@@ -882,14 +882,12 @@ public:
 
         void linkJumps(MacroAssembler::AbstractMacroAssemblerType* masm)
         {
-            for (const Jump& jump : m_branchList)
-                jump.link(masm);
+            m_branchList.link(masm);
         }
 
         void linkJumpsTo(MacroAssembler::Label label, MacroAssembler::AbstractMacroAssemblerType* masm)
         {
-            for (const Jump& jump : m_branchList)
-                jump.linkTo(label, masm);
+            m_branchList.linkTo(label, masm);
         }
 
         void linkIfBranch(MacroAssembler::AbstractMacroAssemblerType* masm)
@@ -972,7 +970,7 @@ public:
         CatchKind m_catchKind;
         Vector<Location, 2> m_arguments; // List of input locations to write values into when entering this block.
         Vector<Location, 2> m_results; // List of result locations to write values into when exiting this block.
-        Vector<Jump, 2> m_branchList; // List of branch control info for branches targeting the end of this block.
+        JumpList m_branchList; // List of branch control info for branches targeting the end of this block.
         MacroAssembler::Label m_loopLabel;
         MacroAssembler::Jump m_ifBranch;
         LocalOrTempIndex m_enclosedHeight; // Height of enclosed expression stack, used as the base for all temporary locations.
@@ -1170,12 +1168,7 @@ public:
         RegisterSetBuilder callerSaveGprs = gprSetBuilder;
         RegisterSetBuilder callerSaveFprs = fprSetBuilder;
 
-        // TODO: Handle vectors
-        for (Reg reg : callerSaveFprs.buildAndValidate())
-            m_scratchFPR = reg.fpr(); // Grab last caller-save fpr for scratch register.
-
         gprSetBuilder.remove(m_scratchGPR);
-        gprSetBuilder.remove(m_dataScratchGPR);
         fprSetBuilder.remove(m_scratchFPR);
 
         m_gprSet = m_validGPRs = gprSetBuilder.buildAndValidate();
@@ -1304,7 +1297,7 @@ public:
 
         LOG_INSTRUCTION("TableGet", tableIndex, index, RESULT(result));
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest64(ResultCondition::Zero, resultLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest64(ResultCondition::Zero, resultLocation.asGPR()));
         return { };
     }
 
@@ -1326,7 +1319,7 @@ public:
 
         LOG_INSTRUCTION("TableSet", tableIndex, index, value);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
         return { };
     }
 
@@ -1350,7 +1343,7 @@ public:
 
         LOG_INSTRUCTION("TableInit", tableIndex, dstOffset, srcOffset, length);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
         return { };
     }
 
@@ -1409,7 +1402,7 @@ public:
 
         LOG_INSTRUCTION("TableFill", tableIndex, fill, offset, count);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
         return { };
     }
 
@@ -1431,7 +1424,7 @@ public:
 
         LOG_INSTRUCTION("TableCopy", dstTableIndex, srcTableIndex, dstOffset, srcOffset, length);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsTableAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
         return { };
     }
 
@@ -1629,7 +1622,7 @@ public:
     }
 
     // Memory
-    inline Location emitCheckAndPreparePointer(Value pointer, uint32_t offset, uint32_t sizeOfOperation)
+    inline Location emitCheckAndPreparePointer(Value pointer, uint32_t uoffset, uint32_t sizeOfOperation)
     {
         ScratchScope<1, 0> scratches(*this);
         Location pointerLocation;
@@ -1640,14 +1633,15 @@ public:
             pointerLocation = loadIfNecessary(pointer);
         ASSERT(pointerLocation.isGPR());
 
+        uint64_t boundary = static_cast<uint64_t>(sizeOfOperation) + uoffset - 1;
         switch (m_mode) {
         case MemoryMode::BoundsChecking: {
             // We're not using signal handling only when the memory is not shared.
             // Regardless of signaling, we must check that no memory access exceeds the current memory size.
             m_jit.zeroExtend32ToWord(pointerLocation.asGPR(), m_scratchGPR);
-            m_jit.add64(TrustedImm64(static_cast<uint64_t>(sizeOfOperation) + offset - 1), m_scratchGPR);
-
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch64(RelationalCondition::AboveOrEqual, m_scratchGPR, GPRInfo::wasmBoundsCheckingSizeRegister));
+            if (boundary)
+                m_jit.add64(TrustedImm64(boundary), m_scratchGPR);
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch64(RelationalCondition::AboveOrEqual, m_scratchGPR, GPRInfo::wasmBoundsCheckingSizeRegister));
             break;
         }
 
@@ -1662,11 +1656,12 @@ public:
             // PROT_NONE region, but it's better if we use a smaller immediate because it can codegens better. We know that anything equal to or greater
             // than the declared 'maximum' will trap, so we can compare against that number. If there was no declared 'maximum' then we still know that
             // any access equal to or greater than 4GiB will trap, no need to add the redzone.
-            if (offset >= Memory::fastMappedRedzoneBytes()) {
+            if (uoffset >= Memory::fastMappedRedzoneBytes()) {
                 uint64_t maximum = m_info.memory.maximum() ? m_info.memory.maximum().bytes() : std::numeric_limits<uint32_t>::max();
                 m_jit.zeroExtend32ToWord(pointerLocation.asGPR(), m_scratchGPR);
-                m_jit.add64(TrustedImm64(static_cast<uint64_t>(sizeOfOperation) + offset - 1), m_scratchGPR);
-                addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch64(RelationalCondition::AboveOrEqual, m_scratchGPR, TrustedImm64(static_cast<int64_t>(maximum))));
+                if (boundary)
+                    m_jit.add64(TrustedImm64(boundary), m_scratchGPR);
+                throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch64(RelationalCondition::AboveOrEqual, m_scratchGPR, TrustedImm64(static_cast<int64_t>(maximum))));
             }
             break;
         }
@@ -1734,21 +1729,20 @@ public:
         }
     }
 
-    Address materializePointer(Location pointerLocation, uint32_t offset)
+    Address materializePointer(Location pointerLocation, uint32_t uoffset)
     {
-        Address address = Address(pointerLocation.asGPR(), static_cast<int32_t>(offset));
-        if (!B3::Air::Arg::isValidAddrForm(B3::Air::Move, offset, Width::Width128)) {
-            m_jit.add64(TrustedImm64(static_cast<int64_t>(offset)), pointerLocation.asGPR());
+        if (static_cast<uint64_t>(uoffset) > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) || !B3::Air::Arg::isValidAddrForm(B3::Air::Move, uoffset, Width::Width128)) {
+            m_jit.add64(TrustedImm64(static_cast<int64_t>(uoffset)), pointerLocation.asGPR());
             return Address(pointerLocation.asGPR());
         }
-        return address;
+        return Address(pointerLocation.asGPR(), static_cast<int32_t>(uoffset));
     }
 
-    Value WARN_UNUSED_RETURN emitLoadOp(LoadOpType loadOp, Location pointer, uint32_t offset)
+    Value WARN_UNUSED_RETURN emitLoadOp(LoadOpType loadOp, Location pointer, uint32_t uoffset)
     {
         ASSERT(pointer.isGPR());
 
-        Address address = materializePointer(pointer, offset);
+        Address address = materializePointer(pointer, uoffset);
         Value result = topValue(typeOfLoadOp(loadOp));
         Location resultLocation = allocate(result);
 
@@ -1811,9 +1805,9 @@ public:
         "I64Load8S", "I64Load8U", "I64Load16S", "I64Load16U", "I64Load32S", "I64Load32U"
     };
 
-    PartialResult WARN_UNUSED_RETURN load(LoadOpType loadOp, Value pointer, Value& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN load(LoadOpType loadOp, Value pointer, Value& result, uint32_t uoffset)
     {
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfLoadOp(loadOp)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfLoadOp(loadOp)))) {
             // FIXME: Same issue as in AirIRGenerator::load(): https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
             consume(pointer);
@@ -1844,9 +1838,9 @@ public:
                 break;
             }
         } else
-            result = emitLoadOp(loadOp, emitCheckAndPreparePointer(pointer, offset, sizeOfLoadOp(loadOp)), offset);
+            result = emitLoadOp(loadOp, emitCheckAndPreparePointer(pointer, uoffset, sizeOfLoadOp(loadOp)), uoffset);
 
-        LOG_INSTRUCTION(LOAD_OP_NAMES[(unsigned)loadOp - (unsigned)I32Load], pointer, offset, RESULT(result));
+        LOG_INSTRUCTION(LOAD_OP_NAMES[(unsigned)loadOp - (unsigned)I32Load], pointer, uoffset, RESULT(result));
 
         return { };
     }
@@ -1871,11 +1865,11 @@ public:
         RELEASE_ASSERT_NOT_REACHED();
     }
 
-    void emitStoreOp(StoreOpType storeOp, Location pointer, Value value, uint32_t offset)
+    void emitStoreOp(StoreOpType storeOp, Location pointer, Value value, uint32_t uoffset)
     {
         ASSERT(pointer.isGPR());
 
-        Address address = materializePointer(pointer, offset);
+        Address address = materializePointer(pointer, uoffset);
         Location valueLocation;
         if (value.isConst() && value.isFloat()) {
             ScratchScope<0, 1> scratches(*this);
@@ -1922,18 +1916,18 @@ public:
         "I64Store8", "I64Store16", "I64Store32",
     };
 
-    PartialResult WARN_UNUSED_RETURN store(StoreOpType storeOp, Value pointer, Value value, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN store(StoreOpType storeOp, Value pointer, Value value, uint32_t uoffset)
     {
         Location valueLocation = locationOf(value);
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfStoreOp(storeOp)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfStoreOp(storeOp)))) {
             // FIXME: Same issue as in AirIRGenerator::load(): https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
             consume(pointer);
             consume(value);
         } else
-            emitStoreOp(storeOp, emitCheckAndPreparePointer(pointer, offset, sizeOfStoreOp(storeOp)), value, offset);
+            emitStoreOp(storeOp, emitCheckAndPreparePointer(pointer, uoffset, sizeOfStoreOp(storeOp)), value, uoffset);
 
-        LOG_INSTRUCTION(STORE_OP_NAMES[(unsigned)storeOp - (unsigned)I32Store], pointer, offset, value, valueLocation);
+        LOG_INSTRUCTION(STORE_OP_NAMES[(unsigned)storeOp - (unsigned)I32Store], pointer, uoffset, value, valueLocation);
 
         return { };
     }
@@ -1981,7 +1975,7 @@ public:
         emitCCall(&operationWasmMemoryFill, arguments, TypeKind::I32, shouldThrow);
         Location shouldThrowLocation = allocate(shouldThrow);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
 
         LOG_INSTRUCTION("MemoryFill", dstAddress, targetValue, count);
 
@@ -2002,7 +1996,7 @@ public:
         emitCCall(&operationWasmMemoryCopy, arguments, TypeKind::I32, shouldThrow);
         Location shouldThrowLocation = allocate(shouldThrow);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
 
         LOG_INSTRUCTION("MemoryCopy", dstAddress, srcAddress, count);
 
@@ -2024,7 +2018,7 @@ public:
         emitCCall(&operationWasmMemoryInit, arguments, TypeKind::I32, shouldThrow);
         Location shouldThrowLocation = allocate(shouldThrow);
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
+        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest32(ResultCondition::Zero, shouldThrowLocation.asGPR()));
 
         LOG_INSTRUCTION("MemoryInit", dataSegmentIndex, dstAddress, srcAddress, length);
 
@@ -2194,17 +2188,17 @@ public:
 #endif
     }
 
-    Value WARN_UNUSED_RETURN emitAtomicLoadOp(ExtAtomicOpType loadOp, Type valueType, Location pointer, uint32_t offset)
+    Value WARN_UNUSED_RETURN emitAtomicLoadOp(ExtAtomicOpType loadOp, Type valueType, Location pointer, uint32_t uoffset)
     {
         ASSERT(pointer.isGPR());
 
-        // For Atomic access, we need SimpleAddress (offset = 0).
-        if (offset)
-            m_jit.add64(TrustedImm64(static_cast<int64_t>(offset)), pointer.asGPR());
+        // For Atomic access, we need SimpleAddress (uoffset = 0).
+        if (uoffset)
+            m_jit.add64(TrustedImm64(static_cast<int64_t>(uoffset)), pointer.asGPR());
         Address address = Address(pointer.asGPR());
 
         if (accessWidth(loadOp) != Width8)
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(loadOp) - 1)));
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(loadOp) - 1)));
 
         Value result = topValue(valueType.kind);
         Location resultLocation = allocate(result);
@@ -2286,32 +2280,32 @@ public:
         return result;
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicLoad(ExtAtomicOpType loadOp, Type valueType, ExpressionType pointer, ExpressionType& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicLoad(ExtAtomicOpType loadOp, Type valueType, ExpressionType pointer, ExpressionType& result, uint32_t uoffset)
     {
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfAtomicOpMemoryAccess(loadOp)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfAtomicOpMemoryAccess(loadOp)))) {
             // FIXME: Same issue as in AirIRGenerator::load(): https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
             consume(pointer);
             result = valueType.isI64() ? Value::fromI64(0) : Value::fromI32(0);
         } else
-            result = emitAtomicLoadOp(loadOp, valueType, emitCheckAndPreparePointer(pointer, offset, sizeOfAtomicOpMemoryAccess(loadOp)), offset);
+            result = emitAtomicLoadOp(loadOp, valueType, emitCheckAndPreparePointer(pointer, uoffset, sizeOfAtomicOpMemoryAccess(loadOp)), uoffset);
 
-        LOG_INSTRUCTION(makeString(loadOp), pointer, offset, RESULT(result));
+        LOG_INSTRUCTION(makeString(loadOp), pointer, uoffset, RESULT(result));
 
         return { };
     }
 
-    void emitAtomicStoreOp(ExtAtomicOpType storeOp, Type, Location pointer, Value value, uint32_t offset)
+    void emitAtomicStoreOp(ExtAtomicOpType storeOp, Type, Location pointer, Value value, uint32_t uoffset)
     {
         ASSERT(pointer.isGPR());
 
-        // For Atomic access, we need SimpleAddress (offset = 0).
-        if (offset)
-            m_jit.add64(TrustedImm64(static_cast<int64_t>(offset)), pointer.asGPR());
+        // For Atomic access, we need SimpleAddress (uoffset = 0).
+        if (uoffset)
+            m_jit.add64(TrustedImm64(static_cast<int64_t>(uoffset)), pointer.asGPR());
         Address address = Address(pointer.asGPR());
 
         if (accessWidth(storeOp) != Width8)
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(storeOp) - 1)));
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(storeOp) - 1)));
 
         GPRReg scratch1GPR = InvalidGPRReg;
         GPRReg scratch2GPR = InvalidGPRReg;
@@ -2402,18 +2396,18 @@ public:
         }
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicStore(ExtAtomicOpType storeOp, Type valueType, ExpressionType pointer, ExpressionType value, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicStore(ExtAtomicOpType storeOp, Type valueType, ExpressionType pointer, ExpressionType value, uint32_t uoffset)
     {
         Location valueLocation = locationOf(value);
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfAtomicOpMemoryAccess(storeOp)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfAtomicOpMemoryAccess(storeOp)))) {
             // FIXME: Same issue as in AirIRGenerator::load(): https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
             consume(pointer);
             consume(value);
         } else
-            emitAtomicStoreOp(storeOp, valueType, emitCheckAndPreparePointer(pointer, offset, sizeOfAtomicOpMemoryAccess(storeOp)), value, offset);
+            emitAtomicStoreOp(storeOp, valueType, emitCheckAndPreparePointer(pointer, uoffset, sizeOfAtomicOpMemoryAccess(storeOp)), value, uoffset);
 
-        LOG_INSTRUCTION(makeString(storeOp), pointer, offset, value, valueLocation);
+        LOG_INSTRUCTION(makeString(storeOp), pointer, uoffset, value, valueLocation);
 
         return { };
     }
@@ -2422,13 +2416,13 @@ public:
     {
         ASSERT(pointer.isGPR());
 
-        // For Atomic access, we need SimpleAddress (offset = 0).
+        // For Atomic access, we need SimpleAddress (uoffset = 0).
         if (uoffset)
             m_jit.add64(TrustedImm64(static_cast<int64_t>(uoffset)), pointer.asGPR());
         Address address = Address(pointer.asGPR());
 
         if (accessWidth(op) != Width8)
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(op) - 1)));
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(op) - 1)));
 
         Value result = topValue(valueType.kind);
         Location resultLocation = allocate(result);
@@ -2781,10 +2775,10 @@ public:
         return result;
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicBinaryRMW(ExtAtomicOpType op, Type valueType, ExpressionType pointer, ExpressionType value, ExpressionType& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicBinaryRMW(ExtAtomicOpType op, Type valueType, ExpressionType pointer, ExpressionType value, ExpressionType& result, uint32_t uoffset)
     {
         Location valueLocation = locationOf(value);
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfAtomicOpMemoryAccess(op)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfAtomicOpMemoryAccess(op)))) {
             // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
             // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
@@ -2792,9 +2786,9 @@ public:
             consume(value);
             result = valueType.isI64() ? Value::fromI64(0) : Value::fromI32(0);
         } else
-            result = emitAtomicBinaryRMWOp(op, valueType, emitCheckAndPreparePointer(pointer, offset, sizeOfAtomicOpMemoryAccess(op)), value, offset);
+            result = emitAtomicBinaryRMWOp(op, valueType, emitCheckAndPreparePointer(pointer, uoffset, sizeOfAtomicOpMemoryAccess(op)), value, uoffset);
 
-        LOG_INSTRUCTION(makeString(op), pointer, offset, value, valueLocation, RESULT(result));
+        LOG_INSTRUCTION(makeString(op), pointer, uoffset, value, valueLocation, RESULT(result));
 
         return { };
     }
@@ -2803,7 +2797,7 @@ public:
     {
         ASSERT(pointer.isGPR());
 
-        // For Atomic access, we need SimpleAddress (offset = 0).
+        // For Atomic access, we need SimpleAddress (uoffset = 0).
         if (uoffset)
             m_jit.add64(TrustedImm64(static_cast<int64_t>(uoffset)), pointer.asGPR());
         Address address = Address(pointer.asGPR());
@@ -2811,7 +2805,7 @@ public:
         Width accessWidth = Wasm::accessWidth(op);
 
         if (accessWidth != Width8)
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(op) - 1)));
+            throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branchTest64(ResultCondition::NonZero, pointer.asGPR(), TrustedImm64(sizeOfAtomicOpMemoryAccess(op) - 1)));
 
         Value result = topValue(expected.type());
         Location resultLocation = allocate(result);
@@ -2968,10 +2962,10 @@ public:
         return result;
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicCompareExchange(ExtAtomicOpType op, Type valueType, ExpressionType pointer, ExpressionType expected, ExpressionType value, ExpressionType& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicCompareExchange(ExtAtomicOpType op, Type valueType, ExpressionType pointer, ExpressionType expected, ExpressionType value, ExpressionType& result, uint32_t uoffset)
     {
         Location valueLocation = locationOf(value);
-        if (UNLIKELY(sumOverflows<uint32_t>(offset, sizeOfAtomicOpMemoryAccess(op)))) {
+        if (UNLIKELY(sumOverflows<uint32_t>(uoffset, sizeOfAtomicOpMemoryAccess(op)))) {
             // FIXME: Even though this is provably out of bounds, it's not a validation error, so we have to handle it
             // as a runtime exception. However, this may change: https://bugs.webkit.org/show_bug.cgi?id=166435
             emitThrowException(ExceptionType::OutOfBoundsMemoryAccess);
@@ -2980,19 +2974,19 @@ public:
             consume(value);
             result = valueType.isI64() ? Value::fromI64(0) : Value::fromI32(0);
         } else
-            result = emitAtomicCompareExchange(op, valueType, emitCheckAndPreparePointer(pointer, offset, sizeOfAtomicOpMemoryAccess(op)), expected, value, offset);
+            result = emitAtomicCompareExchange(op, valueType, emitCheckAndPreparePointer(pointer, uoffset, sizeOfAtomicOpMemoryAccess(op)), expected, value, uoffset);
 
-        LOG_INSTRUCTION(makeString(op), pointer, expected, value, valueLocation, offset, RESULT(result));
+        LOG_INSTRUCTION(makeString(op), pointer, expected, value, valueLocation, uoffset, RESULT(result));
 
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicWait(ExtAtomicOpType op, ExpressionType pointer, ExpressionType value, ExpressionType timeout, ExpressionType& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicWait(ExtAtomicOpType op, ExpressionType pointer, ExpressionType value, ExpressionType timeout, ExpressionType& result, uint32_t uoffset)
     {
         Vector<Value, 8> arguments = {
             instanceValue(),
             pointer,
-            Value::fromI32(offset),
+            Value::fromI32(uoffset),
             value,
             timeout
         };
@@ -3003,26 +2997,26 @@ public:
             emitCCall(&operationMemoryAtomicWait64, arguments, TypeKind::I32, result);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION(makeString(op), pointer, value, timeout, offset, RESULT(result));
+        LOG_INSTRUCTION(makeString(op), pointer, value, timeout, uoffset, RESULT(result));
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch32(RelationalCondition::LessThan, resultLocation.asGPR(), TrustedImm32(0)));
+        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch32(RelationalCondition::LessThan, resultLocation.asGPR(), TrustedImm32(0)));
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN atomicNotify(ExtAtomicOpType op, ExpressionType pointer, ExpressionType count, ExpressionType& result, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN atomicNotify(ExtAtomicOpType op, ExpressionType pointer, ExpressionType count, ExpressionType& result, uint32_t uoffset)
     {
         Vector<Value, 8> arguments = {
             instanceValue(),
             pointer,
-            Value::fromI32(offset),
+            Value::fromI32(uoffset),
             count
         };
         emitCCall(&operationMemoryAtomicNotify, arguments, TypeKind::I32, result);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION(makeString(op), pointer, count, offset, RESULT(result));
+        LOG_INSTRUCTION(makeString(op), pointer, count, uoffset, RESULT(result));
 
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch32(RelationalCondition::LessThan, resultLocation.asGPR(), TrustedImm32(0)));
+        throwExceptionIf(ExceptionType::OutOfBoundsMemoryAccess, m_jit.branch32(RelationalCondition::LessThan, resultLocation.asGPR(), TrustedImm32(0)));
         return { };
     }
 
@@ -3225,12 +3219,12 @@ public:
         Jump belowMin = operandType == Types::F32
             ? m_jit.branchFloat(minCondition, operandLocation.asFPR(), minFloat.asFPR())
             : m_jit.branchDouble(minCondition, operandLocation.asFPR(), minFloat.asFPR());
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTrunc, belowMin);
+        throwExceptionIf(ExceptionType::OutOfBoundsTrunc, belowMin);
 
         Jump aboveMax = operandType == Types::F32
             ? m_jit.branchFloat(DoubleCondition::DoubleGreaterThanOrEqualOrUnordered, operandLocation.asFPR(), maxFloat.asFPR())
             : m_jit.branchDouble(DoubleCondition::DoubleGreaterThanOrEqualOrUnordered, operandLocation.asFPR(), maxFloat.asFPR());
-        addExceptionLateLinkTask(ExceptionType::OutOfBoundsTrunc, aboveMax);
+        throwExceptionIf(ExceptionType::OutOfBoundsTrunc, aboveMax);
 
         truncInBounds(kind, operandLocation, resultLocation);
 
@@ -3768,12 +3762,9 @@ public:
         });
     }
 
-    void addExceptionLateLinkTask(ExceptionType type, Jump jump)
+    void throwExceptionIf(ExceptionType type, Jump jump)
     {
-        addLatePath([type, jump] (BBQJIT& generator, CCallHelpers& jit) {
-            jump.link(&jit);
-            generator.emitThrowException(type);
-        });
+        m_exceptions[static_cast<unsigned>(type)].append(jump);
     }
 
 #if CPU(X86_64)
@@ -3827,7 +3818,7 @@ public:
         Jump isZero = is32
             ? m_jit.branchTest32(ResultCondition::Zero, rhsLocation.asGPR())
             : m_jit.branchTest64(ResultCondition::Zero, rhsLocation.asGPR());
-        addExceptionLateLinkTask(ExceptionType::DivisionByZero, isZero);
+        throwExceptionIf(ExceptionType::DivisionByZero, isZero);
         if constexpr (isSigned) {
             if constexpr (is32)
                 m_jit.compare32(RelationalCondition::Equal, rhsLocation.asGPR(), TrustedImm32(-1), scratches.gpr(0));
@@ -3850,7 +3841,7 @@ public:
                 toEnd = m_jit.jump();
             } else {
                 Jump isNegativeOne = m_jit.branchTest64(ResultCondition::NonZero, scratches.gpr(1));
-                addExceptionLateLinkTask(ExceptionType::IntegerOverflow, isNegativeOne);
+                throwExceptionIf(ExceptionType::IntegerOverflow, isNegativeOne);
             }
         }
 
@@ -3917,7 +3908,7 @@ public:
                     Jump jump = is32
                         ? m_jit.branch32(RelationalCondition::Equal, lhsLocation.asGPR(), TrustedImm32(std::numeric_limits<int32_t>::min()))
                         : m_jit.branch64(RelationalCondition::Equal, lhsLocation.asGPR(), TrustedImm64(std::numeric_limits<int64_t>::min()));
-                    addExceptionLateLinkTask(ExceptionType::IntegerOverflow, jump);
+                    throwExceptionIf(ExceptionType::IntegerOverflow, jump);
                 }
 
                 if constexpr (IsMod) {
@@ -3990,7 +3981,7 @@ public:
             Jump isZero = is32
                 ? m_jit.branchTest32(ResultCondition::Zero, rhsLocation.asGPR())
                 : m_jit.branchTest64(ResultCondition::Zero, rhsLocation.asGPR());
-            addExceptionLateLinkTask(ExceptionType::DivisionByZero, isZero);
+            throwExceptionIf(ExceptionType::DivisionByZero, isZero);
             checkedForZero = true;
 
             if (!dividend) {
@@ -4004,7 +3995,7 @@ public:
                 Jump isNegativeOne = is32
                     ? m_jit.branch32(RelationalCondition::Equal, rhsLocation.asGPR(), TrustedImm32(-1))
                     : m_jit.branch64(RelationalCondition::Equal, rhsLocation.asGPR(), TrustedImm64(-1));
-                addExceptionLateLinkTask(ExceptionType::IntegerOverflow, isNegativeOne);
+                throwExceptionIf(ExceptionType::IntegerOverflow, isNegativeOne);
                 checkedForNegativeOne = true;
             }
 
@@ -4017,7 +4008,7 @@ public:
             Jump isZero = is32
                 ? m_jit.branchTest32(ResultCondition::Zero, rhsLocation.asGPR())
                 : m_jit.branchTest64(ResultCondition::Zero, rhsLocation.asGPR());
-            addExceptionLateLinkTask(ExceptionType::DivisionByZero, isZero);
+            throwExceptionIf(ExceptionType::DivisionByZero, isZero);
         }
 
         ScratchScope<1, 0> scratches(*this, lhsLocation, rhsLocation, resultLocation);
@@ -4034,7 +4025,7 @@ public:
             }
             m_jit.and64(m_scratchGPR, scratches.gpr(0), m_scratchGPR);
             Jump isNegativeOne = m_jit.branchTest64(ResultCondition::NonZero, m_scratchGPR);
-            addExceptionLateLinkTask(ExceptionType::IntegerOverflow, isNegativeOne);
+            throwExceptionIf(ExceptionType::IntegerOverflow, isNegativeOne);
         }
 
         RegisterID divResult = IsMod ? scratches.gpr(0) : resultLocation.asGPR();
@@ -5261,10 +5252,12 @@ public:
             "F32ConvertUI32", TypeKind::F32,
             BLOCK(Value::fromF32(static_cast<uint32_t>(operand.asI32()))),
             BLOCK(
-                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
 #if CPU(X86_64)
-                m_jit.convertUInt64ToFloat(m_scratchGPR, resultLocation.asFPR(), m_dataScratchGPR);
+                ScratchScope<1, 0> scratches(*this);
+                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
+                m_jit.convertUInt64ToFloat(m_scratchGPR, resultLocation.asFPR(), scratches.gpr(0));
 #else
+                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
                 m_jit.convertUInt64ToFloat(m_scratchGPR, resultLocation.asFPR());
 #endif
             )
@@ -5289,7 +5282,7 @@ public:
             BLOCK(Value::fromF32(static_cast<uint64_t>(operand.asI64()))),
             BLOCK(
 #if CPU(X86_64)
-                m_jit.convertUInt64ToFloat(operandLocation.asGPR(), resultLocation.asFPR(), m_dataScratchGPR);
+                m_jit.convertUInt64ToFloat(operandLocation.asGPR(), resultLocation.asFPR(), m_scratchGPR);
 #else
                 m_jit.convertUInt64ToFloat(operandLocation.asGPR(), resultLocation.asFPR());
 #endif
@@ -5314,10 +5307,12 @@ public:
             "F64ConvertUI32", TypeKind::F64,
             BLOCK(Value::fromF64(static_cast<uint32_t>(operand.asI32()))),
             BLOCK(
-                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
 #if CPU(X86_64)
-                m_jit.convertUInt64ToDouble(m_scratchGPR, resultLocation.asFPR(), m_dataScratchGPR);
+                ScratchScope<1, 0> scratches(*this);
+                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
+                m_jit.convertUInt64ToDouble(m_scratchGPR, resultLocation.asFPR(), scratches.gpr(0));
 #else
+                m_jit.zeroExtend32ToWord(operandLocation.asGPR(), m_scratchGPR);
                 m_jit.convertUInt64ToDouble(m_scratchGPR, resultLocation.asFPR());
 #endif
             )
@@ -5342,7 +5337,7 @@ public:
             BLOCK(Value::fromF64(static_cast<uint64_t>(operand.asI64()))),
             BLOCK(
 #if CPU(X86_64)
-                m_jit.convertUInt64ToDouble(operandLocation.asGPR(), resultLocation.asFPR(), m_dataScratchGPR);
+                m_jit.convertUInt64ToDouble(operandLocation.asGPR(), resultLocation.asFPR(), m_scratchGPR);
 #else
                 m_jit.convertUInt64ToDouble(operandLocation.asGPR(), resultLocation.asFPR());
 #endif
@@ -5363,8 +5358,7 @@ public:
                 m_jit.and32(Imm32(static_cast<int32_t>(0x80000000u)), m_scratchGPR, m_scratchGPR);
                 m_jit.move32ToFloat(m_scratchGPR, m_scratchFPR);
 #if CPU(X86_64)
-                m_jit.move(Imm32(0x7fffffff), m_scratchGPR);
-                m_jit.move32ToFloat(m_scratchGPR, resultLocation.asFPR());
+                m_jit.move32ToFloat(TrustedImm32(0x7fffffff), resultLocation.asFPR());
                 m_jit.andFloat(lhsLocation.asFPR(), resultLocation.asFPR());
                 m_jit.orFloat(resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
 #else
@@ -5383,8 +5377,7 @@ public:
                 } else {
                     bool signBit = bitwise_cast<uint32_t>(rhs.asF32()) & 0x80000000u;
 #if CPU(X86_64)
-                    m_jit.move(Imm32(0x7fffffff), m_scratchGPR);
-                    m_jit.move32ToFloat(m_scratchGPR, resultLocation.asFPR());
+                    m_jit.move32ToFloat(TrustedImm32(0x7fffffff), resultLocation.asFPR());
                     m_jit.andFloat(lhsLocation.asFPR(), resultLocation.asFPR());
                     if (signBit) {
                         m_jit.xorFloat(m_scratchFPR, m_scratchFPR);
@@ -5421,8 +5414,7 @@ public:
                 m_jit.move64ToDouble(m_scratchGPR, m_scratchFPR);
 
 #if CPU(X86_64)
-                m_jit.move(TrustedImm64(0x7fffffffffffffffll), m_scratchGPR);
-                m_jit.move64ToDouble(m_scratchGPR, resultLocation.asFPR());
+                m_jit.move64ToDouble(TrustedImm64(0x7fffffffffffffffll), resultLocation.asFPR());
                 m_jit.andDouble(lhsLocation.asFPR(), resultLocation.asFPR());
                 m_jit.orDouble(resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
 #else
@@ -5443,8 +5435,7 @@ public:
                 } else {
                     bool signBit = bitwise_cast<uint64_t>(rhs.asF64()) & 0x8000000000000000ull;
 #if CPU(X86_64)
-                    m_jit.move(TrustedImm64(0x7fffffffffffffffll), m_scratchGPR);
-                    m_jit.move64ToDouble(m_scratchGPR, resultLocation.asFPR());
+                    m_jit.move64ToDouble(TrustedImm64(0x7fffffffffffffffll), resultLocation.asFPR());
                     m_jit.andDouble(lhsLocation.asFPR(), resultLocation.asFPR());
                     if (signBit) {
                         m_jit.xorDouble(m_scratchFPR, m_scratchFPR);
@@ -5511,8 +5502,7 @@ public:
             BLOCK(Value::fromF32(std::abs(operand.asF32()))),
             BLOCK(
 #if CPU(X86_64)
-                m_jit.move(Imm32(0x7fffffffll), m_scratchGPR);
-                m_jit.move32ToFloat(m_scratchGPR, m_scratchFPR);
+                m_jit.move32ToFloat(TrustedImm32(0x7fffffffll), m_scratchFPR);
                 m_jit.andFloat(operandLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
 #else
                 m_jit.absFloat(operandLocation.asFPR(), resultLocation.asFPR());
@@ -5528,8 +5518,7 @@ public:
             BLOCK(Value::fromF64(std::abs(operand.asF64()))),
             BLOCK(
 #if CPU(X86_64)
-                m_jit.move(TrustedImm64(0x7fffffffffffffffll), m_scratchGPR);
-                m_jit.move64ToDouble(m_scratchGPR, m_scratchFPR);
+                m_jit.move64ToDouble(TrustedImm64(0x7fffffffffffffffll), m_scratchFPR);
                 m_jit.andDouble(operandLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
 #else
                 m_jit.absDouble(operandLocation.asFPR(), resultLocation.asFPR());
@@ -5705,7 +5694,7 @@ public:
         result = topValue(TypeKind::Ref);
         Location resultLocation = allocate(result);
         ASSERT(JSValue::encode(jsNull()) >= 0 && JSValue::encode(jsNull()) <= INT32_MAX);
-        addExceptionLateLinkTask(ExceptionType::NullRefAsNonNull, m_jit.branch64(RelationalCondition::Equal, valueLocation.asGPR(), TrustedImm32(static_cast<int32_t>(JSValue::encode(jsNull())))));
+        throwExceptionIf(ExceptionType::NullRefAsNonNull, m_jit.branch64(RelationalCondition::Equal, valueLocation.asGPR(), TrustedImm32(static_cast<int32_t>(JSValue::encode(jsNull())))));
         m_jit.move(valueLocation.asGPR(), resultLocation.asGPR());
 
         return { };
@@ -6119,6 +6108,15 @@ public:
 
         for (const auto& latePath : m_latePaths)
             latePath->run(*this, m_jit);
+
+        for (unsigned i = 0; i < numberOfExceptionTypes; ++i) {
+            auto& jumps = m_exceptions[i];
+            if (!jumps.empty()) {
+                jumps.link(&jit);
+                emitThrowException(static_cast<ExceptionType>(i));
+            }
+        }
+
         return { };
     }
 
@@ -6146,7 +6144,7 @@ public:
         // FIXME: We should just store these registers on stack and load them.
         if (!!m_info.memory) {
             m_jit.loadPairPtr(GPRInfo::wasmContextInstancePointer, TrustedImm32(Instance::offsetOfCachedMemory()), GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister);
-            m_jit.cageConditionallyAndUntag(Gigacage::Primitive, GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister, m_dataScratchGPR, /* validateAuth */ true, /* mayBeNull */ false);
+            m_jit.cageConditionallyAndUntag(Gigacage::Primitive, GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister, m_scratchGPR, /* validateAuth */ true, /* mayBeNull */ false);
         }
     }
 
@@ -6303,12 +6301,18 @@ public:
         case TypeKind::Struct:
         case TypeKind::Func: {
             resultLocation = Location::fromGPR(GPRInfo::returnValueGPR);
+            ASSERT(m_validGPRs.contains(GPRInfo::returnValueGPR, IgnoreVectors));
             break;
         }
         case TypeKind::F32:
-        case TypeKind::F64:
+        case TypeKind::F64: {
+            resultLocation = Location::fromFPR(FPRInfo::returnValueFPR);
+            ASSERT(m_validFPRs.contains(FPRInfo::returnValueFPR, Width::Width128));
+            break;
+        }
         case TypeKind::V128: {
             resultLocation = Location::fromFPR(FPRInfo::returnValueFPR);
+            ASSERT(m_validFPRs.contains(FPRInfo::returnValueFPR, Width::Width128));
             break;
         }
         case TypeKind::Void:
@@ -6377,7 +6381,7 @@ public:
         Jump isSameInstance = m_jit.branchPtr(RelationalCondition::Equal, calleeInstance, GPRInfo::wasmContextInstancePointer);
         m_jit.move(calleeInstance, GPRInfo::wasmContextInstancePointer);
         m_jit.loadPairPtr(GPRInfo::wasmContextInstancePointer, TrustedImm32(Instance::offsetOfCachedMemory()), GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister);
-        m_jit.cageConditionallyAndUntag(Gigacage::Primitive, GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister, m_dataScratchGPR, /* validateAuth */ true, /* mayBeNull */ false);
+        m_jit.cageConditionallyAndUntag(Gigacage::Primitive, GPRInfo::wasmBaseMemoryPointer, GPRInfo::wasmBoundsCheckingSizeRegister, m_scratchGPR, /* validateAuth */ true, /* mayBeNull */ false);
         isSameInstance.link(&m_jit);
 
         // Since this can switch instance, we need to keep JSWebAssemblyInstance anchored in the stack.
@@ -6439,7 +6443,7 @@ public:
             consume(calleeIndex);
 
             // Check the index we are looking for is valid.
-            addExceptionLateLinkTask(ExceptionType::OutOfBoundsCallIndirect, m_jit.branch32(RelationalCondition::AboveOrEqual, calleeIndexLocation.asGPR(), callableFunctionBufferLength));
+            throwExceptionIf(ExceptionType::OutOfBoundsCallIndirect, m_jit.branch32(RelationalCondition::AboveOrEqual, calleeIndexLocation.asGPR(), callableFunctionBufferLength));
 
             // Neither callableFunctionBuffer nor callableFunctionBufferLength are used before any of these
             // are def'd below, so we can reuse the registers and save some pressure.
@@ -6464,8 +6468,8 @@ public:
             m_jit.loadPtr(Address(calleeSignatureIndex, FuncRefTable::Function::offsetOfValue()), jsCalleeAnchor);
             m_jit.loadPtr(Address(calleeSignatureIndex, FuncRefTable::Function::offsetOfFunction() + WasmToWasmImportableFunction::offsetOfSignatureIndex()), calleeSignatureIndex);
 
-            addExceptionLateLinkTask(ExceptionType::NullTableEntry, m_jit.branchTestPtr(ResultCondition::Zero, calleeSignatureIndex, calleeSignatureIndex));
-            addExceptionLateLinkTask(ExceptionType::BadSignature, m_jit.branchPtr(RelationalCondition::NotEqual, calleeSignatureIndex, TrustedImmPtr(TypeInformation::get(originalSignature))));
+            throwExceptionIf(ExceptionType::NullTableEntry, m_jit.branchTestPtr(ResultCondition::Zero, calleeSignatureIndex, calleeSignatureIndex));
+            throwExceptionIf(ExceptionType::BadSignature, m_jit.branchPtr(RelationalCondition::NotEqual, calleeSignatureIndex, TrustedImmPtr(TypeInformation::get(originalSignature))));
         }
 
         emitIndirectCall("CallIndirect", calleeIndex, calleeInstance, calleeCode, jsCalleeAnchor, signature, args, results, callType);
@@ -6496,33 +6500,44 @@ public:
     void notifyFunctionUsesSIMD()
     { }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDLoad(ExpressionType pointer, uint32_t offset, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addSIMDLoad(ExpressionType pointer, uint32_t uoffset, ExpressionType& result)
     {
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
         result = topValue(TypeKind::V128);
         Location resultLocation = allocate(result);
         m_jit.loadVector(address, resultLocation.asFPR());
-        LOG_INSTRUCTION("V128Load", pointer, pointerLocation, offset, RESULT(result));
+        LOG_INSTRUCTION("V128Load", pointer, pointerLocation, uoffset, RESULT(result));
 
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDStore(ExpressionType value, ExpressionType pointer, uint32_t offset)
+    PartialResult WARN_UNUSED_RETURN addSIMDStore(ExpressionType value, ExpressionType pointer, uint32_t uoffset)
     {
         Location valueLocation = loadIfNecessary(value);
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
         consume(value);
-        Address address = materializePointer(pointerLocation, offset);
+        Address address = materializePointer(pointerLocation, uoffset);
         m_jit.storeVector(valueLocation.asFPR(), address);
-        LOG_INSTRUCTION("V128Store", pointer, pointerLocation, offset, value, valueLocation);
+        LOG_INSTRUCTION("V128Store", pointer, pointerLocation, uoffset, value, valueLocation);
 
         return { };
     }
 
     PartialResult WARN_UNUSED_RETURN addSIMDSplat(SIMDLane lane, ExpressionType value, ExpressionType& result)
     {
-        Location valueLocation = loadIfNecessary(value);
+        Location valueLocation;
+        if (value.isConst()) {
+            if (value.isFloat()) {
+                ScratchScope<0, 1> scratches(*this);
+                valueLocation = Location::fromFPR(scratches.fpr(0));
+            } else {
+                ScratchScope<1, 0> scratches(*this);
+                valueLocation = Location::fromGPR(scratches.gpr(0));
+            }
+            emitMoveConst(value, valueLocation);
+        } else
+            valueLocation = loadIfNecessary(value);
         consume(value);
 
         result = topValue(TypeKind::V128);
@@ -6701,15 +6716,15 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDLoadSplat(SIMDLaneOperation op, ExpressionType pointer, uint32_t offset, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addSIMDLoadSplat(SIMDLaneOperation op, ExpressionType pointer, uint32_t uoffset, ExpressionType& result)
     {
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
 
         result = topValue(TypeKind::V128);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, offset, RESULT(result));
+        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, uoffset, RESULT(result));
 
         switch (op) {
 #if CPU(X86_64)
@@ -6737,10 +6752,10 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDLoadLane(SIMDLaneOperation op, ExpressionType pointer, ExpressionType vector, uint32_t offset, uint8_t lane, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addSIMDLoadLane(SIMDLaneOperation op, ExpressionType pointer, ExpressionType vector, uint32_t uoffset, uint8_t lane, ExpressionType& result)
     {
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
 
         Location vectorLocation = loadIfNecessary(vector);
         consume(vector);
@@ -6748,7 +6763,7 @@ public:
         result = topValue(TypeKind::V128);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, offset, RESULT(result));
+        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, uoffset, RESULT(result));
 
         m_jit.move(vectorLocation.asFPR(), resultLocation.asFPR());
         switch (op) {
@@ -6771,15 +6786,15 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDStoreLane(SIMDLaneOperation op, ExpressionType pointer, ExpressionType vector, uint32_t offset, uint8_t lane)
+    PartialResult WARN_UNUSED_RETURN addSIMDStoreLane(SIMDLaneOperation op, ExpressionType pointer, ExpressionType vector, uint32_t uoffset, uint8_t lane)
     {
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
 
         Location vectorLocation = loadIfNecessary(vector);
         consume(vector);
 
-        LOG_INSTRUCTION("Vector", op, vector, vectorLocation, pointer, pointerLocation, offset);
+        LOG_INSTRUCTION("Vector", op, vector, vectorLocation, pointer, pointerLocation, uoffset);
 
         switch (op) {
         case SIMDLaneOperation::StoreLane8:
@@ -6801,7 +6816,7 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDLoadExtend(SIMDLaneOperation op, ExpressionType pointer, uint32_t offset, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addSIMDLoadExtend(SIMDLaneOperation op, ExpressionType pointer, uint32_t uoffset, ExpressionType& result)
     {
         SIMDLane lane;
         SIMDSignMode signMode;
@@ -6835,13 +6850,13 @@ public:
             RELEASE_ASSERT_NOT_REACHED();
         }
 
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
 
         result = topValue(TypeKind::V128);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, offset, RESULT(result));
+        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, uoffset, RESULT(result));
 
         m_jit.loadDouble(address, resultLocation.asFPR());
         m_jit.vectorExtendLow(SIMDInfo { lane, signMode }, resultLocation.asFPR(), resultLocation.asFPR());
@@ -6849,15 +6864,15 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addSIMDLoadPad(SIMDLaneOperation op, ExpressionType pointer, uint32_t offset, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addSIMDLoadPad(SIMDLaneOperation op, ExpressionType pointer, uint32_t uoffset, ExpressionType& result)
     {
-        Location pointerLocation = emitCheckAndPreparePointer(pointer, offset, bytesForWidth(Width::Width128));
-        Address address = materializePointer(pointerLocation, offset);
+        Location pointerLocation = emitCheckAndPreparePointer(pointer, uoffset, bytesForWidth(Width::Width128));
+        Address address = materializePointer(pointerLocation, uoffset);
 
         result = topValue(TypeKind::V128);
         Location resultLocation = allocate(result);
 
-        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, offset, RESULT(result));
+        LOG_INSTRUCTION("Vector", op, pointer, pointerLocation, uoffset, RESULT(result));
 
         if (op == SIMDLaneOperation::LoadPad32)
             m_jit.loadFloat(address, resultLocation.asFPR());
@@ -6879,12 +6894,8 @@ public:
 #else
             m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::Unsigned }, result.asFPR(), result.asFPR(), result.asFPR());
 #endif
-        else {
-            m_jit.move(TrustedImm64(value.u64x2[0]), m_dataScratchGPR);
-            m_jit.vectorReplaceLaneInt64(TrustedImm32(0), m_dataScratchGPR, result.asFPR());
-            m_jit.move(TrustedImm64(value.u64x2[1]), m_dataScratchGPR);
-            m_jit.vectorReplaceLaneInt64(TrustedImm32(1), m_dataScratchGPR, result.asFPR());
-        }
+        else
+            m_jit.materializeVector(value, result.asFPR());
     }
 
     ExpressionType WARN_UNUSED_RETURN addConstant(v128_t value)
@@ -7016,11 +7027,11 @@ public:
             return { };
         case JSC::SIMDLaneOperation::AnyTrue:
 #if CPU(ARM64)
-                m_jit.vectorUnsignedMax(SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, valueLocation.asFPR(), m_scratchFPR);
-                m_jit.moveFloatTo32(m_scratchFPR, resultLocation.asGPR());
-                m_jit.test32(ResultCondition::NonZero, resultLocation.asGPR(), resultLocation.asGPR(), resultLocation.asGPR());
+            m_jit.vectorUnsignedMax(SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, valueLocation.asFPR(), m_scratchFPR);
+            m_jit.moveFloatTo32(m_scratchFPR, resultLocation.asGPR());
+            m_jit.test32(ResultCondition::NonZero, resultLocation.asGPR(), resultLocation.asGPR(), resultLocation.asGPR());
 #else
-                m_jit.vectorAnyTrue(valueLocation.asFPR(), resultLocation.asGPR());
+            m_jit.vectorAnyTrue(valueLocation.asFPR(), resultLocation.asGPR());
 #endif
             return { };
         case JSC::SIMDLaneOperation::AllTrue:
@@ -7078,12 +7089,10 @@ public:
             }
             if (scalarTypeIsFloatingPoint(info.lane)) {
                 if (info.lane == SIMDLane::f32x4) {
-                    m_jit.move(TrustedImm32(0x7fffffff), m_scratchGPR);
-                    m_jit.move32ToFloat(m_scratchGPR, m_scratchFPR);
+                    m_jit.move32ToFloat(TrustedImm32(0x7fffffff), m_scratchFPR);
                     m_jit.vectorSplatFloat32(m_scratchFPR, m_scratchFPR);
                 } else {
-                    m_jit.move(TrustedImm64(0x7fffffffffffffffll), m_scratchGPR);
-                    m_jit.move64ToDouble(m_scratchGPR, m_scratchFPR);
+                    m_jit.move64ToDouble(TrustedImm64(0x7fffffffffffffffll), m_scratchFPR);
                     m_jit.vectorSplatFloat64(m_scratchFPR, m_scratchFPR);
                 }
                 m_jit.vectorAnd(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, valueLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
@@ -7197,15 +7206,16 @@ public:
             m_jit.vectorTruncSat(info, valueLocation.asFPR(), resultLocation.asFPR());
 #endif
             return { };
-        case JSC::SIMDLaneOperation::Not:
+        case JSC::SIMDLaneOperation::Not: {
 #if CPU(X86_64)
-                // Equality is always a single instruction for this lane, so it doesn't matter that our scratch register is the same as the operands.
-                m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
-                m_jit.vectorXor(info, valueLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
+            ScratchScope<0, 1> scratches(*this, valueLocation, resultLocation);
+            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
+            m_jit.vectorXor(info, valueLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
 #else
-                m_jit.vectorNot(info, valueLocation.asFPR(), resultLocation.asFPR());
+            m_jit.vectorNot(info, valueLocation.asFPR(), resultLocation.asFPR());
 #endif
             return { };
+        }
         case JSC::SIMDLaneOperation::Neg:
 #if CPU(X86_64)
             switch (info.lane) {
@@ -7219,14 +7229,12 @@ public:
                 break;
             case SIMDLane::f32x4:
                 // For floats, we unfortunately have to flip the sign bit using XOR.
-                m_jit.move(TrustedImm32(-0x80000000), m_scratchGPR);
-                m_jit.move32ToFloat(m_scratchGPR, m_scratchFPR);
+                m_jit.move32ToFloat(TrustedImm32(-0x80000000), m_scratchFPR);
                 m_jit.vectorSplatFloat32(m_scratchFPR, m_scratchFPR);
                 m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, valueLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
                 break;
             case SIMDLane::f64x2:
-                m_jit.move(TrustedImm64(-0x8000000000000000ll), m_scratchGPR);
-                m_jit.move64ToDouble(m_scratchGPR, m_scratchFPR);
+                m_jit.move64ToDouble(TrustedImm64(-0x8000000000000000ll), m_scratchFPR);
                 m_jit.vectorSplatFloat64(m_scratchFPR, m_scratchFPR);
                 m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, valueLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
                 break;
@@ -7292,35 +7300,43 @@ public:
         // directly implement most relational conditions between vectors: the cases below
         // are best emitted as inversions of conditions that are supported.
         switch (relOp.asRelationalCondition()) {
-        case MacroAssembler::NotEqual:
+        case MacroAssembler::NotEqual: {
+            ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
             m_jit.compareIntegerVector(RelationalCondition::Equal, info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
-            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
+            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
             m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
             break;
-        case MacroAssembler::Above:
+        }
+        case MacroAssembler::Above: {
+            ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
             m_jit.compareIntegerVector(RelationalCondition::BelowOrEqual, info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
-            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
+            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
             m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
             break;
-        case MacroAssembler::Below:
+        }
+        case MacroAssembler::Below: {
+            ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
             m_jit.compareIntegerVector(RelationalCondition::AboveOrEqual, info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
-            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
+            m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
             m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
             break;
+        }
         case MacroAssembler::GreaterThanOrEqual:
             if (info.lane == SIMDLane::i64x2) {
                 // Note: rhs and lhs are reversed here, we are semantically negating LessThan. GreaterThan is
                 // just better supported on AVX.
+                ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
                 m_jit.compareIntegerVector(RelationalCondition::GreaterThan, info, rightLocation.asFPR(), leftLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
-                m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
+                m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
                 m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
             } else
                 m_jit.compareIntegerVector(relOp.asRelationalCondition(), info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
             break;
         case MacroAssembler::LessThanOrEqual:
             if (info.lane == SIMDLane::i64x2) {
+                ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
                 m_jit.compareIntegerVector(RelationalCondition::GreaterThan, info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
-                m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, m_scratchFPR);
+                m_jit.compareIntegerVector(RelationalCondition::Equal, SIMDInfo { SIMDLane::i32x4, SIMDSignMode::None }, m_scratchFPR, m_scratchFPR, m_scratchFPR, scratches.fpr(0));
                 m_jit.vectorXor(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }, resultLocation.asFPR(), m_scratchFPR, resultLocation.asFPR());
             } else
                 m_jit.compareIntegerVector(relOp.asRelationalCondition(), info, leftLocation.asFPR(), rightLocation.asFPR(), resultLocation.asFPR(), m_scratchFPR);
@@ -7339,14 +7355,17 @@ public:
         if (info.lane == SIMDLane::i64x2) {
             // Multiplication of 64-bit ints isn't natively supported on ARM or Intel (at least the ones we're targeting)
             // so we scalarize it instead.
+            ScratchScope<1, 0> scratches(*this);
+            GPRReg dataScratchGPR = scratches.gpr(0);
             m_jit.vectorExtractLaneInt64(TrustedImm32(0), left.asFPR(), m_scratchGPR);
-            m_jit.vectorExtractLaneInt64(TrustedImm32(0), right.asFPR(), m_dataScratchGPR);
-            m_jit.mul64(m_scratchGPR, m_dataScratchGPR, m_scratchGPR);
-            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(0), m_scratchGPR, result.asFPR());
+            m_jit.vectorExtractLaneInt64(TrustedImm32(0), right.asFPR(), dataScratchGPR);
+            m_jit.mul64(m_scratchGPR, dataScratchGPR, m_scratchGPR);
+            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(0), m_scratchGPR, m_scratchFPR);
             m_jit.vectorExtractLaneInt64(TrustedImm32(1), left.asFPR(), m_scratchGPR);
-            m_jit.vectorExtractLaneInt64(TrustedImm32(1), right.asFPR(), m_dataScratchGPR);
-            m_jit.mul64(m_scratchGPR, m_dataScratchGPR, m_scratchGPR);
-            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(1), m_scratchGPR, result.asFPR());
+            m_jit.vectorExtractLaneInt64(TrustedImm32(1), right.asFPR(), dataScratchGPR);
+            m_jit.mul64(m_scratchGPR, dataScratchGPR, m_scratchGPR);
+            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(1), m_scratchGPR, m_scratchFPR);
+            m_jit.moveVector(m_scratchFPR, result.asFPR());
         } else
             m_jit.vectorMul(info, left.asFPR(), right.asFPR(), result.asFPR());
     }
@@ -7523,9 +7542,7 @@ public:
 private:
     bool isScratch(Location loc)
     {
-        return (loc.isGPR() && loc.asGPR() == m_dataScratchGPR)
-            || (loc.isGPR() && loc.asGPR() == m_scratchGPR)
-            || (loc.isFPR() && loc.asFPR() == m_scratchFPR);
+        return (loc.isGPR() && loc.asGPR() == m_scratchGPR) || (loc.isFPR() && loc.asFPR() == m_scratchFPR);
     }
 
     void emitStoreConst(Value constant, Location loc)
@@ -7587,12 +7604,10 @@ private:
             m_jit.move(TrustedImm64(constant.asRef()), loc.asGPR());
             break;
         case TypeKind::F32:
-            m_jit.move(Imm32(constant.asI32()), m_dataScratchGPR);
-            m_jit.move32ToFloat(m_dataScratchGPR, loc.asFPR());
+            m_jit.moveFloat(Imm32(constant.asI32()), loc.asFPR());
             break;
         case TypeKind::F64:
-            m_jit.move(Imm64(constant.asI64()), m_dataScratchGPR);
-            m_jit.move64ToDouble(m_dataScratchGPR, loc.asFPR());
+            m_jit.moveDouble(Imm64(constant.asI64()), loc.asFPR());
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED_WITH_MESSAGE("Unimplemented constant typekind.");
@@ -7654,12 +7669,10 @@ private:
         case TypeKind::I32:
         case TypeKind::I31ref:
         case TypeKind::F32:
-            m_jit.load32(srcLocation.asAddress(), m_dataScratchGPR);
-            m_jit.store32(m_dataScratchGPR, dst.asAddress());
+            m_jit.transfer32(srcLocation.asAddress(), dst.asAddress());
             break;
         case TypeKind::I64:
-            m_jit.load64(srcLocation.asAddress(), m_dataScratchGPR);
-            m_jit.store64(m_dataScratchGPR, dst.asAddress());
+            m_jit.transfer64(srcLocation.asAddress(), dst.asAddress());
             break;
         case TypeKind::F64:
             m_jit.loadDouble(srcLocation.asAddress(), m_scratchFPR);
@@ -7671,8 +7684,7 @@ private:
         case TypeKind::Funcref:
         case TypeKind::Structref:
         case TypeKind::Arrayref:
-            m_jit.loadPtr(srcLocation.asAddress(), m_dataScratchGPR);
-            m_jit.storePtr(m_dataScratchGPR, dst.asAddress());
+            m_jit.transfer64(srcLocation.asAddress(), dst.asAddress());
             break;
         case TypeKind::V128: {
             // We do two scalar load/store pairs instead of one vector load/store in order to avoid
@@ -8368,8 +8380,7 @@ private:
     int m_blockCount;
 
     RegisterID m_scratchGPR { GPRInfo::nonPreservedNonArgumentGPR0 }; // Scratch registers to hold temporaries in operations.
-    FPRegisterID m_scratchFPR;
-    RegisterID m_dataScratchGPR { GPRInfo::wasmScratchGPR0 }; // Used specifically as a temporary for complex moves.
+    FPRegisterID m_scratchFPR { FPRInfo::nonPreservedNonArgumentFPR0 };
 
 #if CPU(X86) || CPU(X86_64)
     RegisterID m_shiftRCX { X86Registers::ecx };
@@ -8382,6 +8393,8 @@ private:
     RegisterSet m_callerSaves;
 
     InternalFunction* m_compilation;
+
+    std::array<JumpList, numberOfExceptionTypes> m_exceptions { };
 };
 
 Expected<std::unique_ptr<InternalFunction>, String> parseAndCompileBBQ(CompilationContext& compilationContext, Callee& callee, const FunctionData& function, const TypeDefinition& signature, Vector<UnlinkedWasmToWasmCall>& unlinkedWasmToWasmCalls, const ModuleInformation& info, MemoryMode mode, uint32_t functionIndex, std::optional<bool> hasExceptionHandlers, TierUpCount* tierUp)
