@@ -900,6 +900,8 @@ auto LLIntGenerator::addLocal(Type type, uint32_t count) -> PartialResult
             m_uninitializedLocals.append(push(NoConsistencyCheck));
     } else
         m_stackSize += count;
+    if (m_maxStackSize < m_stackSize)
+        m_maxStackSize = m_stackSize;
     return { };
 }
 
@@ -1247,6 +1249,11 @@ auto LLIntGenerator::addReturn(const ControlType& data, Stack& returnValues) -> 
         WasmRetVoid::emit(this);
         return { };
     }
+
+    // We should materialize locals when return more than one values, since 
+    // it might clobber arguments before use them (see examples in wasm-tuple-return.js).
+    if (returnValues.size() > 1)
+        materializeConstantsAndLocals(returnValues);
 
     // no need to drop keep here, since we have to move anyway
     unifyValuesWithBlock(callInformationForCallee(*data.m_signature->as<FunctionSignature>()), returnValues);

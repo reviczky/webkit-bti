@@ -729,6 +729,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
     m_backgroundColor = parameters.backgroundColor;
 
+    // We need to set the device scale factor before creating the drawing area
+    // to ensure it's created with the right size.
+    m_page->setDeviceScaleFactor(parameters.deviceScaleFactor);
+
     m_drawingArea = DrawingArea::create(*this, parameters);
     m_drawingArea->setShouldScaleViewToFitDocument(parameters.shouldScaleViewToFitDocument);
 
@@ -778,7 +782,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         m_page->setOpenedByDOM();
 
     m_page->setGroupName(m_pageGroup->identifier());
-    m_page->setDeviceScaleFactor(parameters.deviceScaleFactor);
     m_page->setUserInterfaceLayoutDirection(m_userInterfaceLayoutDirection);
 #if PLATFORM(IOS_FAMILY)
     m_page->setTextAutosizingWidth(parameters.textAutosizingWidth);
@@ -838,8 +841,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     if (!parameters.itemStates.isEmpty())
         restoreSessionInternal(parameters.itemStates, parameters.itemStatesWereRestoredByAPIRequest ? WasRestoredByAPIRequest::Yes : WasRestoredByAPIRequest::No, WebBackForwardListProxy::OverwriteExistingItem::No);
 
-    m_drawingArea->enablePainting();
-    
     setMediaVolume(parameters.mediaVolume);
 
     setMuted(parameters.muted, [] { });
@@ -1049,7 +1050,6 @@ void WebPage::reinitializeWebPage(WebPageCreationParameters&& parameters)
         m_drawingArea = DrawingArea::create(*this, parameters);
         m_drawingArea->setShouldScaleViewToFitDocument(parameters.shouldScaleViewToFitDocument);
         m_drawingArea->updatePreferences(parameters.store);
-        m_drawingArea->enablePainting();
 
         m_drawingArea->adoptLayersFromDrawingArea(*oldDrawingArea);
         m_drawingArea->adoptDisplayRefreshMonitorsFromDrawingArea(*oldDrawingArea);
@@ -1961,9 +1961,10 @@ void WebPage::tryRestoreScrollPosition()
     m_page->mainFrame().loader().history().restoreScrollPositionAndViewState();
 }
 
-WebPage& WebPage::fromCorePage(Page& page)
+WebPage* WebPage::fromCorePage(Page& page)
 {
-    return static_cast<WebChromeClient&>(page.chrome().client()).page();
+    auto& client = page.chrome().client();
+    return client.isEmptyChromeClient() ? nullptr : &static_cast<WebChromeClient&>(client).page();
 }
 
 void WebPage::setSize(const WebCore::IntSize& viewSize)
@@ -7790,7 +7791,7 @@ std::optional<WebCore::ElementContext> WebPage::contextForElement(WebCore::Eleme
 void WebPage::startTextManipulations(Vector<WebCore::TextManipulationController::ExclusionRule>&& exclusionRules, CompletionHandler<void()>&& completionHandler)
 {
     if (!m_page)
-        return;
+        return completionHandler();
 
     RefPtr mainDocument = m_page->mainFrame().document();
     if (!mainDocument)

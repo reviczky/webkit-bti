@@ -110,6 +110,8 @@ void RenderTreeUpdater::commit(std::unique_ptr<const Style::Update> styleUpdate)
     updateRenderViewStyle();
 
     for (auto& root : m_styleUpdate->roots()) {
+        if (&root->document() != &m_document)
+            continue;
         auto* renderingRoot = findRenderingRoot(*root);
         if (!renderingRoot)
             continue;
@@ -576,8 +578,6 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
         teardownStack.append(&element);
     };
 
-    auto& document = root.document();
-
     auto pop = [&] (unsigned depth) {
         while (teardownStack.size() > depth) {
             auto& element = *teardownStack.takeLast();
@@ -595,10 +595,10 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
                     styleable.willChangeRenderer();
                     break;
                 }
-                FALLTHROUGH;
+                element.clearHoverAndActiveStatusBeforeDetachingRenderer();
+                break;
             case TeardownType::Full:
-                if (document.renderTreeBeingDestroyed())
-                    styleable.cancelDeclarativeAnimations();
+                styleable.cancelDeclarativeAnimations();
                 element.clearHoverAndActiveStatusBeforeDetachingRenderer();
                 break;
             case TeardownType::RendererUpdateCancelingAnimations:

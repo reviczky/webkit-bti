@@ -73,11 +73,19 @@ GStreamerMediaEndpoint::GStreamerMediaEndpoint(GStreamerPeerConnectionBackend& p
 #endif
 {
     ensureGStreamerInitialized();
+    registerWebKitGStreamerElements();
 
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkit_webrtc_endpoint_debug, "webkitwebrtcendpoint", 0, "WebKit WebRTC end-point");
     });
+}
+
+GStreamerMediaEndpoint::~GStreamerMediaEndpoint()
+{
+    if (!m_pipeline)
+        return;
+    teardownPipeline();
 }
 
 bool GStreamerMediaEndpoint::initializePipeline()
@@ -176,6 +184,7 @@ bool GStreamerMediaEndpoint::initializePipeline()
 void GStreamerMediaEndpoint::teardownPipeline()
 {
     ASSERT(m_pipeline);
+    GST_DEBUG_OBJECT(m_pipeline.get(), "Tearing down.");
 #if !RELEASE_LOG_DISABLED
     stopLoggingStats();
 #endif
@@ -386,9 +395,13 @@ void GStreamerMediaEndpoint::doSetLocalDescription(const RTCSessionDescription* 
     }, [protectedThis = Ref(*this), this](const GError* error) {
         if (protectedThis->isStopped())
             return;
-        if (error && error->code == GST_WEBRTC_ERROR_INVALID_STATE)
-            m_peerConnectionBackend.setLocalDescriptionFailed(Exception { InvalidStateError, "Failed to set local answer sdp: no pending remote description."_s });
-        else
+        if (error) {
+            if (error->code == GST_WEBRTC_ERROR_INVALID_STATE) {
+                m_peerConnectionBackend.setLocalDescriptionFailed(Exception { InvalidStateError, "Failed to set local answer sdp: no pending remote description."_s });
+                return;
+            }
+            m_peerConnectionBackend.setLocalDescriptionFailed(Exception { OperationError, String::fromUTF8(error->message) });
+        } else
             m_peerConnectionBackend.setLocalDescriptionFailed(Exception { OperationError, "Unable to apply session local description"_s });
     });
 }
@@ -491,6 +504,13 @@ void GStreamerMediaEndpoint::setDescription(const RTCSessionDescription* descrip
             return;
         }
         sdpType = description->type();
+        if (descriptionType == DescriptionType::Local && sdpType == RTCSdpType::Answer && !gst_sdp_message_get_version(message.get())) {
+            GError error;
+            GUniquePtr<char> errorMessage(g_strdup("Expect line: v="));
+            error.message = errorMessage.get();
+            failureCallback(&error);
+            return;
+        }
         preProcessCallback(*message.get());
     } else if (gst_sdp_message_new(&message.outPtr()) != GST_SDP_OK) {
         failureCallback(nullptr);
@@ -653,7 +673,7 @@ GRefPtr<GstPad> GStreamerMediaEndpoint::requestPad(std::optional<unsigned> mLine
     } else
         sinkPad = requestPad("sink_%u"_s);
 
-    GST_DEBUG_OBJECT(m_pipeline.get(), "Setting msid to %s on sink pad", mediaStreamID.ascii().data());
+    GST_DEBUG_OBJECT(m_pipeline.get(), "Setting msid to %s on sink pad %" GST_PTR_FORMAT, mediaStreamID.ascii().data(), sinkPad.get());
     if (gstObjectHasProperty(sinkPad.get(), "msid"))
         g_object_set(sinkPad.get(), "msid", mediaStreamID.ascii().data(), nullptr);
 

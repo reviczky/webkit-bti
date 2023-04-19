@@ -1815,6 +1815,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         if (!m_isLegacyPlaybin && currentState == GST_STATE_PAUSED && newState == GST_STATE_PLAYING)
             playbin3SendSelectStreamsIfAppropriate();
         updateStates();
+        checkPlayingConsistency();
 
         break;
     }
@@ -2647,6 +2648,9 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
 #endif
     }
 
+    if (!ensureGStreamerInitialized())
+        return result;
+
     GST_DEBUG("Checking mime-type \"%s\"", parameters.type.raw().utf8().data());
     if (parameters.type.isEmpty())
         return result;
@@ -2654,6 +2658,8 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
     // This player doesn't support pictures rendering.
     if (parameters.type.raw().startsWith("image"_s))
         return result;
+
+    registerWebKitGStreamerElements();
 
     auto& gstRegistryScanner = GStreamerRegistryScanner::singleton();
     result = gstRegistryScanner.isContentTypeSupported(GStreamerRegistryScanner::Configuration::Decoding, parameters.type, parameters.contentTypesRequiringHardwareSupport);
@@ -3511,14 +3517,14 @@ void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() cons
     });
 }
 
-void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
+void MediaPlayerPrivateGStreamer::triggerRepaint(GRefPtr<GstSample>&& sample)
 {
     ASSERT(!isMainThread());
 
-    GstBuffer* buffer = gst_sample_get_buffer(sample);
+    GstBuffer* buffer = gst_sample_get_buffer(sample.get());
     if (buffer && GST_BUFFER_PTS_IS_VALID(buffer)) {
         // Heuristic to avoid asking for playbackPosition() from a non-main thread.
-        MediaTime currentTime = MediaTime(gst_segment_to_stream_time(gst_sample_get_segment(sample), GST_FORMAT_TIME, GST_BUFFER_PTS(buffer)), GST_SECOND);
+        MediaTime currentTime = MediaTime(gst_segment_to_stream_time(gst_sample_get_segment(sample.get()), GST_FORMAT_TIME, GST_BUFFER_PTS(buffer)), GST_SECOND);
         DataMutexLocker taskAtMediaTimeScheduler { m_TaskAtMediaTimeSchedulerDataMutex };
         if (auto task = taskAtMediaTimeScheduler->checkTaskForScheduling(currentTime))
             RunLoop::main().dispatch(WTFMove(task.value()));
@@ -3528,15 +3534,19 @@ void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
     {
         Locker sampleLocker { m_sampleMutex };
         shouldTriggerResize = !m_sample;
-        m_sample = sample;
+        m_sample = WTFMove(sample);
     }
 
     if (shouldTriggerResize) {
         GST_DEBUG_OBJECT(pipeline(), "First sample reached the sink, triggering video dimensions update");
-        GRefPtr<GstCaps> caps(gst_sample_get_caps(sample));
-        if (!caps) {
-            GST_ERROR_OBJECT(pipeline(), "Received sample without caps: %" GST_PTR_FORMAT, sample);
-            return;
+        GRefPtr<GstCaps> caps;
+        {
+            Locker sampleLocker { m_sampleMutex };
+            caps = gst_sample_get_caps(m_sample.get());
+            if (!caps) {
+                GST_ERROR_OBJECT(pipeline(), "Received sample without caps: %" GST_PTR_FORMAT, m_sample.get());
+                return;
+            }
         }
         RunLoop::main().dispatch([weakThis = WeakPtr { *this }, this, caps = WTFMove(caps)] {
             if (!weakThis)
@@ -3593,11 +3603,6 @@ void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
         pushTextureToCompositor();
     }
 #endif // USE(TEXTURE_MAPPER_GL)
-}
-
-void MediaPlayerPrivateGStreamer::repaintCallback(MediaPlayerPrivateGStreamer* player, GstSample* sample)
-{
-    player->triggerRepaint(sample);
 }
 
 void MediaPlayerPrivateGStreamer::cancelRepaint(bool destroying)
@@ -3958,7 +3963,9 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
     if (!m_videoSink) {
         m_isUsingFallbackVideoSink = true;
         m_videoSink = webkitVideoSinkNew();
-        g_signal_connect_swapped(m_videoSink.get(), "repaint-requested", G_CALLBACK(repaintCallback), this);
+        g_signal_connect_swapped(m_videoSink.get(), "repaint-requested", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstSample* sample) {
+            player->triggerRepaint(adoptGRef(sample));
+        }), this);
         g_signal_connect_swapped(m_videoSink.get(), "repaint-cancelled", G_CALLBACK(repaintCancelledCallback), this);
     }
 
@@ -4257,6 +4264,41 @@ std::optional<VideoFrameMetadata> MediaPlayerPrivateGStreamer::videoFrameMetadat
     metadata.expectedDisplayTime = metadata.presentationTime;
 
     return metadata;
+}
+
+static bool areAllSinksPlayingForBin(GstBin* bin)
+{
+    for (auto* element : GstIteratorAdaptor<GstElement>(GUniquePtr<GstIterator>(gst_bin_iterate_sinks(bin)))) {
+        if (GST_IS_BIN(element) && !areAllSinksPlayingForBin(GST_BIN_CAST(element)))
+            return false;
+
+        GstState state, pending;
+        gst_element_get_state(element, &state, &pending, 0);
+        if (state != GST_STATE_PLAYING && pending != GST_STATE_PLAYING)
+            return false;
+    }
+    return true;
+}
+
+void MediaPlayerPrivateGStreamer::checkPlayingConsistency()
+{
+    if (!pipeline())
+        return;
+
+    GstState state, pending;
+    gst_element_get_state(pipeline(), &state, &pending, 0);
+    if (state == GST_STATE_PLAYING && pending == GST_STATE_VOID_PENDING) {
+        if (!areAllSinksPlayingForBin(GST_BIN(pipeline()))) {
+            if (!m_didTryToRecoverPlayingState) {
+                GST_WARNING_OBJECT(pipeline(), "Playbin is in PLAYING state but some sinks aren't, trying to recover.");
+                ASSERT_NOT_REACHED_WITH_MESSAGE("Playbin is in PLAYING state but some sinks aren't. This should not happen.");
+                m_didTryToRecoverPlayingState = true;
+                gst_element_set_state(pipeline(), GST_STATE_PAUSED);
+                gst_element_set_state(pipeline(), GST_STATE_PLAYING);
+            }
+        } else
+            m_didTryToRecoverPlayingState = false;
+    }
 }
 
 }
