@@ -1,4 +1,4 @@
-wpewebkit (2.40.1-1) UNRELEASED; urgency=medium
+wpewebkit (2.40.1-1) experimental; urgency=medium
 
   * New upstream release.
   * Refresh all patches.
