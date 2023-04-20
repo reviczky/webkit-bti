@@ -1923,8 +1923,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderTextInlines.h
        Source/WebCore/rendering/RenderTheme.cpp
        Source/WebCore/rendering/RenderTheme.h
-       Source/WebCore/rendering/RenderThemeGtk.cpp
-       Source/WebCore/rendering/RenderThemeGtk.h
        Source/WebCore/rendering/RenderThemeMac.h
        Source/WebCore/rendering/RenderThemeWin.cpp
        Source/WebCore/rendering/RenderThemeWin.h
