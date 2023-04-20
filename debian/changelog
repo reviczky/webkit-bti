@@ -1,5 +1,6 @@
-webkit2gtk (2.40.0-4) UNRELEASED; urgency=medium
+webkit2gtk (2.40.1-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/rules:
     - Build with -DUSE_GBM=OFF in the Hurd (Closes: #1033999).
 
