@@ -158,7 +158,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5497,3 +5502,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5499,3 +5504,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
