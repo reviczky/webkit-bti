@@ -28,8 +28,8 @@
 
 #include <wtf/glib/WTFGType.h>
 
-GST_DEBUG_CATEGORY_EXTERN(webkit_webrtc_endpoint_debug);
-#define GST_CAT_DEFAULT webkit_webrtc_endpoint_debug
+GST_DEBUG_CATEGORY(webkit_webrtc_outgoing_video_debug);
+#define GST_CAT_DEFAULT webkit_webrtc_outgoing_video_debug
 
 namespace WebCore {
 
@@ -42,6 +42,10 @@ WEBKIT_DEFINE_ASYNC_DATA_STRUCT(RealtimeOutgoingVideoSourceHolder)
 RealtimeOutgoingVideoSourceGStreamer::RealtimeOutgoingVideoSourceGStreamer(const String& mediaStreamId, MediaStreamTrack& track)
     : RealtimeOutgoingMediaSourceGStreamer(mediaStreamId, track)
 {
+    static std::once_flag debugRegisteredFlag;
+    std::call_once(debugRegisteredFlag, [] {
+        GST_DEBUG_CATEGORY_INIT(webkit_webrtc_outgoing_video_debug, "webkitwebrtcoutgoingvideo", 0, "WebKit WebRTC outgoing video");
+    });
     registerWebKitGStreamerElements();
 
     static Atomic<uint64_t> sourceCounter = 0;
@@ -127,8 +131,9 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
         return false;
     }
 
+    // FIXME: Re-enable auto-header-extension. Currently triggers caps negotiation error.
     // Align MTU with libwebrtc implementation, also helping to reduce packet fragmentation.
-    g_object_set(m_payloader.get(), "mtu", 1200, nullptr);
+    g_object_set(m_payloader.get(), "auto-header-extension", FALSE, "mtu", 1200, nullptr);
 
     if (!videoEncoderSetFormat(WEBKIT_VIDEO_ENCODER(m_encoder.get()), WTFMove(encoderCaps))) {
         GST_ERROR_OBJECT(m_bin.get(), "Unable to set encoder format");

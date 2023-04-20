@@ -46,6 +46,7 @@
 #include "CSSPendingSubstitutionValue.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSPropertyParsing.h"
+#include "CSSQuadValue.h"
 #include "CSSTokenizer.h"
 #include "CSSTransformListValue.h"
 #include "CSSValuePair.h"
@@ -1131,7 +1132,6 @@ static constexpr InitialValue initialValueForLonghand(CSSPropertyID longhand)
     case CSSPropertyWebkitMaskBoxImageRepeat:
         return CSSValueStretch;
     case CSSPropertyBorderImageSlice:
-    case CSSPropertyWebkitMaskBoxImageSlice:
         return InitialNumericValue { 100, CSSUnitType::CSS_PERCENTAGE };
     case CSSPropertyBoxSizing:
         return CSSValueContentBox;
@@ -1260,6 +1260,14 @@ static bool isNumber(const RectBase& quad, double number, CSSUnitType type)
         && isNumber(quad.left(), number, type);
 }
 
+static bool isValueID(const RectBase& quad, CSSValueID valueID)
+{
+    return isValueID(quad.top(), valueID)
+        && isValueID(quad.right(), valueID)
+        && isValueID(quad.bottom(), valueID)
+        && isValueID(quad.left(), valueID);
+}
+
 static bool isNumericQuad(const CSSValue& value, double number, CSSUnitType type)
 {
     return value.isQuad() && isNumber(value.quad(), number, type);
@@ -1276,10 +1284,12 @@ bool isInitialValueForLonghand(CSSPropertyID longhand, const CSSValue& value)
             return true;
         break;
     case CSSPropertyBorderImageOutset:
+    case CSSPropertyWebkitMaskBoxImageOutset:
         if (isNumericQuad(value, 0, CSSUnitType::CSS_NUMBER))
             return true;
         break;
     case CSSPropertyBorderImageRepeat:
+    case CSSPropertyWebkitMaskBoxImageRepeat:
         if (isValueIDPair(value, CSSValueStretch))
             return true;
         break;
@@ -1301,6 +1311,18 @@ bool isInitialValueForLonghand(CSSPropertyID longhand, const CSSValue& value)
                 return true;
         }
         break;
+    case CSSPropertyWebkitMaskBoxImageSlice:
+        if (auto sliceValue = dynamicDowncast<CSSBorderImageSliceValue>(value)) {
+            if (sliceValue->fill() && isNumber(sliceValue->slices(), 0, CSSUnitType::CSS_NUMBER))
+                return true;
+        }
+        return false;
+    case CSSPropertyWebkitMaskBoxImageWidth:
+        if (auto widthValue = dynamicDowncast<CSSBorderImageWidthValue>(value)) {
+            if (!widthValue->overridesBorderWidths() && isValueID(widthValue->widths(), CSSValueAuto))
+                return true;
+        }
+        break;
     default:
         break;
     }
@@ -1313,6 +1335,8 @@ bool isInitialValueForLonghand(CSSPropertyID longhand, const CSSValue& value)
 
 ASCIILiteral initialValueTextForLonghand(CSSPropertyID longhand)
 {
+    if (longhand == CSSPropertyWebkitMaskBoxImageSlice)
+        return "0 fill"_s;
     return WTF::switchOn(initialValueForLonghand(longhand), [](CSSValueID value) {
         return nameLiteral(value);
     }, [](InitialNumericValue initialValue) {
@@ -1357,6 +1381,8 @@ ASCIILiteral initialValueTextForLonghand(CSSPropertyID longhand)
 
 CSSValueID initialValueIDForLonghand(CSSPropertyID longhand)
 {
+    if (longhand == CSSPropertyWebkitMaskBoxImageSlice)
+        return CSSValueInvalid;
     return WTF::switchOn(initialValueForLonghand(longhand), [](CSSValueID value) {
         return value;
     }, [](InitialNumericValue) {
