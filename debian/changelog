@@ -1,3 +1,24 @@
+webkit2gtk (2.40.1-1~deb11u1) bullseye-security; urgency=medium
+
+  * Rebuild for bullseye-security.
+  * gcc 10 segfaults when building webkit in amd64 (see #1008098) so use
+    clang instead. Keep using gcc in other architectures because clang has
+    problems in at least i386, arm64 and mipsel (see #1010329 and
+    #1016811).
+    - debian/rules: Tell CMake to use clang.
+    - debian/control.in: Build depend on clang.
+  * Build libsoup2 packages only.
+    - debian/rules: Set ENABLE_SOUP3=NO, ENABLE_GTK4=NO and
+      USE_PREBUILT_DOCS=YES.
+    - debian/control.in: Remove build dependency on ccache.
+  * debian/rules:
+    - Disable USE_AVI, USE_GBM and USE_GSTREAMER_TRANSCODER due to missing
+      or additional build dependencies.
+  * debian/control:
+    - Don't require version 1.20.0 of libgstreamer-plugins-bad1.0-dev.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 02 May 2023 13:09:59 +0200
+
 webkit2gtk (2.40.1-1) unstable; urgency=high
 
   * New upstream release.
