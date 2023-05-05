@@ -342,11 +342,11 @@ endif
 
 override_dh_makeshlibs:
 	$(SOUP2_BUILD) dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
-	$(SOUP2_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.0-18
+	$(SOUP2_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.0-18 -VNone
 	$(SOUP3_BUILD) dh_makeshlibs -plibwebkit2gtk-4.1-0 -Xinjected-bundle
-	$(SOUP3_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.1-0
+	$(SOUP3_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.1-0 -VNone
 	$(GTK4_BUILD)  dh_makeshlibs -plibwebkitgtk-6.0-4 -Xinjected-bundle
-	$(GTK4_BUILD)  dh_makeshlibs -plibjavascriptcoregtk-6.0-1
+	$(GTK4_BUILD)  dh_makeshlibs -plibjavascriptcoregtk-6.0-1 -VNone
 
 override_dh_missing:
 	dh_missing --fail-missing

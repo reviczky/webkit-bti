@@ -7,6 +7,9 @@ webkit2gtk (2.41.4-1) UNRELEASED; urgency=medium
       where they are very old.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
+  * debian/rules:
+    - Pass -VNone to dh_makeshlibs for javascriptcore to keep the behavior
+      of the debhelper compat level 11 and earlier.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 17 May 2023 16:50:02 +0200
 
