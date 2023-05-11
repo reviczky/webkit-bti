@@ -9,3 +9,4 @@ force-single-process.patch
 support-old-cmake.patch
 no-gtk-overlay-scrolling.patch
 revert-cmake-3.16-bump.patch
+revert-gstreamer-1.16-bump.patch

@@ -1,0 +1,152 @@
+Description: revert GStreamer dependency bump, as 1.16 is not
+ available in Debian 10 buster
+Author: Emilio Pozuelo Monfort <pochu@debian.org>
+
+This reverts:
+
+From b2517e465d9f2983fe3181b176767e91b3a7f32e Mon Sep 17 00:00:00 2001
+From: Bastian Krause <bst@pengutronix.de>
+Date: Thu, 3 Nov 2022 12:28:50 -0700
+Subject: [PATCH] [GStreamer] Bump minimum version requirement to 1.16.2
+ https://bugs.webkit.org/show_bug.cgi?id=247440
+
+diff --git a/Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp b/Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
+index 5308821fc2..5eaf8bdd62 100644
+--- a/Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
++++ b/Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
+@@ -68,7 +68,9 @@ void MediaStreamAudioSource::consumeAudio(AudioBus& bus, size_t numberOfFrames)
+     GST_BUFFER_FLAG_SET(buffer.get(), GST_BUFFER_FLAG_LIVE);
+ 
+     copyBusData(bus, buffer.get(), muted());
++#if GST_CHECK_VERSION(1, 16, 0)
+     gst_buffer_add_audio_meta(buffer.get(), &info, numberOfFrames, nullptr);
++#endif
+     auto sample = adoptGRef(gst_sample_new(buffer.get(), caps.get(), nullptr, nullptr));
+     GStreamerAudioData audioBuffer(WTFMove(sample), info);
+     GStreamerAudioStreamDescription description(&info);
+diff --git a/Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
+index a861b913cc..df21a1f67e 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
+@@ -88,7 +88,25 @@ static void webKitGLVideoSinkConstructed(GObject* object)
+     ASSERT(colorconvert);
+     gst_bin_add_many(GST_BIN_CAST(sink), upload, colorconvert, sink->priv->appSink.get(), nullptr);
+ 
+-    GRefPtr<GstCaps> caps = adoptGRef(gst_caps_from_string("video/x-raw, format = (string) " GST_GL_CAPS_FORMAT));
++    // Workaround until we can depend on GStreamer 1.16.2.
++    // https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/commit/8d32de090554cf29fe359f83aa46000ba658a693
++    // Forcing a color conversion to RGBA here allows glupload to internally use
++    // an uploader that adds a VideoMeta, through the TextureUploadMeta caps
++    // feature, without needing the patch above. However this specific caps
++    // feature is going to be removed from GStreamer so it is considered a
++    // short-term workaround. This code path most likely will have a negative
++    // performance impact on embedded platforms as well. Downstream embedders
++    // are highly encouraged to cherry-pick the patch linked above in their BSP
++    // and set the WEBKIT_GST_NO_RGBA_CONVERSION environment variable until
++    // GStreamer 1.16.2 is released.
++    // See also https://bugs.webkit.org/show_bug.cgi?id=201422
++    GRefPtr<GstCaps> caps;
++    if (webkitGstCheckVersion(1, 16, 2) || getenv("WEBKIT_GST_NO_RGBA_CONVERSION"))
++        caps = adoptGRef(gst_caps_from_string("video/x-raw, format = (string) " GST_GL_CAPS_FORMAT));
++    else {
++        GST_INFO_OBJECT(sink, "Forcing RGBA as GStreamer is not new enough.");
++        caps = adoptGRef(gst_caps_from_string("video/x-raw, format = (string) RGBA"));
++    }
+     gst_caps_set_features(caps.get(), 0, gst_caps_features_new(GST_CAPS_FEATURE_MEMORY_GL_MEMORY, nullptr));
+     g_object_set(sink->priv->appSink.get(), "caps", caps.get(), nullptr);
+ 
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+index 6dbf6a67df..184c5c3e5f 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/GStreamerEMEUtilities.h
+@@ -61,8 +61,10 @@ public:
+     const String& systemId() const { return m_systemId; }
+     String payloadContainerType() const
+     {
++#if GST_CHECK_VERSION(1, 16, 0)
+         if (m_systemId == GST_PROTECTION_UNSPECIFIED_SYSTEM_ID ""_s)
+             return "webm"_s;
++#endif
+         return "cenc"_s;
+     }
+ 
+@@ -111,8 +113,10 @@ public:
+     static constexpr auto s_WidevineKeySystem = "com.widevine.alpha"_s;
+     static constexpr auto s_PlayReadyUUID = WEBCORE_GSTREAMER_EME_UTILITIES_PLAYREADY_UUID ""_s;
+     static constexpr std::array<ASCIILiteral, 2> s_PlayReadyKeySystems = { "com.microsoft.playready"_s,  "com.youtube.playready"_s };
++#if GST_CHECK_VERSION(1, 16, 0)
+     static constexpr auto s_unspecifiedUUID = GST_PROTECTION_UNSPECIFIED_SYSTEM_ID ""_s;
+     static constexpr auto s_unspecifiedKeySystem = GST_PROTECTION_UNSPECIFIED_SYSTEM_ID ""_s;
++#endif
+ 
+     static bool isClearKeyKeySystem(const String& keySystem)
+     {
+@@ -144,6 +148,7 @@ public:
+         return equalIgnoringASCIICase(uuid, s_PlayReadyUUID);
+     }
+ 
++#if GST_CHECK_VERSION(1, 16, 0)
+     static bool isUnspecifiedKeySystem(const String& keySystem)
+     {
+         return equalIgnoringASCIICase(keySystem, s_unspecifiedKeySystem);
+@@ -153,6 +158,7 @@ public:
+     {
+         return equalIgnoringASCIICase(uuid, s_unspecifiedUUID);
+     }
++#endif
+ 
+     static const char* keySystemToUuid(const String& keySystem)
+     {
+@@ -165,8 +171,10 @@ public:
+         if (isPlayReadyKeySystem(keySystem))
+             return s_PlayReadyUUID;
+ 
++#if GST_CHECK_VERSION(1, 16, 0)
+         if (isUnspecifiedKeySystem(keySystem))
+             return s_unspecifiedUUID;
++#endif
+ 
+         ASSERT_NOT_REACHED();
+         return { };
+@@ -183,8 +191,10 @@ public:
+         if (isPlayReadyUUID(uuid))
+             return s_PlayReadyKeySystems[0];
+ 
++#if GST_CHECK_VERSION(1, 16, 0)
+         if (isUnspecifiedUUID(uuid))
+             return s_unspecifiedKeySystem;
++#endif
+ 
+         ASSERT_NOT_REACHED();
+         return ""_s;
+diff --git a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+index 4e2f9b18cc..c45cb51420 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/eme/WebKitCommonEncryptionDecryptorGStreamer.cpp
+@@ -170,8 +170,11 @@ static GstCaps* transformCaps(GstBaseTransform* base, GstPadDirection direction,
+ 
+                 // GST_PROTECTION_UNSPECIFIED_SYSTEM_ID was added in the GStreamer
+                 // developement git master which will ship as version 1.16.0.
+-                gst_structure_set_name(outgoingStructure.get(), !g_strcmp0(klass->protectionSystemId(self),
+-                    GST_PROTECTION_UNSPECIFIED_SYSTEM_ID) ? "application/x-webm-enc" : "application/x-cenc");
++                gst_structure_set_name(outgoingStructure.get(),
++#if GST_CHECK_VERSION(1, 16, 0)
++                    !g_strcmp0(klass->protectionSystemId(self), GST_PROTECTION_UNSPECIFIED_SYSTEM_ID) ? "application/x-webm-enc" :
++#endif
++                    "application/x-cenc");
+             }
+         }
+ 
+diff --git a/Source/cmake/GStreamerChecks.cmake b/Source/cmake/GStreamerChecks.cmake
+index ba8423e279..df9d320491 100644
+--- a/Source/cmake/GStreamerChecks.cmake
++++ b/Source/cmake/GStreamerChecks.cmake
+@@ -36,7 +36,7 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
+               list(APPEND GSTREAMER_COMPONENTS webrtc)
+           endif ()
+ 
+-          find_package(GStreamer 1.16.2 REQUIRED COMPONENTS ${GSTREAMER_COMPONENTS})
++          find_package(GStreamer 1.14.0 REQUIRED COMPONENTS ${GSTREAMER_COMPONENTS})
+ 
+           if (ENABLE_WEB_AUDIO)
+               if (NOT PC_GSTREAMER_AUDIO_FOUND OR NOT PC_GSTREAMER_FFT_FOUND)
