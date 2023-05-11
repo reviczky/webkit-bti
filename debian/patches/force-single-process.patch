@@ -21,9 +21,9 @@ Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
 --- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
 +++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
 @@ -420,6 +420,20 @@ static void webkitWebContextConstructed(
-     configuration.setUsesWebProcessCache(true);
- #if PLATFORM(GTK)
+ #if PLATFORM(GTK) && !USE(GTK4)
      configuration.setProcessSwapsOnNavigation(priv->psonEnabled);
+     configuration.setUseSystemAppearanceForScrollbars(priv->useSystemAppearanceForScrollbars);
 +    if (!priv->psonEnabled) {
 +        const char* useSingleWebProcess = getenv("WEBKIT_USE_SINGLE_WEB_PROCESS");
 +        if (useSingleWebProcess) {
@@ -38,6 +38,6 @@ Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
 +        }
 +     }
 +
- #if !USE(GTK4)
-     configuration.setUseSystemAppearanceForScrollbars(priv->useSystemAppearanceForScrollbars);
+ #else
+     configuration.setProcessSwapsOnNavigation(true);
  #endif
