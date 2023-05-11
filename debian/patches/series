@@ -8,3 +8,4 @@ fix-ftbfs-hurd.patch
 force-single-process.patch
 support-old-cmake.patch
 no-gtk-overlay-scrolling.patch
+fix-jscast-undeclared-error.patch

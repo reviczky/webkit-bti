@@ -1,0 +1,36 @@
+From d7a67e49ad5440769cca084d6cc1cea3c5788761 Mon Sep 17 00:00:00 2001
+From: Thomas Devoogdt <thomas.devoogdt@barco.com>
+Date: Mon, 24 Apr 2023 11:39:42 -0700
+Subject: [PATCH] [JSC] fix include error by 263041@main
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+https://bugs.webkit.org/show_bug.cgi?id=255867
+
+Reviewed by Yusuke Suzuki.
+
+Seen on webkitgtk-2.38.6 but also applicable on main.
+
+/home/thomas/Documents/buildroot/output/build/webkitgtk-2.38.6/Source/JavaScriptCore/runtime/ArgList.h: In member function ‘decltype(auto) JSC::MarkedVector<T, passedInlineCapacity, OverflowHandler>::at(int) const’:
+/home/thomas/Documents/buildroot/output/build/webkitgtk-2.38.6/Source/JavaScriptCore/runtime/ArgList.h:144:20: error: ‘jsCast’ was not declared in this scope
+             return jsCast<T>(JSValue::decode(slotFor(i)).asCell());
+
+Signed-off-by: Thomas Devoogdt <thomas.devoogdt@barco.com>
+Canonical link: https://commits.webkit.org/263324@main
+---
+ Source/JavaScriptCore/runtime/ArgList.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/JavaScriptCore/runtime/ArgList.h b/Source/JavaScriptCore/runtime/ArgList.h
+index 81a503d73756..e5ab50f0e01a 100644
+--- a/Source/JavaScriptCore/runtime/ArgList.h
++++ b/Source/JavaScriptCore/runtime/ArgList.h
+@@ -22,6 +22,7 @@
+ #pragma once
+ 
+ #include "CallFrame.h"
++#include "JSCast.h"
+ #include <wtf/CheckedArithmetic.h>
+ #include <wtf/ForbidHeapAllocation.h>
+ #include <wtf/HashSet.h>
