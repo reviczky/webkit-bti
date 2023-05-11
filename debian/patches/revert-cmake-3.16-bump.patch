@@ -1,0 +1,59 @@
+Revert bump to CMake 3.16, as Debian buster has 3.13.4.
+
+This reverts commit 121756da74:
+
+From 121756da7448caa31c54f128bcf8cdefe774963d Mon Sep 17 00:00:00 2001
+From: Fujii Hironori <Hironori.Fujii@sony.com>
+Date: Sun, 27 Nov 2022 16:47:05 -0800
+Subject: [PATCH] [CMake] Use CMAKE_MSVC_RUNTIME_LIBRARY to select a CRT type
+ instead of regexp replacing https://bugs.webkit.org/show_bug.cgi?id=248289
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index aa99898dc4..71bb6f95cf 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -6,7 +6,7 @@
+ # latter in particular handles loading a bunch of shared CMake definitions
+ # and loading the cross-compilation settings from CMAKE_TOOLCHAIN_FILE.
+ 
+-cmake_minimum_required(VERSION 3.16)
++cmake_minimum_required(VERSION 3.12)
+ project(WebKit)
+ 
+ # Remove this cmake_policy() after upgrading cmake_minimum_required() to 3.20.
+diff --git a/Source/cmake/OptionsMSVC.cmake b/Source/cmake/OptionsMSVC.cmake
+index bd81da8df2..3a50e3f3d4 100644
+--- a/Source/cmake/OptionsMSVC.cmake
++++ b/Source/cmake/OptionsMSVC.cmake
+@@ -165,6 +165,31 @@ if (NOT ${CMAKE_CXX_FLAGS} STREQUAL "")
+     WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(/W4)
+ endif ()
+ 
++if (MSVC_STATIC_RUNTIME)
++    message(STATUS "Using multithreaded, static version of the run-time library")
++    set(MSVC_RUNTIME_COMPILE_FLAG "/MT")
++    set(MSVC_RUNTIME_LINKER_FLAGS "/NODEFAULTLIB:MSVCRT /NODEFAULTLIB:MSVCRTD")
++else ()
++    message(STATUS "Using multithreaded, dynamic version of the run-time library")
++    set(MSVC_RUNTIME_COMPILE_FLAG "/MD")
++    # No linker flags are required
++endif ()
++
++foreach (flag_var
++    CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
++    CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO
++    CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
++    CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
++    # Use the multithreaded static runtime library instead of the default DLL runtime.
++    string(REGEX REPLACE "/MD" "${MSVC_RUNTIME_COMPILE_FLAG}" ${flag_var} "${${flag_var}}")
++
++    # No debug runtime, even in debug builds.
++    if (NOT DEBUG_SUFFIX)
++        string(REGEX REPLACE "${MSVC_RUNTIME_COMPILE_FLAG}d" "${MSVC_RUNTIME_COMPILE_FLAG}" ${flag_var} "${${flag_var}}")
++        string(REGEX REPLACE "/D_DEBUG" "" ${flag_var} "${${flag_var}}")
++    endif ()
++endforeach ()
++
+ # Make sure incremental linking is turned off, as it creates unacceptably long link times.
+ string(REPLACE "INCREMENTAL:YES" "INCREMENTAL:NO" replace_CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS})
+ set(CMAKE_SHARED_LINKER_FLAGS "${replace_CMAKE_SHARED_LINKER_FLAGS} /INCREMENTAL:NO")
