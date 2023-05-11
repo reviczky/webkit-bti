@@ -30,6 +30,7 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     error ".debug_info section not present"
     - Add debian/compat file.
     - Update build dependency on debhelper.
+  * Build with clang as GCC is too old in buster.
 
  -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 11 May 2023 13:30:32 +0200
 

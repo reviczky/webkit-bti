@@ -35,6 +35,10 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
+EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++
+
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)
