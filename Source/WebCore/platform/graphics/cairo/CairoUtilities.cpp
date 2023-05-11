@@ -49,11 +49,11 @@
 
 namespace WebCore {
 
-#if USE(CAIRO) && !PLATFORM(GTK)
-const cairo_font_options_t* getDefaultCairoFontOptions()
+#if USE(FREETYPE)
+RecursiveLock& cairoFontLock()
 {
-    static NeverDestroyed<cairo_font_options_t*> options = cairo_font_options_create();
-    return options;
+    static RecursiveLock s_lock;
+    return s_lock;
 }
 #endif
 

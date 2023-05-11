@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.38.6</p>
         
       </div>
       
@@ -159,12 +159,12 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
       </h4>
 
       <div class="docblock">
-        <pre><code><div class="highlight"><pre><span></span><span class="n">gboolean</span>
-<span class="n">permission_request</span><span class="w"> </span><span class="p">(</span>
-<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span>
-<span class="w">  </span><span class="n">WebKit2PermissionRequest</span><span class="o">*</span><span class="w"> </span><span class="n">request</span><span class="p">,</span>
-<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span>
-<span class="p">)</span>
+        <pre><code><div class="highlight"><pre><span></span><span class="n">gboolean</span><span class="w"></span>
+<span class="n">permission_request</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
+<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"></span>
+<span class="w">  </span><span class="n">WebKit2PermissionRequest</span><span class="o">*</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"></span>
+<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="w"></span>
+<span class="p">)</span><span class="w"></span>
 </pre></div>
 </code></pre>
       </div>
@@ -185,30 +185,30 @@ decide about a permission request, such as allowing the browser
 to switch to fullscreen mode, sharing its location or similar&nbsp;operations.</p>
 <p>A possible way to use this signal could be through a dialog
 allowing the user decide what to do with the&nbsp;request:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span><span class="w"> </span><span class="nf">permission_request_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
-<span class="w">                                       </span><span class="n">WebKitPermissionRequest</span><span class="w"> </span><span class="o">*</span><span class="n">request</span><span class="p">,</span>
-<span class="w">                                       </span><span class="n">GtkWindow</span><span class="w"> </span><span class="o">*</span><span class="n">parent_window</span><span class="p">)</span>
-<span class="p">{</span>
-<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">dialog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_message_dialog_new</span><span class="w"> </span><span class="p">(</span><span class="n">parent_window</span><span class="p">,</span>
-<span class="w">                                                </span><span class="n">GTK_DIALOG_MODAL</span><span class="p">,</span>
-<span class="w">                                                </span><span class="n">GTK_MESSAGE_QUESTION</span><span class="p">,</span>
-<span class="w">                                                </span><span class="n">GTK_BUTTONS_YES_NO</span><span class="p">,</span>
-<span class="w">                                                </span><span class="s">&quot;Allow Permission Request?&quot;</span><span class="p">);</span>
-<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span>
-<span class="w">    </span><span class="n">gint</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_dialog_run</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_DIALOG</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">));</span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span><span class="w"> </span><span class="nf">permission_request_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                       </span><span class="n">WebKitPermissionRequest</span><span class="w"> </span><span class="o">*</span><span class="n">request</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                       </span><span class="n">GtkWindow</span><span class="w"> </span><span class="o">*</span><span class="n">parent_window</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">dialog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_message_dialog_new</span><span class="w"> </span><span class="p">(</span><span class="n">parent_window</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_DIALOG_MODAL</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_MESSAGE_QUESTION</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_BUTTONS_YES_NO</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="s">&quot;Allow Permission Request?&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">gint</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_dialog_run</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_DIALOG</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">));</span><span class="w"></span>
 
-<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">GTK_RESPONSE_YES</span><span class="p">:</span>
-<span class="w">        </span><span class="n">webkit_permission_request_allow</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span>
-<span class="w">    </span><span class="k">default</span><span class="o">:</span>
-<span class="w">        </span><span class="n">webkit_permission_request_deny</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span>
-<span class="w">    </span><span class="p">}</span>
-<span class="w">    </span><span class="n">gtk_widget_destroy</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_permission_request_allow</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_permission_request_deny</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_destroy</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span><span class="w"></span>
 
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span>
-<span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
 </code></pre></div>
 
 <p>It is possible to handle permission requests asynchronously, by

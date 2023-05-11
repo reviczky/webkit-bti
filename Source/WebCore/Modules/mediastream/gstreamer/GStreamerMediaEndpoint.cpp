@@ -80,6 +80,13 @@ GStreamerMediaEndpoint::GStreamerMediaEndpoint(GStreamerPeerConnectionBackend& p
     });
 }
 
+GStreamerMediaEndpoint::~GStreamerMediaEndpoint()
+{
+    if (!m_pipeline)
+        return;
+    teardownPipeline();
+}
+
 bool GStreamerMediaEndpoint::initializePipeline()
 {
     static uint32_t nPipeline = 0;
@@ -176,6 +183,7 @@ bool GStreamerMediaEndpoint::initializePipeline()
 void GStreamerMediaEndpoint::teardownPipeline()
 {
     ASSERT(m_pipeline);
+    GST_DEBUG_OBJECT(m_pipeline.get(), "Tearing down.");
 #if !RELEASE_LOG_DISABLED
     stopLoggingStats();
 #endif
@@ -385,9 +393,13 @@ void GStreamerMediaEndpoint::doSetLocalDescription(const RTCSessionDescription* 
     }, [protectedThis = Ref(*this), this](const GError* error) {
         if (protectedThis->isStopped())
             return;
-        if (error && error->code == GST_WEBRTC_ERROR_INVALID_STATE)
-            m_peerConnectionBackend.setLocalDescriptionFailed(Exception { InvalidStateError, "Failed to set local answer sdp: no pending remote description."_s });
-        else
+        if (error) {
+            if (error->code == GST_WEBRTC_ERROR_INVALID_STATE) {
+                m_peerConnectionBackend.setLocalDescriptionFailed(Exception { InvalidStateError, "Failed to set local answer sdp: no pending remote description."_s });
+                return;
+            }
+            m_peerConnectionBackend.setLocalDescriptionFailed(Exception { OperationError, String::fromUTF8(error->message) });
+        } else
             m_peerConnectionBackend.setLocalDescriptionFailed(Exception { OperationError, "Unable to apply session local description"_s });
     });
 }
@@ -488,6 +500,13 @@ void GStreamerMediaEndpoint::setDescription(const RTCSessionDescription* descrip
             return;
         }
         sdpType = description->type();
+        if (descriptionType == DescriptionType::Local && sdpType == RTCSdpType::Answer && !gst_sdp_message_get_version(message.get())) {
+            GError error;
+            GUniquePtr<char> errorMessage(g_strdup("Expect line: v="));
+            error.message = errorMessage.get();
+            failureCallback(&error);
+            return;
+        }
         preProcessCallback(*message.get());
     } else if (gst_sdp_message_new(&message.outPtr()) != GST_SDP_OK) {
         failureCallback(nullptr);
@@ -985,6 +1004,12 @@ std::unique_ptr<GStreamerRtpTransceiverBackend> GStreamerMediaEndpoint::transcei
     return nullptr;
 }
 
+struct AddIceCandidateCallData {
+    GRefPtr<GstElement> webrtcBin;
+    PeerConnectionBackend::AddIceCandidateCallback callback;
+};
+WEBKIT_DEFINE_ASYNC_DATA_STRUCT(AddIceCandidateCallData)
+
 void GStreamerMediaEndpoint::addIceCandidate(GStreamerIceCandidate& candidate, PeerConnectionBackend::AddIceCandidateCallback&& callback)
 {
     GST_DEBUG_OBJECT(m_pipeline.get(), "Adding ICE candidate %s", candidate.candidate.utf8().data());
@@ -996,6 +1021,36 @@ void GStreamerMediaEndpoint::addIceCandidate(GStreamerIceCandidate& candidate, P
         return;
     }
 
+    // https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/3960
+    if (webkitGstCheckVersion(1, 23, 0)) {
+        auto* data = createAddIceCandidateCallData();
+        data->webrtcBin = m_webrtcBin;
+        data->callback = WTFMove(callback);
+        g_signal_emit_by_name(m_webrtcBin.get(), "add-ice-candidate-full", candidate.sdpMLineIndex, candidate.candidate.utf8().data(), gst_promise_new_with_change_func([](GstPromise* rawPromise, gpointer userData) {
+            auto* data = reinterpret_cast<AddIceCandidateCallData*>(userData);
+            auto promise = adoptGRef(rawPromise);
+            auto result = gst_promise_wait(promise.get());
+            const auto* reply = gst_promise_get_reply(promise.get());
+            if (result != GST_PROMISE_RESULT_REPLIED || (reply && gst_structure_has_field(reply, "error"))) {
+                if (reply) {
+                    GUniqueOutPtr<GError> error;
+                    gst_structure_get(reply, "error", G_TYPE_ERROR, &error.outPtr(), nullptr);
+                    GST_ERROR("Unable to add ICE candidate, error: %s", error->message);
+                }
+                callOnMainThread([task = createSharedTask<PeerConnectionBackend::AddIceCandidateCallbackFunction>(WTFMove(data->callback))]() mutable {
+                    task->run(Exception { OperationError, "Error processing ICE candidate"_s });
+                });
+                return;
+            }
+
+            callOnMainThread([task = createSharedTask<PeerConnectionBackend::AddIceCandidateCallbackFunction>(WTFMove(data->callback)), descriptions = descriptionsFromWebRTCBin(data->webrtcBin.get())]() mutable {
+                task->run(WTFMove(descriptions));
+            });
+        }, data, reinterpret_cast<GDestroyNotify>(destroyAddIceCandidateCallData)));
+        return;
+    }
+
+    // Candidate parsing is still needed for old GStreamer versions.
     auto parsedCandidate = parseIceCandidateSDP(candidate.candidate);
     if (!parsedCandidate) {
         callOnMainThread([task = createSharedTask<PeerConnectionBackend::AddIceCandidateCallbackFunction>(WTFMove(callback))]() mutable {
@@ -1004,8 +1059,7 @@ void GStreamerMediaEndpoint::addIceCandidate(GStreamerIceCandidate& candidate, P
         return;
     }
 
-    // FIXME: invalid sdpMLineIndex exception not relayed from webrtcbin.
-    // FIXME: Ideally this should pass the result/error to a GstPromise object.
+    // This is racy but nothing we can do about it when we are on older GStreamer runtimes.
     g_signal_emit_by_name(m_webrtcBin.get(), "add-ice-candidate", candidate.sdpMLineIndex, candidate.candidate.utf8().data());
     callOnMainThread([task = createSharedTask<PeerConnectionBackend::AddIceCandidateCallbackFunction>(WTFMove(callback)), descriptions = descriptionsFromWebRTCBin(m_webrtcBin.get())]() mutable {
         task->run(WTFMove(descriptions));
