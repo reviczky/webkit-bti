@@ -106,7 +106,7 @@ public:
     void removedFromMediaSource();
     void seekToTime(const MediaTime&);
 
-    bool canPlayThroughRange(PlatformTimeRanges&);
+    bool canPlayThroughRange(const PlatformTimeRanges&);
 
     bool hasVideo() const;
 
@@ -161,7 +161,7 @@ private:
     void sourceBufferPrivateAppendError(bool decodeError) final;
     void sourceBufferPrivateAppendComplete(AppendResult) final;
     void sourceBufferPrivateHighestPresentationTimestampChanged(const MediaTime&) final;
-    void sourceBufferPrivateDurationChanged(const MediaTime& duration) final;
+    void sourceBufferPrivateDurationChanged(const MediaTime& duration, CompletionHandler<void()>&&) final;
     void sourceBufferPrivateDidParseSample(double sampleDuration) final;
     void sourceBufferPrivateDidDropSample() final;
     void sourceBufferPrivateBufferedDirtyChanged(bool) final;

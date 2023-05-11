@@ -553,17 +553,12 @@ void AppendPipeline::consumeAppsinksAvailableSamples()
 
     GRefPtr<GstSample> sample;
     int batchedSampleCount = 0;
-    // In some cases each frame increases the duration of the movie.
-    // Batch duration changes so that if we pick 100 of such samples we don't have to run 100 times
-    // layout for the video controls, but only once.
-    m_playerPrivate->blockDurationChanges();
     for (std::unique_ptr<Track>& track : m_tracks) {
         while ((sample = adoptGRef(gst_app_sink_try_pull_sample(GST_APP_SINK(track->appsink.get()), 0)))) {
             appsinkNewSample(*track, WTFMove(sample));
             batchedSampleCount++;
         }
     }
-    m_playerPrivate->unblockDurationChanges();
 
     GST_TRACE_OBJECT(m_pipeline.get(), "batchedSampleCount = %d", batchedSampleCount);
 }
@@ -807,6 +802,11 @@ bool AppendPipeline::recycleTrackForPad(GstPad* demuxerSrcPad)
         if (peer.get() != demuxerSrcPad) {
             GST_DEBUG_OBJECT(peer.get(), "Unlinking from track %s", matchingTrack->trackId.string().ascii().data());
             gst_pad_unlink(peer.get(), matchingTrack->entryPad.get());
+
+            const String& type = m_sourceBufferPrivate.type().containerType();
+            if (type.endsWith("webm"_s))
+                gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, matroskademuxForceSegmentStartToEqualZero, nullptr, nullptr);
+
             matchingTrack->emplaceOptionalParserForFormat(GST_BIN_CAST(m_pipeline.get()), parsedCaps);
             linkPadWithTrack(demuxerSrcPad, *matchingTrack);
             matchingTrack->caps = WTFMove(parsedCaps);
