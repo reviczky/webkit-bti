@@ -10,7 +10,7 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
       constant warnings about its absence (see #1024535).
   * debian/control.in:
     - Remove build dependencies on ccache, libwpebackend-fdo-1.0-dev,
-      libmanette-0.2-dev and liblcms2-dev.
+      libmanette-0.2-dev, liblcms2-dev and libavif-dev.
     - Switch build dependency from libenchant-2-dev to libenchant-dev.
     - Switch build dependency from libfreetype-dev to libfreetype6-dev.
     - Switch build dependencies on libegl-dev, libgl-dev and libgles-dev
@@ -22,7 +22,7 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     - Set ENABLE_SOUP3=NO, ENABLE_GTK4=NO and USE_PREBUILT_DOCS=YES. This
       builds the 4.0 API packages only (soup2 build).
     - Build with -DENABLE_GAMEPAD=OFF -DUSE_LCMS=OFF.
-    - Disable USE_AVI, USE_GBM and USE_GSTREAMER_TRANSCODER due to missing
+    - Disable USE_AVIF, USE_GBM and USE_GSTREAMER_TRANSCODER due to missing
       or additional build dependencies.
   * Set the debhelper compatibility level back to 10. This fixes a dh_dwz
     error ".debug_info section not present"
