@@ -1,0 +1,18 @@
+Don't use CMake NAME_WLE, introduced in CMake 3.14.
+
+Author: Emilio Pozuelo Monfort <pochu@debian.org>
+
+diff --git a/Source/cmake/GLibMacros.cmake b/Source/cmake/GLibMacros.cmake
+index 975921b261..1df0dc5245 100644
+--- a/Source/cmake/GLibMacros.cmake
++++ b/Source/cmake/GLibMacros.cmake
+@@ -1,6 +1,8 @@
+ macro(GENERATE_GLIB_API_HEADERS _framework _input_header_templates _derived_sources_directory _output_headers)
+     foreach (header_template ${${_input_header_templates}})
+-        get_filename_component(header ${header_template} NAME_WLE)
++        get_filename_component(header ${header_template} NAME)
++        string(REGEX REPLACE "\\.[^.]*$" "" header ${header})
++
+         add_custom_command(
+             OUTPUT ${_derived_sources_directory}/${header}
+             DEPENDS ${header_template} ${WEBKIT_DIR}/Scripts/glib/generate-api-header.py

@@ -3,10 +3,10 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
   * Rebuild for buster-security.
   * debian/patches/force-single-process.patch:
     - Force the single-process mode in Evolution and Geary
-  * debian/patches/support-old-cmake.patch:
-    - Fix build with cmake < 3.15
-  * debian/patches/revert-cmake-3.16-bump.patch:
-    - Add another patch to support buster's cmake.
+  * debian/patches/support-old-cmake.patch,
+    debian/patches/revert-cmake-3.16-bump.patch,
+    cmake-dont-use-NAME_WLE.patch:
+    - Add patches to support buster's cmake.
   * debian/patches/revert-gstreamer-1.16-bump.patch:
     - Revert bump to GStreamer 1.16, not available in buster.
   * debian/patches/no-gtk-overlay-scrolling.patch:
