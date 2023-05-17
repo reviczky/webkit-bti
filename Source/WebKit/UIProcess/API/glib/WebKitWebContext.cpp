@@ -1079,9 +1079,9 @@ WebKitDownload* webkit_web_context_download_uri(WebKitWebContext* context, const
 
     WebCore::ResourceRequest request(String::fromUTF8(uri));
     auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(context->priv->websiteDataManager.get());
-    auto& downloadProxy = context->priv->processPool->download(websiteDataStore, nullptr, request);
-    auto download = webkitDownloadCreate(downloadProxy);
-    downloadProxy.setDidStartCallback([context = GRefPtr<WebKitWebContext> { context }, download = download.get()](auto* downloadProxy) {
+    auto downloadProxy = context->priv->processPool->download(websiteDataStore, nullptr, request);
+    auto download = webkitDownloadCreate(downloadProxy.get());
+    downloadProxy->setDidStartCallback([context = GRefPtr<WebKitWebContext> { context }, download = download.get()](auto* downloadProxy) {
         if (!downloadProxy)
             return;
 
@@ -1267,7 +1267,7 @@ void webkit_web_context_set_additional_plugins_directory(WebKitWebContext*, cons
  * @context: a #WebKitWebContext
  * @cancellable: (allow-none): a #GCancellable or %NULL to ignore
  * @callback: (scope async): a #GAsyncReadyCallback to call when the request is satisfied
- * @user_data: (closure): the data to pass to callback function
+ * @user_data: the data to pass to callback function
  *
  * Asynchronously get the list of installed plugins.
  *

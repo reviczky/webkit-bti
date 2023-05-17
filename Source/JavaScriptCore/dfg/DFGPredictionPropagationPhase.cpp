@@ -42,7 +42,9 @@ class PredictionPropagationPhase : public Phase {
 public:
     PredictionPropagationPhase(Graph& graph)
         : Phase(graph, "prediction propagation")
+        , m_tupleSpeculations(graph.m_tupleData.size())
     {
+        m_tupleSpeculations.fill(SpecNone);
     }
     
     bool run()
@@ -127,6 +129,37 @@ private:
         ASSERT(m_currentNode->hasResult());
         
         return m_currentNode->predict(prediction);
+    }
+
+    bool setTuplePrediction(SpeculatedType prediction, unsigned index)
+    {
+        ASSERT(index < m_currentNode->tupleSize());
+
+        SpeculatedType& speculation = m_tupleSpeculations[m_currentNode->tupleOffset() + index];
+        // setTuplePrediction() is used when we know that there is no way that we can change
+        // our minds about what the prediction is going to be. There is no semantic
+        // difference between setTuplePrediction() and mergeTupleSpeculation() other than the
+        // increased checking to validate this property.
+        ASSERT(speculation == SpecNone || speculation == prediction);
+        return mergeSpeculation(speculation, prediction);
+    }
+
+    bool mergeTuplePrediction(SpeculatedType prediction, unsigned index)
+    {
+        ASSERT(index < m_currentNode->tupleSize());
+
+        SpeculatedType& speculation = m_tupleSpeculations[m_currentNode->tupleOffset() + index];
+        return mergeSpeculation(speculation, prediction);
+    }
+
+    template<typename... SpeculatedTypes>
+    bool setTuplePredictions(SpeculatedTypes... predictions)
+    {
+        unsigned index = 0;
+        bool updatedPrediction = false;
+        for (SpeculatedType prediction : { predictions... })
+            updatedPrediction |= setTuplePrediction(prediction, index++);
+        return updatedPrediction;
     }
     
     SpeculatedType speculatedDoubleTypeForPrediction(SpeculatedType value)
@@ -768,9 +801,11 @@ private:
             break;
         }
 
+        case EnumeratorPutByVal:
         case PutByValDirect:
         case PutByVal:
-        case PutByValAlias: {
+        case PutByValAlias:
+        case PutByValMegamorphic: {
             Edge child1 = m_graph.varArgChild(node, 0);
             Edge child2 = m_graph.varArgChild(node, 1);
             Edge child3 = m_graph.varArgChild(node, 2);
@@ -881,6 +916,7 @@ private:
 
         case NewArrayWithSpecies:
         case EnumeratorGetByVal:
+        case GetByValMegamorphic:
         case ArrayPop:
         case ArrayPush:
         case RegExpExec:
@@ -894,11 +930,14 @@ private:
         case StringReplaceString:
         case GetById:
         case GetByIdFlush:
+        case GetByIdMegamorphic:
         case GetByIdWithThis:
+        case GetByIdWithThisMegamorphic:
         case GetByIdDirect:
         case GetByIdDirectFlush:
         case TryGetById:
         case GetByValWithThis:
+        case GetByValWithThisMegamorphic:
         case GetByOffset:
         case GetPrivateName:
         case GetPrivateNameById:
@@ -973,7 +1012,9 @@ private:
         case NewFunction:
         case NewGeneratorFunction:
         case NewAsyncGeneratorFunction:
-        case NewAsyncFunction: {
+        case NewAsyncFunction:
+        case NewBoundFunction:
+        case FunctionBind: {
             setPrediction(SpecFunction);
             break;
         }
@@ -1094,6 +1135,7 @@ private:
         case IsConstructor:
         case IsCellWithType:
         case IsTypedArrayView:
+        case HasStructureWithFlags:
         case MatchStructure: {
             setPrediction(SpecBoolean);
             break;
@@ -1163,7 +1205,9 @@ private:
         case CreateRest:
         case NewArrayBuffer:
         case ObjectKeys:
-        case ObjectGetOwnPropertyNames: {
+        case ObjectGetOwnPropertyNames:
+        case ObjectGetOwnPropertySymbols:
+        case ReflectOwnKeys: {
             setPrediction(SpecArray);
             break;
         }
@@ -1238,11 +1282,6 @@ private:
             break;
         }
 
-        case CreateArgumentsButterflyExcludingThis: {
-            setPrediction(SpecCellOther);
-            break;
-        }
-            
         case FiatInt52: {
             RELEASE_ASSERT(enableInt52());
             setPrediction(SpecInt52Any);
@@ -1253,9 +1292,9 @@ private:
             setPrediction(SpecObjectOther);
             break;
 
-        case EnumeratorNextExtractMode:
-        case EnumeratorNextExtractIndex: {
-            setPrediction(SpecInt32Only);
+        case ExtractFromTuple: {
+            // Use mergePrediction because ExtractFromTuple doesn't know if the prediction could change.
+            mergePrediction(m_tupleSpeculations[m_currentNode->tupleIndex()]);
             break;
         }
 
@@ -1276,7 +1315,7 @@ private:
         }
 
         case EnumeratorNextUpdateIndexAndMode: {
-            setPrediction(SpecFullNumber);
+            setTuplePredictions(SpecInt32Only, SpecInt32Only);
             break;
         }
 
@@ -1431,8 +1470,10 @@ private:
         case PutByValWithThis:
         case PutByIdWithThis:
         case PutByVal:
+        case PutByValMegamorphic:
         case PutPrivateName:
         case PutPrivateNameById:
+        case EnumeratorPutByVal:
         case SetPrivateBrand:
         case CheckPrivateBrand:
         case PutClosureVar:
@@ -1448,6 +1489,7 @@ private:
         case PutById:
         case PutByIdFlush:
         case PutByIdDirect:
+        case PutByIdMegamorphic:
         case PutByOffset:
         case MultiPutByOffset:
         case PutGetterById:
@@ -1562,6 +1604,7 @@ private:
     }
 
     Vector<Node*> m_dependentNodes;
+    Vector<SpeculatedType, 16> m_tupleSpeculations;
     Node* m_currentNode;
     bool m_changed { false };
     PredictionPass m_pass { PrimaryPass }; // We use different logic for considering predictions depending on how far along we are in propagation.

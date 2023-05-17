@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2003-2022 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2023 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Cameron Zwarich (cwzwarich@uwaterloo.ca)
  *  Copyright (C) 2007 Maks Orlovich
  *
@@ -168,6 +168,9 @@ public:
     PropertyStatus reifyLazyPropertyIfNeeded(VM&, JSGlobalObject*, PropertyName);
 
     bool canAssumeNameAndLengthAreOriginal(VM&);
+    double originalLength(VM&);
+    JSString* originalName(JSGlobalObject*);
+
     bool mayHaveNonReifiedPrototype();
 
 protected:
@@ -175,7 +178,11 @@ protected:
     JSFunction(VM&, FunctionExecutable*, JSScope*, Structure*);
 
     void finishCreation(VM&, NativeExecutable*, unsigned length, const String& name);
+#if ASSERT_ENABLED
     void finishCreation(VM&);
+#else
+    using Base::finishCreation;
+#endif
 
     static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
     static void getOwnSpecialPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, DontEnumPropertiesMode);

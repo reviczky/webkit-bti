@@ -37,8 +37,8 @@
 #include "WebProcess.h"
 #include <WebCore/AsyncScrollingCoordinator.h>
 #include <WebCore/Chrome.h>
-#include <WebCore/Frame.h>
-#include <WebCore/FrameView.h>
+#include <WebCore/LocalFrame.h>
+#include <WebCore/LocalFrameView.h>
 #include <WebCore/PageOverlayController.h>
 #include <WebCore/RenderLayerBacking.h>
 #include <WebCore/RenderView.h>
@@ -65,7 +65,7 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage, WebCore::PlatformDisplayID displa
 #endif
     scheduleLayerFlush();
 
-    if (FrameView* frameView = m_webPage.mainFrameView()) {
+    if (auto* frameView = m_webPage.mainFrameView()) {
         auto contentsSize = frameView->contentsSize();
         if (!contentsSize.isEmpty())
             m_viewportController.didChangeContentsSize(contentsSize);
@@ -301,8 +301,11 @@ void LayerTreeHost::didChangeViewport()
     // When using non overlay scrollbars, the contents size doesn't include the scrollbars, but we need to include them
     // in the visible area used by the compositor to ensure that the scrollbar layers are also updated.
     // See https://bugs.webkit.org/show_bug.cgi?id=160450.
-    FrameView* view = m_webPage.corePage()->mainFrame().view();
-    Scrollbar* scrollbar = view->verticalScrollbar();
+    auto* localMainFrame = dynamicDowncast<WebCore::LocalFrame>(m_webPage.corePage()->mainFrame());
+    auto* view = localMainFrame ? localMainFrame->view() : nullptr;
+    if (!view)
+        return;
+    auto* scrollbar = view->verticalScrollbar();
     if (scrollbar && !scrollbar->isOverlayScrollbar())
         visibleRect.expand(scrollbar->width(), 0);
     scrollbar = view->horizontalScrollbar();
@@ -402,6 +405,16 @@ uint64_t LayerTreeHost::nativeSurfaceHandleForCompositing()
     return m_surface->window();
 }
 
+void LayerTreeHost::didCreateGLContext()
+{
+    m_surface->didCreateGLContext();
+}
+
+void LayerTreeHost::willDestroyGLContext()
+{
+    m_surface->willDestroyGLContext();
+}
+
 void LayerTreeHost::didDestroyGLContext()
 {
     m_surface->finalize();
@@ -424,7 +437,7 @@ void LayerTreeHost::didRenderFrame()
 
 void LayerTreeHost::displayDidRefresh(PlatformDisplayID displayID)
 {
-    WebProcess::singleton().eventDispatcher().notifyScrollingTreesDisplayWasRefreshed(displayID);
+    WebProcess::singleton().eventDispatcher().notifyScrollingTreesDisplayDidRefresh(displayID);
 }
 
 void LayerTreeHost::requestDisplayRefreshMonitorUpdate()
@@ -474,7 +487,7 @@ void LayerTreeHost::renderNextFrame(bool forceRepaint)
 #if PLATFORM(GTK)
 FloatPoint LayerTreeHost::constrainTransientZoomOrigin(double scale, FloatPoint origin) const
 {
-    FrameView& frameView = *m_webPage.mainFrameView();
+    auto& frameView = *m_webPage.mainFrameView();
     FloatRect visibleContentRect = frameView.visibleContentRectIncludingScrollbars();
 
     FloatPoint constrainedOrigin = visibleContentRect.location();

@@ -30,7 +30,13 @@
 #include "CSSAnimation.h"
 #include "CSSPropertyAnimation.h"
 #include "CSSTransition.h"
+#include "Document.h"
 #include "KeyframeEffect.h"
+#include "RenderStyleInlines.h"
+#include "RotateTransformOperation.h"
+#include "ScaleTransformOperation.h"
+#include "TransformOperations.h"
+#include "TranslateTransformOperation.h"
 #include "WebAnimation.h"
 #include "WebAnimationUtilities.h"
 #include <wtf/PointerComparison.h>
@@ -117,7 +123,7 @@ void KeyframeEffectStack::ensureEffectsAreSorted()
     if (m_isSorted || m_effects.size() < 2)
         return;
 
-    std::stable_sort(m_effects.begin(), m_effects.end(), [&](auto& lhs, auto& rhs) {
+    std::stable_sort(m_effects.begin(), m_effects.end(), [](auto& lhs, auto& rhs) {
         RELEASE_ASSERT(lhs.get());
         RELEASE_ASSERT(rhs.get());
         
@@ -247,16 +253,12 @@ void KeyframeEffectStack::lastStyleChangeEventStyleDidChange(const RenderStyle* 
         effect->lastStyleChangeEventStyleDidChange(previousStyle, currentStyle);
 }
 
-void KeyframeEffectStack::didApplyCascade(const RenderStyle& styleBeforeCascade, const RenderStyle& styleAfterCascade, const HashSet<AnimatableProperty> animatedProperties, const Document& document)
+void KeyframeEffectStack::cascadeDidOverrideProperties(const HashSet<AnimatableProperty>& overriddenProperties, const Document& document)
 {
     HashSet<AnimatableProperty> acceleratedPropertiesOverriddenByCascade;
-    if (styleBeforeCascade != styleAfterCascade) {
-        for (auto animatedProperty : animatedProperties) {
-            if (!CSSPropertyAnimation::animationOfPropertyIsAccelerated(animatedProperty))
-                continue;
-            if (!CSSPropertyAnimation::propertiesEqual(animatedProperty, styleBeforeCascade, styleAfterCascade, document))
-                acceleratedPropertiesOverriddenByCascade.add(animatedProperty);
-        }
+    for (auto animatedProperty : overriddenProperties) {
+        if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(animatedProperty, document.settings()))
+            acceleratedPropertiesOverriddenByCascade.add(animatedProperty);
     }
 
     if (acceleratedPropertiesOverriddenByCascade == m_acceleratedPropertiesOverriddenByCascade)
@@ -268,5 +270,10 @@ void KeyframeEffectStack::didApplyCascade(const RenderStyle& styleBeforeCascade,
         effect->acceleratedPropertiesOverriddenByCascadeDidChange();
 }
 
+void KeyframeEffectStack::applyPendingAcceleratedActions() const
+{
+    for (auto& effect : m_effects)
+        effect->applyPendingAcceleratedActionsOrUpdateTimingProperties();
+}
 
 } // namespace WebCore

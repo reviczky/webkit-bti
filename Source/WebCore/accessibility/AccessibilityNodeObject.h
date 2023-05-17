@@ -46,7 +46,7 @@ enum MouseButtonListenerResultFilter {
 
 class AccessibilityNodeObject : public AccessibilityObject {
 public:
-    static Ref<AccessibilityNodeObject> create(Node*);
+    static Ref<AccessibilityNodeObject> create(Node&);
     virtual ~AccessibilityNodeObject();
 
     void init() override;
@@ -56,35 +56,32 @@ public:
     bool isBusy() const override;
     bool isControl() const override;
     bool isFieldset() const override;
-    bool isGroup() const override;
-    bool isHeading() const override;
     bool isHovered() const override;
     bool isInputImage() const override;
     bool isLink() const override;
-    bool isMenu() const override;
-    bool isMenuBar() const override;
-    bool isMenuButton() const override;
-    bool isMenuItem() const override;
-    bool isMenuRelated() const override;
     bool isMultiSelectable() const override;
     bool isNativeImage() const;
     bool isNativeTextControl() const override;
-    bool isPasswordField() const override;
-    bool isProgressIndicator() const override;
+    bool isSecureField() const override;
     bool isSearchField() const override;
-    bool isSlider() const override;
 
     bool isChecked() const override;
     bool isEnabled() const override;
     bool isIndeterminate() const override;
     bool isPressed() const override;
     bool isRequired() const override;
+    bool supportsARIAOwns() const final;
     bool supportsRequiredAttribute() const override;
+
+    bool supportsDropping() const override;
+    bool supportsDragging() const override;
+    bool isGrabbed() override;
+    Vector<String> determineDropEffects() const override;
 
     bool canSetSelectedAttribute() const override;
 
     void setNode(Node*);
-    Node* node() const override { return m_node; }
+    Node* node() const override { return m_node.get(); }
     Document* document() const override;
 
     void setFocused(bool) override;
@@ -102,14 +99,13 @@ public:
 
     AccessibilityOrientation orientation() const override;
 
-    AXCoreObject* selectedRadioButton() override;
-    AXCoreObject* selectedTabItem() override;
     AccessibilityButtonState checkboxOrRadioValue() const override;
 
+    URL url() const override;
     unsigned hierarchicalLevel() const override;
     String textUnderElement(AccessibilityTextUnderElementMode = AccessibilityTextUnderElementMode()) const override;
     String accessibilityDescriptionForChildren() const;
-    String accessibilityDescription() const override;
+    String description() const override;
     String helpText() const override;
     String title() const override;
     String text() const override;
@@ -124,6 +120,10 @@ public:
     Element* actionElement() const override;
     Element* mouseButtonListener(MouseButtonListenerResultFilter = ExcludeBodyElement) const;
     Element* anchorElement() const override;
+    AccessibilityObject* internalLinkElement() const;
+    void addRadioButtonGroupMembers(AccessibilityChildrenVector& linkedUIElements) const;
+    void addRadioButtonGroupChildren(AXCoreObject&, AccessibilityChildrenVector&) const;
+    AccessibilityChildrenVector linkedObjects() const override;
     AccessibilityObject* menuForMenuButton() const;
    
     virtual void changeValueByPercent(float percentChange);
@@ -136,6 +136,7 @@ public:
     AccessibilityObject* parentObjectIfExists() const override;
 
     void updateRole() override;
+    bool matchesTextAreaRole() const;
 
     void increment() override;
     void decrement() override;
@@ -147,7 +148,6 @@ protected:
     void detachRemoteParts(AccessibilityDetachmentType) override;
 
     AccessibilityRole m_ariaRole { AccessibilityRole::Unknown };
-    mutable AccessibilityRole m_roleForMSAA { AccessibilityRole::Unknown };
 #ifndef NDEBUG
     bool m_initialized { false };
 #endif
@@ -155,12 +155,9 @@ protected:
     bool isDetached() const override { return !m_node; }
 
     virtual AccessibilityRole determineAccessibilityRole();
-    enum class TreatStyleFormatGroupAsInline {
-        No,
-        Yes
-    };
+    enum class TreatStyleFormatGroupAsInline : bool { No, Yes };
     AccessibilityRole determineAccessibilityRoleFromNode(TreatStyleFormatGroupAsInline = TreatStyleFormatGroupAsInline::No) const;
-    AccessibilityRole ariaRoleAttribute() const override;
+    AccessibilityRole ariaRoleAttribute() const override { return m_ariaRole; }
     virtual AccessibilityRole determineAriaRoleAttribute() const;
     AccessibilityRole remapAriaRoleDueToParent(AccessibilityRole) const;
 
@@ -168,8 +165,11 @@ protected:
     void clearChildren() override;
     void updateChildrenIfNecessary() override;
     bool canHaveChildren() const override;
+    AccessibilityChildrenVector visibleChildren() override;
     bool isDescendantOfBarrenParent() const override;
-
+    void updateOwnedChildren();
+    AccessibilityObject* ownerParentObject() const;
+    
     enum class StepAction : bool { Decrement, Increment };
     void alterRangeValue(StepAction);
     void changeValueByStep(StepAction);
@@ -182,6 +182,7 @@ protected:
     const String liveRegionRelevant() const override;
     bool liveRegionAtomic() const override;
 
+    String accessKey() const final;
     bool isLabelable() const;
     AccessibilityObject* correspondingControlForLabelElement() const override;
     AccessibilityObject* correspondingLabelForControlElement() const override;
@@ -200,6 +201,7 @@ protected:
     AccessibilityObject* menuButtonForMenu() const;
     AccessibilityObject* captionForFigure() const;
     virtual void titleElementText(Vector<AccessibilityText>&) const;
+    AccessibilityObject* titleUIElement() const override;
     bool exposesTitleUIElement() const override;
 
 private:
@@ -222,9 +224,11 @@ private:
 
     bool isDescendantOfElementType(const HashSet<QualifiedName>&) const;
 
-    Node* m_node;
+    WeakPtr<Node, WeakPtrImplWithEventTargetData> m_node;
 };
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityNodeObject, isAccessibilityNodeObject())
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::AccessibilityNodeObject) \
+    static bool isType(const WebCore::AccessibilityObject& object) { return object.isAccessibilityNodeObject(); } \
+SPECIALIZE_TYPE_TRAITS_END()

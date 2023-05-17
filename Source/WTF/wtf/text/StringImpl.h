@@ -330,12 +330,12 @@ public:
     static WTF_EXPORT_PRIVATE Expected<size_t, UTF8ConversionError> utf8ForCharactersIntoBuffer(const UChar* characters, unsigned length, ConversionMode, Vector<char, 1024>&);
 
     template<typename Func>
-    static Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> tryGetUTF8ForCharacters(const Func&, const LChar* characters, unsigned length);
+    static Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> tryGetUTF8ForCharacters(const Func&, const LChar* characters, unsigned length);
     template<typename Func>
-    static Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> tryGetUTF8ForCharacters(const Func&, const UChar* characters, unsigned length, ConversionMode = LenientConversion);
+    static Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> tryGetUTF8ForCharacters(const Func&, const UChar* characters, unsigned length, ConversionMode = LenientConversion);
 
     template<typename Func>
-    Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> tryGetUTF8(const Func&, ConversionMode = LenientConversion) const;
+    Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> tryGetUTF8(const Func&, ConversionMode = LenientConversion) const;
     WTF_EXPORT_PRIVATE Expected<CString, UTF8ConversionError> tryGetUTF8(ConversionMode = LenientConversion) const;
     WTF_EXPORT_PRIVATE CString utf8(ConversionMode = LenientConversion) const;
 
@@ -628,7 +628,7 @@ template<typename CharacterType1, typename CharacterType2> int codePointCompare(
 int codePointCompare(const StringImpl*, const StringImpl*);
 
 // FIXME: Should rename this to make clear it uses the Unicode definition of whitespace.
-// Most WebKit callers don't want that would use isASCIISpace or isHTMLSpace instead.
+// Most WebKit callers don't want that would use isUnicodeCompatibleASCIIWhitespace or isASCIIWhitespace instead.
 bool isSpaceOrNewline(UChar32);
 bool isNotSpaceOrNewline(UChar32);
 // FIXME: rdar://99002825 (Investigate if isSpaceOrNewline should be including 0xA0 non-breaking space in check.)
@@ -790,8 +790,8 @@ inline int codePointCompare(const StringImpl* string1, const StringImpl* string2
 
 inline bool isSpaceOrNewline(UChar32 character)
 {
-    // Use isASCIISpace() for all Latin-1 characters. This will include newlines, which aren't included in Unicode DirWS.
-    return isLatin1(character) ? isASCIISpace(character) : u_charDirection(character) == U_WHITE_SPACE_NEUTRAL;
+    // Use isUnicodeCompatibleASCIIWhitespace() for all Latin-1 characters. This will include newlines, which aren't included in Unicode DirWS.
+    return isLatin1(character) ? isUnicodeCompatibleASCIIWhitespace(character) : u_charDirection(character) == U_WHITE_SPACE_NEUTRAL;
 }
 
 inline bool isNotSpaceOrNewline(UChar32 character)
@@ -799,10 +799,10 @@ inline bool isNotSpaceOrNewline(UChar32 character)
     return !isSpaceOrNewline(character);
 }
 
-// FIXME: For LChar, isASCIISpace(character) || character == noBreakSpace would be enough
+// FIXME: For LChar, isUnicodeCompatibleASCIIWhitespace(character) || character == noBreakSpace would be enough
 inline bool isUnicodeWhitespace(UChar32 character)
 {
-    return isASCII(character) ? isASCIISpace(character) : u_isUWhiteSpace(character);
+    return isASCII(character) ? isUnicodeCompatibleASCIIWhitespace(character) : u_isUWhiteSpace(character);
 }
 
 inline StringImplShape::StringImplShape(unsigned refCount, unsigned length, const LChar* data8, unsigned hashAndFlags)
@@ -1434,6 +1434,7 @@ template<typename CharacterType, typename Predicate> ALWAYS_INLINE Ref<StringImp
 template<typename Predicate>
 inline Ref<StringImpl> StringImpl::removeCharacters(const Predicate& findMatch)
 {
+    static_assert(!std::is_function_v<Predicate>, "Passing a lambda instead of a function pointer helps the compiler with inlining");
     if (is8Bit())
         return removeCharactersImpl(characters8(), findMatch);
     return removeCharactersImpl(characters16(), findMatch);
@@ -1478,7 +1479,7 @@ inline Ref<StringImpl> StringImpl::createByReplacingInCharacters(const UChar* ch
 }
 
 template<typename Func>
-inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8(const Func& function, ConversionMode mode) const
+inline Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8(const Func& function, ConversionMode mode) const
 {
     if (is8Bit())
         return tryGetUTF8ForCharacters(function, characters8(), length());
@@ -1486,11 +1487,11 @@ inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionErro
 }
 
 template<typename Func>
-inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8ForCharacters(const Func& function, const LChar* characters, unsigned length)
+inline Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8ForCharacters(const Func& function, const LChar* characters, unsigned length)
 {
     if (!length) {
         constexpr const char* emptyString = "";
-        return function(Span { emptyString, emptyString });
+        return function(makeSpan(emptyString, emptyString));
     }
 
     // Allocate a buffer big enough to hold all the characters
@@ -1519,25 +1520,25 @@ inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionErro
 
         auto success = Unicode::convertLatin1ToUTF8(&nonASCII, characters + length, &buffer, buffer + (bufferVector.size() - prefixLength));
         ASSERT_UNUSED(success, success); // (length * 2) should be sufficient for any conversion from Latin1
-        return function(Span { bufferVector.data(), buffer });
+        return function(makeSpan(bufferVector.data(), buffer));
     }
-    return function(Span { bitwise_cast<const char*>(characters), bitwise_cast<const char*>(characters + length) });
+    return function(makeSpan(bitwise_cast<const char*>(characters), bitwise_cast<const char*>(characters + length)));
 #else
     Vector<char, 1024> bufferVector(length * 2);
     char* buffer = bufferVector.data();
     const LChar* source = characters;
     bool success = Unicode::convertLatin1ToUTF8(&source, source + length, &buffer, buffer + bufferVector.size());
     ASSERT_UNUSED(success, success); // (length * 2) should be sufficient for any conversion from Latin1
-    return function(Span { bufferVector.data(), buffer });
+    return function(makeSpan(bufferVector.data(), buffer));
 #endif
 }
 
 template<typename Func>
-inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8ForCharacters(const Func& function, const UChar* characters, unsigned length, ConversionMode mode)
+inline Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> StringImpl::tryGetUTF8ForCharacters(const Func& function, const UChar* characters, unsigned length, ConversionMode mode)
 {
     if (!length) {
         constexpr const char* emptyString = "";
-        return function(Span { emptyString, emptyString });
+        return function(makeSpan(emptyString, emptyString));
     }
     if (length > MaxLength / 3)
         return makeUnexpected(UTF8ConversionError::OutOfMemory);
@@ -1547,7 +1548,7 @@ inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionErro
     auto convertedSize = utf8ForCharactersIntoBuffer(characters, length, mode, bufferVector);
     if (!convertedSize)
         return makeUnexpected(convertedSize.error());
-    return function(Span { bufferVector.data(), *convertedSize });
+    return function(makeSpan(bufferVector.data(), *convertedSize));
 }
 
 } // namespace WTF

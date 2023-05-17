@@ -23,17 +23,19 @@
 #include "SVGInlineTextBox.h"
 
 #include "FloatConversion.h"
-#include "Frame.h"
-#include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HitTestResult.h"
 #include "LegacyInlineFlowBox.h"
+#include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "PointerEventsHitRules.h"
 #include "RenderBlock.h"
 #include "RenderInline.h"
 #include "RenderSVGResourceSolidColor.h"
+#include "RenderStyleInlines.h"
 #include "RenderView.h"
 #include "SVGInlineTextBoxInlines.h"
+#include "SVGRenderStyle.h"
 #include "SVGRenderingContext.h"
 #include "SVGResourcesCache.h"
 #include "SVGRootInlineBox.h"
@@ -286,9 +288,8 @@ void SVGInlineTextBox::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffse
         if (decorations & TextDecorationLine::Overline)
             paintDecoration(paintInfo.context(), TextDecorationLine::Overline, fragment);
 
-        auto paintOrder = RenderStyle::paintTypesForPaintOrder(style.paintOrder());
-        for (unsigned i = 0; i < paintOrder.size(); ++i) {
-            switch (paintOrder.at(i)) {
+        for (auto type : RenderStyle::paintTypesForPaintOrder(style.paintOrder())) {
+            switch (type) {
             case PaintType::Fill:
                 if (!hasFill)
                     continue;
@@ -554,7 +555,7 @@ void SVGInlineTextBox::paintTextWithShadows(GraphicsContext& context, const Rend
             break;
 
         {
-            ShadowApplier shadowApplier(*usedContext, shadow, nullptr, shadowRect);
+            ShadowApplier shadowApplier(style, *usedContext, shadow, nullptr, shadowRect);
 
             if (!shadowApplier.didSaveContext())
                 usedContext->save();

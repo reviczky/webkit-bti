@@ -43,12 +43,13 @@ public:
 #if ENABLE(VIDEO)
     bool copyTextureFromMedia(MediaPlayer&, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY) final;
 #endif
-#if ENABLE(MEDIA_STREAM)
+#if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
     RefPtr<VideoFrame> paintCompositedResultsToVideoFrame() final;
 #endif
+    RefPtr<PixelBuffer> readCompositedResults() final;
 
     void setContextVisibility(bool) final;
-    bool reshapeDisplayBufferBacking() final;
+    bool reshapeDrawingBuffer() final;
     void prepareForDisplay() final;
 
 private:

@@ -118,11 +118,11 @@ public:
     Ref<GPUQuerySet> createQuerySet(const GPUQuerySetDescriptor&);
 
     void pushErrorScope(GPUErrorFilter);
-    using ErrorScopePromise = DOMPromiseDeferred<IDLNullable<IDLUnion<IDLInterface<GPUOutOfMemoryError>, IDLInterface<GPUValidationError>>>>;
+    using ErrorScopePromise = DOMPromiseDeferred<IDLNullable<IDLUnion<IDLInterface<GPUOutOfMemoryError>, IDLInterface<GPUValidationError>, IDLInterface<GPUInternalError>>>>;
     void popErrorScope(ErrorScopePromise&&);
 
     using LostPromise = DOMPromiseProxy<IDLInterface<GPUDeviceLostInfo>>;
-    LostPromise& lost() { return m_lostPromise; }
+    LostPromise& lost();
 
     PAL::WebGPU::Device& backing() { return m_backing; }
     const PAL::WebGPU::Device& backing() const { return m_backing; }
@@ -147,6 +147,7 @@ private:
     Ref<PAL::WebGPU::Device> m_backing;
     Ref<GPUQueue> m_queue;
     Ref<GPUPipelineLayout> m_autoPipelineLayout;
+    bool m_waitingForDeviceLostPromise { false };
 };
 
 }

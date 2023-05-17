@@ -37,16 +37,15 @@
 #include "ChromeClient.h"
 #include "DOMFormData.h"
 #include "Editor.h"
-#include "ElementInlines.h"
 #include "ElementRareData.h"
 #include "EventLoop.h"
 #include "EventNames.h"
-#include "Frame.h"
 #include "FrameSelection.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "KeyboardEvent.h"
+#include "LocalFrame.h"
 #include "LocalizedStrings.h"
 #include "NodeRenderStyle.h"
 #include "Page.h"
@@ -63,6 +62,7 @@
 #include "TextEvent.h"
 #include "TextIterator.h"
 #include "TextNodeTraversal.h"
+#include "TypedElementDescendantIteratorInlines.h"
 #include "UserTypingGestureIndicator.h"
 #include "WheelEvent.h"
 
@@ -83,8 +83,6 @@ TextFieldInputType::TextFieldInputType(Type type, HTMLInputElement& element)
 
 TextFieldInputType::~TextFieldInputType()
 {
-    if (m_innerSpinButton)
-        m_innerSpinButton->removeSpinButtonOwner();
 #if ENABLE(DATALIST_ELEMENT)
     closeSuggestions();
 #endif
@@ -594,7 +592,11 @@ static bool isAutoFillButtonTypeChanged(const AtomString& attribute, AutoFillBut
 
 String TextFieldInputType::sanitizeValue(const String& proposedValue) const
 {
-    return limitLength(proposedValue.removeCharacters(isHTMLLineBreak), HTMLInputElement::maxEffectiveLength);
+    // Passing a lambda instead of a function name helps the compiler inline isHTMLLineBreak.
+    auto proposedValueWithoutLineBreaks = proposedValue.removeCharacters([](auto character) {
+        return isHTMLLineBreak(character);
+    });
+    return limitLength(WTFMove(proposedValueWithoutLineBreaks), HTMLInputElement::maxEffectiveLength);
 }
 
 void TextFieldInputType::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent& event)
@@ -783,7 +785,7 @@ bool TextFieldInputType::shouldDrawCapsLockIndicator() const
     if (element()->hasAutoFillStrongPasswordButton())
         return false;
 
-    RefPtr<Frame> frame = element()->document().frame();
+    RefPtr frame { element()->document().frame() };
     if (!frame)
         return false;
 

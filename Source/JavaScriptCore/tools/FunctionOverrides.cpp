@@ -32,6 +32,7 @@
 #include <wtf/DataLog.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/SafeStrerror.h>
+#include <wtf/WTFProcess.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringHash.h>
@@ -185,7 +186,7 @@ bool FunctionOverrides::initializeOverrideFor(const SourceCode& origCode, Functi
     do { \
         dataLog("functionOverrides ", error, ": "); \
         dataLog errorMessageInBrackets; \
-        exit(EXIT_FAILURE); \
+        exitProcess(EXIT_FAILURE); \
     } while (false)
 
 static bool hasDisallowedCharacters(const char* str, size_t length)
@@ -195,7 +196,7 @@ static bool hasDisallowedCharacters(const char* str, size_t length)
         // '{' is also disallowed, but we don't need to check for it because
         // parseClause() searches for '{' as the end of the start delimiter.
         // As a result, the parsed delimiter string will never include '{'.
-        if (c == '}' || isASCIISpace(c))
+        if (c == '}' || isUnicodeCompatibleASCIIWhitespace(c))
             return true;
     }
     return false;

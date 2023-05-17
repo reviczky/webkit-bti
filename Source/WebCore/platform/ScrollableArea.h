@@ -87,8 +87,7 @@ public:
     // Allows subclasses to handle scroll position updates themselves. If this member function
     // returns true, the scrollable area won't actually update the scroll position and instead
     // expect it to happen sometime in the future.
-    virtual bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) { return false; }
-    virtual bool requestAnimatedScrollToPosition(const ScrollPosition&, ScrollClamping = ScrollClamping::Clamped) { return false; }
+    virtual bool requestScrollToPosition(const ScrollPosition&, ScrollType = ScrollType::Programmatic, ScrollClamping = ScrollClamping::Clamped, ScrollIsAnimated = ScrollIsAnimated::No) { return false; }
     virtual void stopAsyncAnimatedScroll() { }
 
     virtual bool requestStartKeyboardScrollAnimation(const KeyboardScroll&) { return false; }
@@ -111,7 +110,7 @@ public:
     void stopKeyboardScrollAnimation();
 
 #if ENABLE(TOUCH_EVENTS)
-    virtual bool handleTouchEvent(const PlatformTouchEvent&);
+    WEBCORE_EXPORT virtual bool handleTouchEvent(const PlatformTouchEvent&);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -196,6 +195,7 @@ public:
     ScrollAnimator* existingScrollAnimator() const { return m_scrollAnimator.get(); }
 
     WEBCORE_EXPORT ScrollbarsController& scrollbarsController() const;
+    void setScrollbarsController(std::unique_ptr<ScrollbarsController>&&);
 
     virtual bool isActive() const = 0;
     WEBCORE_EXPORT virtual void invalidateScrollbar(Scrollbar&, const IntRect&);
@@ -346,6 +346,8 @@ public:
 
     virtual bool scrollAnimatorEnabled() const { return false; }
 
+    virtual bool isInStableState() const { return true; }
+
     // NOTE: Only called from Internals for testing.
     WEBCORE_EXPORT void setScrollOffsetFromInternals(const ScrollOffset&);
 
@@ -354,7 +356,7 @@ public:
 
     // Computes the double value for the scrollbar's current position and the current overhang amount.
     // This function is static so that it can be called from the main thread or the scrolling thread.
-    WEBCORE_EXPORT static void computeScrollbarValueAndOverhang(float currentPosition, float totalSize, float visibleSize, float& doubleValue, float& overhangAmount);
+    WEBCORE_EXPORT static void computeScrollbarValueAndOverhang(float currentPosition, float totalSize, float visibleSize, float& scrollbarValue, float& overhangAmount);
 
     static std::optional<BoxSide> targetSideForScrollDelta(FloatSize, ScrollEventAxis);
 
@@ -387,6 +389,8 @@ public:
     {
         return 1.0f;
     }
+
+    virtual float deviceScaleFactor() const { return 1; }
 
     virtual void didStartScrollAnimation() { }
     

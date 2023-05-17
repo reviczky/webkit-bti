@@ -35,10 +35,6 @@
 #include "SharedBuffer.h"
 #include <wtf/text/TextStream.h>
 
-#if USE(CG)
-#include "GraphicsContextPlatformPrivateCG.h"
-#endif
-
 namespace WebCore {
 namespace DisplayList {
 
@@ -152,6 +148,11 @@ void ClipPath::apply(GraphicsContext& context) const
     context.clipPath(m_path, m_windRule);
 }
 
+void ResetClip::apply(GraphicsContext& context) const
+{
+    context.resetClip();
+}
+
 DrawFilteredImageBuffer::DrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter& filter)
     : m_sourceImageIdentifier(sourceImageIdentifier)
     , m_sourceImageRect(sourceImageRect)
@@ -237,7 +238,7 @@ void DrawLine::apply(GraphicsContext& context) const
     context.drawLine(m_point1, m_point2);
 }
 
-DrawLinesForText::DrawLinesForText(const FloatPoint& blockLocation, const FloatSize& localAnchor, float thickness, const DashArray& widths, bool printing, bool doubleLines, StrokeStyle style)
+DrawLinesForText::DrawLinesForText(const FloatPoint& blockLocation, const FloatSize& localAnchor, const DashArray& widths, float thickness, bool printing, bool doubleLines, StrokeStyle style)
     : m_blockLocation(blockLocation)
     , m_localAnchor(localAnchor)
     , m_widths(widths)
@@ -255,10 +256,7 @@ void DrawLinesForText::apply(GraphicsContext& context) const
 
 void DrawDotsForDocumentMarker::apply(GraphicsContext& context) const
 {
-    context.drawDotsForDocumentMarker(m_rect, {
-        static_cast<DocumentMarkerLineStyleMode>(m_styleMode),
-        m_styleShouldUseDarkAppearance,
-    });
+    context.drawDotsForDocumentMarker(m_rect, m_style);
 }
 
 void DrawEllipse::apply(GraphicsContext& context) const
@@ -294,6 +292,12 @@ void FillRectWithColor::apply(GraphicsContext& context) const
 FillRectWithGradient::FillRectWithGradient(const FloatRect& rect, Gradient& gradient)
     : m_rect(rect)
     , m_gradient(gradient)
+{
+}
+
+FillRectWithGradient::FillRectWithGradient(FloatRect&& rect, Ref<Gradient>&& gradient)
+    : m_rect(WTFMove(rect))
+    , m_gradient(WTFMove(gradient))
 {
 }
 
@@ -451,8 +455,6 @@ void ApplyDeviceScaleFactor::apply(GraphicsContext& context) const
 {
     context.applyDeviceScaleFactor(m_scaleFactor);
 }
-
-#if !LOG_DISABLED
 TextStream& operator<<(TextStream& ts, ItemType type)
 {
     switch (type) {
@@ -476,6 +478,7 @@ TextStream& operator<<(TextStream& ts, ItemType type)
     case ItemType::ClipToImageBuffer: ts << "clip-to-image-buffer"; break;
     case ItemType::ClipOutToPath: ts << "clip-out-to-path"; break;
     case ItemType::ClipPath: ts << "clip-path"; break;
+    case ItemType::ResetClip: ts << "reset-clip"; break;
     case ItemType::DrawFilteredImageBuffer: ts << "draw-filtered-image-buffer"; break;
     case ItemType::DrawGlyphs: ts << "draw-glyphs"; break;
     case ItemType::DrawDecomposedGlyphs: ts << "draw-decomposed-glyphs"; break;
@@ -1071,10 +1074,10 @@ void dumpItemHandle(TextStream& ts, const ItemHandle& item, OptionSet<AsTextFlag
     case ItemType::ApplyFillPattern:
 #endif
     case ItemType::ClearShadow:
+    case ItemType::ResetClip:
         break;
     }
 }
-#endif
 
 } // namespace DisplayList
 } // namespace WebCore

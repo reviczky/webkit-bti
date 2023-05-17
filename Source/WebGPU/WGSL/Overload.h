@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "Constraints.h"
 #include "TypeStore.h"
 
 namespace WGSL {
@@ -36,23 +37,8 @@ struct NumericVariable {
 using AbstractValue = std::variant<NumericVariable, unsigned>;
 
 struct TypeVariable {
-    enum Constraint : uint8_t {
-        None = 0,
-        F16 = 1 << 0,
-        F32 = 1 << 1,
-        AbstractFloat = 1 << 2,
-        Float = F16 | F32 | AbstractFloat,
-
-        I32 = 1 << 3,
-        U32 = 1 << 4,
-        AbstractInt = 1 << 5,
-        Integer = I32 | U32 | AbstractInt,
-
-        Number = Float | Integer,
-    };
-
     unsigned id;
-    Constraint constraints { None };
+    Constraint constraints { Constraints::None };
 };
 
 struct AbstractVector;
@@ -64,25 +50,35 @@ using AbstractType = std::variant<
     Type*
 >;
 
+using AbstractScalarType = std::variant<
+    TypeVariable,
+    Type*
+>;
+
 struct AbstractVector {
-    TypeVariable element;
+    AbstractScalarType element;
     AbstractValue size;
 };
 
 struct AbstractMatrix {
-    TypeVariable element;
+    AbstractScalarType element;
     AbstractValue columns;
     AbstractValue rows;
 };
 
 struct OverloadCandidate {
-    WTF::Vector<TypeVariable, 1> typeVariables;
-    WTF::Vector<NumericVariable, 2> numericVariables;
-    WTF::Vector<AbstractType, 2> parameters;
+    Vector<TypeVariable, 1> typeVariables;
+    Vector<NumericVariable, 2> numericVariables;
+    Vector<AbstractType, 2> parameters;
     AbstractType result;
 };
 
-Type* resolveOverloads(TypeStore&, const WTF::Vector<OverloadCandidate>&, const WTF::Vector<Type*>&);
+struct SelectedOverload {
+    FixedVector<Type*> parameters;
+    Type* result;
+};
+
+std::optional<SelectedOverload> resolveOverloads(TypeStore&, const Vector<OverloadCandidate>&, const Vector<Type*>& valueArguments, const Vector<Type*>& typeArguments);
 
 } // namespace WGSL
 
@@ -91,5 +87,6 @@ void printInternal(PrintStream&, const WGSL::NumericVariable&);
 void printInternal(PrintStream&, const WGSL::AbstractValue&);
 void printInternal(PrintStream&, const WGSL::TypeVariable&);
 void printInternal(PrintStream&, const WGSL::AbstractType&);
+void printInternal(PrintStream&, const WGSL::AbstractScalarType&);
 void printInternal(PrintStream&, const WGSL::OverloadCandidate&);
 } // namespace WTF

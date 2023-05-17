@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2009-2022 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,9 @@
 #include "HTMLElement.h"
 #include "HTMLNames.h"
 #include "HTMLTemplateElement.h"
+#include "NodeName.h"
 #include "ProcessingInstruction.h"
+#include "ScriptController.h"
 #include "TemplateContentDocumentFragment.h"
 #include "XLinkNames.h"
 #include "XMLNSNames.h"
@@ -103,38 +105,34 @@ static const uint8_t entityMap[maximumEscapedentityCharacter + 1] = {
 
 static bool elementCannotHaveEndTag(const Node& node)
 {
-    if (!is<HTMLElement>(node))
+    using namespace ElementNames;
+    if (!is<Element>(node))
         return false;
 
-    // From https://html.spec.whatwg.org/#serialising-html-fragments:
-    // If current node is an area, base, basefont, bgsound, br, col, embed, frame, hr, img,
-    // input, keygen, link, meta, param, source, track or wbr element, then continue on to
-    // the next child node at this point.
-    static const AtomStringImpl* const localNames[] = {
-        areaTag->localName().impl(),
-        baseTag->localName().impl(),
-        basefontTag->localName().impl(),
-        bgsoundTag->localName().impl(),
-        brTag->localName().impl(),
-        colTag->localName().impl(),
-        embedTag->localName().impl(),
-        frameTag->localName().impl(),
-        hrTag->localName().impl(),
-        imgTag->localName().impl(),
-        inputTag->localName().impl(),
-        keygenTag->localName().impl(),
-        linkTag->localName().impl(),
-        metaTag->localName().impl(),
-        paramTag->localName().impl(),
-        sourceTag->localName().impl(),
-        trackTag->localName().impl(),
-        wbrTag->localName().impl()
-    };
-
-    auto* const elementName = downcast<HTMLElement>(node).localName().impl();
-    for (auto* name : localNames) {
-        if (name == elementName)
-            return true;
+    switch (downcast<Element>(node).elementName()) {
+        // https://html.spec.whatwg.org/#void-elements
+    case HTML::area:
+    case HTML::base:
+    case HTML::br:
+    case HTML::col:
+    case HTML::embed:
+    case HTML::hr:
+    case HTML::img:
+    case HTML::input:
+    case HTML::link:
+    case HTML::meta:
+    case HTML::source:
+    case HTML::track:
+    case HTML::wbr:
+        // https://html.spec.whatwg.org/#serializes-as-void
+    case HTML::basefont:
+    case HTML::bgsound:
+    case HTML::frame:
+    case HTML::keygen:
+    case HTML::param:
+        return true;
+    default:
+        break;
     }
 
     return false;
@@ -305,32 +303,6 @@ void MarkupAccumulator::appendCustomAttributes(StringBuilder&, const Element&, N
 {
 }
 
-void MarkupAccumulator::appendQuotedURLAttributeValue(StringBuilder& result, const Element& element, const Attribute& attribute)
-{
-    ASSERT(element.isURLAttribute(attribute));
-    String resolvedURLString = resolveURLIfNeeded(element, attribute.value());
-    char quoteChar = '"';
-    if (WTF::protocolIsJavaScript(resolvedURLString)) {
-        // minimal escaping for javascript urls
-        if (resolvedURLString.contains('&'))
-            resolvedURLString = makeStringByReplacingAll(resolvedURLString, '&', "&amp;"_s);
-
-        if (resolvedURLString.contains('"')) {
-            if (resolvedURLString.contains('\''))
-                resolvedURLString = makeStringByReplacingAll(resolvedURLString, '"', "&quot;"_s);
-            else
-                quoteChar = '\'';
-        }
-        result.append(quoteChar, resolvedURLString, quoteChar);
-        return;
-    }
-
-    // FIXME: This does not fully match other browsers. Firefox percent-escapes non-ASCII characters for innerHTML.
-    result.append(quoteChar);
-    appendAttributeValue(result, resolvedURLString, false);
-    result.append(quoteChar);
-}
-
 static bool shouldAddNamespaceElement(const Element& element)
 {
     // Don't add namespace attribute if it is already defined for this elem.
@@ -392,17 +364,37 @@ void MarkupAccumulator::appendNamespace(StringBuilder& result, const AtomString&
     result.append('"');
 }
 
+static inline bool isScriptEnabled(Node& node)
+{
+    RefPtr frame = node.document().frame();
+    return frame && frame->script().canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript);
+}
+
 EntityMask MarkupAccumulator::entityMaskForText(const Text& text) const
 {
+    using namespace ElementNames;
+
     if (!text.document().isHTMLDocument() || inXMLFragmentSerialization())
         return EntityMaskInPCDATA;
 
-    const QualifiedName* parentName = nullptr;
-    if (text.parentElement())
-        parentName = &text.parentElement()->tagQName();
-
-    if (parentName && (*parentName == scriptTag || *parentName == styleTag || *parentName == xmpTag))
-        return EntityMaskInCDATA;
+    if (auto* element = text.parentElement()) {
+        switch (element->elementName()) {
+        case HTML::noscript:
+            if (!isScriptEnabled(*element))
+                break;
+            FALLTHROUGH;
+        case HTML::iframe:
+        case HTML::noembed:
+        case HTML::noframes:
+        case HTML::plaintext:
+        case HTML::script:
+        case HTML::style:
+        case HTML::xmp:
+            return EntityMaskInCDATA;
+        default:
+            break;
+        }
+    }
     return EntityMaskInHTMLPCDATA;
 }
 
@@ -494,7 +486,7 @@ void MarkupAccumulator::generateUniquePrefix(QualifiedName& prefixedName, const 
     AtomString name;
     do {
         // FIXME: We should create makeAtomString, which would be more efficient.
-        name = makeAtomString("NS"_s, ++m_prefixLevel);
+        name = makeAtomString("ns"_s, ++m_prefixLevel);
     } while (namespaces.get(name.impl()));
     prefixedName.setPrefix(name);
 }
@@ -546,28 +538,32 @@ void MarkupAccumulator::appendAttribute(StringBuilder& result, const Element& el
 {
     bool isSerializingHTML = element.document().isHTMLDocument() && !inXMLFragmentSerialization();
 
+    std::optional<QualifiedName> effectiveXMLPrefixedName;
+
+    // Per https://w3c.github.io/DOM-Parsing/#dfn-xml-serialization-of-the-attributes the xmlns attribute is serialized first
+    if (!isSerializingHTML) {
+        effectiveXMLPrefixedName = xmlAttributeSerialization(attribute, namespaces);
+        if (namespaces && shouldAddNamespaceAttribute(attribute, *namespaces))
+            appendNamespace(result, effectiveXMLPrefixedName->prefix(), effectiveXMLPrefixedName->namespaceURI(), *namespaces);
+    }
+
     result.append(' ');
 
-    std::optional<QualifiedName> effectiveXMLPrefixedName;
     if (isSerializingHTML)
         result.append(htmlAttributeSerialization(attribute));
-    else {
-        effectiveXMLPrefixedName = xmlAttributeSerialization(attribute, namespaces);
+    else
         result.append(effectiveXMLPrefixedName->toString());
-    }
 
     result.append('=');
 
-    if (element.isURLAttribute(attribute))
-        appendQuotedURLAttributeValue(result, element, attribute);
-    else {
-        result.append('"');
+    result.append('"');
+    if (element.isURLAttribute(attribute)) {
+        // FIXME: This does not fully match other browsers. Firefox percent-escapes
+        // non-ASCII characters for innerHTML.
+        appendAttributeValue(result, resolveURLIfNeeded(element, attribute.value()), isSerializingHTML);
+    } else
         appendAttributeValue(result, attribute.value(), isSerializingHTML);
-        result.append('"');
-    }
-
-    if (!isSerializingHTML && namespaces && shouldAddNamespaceAttribute(attribute, *namespaces))
-        appendNamespace(result, effectiveXMLPrefixedName->prefix(), effectiveXMLPrefixedName->namespaceURI(), *namespaces);
+    result.append('"');
 }
 
 void MarkupAccumulator::appendNonElementNode(StringBuilder& result, const Node& node, Namespaces* namespaces)

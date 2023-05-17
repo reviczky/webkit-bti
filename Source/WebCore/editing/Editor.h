@@ -32,8 +32,8 @@
 #include "EditingStyle.h"
 #include "EditorInsertAction.h"
 #include "FindOptions.h"
-#include "Frame.h"
 #include "FrameSelection.h"
+#include "LocalFrame.h"
 #include "PasteboardWriterData.h"
 #include <wtf/RobinHoodHashSet.h>
 #include "ScrollView.h"
@@ -68,11 +68,11 @@ class EditCommandComposition;
 class EditorClient;
 class EditorInternalCommand;
 class File;
-class Frame;
 class HTMLElement;
 class HitTestResult;
 class KeyboardEvent;
 class KillRing;
+class LocalFrame;
 class Pasteboard;
 class PasteboardWriterData;
 class RenderLayer;
@@ -99,10 +99,10 @@ struct PromisedAttachmentInfo;
 struct SerializedAttachmentData;
 #endif
 
-enum EditorCommandSource { CommandFromMenuOrKeyBinding, CommandFromDOM, CommandFromDOMWithUserInterface };
-enum EditorParagraphSeparator { EditorParagraphSeparatorIsDiv, EditorParagraphSeparatorIsP };
+enum class EditorCommandSource : uint8_t { MenuOrKeyBinding, DOM, DOMWithUserInterface };
+enum class EditorParagraphSeparator : bool { div, p };
 
-enum class MailBlockquoteHandling {
+enum class MailBlockquoteHandling : bool {
     RespectBlockquote,
     IgnoreBlockquote,
 };
@@ -141,7 +141,7 @@ public:
     WEBCORE_EXPORT void invalidate();
 
 private:
-    enum class IsTemporarySelection { No, Yes };
+    enum class IsTemporarySelection : bool { No, Yes };
 
     void setSelection(const VisibleSelection&, IsTemporarySelection);
 
@@ -157,7 +157,7 @@ private:
 class IgnoreSelectionChangeForScope {
     WTF_MAKE_NONCOPYABLE(IgnoreSelectionChangeForScope); WTF_MAKE_FAST_ALLOCATED;
 public:
-    IgnoreSelectionChangeForScope(Frame& frame)
+    IgnoreSelectionChangeForScope(LocalFrame& frame)
         : m_selectionChange(*frame.document(), std::nullopt, TemporarySelectionOption::IgnoreSelectionChanges)
     {
     }
@@ -317,9 +317,9 @@ public:
         const EditorInternalCommand* m_command { nullptr };
         EditorCommandSource m_source;
         RefPtr<Document> m_document;
-        RefPtr<Frame> m_frame;
+        RefPtr<LocalFrame> m_frame;
     };
-    WEBCORE_EXPORT Command command(const String& commandName); // Command source is CommandFromMenuOrKeyBinding.
+    WEBCORE_EXPORT Command command(const String& commandName); // Command source is EditorCommandSource::MenuOrKeyBinding.
     Command command(const String& commandName, EditorCommandSource);
     WEBCORE_EXPORT static bool commandIsSupportedFromMenuOrKeyBinding(const String& commandName); // Works without a frame.
 
@@ -418,7 +418,7 @@ public:
     // is a frame-specific concept, because executing an editing command can run JavaScript that can do
     // anything, including changing the focused frame. That is, it is not enough to set this setting on
     // one Editor to disallow selection changes in all frames.
-    enum class RevealSelection { No, Yes };
+    enum class RevealSelection : bool { No, Yes };
     WEBCORE_EXPORT void setIgnoreSelectionChanges(bool, RevealSelection shouldRevealExistingSelection = RevealSelection::Yes);
     bool ignoreSelectionChanges() const { return m_ignoreSelectionChanges; }
 
@@ -653,6 +653,7 @@ private:
 
     void postTextStateChangeNotificationForCut(const String&, const VisibleSelection&);
 
+    WeakPtr<EditorClient> m_client;
     Document& m_document;
     RefPtr<CompositeEditCommand> m_lastEditCommand;
     RefPtr<Text> m_compositionNode;
@@ -666,7 +667,7 @@ private:
     const std::unique_ptr<PAL::KillRing> m_killRing;
     const std::unique_ptr<SpellChecker> m_spellChecker;
     const std::unique_ptr<AlternativeTextController> m_alternativeTextController;
-    EditorParagraphSeparator m_defaultParagraphSeparator { EditorParagraphSeparatorIsDiv };
+    EditorParagraphSeparator m_defaultParagraphSeparator { EditorParagraphSeparator::div };
     bool m_overwriteModeEnabled { false };
 
 #if ENABLE(ATTACHMENT_ELEMENT)

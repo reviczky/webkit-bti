@@ -61,6 +61,7 @@ public:
     AbstractColoringAllocator(Code& code, const Vector<Reg>& regsInPriorityOrder, IndexType lastPrecoloredRegisterIndex, unsigned tmpArraySize, const BitVector& unspillableTmps, const UseCounts& useCounts)
         : m_regsInPriorityOrder(regsInPriorityOrder)
         , m_lastPrecoloredRegisterIndex(lastPrecoloredRegisterIndex)
+        , m_coalescedTmps(tmpArraySize, 0)
         , m_unspillableTmps(unspillableTmps)
         , m_useCounts(useCounts)
         , m_code(code)
@@ -73,10 +74,9 @@ public:
                 dataLogIf(unspillableTmps.quickGet(i), TmpMapper::tmpFromAbsoluteIndex(i), ", ");
             dataLogLn("]");
         }
-        
+
         m_adjacencyList.resize(tmpArraySize);
         m_moveList.resize(tmpArraySize);
-        m_coalescedTmps.fill(0, tmpArraySize);
         m_isOnSelectStack.ensureSize(tmpArraySize);
         m_spillWorklist.ensureSize(tmpArraySize);
     }
@@ -208,6 +208,9 @@ protected:
         ASSERT(u != v);
         ASSERT(!isPrecolored(u));
         ASSERT(!isPrecolored(v));
+
+        if (m_unspillableTmps.get(u) != m_unspillableTmps.get(v))
+            return false;
 
         const auto& adjacentsOfU = m_adjacencyList[u];
         const auto& adjacentsOfV = m_adjacencyList[v];
@@ -1446,11 +1449,6 @@ public:
             return m_indexIterator == other.m_indexIterator;
         }
 
-        bool operator!=(const IndexToTmpIteratorAdaptor& other) const
-        {
-            return !(*this == other);
-        }
-
     private:
         IndexIterator m_indexIterator;
     };
@@ -1896,8 +1894,7 @@ private:
         unsigned numTmps = m_code.numTmps(bank);
         unsigned arraySize = AbsoluteTmpMapper<bank>::absoluteIndex(numTmps);
 
-        Vector<Range, 0, UnsafeVectorOverflow> ranges;
-        ranges.fill(Range(), arraySize);
+        Vector<Range, 0, UnsafeVectorOverflow> ranges(arraySize, Range());
 
         unsigned globalIndex = 0;
         for (BasicBlock* block : m_code) {

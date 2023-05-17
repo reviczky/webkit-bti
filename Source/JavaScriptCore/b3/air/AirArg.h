@@ -781,11 +781,6 @@ public:
             && m_scale == other.m_scale;
     }
 
-    bool operator!=(const Arg& other) const
-    {
-        return !(*this == other);
-    }
-
     explicit operator bool() const { return *this != Arg(); }
 
     Kind kind() const
@@ -1304,7 +1299,7 @@ public:
     template<typename Int, typename = Value::IsLegalOffset<Int>>
     static bool isValidAddrForm(Air::Opcode opcode, Int offset, std::optional<Width> width = std::nullopt)
     {
-#if !CPU(ARM_THUM2)
+#if !CPU(ARM_THUMB2)
         UNUSED_PARAM(opcode);
 #endif
         if (isX86())
@@ -1349,14 +1344,23 @@ public:
     }
 
     template<typename Int, typename = Value::IsLegalOffset<Int>>
-    static bool isValidIndexForm(unsigned scale, Int offset, std::optional<Width> width = std::nullopt)
+    static bool isValidIndexForm(Air::Opcode opcode, unsigned scale, Int offset, std::optional<Width> width = std::nullopt)
     {
         if (!isValidScale(scale, width))
             return false;
         if (isX86())
             return true;
-        if (isARM64() || isARM_THUMB2())
+        if (isARM64())
             return !offset;
+        if (isARM_THUMB2()) {
+            switch (opcode) {
+            case MoveFloat:
+            case MoveDouble:
+                return false;
+            default:
+                return !offset;
+            }
+        }
         return false;
     }
 
@@ -1396,7 +1400,7 @@ public:
         case CallArg:
             return isValidAddrForm(opcode, offset(), width);
         case Index:
-            return isValidIndexForm(scale(), offset(), width);
+            return isValidIndexForm(opcode, scale(), offset(), width);
         case PreIndex:
         case PostIndex:
             return isValidIncrementIndexForm(offset());

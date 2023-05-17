@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2015 Andy VanWagoner (andy@vanwagoner.family)
  * Copyright (C) 2016 Sukolsak Sakshuwong (sukolsak@gmail.com)
- * Copyright (C) 2016-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2020 Sony Interactive Entertainment Inc.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,12 +88,6 @@ Structure* IntlNumberFormat::createStructure(VM& vm, JSGlobalObject* globalObjec
 IntlNumberFormat::IntlNumberFormat(VM& vm, Structure* structure)
     : Base(vm, structure)
 {
-}
-
-void IntlNumberFormat::finishCreation(VM& vm)
-{
-    Base::finishCreation(vm);
-    ASSERT(inherits(info()));
 }
 
 template<typename Visitor>
@@ -433,7 +427,7 @@ void IntlNumberFormat::initializeNumberFormat(JSGlobalObject* globalObject, JSVa
         }, "roundingMode must be either \"ceil\", \"floor\", \"expand\", \"trunc\", \"halfCeil\", \"halfFloor\", \"halfExpand\", \"halfTrunc\", or \"halfEven\""_s, RoundingMode::HalfExpand);
     RETURN_IF_EXCEPTION(scope, void());
 
-    CString dataLocaleWithExtensions = makeString(resolved.dataLocale, "-u-nu-", m_numberingSystem).utf8();
+    CString dataLocaleWithExtensions = makeString(resolved.dataLocale, "-u-nu-"_s, m_numberingSystem).utf8();
     dataLogLnIf(IntlNumberFormatInternal::verbose, "dataLocaleWithExtensions:(", dataLocaleWithExtensions , ")");
 
     // Options are obtained. Configure formatter here.

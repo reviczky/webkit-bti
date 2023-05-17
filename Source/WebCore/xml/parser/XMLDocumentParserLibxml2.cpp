@@ -34,12 +34,10 @@
 #include "CommonAtomStrings.h"
 #include "CustomElementReactionQueue.h"
 #include "CustomElementRegistry.h"
-#include "DOMWindow.h"
 #include "Document.h"
 #include "DocumentFragment.h"
 #include "DocumentType.h"
 #include "EventLoop.h"
-#include "Frame.h"
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
 #include "HTMLEntityParser.h"
@@ -48,7 +46,10 @@
 #include "HTMLTemplateElement.h"
 #include "HTTPParsers.h"
 #include "InlineClassicScript.h"
+#include "LocalDOMWindow.h"
+#include "LocalFrame.h"
 #include "MIMETypeRegistry.h"
+#include "OriginAccessPatterns.h"
 #include "Page.h"
 #include "PageConsoleClient.h"
 #include "PendingScript.h"
@@ -448,7 +449,7 @@ static bool shouldAllowExternalLoad(const URL& url)
     // retrieved content.  If we had more context, we could potentially allow
     // the parser to load a DTD.  As things stand, we take the conservative
     // route and allow same-origin requests only.
-    if (!XMLDocumentParserScope::currentCachedResourceLoader->document()->securityOrigin().canRequest(url)) {
+    if (!XMLDocumentParserScope::currentCachedResourceLoader->document()->securityOrigin().canRequest(url, OriginAccessPatternsForWebProcess::singleton())) {
         XMLDocumentParserScope::currentCachedResourceLoader->printAccessDeniedMessage(url);
         return false;
     }
@@ -598,7 +599,7 @@ bool XMLDocumentParser::supportsXMLVersion(const String& version)
     return version == "1.0"_s;
 }
 
-XMLDocumentParser::XMLDocumentParser(Document& document, FrameView* frameView, OptionSet<ParserContentPolicy> policy)
+XMLDocumentParser::XMLDocumentParser(Document& document, LocalFrameView* frameView, OptionSet<ParserContentPolicy> policy)
     : ScriptableDocumentParser(document, policy)
     , m_view(frameView)
     , m_pendingCallbacks(makeUnique<PendingCallbacks>())

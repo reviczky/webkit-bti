@@ -272,6 +272,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case IsConstructor:
     case IsCellWithType:
     case IsTypedArrayView:
+    case HasStructureWithFlags:
     case TypeOf:
     case ToBoolean:
     case LogicalNot:
@@ -344,7 +345,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
         if (value.isInfinite() || value.size() != 1)
             return false;
 
-        return value[0].get() == graph.m_vm.getterSetterStructure;
+        return value[0].get() == graph.m_vm.getterSetterStructure.get();
     }
 
     case BottomValue:
@@ -369,12 +370,14 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case FilterDeleteByStatus:
     case FilterCheckPrivateBrandStatus:
     case FilterSetPrivateBrandStatus:
+    case EnumeratorPutByVal:
         // We don't want these to be moved anywhere other than where we put them, since we want them
         // to capture "profiling" at the point in control flow here the user put them.
         return false;
 
     case EnumeratorGetByVal:
     case GetByVal:
+    case GetByValMegamorphic:
     case GetIndexedPropertyStorage:
     case GetArrayLength:
     case GetTypedArrayLengthAsInt52:
@@ -392,10 +395,11 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case GetTypedArrayByteOffset:
     case GetTypedArrayByteOffsetAsInt52:
         return !(state.forNode(node->child1()).m_type & ~(SpecTypedArrayView));
-            
+
     case PutByValDirect:
     case PutByVal:
     case PutByValAlias:
+    case PutByValMegamorphic:
         return node->arrayMode().modeForPut().alreadyChecked(
             graph, node, state.forNode(graph.varArgChild(node, 0)));
 
@@ -501,9 +505,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     }
 
     case EnumeratorNextUpdateIndexAndMode:
-    // These technically don't have effects but they'll only ever follow a EnumeratorNextUpdateIndexAndMode so we might as well return false.
-    case EnumeratorNextExtractMode:
-    case EnumeratorNextExtractIndex:
+    case ExtractFromTuple:
     case EnumeratorNextUpdatePropertyName:
     case ToThis:
     case CreateThis:
@@ -514,7 +516,9 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ObjectCreate:
     case ObjectKeys:
     case ObjectGetOwnPropertyNames:
+    case ObjectGetOwnPropertySymbols:
     case ObjectToString:
+    case ReflectOwnKeys:
     case SetLocal:
     case SetCallee:
     case PutStack:
@@ -530,13 +534,17 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case DeleteById:
     case DeleteByVal:
     case GetById:
+    case GetByIdMegamorphic:
     case GetByIdWithThis:
+    case GetByIdWithThisMegamorphic:
     case GetByValWithThis:
+    case GetByValWithThisMegamorphic:
     case GetByIdFlush:
     case GetByIdDirect:
     case GetByIdDirectFlush:
     case PutById:
     case PutByIdFlush:
+    case PutByIdMegamorphic:
     case PutByIdWithThis:
     case PutByValWithThis:
     case PutByIdDirect:
@@ -618,12 +626,12 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
-    case CreateArgumentsButterflyExcludingThis:
     case PutToArguments:
     case NewFunction:
     case NewGeneratorFunction:
     case NewAsyncGeneratorFunction:
     case NewAsyncFunction:
+    case NewBoundFunction:
     case Jump:
     case Branch:
     case Switch:
@@ -707,6 +715,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ArithIMul:
     case TryGetById:
     case StringLocaleCompare:
+    case FunctionBind:
         return false;
 
     case StringReplaceString:

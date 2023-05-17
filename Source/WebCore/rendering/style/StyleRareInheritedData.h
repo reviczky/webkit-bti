@@ -25,10 +25,11 @@
 #pragma once
 
 #include "Length.h"
+#include "ListStyleType.h"
 #include "RenderStyleConstants.h"
 #include "StyleColor.h"
 #include "StyleCustomPropertyData.h"
-#include "StyleTextEdge.h"
+#include "StyleTextBoxEdge.h"
 #include "TabSize.h"
 #include "TextSpacing.h"
 #include "TextUnderlineOffset.h"
@@ -66,17 +67,12 @@ public:
     ~StyleRareInheritedData();
 
     bool operator==(const StyleRareInheritedData& o) const;
-    bool operator!=(const StyleRareInheritedData& o) const
-    {
-        return !(*this == o);
-    }
 
     bool hasColorFilters() const;
 
     float textStrokeWidth;
 
     RefPtr<StyleImage> listStyleImage;
-    AtomString listStyleStringValue;
 
     StyleColor textStrokeColor;
     StyleColor textFillColor;
@@ -99,7 +95,7 @@ public:
 
     TextUnderlineOffset textUnderlineOffset;
 
-    TextEdge textEdge;
+    TextBoxEdge textBoxEdge;
     
     Length wordSpacing;
     float miterLimit;
@@ -120,7 +116,7 @@ public:
     unsigned lineBreak : 3; // LineBreak
     unsigned userSelect : 2; // UserSelect
     unsigned colorSpace : 1; // ColorSpace
-    unsigned speakAs : 4; // ESpeakAs
+    unsigned speakAs : 4 { 0 }; // OptionSet<SpeakAs>
     unsigned hyphens : 2; // Hyphens
     unsigned textCombine : 1; // text-combine-upright
     unsigned textEmphasisFill : 1; // TextEmphasisFill
@@ -145,7 +141,7 @@ public:
     unsigned textAlignLast : 3; // TextAlignLast
     unsigned textJustify : 2; // TextJustify
     unsigned textDecorationSkipInk : 2; // TextDecorationSkipInk
-    unsigned textUnderlinePosition : 2; // TextUnderlinePosition
+    unsigned textUnderlinePosition : 3; // TextUnderlinePosition
     unsigned textWrap : 3; // TextWrap
     unsigned rubyPosition : 2; // RubyPosition
     unsigned textZoom: 1; // TextZoom
@@ -211,6 +207,8 @@ public:
 #endif
     TextSpacingTrim textSpacingTrim;
     TextAutospace textAutospace;
+
+    ListStyleType listStyleType;
 
 private:
     StyleRareInheritedData();

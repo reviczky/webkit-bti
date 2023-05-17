@@ -41,12 +41,13 @@
 #include "DocumentLoader.h"
 #include "EventNames.h"
 #include "FormData.h"
-#include "Frame.h"
 #include "HTMLParserIdioms.h"
 #include "InspectorInstrumentation.h"
 #include "JSExecState.h"
 #include "JSWindowProxy.h"
 #include "LegacySchemeRegistry.h"
+#include "LocalFrame.h"
+#include "OriginAccessPatterns.h"
 #include "ParsingUtilities.h"
 #include "PingLoader.h"
 #include "Report.h"
@@ -253,7 +254,7 @@ void ContentSecurityPolicy::didReceiveHeader(const String& header, ContentSecuri
     // be combined with a comma. Walk the header string, and parse each comma
     // separated chunk as a separate header.
     readCharactersForParsing(header, [&](auto buffer) {
-        skipWhile<isASCIISpace>(buffer);
+        skipWhile<isUnicodeCompatibleASCIIWhitespace>(buffer);
         auto begin = buffer.position();
 
         while (buffer.hasCharactersRemaining()) {
@@ -538,7 +539,7 @@ bool ContentSecurityPolicy::allowEval(JSC::JSGlobalObject* state, LogToConsole s
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForUnsafeEval);
 }
 
-bool ContentSecurityPolicy::allowFrameAncestors(const Frame& frame, const URL& url, bool overrideContentSecurityPolicy) const
+bool ContentSecurityPolicy::allowFrameAncestors(const LocalFrame& frame, const URL& url, bool overrideContentSecurityPolicy) const
 {
     if (overrideContentSecurityPolicy)
         return true;
@@ -775,7 +776,7 @@ String ContentSecurityPolicy::createURLForReporting(const URL& url, const String
     // WPT indicates that modern Reporting API expects explicit port in reported URLs
     //     content-security-policy/reporting-api/report-to-directive-allowed-in-meta.https.sub.html
     //     content-security-policy/reporting-api/reporting-api-sends-reports-on-violation.https.sub.html
-    if (securityOrigin->canRequest(url) || directiveIsSafe)
+    if (securityOrigin->canRequest(url, originAccessPatternsForWebProcessOrEmpty()) || directiveIsSafe)
         return usesReportingAPI ? url.strippedForUseAsReferrerWithExplicitPort() : url.strippedForUseAsReferrer();
 
     return SecurityOrigin::create(url)->toString();
@@ -1041,8 +1042,8 @@ void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(URL& url, InsecureReq
         url.setProtocol("wss"_s);
     }
 
-    if (url.port() && url.port().value() == 80)
-        url.setPort(443);
+    if (url.port() == 80)
+        url.setPort(std::nullopt);
 }
 
 void ContentSecurityPolicy::setUpgradeInsecureRequests(bool upgradeInsecureRequests)

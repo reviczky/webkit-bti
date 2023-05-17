@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,6 +40,7 @@ class FloatPoint;
 class FloatRect;
 class Font;
 class GlyphBuffer;
+class Gradient;
 class Image;
 class SourceImage;
 class VideoFrame;
@@ -64,6 +65,9 @@ public:
     virtual void convertToLuminanceMask() = 0;
     virtual void transformToColorSpace(const DestinationColorSpace&) = 0;
 
+    // Records possible pending commands. Should be used when recording is known to end.
+    WEBCORE_EXPORT void commitRecording();
+
 protected:
     virtual void recordSave() = 0;
     virtual void recordRestore() = 0;
@@ -81,6 +85,7 @@ protected:
     virtual void recordSetLineJoin(LineJoin) = 0;
     virtual void recordSetMiterLimit(float) = 0;
     virtual void recordClearShadow() = 0;
+    virtual void recordResetClip() = 0;
     virtual void recordClip(const FloatRect&) = 0;
     virtual void recordClipOut(const FloatRect&) = 0;
     virtual void recordClipToImageBuffer(ImageBuffer&, const FloatRect& destinationRect) = 0;
@@ -146,6 +151,8 @@ protected:
     virtual bool recordResourceUse(const SourceImage&) = 0;
     virtual bool recordResourceUse(Font&) = 0;
     virtual bool recordResourceUse(DecomposedGlyphs&) = 0;
+    virtual bool recordResourceUse(Gradient&) = 0;
+    virtual bool recordResourceUse(Filter&) = 0;
 
     struct ContextState {
         GraphicsContextState state;
@@ -190,9 +197,7 @@ private:
     const DestinationColorSpace& colorSpace() const final { return m_colorSpace; }
 
 #if USE(CG)
-    void setIsCALayerContext(bool) final { }
     bool isCALayerContext() const final { return false; }
-    void setIsAcceleratedContext(bool) final { }
 #endif
 
     void fillRoundedRectImpl(const FloatRoundedRect&, const Color&) final { ASSERT_NOT_REACHED(); }
@@ -262,6 +267,7 @@ private:
     WEBCORE_EXPORT void beginTransparencyLayer(float opacity) final;
     WEBCORE_EXPORT void endTransparencyLayer() final;
 
+    WEBCORE_EXPORT void resetClip() final;
     WEBCORE_EXPORT void clip(const FloatRect&) final;
     WEBCORE_EXPORT void clipOut(const FloatRect&) final;
     WEBCORE_EXPORT void clipOut(const Path&) final;
@@ -288,6 +294,7 @@ private:
     float m_initialScale { 1 };
     DestinationColorSpace m_colorSpace;
     const DrawGlyphsMode m_drawGlyphsMode { DrawGlyphsMode::Normal };
+    const FloatRect m_initialClip;
 };
 
 } // namespace DisplayList

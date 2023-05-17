@@ -28,10 +28,12 @@
 #include "RenderMultiColumnSet.h"
 
 #include "BorderPainter.h"
-#include "FrameView.h"
 #include "HitTestResult.h"
+#include "LocalFrameView.h"
 #include "PaintInfo.h"
+#include "RenderBlockInlines.h"
 #include "RenderBoxFragmentInfo.h"
+#include "RenderBoxInlines.h"
 #include "RenderLayer.h"
 #include "RenderMultiColumnFlow.h"
 #include "RenderMultiColumnSpannerPlaceholder.h"

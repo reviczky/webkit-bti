@@ -54,7 +54,7 @@ public:
 
     void flush() final
     {
-        m_flushState->waitForDidFlushOnSecondaryThread(m_targetFlushIdentifier);
+        m_flushState->waitForDidFlush(m_targetFlushIdentifier, RemoteDisplayListRecorderProxy::defaultSendTimeout);
     }
 
 private:
@@ -119,7 +119,7 @@ void RemoteImageBufferProxy::backingStoreWillChange()
 void RemoteImageBufferProxy::didCreateImageBufferBackend(ImageBufferBackendHandle&& handle)
 {
     ASSERT(!m_backend);
-    if (renderingMode() == RenderingMode::Accelerated && std::holds_alternative<ShareableBitmapHandle>(handle))
+    if (renderingMode() == RenderingMode::Accelerated && std::holds_alternative<ShareableBitmap::Handle>(handle))
         m_backendInfo = ImageBuffer::populateBackendInfo<UnacceleratedImageBufferShareableBackend>(parameters());
     
     if (renderingMode() == RenderingMode::Unaccelerated)
@@ -128,29 +128,6 @@ void RemoteImageBufferProxy::didCreateImageBufferBackend(ImageBufferBackendHandl
         m_backend = AcceleratedImageBufferShareableMappedBackend::create(parameters(), WTFMove(handle));
     else
         m_backend = AcceleratedImageBufferRemoteBackend::create(parameters(), WTFMove(handle));
-}
-
-void RemoteImageBufferProxy::waitForDidFlushWithTimeout()
-{
-    if (!m_remoteRenderingBackendProxy)
-        return;
-
-    // Wait for our DisplayList to be flushed but do not hang.
-    static constexpr unsigned maximumNumberOfTimeouts = 3;
-    unsigned numberOfTimeouts = 0;
-#if !LOG_DISABLED
-    auto startTime = MonotonicTime::now();
-#endif
-    LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " waitForDidFlushWithTimeout: waiting for flush {" << m_sentFlushIdentifier);
-    while (numberOfTimeouts < maximumNumberOfTimeouts && hasPendingFlush()) {
-        if (!m_remoteRenderingBackendProxy->waitForDidFlush())
-            ++numberOfTimeouts;
-    }
-
-    LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " waitForDidFlushWithTimeout: done waiting " << (MonotonicTime::now() - startTime).milliseconds() << "ms; " << numberOfTimeouts << " timeout(s)");
-
-    if (UNLIKELY(numberOfTimeouts >= maximumNumberOfTimeouts))
-        RELEASE_LOG_FAULT(SharedDisplayLists, "Exceeded timeout while waiting for flush in remote rendering backend: %" PRIu64 ".", m_remoteRenderingBackendProxy->renderingBackendIdentifier().toUInt64());
 }
 
 ImageBufferBackend* RemoteImageBufferProxy::ensureBackendCreated() const
@@ -173,24 +150,26 @@ ImageBufferBackend* RemoteImageBufferProxy::ensureBackendCreated() const
 
 RefPtr<NativeImage> RemoteImageBufferProxy::copyNativeImage(BackingStoreCopy copyBehavior) const
 {
-    if (canMapBackingStore())
+    if (canMapBackingStore()) {
+        const_cast<RemoteImageBufferProxy*>(this)->flushDrawingContext();
         return ImageBuffer::copyNativeImage(copyBehavior);
-
+    }
     if (UNLIKELY(!m_remoteRenderingBackendProxy))
         return { };
 
-    const_cast<RemoteImageBufferProxy*>(this)->flushDrawingContext();
     auto bitmap = m_remoteRenderingBackendProxy->getShareableBitmap(m_renderingResourceIdentifier, PreserveResolution::Yes);
     if (!bitmap)
         return { };
     return NativeImage::create(bitmap->createPlatformImage(DontCopyBackingStore));
 }
 
-RefPtr<NativeImage> RemoteImageBufferProxy::copyNativeImageForDrawing(BackingStoreCopy copyBehavior) const
+RefPtr<NativeImage> RemoteImageBufferProxy::copyNativeImageForDrawing(GraphicsContext& destination) const
 {
-    if (canMapBackingStore())
-        return ImageBuffer::copyNativeImageForDrawing(copyBehavior);
-    return copyNativeImage(copyBehavior);
+    if (canMapBackingStore()) {
+        const_cast<RemoteImageBufferProxy*>(this)->flushDrawingContext();
+        return ImageBuffer::copyNativeImageForDrawing(destination);
+    }
+    return copyNativeImage(DontCopyBackingStore);
 }
 
 void RemoteImageBufferProxy::drawConsuming(GraphicsContext& destContext, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
@@ -225,16 +204,18 @@ RefPtr<Image> RemoteImageBufferProxy::filteredImage(Filter& filter)
 {
     if (UNLIKELY(!m_remoteRenderingBackendProxy))
         return { };
-    flushDrawingContext();
     return m_remoteRenderingBackendProxy->getFilteredImage(m_renderingResourceIdentifier, filter);
 }
 
 RefPtr<PixelBuffer> RemoteImageBufferProxy::getPixelBuffer(const PixelBufferFormat& destinationFormat, const IntRect& srcRect, const ImageBufferAllocator& allocator) const
 {
+    if (canMapBackingStore()) {
+        const_cast<RemoteImageBufferProxy&>(*this).flushDrawingContext();
+        return ImageBuffer::getPixelBuffer(destinationFormat, srcRect, allocator);
+    }
+
     if (UNLIKELY(!m_remoteRenderingBackendProxy))
         return nullptr;
-    auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
-    mutableThis.flushDrawingContextAsync();
     IntRect sourceRectScaled = srcRect;
     sourceRectScaled.scale(resolutionScale());
     auto pixelBuffer = allocator.createPixelBuffer(destinationFormat, sourceRectScaled.size());
@@ -261,13 +242,19 @@ GraphicsContext& RemoteImageBufferProxy::context() const
 
 void RemoteImageBufferProxy::putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
 {
+    if (canMapBackingStore()) {
+        // Simulate a write so that pending reads migrate the data off of the mapped buffer.
+        context().fillRect({ });
+        const_cast<RemoteImageBufferProxy&>(*this).flushDrawingContext();
+        ImageBuffer::putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
+        return;
+    }
+
     if (UNLIKELY(!m_remoteRenderingBackendProxy))
         return;
     // The math inside PixelBuffer::create() doesn't agree with the math inside ImageBufferBackend::putPixelBuffer() about how m_resolutionScale interacts with the data in the ImageBuffer.
     // This means that putPixelBuffer() is only called when resolutionScale() == 1.
     ASSERT(resolutionScale() == 1);
-    auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
-    mutableThis.flushDrawingContextAsync();
     backingStoreWillChange();
     m_remoteRenderingBackendProxy->putPixelBufferForImageBuffer(m_renderingResourceIdentifier, pixelBuffer, srcRect, destPoint, destFormat);
 }
@@ -282,12 +269,6 @@ void RemoteImageBufferProxy::transformToColorSpace(const DestinationColorSpace& 
     m_remoteDisplayList.transformToColorSpace(colorSpace);
 }
 
-void RemoteImageBufferProxy::flushContext()
-{
-    flushDrawingContext();
-    m_backend->flushContext();
-}
-
 void RemoteImageBufferProxy::flushDrawingContext()
 {
     if (UNLIKELY(!m_remoteRenderingBackendProxy))
@@ -295,10 +276,14 @@ void RemoteImageBufferProxy::flushDrawingContext()
 
     TraceScope tracingScope(FlushRemoteImageBufferStart, FlushRemoteImageBufferEnd);
 
-    bool shouldWait = flushDrawingContextAsync();
-    LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " flushDrawingContext: shouldWait " << shouldWait);
-    if (shouldWait)
-        waitForDidFlushWithTimeout();
+    if (!m_needsFlush) {
+        if (hasPendingFlush())
+            m_flushState->waitForDidFlush(m_sentFlushIdentifier, RemoteDisplayListRecorderProxy::defaultSendTimeout);
+        return;
+    }
+
+    m_remoteDisplayList.flushContextSync();
+    m_needsFlush = false;
 }
 
 bool RemoteImageBufferProxy::flushDrawingContextAsync()
@@ -311,8 +296,9 @@ bool RemoteImageBufferProxy::flushDrawingContextAsync()
 
     m_sentFlushIdentifier = DisplayListRecorderFlushIdentifier::generate();
     LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " flushDrawingContextAsync - flush " << m_sentFlushIdentifier);
-    m_remoteDisplayList.flushContext(m_sentFlushIdentifier);
-    m_remoteRenderingBackendProxy->addPendingFlush(m_flushState, m_sentFlushIdentifier);
+    IPC::Semaphore flushSemaphore;
+    m_remoteDisplayList.flushContext(flushSemaphore);
+    m_remoteRenderingBackendProxy->addPendingFlush(m_flushState, WTFMove(flushSemaphore), m_sentFlushIdentifier);
     m_needsFlush = false;
     return true;
 }
@@ -335,12 +321,12 @@ void RemoteImageBufferProxy::prepareForBackingStoreChange()
         backend->ensureNativeImagesHaveCopiedBackingStore();
 }
 
-void RemoteImageBufferProxyFlushState::waitForDidFlushOnSecondaryThread(DisplayListRecorderFlushIdentifier targetFlushIdentifier)
+void RemoteImageBufferProxyFlushState::waitForDidFlush(DisplayListRecorderFlushIdentifier targetFlushIdentifier, Seconds timeout)
 {
     Locker locker { m_lock };
     if (m_identifier >= targetFlushIdentifier)
         return;
-    m_condition.wait(m_lock, [&] {
+    m_condition.waitFor(m_lock, timeout, [&] {
         assertIsHeld(m_lock);
         return m_identifier >= targetFlushIdentifier;
     });
@@ -391,7 +377,7 @@ std::unique_ptr<SerializedImageBuffer> RemoteImageBufferProxy::sinkIntoSerialize
 }
 
 RemoteSerializedImageBufferProxy::RemoteSerializedImageBufferProxy(const WebCore::ImageBufferBackend::Parameters& parameters, const WebCore::ImageBufferBackend::Info& info, const WebCore::RenderingResourceIdentifier& renderingResourceIdentifier, RemoteRenderingBackendProxy& backend)
-    : m_referenceTracker(RemoteSerializedImageBufferIdentifier::generateThreadSafe())
+    : m_referenceTracker(RemoteSerializedImageBufferIdentifier::generate())
     , m_parameters(parameters)
     , m_info(info)
     , m_renderingResourceIdentifier(renderingResourceIdentifier)
@@ -399,15 +385,15 @@ RemoteSerializedImageBufferProxy::RemoteSerializedImageBufferProxy(const WebCore
 {
     backend.remoteResourceCacheProxy().forgetImageBuffer(m_renderingResourceIdentifier);
     backend.moveToSerializedBuffer(m_renderingResourceIdentifier, m_referenceTracker.write());
-
-    // Record an implicit read, since we always do a read+write (to get+remove) as a single
-    // operation.
-    m_referenceTracker.read();
 }
 
 RefPtr<ImageBuffer> RemoteSerializedImageBufferProxy::sinkIntoImageBuffer(std::unique_ptr<RemoteSerializedImageBufferProxy> buffer, RemoteRenderingBackendProxy& backend)
 {
     auto result = adoptRef(new RemoteImageBufferProxy(buffer->m_parameters, buffer->m_info, backend, nullptr, buffer->m_renderingResourceIdentifier));
+
+    // Record an implicit read, since we always do a read+write (to get+remove) as a single
+    // operation.
+    buffer->m_referenceTracker.read();
     backend.moveToImageBuffer(buffer->m_referenceTracker.write(), result->renderingResourceIdentifier());
     buffer->m_connection = nullptr;
     return result;

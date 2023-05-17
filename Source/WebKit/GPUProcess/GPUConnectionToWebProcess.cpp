@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +41,7 @@
 #include "LibWebRTCCodecsProxyMessages.h"
 #include "Logging.h"
 #include "MediaOverridesForTesting.h"
+#include "MessageSenderInlines.h"
 #include "RemoteAudioHardwareListenerProxy.h"
 #include "RemoteAudioMediaStreamTrackRendererInternalUnitManager.h"
 #include "RemoteAudioMediaStreamTrackRendererInternalUnitManagerMessages.h"
@@ -67,9 +68,9 @@
 #include "WebGPUObjectHeap.h"
 #include "WebProcessMessages.h"
 #include <WebCore/LogInitialization.h>
+#include <WebCore/MediaPlayer.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
 #include <WebCore/NowPlayingManager.h>
-#include <wtf/Language.h>
 
 #if PLATFORM(COCOA)
 #include "RemoteLayerTreeDrawingAreaProxyMessages.h"
@@ -88,6 +89,10 @@
 #include "RemoteCDMInstanceProxyMessages.h"
 #include "RemoteCDMInstanceSessionProxyMessages.h"
 #include "RemoteCDMProxyMessages.h"
+#endif
+
+#if ENABLE(MEDIA_SOURCE)
+#include <WebCore/MediaStrategy.h>
 #endif
 
 // FIXME: <https://bugs.webkit.org/show_bug.cgi?id=211085>
@@ -263,6 +268,7 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     , m_presentingApplicationAuditToken(WTFMove(parameters.presentingApplicationAuditToken))
 #endif
     , m_isLockdownModeEnabled(parameters.isLockdownModeEnabled)
+    , m_allowTestOnlyIPC(parameters.allowTestOnlyIPC)
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     , m_routingArbitrator(LocalAudioSessionRoutingArbitrator::create(*this))
 #endif
@@ -272,9 +278,6 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     gpuProcess.audioSessionManager().session().setRoutingArbitrationClient(m_routingArbitrator.get());
 #endif
-
-    if (!parameters.overrideLanguages.isEmpty())
-        overrideUserPreferredLanguages(parameters.overrideLanguages);
 
     // Use this flag to force synchronous messages to be treated as asynchronous messages in the WebProcess.
     // Otherwise, the WebProcess would process incoming synchronous IPC while waiting for a synchronous IPC
@@ -341,6 +344,7 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 #endif
 #if ENABLE(VIDEO)
     m_videoFrameObjectHeap->close();
+    m_remoteMediaPlayerManagerProxy->clear();
 #endif
     // RemoteRenderingBackend objects ref their GPUConnectionToWebProcess so we need to make sure
     // to break the reference cycle by destroying them.
@@ -625,19 +629,6 @@ RemoteRenderingBackend* GPUConnectionToWebProcess::remoteRenderingBackend(Render
     return it->value.get();
 }
 
-void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle&& connectionHandle)
-{
-    auto it = m_remoteRenderingBackendMap.find(renderingBackendIdentifier);
-    if (it == m_remoteRenderingBackendMap.end())
-        return;
-    auto* renderingBackend = it->value.get();
-
-    auto addResult = m_remoteGPUMap.ensure(identifier, [&] {
-        return IPC::ScopedActiveMessageReceiveQueue { RemoteGPU::create(identifier, *this, *renderingBackend, WTFMove(connectionHandle)) };
-    });
-    ASSERT_UNUSED(addResult, addResult.isNewEntry);
-}
-
 void GPUConnectionToWebProcess::clearNowPlayingInfo()
 {
     m_isActiveNowPlayingProcess = false;
@@ -743,11 +734,6 @@ void GPUConnectionToWebProcess::setMediaOverridesForTesting(MediaOverridesForTes
     SystemBatteryStatusTestingOverrides::singleton().setHasAC(WTFMove(overrides.systemHasAC));
     SystemBatteryStatusTestingOverrides::singleton().setHasBattery(WTFMove(overrides.systemHasBattery));
 #endif
-}
-
-void GPUConnectionToWebProcess::setUserPreferredLanguages(const Vector<String>& languages)
-{
-    overrideUserPreferredLanguages(languages);
 }
 
 bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -961,7 +947,7 @@ const String& GPUConnectionToWebProcess::mediaKeysStorageDirectory() const
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-void GPUConnectionToWebProcess::setOrientationForMediaCapture(uint64_t orientation)
+void GPUConnectionToWebProcess::setOrientationForMediaCapture(IntDegrees orientation)
 {
 // FIXME: <https://bugs.webkit.org/show_bug.cgi?id=211085>
 #if PLATFORM(COCOA)
@@ -1034,6 +1020,16 @@ void GPUConnectionToWebProcess::dispatchDisplayWasReconfigured()
 void GPUConnectionToWebProcess::enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder)
 {
     m_gpuProcess->enableVP9Decoders(shouldEnableVP8Decoder, shouldEnableVP9Decoder, shouldEnableVP9SWDecoder);
+}
+#endif
+
+#if ENABLE(MEDIA_SOURCE)
+void GPUConnectionToWebProcess::enableMockMediaSource()
+{
+    if (m_mockMediaSourceEnabled)
+        return;
+    MediaStrategy::addMockMediaSourceEngine();
+    m_mockMediaSourceEnabled = true;
 }
 #endif
 

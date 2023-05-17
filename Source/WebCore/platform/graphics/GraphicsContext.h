@@ -69,6 +69,7 @@ class GraphicsContext {
     friend class BifurcatedGraphicsContext;
     friend class DisplayList::DrawNativeImage;
     friend class NativeImage;
+    friend class ImageBuffer;
 public:
     WEBCORE_EXPORT GraphicsContext(const GraphicsContextState::ChangeFlags& = { }, InterpolationQuality = InterpolationQuality::Default);
     WEBCORE_EXPORT GraphicsContext(const GraphicsContextState&);
@@ -190,11 +191,7 @@ public:
     virtual void applyFillPattern() = 0;
 
     // FIXME: Can we make this a why instead of a what, and then have it exist cross-platform?
-    virtual void setIsCALayerContext(bool) = 0;
     virtual bool isCALayerContext() const = 0;
-
-    // FIXME: Can this be a GraphicsContextCG constructor parameter? Or just be read off the context?
-    virtual void setIsAcceleratedContext(bool) = 0;
 #endif
 
     virtual RenderingMode renderingMode() const { return RenderingMode::Unaccelerated; }
@@ -274,7 +271,7 @@ public:
 
     WEBCORE_EXPORT void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatPoint& destination, const ImagePaintingOptions& = { });
     WEBCORE_EXPORT void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatRect& destination, const ImagePaintingOptions& = { });
-    WEBCORE_EXPORT virtual void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions& = { });
+    WEBCORE_EXPORT void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions& = { });
 
     WEBCORE_EXPORT virtual void drawFilteredImageBuffer(ImageBuffer* sourceImage, const FloatRect& sourceImageRect, Filter&, FilterResults&);
 
@@ -290,6 +287,7 @@ public:
 
     // Clipping
 
+    virtual void resetClip() = 0;
     virtual void clip(const FloatRect&) = 0;
     WEBCORE_EXPORT virtual void clipRoundedRect(const FloatRoundedRect&);
 
@@ -297,7 +295,7 @@ public:
     virtual void clipOut(const Path&) = 0;
     WEBCORE_EXPORT virtual void clipOutRoundedRect(const FloatRoundedRect&);
     virtual void clipPath(const Path&, WindRule = WindRule::EvenOdd) = 0;
-    WEBCORE_EXPORT virtual void clipToImageBuffer(ImageBuffer&, const FloatRect&);
+    WEBCORE_EXPORT virtual void clipToImageBuffer(ImageBuffer&, const FloatRect&) = 0;
     WEBCORE_EXPORT virtual IntRect clipBounds() const;
 
     // Text
@@ -369,12 +367,6 @@ public:
 #if OS(WINDOWS)
     HDC getWindowsContext(const IntRect&, bool supportAlphaBlend); // The passed in rect is used to create a bitmap for compositing inside transparency layers.
     void releaseWindowsContext(HDC, const IntRect&, bool supportAlphaBlend); // The passed in HDC should be the one handed back by getWindowsContext.
-#endif
-
-#if OS(WINDOWS) && !USE(CAIRO)
-    // FIXME: This should not exist; we need a different place to
-    // put code shared between Windows CG and Windows Cairo backends.
-    virtual GraphicsContextPlatformPrivate* deprecatedPrivateContext() const { return nullptr; }
 #endif
 
 private:

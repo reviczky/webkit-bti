@@ -24,7 +24,6 @@
 
 #include "GStreamerCommon.h"
 #include "GStreamerMediaStreamSource.h"
-#include "GStreamerWebRTCUtils.h"
 #include "MediaStreamTrack.h"
 
 #define GST_USE_UNSTABLE_API
@@ -36,9 +35,10 @@ GST_DEBUG_CATEGORY(webkit_webrtc_outgoing_media_debug);
 
 namespace WebCore {
 
-RealtimeOutgoingMediaSourceGStreamer::RealtimeOutgoingMediaSourceGStreamer(const String& mediaStreamId, MediaStreamTrack& track)
+RealtimeOutgoingMediaSourceGStreamer::RealtimeOutgoingMediaSourceGStreamer(const RefPtr<UniqueSSRCGenerator>& ssrcGenerator, const String& mediaStreamId, MediaStreamTrack& track)
     : m_mediaStreamId(mediaStreamId)
     , m_trackId(track.id())
+    , m_ssrcGenerator(ssrcGenerator)
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
@@ -68,6 +68,8 @@ RealtimeOutgoingMediaSourceGStreamer::~RealtimeOutgoingMediaSourceGStreamer()
     if (m_transceiver)
         g_signal_handlers_disconnect_by_data(m_transceiver.get(), this);
 
+    stopOutgoingSource();
+
     if (GST_IS_PAD(m_webrtcSinkPad.get())) {
         auto srcPad = adoptGRef(gst_element_get_static_pad(m_bin.get(), "src"));
         if (gst_pad_unlink(srcPad.get(), m_webrtcSinkPad.get())) {
@@ -90,7 +92,7 @@ const GRefPtr<GstCaps>& RealtimeOutgoingMediaSourceGStreamer::allowedCaps() cons
         return m_allowedCaps;
 
     auto sdpMsIdLine = makeString(m_mediaStreamId, ' ', m_trackId);
-    m_allowedCaps = capsFromRtpCapabilities(rtpCapabilities(), [&sdpMsIdLine](GstStructure* structure) {
+    m_allowedCaps = capsFromRtpCapabilities(m_ssrcGenerator, rtpCapabilities(), [&sdpMsIdLine](GstStructure* structure) {
         gst_structure_set(structure, "a-msid", G_TYPE_STRING, sdpMsIdLine.ascii().data(), nullptr);
     });
 

@@ -29,6 +29,8 @@
 #include "config.h"
 #include "UserAgentStyle.h"
 
+#include "CSSCounterStyleRegistry.h"
+#include "CSSCounterStyleRule.h"
 #include "CSSValuePool.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
@@ -53,6 +55,7 @@
 #include "MathMLElement.h"
 #include "MediaQueryEvaluator.h"
 #include "Page.h"
+#include "Quirks.h"
 #include "RenderTheme.h"
 #include "RuleSetBuilder.h"
 #include "SVGElement.h"
@@ -80,6 +83,7 @@ StyleSheetContents* UserAgentStyle::mediaQueryStyleSheet;
 StyleSheetContents* UserAgentStyle::popoverStyleSheet;
 StyleSheetContents* UserAgentStyle::plugInsStyleSheet;
 StyleSheetContents* UserAgentStyle::horizontalFormControlsStyleSheet;
+StyleSheetContents* UserAgentStyle::counterStylesStyleSheet;
 #if ENABLE(FULLSCREEN_API)
 StyleSheetContents* UserAgentStyle::fullscreenStyleSheet;
 #endif
@@ -119,6 +123,14 @@ static StyleSheetContents* parseUASheet(const String& str)
     StyleSheetContents& sheet = StyleSheetContents::create(CSSParserContext(UASheetMode)).leakRef(); // leak the sheet on purpose
     sheet.parseString(str);
     return &sheet;
+}
+void static addToCounterStyleRegistry(StyleSheetContents& sheet)
+{
+    for (auto& rule : sheet.childRules()) {
+        if (auto* counterStyleRule = dynamicDowncast<StyleRuleCounterStyle>(rule.get()))
+            CSSCounterStyleRegistry::addUserAgentCounterStyle(counterStyleRule->descriptors());
+    }
+    CSSCounterStyleRegistry::resolveUserAgentReferences();
 }
 
 void UserAgentStyle::addToDefaultStyle(StyleSheetContents& sheet)
@@ -235,9 +247,15 @@ void UserAgentStyle::ensureDefaultStyleSheetsForElement(const Element& element)
     }
 #endif // ENABLE(MATHML)
 
-    if (!popoverStyleSheet && element.document().settings().popoverAttributeEnabled() && element.hasAttributeWithoutSynchronization(popoverAttr)) {
+    bool popoverAttributeEnabled = element.document().settings().popoverAttributeEnabled() && !element.document().quirks().shouldDisablePopoverAttributeQuirk();
+    if (!popoverStyleSheet && popoverAttributeEnabled && element.hasAttributeWithoutSynchronization(popoverAttr)) {
         popoverStyleSheet = parseUASheet(StringImpl::createWithoutCopying(popoverUserAgentStyleSheet, sizeof(popoverUserAgentStyleSheet)));
         addToDefaultStyle(*popoverStyleSheet);
+    }
+
+    if (!counterStylesStyleSheet) {
+        counterStylesStyleSheet = parseUASheet(StringImpl::createWithoutCopying(counterStylesUserAgentStyleSheet, sizeof(counterStylesUserAgentStyleSheet)));
+        addToCounterStyleRegistry(*counterStylesStyleSheet);
     }
 
 #if ENABLE(FULLSCREEN_API)

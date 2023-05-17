@@ -58,7 +58,7 @@
 #include <JavaScriptCore/JavaScript.h>
 #include <JavaScriptCore/OpaqueJSString.h>
 #include <WebCore/DOMWrapperWorld.h>
-#include <WebCore/Frame.h>
+#include <WebCore/LocalFrame.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ScriptController.h>
 #include <wtf/PageBlock.h>
@@ -285,10 +285,10 @@ private:
 
     static JSValueRef readHeaderBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception);
     static JSValueRef readDataBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception);
-    static JSValueRef readBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, Span<uint8_t>);
+    static JSValueRef readBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, std::span<uint8_t>);
     static JSValueRef writeHeaderBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception);
     static JSValueRef writeDataBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception);
-    static JSValueRef writeBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, Span<uint8_t>);
+    static JSValueRef writeBytes(JSContextRef, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, std::span<uint8_t>);
 
     WeakPtr<JSIPCStreamClientConnection> m_streamConnection;
 };
@@ -487,7 +487,7 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
                 JSValueUnprotect(context, resolve);
                 JSGlobalContextRelease(JSContextGetGlobalContext(context));
             },
-            IPC::Connection::AsyncReplyID::generateThreadSafe()
+            IPC::Connection::AsyncReplyID::generate()
         };
         connection.sendMessageWithAsyncReply(WTFMove(encoder), WTFMove(handler), IPC::SendOption::IPCTestingMessage);
     } else
@@ -1147,7 +1147,7 @@ JSValueRef JSIPCStreamClientConnection::sendIPCStreamTesterSyncCrashOnZero(JSCon
 
     auto& streamConnection = jsStreamConnection->connection();
     enum JSIPCStreamTesterIdentifierType { };
-    auto destination = makeObjectIdentifier<JSIPCStreamTesterIdentifierType>(*destinationID);
+    auto destination = ObjectIdentifier<JSIPCStreamTesterIdentifierType>(*destinationID);
 
     auto result = streamConnection.sendSync(Messages::IPCStreamTester::SyncCrashOnZero(value), destination, timeoutDuration);
     if (!result) {
@@ -1342,7 +1342,7 @@ JSValueRef JSIPCSemaphore::waitFor(JSContextRef context, JSObjectRef, JSObjectRe
 SharedMemory::Handle JSSharedMemory::createHandle(SharedMemory::Protection protection)
 {
     if (auto handle = m_sharedMemory->createHandle(protection))
-        return *handle;
+        return WTFMove(*handle);
     return { };
 }
 
@@ -1556,7 +1556,7 @@ JSValueRef JSIPCStreamConnectionBuffer::readHeaderBytes(JSContextRef context, JS
     }
 
     IPC::StreamConnectionBuffer& buffer = jsStreamBuffer->m_streamConnection->m_streamConnection->bufferForTesting();
-    Span<uint8_t> span = buffer.headerForTesting();
+    std::span<uint8_t> span = buffer.headerForTesting();
 
     return readBytes(context, nullptr, thisObject, argumentCount, arguments, exception, span);
 }
@@ -1575,12 +1575,12 @@ JSValueRef JSIPCStreamConnectionBuffer::readDataBytes(JSContextRef context, JSOb
     }
 
     IPC::StreamConnectionBuffer& buffer = jsStreamBuffer->m_streamConnection->m_streamConnection->bufferForTesting();
-    Span<uint8_t> span = buffer.dataForTesting();
+    std::span<uint8_t> span = buffer.dataForTesting();
 
     return readBytes(context, nullptr, thisObject, argumentCount, arguments, exception, span);
 }
 
-JSValueRef JSIPCStreamConnectionBuffer::readBytes(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, Span<uint8_t> span)
+JSValueRef JSIPCStreamConnectionBuffer::readBytes(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, std::span<uint8_t> span)
 {
     size_t offset = 0;
     size_t length = span.size();
@@ -1637,7 +1637,7 @@ JSValueRef JSIPCStreamConnectionBuffer::writeHeaderBytes(JSContextRef context, J
     }
 
     IPC::StreamConnectionBuffer& buffer = jsStreamBuffer->m_streamConnection->m_streamConnection->bufferForTesting();
-    Span<uint8_t> span = buffer.headerForTesting();
+    std::span<uint8_t> span = buffer.headerForTesting();
 
     return writeBytes(context, nullptr, thisObject, argumentCount, arguments, exception, span);
 }
@@ -1656,12 +1656,12 @@ JSValueRef JSIPCStreamConnectionBuffer::writeDataBytes(JSContextRef context, JSO
     }
 
     IPC::StreamConnectionBuffer& buffer = jsStreamBuffer->m_streamConnection->m_streamConnection->bufferForTesting();
-    Span<uint8_t> span = buffer.dataForTesting();
+    std::span<uint8_t> span = buffer.dataForTesting();
 
     return writeBytes(context, nullptr, thisObject, argumentCount, arguments, exception, span);
 }
 
-JSValueRef JSIPCStreamConnectionBuffer::writeBytes(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, Span<uint8_t> span)
+JSValueRef JSIPCStreamConnectionBuffer::writeBytes(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception, std::span<uint8_t> span)
 {
     auto type = argumentCount ? JSValueGetTypedArrayType(context, arguments[0], exception) : kJSTypedArrayTypeNone;
     if (type == kJSTypedArrayTypeNone) {
@@ -1884,7 +1884,7 @@ static bool encodeTypedArray(IPC::Encoder& encoder, JSContextRef context, JSValu
     if (!data.buffer)
         return false;
 
-    encoder.encodeSpan(Span { reinterpret_cast<const uint8_t*>(data.buffer), data.length });
+    encoder.encodeSpan(makeSpan(reinterpret_cast<const uint8_t*>(data.buffer), data.length));
     return true;
 }
 
@@ -1945,7 +1945,7 @@ std::optional<ObjectIdentifier<ObjectIdentifierType>> getObjectIdentifierFromPro
     auto number = convertToUint64(jsPropertyValue);
     if (!number)
         return std::nullopt;
-    return makeObjectIdentifier<ObjectIdentifierType>(*number);
+    return ObjectIdentifier<ObjectIdentifierType>(*number);
 }
 
 static bool encodeRemoteRenderingBackendCreationParameters(IPC::Encoder& encoder, JSC::JSGlobalObject* globalObject, JSC::JSObject* jsObject, JSC::CatchScope& scope)
@@ -2270,8 +2270,8 @@ static bool encodeArgument(IPC::Encoder& encoder, JSContextRef context, JSValueR
         if (!frameIdentifier || !processIdentifier)
             return false;
         encoder << WebCore::FrameIdentifier {
-            makeObjectIdentifier<WebCore::FrameIdentifierType>(frameIdentifier),
-            makeObjectIdentifier<WebCore::ProcessIdentifierType>(processIdentifier)
+            ObjectIdentifier<WebCore::FrameIdentifierType>(frameIdentifier),
+            ObjectIdentifier<WebCore::ProcessIdentifierType>(processIdentifier)
         };
         return true;
     }
@@ -2836,7 +2836,7 @@ JSMessageListener::JSMessageListener(JSIPC& jsIPC, Type type, JSContextRef conte
 
     // We can't retain the global context here as that would cause a leak
     // since this object is supposed to live as long as the global object is alive.
-    JSC::PrivateName uniquePrivateName;
+    JSC::PrivateName uniquePrivateName(JSC::PrivateName::Description, "listener"_s);
     globalObject->putDirect(vm, uniquePrivateName, toJS(globalObject, callback));
 
     UNUSED_PARAM(catchScope);
@@ -2971,10 +2971,10 @@ template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* glob
     RETURN_IF_EXCEPTION(scope, JSC::JSValue());
 
     auto protection = Protection::ReadWrite;
-    auto sharedMemory = SharedMemory::map(value, protection);
+    auto sharedMemory = SharedMemory::map(WTFMove(value), protection);
     if (!sharedMemory) {
         protection = Protection::ReadOnly;
-        sharedMemory = SharedMemory::map(value, protection);
+        sharedMemory = SharedMemory::map(WTFMove(value), protection);
         if (!sharedMemory)
             return JSC::JSValue();
     }

@@ -26,7 +26,7 @@
 
 #pragma once
 
-#if ENABLE(ASSEMBLER)
+#if ENABLE(ASSEMBLER) && CPU(ARM_THUMB2)
 
 #include <initializer_list>
 
@@ -2051,8 +2051,10 @@ public:
         move(dataTempRegister, reg2);
     }
 
-    void swap(FPRegisterID fr1, FPRegisterID fr2)
+    void swapDouble(FPRegisterID fr1, FPRegisterID fr2)
     {
+        if (fr1 == fr2)
+            return;
         moveDouble(fr1, fpTempRegister);
         moveDouble(fr2, fr1);
         moveDouble(fpTempRegister, fr2);
@@ -3112,4 +3114,4 @@ private:
 
 } // namespace JSC
 
-#endif // ENABLE(ASSEMBLER)
+#endif // ENABLE(ASSEMBLER) && CPU(ARM_THUMB2)

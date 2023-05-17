@@ -27,12 +27,14 @@
 #include "IPCStreamTester.h"
 
 #if ENABLE(IPC_TESTING_API)
+
 #include "Decoder.h"
 #include "IPCStreamTesterMessages.h"
 #include "IPCStreamTesterProxyMessages.h"
 #include "IPCUtilities.h"
 #include "StreamConnectionWorkQueue.h"
 #include "StreamServerConnection.h"
+#include <wtf/WTFProcess.h>
 
 #if USE(FOUNDATION)
 #include <CoreFoundation/CoreFoundation.h>
@@ -84,7 +86,7 @@ void IPCStreamTester::syncMessageReturningSharedMemory1(uint32_t byteCount, Comp
         uint8_t* data = static_cast<uint8_t*>(sharedMemory->data());
         for (size_t i = 0; i < sharedMemory->size(); ++i)
             data[i] = i;
-        return *handle;
+        return WTFMove(*handle);
     }();
     completionHandler(WTFMove(result));
 }
@@ -93,12 +95,7 @@ void IPCStreamTester::syncCrashOnZero(int32_t value, CompletionHandler<void(int3
 {
     if (!value) {
         // Use exit so that we don't leave a crash report.
-#if OS(WINDOWS)
-        // Calling _exit in non-main threads may cause a deadlock in WTF::Thread::ThreadHolder::~ThreadHolder.
-        TerminateProcess(GetCurrentProcess(), EXIT_SUCCESS);
-#else
-        _exit(EXIT_SUCCESS);
-#endif
+        terminateProcess(EXIT_SUCCESS);
     }
     completionHandler(value);
 }

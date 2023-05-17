@@ -31,15 +31,14 @@
 #if ENABLE(MATHML)
 
 #include "CommonAtomStrings.h"
-#include "ElementIterator.h"
+#include "ElementAncestorIteratorInlines.h"
 #include "HTMLHtmlElement.h"
 #include "HTMLMapElement.h"
 #include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
 #include "HTTPParsers.h"
 #include "MathMLMathElement.h"
 #include "MathMLNames.h"
-#include "RenderMathMLBlock.h"
+#include "RenderMathMLBlockInlines.h"
 #include "RenderTableCell.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGSVGElement.h"
@@ -52,8 +51,8 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(MathMLPresentationElement);
 
 using namespace MathMLNames;
 
-MathMLPresentationElement::MathMLPresentationElement(const QualifiedName& tagName, Document& document)
-    : MathMLElement(tagName, document)
+MathMLPresentationElement::MathMLPresentationElement(const QualifiedName& tagName, Document& document, ConstructionType constructionType)
+    : MathMLElement(tagName, document, constructionType)
 {
 }
 
@@ -183,7 +182,6 @@ bool MathMLPresentationElement::isFlowContent(const Node& node)
         || htmlElement.hasTagName(HTMLNames::pTag)
         || htmlElement.hasTagName(HTMLNames::preTag)
         || htmlElement.hasTagName(HTMLNames::sectionTag)
-        || (htmlElement.hasTagName(HTMLNames::styleTag) && htmlElement.hasAttribute(HTMLNames::scopedAttr))
         || htmlElement.hasTagName(HTMLNames::tableTag)
         || htmlElement.hasTagName(HTMLNames::ulTag);
 }
@@ -298,7 +296,7 @@ MathMLElement::Length MathMLPresentationElement::parseMathMLLength(const String&
     //   pattern = '\s*((-?[0-9]*([0-9]\.?|\.[0-9])[0-9]*(e[mx]|in|cm|mm|p[xtc]|%)?)|(negative)?((very){0,2}thi(n|ck)|medium)mathspace)\s*'
     //
     // We do not perform a strict verification of the syntax of whitespaces and number.
-    // Instead, we just use isHTMLSpace and toFloat to parse these parts.
+    // Instead, we just use isASCIIWhitespace and toFloat to parse these parts.
 
     // We first skip whitespace from both ends of the string.
     StringView stringView = string;
@@ -362,15 +360,15 @@ std::optional<MathMLElement::MathVariant> MathMLPresentationElement::specifiedMa
     return m_mathVariant.value() == MathVariant::None ? std::nullopt : m_mathVariant;
 }
 
-void MathMLPresentationElement::parseAttribute(const QualifiedName& name, const AtomString& value)
+void MathMLPresentationElement::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason attributeModificationReason)
 {
-    bool mathVariantAttribute = name == mathvariantAttr && acceptsMathVariantAttribute();
-    if (mathVariantAttribute)
+    if (name == mathvariantAttr && acceptsMathVariantAttribute()) {
         m_mathVariant = std::nullopt;
-    if ((mathVariantAttribute) && renderer())
-        MathMLStyle::resolveMathMLStyleTree(renderer());
+        if (renderer())
+            MathMLStyle::resolveMathMLStyleTree(renderer());
+    }
 
-    MathMLElement::parseAttribute(name, value);
+    MathMLElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
 }
 
 }

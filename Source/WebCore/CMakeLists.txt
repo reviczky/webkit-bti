@@ -13,6 +13,8 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${CMAKE_BINARY_DIR}"
     "${WebCore_DERIVED_SOURCES_DIR}"
     "${WEBCORE_DIR}"
+    "${WEBCORE_DIR}/Modules/ShapeDetection"
+    "${WEBCORE_DIR}/Modules/ShapeDetection/Interfaces"
     "${WEBCORE_DIR}/Modules/WebGPU"
     "${WEBCORE_DIR}/Modules/airplay"
     "${WEBCORE_DIR}/Modules/applepay"
@@ -181,6 +183,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/websockets"
     "${WEBCORE_DIR}/workers"
     "${WEBCORE_DIR}/workers/service"
+    "${WEBCORE_DIR}/workers/service/background-fetch"
     "${WEBCORE_DIR}/workers/service/context"
     "${WEBCORE_DIR}/workers/service/server"
     "${WEBCORE_DIR}/workers/shared"
@@ -326,6 +329,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/fetch/FetchRequestMode.idl
     Modules/fetch/FetchRequestRedirect.idl
     Modules/fetch/FetchResponse.idl
+    Modules/fetch/RequestPriority.idl
     Modules/fetch/WindowOrWorkerGlobalScope+Fetch.idl
 
     Modules/filesystemaccess/FileSystemDirectoryHandle.idl
@@ -415,12 +419,14 @@ set(WebCore_NON_SVG_IDL_FILES
 
     Modules/mediastream/CanvasCaptureMediaStreamTrack.idl
     Modules/mediastream/DoubleRange.idl
+    Modules/mediastream/InputDeviceInfo.idl
     Modules/mediastream/LongRange.idl
     Modules/mediastream/MediaDeviceInfo.idl
     Modules/mediastream/MediaDevices.idl
     Modules/mediastream/MediaStream.idl
     Modules/mediastream/MediaStreamTrack.idl
     Modules/mediastream/MediaStreamTrackEvent.idl
+    Modules/mediastream/MediaTrackCapabilities.idl
     Modules/mediastream/MediaTrackConstraints.idl
     Modules/mediastream/MediaTrackSupportedConstraints.idl
     Modules/mediastream/Navigator+MediaDevices.idl
@@ -572,7 +578,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/screen-wake-lock/WakeLockSentinel.idl
     Modules/screen-wake-lock/WakeLockType.idl
 
-    Modules/speech/DOMWindow+SpeechSynthesis.idl
+    Modules/speech/LocalDOMWindow+SpeechSynthesis.idl
     Modules/speech/SpeechRecognitionErrorEvent.idl
     Modules/speech/SpeechRecognition.idl
     Modules/speech/SpeechRecognitionAlternative.idl
@@ -737,9 +743,9 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webcodecs/WebCodecsVideoFrameOutputCallback.idl
     Modules/webcodecs/WebCodecsVideoFrame.idl
 
-    Modules/webdatabase/DOMWindow+WebDatabase.idl
     Modules/webdatabase/Database.idl
     Modules/webdatabase/DatabaseCallback.idl
+    Modules/webdatabase/LocalDOMWindow+WebDatabase.idl
     Modules/webdatabase/SQLError.idl
     Modules/webdatabase/SQLResultSet.idl
     Modules/webdatabase/SQLResultSetRowList.idl
@@ -1166,6 +1172,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/MediaEncryptedEvent.idl
     html/MediaError.idl
     html/OffscreenCanvas.idl
+    html/PopoverInvokerElement.idl
     html/RadioNodeList.idl
     html/SubmitEvent.idl
     html/TextMetrics.idl
@@ -1244,20 +1251,21 @@ set(WebCore_NON_SVG_IDL_FILES
     page/BarProp.idl
     page/Crypto.idl
     page/DOMSelection.idl
-    page/DOMWindow+CSSOM.idl
-    page/DOMWindow+CSSOMView.idl
-    page/DOMWindow+Compat.idl
-    page/DOMWindow+DeviceMotion.idl
-    page/DOMWindow+DeviceOrientation.idl
-    page/DOMWindow+RequestIdleCallback.idl
-    page/DOMWindow+Selection.idl
-    page/DOMWindow+VisualViewport.idl
     page/DOMWindow.idl
     page/EventSource.idl
     page/History.idl
     page/IntersectionObserver.idl
     page/IntersectionObserverCallback.idl
     page/IntersectionObserverEntry.idl
+    page/LocalDOMWindow+CSSOM.idl
+    page/LocalDOMWindow+CSSOMView.idl
+    page/LocalDOMWindow+Compat.idl
+    page/LocalDOMWindow+DeviceMotion.idl
+    page/LocalDOMWindow+DeviceOrientation.idl
+    page/LocalDOMWindow+RequestIdleCallback.idl
+    page/LocalDOMWindow+Selection.idl
+    page/LocalDOMWindow+VisualViewport.idl
+    page/LocalDOMWindow.idl
     page/Location.idl
     page/Navigator+UserActivation.idl
     page/Navigator.idl
@@ -1314,6 +1322,7 @@ set(WebCore_NON_SVG_IDL_FILES
     page/WindowOrWorkerGlobalScope+Crypto.idl
     page/WindowOrWorkerGlobalScope+Performance.idl
     page/WindowOrWorkerGlobalScope.idl
+    page/WindowPostMessageOptions.idl
     page/WindowSessionStorage.idl
     page/WorkerNavigator.idl
 
@@ -1350,6 +1359,20 @@ set(WebCore_NON_SVG_IDL_FILES
     workers/service/ServiceWorkerRegistration.idl
     workers/service/ServiceWorkerUpdateViaCache.idl
     workers/service/ServiceWorkerWindowClient.idl
+
+    workers/service/background-fetch/BackgroundFetchEvent.idl
+    workers/service/background-fetch/BackgroundFetchEventInit.idl
+    workers/service/background-fetch/BackgroundFetchFailureReason.idl
+    workers/service/background-fetch/BackgroundFetchManager.idl
+    workers/service/background-fetch/BackgroundFetchOptions.idl
+    workers/service/background-fetch/BackgroundFetchRecord.idl
+    workers/service/background-fetch/BackgroundFetchRegistration.idl
+    workers/service/background-fetch/BackgroundFetchResult.idl
+    workers/service/background-fetch/BackgroundFetchUIOptions.idl
+    workers/service/background-fetch/BackgroundFetchUpdateUIEvent.idl
+    workers/service/background-fetch/ImageResource.idl
+    workers/service/background-fetch/ServiceWorkerGlobalScope+BackgroundFetchAPI.idl
+    workers/service/background-fetch/ServiceWorkerRegistration+BackgroundFetchAPI.idl
 
     workers/shared/SharedWorker.idl
     workers/shared/SharedWorkerGlobalScope.idl
@@ -1583,8 +1606,21 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
 )
 
 list(APPEND WebCore_NON_SVG_IDL_FILES
+    Modules/ShapeDetection/BarcodeDetector.idl
+    Modules/ShapeDetection/BarcodeDetectorOptions.idl
+    Modules/ShapeDetection/BarcodeFormat.idl
+    Modules/ShapeDetection/DetectedBarcode.idl
+    Modules/ShapeDetection/DetectedFace.idl
+    Modules/ShapeDetection/DetectedText.idl
+    Modules/ShapeDetection/FaceDetector.idl
+    Modules/ShapeDetection/FaceDetectorOptions.idl
+    Modules/ShapeDetection/Landmark.idl
+    Modules/ShapeDetection/LandmarkType.idl
+    Modules/ShapeDetection/Point2D.idl
+    Modules/ShapeDetection/TextDetector.idl
     Modules/WebGPU/GPU.idl
     Modules/WebGPU/GPUAdapter.idl
+    Modules/WebGPU/GPUAdapterInfo.idl
     Modules/WebGPU/GPUAddressMode.idl
     Modules/WebGPU/GPUAutoLayoutMode.idl
     Modules/WebGPU/GPUBindGroup.idl
@@ -1602,6 +1638,7 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUBufferBindingLayout.idl
     Modules/WebGPU/GPUBufferBindingType.idl
     Modules/WebGPU/GPUBufferDescriptor.idl
+    Modules/WebGPU/GPUBufferMapState.idl
     Modules/WebGPU/GPUBufferUsage.idl
     Modules/WebGPU/GPUCanvasCompositingAlphaMode.idl
     Modules/WebGPU/GPUCanvasConfiguration.idl
@@ -1648,6 +1685,7 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUImageCopyTextureTagged.idl
     Modules/WebGPU/GPUImageDataLayout.idl
     Modules/WebGPU/GPUIndexFormat.idl
+    Modules/WebGPU/GPUInternalError.idl
     Modules/WebGPU/GPULoadOp.idl
     Modules/WebGPU/GPUMapMode.idl
     Modules/WebGPU/GPUMipmapFilterMode.idl
@@ -1658,6 +1696,9 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUOrigin3DDict.idl
     Modules/WebGPU/GPUOutOfMemoryError.idl
     Modules/WebGPU/GPUPipelineBase.idl
+    Modules/WebGPU/GPUPipelineError.idl
+    Modules/WebGPU/GPUPipelineErrorInit.idl
+    Modules/WebGPU/GPUPipelineErrorReason.idl
     Modules/WebGPU/GPUPipelineDescriptorBase.idl
     Modules/WebGPU/GPUPipelineLayout.idl
     Modules/WebGPU/GPUPipelineLayoutDescriptor.idl
@@ -1737,6 +1778,7 @@ set(WebCore_CSS_VALUE_KEYWORDS
 )
 
 set(WebCore_USER_AGENT_STYLE_SHEETS
+    ${WEBCORE_DIR}/css/counterStyles.css
     ${WEBCORE_DIR}/css/dialog.css
     ${WEBCORE_DIR}/css/fullscreen.css
     ${WEBCORE_DIR}/css/horizontalFormControls.css
@@ -1793,9 +1835,6 @@ elseif (USE_LIBEPOXY)
 else ()
     if (USE_OPENGL)
         list(APPEND WebCore_LIBRARIES OpenGL::OpenGL)
-        if (TARGET OpenGL::GLX)
-            list(APPEND WebCore_LIBRARIES OpenGL::GLX)
-        endif ()
     elseif (USE_OPENGL_ES)
         list(APPEND WebCore_LIBRARIES OpenGL::GLES)
     endif ()
@@ -1876,6 +1915,7 @@ if (ENABLE_WEBGL)
         html/canvas/EXTDisjointTimerQueryWebGL2.cpp
         html/canvas/EXTFloatBlend.cpp
         html/canvas/EXTFragDepth.cpp
+        html/canvas/EXTPolygonOffsetClamp.cpp
         html/canvas/EXTShaderTextureLOD.cpp
         html/canvas/EXTTextureCompressionBPTC.cpp
         html/canvas/EXTTextureCompressionRGTC.cpp
@@ -1946,6 +1986,7 @@ list(APPEND WebCore_IDL_FILES
     html/canvas/EXTDisjointTimerQueryWebGL2.idl
     html/canvas/EXTFloatBlend.idl
     html/canvas/EXTFragDepth.idl
+    html/canvas/EXTPolygonOffsetClamp.idl
     html/canvas/EXTShaderTextureLOD.idl
     html/canvas/EXTTextureCompressionBPTC.idl
     html/canvas/EXTTextureCompressionRGTC.idl
@@ -2293,7 +2334,7 @@ set(SUPPLEMENTAL_DEPENDENCY_FILE ${WebCore_DERIVED_SOURCES_DIR}/supplemental_dep
 set(ISO_SUBSPACES_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMIsoSubspaces.h)
 set(CLIENT_ISO_SUBSPACES_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMClientIsoSubspaces.h)
 set(CONSTRUCTORS_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMConstructors.h)
-set(WINDOW_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMWindowConstructors.idl)
+set(WINDOW_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/LocalDOMWindowConstructors.idl)
 set(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/WorkerGlobalScopeConstructors.idl)
 set(SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/ShadowRealmGlobalScopeConstructors.idl)
 set(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DedicatedWorkerGlobalScopeConstructors.idl)
@@ -2534,7 +2575,6 @@ set(WebCore_BUILTINS_SOURCES
     ${WEBCORE_DIR}/Modules/streams/CountQueuingStrategy.js
     ${WEBCORE_DIR}/Modules/streams/ReadableByteStreamController.js
     ${WEBCORE_DIR}/Modules/streams/ReadableByteStreamInternals.js
-    ${WEBCORE_DIR}/Modules/streams/ReadableStream.js
     ${WEBCORE_DIR}/Modules/streams/ReadableStreamBYOBReader.js
     ${WEBCORE_DIR}/Modules/streams/ReadableStreamBYOBRequest.js
     ${WEBCORE_DIR}/Modules/streams/ReadableStreamDefaultController.js
@@ -2639,8 +2679,8 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/XMLNames.cpp)
 GENERATE_DOM_NAME_ENUM(TagName)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/TagName.cpp)
 
-GENERATE_DOM_NAME_ENUM(ElementName)
-list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/ElementName.cpp)
+GENERATE_DOM_NAME_ENUM(NodeName)
+list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/NodeName.cpp)
 
 GENERATE_DOM_NAME_ENUM(Namespace)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Namespace.cpp)
@@ -2667,7 +2707,7 @@ endif ()
 WEBKIT_FRAMEWORK(WebCore)
 
 if (APPLE)
-    set_target_properties(WebCore PROPERTIES LINK_FLAGS "-sub_library libobjc -umbrella WebKit -allowable_client WebCoreTestSupport -allowable_client WebKit2 -allowable_client WebKitLegacy")
+    set_target_properties(WebCore PROPERTIES LINK_FLAGS "-weak-lxslt -sub_library libobjc -umbrella WebKit -allowable_client WebCoreTestSupport -allowable_client WebKit2 -allowable_client WebKitLegacy")
 endif ()
 
 # The -ftree-sra optimization (implicit with -O2) causes crashes when

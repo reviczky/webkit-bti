@@ -1039,13 +1039,21 @@ sub LinkOverloadedOperations
 {
     my ($object, $interface) = @_;
 
-    my %nameToOperationsMap = ();
+    my %nameToRegularOperationsMap = ();
+    my %nameToStaticOperationsMap = ();
     foreach my $operation (@{$interface->operations}) {
         my $name = $operation->name;
-        $nameToOperationsMap{$name} = [] if !exists $nameToOperationsMap{$name};
-        push(@{$nameToOperationsMap{$name}}, $operation);
-        $operation->{overloads} = $nameToOperationsMap{$name};
-        $operation->{overloadIndex} = @{$nameToOperationsMap{$name}};
+        if ($operation->isStatic) {
+            $nameToStaticOperationsMap{$name} = [] if !exists $nameToStaticOperationsMap{$name};
+            push(@{$nameToStaticOperationsMap{$name}}, $operation);
+            $operation->{overloads} = $nameToStaticOperationsMap{$name};
+            $operation->{overloadIndex} = @{$nameToStaticOperationsMap{$name}};
+        } else {
+            $nameToRegularOperationsMap{$name} = [] if !exists $nameToRegularOperationsMap{$name};
+            push(@{$nameToRegularOperationsMap{$name}}, $operation);
+            $operation->{overloads} = $nameToRegularOperationsMap{$name};
+            $operation->{overloadIndex} = @{$nameToRegularOperationsMap{$name}};
+        }
     }
 
     my $index = 1;
@@ -1102,8 +1110,10 @@ sub GetterExpression
 
     my $functionName;
     if ($attribute->extendedAttributes->{"URL"}) {
+        $implIncludes->{"ElementInlines.h"} = 1;
         $functionName = "getURLAttributeForBindings";
     } elsif ($attributeType->name eq "boolean") {
+        $implIncludes->{"ElementInlines.h"} = 1;
         $functionName = "hasAttributeWithoutSynchronization";
     } elsif ($attributeType->name eq "long") {
         $functionName = "getIntegralAttribute";
@@ -1118,6 +1128,7 @@ sub GetterExpression
             $functionName = "getIdAttribute";
             $contentAttributeName = "";
         } elsif ($contentAttributeName eq "WebCore::HTMLNames::nameAttr") {
+            $implIncludes->{"ElementInlines.h"} = 1;
             $functionName = "getNameAttribute";
             $contentAttributeName = "";
         } elsif ($generator->IsSVGAnimatedType($attributeType)) {

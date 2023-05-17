@@ -26,6 +26,7 @@
 #include "JSGlobalObjectFunctions.h"
 
 #include "CallFrame.h"
+#include "GlobalObjectMethodTable.h"
 #include "ImportMap.h"
 #include "IndirectEvalExecutable.h"
 #include "InlineCallFrame.h"
@@ -493,10 +494,10 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncEval, (JSGlobalObject* globalObject, CallFram
 
     JSValue parsedObject;
     if (s.is8Bit()) {
-        LiteralParser<LChar> preparser(globalObject, s.characters8(), s.length(), NonStrictJSON, nullptr);
+        LiteralParser<LChar> preparser(globalObject, s.characters8(), s.length(), SloppyJSON, nullptr);
         parsedObject = preparser.tryLiteralParse();
     } else {
-        LiteralParser<UChar> preparser(globalObject, s.characters16(), s.length(), NonStrictJSON, nullptr);
+        LiteralParser<UChar> preparser(globalObject, s.characters16(), s.length(), SloppyJSON, nullptr);
         parsedObject = preparser.tryLiteralParse();
     }
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
@@ -509,7 +510,7 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncEval, (JSGlobalObject* globalObject, CallFram
     if (!eval)
         return encodedJSValue();
 
-    RELEASE_AND_RETURN(scope, JSValue::encode(vm.interpreter.executeEval(eval, globalObject, globalObject->globalThis(), globalObject->globalScope())));
+    RELEASE_AND_RETURN(scope, JSValue::encode(vm.interpreter.executeEval(eval, globalObject->globalThis(), globalObject->globalScope())));
 }
 
 JSC_DEFINE_HOST_FUNCTION(globalFuncParseInt, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -854,9 +855,7 @@ static bool canPerformFastPropertyEnumerationForCopyDataProperties(Structure* st
     // https://bugs.webkit.org/show_bug.cgi?id=185358
     if (hasIndexedProperties(structure->indexingType()))
         return false;
-    if (structure->hasGetterSetterProperties())
-        return false;
-    if (structure->hasCustomGetterSetterProperties())
+    if (structure->hasAnyKindOfGetterSetterProperties())
         return false;
     if (structure->isUncacheableDictionary())
         return false;
@@ -1001,6 +1000,57 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncDateTimeFormat, (JSGlobalObject* globalObject
     double value = callFrame->argument(2).toNumber(globalObject);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     RELEASE_AND_RETURN(scope, JSValue::encode(dateTimeFormat->format(globalObject, value)));
+}
+
+JSC_DEFINE_HOST_FUNCTION(globalFuncHandleNegativeProxyHasTrapResult, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSObject* target = asObject(callFrame->uncheckedArgument(0));
+
+    Identifier propertyName = callFrame->uncheckedArgument(1).toPropertyKey(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    scope.release();
+    ProxyObject::validateNegativeHasTrapResult(globalObject, target, propertyName);
+
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(globalFuncHandleProxyGetTrapResult, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue trapResult = callFrame->uncheckedArgument(0);
+    JSObject* target = asObject(callFrame->uncheckedArgument(1));
+
+    Identifier propertyName = callFrame->uncheckedArgument(2).toPropertyKey(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    scope.release();
+    ProxyObject::validateGetTrapResult(globalObject, trapResult, target, propertyName);
+
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(globalFuncHandlePositiveProxySetTrapResult, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSObject* target = asObject(callFrame->uncheckedArgument(0));
+
+    Identifier propertyName = callFrame->uncheckedArgument(1).toPropertyKey(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    JSValue putValue = callFrame->uncheckedArgument(2);
+
+    scope.release();
+    ProxyObject::validatePositiveSetTrapResult(globalObject, target, propertyName, putValue);
+
+    return JSValue::encode(jsUndefined());
 }
 
 } // namespace JSC

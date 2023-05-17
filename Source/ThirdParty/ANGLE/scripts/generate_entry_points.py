@@ -64,6 +64,7 @@ PLS_ALLOW_LIST = {
     "BufferData",
     "BufferSubData",
     "CheckFramebufferStatus",
+    "ClipControlEXT",
     "CullFace",
     "DepthFunc",
     "DepthMask",
@@ -75,6 +76,7 @@ PLS_ALLOW_LIST = {
     "EnableClientState",
     "EnableVertexAttribArray",
     "EndPixelLocalStorageANGLE",
+    "FramebufferPixelLocalStorageInterruptANGLE",
     "FrontFace",
     "MapBufferRange",
     "PixelLocalStorageBarrierANGLE",
@@ -89,6 +91,9 @@ PLS_ALLOW_LIST = {
     "UseProgram",
     "ValidateProgram",
     "Viewport",
+    "ProvokingVertexANGLE",
+    "FenceSync",
+    "FlushMappedBufferRange",
 }
 PLS_ALLOW_WILDCARDS = [
     "BlendEquationSeparatei*",
@@ -97,13 +102,22 @@ PLS_ALLOW_WILDCARDS = [
     "BlendFunci*",
     "ClearBuffer*",
     "ColorMaski*",
+    "DebugMessageCallback*",
+    "DebugMessageControl*",
+    "DebugMessageInsert*",
     "Disablei*",
     "DrawArrays*",
     "DrawElements*",
     "DrawRangeElements*",
     "Enablei*",
+    "Gen*",
     "Get*",
     "Is*",
+    "ObjectLabel*",
+    "ObjectPtrLabel*",
+    "PolygonOffset*",
+    "PopDebugGroup*",
+    "PushDebugGroup*",
     "SamplerParameter*",
     "TexParameter*",
     "Uniform*",
@@ -282,17 +296,18 @@ TEMPLATE_EGL_ENTRY_POINT_NO_RETURN = """\
 void EGLAPIENTRY EGL_{name}({params})
 {{
     {preamble}
-    {entry_point_locks}
-    EGL_EVENT({name}, "{format_params}"{comma_if_needed}{pass_params});
-
     Thread *thread = egl::GetCurrentThread();
+    {{
+        ANGLE_SCOPED_GLOBAL_LOCK();
+        EGL_EVENT({name}, "{format_params}"{comma_if_needed}{pass_params});
 
-    {packed_gl_enum_conversions}
+        {packed_gl_enum_conversions}
 
-    ANGLE_EGL_VALIDATE_VOID(thread, {name}, {labeled_object}, {internal_params});
+        ANGLE_EGL_VALIDATE_VOID(thread, {name}, {labeled_object}, {internal_params});
 
-    {name}(thread{comma_if_needed}{internal_params});
-    ANGLE_CAPTURE_EGL({name}, true, {egl_capture_params});
+        {name}(thread{comma_if_needed}{internal_params});
+        ANGLE_CAPTURE_EGL({name}, true, {egl_capture_params});
+    }}
 }}
 """
 
@@ -307,17 +322,19 @@ TEMPLATE_EGL_ENTRY_POINT_WITH_RETURN = """\
 {return_type} EGLAPIENTRY EGL_{name}({params})
 {{
     {preamble}
-    {entry_point_locks}
-    EGL_EVENT({name}, "{format_params}"{comma_if_needed}{pass_params});
-
     Thread *thread = egl::GetCurrentThread();
+    {return_type} returnValue;
+    {{
+        ANGLE_SCOPED_GLOBAL_LOCK();
+        EGL_EVENT({name}, "{format_params}"{comma_if_needed}{pass_params});
 
-    {packed_gl_enum_conversions}
+        {packed_gl_enum_conversions}
 
-    ANGLE_EGL_VALIDATE(thread, {name}, {labeled_object}, {return_type}{comma_if_needed}{internal_params});
+        ANGLE_EGL_VALIDATE(thread, {name}, {labeled_object}, {return_type}{comma_if_needed}{internal_params});
 
-    {return_type} returnValue = {name}(thread{comma_if_needed}{internal_params});
-    ANGLE_CAPTURE_EGL({name}, true, {egl_capture_params}, returnValue);
+        returnValue = {name}(thread{comma_if_needed}{internal_params});
+        ANGLE_CAPTURE_EGL({name}, true, {egl_capture_params}, returnValue);
+    }}
     return returnValue;
 }}
 """
@@ -1322,8 +1339,8 @@ EGL_PACKED_TYPES = {
     "EGLImageKHR": "ImageID",
     "EGLStreamKHR": "egl::Stream *",
     "EGLSurface": "SurfaceID",
-    "EGLSync": "egl::Sync *",
-    "EGLSyncKHR": "egl::Sync *",
+    "EGLSync": "egl::SyncID",
+    "EGLSyncKHR": "egl::SyncID",
 }
 
 CAPTURE_BLOCKLIST = ['eglGetProcAddress']
@@ -1677,8 +1694,6 @@ def format_entry_point_def(api, command_node, cmd_name, proto, params, cmd_packe
             event_comment,
         "labeled_object":
             get_egl_entry_point_labeled_object(ep_to_object, cmd_name, params, packed_enums),
-        "entry_point_locks":
-            get_locks(api, cmd_name, params),
         "optional_gl_entry_point_locks":
             get_optional_gl_locks(api, cmd_name, params),
         "preamble":
@@ -1697,7 +1712,8 @@ def get_capture_param_type_name(param_type):
     param_type = param_type.replace("&", "")
     param_type = param_type.replace("const", "")
     param_type = param_type.replace("struct", "")
-    param_type = param_type.replace("egl::", "egl_" if pointer_count else "")
+    param_type = param_type.replace("egl::",
+                                    "egl_" if pointer_count or param_type == 'egl::SyncID' else "")
     param_type = param_type.replace("gl::", "")
     param_type = param_type.strip()
 
@@ -2266,6 +2282,8 @@ def add_namespace(param_type):
         return param_type.replace('gl_', 'gl::')
     elif param_type.startswith('egl_'):
         return param_type.replace('egl_', 'egl::')
+    elif param_type.startswith('wl_'):
+        return param_type
     elif param_type in egl_namespace:
         return "egl::" + param_type
     else:
@@ -2501,6 +2519,8 @@ def format_replay_params(api, command_name, param_text_list, packed_enums, resou
                     param_access = 'gUniformLocations[gCurrentProgram][%s]' % param_access
                 elif packed_type == 'egl::Image':
                     param_access = 'gEGLImageMap2[captures[%d].value.GLuintVal]' % i
+                elif packed_type == 'egl::Sync':
+                    param_access = 'gEGLSyncMap[captures[%d].value.egl_SyncIDVal]' % i
         param_access_strs.append(param_access)
     return ', '.join(param_access_strs)
 
@@ -2654,37 +2674,6 @@ def get_egl_entry_point_labeled_object(ep_to_object, cmd_stripped, params, packe
     return "Get%sIfValid(%s, %s)" % (category, display_param, found_param)
 
 
-LOCK_GLOBAL_SURFACE = "ANGLE_SCOPED_GLOBAL_SURFACE_LOCK();"
-LOCK_GLOBAL = "ANGLE_SCOPED_GLOBAL_LOCK();"
-
-LOCK_ORDERING = {
-    LOCK_GLOBAL_SURFACE: 0,
-    LOCK_GLOBAL: 1,
-}
-
-
-def ordered_lock_statements(*locks):
-    return "".join(sorted(locks, key=lambda lock: LOCK_ORDERING[lock]))
-
-
-def get_locks(api, cmd_name, params):
-
-    if api != apis.EGL:
-        return ordered_lock_statements(LOCK_GLOBAL)
-
-    has_surface = False
-
-    for param in params:
-        param_type = just_the_type(param)
-        if param_type == "EGLSurface":
-            has_surface = True
-
-    if has_surface:
-        return ordered_lock_statements(LOCK_GLOBAL_SURFACE, LOCK_GLOBAL)
-
-    return ordered_lock_statements(LOCK_GLOBAL)
-
-
 def get_optional_gl_locks(api, cmd_name, params):
     if api != apis.GLES:
         return ""
@@ -2694,7 +2683,7 @@ def get_optional_gl_locks(api, cmd_name, params):
     if not cmd_name.startswith("glEGLImage"):
         return ""
 
-    return ordered_lock_statements(LOCK_GLOBAL)
+    return "ANGLE_SCOPED_GLOBAL_LOCK();"
 
 
 def get_prepare_swap_buffers_call(api, cmd_name, params):
@@ -2931,10 +2920,6 @@ def main():
 
         header_includes = TEMPLATE_HEADER_INCLUDES.format(
             major=major_if_not_one, minor=minor_if_not_zero)
-
-        # We include the platform.h header since it undefines the conflicting MemoryBarrier macro.
-        if major_version == 3 and minor_version == 1:
-            header_includes += "\n#include \"common/platform.h\"\n"
 
         version_annotation = "%s%s" % (major_version, minor_if_not_zero)
         source_includes = TEMPLATE_SOURCES_INCLUDES.format(

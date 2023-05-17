@@ -139,6 +139,9 @@ public:
     bool isMutable() const { return m_isMutable; }
     void setMutable() { m_isMutable = true; }
 
+    bool hasNestingRules() const { return m_hasNestingRules; }
+    void setHasNestingRules() { m_hasNestingRules = true; }
+
     bool isInMemoryCache() const { return m_inMemoryCacheCount; }
     void addedToMemoryCache();
     void removedFromMemoryCache();
@@ -149,6 +152,8 @@ public:
     bool isContentOpaque() const { return m_parserContext.isContentOpaque; }
 
     void setLoadErrorOccured() { m_didLoadErrorOccur = true; }
+
+    friend class CSSStyleSheet;
 
 private:
     WEBCORE_EXPORT StyleSheetContents(StyleRuleImport* ownerRule, const String& originalURL, const CSSParserContext&);
@@ -175,6 +180,7 @@ private:
     bool m_didLoadErrorOccur { false };
     bool m_usesStyleBasedEditability { false };
     bool m_isMutable { false };
+    bool m_hasNestingRules { false };
     unsigned m_inMemoryCacheCount { 0 };
 
     CSSParserContext m_parserContext;

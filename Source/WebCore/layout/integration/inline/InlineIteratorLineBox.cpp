@@ -26,7 +26,7 @@
 #include "config.h"
 #include "InlineIteratorLineBox.h"
 
-#include "InlineIteratorBox.h"
+#include "InlineIteratorBoxInlines.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "RenderBlockFlow.h"
 #include "RenderView.h"
@@ -92,6 +92,12 @@ LineBoxIterator lastLineBoxFor(const RenderBlockFlow& flow)
 
     return { LineBoxIteratorLegacyPath { flow.lastRootBox() } };
 }
+
+LineBoxIterator lineBoxFor(const LayoutIntegration::InlineContent& inlineContent, size_t lineIndex)
+{
+    return { LineBoxIteratorModernPath { inlineContent, lineIndex } };
+}
+
 
 LineBoxIterator LineBox::next() const
 {

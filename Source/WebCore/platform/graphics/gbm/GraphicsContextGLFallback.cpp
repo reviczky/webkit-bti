@@ -36,7 +36,7 @@
 #include "PixelBuffer.h"
 #include "PlatformLayerDisplayDelegate.h"
 
-#if USE(GSTREAMER) && ENABLE(MEDIA_STREAM)
+#if USE(GSTREAMER) && (ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS))
 #include "VideoFrameGStreamer.h"
 #endif
 
@@ -72,7 +72,7 @@ bool GraphicsContextGLFallback::copyTextureFromMedia(MediaPlayer&, PlatformGLObj
 }
 #endif
 
-#if ENABLE(MEDIA_STREAM)
+#if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
 RefPtr<VideoFrame> GraphicsContextGLFallback::paintCompositedResultsToVideoFrame()
 {
 #if USE(GSTREAMER)
@@ -82,6 +82,11 @@ RefPtr<VideoFrame> GraphicsContextGLFallback::paintCompositedResultsToVideoFrame
     return nullptr;
 }
 #endif
+
+RefPtr<PixelBuffer> GraphicsContextGLFallback::readCompositedResults()
+{
+    return readRenderingResults();
+}
 
 bool GraphicsContextGLFallback::platformInitializeContext()
 {
@@ -246,7 +251,7 @@ void GraphicsContextGLFallback::setContextVisibility(bool)
 {
 }
 
-bool GraphicsContextGLFallback::reshapeDisplayBufferBacking()
+bool GraphicsContextGLFallback::reshapeDrawingBuffer()
 {
     auto attrs = contextAttributes();
     const auto size = getInternalFramebufferSize();

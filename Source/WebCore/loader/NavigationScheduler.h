@@ -39,7 +39,7 @@ namespace WebCore {
 
 class Document;
 class FormSubmission;
-class Frame;
+class LocalFrame;
 class ScheduledNavigation;
 class SecurityOrigin;
 

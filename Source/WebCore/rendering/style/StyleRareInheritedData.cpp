@@ -24,14 +24,11 @@
 
 #include "CursorList.h"
 #include "QuotesData.h"
-#include "RenderStyle.h"
 #include "RenderStyleConstants.h"
+#include "RenderStyleInlines.h"
 #include "ShadowData.h"
-#include "StyleColorScheme.h"
-#include "StyleCustomPropertyData.h"
 #include "StyleFilterData.h"
 #include "StyleImage.h"
-#include <wtf/DataRef.h>
 #include <wtf/PointerComparison.h>
 
 namespace WebCore {
@@ -42,12 +39,12 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
     StyleColor firstColor;
     StyleColor colors[10];
     void* ownPtrs[1];
-    AtomString atomStrings[6];
+    AtomString atomStrings[5];
     void* refPtrs[3];
     Length lengths[2];
     float secondFloat;
     TextUnderlineOffset offset;
-    TextEdge textEdge;
+    TextBoxEdge textBoxEdge;
     void* customPropertyDataRefs[1];
     unsigned bitfields[7];
     short pagedMediaShorts[2];
@@ -71,6 +68,8 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
 #endif
     TextSpacingTrim textSpacingTrim;
     TextAutospace textAutospace;
+
+    ListStyleType listStyleType;
 };
 
 static_assert(sizeof(StyleRareInheritedData) <= sizeof(GreaterThanOrSameSizeAsStyleRareInheritedData), "StyleRareInheritedData should bit pack");
@@ -80,20 +79,19 @@ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(StyleRareInheritedData);
 StyleRareInheritedData::StyleRareInheritedData()
     : textStrokeWidth(RenderStyle::initialTextStrokeWidth())
     , listStyleImage(RenderStyle::initialListStyleImage())
-    , listStyleStringValue(RenderStyle::initialListStyleStringValue())
     , textStrokeColor(RenderStyle::initialTextStrokeColor())
     , textFillColor(RenderStyle::initialTextFillColor())
     , textEmphasisColor(RenderStyle::initialTextEmphasisColor())
     , visitedLinkTextStrokeColor(RenderStyle::initialTextStrokeColor())
     , visitedLinkTextFillColor(RenderStyle::initialTextFillColor())
     , visitedLinkTextEmphasisColor(RenderStyle::initialTextEmphasisColor())
-    , caretColor(RenderStyle::currentColor())
-    , visitedLinkCaretColor(RenderStyle::currentColor())
-    , accentColor(RenderStyle::currentColor())
+    , caretColor(StyleColor::currentColor())
+    , visitedLinkCaretColor(StyleColor::currentColor())
+    , accentColor(StyleColor::currentColor())
     , indent(RenderStyle::initialTextIndent())
     , effectiveZoom(RenderStyle::initialZoom())
     , textUnderlineOffset(RenderStyle::initialTextUnderlineOffset())
-    , textEdge(RenderStyle::initialTextEdge())
+    , textBoxEdge(RenderStyle::initialTextBoxEdge())
     , miterLimit(RenderStyle::initialStrokeMiterLimit())
     , customProperties(StyleCustomPropertyData::create())
     , widows(RenderStyle::initialWidows())
@@ -107,7 +105,6 @@ StyleRareInheritedData::StyleRareInheritedData()
     , nbspMode(static_cast<unsigned>(NBSPMode::Normal))
     , lineBreak(static_cast<unsigned>(LineBreak::Auto))
     , userSelect(static_cast<unsigned>(RenderStyle::initialUserSelect()))
-    , speakAs(RenderStyle::initialSpeakAs().toRaw())
     , hyphens(static_cast<unsigned>(Hyphens::Manual))
     , textCombine(static_cast<unsigned>(RenderStyle::initialTextCombine()))
     , textEmphasisFill(static_cast<unsigned>(TextEmphasisFill::Filled))
@@ -171,6 +168,7 @@ StyleRareInheritedData::StyleRareInheritedData()
 #endif
     , textSpacingTrim(RenderStyle::initialTextSpacingTrim())
     , textAutospace(RenderStyle::initialTextAutospace())
+    , listStyleType(RenderStyle::initialListStyleType())
 {
 }
 
@@ -178,7 +176,6 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     : RefCounted<StyleRareInheritedData>()
     , textStrokeWidth(o.textStrokeWidth)
     , listStyleImage(o.listStyleImage)
-    , listStyleStringValue(o.listStyleStringValue)
     , textStrokeColor(o.textStrokeColor)
     , textFillColor(o.textFillColor)
     , textEmphasisColor(o.textEmphasisColor)
@@ -193,7 +190,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , indent(o.indent)
     , effectiveZoom(o.effectiveZoom)
     , textUnderlineOffset(o.textUnderlineOffset)
-    , textEdge(o.textEdge)
+    , textBoxEdge(o.textBoxEdge)
     , miterLimit(o.miterLimit)
     , customProperties(o.customProperties)
     , widows(o.widows)
@@ -278,6 +275,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
 #endif
     , textSpacingTrim(o.textSpacingTrim)
     , textAutospace(o.textAutospace)
+    , listStyleType(o.listStyleType)
 {
 }
 
@@ -308,7 +306,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && indent == o.indent
         && effectiveZoom == o.effectiveZoom
         && textUnderlineOffset == o.textUnderlineOffset
-        && textEdge == o.textEdge
+        && textBoxEdge == o.textBoxEdge
         && wordSpacing == o.wordSpacing
         && miterLimit == o.miterLimit
         && widows == o.widows
@@ -389,7 +387,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && visitedLinkStrokeColor == o.visitedLinkStrokeColor
         && customProperties == o.customProperties
         && arePointingToEqualData(listStyleImage, o.listStyleImage)
-        && listStyleStringValue == o.listStyleStringValue
+        && listStyleType == o.listStyleType
         && textSpacingTrim == o.textSpacingTrim
         && textAutospace == o.textAutospace;
 }

@@ -55,6 +55,7 @@ inline CapabilityLevel canCompile(Node* node)
     case Phantom:
     case Flush:
     case PhantomLocal:
+    case ExtractFromTuple:
     case SetArgumentDefinitely:
     case SetArgumentMaybe:
     case Return:
@@ -144,6 +145,7 @@ inline CapabilityLevel canCompile(Node* node)
     case NewGeneratorFunction:
     case NewAsyncFunction:
     case NewAsyncGeneratorFunction:
+    case NewBoundFunction:
     case GetClosureVar:
     case PutClosureVar:
     case GetInternalField:
@@ -151,7 +153,6 @@ inline CapabilityLevel canCompile(Node* node)
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
-    case CreateArgumentsButterflyExcludingThis:
     case GetFromArguments:
     case PutToArguments:
     case GetArgument:
@@ -223,6 +224,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ToNumeric:
     case ToString:
     case FunctionToString:
+    case FunctionBind:
     case ToObject:
     case CallObjectConstructor:
     case CallStringConstructor:
@@ -231,14 +233,18 @@ inline CapabilityLevel canCompile(Node* node)
     case ObjectCreate:
     case ObjectKeys:
     case ObjectGetOwnPropertyNames:
+    case ObjectGetOwnPropertySymbols:
     case ObjectToString:
+    case ReflectOwnKeys:
     case MakeRope:
     case NewArrayWithSize:
     case NewArrayWithSpecies:
     case TryGetById:
     case GetById:
     case GetByIdFlush:
+    case GetByIdMegamorphic:
     case GetByIdWithThis:
+    case GetByIdWithThisMegamorphic:
     case GetByIdDirect:
     case GetByIdDirectFlush:
     case ToThis:
@@ -284,6 +290,7 @@ inline CapabilityLevel canCompile(Node* node)
     case IsConstructor:
     case IsTypedArrayView:
     case CheckTypeInfoFlags:
+    case HasStructureWithFlags:
     case OverridesHasInstance:
     case InstanceOf:
     case InstanceOfCustom:
@@ -298,12 +305,11 @@ inline CapabilityLevel canCompile(Node* node)
     case ResolveRope:
     case GetPropertyEnumerator:
     case EnumeratorNextUpdateIndexAndMode:
-    case EnumeratorNextExtractMode:
-    case EnumeratorNextExtractIndex:
     case EnumeratorNextUpdatePropertyName:
     case EnumeratorGetByVal:
     case EnumeratorInByVal:
     case EnumeratorHasOwnProperty:
+    case EnumeratorPutByVal:
     case BottomValue:
     case PhantomNewObject:
     case PhantomNewFunction:
@@ -333,6 +339,7 @@ inline CapabilityLevel canCompile(Node* node)
     case PutById:
     case PutByIdDirect:
     case PutByIdFlush:
+    case PutByIdMegamorphic:
     case PutByIdWithThis:
     case PutGetterById:
     case PutSetterById:
@@ -406,9 +413,12 @@ inline CapabilityLevel canCompile(Node* node)
     case GetTypedArrayLengthAsInt52:
     case GetVectorLength:
     case GetByVal:
+    case GetByValMegamorphic:
     case GetByValWithThis:
+    case GetByValWithThisMegamorphic:
     case PutByVal:
     case PutByValAlias:
+    case PutByValMegamorphic:
     case PutByValDirect:
     case PutByValWithThis:
     case PutPrivateName:

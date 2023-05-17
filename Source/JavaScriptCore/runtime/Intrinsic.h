@@ -59,6 +59,7 @@ namespace JSC {
     macro(ArrayValuesIntrinsic) \
     macro(ArrayKeysIntrinsic) \
     macro(ArrayEntriesIntrinsic) \
+    macro(BooleanConstructorIntrinsic) \
     macro(CharCodeAtIntrinsic) \
     macro(CharAtIntrinsic) \
     macro(DatePrototypeGetTimeIntrinsic) \
@@ -98,11 +99,13 @@ namespace JSC {
     macro(ObjectAssignIntrinsic) \
     macro(ObjectCreateIntrinsic) \
     macro(ObjectGetOwnPropertyNamesIntrinsic) \
+    macro(ObjectGetOwnPropertySymbolsIntrinsic) \
     macro(ObjectGetPrototypeOfIntrinsic) \
     macro(ObjectIsIntrinsic) \
     macro(ObjectKeysIntrinsic) \
     macro(ObjectToStringIntrinsic) \
     macro(ReflectGetPrototypeOfIntrinsic) \
+    macro(ReflectOwnKeysIntrinsic) \
     macro(StringConstructorIntrinsic) \
     macro(StringPrototypeCodePointAtIntrinsic) \
     macro(StringPrototypeLocaleCompareIntrinsic) \
@@ -166,6 +169,7 @@ namespace JSC {
     macro(AtomicsXorIntrinsic) \
     macro(ParseIntIntrinsic) \
     macro(FunctionToStringIntrinsic) \
+    macro(FunctionBindIntrinsic) \
     \
     /* Getter intrinsics. */ \
     macro(TypedArrayLengthIntrinsic) \

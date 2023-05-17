@@ -54,7 +54,6 @@
 #include "DOMEditor.h"
 #include "DOMException.h"
 #include "DOMPatchSupport.h"
-#include "DOMWindow.h"
 #include "DocumentInlines.h"
 #include "DocumentType.h"
 #include "Editing.h"
@@ -62,15 +61,12 @@
 #include "Event.h"
 #include "EventListener.h"
 #include "EventNames.h"
-#include "Frame.h"
 #include "FrameTree.h"
-#include "FrameView.h"
 #include "FullscreenManager.h"
 #include "HTMLElement.h"
 #include "HTMLFrameOwnerElement.h"
 #include "HTMLMediaElement.h"
 #include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLScriptElement.h"
 #include "HTMLStyleElement.h"
 #include "HTMLTemplateElement.h"
@@ -85,9 +81,12 @@
 #include "InstrumentingAgents.h"
 #include "IntRect.h"
 #include "JSDOMBindingSecurity.h"
-#include "JSDOMWindowCustom.h"
 #include "JSEventListener.h"
+#include "JSLocalDOMWindowCustom.h"
 #include "JSNode.h"
+#include "LocalDOMWindow.h"
+#include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "MutationEvent.h"
 #include "Node.h"
 #include "NodeList.h"
@@ -311,7 +310,10 @@ void InspectorDOMAgent::didCreateFrontendAndBackend(Inspector::FrontendRouter*, 
     m_domEditor = makeUnique<DOMEditor>(*m_history);
 
     m_instrumentingAgents.setPersistentDOMAgent(this);
-    m_document = m_inspectedPage.mainFrame().document();
+    auto* localMainFrame = dynamicDowncast<LocalFrame>(m_inspectedPage.mainFrame());
+    if (!localMainFrame)
+        return;
+    m_document = localMainFrame->document();
 
     // Force a layout so that we can collect additional information from the layout process.
     relayoutDocument();
@@ -348,7 +350,7 @@ void InspectorDOMAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReaso
 Vector<Document*> InspectorDOMAgent::documents()
 {
     Vector<Document*> result;
-    for (AbstractFrame* frame = m_document->frame(); frame; frame = frame->tree().traverseNext()) {
+    for (Frame* frame = m_document->frame(); frame; frame = frame->tree().traverseNext()) {
         auto* localFrame = dynamicDowncast<LocalFrame>(frame);
         if (!localFrame)
             continue;
@@ -2095,7 +2097,7 @@ Ref<Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener
             handlerObject = scriptListener->ensureJSFunction(*document);
             if (auto frame = document->frame()) {
                 // FIXME: Why do we need the canExecuteScripts check here?
-                if (frame->script().canExecuteScripts(NotAboutToExecuteScript))
+                if (frame->script().canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript))
                     globalObject = frame->script().globalObject(*scriptListener->isolatedWorld());
             }
         }
@@ -2142,7 +2144,7 @@ Ref<Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener
         .release();
     if (is<Node>(eventTarget))
         value->setNodeId(pushNodePathToFrontend(&downcast<Node>(eventTarget)));
-    else if (is<DOMWindow>(eventTarget))
+    else if (is<LocalDOMWindow>(eventTarget))
         value->setOnWindow(true);
     if (!scriptID.isNull()) {
         auto location = Protocol::Debugger::Location::create()
@@ -2391,8 +2393,7 @@ Ref<Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::buildObjectForAcc
             role = axObject->computedRoleString();
             selected = axObject->isSelected();
 
-            AXCoreObject::AccessibilityChildrenVector selectedChildren;
-            axObject->selectedChildren(selectedChildren);
+            auto selectedChildren = axObject->selectedChildren();
             if (selectedChildren.size()) {
                 selectedChildNodeIds = JSON::ArrayOf<Protocol::DOM::NodeId>::create();
                 for (auto& selectedChildObject : selectedChildren) {
@@ -2494,7 +2495,7 @@ Ref<Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::buildObjectForAcc
 static bool containsOnlyHTMLWhitespace(Node* node)
 {
     // FIXME: Respect ignoreWhitespace setting from inspector front end?
-    return is<Text>(node) && downcast<Text>(*node).data().isAllSpecialCharacters<isHTMLSpace>();
+    return is<Text>(node) && downcast<Text>(*node).data().isAllSpecialCharacters<isASCIIWhitespace>();
 }
 
 Node* InspectorDOMAgent::innerFirstChild(Node* node)
@@ -2803,7 +2804,7 @@ void InspectorDOMAgent::didChangeCustomElementState(Element& element)
     m_frontendDispatcher->customElementStateChanged(elementId, customElementState(element));
 }
 
-void InspectorDOMAgent::frameDocumentUpdated(Frame& frame)
+void InspectorDOMAgent::frameDocumentUpdated(LocalFrame& frame)
 {
     Document* document = frame.document();
     if (!document)

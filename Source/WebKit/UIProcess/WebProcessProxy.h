@@ -48,7 +48,6 @@
 #include <WebCore/ProcessIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SharedStringHash.h>
-#include <WebCore/SleepDisabler.h>
 #include <pal/SessionID.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
@@ -57,6 +56,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/RobinHoodHashSet.h>
+#include <wtf/UUID.h>
 #include <wtf/WeakHashSet.h>
 
 #if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
@@ -117,7 +117,7 @@ struct WebPageCreationParameters;
 struct WebPreferencesStore;
 struct WebsiteData;
 
-enum class RemoteWorkerType : bool;
+enum class RemoteWorkerType : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
 #if ENABLE(MEDIA_STREAM)
@@ -141,13 +141,11 @@ enum class CheckBackForwardList : bool { No, Yes };
 class WebProcessProxy : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakPtr<WebPageProxy>>;
+    using UserInitiatedActionByAuthorizationTokenMap = HashMap<UUID, RefPtr<API::UserInitiatedAction>>;
     typedef HashMap<WebCore::FrameIdentifier, WeakPtr<WebFrameProxy>> WebFrameProxyMap;
     typedef HashMap<uint64_t, RefPtr<API::UserInitiatedAction>> UserInitiatedActionMap;
 
-    enum class IsPrewarmed {
-        No,
-        Yes
-    };
+    enum class IsPrewarmed : bool { No, Yes };
 
     enum class ShouldLaunchProcess : bool { No, Yes };
     enum class LockdownMode : bool { Disabled, Enabled };
@@ -182,7 +180,7 @@ public:
     bool isInProcessCache() const { return m_isInProcessCache; }
 
     void enableRemoteWorkers(RemoteWorkerType, const UserContentControllerIdentifier&);
-    void disableRemoteWorkers(RemoteWorkerType);
+    void disableRemoteWorkers(OptionSet<RemoteWorkerType>);
 
     WebsiteDataStore* websiteDataStore() const { ASSERT(m_websiteDataStore); return m_websiteDataStore.get(); }
     void setWebsiteDataStore(WebsiteDataStore&);
@@ -195,6 +193,9 @@ public:
     static RefPtr<WebProcessProxy> processForIdentifier(WebCore::ProcessIdentifier);
     static RefPtr<WebPageProxy> webPage(WebPageProxyIdentifier);
     static RefPtr<WebPageProxy> audioCapturingWebPage();
+#if ENABLE(WEBXR) && !USE(OPENXR)
+    static RefPtr<WebPageProxy> webPageWithActiveXRSession();
+#endif
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
 
     enum class BeginsUsingDataStore : bool { No, Yes };
@@ -237,7 +238,11 @@ public:
     void addWebUserContentControllerProxy(WebUserContentControllerProxy&);
     void didDestroyWebUserContentControllerProxy(WebUserContentControllerProxy&);
 
+    void recordUserGestureAuthorizationToken(UUID);
     RefPtr<API::UserInitiatedAction> userInitiatedActivity(uint64_t);
+    RefPtr<API::UserInitiatedAction> userInitiatedActivity(std::optional<UUID>, uint64_t);
+
+    void consumeIfNotVerifiablyFromUIProcess(API::UserInitiatedAction&, std::optional<UUID>);
 
     bool isResponsive() const;
 
@@ -357,6 +362,7 @@ public:
     void sendPrepareToSuspend(IsSuspensionImminent, double remainingRunTime, CompletionHandler<void()>&&) final;
     void sendProcessDidResume(ResumeReason) final;
     void didChangeThrottleState(ProcessThrottleState) final;
+    void prepareToDropLastAssertion(CompletionHandler<void()>&&) final;
     ASCIILiteral clientName() const final { return "WebProcess"_s; }
     String environmentIdentifier() const final;
 
@@ -415,8 +421,6 @@ public:
     void gpuProcessExited(ProcessTerminationReason);
 #endif
 
-    bool hasSleepDisabler() const;
-
 #if PLATFORM(COCOA)
     bool hasNetworkExtensionSandboxAccess() const { return m_hasNetworkExtensionSandboxAccess; }
     void markHasNetworkExtensionSandboxAccess() { m_hasNetworkExtensionSandboxAccess = true; }
@@ -434,6 +438,9 @@ public:
     bool ignoreInvalidMessageForTesting() const { return m_ignoreInvalidMessageForTesting; }
     void setIgnoreInvalidMessageForTesting();
 #endif
+    
+    bool allowTestOnlyIPC() const { return m_allowTestOnlyIPC; }
+    void setAllowTestOnlyIPC(bool allowTestOnlyIPC) { m_allowTestOnlyIPC = allowTestOnlyIPC; }
 
 #if ENABLE(MEDIA_STREAM)
     static void muteCaptureInPagesExcept(WebCore::PageIdentifier);
@@ -515,6 +522,8 @@ private:
     using WebProcessProxyMap = HashMap<WebCore::ProcessIdentifier, WeakPtr<WebProcessProxy>>;
     static WebProcessProxyMap& allProcessMap();
     static Vector<RefPtr<WebProcessProxy>> allProcesses();
+    static WebPageProxyMap& globalPageMap();
+    static Vector<RefPtr<WebPageProxy>> globalPages();
 
     void platformInitialize();
     void platformDestroy();
@@ -523,6 +532,7 @@ private:
     void updateBackForwardItem(const BackForwardListItemState&);
     void didDestroyFrame(WebCore::FrameIdentifier, WebPageProxyIdentifier);
     void didDestroyUserGestureToken(uint64_t);
+    void postMessageToRemote(WebCore::ProcessIdentifier, WebCore::FrameIdentifier, std::optional<WebCore::SecurityOriginData>, const WebCore::MessageWithMessagePorts&);
 
     bool canBeAddedToWebProcessCache() const;
     void shouldTerminate(CompletionHandler<void(bool)>&&);
@@ -541,6 +551,8 @@ private:
     static const MemoryCompactLookupOnlyRobinHoodHashSet<String>& platformPathsWithAssumedReadAccess();
 
     void updateBackgroundResponsivenessTimer();
+
+    void updateBlobRegistryPartitioningState() const;
 
     void processDidTerminateOrFailedToLaunch(ProcessTerminationReason);
 
@@ -576,9 +588,6 @@ private:
     void sendMessageToWebContextWithReply(UserMessage&&, CompletionHandler<void(UserMessage&&)>&&);
 #endif
 
-    void didCreateSleepDisabler(WebCore::SleepDisablerIdentifier, const String& reason, bool display);
-    void didDestroySleepDisabler(WebCore::SleepDisablerIdentifier);
-
     void createSpeechRecognitionServer(SpeechRecognitionServerIdentifier);
     void destroySpeechRecognitionServer(SpeechRecognitionServerIdentifier);
 
@@ -592,9 +601,10 @@ private:
     bool messageSourceIsValidWebContentProcess();
 #endif
 
-    bool shouldTakeSuspendedAssertion() const;
+    bool shouldTakeNearSuspendedAssertion() const;
+    bool shouldDropNearSuspendedAssertionAfterDelay() const;
 
-    enum class IsWeak { No, Yes };
+    enum class IsWeak : bool { No, Yes };
     template<typename T> class WeakOrStrongPtr {
     public:
         WeakOrStrongPtr(T& object, IsWeak isWeak)
@@ -640,6 +650,7 @@ private:
     WeakHashSet<ProvisionalPageProxy> m_provisionalPages;
     WeakHashSet<ProvisionalFrameProxy> m_provisionalFrames;
     UserInitiatedActionMap m_userInitiatedActionMap;
+    UserInitiatedActionByAuthorizationTokenMap m_userInitiatedActionByAuthorizationTokenMap;
 
     HashMap<VisitedLinkStore*, HashSet<WebPageProxyIdentifier>> m_visitedLinkStoresWithUsers;
     HashSet<WebUserContentControllerProxy*> m_webUserContentControllerProxies;
@@ -673,6 +684,9 @@ private:
 
     VisibleWebPageCounter m_visiblePageCounter;
     RefPtr<WebsiteDataStore> m_websiteDataStore;
+#if PLATFORM(COCOA)
+    RefPtr<NetworkProcessProxy> m_networkProcessToKeepAliveUntilDataStoreIsCreated;
+#endif
 
     bool m_isUnderMemoryPressure { false };
 
@@ -717,8 +731,6 @@ private:
     std::optional<RemoteWorkerInformation> m_sharedWorkerInformation;
     bool m_hasServiceWorkerBackgroundProcessing { false };
 
-    HashMap<WebCore::SleepDisablerIdentifier, std::unique_ptr<WebCore::SleepDisabler>> m_sleepDisablers;
-
     struct AudibleMediaActivity {
         Ref<ProcessAssertion> assertion;
         WebProcessWithAudibleMediaToken token;
@@ -732,6 +744,8 @@ private:
 #if ENABLE(IPC_TESTING_API)
     bool m_ignoreInvalidMessageForTesting { false };
 #endif
+    
+    bool m_allowTestOnlyIPC { false };
 
     using SpeechRecognitionServerMap = HashMap<SpeechRecognitionServerIdentifier, std::unique_ptr<SpeechRecognitionServer>>;
     SpeechRecognitionServerMap m_speechRecognitionServerMap;
@@ -741,6 +755,9 @@ private:
     std::unique_ptr<WebLockRegistryProxy> m_webLockRegistry;
     std::unique_ptr<WebPermissionControllerProxy> m_webPermissionController;
     bool m_isConnectedToHardwareConsole { true };
+#if PLATFORM(MAC)
+    bool m_platformSuspendDidReleaseNearSuspendedAssertion { false };
+#endif
     mutable String m_environmentIdentifier;
 };
 

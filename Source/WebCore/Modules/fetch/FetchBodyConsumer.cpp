@@ -30,6 +30,7 @@
 #include "FetchBodyConsumer.h"
 
 #include "DOMFormData.h"
+#include "FetchBodyOwner.h"
 #include "FormData.h"
 #include "FormDataConsumer.h"
 #include "HTTPHeaderField.h"
@@ -37,7 +38,6 @@
 #include "JSBlob.h"
 #include "JSDOMFormData.h"
 #include "JSDOMPromiseDeferred.h"
-#include "RFC7230.h"
 #include "TextResourceDecoder.h"
 #include <wtf/StringExtras.h>
 #include <wtf/URLParser.h>
@@ -67,7 +67,7 @@ static HashMap<String, String> parseParameters(StringView input, size_t position
 {
     HashMap<String, String> parameters;
     while (position < input.length()) {
-        while (position < input.length() && RFC7230::isWhitespace(input[position]))
+        while (position < input.length() && isTabOrSpace(input[position]))
             position++;
         size_t nameBegin = position;
         while (position < input.length() && input[position] != '=' && input[position] != ';')
@@ -229,8 +229,8 @@ static void resolveWithTypeAndData(Ref<DeferredPromise>&& promise, FetchBodyCons
         fulfillPromiseWithArrayBuffer(WTFMove(promise), data, length);
         return;
     case FetchBodyConsumer::Type::Blob:
-        promise->resolveCallbackValueWithNewlyCreated<IDLInterface<Blob>>([&data, &length, &contentType, context](auto&) {
-            return blobFromData(context, { data, length }, contentType);
+        promise->resolveCallbackValueWithNewlyCreated<IDLInterface<Blob>>([&data, &length, &contentType](auto& context) {
+            return blobFromData(&context, { data, length }, contentType);
         });
         return;
     case FetchBodyConsumer::Type::JSON:
@@ -333,7 +333,7 @@ void FetchBodyConsumer::extract(ReadableStream& stream, ReadableStreamToSharedBu
     m_sink->pipeFrom(stream);
 }
 
-void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& contentType, ReadableStream* stream)
+void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& contentType, FetchBodyOwner* owner, ReadableStream* stream)
 {
     if (stream) {
         ASSERT(!m_sink);
@@ -359,11 +359,11 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
     }
 
     if (m_isLoading) {
+        if (owner)
+            owner->loadBody();
         setConsumePromise(WTFMove(promise));
         return;
     }
-
-    auto* context = promise->scriptExecutionContext();
 
     ASSERT(m_type != Type::None);
     switch (m_type) {
@@ -371,8 +371,8 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
         fulfillPromiseWithArrayBuffer(WTFMove(promise), takeAsArrayBuffer().get());
         return;
     case Type::Blob:
-        promise->resolveCallbackValueWithNewlyCreated<IDLInterface<Blob>>([this, context](auto&) {
-            return takeAsBlob(context);
+        promise->resolveCallbackValueWithNewlyCreated<IDLInterface<Blob>>([this, &contentType](auto& context) {
+            return takeAsBlob(&context, contentType);
         });
         return;
     case Type::JSON:
@@ -383,7 +383,7 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
         return;
     case FetchBodyConsumer::Type::FormData: {
         auto buffer = takeData();
-        if (auto formData = packageFormData(context, contentType, buffer ? buffer->makeContiguous()->data() : nullptr, buffer ? buffer->size() : 0))
+        if (auto formData = packageFormData(promise->scriptExecutionContext(), contentType, buffer ? buffer->makeContiguous()->data() : nullptr, buffer ? buffer->size() : 0))
             promise->resolve<IDLInterface<DOMFormData>>(*formData);
         else
             promise->reject(TypeError);
@@ -421,12 +421,14 @@ RefPtr<JSC::ArrayBuffer> FetchBodyConsumer::takeAsArrayBuffer()
     return m_buffer.takeAsArrayBuffer();
 }
 
-Ref<Blob> FetchBodyConsumer::takeAsBlob(ScriptExecutionContext* context)
+Ref<Blob> FetchBodyConsumer::takeAsBlob(ScriptExecutionContext* context, const String& contentType)
 {
-    if (!m_buffer)
-        return Blob::create(context, Vector<uint8_t>(), Blob::normalizedContentType(m_contentType));
+    String normalizedContentType = Blob::normalizedContentType(extractMIMETypeFromMediaType(contentType));
 
-    return blobFromData(context, m_buffer.take()->extractData(), m_contentType);
+    if (!m_buffer)
+        return Blob::create(context, Vector<uint8_t>(), normalizedContentType);
+
+    return blobFromData(context, m_buffer.take()->extractData(), normalizedContentType);
 }
 
 String FetchBodyConsumer::takeAsText()
@@ -479,10 +481,10 @@ void FetchBodyConsumer::loadingSucceeded(const String& contentType)
 
     if (m_consumePromise) {
         if (!m_userGestureToken || m_userGestureToken->hasExpired(UserGestureToken::maximumIntervalForUserGestureForwardingForFetch()) || !m_userGestureToken->processingUserGesture())
-            resolve(m_consumePromise.releaseNonNull(), contentType, nullptr);
+            resolve(m_consumePromise.releaseNonNull(), contentType, nullptr, nullptr);
         else {
             UserGestureIndicator gestureIndicator(m_userGestureToken, UserGestureToken::GestureScope::MediaOnly, UserGestureToken::IsPropagatedFromFetch::Yes);
-            resolve(m_consumePromise.releaseNonNull(), contentType, nullptr);
+            resolve(m_consumePromise.releaseNonNull(), contentType, nullptr, nullptr);
         }
     }
     if (m_source) {
@@ -494,7 +496,6 @@ void FetchBodyConsumer::loadingSucceeded(const String& contentType)
 FetchBodyConsumer FetchBodyConsumer::clone()
 {
     FetchBodyConsumer clone { m_type };
-    clone.m_contentType = m_contentType;
     clone.m_buffer = m_buffer;
     return clone;
 }

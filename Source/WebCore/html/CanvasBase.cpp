@@ -26,17 +26,18 @@
 #include "config.h"
 #include "CanvasBase.h"
 
+#include "ByteArrayPixelBuffer.h"
 #include "CanvasRenderingContext.h"
 #include "Chrome.h"
 #include "Document.h"
 #include "Element.h"
-#include "FloatRect.h"
 #include "GraphicsClient.h"
 #include "GraphicsContext.h"
 #include "HTMLCanvasElement.h"
 #include "HostWindow.h"
 #include "ImageBuffer.h"
 #include "InspectorInstrumentation.h"
+#include "IntRect.h"
 #include "StyleCanvasImage.h"
 #include "RenderElement.h"
 #include "WebCoreOpaqueRoot.h"
@@ -106,8 +107,11 @@ AffineTransform CanvasBase::baseTransform() const
 
 void CanvasBase::makeRenderingResultsAvailable()
 {
-    if (auto* context = renderingContext())
+    if (auto* context = renderingContext()) {
         context->paintRenderingResultsToCanvas();
+        if (auto noiseInjectionHashSalt = scriptExecutionContext() ? scriptExecutionContext()->noiseInjectionHashSalt() : std::nullopt)
+            m_canvasNoiseInjection.postProcessDirtyCanvasBuffer(buffer(), *noiseInjectionHashSalt);
+    }
 }
 
 size_t CanvasBase::memoryCost() const
@@ -197,6 +201,17 @@ void CanvasBase::notifyObserversCanvasChanged(const std::optional<FloatRect>& re
         observer.canvasChanged(*this, rect);
 }
 
+void CanvasBase::didDraw(const std::optional<FloatRect>& rect, ShouldApplyPostProcessingToDirtyRect shouldApplyPostProcessingToDirtyRect)
+{
+    // FIXME: We should exclude rects with ShouldApplyPostProcessingToDirtyRect::No
+    if (shouldInjectNoiseBeforeReadback() && shouldApplyPostProcessingToDirtyRect == ShouldApplyPostProcessingToDirtyRect::Yes) {
+        if (rect)
+            m_canvasNoiseInjection.updateDirtyRect(intersection(enclosingIntRect(*rect), { { }, size() }));
+        else
+            m_canvasNoiseInjection.updateDirtyRect({ { }, size() });
+    }
+}
+
 void CanvasBase::notifyObserversCanvasResized()
 {
     for (auto& observer : m_observers)
@@ -238,8 +253,9 @@ HashSet<Element*> CanvasBase::cssCanvasClients() const
         if (!is<StyleCanvasImage>(observer))
             continue;
 
-        for (auto& client : downcast<StyleCanvasImage>(observer).clients().values()) {
-            if (auto element = client->element())
+        for (auto entry : downcast<StyleCanvasImage>(observer).clients()) {
+            auto& client = entry.key;
+            if (auto element = client.element())
                 cssCanvasClients.add(element);
         }
     }
@@ -354,6 +370,19 @@ RefPtr<ImageBuffer> CanvasBase::allocateImageBuffer(bool usesDisplayListDrawing,
     context.graphicsClient = graphicsClient();
     context.avoidIOSurfaceSizeCheckInWebProcessForTesting = avoidBackendSizeCheckForTesting;
     return ImageBuffer::create(size(), RenderingPurpose::Canvas, 1, colorSpace, pixelFormat, bufferOptions, context);
+}
+
+bool CanvasBase::shouldInjectNoiseBeforeReadback() const
+{
+    // Note, every early-return resulting from this check potentially leaks this state. This is a risk that we're accepting right now.
+    return scriptExecutionContext() && scriptExecutionContext()->noiseInjectionHashSalt();
+}
+
+bool CanvasBase::postProcessPixelBufferResults(Ref<PixelBuffer>&& pixelBuffer) const
+{
+    if (auto noiseInjectionHashSalt = scriptExecutionContext() ? scriptExecutionContext()->noiseInjectionHashSalt() : std::nullopt)
+        return m_canvasNoiseInjection.postProcessPixelBufferResults(std::forward<Ref<PixelBuffer>>(pixelBuffer), *noiseInjectionHashSalt);
+    return false;
 }
 
 size_t CanvasBase::activePixelMemory()

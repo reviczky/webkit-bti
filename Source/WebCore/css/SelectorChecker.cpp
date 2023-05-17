@@ -33,16 +33,15 @@
 #include "CSSSelectorList.h"
 #include "CommonAtomStrings.h"
 #include "Document.h"
-#include "ElementInlines.h"
+#include "ElementChildIteratorInlines.h"
 #include "ElementRareData.h"
 #include "ElementTraversal.h"
-#include "Frame.h"
 #include "FrameSelection.h"
 #include "HTMLDocument.h"
 #include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLSlotElement.h"
 #include "InspectorInstrumentation.h"
+#include "LocalFrame.h"
 #include "Page.h"
 #include "RenderElement.h"
 #include "RuleFeature.h"
@@ -51,7 +50,7 @@
 #include "StyleRule.h"
 #include "StyleScope.h"
 #include "Text.h"
-#include "TypedElementDescendantIterator.h"
+#include "TypedElementDescendantIteratorInlines.h"
 
 namespace WebCore {
 
@@ -478,7 +477,7 @@ static bool attributeValueMatches(const Attribute& attribute, CSSSelector::Match
     case CSSSelector::List:
         {
             // Ignore empty selectors or selectors containing spaces.
-            if (selectorValue.isEmpty() || selectorValue.find(isHTMLSpace<UChar>) != notFound)
+            if (selectorValue.isEmpty() || selectorValue.find(isASCIIWhitespace<UChar>) != notFound)
                 return false;
 
             unsigned startSearchAt = 0;
@@ -490,9 +489,9 @@ static bool attributeValueMatches(const Attribute& attribute, CSSSelector::Match
                     foundPos = value.findIgnoringASCIICase(selectorValue, startSearchAt);
                 if (foundPos == notFound)
                     return false;
-                if (!foundPos || isHTMLSpace(value[foundPos - 1])) {
+                if (!foundPos || isASCIIWhitespace(value[foundPos - 1])) {
                     unsigned endStr = foundPos + selectorValue.length();
-                    if (endStr == value.length() || isHTMLSpace(value[endStr]))
+                    if (endStr == value.length() || isASCIIWhitespace(value[endStr]))
                         break; // We found a match.
                 }
 
@@ -560,8 +559,9 @@ static bool attributeValueMatches(const Attribute& attribute, CSSSelector::Match
 static bool anyAttributeMatches(const Element& element, const CSSSelector& selector, const QualifiedName& selectorAttr, bool caseSensitive)
 {
     ASSERT(element.hasAttributesWithoutUpdate());
+    bool isHTML = element.isHTMLElement() && element.document().isHTMLDocument();
     for (const Attribute& attribute : element.attributesIterator()) {
-        if (!attribute.matches(selectorAttr.prefix(), element.isHTMLElement() ? selector.attributeCanonicalLocalName() : selectorAttr.localName(), selectorAttr.namespaceURI()))
+        if (!attribute.matches(selectorAttr.prefix(), isHTML ? selectorAttr.localNameLowercase() : selectorAttr.localName(), selectorAttr.namespaceURI()))
             continue;
 
         if (attributeValueMatches(attribute, selector.match(), selector.value(), caseSensitive))
@@ -575,7 +575,8 @@ bool SelectorChecker::attributeSelectorMatches(const Element& element, const Qua
 {
     ASSERT(selector.isAttributeSelector());
     auto& selectorAttribute = selector.attribute();
-    auto& selectorName = element.isHTMLElement() ? selector.attributeCanonicalLocalName() : selectorAttribute.localName();
+    bool isHTML = element.isHTMLElement() && element.document().isHTMLDocument();
+    auto& selectorName = isHTML ? selectorAttribute.localNameLowercase() : selectorAttribute.localName();
     if (!Attribute::nameMatchesFilter(attributeName, selectorAttribute.prefix(), selectorName, selectorAttribute.namespaceURI()))
         return false;
     bool caseSensitive = true;
@@ -929,7 +930,7 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
                     if (!matchSelectorList(checkingContext, context, element, *selectorList))
                         return false;
 
-                    addStyleRelation(checkingContext, parentElement, Style::Relation::ChildrenAffectedByPropertyBasedBackwardPositionalRules);
+                    addStyleRelation(checkingContext, parentElement, Style::Relation::ChildrenAffectedByBackwardPositionalRules);
                 } else {
                     auto relation = context.isSubjectOrAdjacentElement ? Style::Relation::ChildrenAffectedByBackwardPositionalRules : Style::Relation::DescendantsAffectedByBackwardPositionalRules;
                     addStyleRelation(checkingContext, parentElement, relation);
@@ -1127,11 +1128,8 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
         case CSSSelector::PseudoClassHasAttachment:
             return hasAttachment(element);
 #endif
-        case CSSSelector::PseudoClassOpen:
-            return matchesOpenPseudoClass(element);
-
-        case CSSSelector::PseudoClassClosed:
-            return matchesClosedPseudoClass(element);
+        case CSSSelector::PseudoClassPopoverOpen:
+            return matchesPopoverOpenPseudoClass(element);
 
         case CSSSelector::PseudoClassModal:
             return matchesModalPseudoClass(element);

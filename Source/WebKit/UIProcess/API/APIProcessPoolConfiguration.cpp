@@ -45,7 +45,6 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     auto copy = this->create();
 
     copy->m_injectedBundlePath = this->m_injectedBundlePath;
-    copy->m_customClassesForParameterCoder = this->m_customClassesForParameterCoder;
     copy->m_cachePartitionedURLSchemes = this->m_cachePartitionedURLSchemes;
     copy->m_alwaysRevalidatedURLSchemes = this->m_alwaysRevalidatedURLSchemes;
     copy->m_additionalReadAccessAllowedPaths = this->m_additionalReadAccessAllowedPaths;
@@ -67,7 +66,6 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_isAutomaticProcessWarmingEnabledByClient = this->m_isAutomaticProcessWarmingEnabledByClient;
     copy->m_usesWebProcessCache = this->m_usesWebProcessCache;
     copy->m_usesBackForwardCache = this->m_usesBackForwardCache;
-    copy->m_customWebContentServiceBundleIdentifier = this->m_customWebContentServiceBundleIdentifier;
     copy->m_usesSingleWebProcess = m_usesSingleWebProcess;
 #if PLATFORM(GTK) && !USE(GTK4)
     copy->m_useSystemAppearanceForScrollbars = m_useSystemAppearanceForScrollbars;

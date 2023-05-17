@@ -38,9 +38,9 @@ class InlineDisplayLineBuilder {
 public:
     InlineDisplayLineBuilder(const InlineFormattingContext&);
 
-    InlineDisplay::Line build(const LineBuilder::LineContent&, const LineBox&, const ConstraintsForInlineContent&) const;
+    InlineDisplay::Line build(const LineBuilder::LineContent&, const LineBox&, const ConstraintsForInlineContent&, bool lineIsFullyTruncatedInBlockDirection) const;
 
-    static std::optional<FloatRect> trailingEllipsisVisualRectAfterTruncation(LineEndingEllipsisPolicy, const InlineDisplay::Line&, DisplayBoxes&, bool isLastLineWithInlineContent);
+    static std::optional<FloatRect> trailingEllipsisVisualRectAfterTruncation(LineEndingEllipsisPolicy, const InlineDisplay::Line&, InlineDisplay::Boxes&, bool isLastLineWithInlineContent);
 
 private:
     struct EnclosingLineGeometry {

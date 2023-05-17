@@ -58,12 +58,12 @@ public:
 
     // Construct a string with UTF-16 data.
     WTF_EXPORT_PRIVATE String(const UChar* characters, unsigned length);
-    ALWAYS_INLINE String(Span<const UChar> characters) : String(characters.data(), characters.size()) { }
+    ALWAYS_INLINE String(std::span<const UChar> characters) : String(characters.data(), characters.size()) { }
 
     // Construct a string with Latin-1 data.
     WTF_EXPORT_PRIVATE String(const LChar* characters, unsigned length);
     WTF_EXPORT_PRIVATE String(const char* characters, unsigned length);
-    ALWAYS_INLINE String(Span<const LChar> characters) : String(characters.data(), characters.size()) { }
+    ALWAYS_INLINE String(std::span<const LChar> characters) : String(characters.data(), characters.size()) { }
     ALWAYS_INLINE static String fromLatin1(const char* characters) { return String { characters }; }
 
     // Construct a string referencing an existing StringImpl.
@@ -104,8 +104,8 @@ public:
     unsigned length() const { return m_impl ? m_impl->length() : 0; }
     const LChar* characters8() const { return m_impl ? m_impl->characters8() : nullptr; }
     const UChar* characters16() const { return m_impl ? m_impl->characters16() : nullptr; }
-    Span<const LChar> span8() const { return { characters8(), length() }; }
-    Span<const UChar> span16() const { return { characters16(), length() }; }
+    std::span<const LChar> span8() const { return { characters8(), length() }; }
+    std::span<const UChar> span16() const { return { characters16(), length() }; }
 
     // Return characters8() or characters16() depending on CharacterType.
     template<typename CharacterType> const CharacterType* characters() const;
@@ -120,7 +120,7 @@ public:
     WTF_EXPORT_PRIVATE CString utf8(ConversionMode = LenientConversion) const;
 
     template<typename Func>
-    Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> tryGetUTF8(const Func&, ConversionMode = LenientConversion) const;
+    Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> tryGetUTF8(const Func&, ConversionMode = LenientConversion) const;
     WTF_EXPORT_PRIVATE Expected<CString, UTF8ConversionError> tryGetUTF8(ConversionMode) const;
     WTF_EXPORT_PRIVATE Expected<CString, UTF8ConversionError> tryGetUTF8() const;
 
@@ -138,7 +138,6 @@ public:
 
     WTF_EXPORT_PRIVATE static String numberToStringFixedPrecision(float, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
     WTF_EXPORT_PRIVATE static String numberToStringFixedPrecision(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
-    WTF_EXPORT_PRIVATE static String numberToStringFixedWidth(float, unsigned decimalPlaces);
     WTF_EXPORT_PRIVATE static String numberToStringFixedWidth(double, unsigned decimalPlaces);
 
     AtomString toExistingAtomString() const;
@@ -330,12 +329,6 @@ inline bool operator==(ASCIILiteral a, const String& b) { return equal(b.impl(),
 template<size_t inlineCapacity> inline bool operator==(const Vector<char, inlineCapacity>& a, const String& b) { return equal(b.impl(), a.data(), a.size()); }
 template<size_t inlineCapacity> inline bool operator==(const String& a, const Vector<char, inlineCapacity>& b) { return b == a; }
 
-inline bool operator!=(const String& a, const String& b) { return !equal(a.impl(), b.impl()); }
-inline bool operator!=(const String& a, ASCIILiteral b) { return !equal(a.impl(), b); }
-inline bool operator!=(ASCIILiteral a, const String& b) { return !equal(b.impl(), a); }
-template<size_t inlineCapacity> inline bool operator!=(const Vector<char, inlineCapacity>& a, const String& b) { return !(a == b); }
-template<size_t inlineCapacity> inline bool operator!=(const String& a, const Vector<char, inlineCapacity>& b) { return b != a; }
-
 bool equalIgnoringASCIICase(const String&, const String&);
 bool equalIgnoringASCIICase(const String&, ASCIILiteral);
 
@@ -441,7 +434,7 @@ inline String::String(StaticStringImpl* string)
 }
 
 inline String::String(ASCIILiteral characters)
-    : m_impl(characters.isNull() ? nullptr : RefPtr<StringImpl> { StringImpl::create(characters) })
+    : m_impl(characters.isNull() ? nullptr : RefPtr { StringImpl::create(characters) })
 {
 }
 
@@ -478,7 +471,7 @@ ALWAYS_INLINE String WARN_UNUSED_RETURN makeStringByReplacingAll(const String& s
 
 WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN makeStringByRemoving(const String&, unsigned position, unsigned lengthToRemove);
 
-WTF_EXPORT_PRIVATE String makeStringByJoining(Span<const String> strings, const String& separator);
+WTF_EXPORT_PRIVATE String makeStringByJoining(std::span<const String> strings, const String& separator);
 
 inline std::optional<UCharDirection> String::defaultWritingDirection() const
 {
@@ -505,11 +498,11 @@ inline String String::substring(unsigned position, unsigned length) const
 }
 
 template<typename Func>
-inline Expected<std::invoke_result_t<Func, Span<const char>>, UTF8ConversionError> String::tryGetUTF8(const Func& function, ConversionMode mode) const
+inline Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8ConversionError> String::tryGetUTF8(const Func& function, ConversionMode mode) const
 {
     if (!m_impl) {
         constexpr const char* emptyString = "";
-        return function(Span { emptyString, emptyString });
+        return function(makeSpan(emptyString, emptyString));
     }
     return m_impl->tryGetUTF8(function, mode);
 }

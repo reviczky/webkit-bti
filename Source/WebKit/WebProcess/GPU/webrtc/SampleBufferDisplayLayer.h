@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,6 +51,8 @@ public:
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
+    WebCore::LayerHostingContextID hostingContextID() const final { return m_hostingContextID; }
+
     using GPUProcessConnection::Client::weakPtrFactory;
     using GPUProcessConnection::Client::WeakValueType;
     using GPUProcessConnection::Client::WeakPtrImplType;
@@ -67,11 +69,12 @@ private:
     bool didFail() const final;
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer) final;
     void updateAffineTransform(CGAffineTransform) final;
-    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation) final;
+    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation, std::optional<WTF::MachSendRight>&&) final;
     void flush() final;
     void flushAndRemoveImage() final;
     void play() final;
     void pause() final;
+    void enqueueBlackFrameFrom(const WebCore::VideoFrame&) final;
     void enqueueVideoFrame(WebCore::VideoFrame&) final;
     void clearVideoFrames() final;
     PlatformLayer* rootLayer() final;
@@ -91,6 +94,7 @@ private:
     bool m_paused { false };
 
     SharedVideoFrameWriter m_sharedVideoFrameWriter;
+    WebCore::LayerHostingContextID m_hostingContextID { 0 };
 };
 
 }

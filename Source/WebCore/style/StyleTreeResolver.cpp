@@ -29,22 +29,21 @@
 #include "CSSFontSelector.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ComposedTreeIterator.h"
-#include "ElementIterator.h"
-#include "Frame.h"
 #include "HTMLBodyElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLProgressElement.h"
 #include "HTMLSlotElement.h"
 #include "LoaderStrategy.h"
+#include "LocalFrame.h"
 #include "NodeRenderStyle.h"
 #include "Page.h"
 #include "PlatformStrategies.h"
 #include "Quirks.h"
 #include "RenderElement.h"
-#include "RenderStyle.h"
+#include "RenderStyleSetters.h"
+#include "ResolvedStyle.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
 #include "StyleAdjuster.h"
@@ -53,6 +52,7 @@
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "Text.h"
+#include "TypedElementDescendantIteratorInlines.h"
 #include "WebAnimationTypes.h"
 #include "WebAnimationUtilities.h"
 
@@ -183,8 +183,6 @@ static bool affectsRenderedSubtree(Element& element, const RenderStyle& newStyle
         return true;
     if (element.renderOrDisplayContentsStyle())
         return true;
-    if (element.displayContentsChanged())
-        return true;
     if (element.rendererIsNeeded(newStyle))
         return true;
     return false;
@@ -229,11 +227,6 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
 
     if (!affectsRenderedSubtree(element, *resolvedStyle.style))
         return { };
-
-    if (m_didSeePendingStylesheet && (!existingStyle || existingStyle->isNotFinal())) {
-        resolvedStyle.style->setIsNotFinal();
-        m_document.setHasNodesWithNonFinalStyle();
-    }
 
     auto update = createAnimatedElementUpdate(WTFMove(resolvedStyle), styleable, parent().change, resolutionContext);
     auto descendantsToResolve = computeDescendantsToResolve(update.change, element.styleValidity(), parent().descendantsToResolve);
@@ -614,9 +607,9 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
             auto animatedStyleBeforeCascadeApplication = RenderStyle::clonePtr(*animatedStyle);
             // The cascade may override animated properties and have dependencies to them.
             // FIXME: This is wrong if there are both transitions and animations running on the same element.
-            applyCascadeAfterAnimation(*animatedStyle, animatedProperties, styleable.hasRunningTransitions(), *resolvedStyle.matchResult, element, resolutionContext);
+            auto overriddenAnimatedProperties = applyCascadeAfterAnimation(*animatedStyle, animatedProperties, styleable.hasRunningTransitions(), *resolvedStyle.matchResult, element, resolutionContext);
             ASSERT(styleable.keyframeEffectStack());
-            styleable.keyframeEffectStack()->didApplyCascade(*animatedStyleBeforeCascadeApplication, *animatedStyle, animatedProperties, document);
+            styleable.keyframeEffectStack()->cascadeDidOverrideProperties(overriddenAnimatedProperties, document);
         }
 
         Adjuster adjuster(document, *resolutionContext.parentStyle, resolutionContext.parentBoxStyle, styleable.pseudoId == PseudoId::None ? &element : nullptr);
@@ -652,7 +645,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
     return { WTFMove(newStyle), change, shouldRecompositeLayer };
 }
 
-void TreeResolver::applyCascadeAfterAnimation(RenderStyle& animatedStyle, const HashSet<AnimatableProperty>& animatedProperties, bool isTransition, const MatchResult& matchResult, const Element& element, const ResolutionContext& resolutionContext)
+HashSet<AnimatableProperty> TreeResolver::applyCascadeAfterAnimation(RenderStyle& animatedStyle, const HashSet<AnimatableProperty>& animatedProperties, bool isTransition, const MatchResult& matchResult, const Element& element, const ResolutionContext& resolutionContext)
 {
     auto builderContext = BuilderContext {
         m_document,
@@ -671,6 +664,8 @@ void TreeResolver::applyCascadeAfterAnimation(RenderStyle& animatedStyle, const 
     };
 
     styleBuilder.applyAllProperties();
+
+    return styleBuilder.overriddenAnimatedProperties();
 }
 
 void TreeResolver::pushParent(Element& element, const RenderStyle& style, Change change, DescendantsToResolve descendantsToResolve)
@@ -840,7 +835,7 @@ void TreeResolver::resolveComposedTree()
                 m_update->addText(text, parent.element, WTFMove(textUpdate));
             }
 
-            if (!text.data().isAllSpecialCharacters<isHTMLSpace>())
+            if (!text.data().isAllSpecialCharacters<isASCIIWhitespace>())
                 parent.resolvedFirstLineAndLetterChild = true;
 
             text.setHasValidStyle();
@@ -1015,9 +1010,9 @@ static Vector<Function<void ()>>& postResolutionCallbackQueue()
     return vector;
 }
 
-static Vector<RefPtr<Frame>>& memoryCacheClientCallsResumeQueue()
+static Vector<RefPtr<LocalFrame>>& memoryCacheClientCallsResumeQueue()
 {
-    static NeverDestroyed<Vector<RefPtr<Frame>>> vector;
+    static NeverDestroyed<Vector<RefPtr<LocalFrame>>> vector;
     return vector;
 }
 
@@ -1034,7 +1029,8 @@ static void suspendMemoryCacheClientCalls(Document& document)
 
     page->setMemoryCacheClientCallsEnabled(false);
 
-    memoryCacheClientCallsResumeQueue().append(&page->mainFrame());
+    if (auto* localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame()))
+        memoryCacheClientCallsResumeQueue().append(localMainFrame);
 }
 
 static unsigned resolutionNestingDepth;

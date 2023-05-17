@@ -25,20 +25,36 @@
 
 #pragma once
 
+#include "LayoutRect.h"
 #include "ReducedResolutionSeconds.h"
 #include "Timer.h"
 
 namespace WebCore {
 
 class CaretAnimator;
+class Color;
 class Document;
+class FloatRect;
+class GraphicsContext;
+class Node;
 class Page;
+
+enum class CaretAnimatorType : uint8_t {
+    Default,
+    Alternate
+};
+
+enum class CaretAnimatorStopReason : uint8_t {
+    Default,
+    CaretRectChanged,
+};
 
 class CaretAnimationClient {
 public:
     virtual ~CaretAnimationClient() = default;
 
     virtual void caretAnimationDidUpdate(CaretAnimator&) { }
+    virtual LayoutRect localCaretRect() const = 0;
 
     virtual Document* document() = 0;
 };
@@ -59,12 +75,7 @@ public:
 
     virtual void start(ReducedResolutionSeconds currentTime) = 0;
 
-    void stop()
-    {
-        if (!m_isActive)
-            return;
-        didEnd();
-    }
+    virtual void stop(CaretAnimatorStopReason = CaretAnimatorStopReason::Default);
 
     bool isActive() const { return m_isActive; }
 
@@ -78,6 +89,8 @@ public:
     virtual void setVisible(bool) = 0;
 
     PresentationProperties presentationProperties() const { return m_presentationProperties; }
+    virtual void paint(const Node&, GraphicsContext&, const FloatRect&, const Color&, const LayoutPoint&) const;
+    virtual LayoutRect caretRepaintRectForLocalRect(LayoutRect) const;
 
 protected:
     explicit CaretAnimator(CaretAnimationClient& client)

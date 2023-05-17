@@ -32,6 +32,7 @@
 
 namespace WebCore {
 
+class DOMRectReadOnly;
 class File;
 class HTMLImageElement;
 class RenderAttachment;
@@ -49,7 +50,7 @@ public:
     WEBCORE_EXPORT URL blobURL() const;
     WEBCORE_EXPORT File* file() const;
 
-    enum class UpdateDisplayAttributes { No, Yes };
+    enum class UpdateDisplayAttributes : bool { No, Yes };
     void setFile(RefPtr<File>&&, UpdateDisplayAttributes = UpdateDisplayAttributes::No);
 
     const String& uniqueIdentifier() const { return m_uniqueIdentifier; }
@@ -69,9 +70,10 @@ public:
     RefPtr<HTMLImageElement> enclosingImageElement() const;
 
     WEBCORE_EXPORT String attachmentTitle() const;
+    const AtomString& attachmentSubtitle() const;
     const AtomString& attachmentActionForDisplay() const;
     String attachmentTitleForDisplay() const;
-    String attachmentSubtitleForDisplay() const;
+    const AtomString& attachmentSubtitleForDisplay() const;
     WEBCORE_EXPORT String attachmentType() const;
     String attachmentPath() const;
     RefPtr<Image> thumbnail() const { return m_thumbnail; }
@@ -79,6 +81,7 @@ public:
     void requestIconWithSize(const FloatSize&) const;
     FloatSize iconSize() const { return m_iconSize; }
     void invalidateRendering();
+    DOMRectReadOnly* saveButtonClientRect() const;
 
 #if ENABLE(SERVICE_CONTROLS)
     bool isImageMenuEnabled() const { return m_isImageMenuEnabled; }
@@ -88,11 +91,15 @@ public:
     bool isImageOnly() const { return m_implementation == Implementation::ImageOnly; }
 
 private:
+    friend class AttachmentSaveEventListener;
+
     HTMLAttachmentElement(const QualifiedName&, Document&);
     virtual ~HTMLAttachmentElement();
 
     void didAddUserAgentShadowRoot(ShadowRoot&) final;
     void ensureModernShadowTree(ShadowRoot&);
+    void updateProgress(const AtomString&);
+    void updateSaveButton(bool);
 
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
     bool shouldSelectOnMouseDown() final {
@@ -103,7 +110,7 @@ private:
 #endif
     }
     bool canContainRangeEndPoint() const final { return false; }
-    void parseAttribute(const QualifiedName&, const AtomString&) final;
+    void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
 
 #if ENABLE(SERVICE_CONTROLS)
     bool childShouldCreateRenderer(const Node&) const final;
@@ -119,9 +126,16 @@ private:
     FloatSize m_iconSize;
 
     RefPtr<HTMLAttachmentElement> m_innerLegacyAttachment;
-    RefPtr<HTMLElement> m_elementWithAction;
-    RefPtr<HTMLElement> m_elementWithTitle;
-    RefPtr<HTMLElement> m_elementWithSubtitle;
+    RefPtr<HTMLElement> m_containerElement;
+    RefPtr<HTMLElement> m_placeholderElement;
+    RefPtr<HTMLElement> m_progressElement;
+    RefPtr<HTMLElement> m_informationBlock;
+    RefPtr<HTMLElement> m_actionTextElement;
+    RefPtr<HTMLElement> m_titleElement;
+    RefPtr<HTMLElement> m_subtitleElement;
+    RefPtr<HTMLElement> m_saveArea;
+    RefPtr<HTMLElement> m_saveButton;
+    mutable RefPtr<DOMRectReadOnly> m_saveButtonClientRect;
 
 #if ENABLE(SERVICE_CONTROLS)
     bool m_isImageMenuEnabled { false };

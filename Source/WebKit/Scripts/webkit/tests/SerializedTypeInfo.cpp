@@ -25,6 +25,10 @@
 #include "config.h"
 #include "SerializedTypeInfo.h"
 
+#include "CommonHeader.h"
+#if ENABLE(TEST_FEATURE)
+#include "CommonHeader.h"
+#endif
 #if ENABLE(TEST_FEATURE)
 #include "FirstMemberType.h"
 #endif
@@ -172,6 +176,27 @@ Vector<SerializedTypeInfo> allSerializedTypes()
                 "secondMember"_s
             }
         } },
+        { "WebCore::TimingFunction"_s, {
+            { "std::variant<WebCore::LinearTimingFunction, WebCore::CubicBezierTimingFunction, WebCore::StepsTimingFunction, WebCore::SpringTimingFunction>"_s, "subclasses"_s }
+        } },
+        { "Namespace::ConditionalCommonClass"_s, {
+            {
+                "int"_s,
+                "value"_s
+            }
+        } },
+        { "Namespace::CommonClass"_s, {
+            {
+                "int"_s,
+                "value"_s
+            }
+        } },
+        { "Namespace::AnotherCommonClass"_s, {
+            {
+                "int"_s,
+                "value"_s
+            }
+        } },
         { "WebCore::SharedStringHash"_s, {
             { "uint32_t"_s, "alias"_s }
         } },
@@ -205,6 +230,31 @@ Vector<SerializedEnumInfo> allSerializedEnums()
             static_cast<uint64_t>(EnumNamespace2::OptionSetEnumType::OptionSetSecondValue),
 #endif
             static_cast<uint64_t>(EnumNamespace2::OptionSetEnumType::OptionSetThirdValue),
+        } },
+        { "OptionSetEnumFirstCondition"_s, sizeof(OptionSetEnumFirstCondition), true, {
+#if ENABLE(OPTION_SET_FIRST_VALUE)
+            static_cast<uint64_t>(OptionSetEnumFirstCondition::OptionSetFirstValue),
+#endif
+            static_cast<uint64_t>(OptionSetEnumFirstCondition::OptionSetSecondValue),
+            static_cast<uint64_t>(OptionSetEnumFirstCondition::OptionSetThirdValue),
+        } },
+        { "OptionSetEnumLastCondition"_s, sizeof(OptionSetEnumLastCondition), true, {
+            static_cast<uint64_t>(OptionSetEnumLastCondition::OptionSetFirstValue),
+            static_cast<uint64_t>(OptionSetEnumLastCondition::OptionSetSecondValue),
+#if ENABLE(OPTION_SET_THIRD_VALUE)
+            static_cast<uint64_t>(OptionSetEnumLastCondition::OptionSetThirdValue),
+#endif
+        } },
+        { "OptionSetEnumAllCondition"_s, sizeof(OptionSetEnumAllCondition), true, {
+#if ENABLE(OPTION_SET_FIRST_VALUE)
+            static_cast<uint64_t>(OptionSetEnumAllCondition::OptionSetFirstValue),
+#endif
+#if ENABLE(OPTION_SET_SECOND_VALUE)
+            static_cast<uint64_t>(OptionSetEnumAllCondition::OptionSetSecondValue),
+#endif
+#if ENABLE(OPTION_SET_THIRD_VALUE)
+            static_cast<uint64_t>(OptionSetEnumAllCondition::OptionSetThirdValue),
+#endif
         } },
     };
 }

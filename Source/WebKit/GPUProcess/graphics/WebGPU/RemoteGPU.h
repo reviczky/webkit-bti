@@ -27,6 +27,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "RemoteGPURequestAdapterResponse.h"
 #include "StreamConnectionWorkQueue.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
@@ -34,6 +35,7 @@
 #include "WebGPUObjectHeap.h"
 #include "WebGPUSupportedFeatures.h"
 #include "WebGPUSupportedLimits.h"
+#include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Ref.h>
@@ -48,9 +50,12 @@ namespace IPC {
 class StreamServerConnection;
 }
 
+namespace WebCore {
+class MediaPlayer;
+}
+
 namespace WebKit {
 
-class GPUConnectionToWebProcess;
 class RemoteRenderingBackend;
 
 namespace WebGPU {
@@ -58,64 +63,27 @@ class ObjectHeap;
 struct RequestAdapterOptions;
 }
 
+using MediaPlayerAccessor = Function<void(WebCore::MediaPlayer&)>;
+using PerformWithMediaPlayerOnMainThread = Function<void(WebCore::MediaPlayerIdentifier, MediaPlayerAccessor&&)>;
+
 class RemoteGPU final : public IPC::StreamMessageReceiver {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<RemoteGPU> create(WebGPUIdentifier identifier, GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteRenderingBackend& renderingBackend, IPC::StreamServerConnection::Handle&& serverConnection)
+    static Ref<RemoteGPU> create(PerformWithMediaPlayerOnMainThread&& performWithMediaPlayerOnMainThread, WebGPUIdentifier identifier, IPC::StreamServerConnection::Handle&& serverConnection)
     {
-        auto result = adoptRef(*new RemoteGPU(identifier, gpuConnectionToWebProcess, renderingBackend, WTFMove(serverConnection)));
+        auto result = adoptRef(*new RemoteGPU(WTFMove(performWithMediaPlayerOnMainThread), identifier, WTFMove(serverConnection)));
         result->initialize();
         return result;
     }
 
     virtual ~RemoteGPU();
 
-    void stopListeningForIPC(Ref<RemoteGPU>&& refFromConnection);
-
-    struct RequestAdapterResponse {
-        String name;
-        WebGPU::SupportedFeatures features;
-        WebGPU::SupportedLimits limits;
-        bool isFallbackAdapter;
-
-        template<class Encoder> void encode(Encoder& encoder) const
-        {
-            encoder << name;
-            encoder << features;
-            encoder << limits;
-            encoder << isFallbackAdapter;
-        }
-
-        template<class Decoder> static std::optional<RequestAdapterResponse> decode(Decoder& decoder)
-        {
-            std::optional<String> name;
-            decoder >> name;
-            if (!name)
-                return std::nullopt;
-
-            std::optional<WebGPU::SupportedFeatures> features;
-            decoder >> features;
-            if (!features)
-                return std::nullopt;
-
-            std::optional<WebGPU::SupportedLimits> limits;
-            decoder >> limits;
-            if (!limits)
-                return std::nullopt;
-
-            std::optional<bool> isFallbackAdapter;
-            decoder >> isFallbackAdapter;
-            if (!isFallbackAdapter)
-                return std::nullopt;
-
-            return { { WTFMove(*name), WTFMove(*features), WTFMove(*limits), *isFallbackAdapter } };
-        }
-    };
+    void stopListeningForIPC();
 
 private:
     friend class WebGPU::ObjectHeap;
 
-    RemoteGPU(WebGPUIdentifier, GPUConnectionToWebProcess&, RemoteRenderingBackend&, IPC::StreamServerConnection::Handle&&);
+    RemoteGPU(PerformWithMediaPlayerOnMainThread&&, WebGPUIdentifier, IPC::StreamServerConnection::Handle&&);
 
     RemoteGPU(const RemoteGPU&) = delete;
     RemoteGPU(RemoteGPU&&) = delete;
@@ -135,20 +103,18 @@ private:
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 
-    void requestAdapter(const WebGPU::RequestAdapterOptions&, WebGPUIdentifier, CompletionHandler<void(std::optional<RequestAdapterResponse>&&)>&&);
+    void requestAdapter(const WebGPU::RequestAdapterOptions&, WebGPUIdentifier, CompletionHandler<void(std::optional<RemoteGPURequestAdapterResponse>&&)>&&);
 
     void createPresentationContext(const WebGPU::PresentationContextDescriptor&, WebGPUIdentifier);
 
     void createCompositorIntegration(WebGPUIdentifier);
 
-    WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     Ref<IPC::StreamConnectionWorkQueue> m_workQueue;
     RefPtr<IPC::StreamServerConnection> m_streamConnection;
     RefPtr<PAL::WebGPU::GPU> m_backing WTF_GUARDED_BY_CAPABILITY(workQueue());
     Ref<WebGPU::ObjectHeap> m_objectHeap WTF_GUARDED_BY_CAPABILITY(workQueue());
+    PerformWithMediaPlayerOnMainThread m_performWithMediaPlayerOnMainThread;
     const WebGPUIdentifier m_identifier;
-    Ref<RemoteRenderingBackend> m_renderingBackend;
-    const WebCore::ProcessIdentifier m_webProcessIdentifier;
 };
 
 } // namespace WebKit

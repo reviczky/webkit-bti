@@ -20,7 +20,7 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #pragma once
@@ -116,7 +116,8 @@ public:
     void renderingModeChanged();
 #if PLATFORM(COCOA)
     void layerHostingContextIdChanged(std::optional<WebKit::LayerHostingContextID>&&, const WebCore::IntSize&);
-    void setVideoInlineSizeFenced(const WebCore::FloatSize&, const WTF::MachSendRight&);
+    WebCore::FloatSize videoInlineSize() const final { return m_videoInlineSize; }
+    void setVideoInlineSizeFenced(const WebCore::FloatSize&, const WTF::MachSendRight&) final;
 #endif
 
     void currentTimeChanged(const MediaTime&, const MonotonicTime&, bool);
@@ -184,7 +185,8 @@ public:
     const void* mediaPlayerLogIdentifier() { return logIdentifier(); }
     const Logger& mediaPlayerLogger() { return logger(); }
 #endif
-
+    LayerHostingContextID hostingContextID()const override;
+    void setLayerHostingContextID(LayerHostingContextID  inID);
 private:
 
 #if !RELEASE_LOG_DISABLED
@@ -283,7 +285,7 @@ private:
 
     MediaTime maxMediaTimeSeekable() const final;
     MediaTime minMediaTimeSeekable() const final;
-    std::unique_ptr<WebCore::PlatformTimeRanges> buffered() const final;
+    const WebCore::PlatformTimeRanges& buffered() const final;
     double seekableTimeRangesLastModifiedTime() const final;
     double liveUpdateInterval() const final;
 
@@ -429,9 +431,9 @@ private:
     WeakPtr<WebCore::MediaPlayer> m_player;
     Ref<WebCore::PlatformMediaResourceLoader> m_mediaResourceLoader;
 #if PLATFORM(COCOA)
-    UniqueRef<WebCore::VideoLayerManager> m_videoLayerManager;
+    mutable UniqueRef<WebCore::VideoLayerManager> m_videoLayerManager;
 #endif
-    PlatformLayerContainer m_videoLayer;
+    mutable PlatformLayerContainer m_videoLayer;
 
     RemoteMediaPlayerManager& m_manager;
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_remoteEngineIdentifier;
@@ -439,7 +441,7 @@ private:
     RemoteMediaPlayerConfiguration m_configuration;
 
     RemoteMediaPlayerState m_cachedState;
-    std::unique_ptr<WebCore::PlatformTimeRanges> m_cachedBufferedTimeRanges;
+    WebCore::PlatformTimeRanges m_cachedBufferedTimeRanges;
 
 #if ENABLE(WEB_AUDIO) && PLATFORM(COCOA)
     RefPtr<RemoteAudioSourceProvider> m_audioSourceProvider;
@@ -478,6 +480,8 @@ private:
 #if PLATFORM(COCOA)
     RefPtr<RemoteVideoFrameProxy> m_videoFrameGatheredWithVideoFrameMetadata;
 #endif
+    LayerHostingContextID m_layerHostingContextID { 0 };
+    WebCore::FloatSize m_videoInlineSize;
     std::optional<WebCore::VideoFrameMetadata> m_videoFrameMetadata;
     bool m_isGatheringVideoFrameMetadata { false };
 #if PLATFORM(COCOA) && !HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)

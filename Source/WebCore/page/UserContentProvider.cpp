@@ -30,9 +30,9 @@
 #include "ChromeClient.h"
 #include "Document.h"
 #include "DocumentLoader.h"
-#include "Frame.h"
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
+#include "LocalFrame.h"
 #include "Page.h"
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -115,8 +115,12 @@ static ContentExtensions::ContentExtensionsBackend::RuleListFilter ruleListFilte
         };
     }
 
-    auto& exceptions = mainLoader->contentExtensionEnablement().second;
-    switch (mainLoader->contentExtensionEnablement().first) {
+    auto policySourceLoader = mainLoader;
+    if (!mainLoader->request().url().hasSpecialScheme() && documentLoader.request().url().protocolIsInHTTPFamily())
+        policySourceLoader = &documentLoader;
+
+    auto& exceptions = policySourceLoader->contentExtensionEnablement().second;
+    switch (policySourceLoader->contentExtensionEnablement().first) {
     case ContentExtensionDefaultEnablement::Disabled:
         return [&](auto& identifier) {
             return exceptions.contains(identifier)
@@ -134,7 +138,7 @@ static ContentExtensions::ContentExtensionsBackend::RuleListFilter ruleListFilte
     return { };
 }
 
-static void sanitizeLookalikeCharactersIfNeeded(ContentRuleListResults& results, const Page& page, const URL& url, const DocumentLoader& initiatingDocumentLoader)
+static void sanitizeLookalikeCharactersIfNeeded(ContentRuleListResults& results, Page& page, const URL& url, const DocumentLoader& initiatingDocumentLoader)
 {
     if (RefPtr frame = initiatingDocumentLoader.frame(); !frame || !frame->isMainFrame())
         return;
