@@ -304,7 +304,7 @@ LibWebRTCCodecs::Decoder* LibWebRTCCodecs::createDecoderInternal(VideoCodecType 
 {
     auto decoder = makeUnique<Decoder>();
     auto* result = decoder.get();
-    decoder->identifier = VideoDecoderIdentifier::generateThreadSafe();
+    decoder->identifier = VideoDecoderIdentifier::generate();
     decoder->type = type;
 
     ensureGPUProcessConnectionAndDispatchToThread([this, decoder = WTFMove(decoder), callback = WTFMove(callback)]() mutable {
@@ -515,7 +515,7 @@ LibWebRTCCodecs::Encoder* LibWebRTCCodecs::createEncoderInternal(VideoCodecType 
 {
     auto encoder = makeUnique<Encoder>();
     auto* result = encoder.get();
-    encoder->identifier = VideoEncoderIdentifier::generateThreadSafe();
+    encoder->identifier = VideoEncoderIdentifier::generate();
     encoder->type = type;
     encoder->useAnnexB = useAnnexB;
     encoder->isRealtime = isRealtime;
@@ -597,7 +597,7 @@ template<typename Frame> int32_t LibWebRTCCodecs::encodeFrameInternal(Encoder& e
 
     auto buffer = encoder.sharedVideoFrameWriter.writeBuffer(frame,
         [&](auto& semaphore) { encoder.connection->send(Messages::LibWebRTCCodecsProxy::SetSharedVideoFrameSemaphore { encoder.identifier, semaphore }, 0); },
-        [&](auto& handle) { encoder.connection->send(Messages::LibWebRTCCodecsProxy::SetSharedVideoFrameMemory { encoder.identifier, handle }, 0); });
+        [&](auto&& handle) { encoder.connection->send(Messages::LibWebRTCCodecsProxy::SetSharedVideoFrameMemory { encoder.identifier, WTFMove(handle) }, 0); });
     if (!buffer)
         return WEBRTC_VIDEO_CODEC_ERROR;
 

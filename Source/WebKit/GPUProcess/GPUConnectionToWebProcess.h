@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,14 +32,13 @@
 #include "MessageReceiverMap.h"
 #include "RemoteAudioHardwareListenerIdentifier.h"
 #include "RemoteAudioSessionIdentifier.h"
-#include "RemoteGPU.h"
 #include "RemoteImageBuffer.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
 #include "RemoteSerializedImageBufferIdentifier.h"
 #include "RenderingBackendIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
 #include "ThreadSafeObjectHeap.h"
-#include "WebGPUIdentifier.h"
+#include <WebCore/IntDegrees.h>
 #include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/NowPlayingManager.h>
 #include <WebCore/PageIdentifier.h>
@@ -145,6 +144,7 @@ public:
     PAL::SessionID sessionID() const { return m_sessionID; }
 
     bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
+    bool allowTestOnlyIPC() const { return m_allowTestOnlyIPC; }
 
     Logger& logger();
 
@@ -154,7 +154,7 @@ public:
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-    void setOrientationForMediaCapture(uint64_t orientation);
+    void setOrientationForMediaCapture(WebCore::IntDegrees);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture);
     void updateCaptureOrigin(const WebCore::SecurityOriginData&);
     bool setCaptureAttributionString();
@@ -208,7 +208,7 @@ public:
 
     void lowMemoryHandler(WTF::Critical, WTF::Synchronous);
 
-    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteSerializedImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
+    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
 
 #if ENABLE(WEBGL)
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
@@ -248,13 +248,15 @@ private:
     void releaseGraphicsContextGL(GraphicsContextGLIdentifier);
 #endif
 
-    void createRemoteGPU(WebGPUIdentifier, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
-
     void clearNowPlayingInfo();
     void setNowPlayingInfo(WebCore::NowPlayingInfo&&);
 
 #if ENABLE(VP9)
     void enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder);
+#endif
+
+#if ENABLE(MEDIA_SOURCE)
+    void enableMockMediaSource();
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
@@ -278,7 +280,6 @@ private:
     void createRemoteCommandListener(RemoteRemoteCommandListenerIdentifier);
     void releaseRemoteCommandListener(RemoteRemoteCommandListenerIdentifier);
     void setMediaOverridesForTesting(MediaOverridesForTesting);
-    void setUserPreferredLanguages(const Vector<String>&);
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
 #if USE(GRAPHICS_LAYER_WC)
@@ -349,9 +350,7 @@ private:
     using RemoteGraphicsContextGLMap = HashMap<GraphicsContextGLIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGraphicsContextGL>>;
     RemoteGraphicsContextGLMap m_remoteGraphicsContextGLMap;
 #endif
-    using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
-    RemoteGPUMap m_remoteGPUMap;
-    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteSerializedImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
+    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
 #if ENABLE(ENCRYPTED_MEDIA)
     std::unique_ptr<RemoteCDMFactoryProxy> m_cdmFactoryProxy;
 #endif
@@ -385,6 +384,10 @@ private:
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;
     bool m_isActiveNowPlayingProcess { false };
     bool m_isLockdownModeEnabled { false };
+    bool m_allowTestOnlyIPC { false };
+#if ENABLE(MEDIA_SOURCE)
+    bool m_mockMediaSourceEnabled { false };
+#endif
 
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     UniqueRef<LocalAudioSessionRoutingArbitrator> m_routingArbitrator;

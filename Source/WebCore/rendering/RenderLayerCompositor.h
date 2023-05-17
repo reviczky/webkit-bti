@@ -198,10 +198,6 @@ public:
     // Update event regions, which only needs to happen once per rendering update.
     void updateEventRegions();
 
-    enum class LayoutUpToDate {
-        Yes, No
-    };
-
     struct RequiresCompositingData {
         LayoutUpToDate layoutUpToDate { LayoutUpToDate::Yes };
         RenderLayer::ViewportConstrainedNotCompositedReason nonCompositedForPositionReason { RenderLayer::NoNotCompositedReason };
@@ -378,7 +374,7 @@ public:
 
     void updateRootContentLayerClipping();
 
-    void updateScrollSnapPropertiesWithFrameView(const FrameView&) const;
+    void updateScrollSnapPropertiesWithFrameView(const LocalFrameView&) const;
 
     // For testing.
     void startTrackingLayerFlushes() { m_layerFlushCount = 0; }
@@ -397,7 +393,7 @@ private:
     bool updateCompositingPolicy();
     
     // GraphicsLayerClient implementation
-    void paintContents(const GraphicsLayer*, GraphicsContext&, const FloatRect&, GraphicsLayerPaintBehavior) override;
+    void paintContents(const GraphicsLayer*, GraphicsContext&, const FloatRect&, OptionSet<GraphicsLayerPaintBehavior>) override;
     void customPositionForVisibleRectComputation(const GraphicsLayer*, FloatPoint&) const override;
     bool shouldDumpPropertyForLayer(const GraphicsLayer*, const char* propertyName, OptionSet<LayerTreeAsTextOptions>) const override;
     bool isTrackingRepaints() const override { return m_isTrackingRepaints; }
@@ -532,6 +528,9 @@ private:
 
     void detachScrollCoordinatedLayer(RenderLayer&, OptionSet<ScrollCoordinationRole>);
     void detachScrollCoordinatedLayerWithRole(RenderLayer&, ScrollingCoordinator&, ScrollCoordinationRole);
+    
+    void resolveScrollingTreeRelationships();
+    bool setupScrollProxyRelatedOverflowScrollingNode(ScrollingCoordinator&, ScrollingNodeID, RenderLayer&);
 
     void updateSynchronousScrollingNodes();
 
@@ -567,7 +566,7 @@ private:
 #endif
 
     bool documentUsesTiledBacking() const;
-    bool isMainFrameCompositor() const;
+    bool isRootFrameCompositor() const;
 
     void updateCompositingForLayerTreeAsTextDump();
 
@@ -637,6 +636,7 @@ private:
     Color m_rootExtendedBackgroundColor;
 
     HashMap<ScrollingNodeID, WeakPtr<RenderLayer>> m_scrollingNodeToLayerMap;
+    WeakHashSet<RenderLayer> m_layersWithUnresolvedRelations;
 #if PLATFORM(IOS_FAMILY)
     std::unique_ptr<LegacyWebKitScrollingLayerCoordinator> m_legacyScrollingLayerCoordinator;
 #endif

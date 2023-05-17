@@ -26,6 +26,7 @@
 #pragma once
 
 #include "DrawingAreaInfo.h"
+#include "FrameTreeCreationParameters.h"
 #include "LayerTreeContext.h"
 #include "SandboxExtension.h"
 #include "SessionState.h"
@@ -42,6 +43,7 @@
 #include <WebCore/FloatSize.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/HighlightVisibility.h>
+#include <WebCore/IntDegrees.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/LayerHostingContextIdentifier.h>
 #include <WebCore/LayoutMilestone.h>
@@ -80,7 +82,7 @@ struct WebPageCreationParameters {
 
     WebCore::IntSize viewSize;
 
-    OptionSet<WebCore::ActivityState::Flag> activityState;
+    OptionSet<WebCore::ActivityState> activityState;
     
     WebPreferencesStore store;
     DrawingAreaType drawingAreaType;
@@ -163,6 +165,8 @@ struct WebPageCreationParameters {
     std::optional<WebCore::DestinationColorSpace> colorSpace;
     bool useSystemAppearance { false };
     bool useFormSemanticContext { false };
+    int headerBannerHeight { 0 };
+    int footerBannerHeight { 0 };
 #endif
 #if ENABLE(META_VIEWPORT)
     bool ignoresViewportScaleLimits;
@@ -177,10 +181,11 @@ struct WebPageCreationParameters {
     WebCore::FloatSize availableScreenSize;
     WebCore::FloatSize overrideScreenSize;
     float textAutosizingWidth;
-    int32_t deviceOrientation { 0 };
+    WebCore::IntDegrees deviceOrientation { 0 };
     bool keyboardIsAttached { false };
     bool canShowWhileLocked { false };
     bool isCapturingScreen { false };
+    WebCore::Color insertionPointColor;
 #endif
 #if PLATFORM(COCOA)
     bool smartInsertDeleteEnabled;
@@ -285,11 +290,10 @@ struct WebPageCreationParameters {
 
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
 
-    std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
-    Markable<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier;
+    std::optional<FrameTreeCreationParameters> subframeProcessFrameTreeCreationParameters;
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    Vector<String> lookalikeCharacterStrings;
+    Vector<WebCore::LookalikeCharactersSanitizationData> lookalikeCharacterStrings;
     Vector<WebCore::LookalikeCharactersSanitizationData> allowedLookalikeCharacterStrings;
 #endif
 

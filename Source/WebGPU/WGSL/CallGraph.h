@@ -34,19 +34,20 @@
 namespace WGSL {
 
 class ShaderModule;
+struct PipelineLayout;
 
 class CallGraph {
     friend class CallGraphBuilder;
 
 public:
     struct Callee {
-        AST::Function* m_target;
-        Vector<AST::CallExpression*> m_callSites;
+        AST::Function* target;
+        Vector<AST::CallExpression*> callSites;
     };
 
     struct EntryPoint {
-        AST::Function& m_function;
-        AST::StageAttribute::Stage m_stage;
+        AST::Function& function;
+        AST::StageAttribute::Stage stage;
     };
 
     ShaderModule& ast() const { return m_ast; }
@@ -61,6 +62,6 @@ private:
     HashMap<AST::Function*, Vector<Callee>> m_callees;
 };
 
-CallGraph buildCallGraph(ShaderModule&);
+CallGraph buildCallGraph(ShaderModule&, const HashMap<String, std::optional<PipelineLayout>>& pipelineLayouts);
 
 } // namespace WGSL

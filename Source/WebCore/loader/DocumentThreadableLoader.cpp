@@ -38,17 +38,18 @@
 #include "CrossOriginAccessControl.h"
 #include "CrossOriginPreflightChecker.h"
 #include "CrossOriginPreflightResultCache.h"
-#include "DOMWindow.h"
 #include "Document.h"
 #include "DocumentLoader.h"
-#include "Frame.h"
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
 #include "InspectorInstrumentation.h"
 #include "InspectorNetworkAgent.h"
 #include "LegacySchemeRegistry.h"
 #include "LoaderStrategy.h"
+#include "LocalDOMWindow.h"
+#include "LocalFrame.h"
 #include "MixedContentChecker.h"
+#include "OriginAccessPatterns.h"
 #include "Performance.h"
 #include "PlatformStrategies.h"
 #include "ProgressTracker.h"
@@ -122,7 +123,7 @@ DocumentThreadableLoader::DocumentThreadableLoader(Document& document, Threadabl
     , m_options(options)
     , m_origin(WTFMove(origin))
     , m_referrer(WTFMove(referrer))
-    , m_sameOriginRequest(securityOrigin().canRequest(request.url()))
+    , m_sameOriginRequest(securityOrigin().canRequest(request.url(), OriginAccessPatternsForWebProcess::singleton()))
     , m_simpleRequest(true)
     , m_async(blockingBehavior == LoadAsynchronously)
     , m_delayCallbacksForIntegrityCheck(!m_options.integrity.isEmpty())
@@ -350,7 +351,7 @@ void DocumentThreadableLoader::redirectReceived(CachedResource& resource, Resour
     // Use a unique for subsequent loads if needed.
     // https://fetch.spec.whatwg.org/#concept-http-redirect-fetch (Step 10).
     ASSERT(m_options.mode == FetchOptions::Mode::Cors);
-    if (!securityOrigin().canRequest(redirectResponse.url()) && !protocolHostAndPortAreEqual(redirectResponse.url(), request.url()))
+    if (!securityOrigin().canRequest(redirectResponse.url(), OriginAccessPatternsForWebProcess::singleton()) && !protocolHostAndPortAreEqual(redirectResponse.url(), request.url()))
         m_origin = SecurityOrigin::createOpaque();
 
     // Except in case where preflight is needed, loading should be able to continue on its own.
@@ -616,7 +617,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     RefPtr<SharedBuffer> data;
     ResourceError error;
     ResourceResponse response;
-    auto identifier = makeObjectIdentifier<ResourceLoader>(std::numeric_limits<uint64_t>::max());
+    auto identifier = AtomicObjectIdentifier<ResourceLoader> { std::numeric_limits<uint64_t>::max() };
     if (auto* frame = m_document.frame()) {
         if (!MixedContentChecker::canRunInsecureContent(*frame, m_document.securityOrigin(), requestURL))
             return;
@@ -716,7 +717,7 @@ bool DocumentThreadableLoader::isAllowedRedirect(const URL& url)
     if (m_options.mode == FetchOptions::Mode::NoCors)
         return true;
 
-    return m_sameOriginRequest && securityOrigin().canRequest(url);
+    return m_sameOriginRequest && securityOrigin().canRequest(url, OriginAccessPatternsForWebProcess::singleton());
 }
 
 SecurityOrigin& DocumentThreadableLoader::securityOrigin() const

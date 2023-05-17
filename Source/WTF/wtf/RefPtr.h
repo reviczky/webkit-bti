@@ -228,24 +228,6 @@ inline bool operator==(T* a, const RefPtr<X, Y, Z>& b)
     return a == b.m_ptr;
 }
 
-template<typename T, typename U, typename V, typename X, typename Y, typename Z>
-inline bool operator!=(const RefPtr<T, U, V>& a, const RefPtr<X, Y, Z>& b)
-{
-    return !(a == b);
-}
-
-template<typename T, typename U, typename V, typename X>
-inline bool operator!=(const RefPtr<T, U, V>& a, X* b)
-{
-    return !(a == b);
-}
-
-template<typename T, typename X, typename Y, typename Z>
-inline bool operator!=(T* a, const RefPtr<X, Y, Z>& b)
-{
-    return !(a == b);
-}
-
 template<typename T, typename U, typename V>
 inline RefPtr<T, U, V> adoptRef(T* p)
 {
@@ -280,6 +262,18 @@ template<typename ExpectedType, typename ArgType, typename PtrTraits, typename R
 inline bool is(const RefPtr<ArgType, PtrTraits, RefDerefTraits>& source)
 {
     return is<ExpectedType>(source.get());
+}
+
+template<typename Target, typename Source, typename PtrTraits, typename RefDerefTraits>
+inline Target* downcast(RefPtr<Source, PtrTraits, RefDerefTraits>& source)
+{
+    return downcast<Target>(source.get());
+}
+
+template<typename Target, typename Source, typename PtrTraits, typename RefDerefTraits>
+inline Target* downcast(const RefPtr<Source, PtrTraits, RefDerefTraits>& source)
+{
+    return downcast<Target>(source.get());
 }
 
 template<typename Target, typename Source, typename TargetPtrTraits = RawPtrTraits<Target>, typename TargetRefDerefTraits = DefaultRefDerefTraits<Target>,

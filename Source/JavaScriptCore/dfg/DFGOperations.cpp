@@ -69,10 +69,13 @@
 #include "JSWeakMapInlines.h"
 #include "JSWeakSet.h"
 #include "NumberConstructor.h"
+#include "NumberObject.h"
+#include "NumberPrototype.h"
 #include "ObjectConstructorInlines.h"
 #include "ObjectPrototypeInlines.h"
 #include "Operations.h"
 #include "ParseInt.h"
+#include "ReflectObject.h"
 #include "RegExpGlobalDataInlines.h"
 #include "RegExpMatchesArray.h"
 #include "RegExpObjectInlines.h"
@@ -83,6 +86,7 @@
 #include "SuperSampler.h"
 #include "Symbol.h"
 #include "TypeProfilerLog.h"
+#include "VMEntryScopeInlines.h"
 #include "VMInlines.h"
 #include "VMTrapsInlines.h"
 #include "WeakMapImplInlines.h"
@@ -257,7 +261,7 @@ JSC_DEFINE_JIT_OPERATION(operationObjectKeys, JSArray*, (JSGlobalObject* globalO
     JSObject* object = JSValue::decode(encodedObject).toObject(globalObject);
     RETURN_IF_EXCEPTION(scope, nullptr);
     scope.release();
-    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Exclude, CachedPropertyNamesKind::Keys);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Exclude);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationObjectKeysObject, JSArray*, (JSGlobalObject* globalObject, JSObject* object))
@@ -265,7 +269,7 @@ JSC_DEFINE_JIT_OPERATION(operationObjectKeysObject, JSArray*, (JSGlobalObject* g
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Exclude, CachedPropertyNamesKind::Keys);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Exclude);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertyNames, JSArray*, (JSGlobalObject* globalObject, EncodedJSValue encodedObject))
@@ -278,7 +282,7 @@ JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertyNames, JSArray*, (JSGlobal
     JSObject* object = JSValue::decode(encodedObject).toObject(globalObject);
     RETURN_IF_EXCEPTION(scope, nullptr);
     scope.release();
-    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Include, CachedPropertyNamesKind::GetOwnPropertyNames);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Include);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertyNamesObject, JSArray*, (JSGlobalObject* globalObject, JSObject* object))
@@ -286,7 +290,28 @@ JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertyNamesObject, JSArray*, (JS
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Include, CachedPropertyNamesKind::GetOwnPropertyNames);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Strings, DontEnumPropertiesMode::Include);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertySymbols, JSArray*, (JSGlobalObject* globalObject, EncodedJSValue encodedObject))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSObject* object = JSValue::decode(encodedObject).toObject(globalObject);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    scope.release();
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Symbols, DontEnumPropertiesMode::Include);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationObjectGetOwnPropertySymbolsObject, JSArray*, (JSGlobalObject* globalObject, JSObject* object))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::Symbols, DontEnumPropertiesMode::Include);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationObjectCreate, JSCell*, (JSGlobalObject* globalObject, EncodedJSValue encodedPrototype))
@@ -342,35 +367,9 @@ JSC_DEFINE_JIT_OPERATION(operationObjectAssignObject, void, (JSGlobalObject* glo
         // that ends up transitioning the structure underneath us.
         // https://bugs.webkit.org/show_bug.cgi?id=187837
 
-        // FIXME: This fast path is very similar to ObjectConstructor' one. But extracting it to a function caused performance
-        // regression in object-assign-replace. Since the code is small and fast path, we keep both.
-
         // Do not clear since Vector::clear shrinks the backing store.
-        properties.resize(0);
-        values.clear();
-        bool canUseFastPath = source->fastForEachPropertyWithSideEffectFreeFunctor(vm, [&](const PropertyTableEntry& entry) -> bool {
-            if (entry.attributes() & PropertyAttribute::DontEnum)
-                return true;
-
-            PropertyName propertyName(entry.key());
-            if (propertyName.isPrivateName())
-                return true;
-
-            properties.append(entry.key());
-            values.appendWithCrashOnOverflow(source->getDirect(entry.offset()));
-
-            return true;
-        });
-
-        if (canUseFastPath) {
-            for (size_t i = 0; i < properties.size(); ++i) {
-                // FIXME: We could put properties in a batching manner to accelerate Object.assign more.
-                // https://bugs.webkit.org/show_bug.cgi?id=185358
-                PutPropertySlot putPropertySlot(target, true);
-                target->putOwnDataProperty(vm, properties[i].get(), values.at(i), putPropertySlot);
-            }
+        if (objectAssignFast(vm, target, source, properties, values))
             return;
-        }
     }
 
     scope.release();
@@ -428,6 +427,31 @@ JSC_DEFINE_JIT_OPERATION(operationObjectToStringObjectSlow, JSString*, (JSGlobal
     return objectPrototypeToString(globalObject, thisValue);
 }
 
+JSC_DEFINE_JIT_OPERATION(operationReflectOwnKeys, JSArray*, (JSGlobalObject* globalObject, EncodedJSValue encodedObject))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSObject* object = JSValue::decode(encodedObject).getObject();
+    if (UNLIKELY(!object)) {
+        throwTypeError(globalObject, scope, ReflectOwnKeysNonObjectArgumentError);
+        return nullptr;
+    }
+
+    scope.release();
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::StringsAndSymbols, DontEnumPropertiesMode::Include);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationReflectOwnKeysObject, JSArray*, (JSGlobalObject* globalObject, JSObject* object))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    return ownPropertyKeys(globalObject, object, PropertyNameMode::StringsAndSymbols, DontEnumPropertiesMode::Include);
+}
+
 JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalObject, JSObject* constructor, uint32_t inlineCapacity))
 {
     VM& vm = globalObject->vm();
@@ -445,7 +469,7 @@ JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalOb
             JSObject* prototype = allocationProfile->prototype();
             ASSERT(prototype == jsCast<JSFunction*>(constructor)->prototypeForConstruction(vm, globalObject));
             result->putDirectOffset(vm, knownPolyProtoOffset, prototype);
-            prototype->didBecomePrototype();
+            prototype->didBecomePrototype(vm);
             ASSERT_WITH_MESSAGE(!hasIndexedProperties(result->indexingType()), "We rely on JSFinalObject not starting out with an indexing type otherwise we would potentially need to convert to slow put storage");
         }
         return result;
@@ -668,7 +692,7 @@ JSC_DEFINE_JIT_OPERATION(operationArithAbs, double, (JSGlobalObject* globalObjec
     JSValue op1 = JSValue::decode(encodedOp1);
     double a = op1.toNumber(globalObject);
     RETURN_IF_EXCEPTION(scope, PNaN);
-    return fabs(a);
+    return std::abs(a);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationArithClz32, UCPUStrictInt32, (JSGlobalObject* globalObject, EncodedJSValue encodedOp1))
@@ -865,7 +889,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValStrict, void, (JSGlobalObject* globalO
     putByValInternal<true, false>(globalObject, vm, encodedBase, encodedProperty, encodedValue);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValNonStrict, void, (JSGlobalObject* globalObject, EncodedJSValue encodedBase, EncodedJSValue encodedProperty, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValSloppy, void, (JSGlobalObject* globalObject, EncodedJSValue encodedBase, EncodedJSValue encodedProperty, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -883,7 +907,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValCellStringStrict, void, (JSGlobalObjec
     putByValCellStringInternal<true, false>(globalObject, vm, cell, asString(string), JSValue::decode(encodedValue));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValCellStringNonStrict, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* string, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValCellStringSloppy, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* string, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -902,7 +926,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValCellSymbolStrict, void, (JSGlobalObjec
     putByValCellInternal<true, false>(globalObject, vm, cell, propertyName, JSValue::decode(encodedValue));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValCellSymbolNonStrict, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* symbol, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValCellSymbolSloppy, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* symbol, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -928,7 +952,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValBeyondArrayBoundsStrict, void, (JSGlob
         object, globalObject, Identifier::from(vm, index), JSValue::decode(encodedValue), slot);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValBeyondArrayBoundsNonStrict, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValBeyondArrayBoundsSloppy, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -962,7 +986,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValBeyondArrayBoundsStrict, void, (
         object, globalObject, Identifier::from(vm, index), jsValue, slot);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValBeyondArrayBoundsNonStrict, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, double value))
+JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValBeyondArrayBoundsSloppy, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, double value))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -997,7 +1021,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValDirectBeyondArrayBoundsStrict, v
     CommonSlowPaths::putDirectWithReify(vm, globalObject, object, Identifier::from(vm, index), jsValue, slot);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValDirectBeyondArrayBoundsNonStrict, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, double value))
+JSC_DEFINE_JIT_OPERATION(operationPutDoubleByValDirectBeyondArrayBoundsSloppy, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, double value))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -1023,7 +1047,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValDirectStrict, void, (JSGlobalObject* g
     putByValInternal<true, true>(globalObject, vm, encodedBase, encodedProperty, encodedValue);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValDirectNonStrict, void, (JSGlobalObject* globalObject, EncodedJSValue encodedBase, EncodedJSValue encodedProperty, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValDirectSloppy, void, (JSGlobalObject* globalObject, EncodedJSValue encodedBase, EncodedJSValue encodedProperty, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -1041,7 +1065,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellStringStrict, void, (JSGloba
     putByValCellStringInternal<true, true>(globalObject, vm, cell, asString(string), JSValue::decode(encodedValue));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellStringNonStrict, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* string, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellStringSloppy, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* string, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -1060,7 +1084,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellSymbolStrict, void, (JSGloba
     putByValCellInternal<true, true>(globalObject, vm, cell, propertyName, JSValue::decode(encodedValue));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellSymbolNonStrict, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* symbol, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValDirectCellSymbolSloppy, void, (JSGlobalObject* globalObject, JSCell* cell, JSCell* symbol, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -1084,7 +1108,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByValDirectBeyondArrayBoundsStrict, void, (
     CommonSlowPaths::putDirectWithReify(vm, globalObject, object, Identifier::from(vm, index), JSValue::decode(encodedValue), slot);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutByValDirectBeyondArrayBoundsNonStrict, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, EncodedJSValue encodedValue))
+JSC_DEFINE_JIT_OPERATION(operationPutByValDirectBeyondArrayBoundsSloppy, void, (JSGlobalObject* globalObject, JSObject* object, int32_t index, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -1321,7 +1345,7 @@ JSC_DEFINE_JIT_OPERATION(operationRegExpMatchFastGlobalString, EncodedJSValue, (
     String s = string->value(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
 
-    if (regExp->unicode()) {
+    if (regExp->eitherUnicode()) {
         unsigned stringLength = s.length();
         RELEASE_AND_RETURN(scope, JSValue::encode(collectMatches(
             vm, globalObject, string, s, regExp,
@@ -2055,56 +2079,15 @@ JSC_DEFINE_JIT_OPERATION(operationCreateScopedArguments, JSCell*, (JSGlobalObjec
     // didn't feel like changing the max number of arguments for a slow path call from 6 to 7.
     ScopedArgumentsTable* table = scope->symbolTable()->arguments();
     
-    return ScopedArguments::createByCopyingFrom(
-        vm, structure, argumentStart, length, callee, table, scope);
+    return ScopedArguments::createByCopyingFrom(vm, structure, argumentStart, length, callee, table, scope);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationCreateClonedArguments, JSCell*, (JSGlobalObject* globalObject, Structure* structure, Register* argumentStart, uint32_t length, JSFunction* callee))
+JSC_DEFINE_JIT_OPERATION(operationCreateClonedArguments, JSCell*, (JSGlobalObject* globalObject, Structure* structure, Register* argumentStart, uint32_t length, JSFunction* callee, Butterfly* butterfly))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    return ClonedArguments::createByCopyingFrom(
-        globalObject, structure, argumentStart, length, callee);
-}
-
-JSC_DEFINE_JIT_OPERATION(operationCreateArgumentsButterflyExcludingThis, JSCell*, (JSGlobalObject* globalObject, Register* argumentStart, uint32_t argumentCount, JSCell* target))
-{
-    VM& vm = globalObject->vm();
-    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
-    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    ASSERT(argumentCount > 1);
-
-    CheckedInt32 totalCount = argumentCount - 1;
-    int32_t additionalCount = 0;
-    JSImmutableButterfly* boundArgs = nullptr;
-    if (target->inherits<JSBoundFunction>()) {
-        JSBoundFunction* boundFunction = jsCast<JSBoundFunction*>(target);
-        if (boundFunction->canCloneBoundArgs()) {
-            boundArgs = boundFunction->boundArgs();
-            additionalCount = boundArgs ? boundArgs->length() : 0;
-            totalCount += additionalCount;
-            if (totalCount.hasOverflowed()) {
-                throwOutOfMemoryError(globalObject, scope);
-                return nullptr;
-            }
-        }
-    }
-
-    JSImmutableButterfly* butterfly = JSImmutableButterfly::tryCreate(vm, vm.immutableButterflyStructures[arrayIndexFromIndexingType(CopyOnWriteArrayWithContiguous) - NumberOfIndexingShapes].get(), totalCount.value());
-    if (!butterfly) {
-        throwOutOfMemoryError(globalObject, scope);
-        return nullptr;
-    }
-    if (additionalCount) {
-        ASSERT(boundArgs);
-        for (int32_t index = 0; index < additionalCount; ++index)
-            butterfly->setIndex(vm, index, boundArgs->get(index));
-    }
-    for (unsigned index = 0; index < (argumentCount - 1); ++index)
-        butterfly->setIndex(vm, index + additionalCount, argumentStart[index + 1].jsValue());
-    return butterfly;
+    return ClonedArguments::createByCopyingFrom(globalObject, structure, argumentStart, length, callee, butterfly);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationCreateDirectArgumentsDuringExit, JSCell*, (VM* vmPointer, InlineCallFrame* inlineCallFrame, JSFunction* callee, uint32_t argumentCount))
@@ -2153,8 +2136,7 @@ JSC_DEFINE_JIT_OPERATION(operationCreateClonedArgumentsDuringExit, JSCell*, (VM*
     
     unsigned length = argumentCount - 1;
     JSGlobalObject* globalObject = codeBlock->globalObject();
-    ClonedArguments* result = ClonedArguments::createEmpty(
-        vm, globalObject->clonedArgumentsStructure(), callee, length);
+    ClonedArguments* result = ClonedArguments::createEmpty(vm, globalObject->clonedArgumentsStructure(), callee, length, nullptr);
     
     Register* arguments =
         callFrame->registers() + (inlineCallFrame ? inlineCallFrame->stackOffset : 0) +
@@ -2389,7 +2371,7 @@ JSC_DEFINE_JIT_OPERATION(operationGetPropertyEnumeratorCell, JSCell*, (JSGlobalO
     RELEASE_AND_RETURN(scope, propertyNameEnumerator(globalObject, base));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdateIndexAndMode, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue baseValue, uint32_t index, int32_t modeNumber, JSPropertyNameEnumerator* enumerator))
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdateIndexAndMode, UGPRPair, (JSGlobalObject* globalObject, EncodedJSValue baseValue, uint32_t index, int32_t modeNumber, JSPropertyNameEnumerator* enumerator))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -2411,13 +2393,7 @@ JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdateIndexAndMode, EncodedJSVal
         RETURN_IF_EXCEPTION(scope, { });
     }
 
-#if USE(JSVALUE64)
-    JSValue result = bitwise_cast<JSValue>(static_cast<uint64_t>(mode) << 32 | index | JSValue::DoubleEncodeOffset);
-#else
-    JSValue result = JSValue(mode, index);
-#endif
-    ASSERT(result.isDouble());
-    return JSValue::encode(result);
+    return makeUGPRPair(index, static_cast<uint32_t>(mode));
 }
 
 JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdatePropertyName, JSString*, (JSGlobalObject* globalObject, uint32_t index, int32_t modeNumber, JSPropertyNameEnumerator* enumerator))
@@ -2489,6 +2465,25 @@ JSC_DEFINE_JIT_OPERATION(operationEnumeratorHasOwnProperty, EncodedJSValue, (JSG
     JSObject* baseObject = base.toObject(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
     RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, baseObject, identifier))));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorRecoverNameAndPutByVal, void, (JSGlobalObject* globalObject, EncodedJSValue baseValue, EncodedJSValue valueValue, bool isStrict, uint32_t index, JSPropertyNameEnumerator* enumerator))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSString* string = enumerator->propertyNameAtIndex(index);
+    PropertyName propertyName = string->toIdentifier(globalObject);
+    // This should only really return for TerminationException since we know string is backed by a UUID.
+    RETURN_IF_EXCEPTION(scope, void());
+    JSValue base = JSValue::decode(baseValue);
+    JSValue value = JSValue::decode(valueValue);
+
+    scope.release();
+    PutPropertySlot slot(base, isStrict);
+    base.put(globalObject, propertyName, value, slot);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationNewRegexpWithLastIndex, JSCell*, (JSGlobalObject* globalObject, JSCell* regexpPtr, EncodedJSValue encodedLastIndex))
@@ -2858,6 +2853,81 @@ JSC_DEFINE_JIT_OPERATION(operationFunctionToString, JSString*, (JSGlobalObject* 
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
     return function->toString(globalObject);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationFunctionBind, JSBoundFunction*, (JSGlobalObject* globalObject, JSObject* target, EncodedJSValue boundThisValue, EncodedJSValue arg0Value, EncodedJSValue arg1Value, EncodedJSValue arg2Value))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (UNLIKELY(!target->isCallable())) {
+        throwTypeError(globalObject, scope, "|this| is not a function inside Function.prototype.bind"_s);
+        return { };
+    }
+
+    unsigned boundArgsLength = 0;
+    boundArgsLength += !!(JSValue::decode(arg0Value));
+    boundArgsLength += !!(JSValue::decode(arg1Value));
+    boundArgsLength += !!(JSValue::decode(arg2Value));
+
+    JSValue boundThis = JSValue::decode(boundThisValue);
+    EncodedJSValue arguments[JSBoundFunction::maxEmbeddedArgs] {
+        arg0Value,
+        arg1Value,
+        arg2Value,
+    };
+    ArgList boundArgs { };
+    if (boundArgsLength >= 1)
+        boundArgs = ArgList(arguments, boundArgsLength);
+
+    double length = 0;
+    JSString* name = nullptr;
+    JSFunction* function = jsDynamicCast<JSFunction*>(target);
+    if (LIKELY(function && function->canAssumeNameAndLengthAreOriginal(vm))) {
+        // Do nothing! 'length' and 'name' computation are lazily done.
+        // And this is totally OK since we know that wrapped functions have canAssumeNameAndLengthAreOriginal condition
+        // at the time of creation of JSBoundFunction.
+        length = PNaN; // Defer computation.
+    } else {
+        bool found = target->hasOwnProperty(globalObject, vm.propertyNames->length);
+        RETURN_IF_EXCEPTION(scope, { });
+        if (found) {
+            JSValue lengthValue = target->get(globalObject, vm.propertyNames->length);
+            RETURN_IF_EXCEPTION(scope, { });
+            length = lengthValue.toIntegerOrInfinity(globalObject);
+            RETURN_IF_EXCEPTION(scope, { });
+            if (length > boundArgsLength)
+                length -= boundArgsLength;
+            else
+                length = 0;
+        }
+        JSValue nameValue = target->get(globalObject, vm.propertyNames->name);
+        RETURN_IF_EXCEPTION(scope, { });
+        if (nameValue.isString())
+            name = asString(nameValue);
+        else
+            name = jsEmptyString(vm);
+    }
+
+    RELEASE_AND_RETURN(scope, JSBoundFunction::create(vm, globalObject, target, boundThis, boundArgs, length, name));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationNewBoundFunction, JSBoundFunction*, (JSGlobalObject* globalObject, JSFunction* function, EncodedJSValue boundThisValue, EncodedJSValue arg0Value, EncodedJSValue arg1Value, EncodedJSValue arg2Value))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    JSValue boundThis = JSValue::decode(boundThisValue);
+    JSValue arg0 = JSValue::decode(arg0Value);
+    JSValue arg1 = JSValue::decode(arg1Value);
+    JSValue arg2 = JSValue::decode(arg2Value);
+    unsigned boundArgsLength = 0;
+    boundArgsLength += !!(arg0);
+    boundArgsLength += !!(arg1);
+    boundArgsLength += !!(arg2);
+    return JSBoundFunction::createRaw(vm, globalObject, function, boundArgsLength, boundThis, arg0, arg1, arg2);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationSingleCharacterString, JSString*, (VM* vmPointer, int32_t character))
@@ -3634,7 +3704,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutDynamicVarStrict, void, (JSGlobalObject* gl
     return putDynamicVar(globalObject, vm, scope, value, impl, getPutInfoBits, isStrictMode);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationPutDynamicVarNonStrict, void, (JSGlobalObject* globalObject, JSObject* scope, EncodedJSValue value, UniquedStringImpl* impl, unsigned getPutInfoBits))
+JSC_DEFINE_JIT_OPERATION(operationPutDynamicVarSloppy, void, (JSGlobalObject* globalObject, JSObject* scope, EncodedJSValue value, UniquedStringImpl* impl, unsigned getPutInfoBits))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);

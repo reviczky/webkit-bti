@@ -40,20 +40,24 @@ private:
     bool canResizeVideoFrames() const final { return true; }
 };
 
-class MockDisplayCaptureSourceGStreamer final : public RealtimeMediaSource, RealtimeMediaSource::VideoFrameObserver {
+class MockDisplayCaptureSourceGStreamer : public RealtimeVideoCaptureSource, RealtimeMediaSource::VideoFrameObserver {
 public:
-    static CaptureSourceOrError create(const CaptureDevice&, MediaDeviceHashSalts&&, const MediaConstraints*);
+    static CaptureSourceOrError create(const CaptureDevice&, MediaDeviceHashSalts&&, const MediaConstraints*, PageIdentifier);
 
     void requestToEnd(Observer&) final;
     bool isProducingData() const final { return m_source->isProducingData(); }
     void setMuted(bool isMuted) final;
+    const IntSize size() const final { return m_source->size(); }
 
 protected:
     // RealtimeMediaSource::VideoFrameObserver
     void videoFrameAvailable(VideoFrame&, VideoFrameTimeMetadata) final;
 
+    void generatePresets() override { };
+    const Vector<VideoPreset>& presets() final { return m_presets; }
+
 private:
-    MockDisplayCaptureSourceGStreamer(const CaptureDevice&, Ref<MockRealtimeVideoSourceGStreamer>&&, MediaDeviceHashSalts&&);
+    MockDisplayCaptureSourceGStreamer(const CaptureDevice&, Ref<MockRealtimeVideoSourceGStreamer>&&, MediaDeviceHashSalts&&, PageIdentifier);
     ~MockDisplayCaptureSourceGStreamer();
 
     void startProducingData() final { m_source->start(); }
@@ -62,12 +66,13 @@ private:
     bool isCaptureSource() const final { return true; }
     const RealtimeMediaSourceCapabilities& capabilities() final;
     const RealtimeMediaSourceSettings& settings() final;
-    CaptureDevice::DeviceType deviceType() const { return m_deviceType; }
+    CaptureDevice::DeviceType deviceType() const final { return m_deviceType; }
 
 #if !RELEASE_LOG_DISABLED
     const char* logClassName() const final { return "MockDisplayCaptureSourceGStreamer"; }
 #endif
 
+    Vector<VideoPreset> m_presets;
     Ref<MockRealtimeVideoSourceGStreamer> m_source;
     CaptureDevice::DeviceType m_deviceType;
     std::optional<RealtimeMediaSourceCapabilities> m_capabilities;

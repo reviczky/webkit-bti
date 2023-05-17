@@ -33,8 +33,6 @@
 #include "ColorBlending.h"
 #include "Document.h"
 #include "FloatRoundedRect.h"
-#include "Frame.h"
-#include "FrameView.h"
 #include "GeometryUtilities.h"
 #include "GraphicsContext.h"
 #include "HTMLImageElement.h"
@@ -42,8 +40,13 @@
 #include "ImageBuffer.h"
 #include "ImageQualityController.h"
 #include "InlineIteratorInlineBox.h"
+#include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "Path.h"
 #include "RenderBlock.h"
+#include "RenderBoxInlines.h"
+#include "RenderBoxModelObjectInlines.h"
+#include "RenderElementInlines.h"
 #include "RenderFlexibleBox.h"
 #include "RenderFragmentContainer.h"
 #include "RenderInline.h"
@@ -299,7 +302,7 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
 {
     if (!is<BitmapImage>(image))
         return DecodingMode::Synchronous;
-    
+
     const BitmapImage& bitmapImage = downcast<BitmapImage>(image);
     if (bitmapImage.canAnimate()) {
         // The DecodingMode for the current frame has to be Synchronous. The DecodingMode
@@ -312,22 +315,26 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
     if (IOSApplication::isIBooksStorytime())
         return DecodingMode::Synchronous;
 #endif
+    if (paintInfo.paintBehavior.contains(PaintBehavior::Snapshotting))
+        return DecodingMode::Synchronous;
+    if (paintInfo.paintBehavior.contains(PaintBehavior::ForceSynchronousImageDecode))
+        return DecodingMode::Synchronous;
     if (is<HTMLImageElement>(element())) {
         auto decodingMode = downcast<HTMLImageElement>(*element()).decodingMode();
-        if (decodingMode != DecodingMode::Auto)
-            return decodingMode;
+        if (decodingMode == DecodingMode::Asynchronous)
+            return DecodingMode::Asynchronous;
+        if (decodingMode == DecodingMode::Synchronous)
+            return DecodingMode::Synchronous;
     }
     if (bitmapImage.isLargeImageAsyncDecodingEnabledForTesting())
         return DecodingMode::Asynchronous;
     if (document().isImageDocument())
         return DecodingMode::Synchronous;
-    if (paintInfo.paintBehavior.contains(PaintBehavior::Snapshotting))
-        return DecodingMode::Synchronous;
     if (!settings().largeImageAsyncDecodingEnabled())
         return DecodingMode::Synchronous;
     if (!bitmapImage.canUseAsyncDecodingForLargeImages())
         return DecodingMode::Synchronous;
-    if (paintInfo.paintBehavior.contains(PaintBehavior::TileFirstPaint))
+    if (paintInfo.paintBehavior.contains(PaintBehavior::DefaultAsynchronousImageDecode))
         return DecodingMode::Asynchronous;
     // FIXME: isVisibleInViewport() is not cheap. Find a way to make this condition faster.
     if (!isVisibleInViewport())
@@ -933,6 +940,11 @@ void RenderBoxModelObject::applyTransform(TransformationMatrix&, const RenderSty
     // applyTransform() is only used through RenderLayer*, which only invokes this for RenderBox derived renderers, thus not for
     // RenderInline/RenderLineBreak - the other two renderers that inherit from RenderBoxModelObject.
     ASSERT_NOT_REACHED();
+}
+
+bool RenderBoxModelObject::requiresLayer() const
+{
+    return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection();
 }
 
 } // namespace WebCore

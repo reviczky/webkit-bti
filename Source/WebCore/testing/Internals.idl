@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -114,6 +114,12 @@ enum AudioSessionCategory {
     "RecordAudio",
     "PlayAndRecord",
     "AudioProcessing"
+};
+
+enum AudioSessionMode {
+    "Default",
+    "VideoChat",
+    "MoviePlayback"
 };
 
 enum RouteSharingPolicy {
@@ -319,6 +325,7 @@ enum HEVCParameterCodec {
     required DOMPointReadOnly bottomLeft;
     sequence<ImageOverlayText> children;
     boolean hasTrailingNewline = true;
+    boolean isVertical = false;
 };
 
 [
@@ -385,6 +392,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     undefined setOverrideCachePolicy(CachePolicy policy);
     undefined setOverrideResourceLoadPriority(ResourceLoadPriority priority);
     undefined setStrictRawResourceValidationPolicyDisabled(boolean disabled);
+    ResourceLoadPriority? getResourcePriority(DOMString url);
 
     boolean isFetchObjectContextStopped(FetchObject object);
 
@@ -513,6 +521,11 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     undefined advanceToNextMisspelling();
 
     sequence<DOMString> userPreferredLanguages();
+
+    // This only overrides the languages inside the WebProcess, not the GPUProcess.
+    // To override the language more globally, please add something like this to
+    // your test instead:
+    // <!-- webkit-test-runner [ language=jp,fr ] -->
     undefined setUserPreferredLanguages(sequence<DOMString> languages);
 
     sequence<DOMString> userPreferredAudioCharacteristics();
@@ -600,6 +613,8 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     DOMString layerTreeAsText(Document document, optional unsigned short flags = 0);
 
     unsigned long long layerIDForElement(Element element);
+    
+    unsigned long long scrollingNodeIDForNode(optional Node? node = null);
 
     // Flags for platformLayerTreeAsText.
     const unsigned short PLATFORM_LAYER_TREE_DEBUG = 1;
@@ -877,6 +892,9 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     undefined setPageDefersLoading(boolean defersLoading);
     boolean pageDefersLoading();
 
+    undefined grantUniversalAccess();
+    undefined disableCORSForURL(DOMString url);
+
     File? createFile(DOMString url);
     DOMString createTemporaryFile(DOMString name, DOMString contents);
 
@@ -901,7 +919,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     undefined setShowAllPlugins(boolean showAll);
 
     [CallWith=CurrentGlobalObject] any cloneArrayBuffer(any buffer, any srcByteOffset, any byteLength);
-    [CallWith=CurrentGlobalObject] boolean isReadableStreamDisturbed(any stream);
+    boolean isReadableStreamDisturbed(ReadableStream stream);
 
     DOMString resourceLoadStatisticsForURL(DOMURL url);
     undefined setTrackingPreventionEnabled(boolean enable);
@@ -969,7 +987,6 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     [Conditional=MEDIA_STREAM] undefined setShouldInterruptAudioOnPageVisibilityChange(boolean shouldInterrupt);
     [Conditional=MEDIA_STREAM] undefined setCameraMediaStreamTrackOrientation(MediaStreamTrack track, short orientation);
     [Conditional=MEDIA_STREAM] undefined observeMediaStreamTrack(MediaStreamTrack track);
-    [Conditional=MEDIA_STREAM] Promise<ImageData> grabNextMediaStreamTrackFrame();
     [Conditional=MEDIA_STREAM] Promise<short> mediaStreamTrackVideoFrameRotation();
     [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackAudioSampleCount;
     [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackVideoSampleCount;
@@ -1019,7 +1036,9 @@ typedef (FetchRequest or FetchResponse) FetchObject;
 
     readonly attribute boolean supportsAudioSession;
     AudioSessionCategory audioSessionCategory();
+    AudioSessionMode audioSessionMode();
     [Conditional=VIDEO] AudioSessionCategory categoryAtMostRecentPlayback(HTMLMediaElement element);
+    [Conditional=VIDEO] AudioSessionMode modeAtMostRecentPlayback(HTMLMediaElement element);
     RouteSharingPolicy routeSharingPolicy();
 
     double preferredAudioBufferSize();
@@ -1048,7 +1067,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     [CallWith=CurrentDocument] undefined queueTaskToQueueMicrotask(DOMString source, VoidCallback callback);
     boolean hasSameEventLoopAs(WindowProxy windowProxy);
 
-    DOMString windowLocationHost(DOMWindow window);
+    DOMString windowLocationHost(LocalDOMWindow window);
 
     undefined markContextAsInsecure();
 
@@ -1076,6 +1095,8 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     undefined setUseSystemAppearance(boolean value);
 
     unsigned long pluginCount();
+    unsigned long pluginScrollPositionX(Element element);
+    unsigned long pluginScrollPositionY(Element element);
 
     undefined notifyResourceLoadObserver();
 
@@ -1182,8 +1203,6 @@ typedef (FetchRequest or FetchResponse) FetchObject;
 
     [Conditional=SERVICE_WORKER] PushSubscription createPushSubscription(USVString endpoint, EpochTimeStamp? expirationTime, ArrayBuffer serverVAPIDPublicKey, ArrayBuffer clientECDHPublicKey, ArrayBuffer auth);
 
-    undefined overrideModalContainerSearchTermForTesting([AtomString] DOMString term);
-
     [Conditional=ARKIT_INLINE_PREVIEW_MAC] Promise<sequence<DOMString>> modelInlinePreviewUUIDs();
     [Conditional=ARKIT_INLINE_PREVIEW_MAC] DOMString modelInlinePreviewUUIDForModelElement(HTMLModelElement modelElement);
     undefined avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement element);
@@ -1197,4 +1216,6 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     SelectorFilterHashCounts selectorFilterHashCounts(DOMString selector);
 
     readonly attribute boolean isVisuallyNonEmpty;
+    
+    boolean isUsingUISideCompositing();
 };

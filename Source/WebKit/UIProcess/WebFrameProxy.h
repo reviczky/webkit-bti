@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,13 +27,11 @@
 
 #include "APIObject.h"
 #include "FrameLoadState.h"
-#include "MessageReceiver.h"
-#include "MessageSender.h"
 #include "WebFramePolicyListenerProxy.h"
-#include "WebPageProxy.h"
 #include <WebCore/FrameLoaderTypes.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
+#include <wtf/ListHashSet.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -42,26 +40,36 @@
 #endif
 
 namespace API {
+class Data;
 class Navigation;
+class URL;
 }
 
 namespace IPC {
 class Connection;
 class Decoder;
+using DataReference = std::span<const uint8_t>;
 }
 
 namespace WebKit {
-struct FrameTreeNodeData;
+
 class ProvisionalFrameProxy;
 class SafeBrowsingWarning;
-class SubframePageProxy;
+class UserData;
 class WebFramePolicyListenerProxy;
+class WebPageProxy;
+class WebProcessProxy;
 class WebsiteDataStore;
+
 enum class ShouldExpectSafeBrowsingResult : bool;
 enum class ProcessSwapRequestedByClient : bool;
+
+struct FrameInfoData;
+struct FrameTreeCreationParameters;
+struct FrameTreeNodeData;
 struct WebsitePoliciesData;
 
-class WebFrameProxy : public API::ObjectImpl<API::Object::Type::Frame>, public IPC::MessageReceiver, public IPC::MessageSender {
+class WebFrameProxy : public API::ObjectImpl<API::Object::Type::Frame>, public CanMakeWeakPtr<WebFrameProxy>, public CanMakeCheckedPtr {
 public:
     static Ref<WebFrameProxy> create(WebPageProxy& page, WebProcessProxy& process, WebCore::FrameIdentifier frameID)
     {
@@ -74,7 +82,7 @@ public:
     virtual ~WebFrameProxy();
 
     WebCore::FrameIdentifier frameID() const { return m_frameID; }
-    WebPageProxy* page() const { return m_page.get(); }
+    WebPageProxy* page() const;
 
     bool pageIsClosed() const { return !m_page; } // Needs to be thread-safe.
 
@@ -143,27 +151,22 @@ public:
     ProcessID processIdentifier() const;
     void swapToProcess(Ref<WebProcessProxy>&&, const WebCore::ResourceRequest&);
 
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-
     void commitProvisionalFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
 
     void getFrameInfo(CompletionHandler<void(FrameTreeNodeData&&)>&&);
-
-    void updateRemoteFrameSize(WebCore::IntSize);
+    FrameTreeCreationParameters frameTreeCreationParameters() const;
 
     WebFrameProxy* parentFrame() { return m_parentFrame.get(); }
+    WebProcessProxy& process() { return m_process.get(); }
+    ProvisionalFrameProxy* provisionalFrame() { return m_provisionalFrame.get(); }
 
 private:
     WebFrameProxy(WebPageProxy&, WebProcessProxy&, WebCore::FrameIdentifier);
 
     std::optional<WebCore::PageIdentifier> pageIdentifier() const;
 
-    IPC::Connection* messageSenderConnection() const final;
-    uint64_t messageSenderDestinationID() const final;
-
     WeakPtr<WebPageProxy> m_page;
     Ref<WebProcessProxy> m_process;
-    std::unique_ptr<SubframePageProxy> m_subframePage;
     WebCore::PageIdentifier m_webPageID;
 
     FrameLoadState m_frameLoadState;

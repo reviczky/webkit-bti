@@ -32,7 +32,6 @@
 #include "FrameLoaderTypes.h"
 #include "LayoutMilestone.h"
 #include "LinkIcon.h"
-#include "PageIdentifier.h"
 #include "RegistrableDomain.h"
 #include "ResourceLoaderIdentifier.h"
 #include <wtf/Expected.h>
@@ -66,17 +65,17 @@ OBJC_CLASS NSView;
 
 namespace WebCore {
 
+class AXCoreObject;
 class AuthenticationChallenge;
 class CachedFrame;
 class CachedResourceRequest;
 class Color;
-class DOMWindow;
+class LocalDOMWindow;
 class DOMWindowExtension;
 class DOMWrapperWorld;
 class DocumentLoader;
 class Element;
 class FormState;
-class Frame;
 class FrameLoader;
 class FrameNetworkingContext;
 class HTMLFormElement;
@@ -85,6 +84,7 @@ class HTMLPlugInElement;
 class HistoryItem;
 class IntSize;
 class LegacyPreviewLoaderClient;
+class LocalFrame;
 class MessageEvent;
 class NavigationAction;
 class Page;
@@ -123,8 +123,6 @@ public:
     virtual bool hasWebView() const = 0; // mainly for assertions
 
     virtual void makeRepresentation(DocumentLoader*) = 0;
-
-    virtual std::optional<PageIdentifier> pageID() const = 0;
 
 #if PLATFORM(IOS_FAMILY)
     // Returns true if the client forced the layout.
@@ -186,7 +184,7 @@ public:
     virtual void dispatchDidReachLayoutMilestone(OptionSet<LayoutMilestone>) { }
     virtual void dispatchDidReachVisuallyNonEmptyState() { }
 
-    virtual Frame* dispatchCreatePage(const NavigationAction&, NewFrameOpenerPolicy) = 0;
+    virtual LocalFrame* dispatchCreatePage(const NavigationAction&, NewFrameOpenerPolicy) = 0;
     virtual void dispatchShow() = 0;
 
     virtual void dispatchDecidePolicyForResponse(const ResourceResponse&, const ResourceRequest&, PolicyCheckIdentifier, const String& downloadAttribute, FramePolicyFunction&&) = 0;
@@ -245,6 +243,7 @@ public:
 
     virtual ResourceError cannotShowMIMETypeError(const ResourceResponse&) const = 0;
     virtual ResourceError fileDoesNotExistError(const ResourceResponse&) const = 0;
+    virtual ResourceError httpsUpgradeRedirectLoopError(const ResourceRequest&) const = 0;
     virtual ResourceError pluginWillHandleLoadError(const ResourceResponse&) const = 0;
 
     virtual bool shouldFallBack(const ResourceError&) const = 0;
@@ -282,7 +281,7 @@ public:
     virtual bool canCachePage() const = 0;
     virtual void convertMainResourceLoadToDownload(DocumentLoader*, const ResourceRequest&, const ResourceResponse&) = 0;
 
-    virtual RefPtr<Frame> createFrame(const AtomString& name, HTMLFrameOwnerElement&) = 0;
+    virtual RefPtr<LocalFrame> createFrame(const AtomString& name, HTMLFrameOwnerElement&) = 0;
     virtual RefPtr<Widget> createPlugin(const IntSize&, HTMLPlugInElement&, const URL&, const Vector<AtomString>&, const Vector<AtomString>&, const String&, bool loadManually) = 0;
     virtual void redirectDataToPlugin(Widget&) = 0;
 
@@ -296,8 +295,11 @@ public:
 #if PLATFORM(COCOA)
     // Allow an accessibility object to retrieve a Frame parent if there's no PlatformWidget.
     virtual RemoteAXObjectRef accessibilityRemoteObject() = 0;
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    virtual void setAXIsolatedTreeRoot(AXCoreObject*) = 0;
+#endif
     virtual void willCacheResponse(DocumentLoader*, ResourceLoaderIdentifier, NSCachedURLResponse*, CompletionHandler<void(NSCachedURLResponse *)>&&) const = 0;
-    virtual NSDictionary *dataDetectionContext() { return nullptr; }
+    virtual std::optional<double> dataDetectionReferenceDate() { return std::nullopt; }
 #endif
 
     virtual bool shouldAlwaysUsePluginDocument(const String& /*mimeType*/) const { return false; }

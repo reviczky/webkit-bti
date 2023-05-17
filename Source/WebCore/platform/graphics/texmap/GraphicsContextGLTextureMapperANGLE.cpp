@@ -45,11 +45,6 @@
 
 namespace WebCore {
 
-GraphicsContextGLANGLE::GraphicsContextGLANGLE(GraphicsContextGLAttributes attributes)
-    : GraphicsContextGL(attributes)
-{
-}
-
 GraphicsContextGLANGLE::~GraphicsContextGLANGLE()
 {
     if (!makeContextCurrent())
@@ -72,16 +67,6 @@ GraphicsContextGLANGLE::~GraphicsContextGLANGLE()
     GL_DeleteFramebuffers(1, &m_fbo);
 }
 
-GCGLDisplay GraphicsContextGLANGLE::platformDisplay() const
-{
-    return m_displayObj;
-}
-
-GCGLConfig GraphicsContextGLANGLE::platformConfig() const
-{
-    return m_configObj;
-}
-
 bool GraphicsContextGLANGLE::makeContextCurrent()
 {
     if (EGL_GetCurrentContext() == m_contextObj)
@@ -97,7 +82,7 @@ void GraphicsContextGLANGLE::platformReleaseThreadResources()
 {
 }
 
-RefPtr<PixelBuffer> GraphicsContextGLANGLE::readCompositedResults()
+RefPtr<PixelBuffer> GraphicsContextGLTextureMapperANGLE::readCompositedResults()
 {
     return readRenderingResults();
 }
@@ -146,7 +131,7 @@ bool GraphicsContextGLTextureMapperANGLE::copyTextureFromMedia(MediaPlayer&, Pla
 }
 #endif
 
-#if ENABLE(MEDIA_STREAM)
+#if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
 RefPtr<VideoFrame> GraphicsContextGLTextureMapperANGLE::paintCompositedResultsToVideoFrame()
 {
 #if USE(GSTREAMER)
@@ -363,7 +348,7 @@ void GraphicsContextGLTextureMapperANGLE::setContextVisibility(bool)
 {
 }
 
-bool GraphicsContextGLTextureMapperANGLE::reshapeDisplayBufferBacking()
+bool GraphicsContextGLTextureMapperANGLE::reshapeDrawingBuffer()
 {
     auto attrs = contextAttributes();
     const auto size = getInternalFramebufferSize();

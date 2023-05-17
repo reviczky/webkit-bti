@@ -35,6 +35,9 @@ enum class EnumWithoutNamespace : uint8_t;
 #if ENABLE(UINT16_ENUM)
 namespace EnumNamespace { enum class EnumType : uint16_t; }
 #endif
+enum class OptionSetEnumFirstCondition : uint32_t;
+enum class OptionSetEnumLastCondition : uint32_t;
+enum class OptionSetEnumAllCondition : uint32_t;
 #if ENABLE(TEST_FEATURE)
 namespace Namespace::Subnamespace { struct StructName; }
 #endif
@@ -53,6 +56,11 @@ using FloatBoxExtent = ScrollSnapOffsetsInfo<float, double>;
 }
 struct NullableSoftLinkedMember;
 namespace WebCore { class TimingFunction; }
+#if ENABLE(TEST_FEATURE)
+namespace Namespace { class ConditionalCommonClass; }
+#endif
+namespace Namespace { class CommonClass; }
+namespace Namespace { class AnotherCommonClass; }
 
 namespace IPC {
 
@@ -129,6 +137,23 @@ template<> struct ArgumentCoder<WebCore::TimingFunction> {
     static std::optional<Ref<WebCore::TimingFunction>> decode(Decoder&);
 };
 
+#if ENABLE(TEST_FEATURE)
+template<> struct ArgumentCoder<Namespace::ConditionalCommonClass> {
+    static void encode(Encoder&, const Namespace::ConditionalCommonClass&);
+    static std::optional<Namespace::ConditionalCommonClass> decode(Decoder&);
+};
+#endif
+
+template<> struct ArgumentCoder<Namespace::CommonClass> {
+    static void encode(Encoder&, const Namespace::CommonClass&);
+    static std::optional<Namespace::CommonClass> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<Namespace::AnotherCommonClass> {
+    static void encode(Encoder&, const Namespace::AnotherCommonClass&);
+    static std::optional<Ref<Namespace::AnotherCommonClass>> decode(Decoder&);
+};
+
 } // namespace IPC
 
 
@@ -138,5 +163,8 @@ template<> bool isValidEnum<EnumWithoutNamespace, void>(uint8_t);
 #if ENABLE(UINT16_ENUM)
 template<> bool isValidEnum<EnumNamespace::EnumType, void>(uint16_t);
 #endif
+template<> bool isValidOptionSet<OptionSetEnumFirstCondition>(OptionSet<OptionSetEnumFirstCondition>);
+template<> bool isValidOptionSet<OptionSetEnumLastCondition>(OptionSet<OptionSetEnumLastCondition>);
+template<> bool isValidOptionSet<OptionSetEnumAllCondition>(OptionSet<OptionSetEnumAllCondition>);
 
 } // namespace WTF

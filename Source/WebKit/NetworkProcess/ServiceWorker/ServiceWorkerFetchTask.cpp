@@ -32,6 +32,7 @@
 #include "FormDataReference.h"
 #include "Logging.h"
 #include "NetworkLoad.h"
+#include "NetworkOriginAccessPatterns.h"
 #include "NetworkProcess.h"
 #include "NetworkResourceLoader.h"
 #include "NetworkSession.h"
@@ -150,7 +151,7 @@ void ServiceWorkerFetchTask::contextClosed()
     if (m_isDone)
         return;
 
-    if (m_wasHandled) {
+    if (m_wasHandled && !m_isLoadingFromPreloader) {
         didFail(ResourceError { errorDomainWebKitInternal, 0, { }, "Service Worker context closed"_s });
         return;
     }
@@ -229,14 +230,14 @@ void ServiceWorkerFetchTask::processResponse(ResourceResponse&& response, bool n
 
     if (m_loader.parameters().options.mode == FetchOptions::Mode::Navigate) {
         if (auto parentOrigin = m_loader.parameters().parentOrigin()) {
-            if (auto error = validateCrossOriginResourcePolicy(m_loader.parameters().parentCrossOriginEmbedderPolicy.value, *parentOrigin, m_currentRequest.url(), response, ForNavigation::Yes)) {
+            if (auto error = validateCrossOriginResourcePolicy(m_loader.parameters().parentCrossOriginEmbedderPolicy.value, *parentOrigin, m_currentRequest.url(), response, ForNavigation::Yes, m_loader.connectionToWebProcess().originAccessPatterns())) {
                 didFail(*error);
                 return;
             }
         }
     }
     if (m_loader.parameters().options.mode == FetchOptions::Mode::NoCors) {
-        if (auto error = validateCrossOriginResourcePolicy(m_loader.parameters().crossOriginEmbedderPolicy.value, *m_loader.parameters().sourceOrigin, m_currentRequest.url(), response, ForNavigation::No)) {
+        if (auto error = validateCrossOriginResourcePolicy(m_loader.parameters().crossOriginEmbedderPolicy.value, *m_loader.parameters().sourceOrigin, m_currentRequest.url(), response, ForNavigation::No, m_loader.connectionToWebProcess().originAccessPatterns())) {
             didFail(*error);
             return;
         }

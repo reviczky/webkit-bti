@@ -85,8 +85,8 @@
 #include <wtf/PlatformEnableCocoa.h>
 #endif
 
-/* --------- Windows CAIRO port --------- */
-#if PLATFORM(WIN_CAIRO)
+/* --------- Windows port --------- */
+#if PLATFORM(WIN)
 #include <wtf/PlatformEnableWinCairo.h>
 #endif
 
@@ -410,6 +410,7 @@
 #define ENABLE_THUNDER 0
 #endif
 
+// ORIENTATION_EVENTS should never get enabled on Desktop, only Mobile.
 #if !defined(ENABLE_ORIENTATION_EVENTS)
 #define ENABLE_ORIENTATION_EVENTS 0
 #endif
@@ -680,6 +681,12 @@
 
 #endif /* !defined(ENABLE_DFG_JIT) && ENABLE(JIT) */
 
+#if ENABLE(DFG_JIT) && ASSERT_ENABLED
+#define ENABLE_DFG_DOES_GC_VALIDATION 1
+#else
+#define ENABLE_DFG_DOES_GC_VALIDATION 0
+#endif
+
 /* Concurrent JS only works on 64-bit platforms because it requires that
    values get stored to atomically. This is trivially true on 64-bit platforms,
    but not true at all on 32-bit platforms where values are composed of two
@@ -885,7 +892,7 @@
 #define ENABLE_OPENTYPE_VERTICAL 1
 #endif
 
-#if !defined(ENABLE_OPENTYPE_MATH) && (OS(DARWIN) && USE(CG)) || (USE(FREETYPE) && !PLATFORM(GTK)) || (PLATFORM(WIN) && (USE(CG) || USE(CAIRO)))
+#if !defined(ENABLE_OPENTYPE_MATH) && (OS(DARWIN) && USE(CG)) || PLATFORM(WIN) || PLATFORM(PLAYSTATION)
 #define ENABLE_OPENTYPE_MATH 1
 #endif
 
@@ -931,7 +938,7 @@
 #define ENABLE_PREDEFINED_COLOR_SPACE_DISPLAY_P3 0
 #endif
 
-#if !defined(ENABLE_GPU_PROCESS_DOM_RENDERING_BY_DEFAULT) && PLATFORM(IOS_FAMILY) && !PLATFORM(WATCHOS) && !HAVE(UIKIT_WEBKIT_INTERNALS)
+#if !defined(ENABLE_GPU_PROCESS_DOM_RENDERING_BY_DEFAULT) && (PLATFORM(IOS_FAMILY) && !PLATFORM(WATCHOS) && !HAVE(UIKIT_WEBKIT_INTERNALS) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 140000))
 #define ENABLE_GPU_PROCESS_DOM_RENDERING_BY_DEFAULT 1
 #endif
 
@@ -939,7 +946,9 @@
 #define ENABLE_GPU_PROCESS_WEBGL_BY_DEFAULT 1
 #endif
 
-
+#if !defined(ENABLE_REMOTE_LAYER_TREE_ON_MAC_BY_DEFAULT) && PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 140000
+#define ENABLE_REMOTE_LAYER_TREE_ON_MAC_BY_DEFAULT 1
+#endif
 
 /* Asserts, invariants for macro definitions */
 

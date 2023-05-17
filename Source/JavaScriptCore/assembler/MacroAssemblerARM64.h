@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(ASSEMBLER)
+#if ENABLE(ASSEMBLER) && CPU(ARM64)
 
 #include "ARM64Assembler.h"
 #include "AbstractMacroAssembler.h"
@@ -66,7 +66,7 @@ protected:
     static constexpr size_t INSTRUCTION_SIZE = 4;
 
     // N instructions to load the pointer + 1 call instruction.
-    static constexpr ptrdiff_t REPATCH_OFFSET_CALL_TO_POINTER = -((Assembler::MAX_POINTER_BITS / 16 + 1) * INSTRUCTION_SIZE);
+    static constexpr ptrdiff_t REPATCH_OFFSET_CALL_TO_POINTER = -((Assembler::NUMBER_OF_ADDRESS_ENCODING_INSTRUCTIONS + 1) * INSTRUCTION_SIZE);
 
 public:
     MacroAssemblerARM64()
@@ -300,6 +300,23 @@ public:
         m_assembler.add<64>(dest, src, dataTempRegister);
     }
 
+    void add64(TrustedImm64 imm, RegisterID src, RegisterID dest)
+    {
+        intptr_t immediate = imm.m_value;
+
+        if (isUInt12(immediate)) {
+            m_assembler.add<64>(dest, src, UInt12(static_cast<int32_t>(immediate)));
+            return;
+        }
+        if (isUInt12(-immediate)) {
+            m_assembler.sub<64>(dest, src, UInt12(static_cast<int32_t>(-immediate)));
+            return;
+        }
+
+        move(imm, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.add<64>(dest, src, dataTempRegister);
+    }
+
     void add64(TrustedImm32 imm, Address address)
     {
         load64(address, getCachedDataTempRegisterIDAndInvalidate());
@@ -358,6 +375,13 @@ public:
     {
         load64(src, getCachedDataTempRegisterIDAndInvalidate());
         m_assembler.add<64>(dest, dest, dataTempRegister);
+    }
+
+    void add64(RegisterID src, Address dest)
+    {
+        load64(dest, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.add<64>(src, dataTempRegister, dataTempRegister);
+        store64(dataTempRegister, dest);
     }
 
     void add64(AbsoluteAddress src, RegisterID dest)
@@ -843,6 +867,22 @@ public:
     void illegalInstruction()
     {
         m_assembler.illegalInstruction();
+    }
+
+    void countPopulation32(RegisterID src, RegisterID dst)
+    {
+        move32ToFloat(src, fpTempRegister);
+        m_assembler.vectorCnt(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
+        m_assembler.addv(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
+        moveFloatTo32(fpTempRegister, dst);
+    }
+
+    void countPopulation64(RegisterID src, RegisterID dst)
+    {
+        move64ToDouble(src, fpTempRegister);
+        m_assembler.vectorCnt(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
+        m_assembler.addv(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
+        moveDoubleTo64(fpTempRegister, dst);
     }
 
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
@@ -1862,6 +1902,16 @@ public:
         m_assembler.sxth<32>(dest, src);
     }
 
+    void zeroExtend16To64(RegisterID src, RegisterID dest)
+    {
+        m_assembler.uxth<64>(dest, src);
+    }
+
+    void signExtend16To64(RegisterID src, RegisterID dest)
+    {
+        m_assembler.sxth<64>(dest, src);
+    }
+
     void load8(Address address, RegisterID dest)
     {
         if (tryLoadWithOffset<8>(dest, address.base, address.offset))
@@ -1937,6 +1987,16 @@ public:
     void signExtend8To32(RegisterID src, RegisterID dest)
     {
         m_assembler.sxtb<32>(dest, src);
+    }
+
+    void zeroExtend8To64(RegisterID src, RegisterID dest)
+    {
+        m_assembler.uxtb<64>(dest, src);
+    }
+
+    void signExtend8To64(RegisterID src, RegisterID dest)
+    {
+        m_assembler.sxtb<64>(dest, src);
     }
 
     void store64(RegisterID src, Address address)
@@ -2313,7 +2373,7 @@ public:
     static bool supportsFloatingPointSqrt() { return true; }
     static bool supportsFloatingPointAbs() { return true; }
     static bool supportsFloatingPointRounding() { return true; }
-    static bool supportsCountPopulation() { return false; }
+    static bool supportsCountPopulation() { return true; }
 
     enum BranchTruncateType { BranchIfTruncateFailed, BranchIfTruncateSuccessful };
 
@@ -3181,26 +3241,40 @@ public:
 
     void swap(RegisterID reg1, RegisterID reg2)
     {
+        if (reg1 == reg2)
+            return;
         move(reg1, getCachedDataTempRegisterIDAndInvalidate());
         move(reg2, reg1);
         move(dataTempRegister, reg2);
     }
 
-    void swap(FPRegisterID reg1, FPRegisterID reg2)
+    void swapDouble(FPRegisterID reg1, FPRegisterID reg2)
     {
+        if (reg1 == reg2)
+            return;
         moveDouble(reg1, fpTempRegister);
         moveDouble(reg2, reg1);
         moveDouble(fpTempRegister, reg2);
     }
 
-    void signExtend32ToPtr(TrustedImm32 imm, RegisterID dest)
+    void signExtend32To64(TrustedImm32 imm, RegisterID dest)
     {
         move(TrustedImm64(imm.m_value), dest);
     }
 
-    void signExtend32ToPtr(RegisterID src, RegisterID dest)
+    void signExtend32To64(RegisterID src, RegisterID dest)
     {
         m_assembler.sxtw(dest, src);
+    }
+
+    void signExtend32ToPtr(TrustedImm32 imm, RegisterID dest)
+    {
+        signExtend32To64(imm, dest);
+    }
+
+    void signExtend32ToPtr(RegisterID src, RegisterID dest)
+    {
+        signExtend32To64(src, dest);
     }
 
     void zeroExtend32ToWord(RegisterID src, RegisterID dest)
@@ -4974,6 +5048,11 @@ public:
 
     void vectorExtractLane(SIMDLane simdLane, TrustedImm32 lane, FPRegisterID src, FPRegisterID dest)
     {
+        if (!lane.m_value) {
+            if (src != dest)
+                moveDouble(src, dest);
+            return;
+        }
         m_assembler.dupElement(dest, src, simdLane, lane.m_value);
     }
 
@@ -5546,9 +5625,12 @@ public:
 
     void vectorDotProduct(FPRegisterID a, FPRegisterID b, FPRegisterID dest, FPRegisterID scratch) 
     {
+        ASSERT(scratch != dest);
+        ASSERT(scratch != a);
+        ASSERT(scratch != b);
         m_assembler.smullv(scratch, a, b, SIMDLane::i16x8);
         m_assembler.smull2v(dest, a, b, SIMDLane::i16x8);
-        m_assembler.addpv(dest, dest, scratch, SIMDLane::i32x4);
+        m_assembler.addpv(dest, scratch, dest, SIMDLane::i32x4);
     }
     void vectorSwizzle(FPRegisterID a, FPRegisterID control, FPRegisterID dest) { m_assembler.tbl(dest, a, control); }
     void vectorSwizzle2(FPRegisterID a, FPRegisterID b, FPRegisterID control, FPRegisterID dest)
@@ -5859,8 +5941,9 @@ protected:
         intptr_t value = reinterpret_cast<intptr_t>(imm.m_value);
         m_assembler.movz<64>(dest, getHalfword(value, 0));
         m_assembler.movk<64>(dest, getHalfword(value, 1), 16);
-        m_assembler.movk<64>(dest, getHalfword(value, 2), 32);
-        if (Assembler::MAX_POINTER_BITS > 48)
+        if constexpr (Assembler::NUMBER_OF_ADDRESS_ENCODING_INSTRUCTIONS > 2)
+            m_assembler.movk<64>(dest, getHalfword(value, 2), 32);
+        if constexpr (Assembler::NUMBER_OF_ADDRESS_ENCODING_INSTRUCTIONS > 3)
             m_assembler.movk<64>(dest, getHalfword(value, 3), 48);
     }
 
@@ -6441,4 +6524,4 @@ inline MacroAssemblerARM64::Jump MacroAssemblerARM64::branch<64>(RelationalCondi
 
 } // namespace JSC
 
-#endif // ENABLE(ASSEMBLER)
+#endif // ENABLE(ASSEMBLER) && CPU(ARM64)

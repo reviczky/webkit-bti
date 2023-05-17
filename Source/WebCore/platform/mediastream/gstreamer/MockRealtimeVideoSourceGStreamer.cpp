@@ -41,30 +41,30 @@ CaptureSourceOrError MockRealtimeVideoSource::create(String&& deviceID, AtomStri
         return { "No mock camera device"_s };
 #endif
 
-    auto source = adoptRef(*new MockRealtimeVideoSourceGStreamer(WTFMove(deviceID), WTFMove(name), WTFMove(hashSalts)));
+    Ref<RealtimeMediaSource> source = adoptRef(*new MockRealtimeVideoSourceGStreamer(WTFMove(deviceID), WTFMove(name), WTFMove(hashSalts)));
     if (constraints) {
         if (auto error = source->applyConstraints(*constraints))
             return WTFMove(error.value().badConstraint);
     }
 
-    return CaptureSourceOrError(RealtimeVideoSource::create(WTFMove(source)));
+    return source;
 }
 
-CaptureSourceOrError MockDisplayCaptureSourceGStreamer::create(const CaptureDevice& device, MediaDeviceHashSalts&& hashSalts, const MediaConstraints* constraints)
+CaptureSourceOrError MockDisplayCaptureSourceGStreamer::create(const CaptureDevice& device, MediaDeviceHashSalts&& hashSalts, const MediaConstraints* constraints, PageIdentifier pageIdentifier)
 {
     auto mockSource = adoptRef(*new MockRealtimeVideoSourceGStreamer(String { device.persistentId() }, AtomString { device.label() }, MediaDeviceHashSalts { hashSalts }));
 
     if (constraints) {
         if (auto error = mockSource->applyConstraints(*constraints))
-            return WTFMove(error.value().badConstraint);
+            return WTFMove(error->message);
     }
 
-    auto source = adoptRef(*new MockDisplayCaptureSourceGStreamer(device, WTFMove(mockSource), WTFMove(hashSalts)));
-    return CaptureSourceOrError(WTFMove(source));
+    Ref<RealtimeMediaSource> source = adoptRef(*new MockDisplayCaptureSourceGStreamer(device, WTFMove(mockSource), WTFMove(hashSalts), pageIdentifier));
+    return source;
 }
 
-MockDisplayCaptureSourceGStreamer::MockDisplayCaptureSourceGStreamer(const CaptureDevice& device, Ref<MockRealtimeVideoSourceGStreamer>&& source, MediaDeviceHashSalts&& hashSalts)
-    : RealtimeMediaSource(device, WTFMove(hashSalts))
+MockDisplayCaptureSourceGStreamer::MockDisplayCaptureSourceGStreamer(const CaptureDevice& device, Ref<MockRealtimeVideoSourceGStreamer>&& source, MediaDeviceHashSalts&& hashSalts, PageIdentifier pageIdentifier)
+    : RealtimeVideoCaptureSource(device, WTFMove(hashSalts), pageIdentifier)
     , m_source(WTFMove(source))
     , m_deviceType(device.type())
 {
@@ -127,7 +127,7 @@ const RealtimeMediaSourceSettings& MockDisplayCaptureSourceGStreamer::settings()
         settings.setWidth(size.width());
         settings.setHeight(size.height());
         settings.setDeviceId(hashedId());
-
+        settings.setDisplaySurface(m_source->mockScreen() ? DisplaySurfaceType::Monitor : DisplaySurfaceType::Window);
         settings.setLogicalSurface(false);
 
         RealtimeMediaSourceSupportedConstraints supportedConstraints;

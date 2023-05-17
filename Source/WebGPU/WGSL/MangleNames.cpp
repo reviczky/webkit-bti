@@ -81,6 +81,7 @@ public:
     void visit(AST::VariableStatement&) override;
     void visit(AST::Structure&) override;
     void visit(AST::Variable&) override;
+    void visit(AST::CompoundStatement&) override;
     void visit(AST::IdentifierExpression&) override;
     void visit(AST::FieldAccessExpression&) override;
     void visit(AST::NamedTypeName&) override;
@@ -105,11 +106,11 @@ private:
 void NameManglerVisitor::run()
 {
     for (const auto& entrypoint : m_callGraph.entrypoints()) {
-        String originalName = entrypoint.m_function.name();
-        introduceVariable(entrypoint.m_function.name(), MangledName::Function);
+        String originalName = entrypoint.function.name();
+        introduceVariable(entrypoint.function.name(), MangledName::Function);
         auto it = m_result.entryPoints.find(originalName);
         RELEASE_ASSERT(it != m_result.entryPoints.end());
-        it->value.mangledName = entrypoint.m_function.name();
+        it->value.mangledName = entrypoint.function.name();
     }
 
     auto& module = m_callGraph.ast();
@@ -159,7 +160,35 @@ void NameManglerVisitor::visit(AST::Structure& structure)
 
 void NameManglerVisitor::visit(AST::Variable& variable)
 {
+    String originalName = variable.name();
+    for (auto& attribute : variable.attributes()) {
+        if (is<AST::IdAttribute>(attribute)) {
+            unsigned value;
+            auto& expression = downcast<AST::IdAttribute>(attribute).value();
+            if (is<AST::AbstractIntegerLiteral>(expression))
+                value = downcast<AST::AbstractIntegerLiteral>(expression).value();
+            else if (is<AST::Signed32Literal>(expression))
+                value = downcast<AST::Signed32Literal>(expression).value();
+            else if (is<AST::Unsigned32Literal>(expression))
+                value = downcast<AST::Unsigned32Literal>(expression).value();
+            else {
+                // Constants must be resolved at an earlier phase
+                RELEASE_ASSERT_NOT_REACHED();
+            }
+            originalName = String::number(value);
+            break;
+        }
+    }
+
     visitVariableDeclaration(variable, MangledName::Global);
+
+    const String& mangledName = variable.name();
+
+    for (auto& entry : m_result.entryPoints) {
+        auto it = entry.value.specializationConstants.find(originalName);
+        if (it != entry.value.specializationConstants.end())
+            it->value.mangledName = mangledName;
+    }
 }
 
 void NameManglerVisitor::visit(AST::VariableStatement& variable)
@@ -171,6 +200,12 @@ void NameManglerVisitor::visitVariableDeclaration(AST::Variable& variable, Mangl
 {
     introduceVariable(variable.name(), kind);
     AST::Visitor::visit(variable);
+}
+
+void NameManglerVisitor::visit(AST::CompoundStatement& statement)
+{
+    ContextScope blockScope(this);
+    AST::Visitor::visit(statement);
 }
 
 void NameManglerVisitor::visit(AST::IdentifierExpression& identifier)
@@ -192,7 +227,7 @@ void NameManglerVisitor::visit(AST::NamedTypeName& type)
 void NameManglerVisitor::introduceVariable(AST::Identifier& name, MangledName::Kind kind)
 {
     const auto& mangledName = ContextProvider::introduceVariable(name, makeMangledName(name, kind));
-    name = AST::Identifier::makeWithSpan(name.span(), mangledName.toString());
+    m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName.toString()));
 }
 
 MangledName NameManglerVisitor::makeMangledName(const String& name, MangledName::Kind kind)
@@ -208,7 +243,7 @@ void NameManglerVisitor::readVariable(AST::Identifier& name) const
 {
     // FIXME: this should be unconditional
     if (const auto* mangledName = ContextProvider::readVariable(name))
-        name = AST::Identifier::makeWithSpan(name.span(), mangledName->toString());
+        m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName->toString()));
 }
 
 void mangleNames(CallGraph& callGraph, PrepareResult& result)

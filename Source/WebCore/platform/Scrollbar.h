@@ -85,7 +85,7 @@ public:
     WEBCORE_EXPORT void setProportion(int visibleSize, int totalSize);
     void setPressedPos(int p) { m_pressedPos = p; }
 
-    void paint(GraphicsContext&, const IntRect& damageRect, Widget::SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, EventRegionContext* = nullptr) override;
+    void paint(GraphicsContext&, const IntRect& damageRect, Widget::SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, RegionContext* = nullptr) override;
 
     bool enabled() const { return m_enabled; }
     virtual void setEnabled(bool);
@@ -134,6 +134,8 @@ public:
 
     bool supportsUpdateOnSecondaryThread() const;
     static NativeScrollbarVisibility nativeScrollbarVisibility(const Scrollbar*);
+
+    float deviceScaleFactor() const;
 
 protected:
     Scrollbar(ScrollableArea&, ScrollbarOrientation, ScrollbarControlSize, ScrollbarTheme* = nullptr, bool isCustomScrollbar = false);

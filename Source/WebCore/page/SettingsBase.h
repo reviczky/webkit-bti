@@ -33,7 +33,6 @@
 #include "EditingBehaviorType.h"
 #include "FontGenericFamilies.h"
 #include "FontLoadTimingOverride.h"
-#include "FontRenderingMode.h"
 #include "ForcedAccessibilityValue.h"
 #include "FourCC.h"
 #include "FrameFlattening.h"
@@ -67,6 +66,7 @@ public:
 
 #if ENABLE(MEDIA_SOURCE)
     WEBCORE_EXPORT static bool platformDefaultMediaSourceEnabled();
+    WEBCORE_EXPORT static uint64_t defaultMaximumSourceBufferSize();
 #endif
 
     static const unsigned defaultMaximumHTMLParserDOMTreeDepth = 512;

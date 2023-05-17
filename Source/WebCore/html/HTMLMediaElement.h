@@ -28,11 +28,13 @@
 #if ENABLE(VIDEO)
 
 #include "ActiveDOMObject.h"
+#include "AudioSession.h"
 #include "AudioTrackClient.h"
 #include "AutoplayEvent.h"
 #include "CaptionUserPreferences.h"
 #include "HTMLElement.h"
 #include "HTMLMediaElementEnums.h"
+#include "HTMLMediaElementIdentifier.h"
 #include "MediaCanStartListener.h"
 #include "MediaControllerInterface.h"
 #include "MediaElementSession.h"
@@ -41,6 +43,7 @@
 #include "MediaUniqueIdentifier.h"
 #include "ReducedResolutionSeconds.h"
 #include "TextTrackClient.h"
+#include "URLKeepingBlobAlive.h"
 #include "VideoTrackClient.h"
 #include "VisibilityChangeClient.h"
 #include <wtf/Function.h>
@@ -60,6 +63,10 @@
 #ifndef NDEBUG
 #include <wtf/StringPrintStream.h>
 #endif
+
+namespace WTF {
+class MachSendRight;
+}
 
 namespace JSC {
 class JSValue;
@@ -156,6 +163,8 @@ public:
     using HTMLElement::WeakValueType;
     using HTMLElement::WeakPtrImplType;
 
+    HTMLMediaElementIdentifier identifier() const { return m_identifier; }
+
     RefPtr<MediaPlayer> player() const { return m_player; }
     WEBCORE_EXPORT std::optional<MediaPlayerIdentifier> playerIdentifier() const;
 
@@ -197,7 +206,6 @@ public:
     MediaPlayer::VideoGravity videoFullscreenGravity() const { return m_videoFullscreenGravity; }
 #endif
 
-    void scheduleCheckPlaybackTargetCompatability();
     void checkPlaybackTargetCompatibility();
     void scheduleResolvePendingPlayPromises();
     void scheduleRejectPendingPlayPromises(Ref<DOMException>&&);
@@ -488,7 +496,6 @@ public:
     WEBCORE_EXPORT static HashSet<SecurityOriginData> originsInMediaCache(const String&);
     WEBCORE_EXPORT static void clearMediaCache(const String&, WallTime modifiedSince = { });
     WEBCORE_EXPORT static void clearMediaCacheForOrigins(const String&, const HashSet<SecurityOriginData>&);
-    static void resetMediaEngines();
 
     bool isPlaying() const final { return m_playing; }
 
@@ -612,7 +619,8 @@ public:
     WEBCORE_EXPORT bool mediaPlayerRenderingCanBeAccelerated() final;
 
 #if USE(AUDIO_SESSION)
-    WEBCORE_EXPORT AudioSessionCategory categoryAtMostRecentPlayback() const { return m_categoryAtMostRecentPlayback; }
+    AudioSessionCategory categoryAtMostRecentPlayback() const { return m_categoryAtMostRecentPlayback; }
+    AudioSessionMode modeAtMostRecentPlayback() const { return m_modeAtMostRecentPlayback; }
 #endif
 
     void updateMediaPlayer(IntSize, bool);
@@ -629,14 +637,18 @@ public:
 
     bool hasSource() const { return hasCurrentSrc() || srcObject(); }
 
+    WEBCORE_EXPORT LayerHostingContextID layerHostingContextID();
+    WEBCORE_EXPORT WebCore::FloatSize naturalSize();
+    WEBCORE_EXPORT WebCore::FloatSize videoInlineSize() const;
+    void setVideoInlineSizeFenced(const FloatSize&, const WTF::MachSendRight&);
     void updateMediaState();
 
 protected:
+    constexpr static auto CreateHTMLMediaElement = CreateHTMLElement | NodeFlag::HasCustomStyleResolveCallbacks;
     HTMLMediaElement(const QualifiedName&, Document&, bool createdByParser);
     virtual ~HTMLMediaElement();
 
-    void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
-    void parseAttribute(const QualifiedName&, const AtomString&) override;
+    void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) override;
     void finishParsingChildren() override;
     bool isURLAttribute(const Attribute&) const override;
     void willAttachRenderers() override;
@@ -825,8 +837,8 @@ private:
     void addPlayedRange(const MediaTime& start, const MediaTime& end);
     
     void scheduleTimeupdateEvent(bool periodicEvent);
-    virtual void scheduleResizeEvent() { }
-    virtual void scheduleResizeEventIfSizeChanged() { }
+    virtual void scheduleResizeEvent(const FloatSize&) { }
+    virtual void scheduleResizeEventIfSizeChanged(const FloatSize&) { }
 
     void selectMediaResource();
     void loadResource(const URL&, ContentType&, const String& keySystem);
@@ -943,6 +955,7 @@ private:
     bool shouldOverrideBackgroundPlaybackRestriction(PlatformMediaSession::InterruptionType) const override;
     bool shouldOverrideBackgroundLoadingRestriction() const override;
     bool canProduceAudio() const final;
+    bool isAudible() const final { return canProduceAudio(); };
     bool hasMediaStreamSource() const final;
     void processIsSuspendedChanged() final;
     bool shouldOverridePauseDuringRouteChange() const final;
@@ -1017,14 +1030,16 @@ private:
 
     bool shouldDisableHDR() const;
 
+    HTMLMediaElementIdentifier m_identifier { HTMLMediaElementIdentifier::generate() };
+
     Timer m_progressEventTimer;
     Timer m_playbackProgressTimer;
     Timer m_scanTimer;
     Timer m_playbackControlsManagerBehaviorRestrictionsTimer;
     Timer m_seekToPlaybackPositionEndedTimer;
+    Timer m_checkPlaybackTargetCompatibilityTimer;
     TaskCancellationGroup m_configureTextTracksTaskCancellationGroup;
     TaskCancellationGroup m_updateTextTracksTaskCancellationGroup;
-    TaskCancellationGroup m_checkPlaybackTargetCompatibilityTaskCancellationGroup;
     TaskCancellationGroup m_updateMediaStateTaskCancellationGroup;
     TaskCancellationGroup m_mediaEngineUpdatedTaskCancellationGroup;
     TaskCancellationGroup m_updatePlayStateTaskCancellationGroup;
@@ -1195,6 +1210,7 @@ private:
     AutoplayEventPlaybackState m_autoplayEventPlaybackState { AutoplayEventPlaybackState::None };
 
     String m_subtitleTrackLanguage;
+    std::optional<String> m_languageOfPrimaryAudioTrack;
     MediaTime m_lastTextTrackUpdateTime { -1, 1 };
 
     std::optional<CaptionUserPreferences::CaptionDisplayMode> m_captionDisplayMode;
@@ -1231,7 +1247,7 @@ private:
     friend class TrackDisplayUpdateScope;
 
     RefPtr<Blob> m_blob;
-    URL m_blobURLForReading;
+    URLKeepingBlobAlive m_blobURLForReading;
     MediaProvider m_mediaProvider;
     WTF::Observer<WebCoreOpaqueRoot()> m_opaqueRootProvider;
 
@@ -1261,7 +1277,6 @@ private:
     MediaProducerMediaStateFlags m_mediaState;
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
-    MonotonicTime m_currentPlaybackTargetIsWirelessEventFiredTime;
     bool m_hasPlaybackTargetAvailabilityListeners { false };
     bool m_failedToPlayToWirelessTarget { false };
     bool m_lastTargetAvailabilityEventState { false };
@@ -1281,6 +1296,7 @@ private:
 
 #if USE(AUDIO_SESSION)
     AudioSessionCategory m_categoryAtMostRecentPlayback;
+    AudioSessionMode m_modeAtMostRecentPlayback;
 #endif
     bool m_wasInterruptedForInvisibleAutoplay { false };
 

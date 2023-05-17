@@ -31,6 +31,7 @@
 #include "LocalizedStrings.h"
 #include "PaintInfo.h"
 #include "RenderButton.h"
+#include "RenderElementInlines.h"
 #include "RenderText.h"
 #include "RenderTheme.h"
 #include "ShadowRoot.h"
@@ -204,7 +205,7 @@ void RenderFileUploadControl::paintControl(PaintInfo& paintInfo, const LayoutPoi
 
 void RenderFileUploadControl::computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const
 {
-    if (shouldApplySizeContainment()) {
+    if (shouldApplySizeOrInlineSizeContainment()) {
         if (auto width = explicitIntrinsicInnerLogicalWidth()) {
             minLogicalWidth = width.value();
             maxLogicalWidth = width.value();

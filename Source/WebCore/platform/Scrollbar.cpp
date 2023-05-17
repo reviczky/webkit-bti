@@ -27,8 +27,8 @@
 #include "Scrollbar.h"
 
 #include "DeprecatedGlobalSettings.h"
-#include "FrameView.h"
 #include "GraphicsContext.h"
+#include "LocalFrameView.h"
 #include "PlatformMouseEvent.h"
 #include "ScrollAnimator.h"
 #include "ScrollView.h"
@@ -160,7 +160,7 @@ void Scrollbar::updateThumbProportion()
     updateThumb();
 }
 
-void Scrollbar::paint(GraphicsContext& context, const IntRect& damageRect, Widget::SecurityOriginPaintPolicy, EventRegionContext*)
+void Scrollbar::paint(GraphicsContext& context, const IntRect& damageRect, Widget::SecurityOriginPaintPolicy, RegionContext*)
 {
     if (context.invalidatingControlTints() && theme().supportsControlTints()) {
         invalidate();
@@ -504,6 +504,11 @@ NativeScrollbarVisibility Scrollbar::nativeScrollbarVisibility(const Scrollbar* 
     if (DeprecatedGlobalSettings::mockScrollbarsEnabled() || (scrollbar && scrollbar->isCustomScrollbar()))
         return NativeScrollbarVisibility::ReplacedByCustomScrollbar;
     return NativeScrollbarVisibility::Visible;
+}
+
+float Scrollbar::deviceScaleFactor() const
+{
+    return m_scrollableArea.deviceScaleFactor();
 }
 
 } // namespace WebCore

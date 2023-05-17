@@ -84,6 +84,9 @@ public:
 #if ENABLE(VIDEO)
         , RefPtr<HTMLVideoElement>
 #endif
+#if ENABLE(OFFSCREEN_CANVAS)
+        , RefPtr<OffscreenCanvas>
+#endif
 #if ENABLE(WEB_CODECS)
         , RefPtr<WebCodecsVideoFrame>
 #endif
@@ -302,7 +305,7 @@ private:
     bool validateBlendEquation(const char* functionName, GCGLenum mode) final;
     bool validateCapability(const char* functionName, GCGLenum cap) final;
     template<typename T, typename TypedArrayType>
-    std::optional<GCGLSpan<const T>> validateClearBuffer(const char* functionName, GCGLenum buffer, TypedList<TypedArrayType, T>& values, GCGLuint srcOffset);
+    std::optional<std::span<const T>> validateClearBuffer(const char* functionName, GCGLenum buffer, TypedList<TypedArrayType, T>& values, GCGLuint srcOffset);
     bool validateFramebufferTarget(GCGLenum target) final;
     WebGLFramebuffer* getFramebufferBinding(GCGLenum target) final;
     WebGLFramebuffer* getReadFramebufferBinding() final;
@@ -317,7 +320,7 @@ private:
 
     IntRect getTextureSourceSubRectangle(GCGLsizei width, GCGLsizei height);
 
-    RefPtr<WebGLTexture> validateTexImageBinding(const char*, TexImageFunctionID, GCGLenum) final;
+    RefPtr<WebGLTexture> validateTexImageBinding(TexImageFunctionID, GCGLenum) final;
 
     // Helper function to check texture 3D target and texture bound to the target.
     // Generate GL errors and return 0 if target is invalid or texture bound is

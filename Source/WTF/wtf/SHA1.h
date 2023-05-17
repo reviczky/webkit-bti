@@ -45,9 +45,9 @@ class SHA1 {
 public:
     WTF_EXPORT_PRIVATE SHA1();
 
-    WTF_EXPORT_PRIVATE void addBytes(Span<const std::byte>);
+    WTF_EXPORT_PRIVATE void addBytes(std::span<const std::byte>);
 
-    void addBytes(Span<const uint8_t> input)
+    void addBytes(std::span<const uint8_t> input)
     {
         addBytes(asBytes(input));
     }
@@ -59,7 +59,7 @@ public:
 
     void addBytes(const uint8_t* input, size_t length)
     {
-        addBytes(Span { input, length });
+        addBytes(makeSpan(input, length));
     }
 
     // Size of the SHA1 hash

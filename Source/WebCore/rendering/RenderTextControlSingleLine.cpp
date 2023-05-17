@@ -27,16 +27,20 @@
 #include "CSSFontSelector.h"
 #include "CSSValueKeywords.h"
 #include "Font.h"
-#include "Frame.h"
 #include "FrameSelection.h"
-#include "FrameView.h"
 #include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "InlineIteratorLineBox.h"
+#include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "LocalizedStrings.h"
+#include "RenderBlockFlowInlines.h"
+#include "RenderBoxInlines.h"
+#include "RenderBoxModelObjectInlines.h"
 #include "RenderLayer.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderScrollbar.h"
+#include "RenderStyleSetters.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "StyleResolver.h"
@@ -433,6 +437,11 @@ bool RenderTextControlSingleLine::logicalScroll(ScrollLogicalDirection direction
 HTMLInputElement& RenderTextControlSingleLine::inputElement() const
 {
     return downcast<HTMLInputElement>(RenderTextControl::textFormControlElement());
+}
+
+RenderTextControlInnerBlock::RenderTextControlInnerBlock(Element& element, RenderStyle&& style)
+    : RenderBlockFlow(element, WTFMove(style))
+{
 }
 
 }

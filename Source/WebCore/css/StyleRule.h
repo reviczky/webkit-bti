@@ -64,7 +64,7 @@ public:
     bool isNamespaceRule() const { return type() == StyleRuleType::Namespace; }
     bool isMediaRule() const { return type() == StyleRuleType::Media; }
     bool isPageRule() const { return type() == StyleRuleType::Page; }
-    bool isStyleRule() const { return type() == StyleRuleType::Style || type() == StyleRuleType::StyleWithNesting; }
+    bool isStyleRule() const { return type() == StyleRuleType::Style; }
     bool isStyleRuleWithNesting() const { return type() == StyleRuleType::StyleWithNesting; }
     bool isGroupRule() const { return type() == StyleRuleType::Media || type() == StyleRuleType::Supports || type() == StyleRuleType::LayerBlock || type() == StyleRuleType::Container; }
     bool isSupportsRule() const { return type() == StyleRuleType::Supports; }
@@ -112,8 +112,6 @@ public:
     ~StyleRule();
 
     const CSSSelectorList& selectorList() const { return m_selectorList; }
-    const CSSSelectorList& resolvedSelectorList() const;
-    
     const StyleProperties& properties() const { return m_properties.get(); }
     MutableStyleProperties& mutableProperties();
 
@@ -158,17 +156,24 @@ class StyleRuleWithNesting final : public StyleRule {
     WTF_MAKE_STRUCT_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(StyleRuleWithNesting);
 public:
     static Ref<StyleRuleWithNesting> create(Ref<StyleProperties>&&, bool hasDocumentSecurityOrigin, CSSSelectorList&&, Vector<Ref<StyleRuleBase>>&& nestedRules);
+    static Ref<StyleRuleWithNesting> create(StyleRule&&);
+    Ref<StyleRuleWithNesting> copy() const;
+    ~StyleRuleWithNesting();
 
     const Vector<Ref<StyleRuleBase>>& nestedRules() const { return m_nestedRules; }
-    const CSSSelectorList& resolvedSelectorList() const { return m_resolvedSelectorList; }
-    void setResolvedSelectorList(CSSSelectorList&&) const;
-    StyleRuleWithNesting(const StyleRuleWithNesting&) = delete;
+    Vector<Ref<StyleRuleBase>>& nestedRules() { return m_nestedRules; }
+    const CSSSelectorList& originalSelectorList() const { return m_originalSelectorList; }
+    void wrapperAdoptOriginalSelectorList(CSSSelectorList&&);
+
+protected:
+    StyleRuleWithNesting(const StyleRuleWithNesting&);
 
 private:
     StyleRuleWithNesting(Ref<StyleProperties>&&, bool hasDocumentSecurityOrigin, CSSSelectorList&&, Vector<Ref<StyleRuleBase>>&& nestedRules);
+    StyleRuleWithNesting(StyleRule&&);
 
     Vector<Ref<StyleRuleBase>> m_nestedRules;
-    mutable CSSSelectorList m_resolvedSelectorList;
+    CSSSelectorList m_originalSelectorList;
 };
 
 class StyleRuleFontFace final : public StyleRuleBase {
@@ -279,6 +284,9 @@ public:
 
     void wrapperInsertRule(unsigned, Ref<StyleRuleBase>&&);
     void wrapperRemoveRule(unsigned);
+
+    friend class CSSGroupingRule;
+    friend class CSSStyleSheet;
 
 protected:
     StyleRuleGroup(StyleRuleType, Vector<RefPtr<StyleRuleBase>>&&);
@@ -419,6 +427,12 @@ inline void StyleRule::wrapperAdoptSelectorList(CSSSelectorList&& selectors)
 #if ENABLE(CSS_SELECTOR_JIT)
     m_compiledSelectors = nullptr;
 #endif
+}
+
+inline void StyleRuleWithNesting::wrapperAdoptOriginalSelectorList(CSSSelectorList&& selectors)
+{
+    m_originalSelectorList = CSSSelectorList { selectors };
+    StyleRule::wrapperAdoptSelectorList(WTFMove(selectors));
 }
 
 #if ENABLE(CSS_SELECTOR_JIT)

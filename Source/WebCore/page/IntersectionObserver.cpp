@@ -30,16 +30,16 @@
 #include "CSSParserTokenRange.h"
 #include "CSSPropertyParserHelpers.h"
 #include "CSSTokenizer.h"
-#include "DOMWindow.h"
 #include "Element.h"
 #include "FrameDestructionObserverInlines.h"
 #include "InspectorInstrumentation.h"
 #include "IntersectionObserverCallback.h"
 #include "IntersectionObserverEntry.h"
 #include "JSNodeCustom.h"
+#include "LocalDOMWindow.h"
 #include "Logging.h"
 #include "Performance.h"
-#include "WebCoreOpaqueRoot.h"
+#include "WebCoreOpaqueRootInlines.h"
 #include <JavaScriptCore/AbstractSlotVisitorInlines.h>
 #include <wtf/Vector.h>
 

@@ -34,12 +34,12 @@
 #include "Document.h"
 #include "ElementInlines.h"
 #include "EventNames.h"
-#include "Frame.h"
 #include "HTMLImageLoader.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "ImageBuffer.h"
 #include "JSDOMPromiseDeferred.h"
+#include "LocalFrame.h"
 #include "Logging.h"
 #include "Page.h"
 #include "Performance.h"
@@ -71,7 +71,6 @@ inline HTMLVideoElement::HTMLVideoElement(const QualifiedName& tagName, Document
     : HTMLMediaElement(tagName, document, createdByParser)
 {
     ASSERT(hasTagName(videoTag));
-    setHasCustomStyleResolveCallbacks();
     m_defaultPosterURL = AtomString { document.settings().defaultVideoPosterURL() };
 }
 
@@ -134,7 +133,7 @@ bool HTMLVideoElement::hasPresentationalHintsForAttribute(const QualifiedName& n
     return HTMLMediaElement::hasPresentationalHintsForAttribute(name);
 }
 
-void HTMLVideoElement::parseAttribute(const QualifiedName& name, const AtomString& value)
+void HTMLVideoElement::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason attributeModificationReason)
 {
     if (name == posterAttr) {
         if (shouldDisplayPosterImage()) {
@@ -149,7 +148,7 @@ void HTMLVideoElement::parseAttribute(const QualifiedName& name, const AtomStrin
         }
     }
     else {
-        HTMLMediaElement::parseAttribute(name, value);    
+        HTMLMediaElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(WIRELESS_PLAYBACK_TARGET)
         if (name == webkitairplayAttr) {
@@ -226,18 +225,17 @@ unsigned HTMLVideoElement::videoHeight() const
     return clampToUnsigned(player()->naturalSize().height());
 }
 
-void HTMLVideoElement::scheduleResizeEvent()
+void HTMLVideoElement::scheduleResizeEvent(const FloatSize& naturalSize)
 {
-    m_lastReportedVideoWidth = videoWidth();
-    m_lastReportedVideoHeight = videoHeight();
+    m_lastReportedNaturalSize = naturalSize;
+    ALWAYS_LOG(LOGIDENTIFIER, naturalSize);
     scheduleEvent(eventNames().resizeEvent);
 }
 
-void HTMLVideoElement::scheduleResizeEventIfSizeChanged()
+void HTMLVideoElement::scheduleResizeEventIfSizeChanged(const FloatSize& naturalSize)
 {
-    if (m_lastReportedVideoWidth == videoWidth() && m_lastReportedVideoHeight == videoHeight())
-        return;
-    scheduleResizeEvent();
+    if (m_lastReportedNaturalSize != naturalSize)
+        scheduleResizeEvent(naturalSize);
 }
 
 bool HTMLVideoElement::isURLAttribute(const Attribute& attribute) const

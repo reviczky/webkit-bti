@@ -38,23 +38,25 @@
 #include "LayoutIntegrationCoverage.h"
 #include "LayoutIntegrationFlexLayout.h"
 #include "LayoutRepainter.h"
+#include "LayoutUnit.h"
+#include "RenderBlockInlines.h"
 #include "RenderChildIterator.h"
 #include "RenderLayer.h"
 #include "RenderLayoutState.h"
 #include "RenderObjectEnums.h"
+#include "RenderObjectInlines.h"
 #include "RenderReplaced.h"
 #include "RenderSVGRoot.h"
 #include "RenderStyleConstants.h"
 #include "RenderTable.h"
 #include "RenderView.h"
 #include "WritingMode.h"
-#include "platform/LayoutUnit.h"
-#include "rendering/RenderBox.h"
 #include <limits>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 #include <wtf/SetForScope.h>
 #include <wtf/TypeCasts.h>
+
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderFlexibleBox);
@@ -103,14 +105,11 @@ void RenderFlexibleBox::computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidt
         minLogicalWidth += scrollbarWidth;
     };
 
-    bool needsSizeContainment = shouldApplySizeContainment();
-    if (needsSizeContainment) {
+    if (shouldApplySizeOrInlineSizeContainment()) {
         if (auto width = explicitIntrinsicInnerLogicalWidth()) {
             minLogicalWidth = width.value();
             maxLogicalWidth = width.value();
         }
-    }
-    if (needsSizeContainment || shouldApplyInlineSizeContainment()) {
         addScrollbarWidth();
         return;
     }
@@ -930,15 +929,14 @@ LayoutUnit RenderFlexibleBox::crossAxisMarginExtentForChild(const RenderBox& chi
     return marginStart + marginEnd;
 }
 
-bool RenderFlexibleBox::shouldTrimChildMargin(MarginTrimType marginTrimType, const RenderBox& child) const
+bool RenderFlexibleBox::isChildEligibleForMarginTrim(MarginTrimType marginTrimType, const RenderBox& child) const
 {
+    ASSERT(style().marginTrim().contains(marginTrimType));
     auto isMarginParallelWithMainAxis = [this](MarginTrimType marginTrimType) {
         if (isHorizontalFlow())
             return marginTrimType == MarginTrimType::BlockStart || marginTrimType == MarginTrimType::BlockEnd;
         return marginTrimType == MarginTrimType::InlineStart || marginTrimType == MarginTrimType::InlineEnd;
     };
-    if (!style().marginTrim().contains(marginTrimType))
-        return false;
     if (isMarginParallelWithMainAxis(marginTrimType))
         return (marginTrimType == MarginTrimType::BlockStart || marginTrimType == MarginTrimType::InlineStart) ? m_marginTrimItems.m_itemsOnFirstFlexLine.contains(&child) : m_marginTrimItems.m_itemsOnLastFlexLine.contains(&child);
     return (marginTrimType == MarginTrimType::BlockStart || marginTrimType == MarginTrimType::InlineStart) ? m_marginTrimItems.m_itemsAtFlexLineStart.contains(&child) : m_marginTrimItems.m_itemsAtFlexLineEnd.contains(&child);
@@ -976,10 +974,10 @@ void RenderFlexibleBox::trimMainAxisMarginStart(const FlexItem& flexItem)
 {
     auto horizontalFlow = isHorizontalFlow();
     flexItem.mainAxisMargin -= horizontalFlow ? flexItem.box.marginStart(&style()) : flexItem.box.marginBefore(&style());
-    if (horizontalFlow) 
-        flexItem.box.setMarginStart(0_lu, &style());
+    if (horizontalFlow)
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::InlineStart);
     else
-        flexItem.box.setMarginBefore(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::BlockStart);
     m_marginTrimItems.m_itemsAtFlexLineStart.add(&flexItem.box);
 }
 
@@ -988,27 +986,27 @@ void RenderFlexibleBox::trimMainAxisMarginEnd(const FlexItem& flexItem)
     auto horizontalFlow = isHorizontalFlow();
     flexItem.mainAxisMargin -= horizontalFlow ? flexItem.box.marginEnd(&style()) : flexItem.box.marginAfter(&style());
     if (horizontalFlow)
-        flexItem.box.setMarginEnd(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::InlineEnd);
     else
-        flexItem.box.setMarginAfter(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::BlockEnd);
     m_marginTrimItems.m_itemsAtFlexLineEnd.add(&flexItem.box);
 }
 
 void RenderFlexibleBox::trimCrossAxisMarginStart(const FlexItem& flexItem)
 {
     if (isHorizontalFlow())
-        flexItem.box.setMarginBefore(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::BlockStart);
     else
-        flexItem.box.setMarginStart(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::InlineStart);
     m_marginTrimItems.m_itemsOnFirstFlexLine.add(&flexItem.box);
 }
 
 void RenderFlexibleBox::trimCrossAxisMarginEnd(const FlexItem& flexItem)
 {
     if (isHorizontalFlow())
-        flexItem.box.setMarginAfter(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::BlockEnd);
     else
-        flexItem.box.setMarginEnd(0_lu, &style());
+        setTrimmedMarginForChild(flexItem.box, MarginTrimType::InlineEnd);
     m_marginTrimItems.m_itemsOnLastFlexLine.add(&flexItem.box);
 }
 
@@ -1496,10 +1494,13 @@ bool RenderFlexibleBox::updateAutoMarginsInCrossAxis(RenderBox& child, LayoutUni
 LayoutUnit RenderFlexibleBox::marginBoxAscentForChild(const RenderBox& child)
 {
     auto ascent = alignmentForChild(child) == ItemPosition::LastBaseline ? child.lastLineBaseline() : child.firstLineBaseline();
-    auto direction = isHorizontalFlow() ? HorizontalLine : VerticalLine;
-    if (!ascent) 
+    auto isHorizontalFlow = this->isHorizontalFlow();
+    auto direction = isHorizontalFlow ? HorizontalLine : VerticalLine;
+    if (!ascent)
         return synthesizedBaseline(child, style(), direction, BorderBox) + flowAwareMarginBeforeForChild(child);
-    return *ascent + flowAwareMarginBeforeForChild(child);
+    if (isHorizontalFlow ? child.isScrollContainerY() : child.isScrollContainerX())
+        return std::clamp(*ascent, 0_lu, crossAxisExtentForChild(child)) + flowAwareMarginBeforeForChild(child);
+    return *ascent + flowAwareMarginBeforeForChild(child);;
 }
 
 LayoutUnit RenderFlexibleBox::computeChildMarginValue(Length margin)
@@ -1673,6 +1674,9 @@ FlexItem RenderFlexibleBox::constructFlexItem(RenderBox& child, bool relayoutChi
     child.clearOverridingContentSize();
     if (is<RenderFlexibleBox>(child))
         downcast<RenderFlexibleBox>(child).resetHasDefiniteHeight();
+
+    if (childHadLayout && child.hasTrimmedMargin(std::optional<MarginTrimType> { }))
+        child.clearTrimmedMarginsMarkings();
     
     LayoutUnit borderAndPadding = isHorizontalFlow() ? child.horizontalBorderAndPaddingExtent() : child.verticalBorderAndPaddingExtent();
     LayoutUnit childInnerFlexBaseSize = computeFlexBaseSizeForChild(child, borderAndPadding, relayoutChildren);
@@ -2208,10 +2212,8 @@ void RenderFlexibleBox::layoutAndPlaceChildren(LayoutUnit& crossAxisOffset, Vect
             maxDescent = std::max(maxDescent, descent);
             if (alignment == ItemPosition::Baseline) {
                 maxAscent =  std::max(maxAscent, ascent);
-                // FIXME: Take scrollbar into account (https://bugs.webkit.org/show_bug.cgi?id=246229)
                 childCrossAxisMarginBoxExtent = maxAscent + maxDescent;
             } else {
-                // FIXME: Take scrollbar into account (https://bugs.webkit.org/show_bug.cgi?id=246229)
                 lastBaselineMaxAscent = std::max(lastBaselineMaxAscent, ascent);
                 childCrossAxisMarginBoxExtent = lastBaselineMaxAscent + maxDescent;
             }

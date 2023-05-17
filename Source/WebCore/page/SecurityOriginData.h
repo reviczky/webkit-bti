@@ -33,11 +33,11 @@
 
 namespace WebCore {
 
-class Frame;
+class LocalFrame;
 class SecurityOrigin;
 
 enum OpaqueOriginIdentifierType { };
-using OpaqueOriginIdentifier = ObjectIdentifier<OpaqueOriginIdentifierType>;
+using OpaqueOriginIdentifier = AtomicObjectIdentifier<OpaqueOriginIdentifierType>;
 
 class SecurityOriginData {
 public:
@@ -64,13 +64,13 @@ public:
     SecurityOriginData(WTF::HashTableDeletedValueType)
         : m_data { Tuple { WTF::HashTableDeletedValue, { }, { } } } { }
     
-    WEBCORE_EXPORT static SecurityOriginData fromFrame(Frame*);
+    WEBCORE_EXPORT static SecurityOriginData fromFrame(LocalFrame*);
     WEBCORE_EXPORT static SecurityOriginData fromURL(const URL&);
     WEBCORE_EXPORT static SecurityOriginData fromURLWithoutStrictOpaqueness(const URL&);
 
     static SecurityOriginData createOpaque()
     {
-        return SecurityOriginData { ProcessQualified<OpaqueOriginIdentifier>::generateThreadSafe() };
+        return SecurityOriginData { ProcessQualified<OpaqueOriginIdentifier>::generate() };
     }
 
     WEBCORE_EXPORT Ref<SecurityOrigin> securityOrigin() const;
@@ -165,7 +165,6 @@ private:
 };
 
 WEBCORE_EXPORT bool operator==(const SecurityOriginData&, const SecurityOriginData&);
-inline bool operator!=(const SecurityOriginData& first, const SecurityOriginData& second) { return !(first == second); }
 
 inline void add(Hasher& hasher, const SecurityOriginData& data)
 {

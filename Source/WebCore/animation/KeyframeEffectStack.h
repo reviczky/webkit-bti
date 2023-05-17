@@ -68,9 +68,11 @@ public:
     void addInvalidCSSAnimationName(const String&);
 
     void lastStyleChangeEventStyleDidChange(const RenderStyle* previousStyle, const RenderStyle* currentStyle);
-    void didApplyCascade(const RenderStyle& styleBeforeCascade, const RenderStyle& styleAfterCascade, const HashSet<AnimatableProperty>, const Document&);
+    void cascadeDidOverrideProperties(const HashSet<AnimatableProperty>&, const Document&);
 
     const HashSet<AnimatableProperty>& acceleratedPropertiesOverriddenByCascade() const { return m_acceleratedPropertiesOverriddenByCascade; }
+
+    void applyPendingAcceleratedActions() const;
 
 private:
     void ensureEffectsAreSorted();

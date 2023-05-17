@@ -36,6 +36,7 @@
 namespace PAL::WebGPU {
 
 class ConvertToBackingContext;
+enum class DeviceLostReason : uint8_t;
 
 class DeviceImpl final : public Device {
     WTF_MAKE_FAST_ALLOCATED;
@@ -75,8 +76,8 @@ private:
     Ref<ShaderModule> createShaderModule(const ShaderModuleDescriptor&) final;
     Ref<ComputePipeline> createComputePipeline(const ComputePipelineDescriptor&) final;
     Ref<RenderPipeline> createRenderPipeline(const RenderPipelineDescriptor&) final;
-    void createComputePipelineAsync(const ComputePipelineDescriptor&, CompletionHandler<void(Ref<ComputePipeline>&&)>&&) final;
-    void createRenderPipelineAsync(const RenderPipelineDescriptor&, CompletionHandler<void(Ref<RenderPipeline>&&)>&&) final;
+    void createComputePipelineAsync(const ComputePipelineDescriptor&, CompletionHandler<void(RefPtr<ComputePipeline>&&)>&&) final;
+    void createRenderPipelineAsync(const RenderPipelineDescriptor&, CompletionHandler<void(RefPtr<RenderPipeline>&&)>&&) final;
 
     Ref<CommandEncoder> createCommandEncoder(const std::optional<CommandEncoderDescriptor>&) final;
     Ref<RenderBundleEncoder> createRenderBundleEncoder(const RenderBundleEncoderDescriptor&) final;
@@ -85,6 +86,7 @@ private:
 
     void pushErrorScope(ErrorFilter) final;
     void popErrorScope(CompletionHandler<void(std::optional<Error>&&)>&&) final;
+    void resolveDeviceLostPromise(CompletionHandler<void(PAL::WebGPU::DeviceLostReason)>&&) final;
 
     void setLabelInternal(const String&) final;
 

@@ -151,6 +151,7 @@ struct PerfMonitorTriplet
     FN(commandQueueSubmitCallsPerFrame)            \
     FN(vkQueueSubmitCallsTotal)                    \
     FN(vkQueueSubmitCallsPerFrame)                 \
+    FN(commandQueueWaitSemaphoresTotal)            \
     FN(renderPasses)                               \
     FN(writeDescriptorSets)                        \
     FN(flushedOutsideRenderPassCommandBuffers)     \
@@ -203,6 +204,7 @@ struct PerfMonitorTriplet
     FN(buffersGhosted)                             \
     FN(vertexArraySyncStateCalls)                  \
     FN(allocateNewBufferBlockCalls)                \
+    FN(bufferSuballocationCalls)                   \
     FN(dynamicBufferAllocations)                   \
     FN(framebufferCacheSize)
 

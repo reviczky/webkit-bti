@@ -26,14 +26,18 @@
 #include "config.h"
 #include "NetworkResourceLoader.h"
 
+#include "EarlyHintsResourceLoader.h"
 #include "FormDataReference.h"
+#include "LoadedWebArchive.h"
 #include "Logging.h"
+#include "MessageSenderInlines.h"
 #include "NetworkCache.h"
 #include "NetworkCacheSpeculativeLoadManager.h"
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkLoad.h"
 #include "NetworkLoadChecker.h"
+#include "NetworkOriginAccessPatterns.h"
 #include "NetworkProcess.h"
 #include "NetworkProcessConnectionMessages.h"
 #include "NetworkProcessProxyMessages.h"
@@ -59,8 +63,10 @@
 #include <WebCore/CrossOriginEmbedderPolicy.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
 #include <WebCore/HTTPParsers.h>
+#include <WebCore/LinkHeader.h>
 #include <WebCore/NetworkLoadMetrics.h>
 #include <WebCore/NetworkStorageSession.h>
+#include <WebCore/OriginAccessPatterns.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ReportingScope.h>
 #include <WebCore/SameSiteInfo.h>
@@ -808,6 +814,16 @@ static BrowsingContextGroupSwitchDecision toBrowsingContextGroupSwitchDecision(c
     return BrowsingContextGroupSwitchDecision::NewSharedGroup;
 }
 
+void NetworkResourceLoader::didReceiveInformationalResponse(ResourceResponse&& response)
+{
+    if (response.httpStatusCode() != 103)
+        return;
+
+    if (!m_earlyHintsResourceLoader)
+        m_earlyHintsResourceLoader = WTF::makeUnique<EarlyHintsResourceLoader>(*this);
+    m_earlyHintsResourceLoader->handleEarlyHintsResponse(WTFMove(response));
+}
+
 void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedResponse, PrivateRelayed privateRelayed, ResponseCompletionHandler&& completionHandler)
 {
     LOADER_RELEASE_LOG("didReceiveResponse: (httpStatusCode=%d, MIMEType=%" PUBLIC_LOG_STRING ", expectedContentLength=%" PRId64 ", hasCachedEntryForValidation=%d, hasNetworkLoadChecker=%d)", receivedResponse.httpStatusCode(), receivedResponse.mimeType().string().utf8().data(), receivedResponse.expectedContentLength(), !!m_cacheEntryForValidation, !!m_networkLoadChecker);
@@ -1155,14 +1171,12 @@ void NetworkResourceLoader::willSendRedirectedRequestInternal(ResourceRequest&& 
 #endif
 
     std::optional<WebCore::PCM::AttributionTriggerData> privateClickMeasurementAttributionTriggerData;
-    if (!sessionID().isEphemeral()) {
-        if (auto result = WebCore::PrivateClickMeasurement::parseAttributionRequest(redirectRequest.url())) {
-            privateClickMeasurementAttributionTriggerData = result.value();
-            if (privateClickMeasurementAttributionTriggerData)
-                privateClickMeasurementAttributionTriggerData->destinationSite = WebCore::RegistrableDomain { request.firstPartyForCookies() };
-        } else if (!result.error().isEmpty())
-            addConsoleMessage(MessageSource::PrivateClickMeasurement, MessageLevel::Error, result.error());
-    }
+    if (auto result = WebCore::PrivateClickMeasurement::parseAttributionRequest(redirectRequest.url())) {
+        privateClickMeasurementAttributionTriggerData = result.value();
+        if (privateClickMeasurementAttributionTriggerData)
+            privateClickMeasurementAttributionTriggerData->destinationSite = WebCore::RegistrableDomain { request.firstPartyForCookies() };
+    } else if (!result.error().isEmpty())
+        addConsoleMessage(MessageSource::PrivateClickMeasurement, MessageLevel::Error, result.error());
 
     if (isFromServiceWorker == IsFromServiceWorker::No) {
         auto maxAgeCap = validateCacheEntryForMaxAgeCapValidation(request, redirectRequest, redirectResponse);
@@ -1719,14 +1733,14 @@ static String escapeForJSON(const String& s)
     return makeStringByReplacingAll(makeStringByReplacingAll(s, '\\', "\\\\"_s), '"', "\\\""_s);
 }
 
-template<typename IdentifierType>
-static String escapeIDForJSON(const std::optional<ObjectIdentifier<IdentifierType>>& value)
+template<typename IdentifierType, typename ThreadSafety>
+static String escapeIDForJSON(const std::optional<ObjectIdentifierGeneric<IdentifierType, ThreadSafety>>& value)
 {
     return value ? String::number(value->toUInt64()) : String("None"_s);
 }
 
-template<typename IdentifierType>
-static String escapeIDForJSON(const std::optional<ProcessQualified<ObjectIdentifier<IdentifierType>>>& value)
+template<typename IdentifierType, typename ThreadSafety>
+static String escapeIDForJSON(const std::optional<ProcessQualified<ObjectIdentifierGeneric<IdentifierType, ThreadSafety>>>& value)
 {
     return value ? String::number(value->object().toUInt64()) : String("None"_s);
 }
@@ -1885,7 +1899,7 @@ void NetworkResourceLoader::logSlowCacheRetrieveIfNeeded(const NetworkCache::Cac
 bool NetworkResourceLoader::isCrossOriginPrefetch() const
 {
     auto& request = originalRequest();
-    return request.httpHeaderField(HTTPHeaderName::Purpose) == "prefetch"_s && !m_parameters.sourceOrigin->canRequest(request.url());
+    return request.httpHeaderField(HTTPHeaderName::Purpose) == "prefetch"_s && !m_parameters.sourceOrigin->canRequest(request.url(), connectionToWebProcess().originAccessPatterns());
 }
 
 #if ENABLE(SERVICE_WORKER)
@@ -2012,6 +2026,7 @@ void NetworkResourceLoader::serviceWorkerDidFinish()
 {
     if (!m_contentFilter)
         return;
+    m_contentFilter->continueAfterNotifyFinished(m_parameters.request.url());
     m_contentFilter->stopFilteringMainResource();
 }
 

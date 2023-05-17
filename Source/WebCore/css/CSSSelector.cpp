@@ -60,22 +60,13 @@ CSSSelector::CSSSelector(const QualifiedName& tagQName, bool tagIsForNamespaceRu
     , m_match(Tag)
     , m_tagIsForNamespaceRule(tagIsForNamespaceRule)
 {
-    const AtomString& tagLocalName = tagQName.localName();
-    const AtomString tagLocalNameASCIILowercase = tagLocalName.convertToASCIILowercase();
-
-    if (tagLocalName == tagLocalNameASCIILowercase) {
-        m_data.tagQName = tagQName.impl();
-        m_data.tagQName->ref();
-    } else {
-        m_data.nameWithCase = adoptRef(new NameWithCase(tagQName, tagLocalNameASCIILowercase)).leakRef();
-        m_hasNameWithCase = true;
-    }
+    m_data.tagQName = tagQName.impl();
+    m_data.tagQName->ref();
 }
 
 void CSSSelector::createRareData()
 {
     ASSERT(match() != Tag);
-    ASSERT(!m_hasNameWithCase);
     if (m_hasRareData)
         return;
     // Move the value to the rare data stucture.
@@ -496,9 +487,6 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             case CSSSelector::PseudoClassChecked:
                 builder.append(":checked");
                 break;
-            case CSSSelector::PseudoClassClosed:
-                builder.append(":closed");
-                break;
             case CSSSelector::PseudoClassCornerPresent:
                 builder.append(":corner-present");
                 break;
@@ -654,8 +642,8 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             case CSSSelector::PseudoClassOnlyOfType:
                 builder.append(":only-of-type");
                 break;
-            case CSSSelector::PseudoClassOpen:
-                builder.append(":open");
+            case CSSSelector::PseudoClassPopoverOpen:
+                builder.append(":popover-open");
                 break;
             case CSSSelector::PseudoClassOptional:
                 builder.append(":optional");
@@ -849,6 +837,19 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
 
     builder.append(separator, rightSide);
 
+    auto separatorTextForNestingRelative = [&] () -> String {
+        switch (cs->relation()) {
+        case CSSSelector::Child:
+            return "> "_s;
+        case CSSSelector::DirectAdjacent:
+            return "+ "_s;
+        case CSSSelector::IndirectAdjacent:
+            return "~ "_s;
+        default:
+            return { };
+        }
+    };
+
     if (auto* previousSelector = cs->tagHistory()) {
         ASCIILiteral separator = ""_s;
         switch (cs->relation()) {
@@ -873,16 +874,18 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             break;
         }
         return previousSelector->selectorText(separator, builder);
+    } else if (auto separatorText = separatorTextForNestingRelative(); !separatorText.isNull()) {
+        // We have a separator but no tag history which can happen with implicit relative nesting selector
+        return separatorText + builder.toString();
     }
 
     return builder.toString();
 }
 
-void CSSSelector::setAttribute(const QualifiedName& value, bool convertToLowercase, AttributeMatchType matchType)
+void CSSSelector::setAttribute(const QualifiedName& value, AttributeMatchType matchType)
 {
     createRareData();
     m_data.rareData->attribute = value;
-    m_data.rareData->attributeCanonicalLocalName = convertToLowercase ? value.localName().convertToASCIILowercase() : value.localName();
     m_caseInsensitiveAttributeValueMatching = matchType == CaseInsensitive;
 }
     
@@ -942,7 +945,6 @@ CSSSelector::RareData::RareData(const RareData& other)
     , a(other.a)
     , b(other.b)
     , attribute(other.attribute)
-    , attributeCanonicalLocalName(other.attributeCanonicalLocalName)
     , argument(other.argument)
     , argumentList(other.argumentList)
 {
@@ -979,19 +981,14 @@ CSSSelector::CSSSelector(const CSSSelector& other)
     , m_isFirstInTagHistory(other.m_isFirstInTagHistory)
     , m_isLastInTagHistory(other.m_isLastInTagHistory)
     , m_hasRareData(other.m_hasRareData)
-    , m_hasNameWithCase(other.m_hasNameWithCase)
     , m_isForPage(other.m_isForPage)
     , m_tagIsForNamespaceRule(other.m_tagIsForNamespaceRule)
     , m_caseInsensitiveAttributeValueMatching(other.m_caseInsensitiveAttributeValueMatching)
 {
-    if (other.m_hasRareData) {
-        auto copied = other.m_data.rareData->deepCopy(); 
-        m_data.rareData = &copied.leakRef();
-        m_data.rareData->ref();
-    } else if (other.m_hasNameWithCase) {
-        m_data.nameWithCase = other.m_data.nameWithCase;
-        m_data.nameWithCase->ref();
-    } else if (other.match() == Tag) {
+    // Manually ref count the m_data union because they are stored as raw ptr, not as Ref.
+    if (other.m_hasRareData)
+        m_data.rareData = &other.m_data.rareData->deepCopy().leakRef();
+    else if (other.match() == Tag) {
         m_data.tagQName = other.m_data.tagQName;
         m_data.tagQName->ref();
     } else if (other.m_data.value) {
@@ -1033,18 +1030,12 @@ void CSSSelector::resolveNestingParentSelectors(const CSSSelectorList& parent)
     visitAllSimpleSelectors(replaceParentSelector);
 }
 
-void CSSSelector::replaceNestingParentByNotAll()
+void CSSSelector::replaceNestingParentByPseudoClassScope()
 {
     auto replaceParentSelector = [] (CSSSelector& selector) {
         if (selector.match() == CSSSelector::PseudoClass && selector.pseudoClassType() == CSSSelector::PseudoClassNestingParent) {
-            // We replace by :not(*)
-            auto allSelector = makeUnique<CSSParserSelector>(CSSSelector(anyQName()));
-            Vector<std::unique_ptr<CSSParserSelector>> vector;
-            vector.append(WTFMove(allSelector));
-            auto selectorList = makeUnique<CSSSelectorList>(WTFMove(vector));
-            selector.setMatch(Match::PseudoClass);
-            selector.setPseudoClassType(PseudoClassType::PseudoClassNot);
-            selector.setSelectorList(WTFMove(selectorList));
+            // Replace by :scope
+            selector.setPseudoClassType(PseudoClassType::PseudoClassScope);
         }
     };
 

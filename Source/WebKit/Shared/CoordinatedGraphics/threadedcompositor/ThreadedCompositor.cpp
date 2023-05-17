@@ -33,7 +33,10 @@
 #include <WebCore/PlatformDisplay.h>
 #include <WebCore/TransformationMatrix.h>
 #include <wtf/SetForScope.h>
+
+#if USE(GLIB_EVENT_LOOP)
 #include <wtf/glib/RunLoopSourcePriority.h>
+#endif
 
 #if USE(LIBEPOXY)
 #include <epoxy/gl.h>
@@ -83,8 +86,12 @@ ThreadedCompositor::ThreadedCompositor(Client& client, ThreadedDisplayRefreshMon
 
         createGLContext();
         if (m_context) {
-            if (!m_nativeSurfaceHandle)
-                m_paintFlags |= TextureMapper::PaintingMirrored;
+            if (!m_nativeSurfaceHandle) {
+                if (m_paintFlags & TextureMapper::PaintingMirrored)
+                    m_paintFlags &= ~TextureMapper::PaintingMirrored;
+                else
+                    m_paintFlags |= TextureMapper::PaintingMirrored;
+            }
             m_scene->setActive(true);
         }
     });
@@ -104,9 +111,11 @@ void ThreadedCompositor::createGLContext()
     // a plain C cast expression in this one instance works in all cases.
     static_assert(sizeof(GLNativeWindowType) <= sizeof(uint64_t), "GLNativeWindowType must not be longer than 64 bits.");
     auto windowType = (GLNativeWindowType) m_nativeSurfaceHandle;
-    m_context = GLContext::createContextForWindow(windowType, &PlatformDisplay::sharedDisplayForCompositing());
-    if (m_context)
+    m_context = GLContext::create(windowType, PlatformDisplay::sharedDisplayForCompositing());
+    if (m_context) {
         m_context->makeContextCurrent();
+        m_client.didCreateGLContext();
+    }
 }
 
 void ThreadedCompositor::invalidate()
@@ -123,6 +132,7 @@ void ThreadedCompositor::invalidate()
         updateSceneWithoutRendering();
 
         m_scene->purgeGLResources();
+        m_client.willDestroyGLContext();
         m_context = nullptr;
         m_client.didDestroyGLContext();
         m_scene = nullptr;

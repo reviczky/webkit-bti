@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -60,6 +60,7 @@ private:
     void recordSetLineJoin(LineJoin) final;
     void recordSetMiterLimit(float) final;
     void recordClearShadow() final;
+    void recordResetClip() final;
     void recordClip(const FloatRect&) final;
     void recordClipOut(const FloatRect&) final;
     void recordClipToImageBuffer(ImageBuffer&, const FloatRect& destinationRect) final;
@@ -123,6 +124,8 @@ private:
     bool recordResourceUse(const SourceImage&) final;
     bool recordResourceUse(Font&) final;
     bool recordResourceUse(DecomposedGlyphs&) final;
+    bool recordResourceUse(Gradient&) final;
+    bool recordResourceUse(Filter&) final;
 
     template<typename T, class... Args>
     void append(Args&&... args)

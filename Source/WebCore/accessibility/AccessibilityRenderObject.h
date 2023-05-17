@@ -39,13 +39,13 @@ namespace WebCore {
 class AccessibilitySVGRoot;
 class AXObjectCache;
 class Element;
-class FrameView;
 class HTMLAreaElement;
 class HTMLElement;
 class HTMLLabelElement;
 class HTMLMapElement;
 class IntPoint;
 class IntSize;
+class LocalFrameView;
 class Node;
 class RenderTextControl;
 class RenderView;
@@ -57,12 +57,7 @@ public:
     virtual ~AccessibilityRenderObject();
     
     bool isAttachment() const override;
-    bool isSelected() const override;
-    bool isLoaded() const override;
     bool isOffScreen() const override;
-    bool isUnvisited() const override;
-    bool isVisited() const override;
-    bool isLinked() const override;
     bool hasBoldFont() const override;
     bool hasItalicFont() const override;
     bool hasPlainText() const override;
@@ -71,16 +66,12 @@ public:
     bool hasSameStyle(const AXCoreObject&) const override;
     bool hasUnderline() const override;
 
-    bool canSetTextRangeAttributes() const override;
-    bool canSetExpandedAttribute() const override;
-
     void setAccessibleName(const AtomString&) override;
 
     // Provides common logic used by all elements when determining isIgnored.
     AccessibilityObjectInclusion defaultObjectInclusion() const override;
     
     int layoutCount() const override;
-    double loadingProgress() const override;
     
     AccessibilityObject* firstChild() const override;
     AccessibilityObject* lastChild() const override;
@@ -89,13 +80,8 @@ public:
     AccessibilityObject* parentObject() const override;
     AccessibilityObject* parentObjectIfExists() const override;
     AccessibilityObject* observableObject() const override;
-    AccessibilityChildrenVector linkedObjects() const override;
     AccessibilityObject* titleUIElement() const override;
 
-    bool supportsARIAOwns() const override;
-    bool isPresentationalChildOfAriaRole() const override;
-    bool ariaRoleHasPresentationalChildren() const override;
-    
     // Should be called on the root accessibility object to kick off a hit test.
     AXCoreObject* accessibilityHitTest(const IntPoint&) const override;
 
@@ -103,8 +89,7 @@ public:
     
     LayoutRect boundingBoxRect() const override;
     LayoutRect elementRect() const override;
-    IntPoint clickPoint() override;
-    
+
     RenderObject* renderer() const override { return m_renderer.get(); }
     RenderBoxModelObject* renderBoxModelObject() const;
     Node* node() const override;
@@ -117,48 +102,30 @@ public:
     URL url() const override;
     PlainTextRange selectedTextRange() const override;
     int insertionPointLineNumber() const override;
-    VisibleSelection selection() const override;
     String stringValue() const override;
     String helpText() const override;
     String textUnderElement(AccessibilityTextUnderElementMode = AccessibilityTextUnderElementMode()) const override;
-    String text() const override;
-    int textLength() const override;
     String selectedText() const override;
-    String accessKey() const override;
 
     bool isWidget() const override;
     Widget* widget() const override;
     Widget* widgetForAttachmentView() const override;
     AccessibilityChildrenVector documentLinks() override;
-    FrameView* documentFrameView() const override;
+    LocalFrameView* documentFrameView() const override;
 
-    void setSelectedTextRange(const PlainTextRange&) override;
+    void setSelectedTextRange(PlainTextRange&&) override;
     bool setValue(const String&) override;
-    void setSelectedRows(AccessibilityChildrenVector&) override;
 
     void addChildren() override;
     bool canHaveChildren() const override;
-    bool canHaveSelectedChildren() const override;
-    void selectedChildren(AccessibilityChildrenVector&) override;
-    void visibleChildren(AccessibilityChildrenVector&) override;
-    void tabChildren(AccessibilityChildrenVector&) override;
-    bool shouldFocusActiveDescendant() const override;
-    AccessibilityObject* activeDescendant() const override;
 
     VisiblePositionRange visiblePositionRange() const override;
     VisiblePositionRange visiblePositionRangeForLine(unsigned) const override;
     IntRect boundsForVisiblePositionRange(const VisiblePositionRange&) const override;
-    IntRect boundsForRange(const SimpleRange&) const override;
     VisiblePositionRange selectedVisiblePositionRange() const override;
     void setSelectedVisiblePositionRange(const VisiblePositionRange&) const override;
     bool isVisiblePositionRangeInDifferentDocument(const VisiblePositionRange&) const;
-    bool hasPopup() const override;
 
-    bool supportsDropping() const override;
-    bool supportsDragging() const override;
-    bool isGrabbed() override;
-    Vector<String> determineDropEffects() const override;
-    
     VisiblePosition visiblePositionForPoint(const IntPoint&) const override;
     VisiblePosition visiblePositionForIndex(unsigned indexValue, bool lastIndexOK) const override;
     int index(const VisiblePosition&) const override;
@@ -173,13 +140,7 @@ public:
     IntRect doAXBoundsForRange(const PlainTextRange&) const override;
     IntRect doAXBoundsForRangeUsingCharacterOffset(const PlainTextRange&) const override;
     
-    String stringValueForMSAA() const override;
-    String stringRoleForMSAA() const override;
-    String nameForMSAA() const override;
-    String descriptionForMSAA() const override;
-    AccessibilityRole roleValueForMSAA() const override;
-
-    String passwordFieldValue() const override;
+    String secureFieldValue() const override;
     void titleElementText(Vector<AccessibilityText>&) const override;
 
 protected:
@@ -202,20 +163,13 @@ protected:
 
 private:
     bool isAccessibilityRenderObject() const final { return true; }
-    void ariaListboxSelectedChildren(AccessibilityChildrenVector&);
-    void ariaListboxVisibleChildren(AccessibilityChildrenVector&);
     bool isAllowedChildOfTree() const;
-    String positionalDescriptionForMSAA() const;
     PlainTextRange documentBasedSelectedTextRange() const;
     Element* rootEditableElementForPosition(const Position&) const;
     bool nodeIsTextControl(const Node*) const;
     Path elementPath() const override;
     
-    bool isTabItemSelected() const;
     LayoutRect checkboxOrRadioRect() const;
-    void addRadioButtonGroupMembers(AccessibilityChildrenVector& linkedUIElements) const;
-    void addRadioButtonGroupChildren(AXCoreObject*, AccessibilityChildrenVector&) const;
-    AccessibilityObject* internalLinkElement() const;
     AXCoreObject* accessibilityImageMapHitTest(HTMLAreaElement*, const IntPoint&) const;
     AccessibilityObject* accessibilityParentForImageMap(HTMLMapElement*) const;
     AXCoreObject* elementAccessibilityHitTest(const IntPoint&) const override;
@@ -250,10 +204,6 @@ private:
     bool supportsExpandedTextValue() const override;
     void updateRoleAfterChildrenCreation();
     
-    void ariaSelectedRows(AccessibilityChildrenVector&);
-    
-    OptionSet<SpeakAs> speakAsProperty() const override;
-    
     bool inheritsPresentationalRole() const override;
 
     bool shouldGetTextFromNode(AccessibilityTextUnderElementMode) const;
@@ -265,8 +215,6 @@ private:
 #endif
 
     bool canHavePlainText() const;
-    // Special handling of click point for links.
-    IntPoint linkClickPoint();
 };
 
 } // namespace WebCore

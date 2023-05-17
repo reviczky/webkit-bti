@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,6 +43,7 @@
 #include "JSArray.h"
 #include "JSCInlines.h"
 #include "JSONObject.h"
+#include "JSPromise.h"
 #include "JSString.h"
 #include "LinkBuffer.h"
 #include "Options.h"
@@ -53,6 +54,7 @@
 #include "SnippetParams.h"
 #include "TypeProfiler.h"
 #include "TypeProfilerLog.h"
+#include "VMEntryScopeInlines.h"
 #include "VMInspector.h"
 #include "VMTrapsInlines.h"
 #include "WasmCapabilities.h"
@@ -64,6 +66,7 @@
 #include <wtf/Language.h>
 #include <wtf/ProcessID.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/WTFProcess.h>
 #include <wtf/unicode/icu/ICUHelpers.h>
 
 #if !USE(SYSTEM_MALLOC)
@@ -759,7 +762,7 @@ static const struct HashTableValue staticCustomAccessorTableValues[3] = {
 };
 
 static const struct HashTable staticCustomAccessorTable =
-    { 3, 7, true, nullptr, staticCustomAccessorTableValues, staticCustomAccessorTableIndex };
+    { 3, 7, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::CustomAccessor, nullptr, staticCustomAccessorTableValues, staticCustomAccessorTableIndex };
 
 class StaticCustomAccessor : public JSNonFinalObject {
     using Base = JSNonFinalObject;
@@ -859,7 +862,7 @@ static const struct HashTableValue staticCustomValueTableValues[4] = {
 };
 
 static const struct HashTable staticCustomValueTable =
-    { 4, 7, true, nullptr, staticCustomValueTableValues, staticCustomValueTableIndex };
+    { 4, 7, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::CustomValue, nullptr, staticCustomValueTableValues, staticCustomValueTableIndex };
 
 class StaticCustomValue : public JSNonFinalObject {
     using Base = JSNonFinalObject;
@@ -955,7 +958,7 @@ static const struct HashTableValue staticDontDeleteDontEnumTableValues[3] = {
 };
 
 static const struct HashTable staticDontDeleteDontEnumTable =
-    { 3, 7, false, nullptr, staticDontDeleteDontEnumTableValues, staticDontDeleteDontEnumTableIndex };
+    { 3, 7, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete, nullptr, staticDontDeleteDontEnumTableValues, staticDontDeleteDontEnumTableIndex };
 
 class ObjectDoingSideEffectPutWithoutCorrectSlotStatus : public JSNonFinalObject {
     using Base = JSNonFinalObject;
@@ -2009,7 +2012,7 @@ public:
 
     WasmStreamingCompiler(VM& vm, Structure* structure, Wasm::CompilerMode compilerMode, JSGlobalObject* globalObject, JSPromise* promise, JSObject* importObject)
         : Base(vm, structure)
-        , m_promise(vm, this, promise)
+        , m_promise(promise, WriteBarrierEarlyInit)
         , m_streamingCompiler(Wasm::StreamingCompiler::create(vm, compilerMode, globalObject, promise, importObject))
     {
         DollarVMAssertScope assertScope;
@@ -2220,6 +2223,7 @@ static JSC_DECLARE_HOST_FUNCTION(functionEnsureArrayStorage);
 static JSC_DECLARE_HOST_FUNCTION(functionSetCrashLogMessage);
 #endif
 static JSC_DECLARE_HOST_FUNCTION(functionAssertFrameAligned);
+static JSC_DECLARE_HOST_FUNCTION(functionCallFromCPPAsFirstEntry);
 static JSC_DECLARE_HOST_FUNCTION(functionCallFromCPP);
 static JSC_DECLARE_HOST_FUNCTION(functionCachedCallFromCPP);
 
@@ -2284,12 +2288,12 @@ JSC_DEFINE_HOST_FUNCTION(functionBreakpoint, (JSGlobalObject* globalObject, Call
     return encodedJSUndefined();
 }
 
-// Executes exit(EXIT_SUCCESS).
+// Executes exitProcess(EXIT_SUCCESS).
 // Usage: $vm.exit()
 JSC_DEFINE_HOST_FUNCTION(functionExit, (JSGlobalObject*, CallFrame*))
 {
     DollarVMAssertScope assertScope;
-    exit(EXIT_SUCCESS);
+    exitProcess(EXIT_SUCCESS);
 }
 
 // Returns true if the current frame is a DFG frame.
@@ -2961,12 +2965,15 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
 
 // Creates a new global object.
 // Usage: $vm.createGlobalObject()
-JSC_DEFINE_HOST_FUNCTION(functionCreateGlobalObject, (JSGlobalObject* globalObject, CallFrame*))
+JSC_DEFINE_HOST_FUNCTION(functionCreateGlobalObject, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
-    return JSValue::encode(JSGlobalObject::create(vm, JSGlobalObject::createStructure(vm, jsNull())));
+    JSValue prototype = jsNull();
+    if (JSObject* object = jsDynamicCast<JSObject*>(callFrame->argument(0)))
+        prototype = object;
+    return JSValue::encode(JSGlobalObject::create(vm, JSGlobalObject::createStructure(vm, prototype)));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionCreateProxy, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -2974,13 +2981,11 @@ JSC_DEFINE_HOST_FUNCTION(functionCreateProxy, (JSGlobalObject* globalObject, Cal
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
-    JSValue target = callFrame->argument(0);
-    if (!target.isObject())
+    JSGlobalObject* target = jsDynamicCast<JSGlobalObject*>(callFrame->argument(0));
+    if (UNLIKELY(!target))
         return JSValue::encode(jsUndefined());
-    JSObject* jsTarget = asObject(target.asCell());
-    Structure* structure = JSProxy::createStructure(vm, globalObject, jsTarget->getPrototypeDirect());
-    JSProxy* proxy = JSProxy::create(vm, structure, jsTarget);
-    return JSValue::encode(proxy);
+    Structure* structure = JSGlobalProxy::createStructure(vm, target, target->getPrototypeDirect());
+    return JSValue::encode(JSGlobalProxy::create(vm, structure, target));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionCreateRuntimeArray, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -3356,7 +3361,7 @@ JSC_DEFINE_HOST_FUNCTION(functionShadowChickenFunctionsOnStack, (JSGlobalObject*
     RETURN_IF_EXCEPTION(scope, { });
     StackVisitor::visit(callFrame, vm, [&] (StackVisitor& visitor) -> IterationStatus {
         DollarVMAssertScope assertScope;
-        if (visitor->isInlinedFrame())
+        if (visitor->isInlinedDFGFrame())
             return IterationStatus::Continue;
         if (visitor->isWasmFrame())
             return IterationStatus::Continue;
@@ -3645,11 +3650,7 @@ JSC_DEFINE_HOST_FUNCTION(functionParseCount, (JSGlobalObject*, CallFrame*))
 JSC_DEFINE_HOST_FUNCTION(functionIsWasmSupported, (JSGlobalObject*, CallFrame*))
 {
     DollarVMAssertScope assertScope;
-#if ENABLE(WEBASSEMBLY)
     return JSValue::encode(jsBoolean(Wasm::isSupported()));
-#else
-    return JSValue::encode(jsBoolean(false));
-#endif
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionMake16BitStringIfPossible, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -3991,6 +3992,20 @@ JSC_DEFINE_HOST_FUNCTION(functionAssertFrameAligned, (JSGlobalObject*, CallFrame
     return JSValue::encode(jsUndefined());
 }
 
+JSC_DEFINE_HOST_FUNCTION(functionCallFromCPPAsFirstEntry, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    DollarVMAssertScope assertScope;
+    VM& vm = globalObject->vm();
+    VMEntryScope* origEntryScope = vm.entryScope;
+    vm.entryScope = nullptr;
+
+    auto restoreEntryScope = makeScopeExit([&] {
+        vm.entryScope = origEntryScope;
+    });
+
+    return functionCallFromCPP(globalObject, callFrame);
+}
+
 JSC_DEFINE_HOST_FUNCTION(functionCallFromCPP, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     DollarVMAssertScope assertScope;
@@ -4126,7 +4141,7 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "callWithStackSize"_s, functionCallWithStackSize, 2);
 
     addFunction(vm, "createGlobalObject"_s, functionCreateGlobalObject, 0);
-    addFunction(vm, "createProxy"_s, functionCreateProxy, 1);
+    addFunction(vm, "createGlobalProxy"_s, functionCreateProxy, 1);
     addFunction(vm, "createRuntimeArray"_s, functionCreateRuntimeArray, 0);
     addFunction(vm, "createNullRopeString"_s, functionCreateNullRopeString, 0);
 
@@ -4242,6 +4257,7 @@ void JSDollarVM::finishCreation(VM& vm)
 
     addFunction(vm, "assertFrameAligned"_s, functionAssertFrameAligned, 0);
 
+    addFunction(vm, "callFromCPPAsFirstEntry"_s, functionCallFromCPPAsFirstEntry, 2);
     addFunction(vm, "callFromCPP"_s, functionCallFromCPP, 2);
     addFunction(vm, "cachedCallFromCPP"_s, functionCachedCallFromCPP, 2);
 

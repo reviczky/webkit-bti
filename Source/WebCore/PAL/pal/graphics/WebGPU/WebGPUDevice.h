@@ -109,8 +109,8 @@ public:
     virtual Ref<ShaderModule> createShaderModule(const ShaderModuleDescriptor&) = 0;
     virtual Ref<ComputePipeline> createComputePipeline(const ComputePipelineDescriptor&) = 0;
     virtual Ref<RenderPipeline> createRenderPipeline(const RenderPipelineDescriptor&) = 0;
-    virtual void createComputePipelineAsync(const ComputePipelineDescriptor&, CompletionHandler<void(Ref<ComputePipeline>&&)>&&) = 0;
-    virtual void createRenderPipelineAsync(const RenderPipelineDescriptor&, CompletionHandler<void(Ref<RenderPipeline>&&)>&&) = 0;
+    virtual void createComputePipelineAsync(const ComputePipelineDescriptor&, CompletionHandler<void(RefPtr<ComputePipeline>&&)>&&) = 0;
+    virtual void createRenderPipelineAsync(const RenderPipelineDescriptor&, CompletionHandler<void(RefPtr<RenderPipeline>&&)>&&) = 0;
 
     virtual Ref<CommandEncoder> createCommandEncoder(const std::optional<CommandEncoderDescriptor>&) = 0;
     virtual Ref<RenderBundleEncoder> createRenderBundleEncoder(const RenderBundleEncoderDescriptor&) = 0;
@@ -119,6 +119,7 @@ public:
 
     virtual void pushErrorScope(ErrorFilter) = 0;
     virtual void popErrorScope(CompletionHandler<void(std::optional<Error>&&)>&&) = 0;
+    virtual void resolveDeviceLostPromise(CompletionHandler<void(PAL::WebGPU::DeviceLostReason)>&&) = 0;
     class DeviceLostClient {
         virtual ~DeviceLostClient() = default;
         virtual void deviceLost() = 0;

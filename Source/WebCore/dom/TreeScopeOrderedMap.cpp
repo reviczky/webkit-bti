@@ -37,7 +37,7 @@
 #include "HTMLLabelElement.h"
 #include "HTMLMapElement.h"
 #include "HTMLNameCollection.h"
-#include "TypedElementDescendantIterator.h"
+#include "TypedElementDescendantIteratorInlines.h"
 
 namespace WebCore {
 

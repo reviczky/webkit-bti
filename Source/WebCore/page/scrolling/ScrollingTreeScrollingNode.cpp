@@ -115,7 +115,7 @@ bool ScrollingTreeScrollingNode::commitStateAfterChildren(const ScrollingStateNo
         handleScrollPositionRequest(scrollingStateNode.requestedScrollData());
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::KeyboardScrollData))
-        handleKeyboardScrollRequest(scrollingStateNode.keyboardScrollData());
+        requestKeyboardScroll(scrollingStateNode.keyboardScrollData());
 
     // This synthetic bit is added back in ScrollingTree::propagateSynchronousScrollingReasons().
 #if ENABLE(SCROLLING_THREAD)
@@ -292,6 +292,11 @@ void ScrollingTreeScrollingNode::handleKeyboardScrollRequest(const RequestedKeyb
 {
     if (m_delegate)
         m_delegate->handleKeyboardScrollRequest(scrollData);
+}
+
+void ScrollingTreeScrollingNode::requestKeyboardScroll(const RequestedKeyboardScrollData& scrollData)
+{
+    scrollingTree().scrollingTreeNodeRequestsKeyboardScroll(scrollingNodeID(), scrollData);
 }
 
 void ScrollingTreeScrollingNode::handleScrollPositionRequest(const RequestedScrollData& requestedScrollData)
@@ -485,6 +490,11 @@ ScrollPropagationInfo ScrollingTreeScrollingNode::computeScrollPropagation(const
         propagation.isHandled = true;
     }
     return propagation;
+}
+
+void ScrollingTreeScrollingNode::scrollbarVisibilityDidChange(ScrollbarOrientation orientation, bool isVisible)
+{
+    scrollingTree().scrollingTreeNodeScrollbarVisibilityDidChange(scrollingNodeID(), orientation, isVisible);
 }
 
 } // namespace WebCore

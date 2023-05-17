@@ -56,6 +56,11 @@ RemoteMediaPlayerManagerProxy::RemoteMediaPlayerManagerProxy(GPUConnectionToWebP
 
 RemoteMediaPlayerManagerProxy::~RemoteMediaPlayerManagerProxy()
 {
+    clear();
+}
+
+void RemoteMediaPlayerManagerProxy::clear()
+{
     auto proxies = std::exchange(m_proxies, { });
 
     for (auto& proxy : proxies.values())
@@ -163,14 +168,14 @@ void RemoteMediaPlayerManagerProxy::supportsKeySystem(MediaPlayerEnums::MediaEng
 void RemoteMediaPlayerManagerProxy::didReceivePlayerMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     ASSERT(RunLoop::isMain());
-    if (auto* player = m_proxies.get(makeObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
+    if (auto* player = m_proxies.get(ObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
         player->didReceiveMessage(connection, decoder);
 }
 
 bool RemoteMediaPlayerManagerProxy::didReceiveSyncPlayerMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& encoder)
 {
     ASSERT(RunLoop::isMain());
-    if (auto* player = m_proxies.get(makeObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
+    if (auto* player = m_proxies.get(ObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
         return player->didReceiveSyncMessage(connection, decoder, encoder);
     return false;
 }
@@ -196,7 +201,7 @@ Logger& RemoteMediaPlayerManagerProxy::logger()
 }
 #endif
 
-ShareableBitmapHandle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime(WebCore::MediaPlayerIdentifier identifier)
+ShareableBitmap::Handle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime(WebCore::MediaPlayerIdentifier identifier)
 {
     auto player = mediaPlayer(identifier);
     if (!player)
@@ -207,7 +212,7 @@ ShareableBitmapHandle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime(W
         return { };
 
     auto imageSize = image->size();
-    auto bitmap = ShareableBitmap::create(imageSize, { player->colorSpace() });
+    auto bitmap = ShareableBitmap::create({ imageSize, player->colorSpace() });
     if (!bitmap)
         return { };
 

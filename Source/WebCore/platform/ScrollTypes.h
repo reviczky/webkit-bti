@@ -73,12 +73,9 @@ enum class ScrollAnimationStatus : uint8_t {
     Animating,
 };
 
-enum class ScrollIsAnimated : uint8_t {
-    No,
-    Yes
-};
+enum class ScrollIsAnimated : bool { No, Yes };
 
-enum class OverflowAnchor : uint8_t {
+enum class OverflowAnchor : bool {
     Auto,
     None
 };
@@ -413,6 +410,14 @@ template<> struct EnumTraits<WebCore::ScrollDirection> {
         WebCore::ScrollDirection::ScrollDown,
         WebCore::ScrollDirection::ScrollLeft,
         WebCore::ScrollDirection::ScrollRight
+    >;
+};
+
+template<> struct EnumTraits<WebCore::ScrollbarOrientation> {
+    using values = EnumValues<
+        WebCore::ScrollbarOrientation,
+        WebCore::ScrollbarOrientation::Horizontal,
+        WebCore::ScrollbarOrientation::Vertical
     >;
 };
 } // namespace WTF

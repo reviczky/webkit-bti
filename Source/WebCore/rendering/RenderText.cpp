@@ -33,17 +33,18 @@
 #include "DocumentInlines.h"
 #include "DocumentMarkerController.h"
 #include "FloatQuad.h"
-#include "Frame.h"
-#include "FrameView.h"
-#include "HTMLParserIdioms.h"
 #include "Hyphenation.h"
-#include "InlineIteratorLineBox.h"
+#include "InlineIteratorBoxInlines.h"
+#include "InlineIteratorLineBoxInlines.h"
 #include "InlineIteratorLogicalOrderTraversal.h"
 #include "InlineIteratorTextBox.h"
+#include "InlineIteratorTextBoxInlines.h"
 #include "InlineRunAndOffset.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "LegacyEllipsisBox.h"
 #include "LineSelection.h"
+#include "LocalFrame.h"
+#include "LocalFrameView.h"
 #include "Range.h"
 #include "RenderBlock.h"
 #include "RenderCombineText.h"
@@ -58,6 +59,7 @@
 #include "Settings.h"
 #include "Text.h"
 #include "TextResourceDecoder.h"
+#include "TextTransform.h"
 #include "VisiblePosition.h"
 #include "WidthIterator.h"
 #include <wtf/IsoMallocInlines.h>
@@ -195,14 +197,7 @@ String capitalize(const String& string, UChar previousCharacter)
 
 inline RenderText::RenderText(Node& node, const String& text)
     : RenderObject(node)
-    , m_hasTab(false)
-    , m_linesDirty(false)
-    , m_needsVisualReordering(false)
     , m_isAllASCII(text.impl()->isAllASCII())
-    , m_knownToHaveNoOverflowAndNoFallbackFonts(false)
-    , m_useBackslashAsYenSymbol(false)
-    , m_originalTextDiffersFromRendered(false)
-    , m_hasInlineWrapperForDisplayContents(false)
     , m_text(text)
 {
     ASSERT(!m_text.isNull());
@@ -255,6 +250,21 @@ bool RenderText::computeUseBackslashAsYenSymbol() const
     return false;
 }
 
+static void initiateFontLoadingByAccessingGlyphDataIfApplicable(const String& textContent, const FontCascade& fontCascade)
+{
+    // See webkit.org/b/252668
+    auto fontVariant = AutoVariant;
+#if USE(FONT_VARIANT_VIA_FEATURES)
+    if (fontCascade.fontDescription().variantCaps() == FontVariantCaps::Small) {
+        // This matches the behavior of ComplexTextController::collectComplexTextRuns(): that function doesn't perform font fallback
+        // on the capitalized characters when small caps is enabled, so we shouldn't here either.
+        fontVariant = NormalVariant;
+    }
+#endif
+    for (size_t i = 0; i < textContent.length(); ++i)
+        fontCascade.glyphDataForCharacter(textContent[i], false, fontVariant);
+}
+
 void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
     // There is no need to ever schedule repaints from a style change of a text run, since
@@ -267,6 +277,9 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     }
 
     const RenderStyle& newStyle = style();
+    if (!oldStyle)
+        initiateFontLoadingByAccessingGlyphDataIfApplicable(m_text, newStyle.fontCascade());
+
     bool needsResetText = false;
     if (!oldStyle) {
         m_useBackslashAsYenSymbol = computeUseBackslashAsYenSymbol();
@@ -276,10 +289,7 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
         needsResetText = true;
     }
 
-    if (!oldStyle || oldStyle->fontCascade() != newStyle.fontCascade())
-        m_canUseSimplifiedTextMeasuring = computeCanUseSimplifiedTextMeasuring();
-
-    TextTransform oldTransform = oldStyle ? oldStyle->textTransform() : TextTransform::None;
+    auto oldTransform = oldStyle ? oldStyle->textTransform() : OptionSet<TextTransform> { };
     TextSecurity oldSecurity = oldStyle ? oldStyle->textSecurity() : TextSecurity::None;
     if (needsResetText || oldTransform != newStyle.textTransform() || oldSecurity != newStyle.textSecurity())
         RenderText::setText(originalText(), true);
@@ -325,7 +335,10 @@ void RenderText::absoluteRects(Vector<IntRect>& rects, const LayoutPoint& accumu
 
 Vector<IntRect> RenderText::absoluteRectsForRange(unsigned start, unsigned end, bool useSelectionHeight, bool* wasFixed) const
 {
-    return absoluteQuadsForRange(start, end, useSelectionHeight, false /* ignoreEmptyTextSelections */, wasFixed).map([](auto& quad) {
+    OptionSet<RenderObject::BoundingRectBehavior> behavior;
+    if (useSelectionHeight)
+        behavior.add(RenderObject::BoundingRectBehavior::UseSelectionHeight);
+    return absoluteQuadsForRange(start, end, behavior, wasFixed).map([](auto& quad) {
         return quad.enclosingBoundingBox();
     });
 }
@@ -478,8 +491,33 @@ static FloatRect localQuadForTextRun(const InlineIterator::TextBox& run, unsigne
     return boxSelectionRect;
 }
 
-Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end, bool useSelectionHeight, bool ignoreEmptyTextSelections, bool* wasFixed) const
+static Vector<LayoutRect> characterRects(const InlineIterator::TextBox& run, unsigned rangeStart, unsigned rangeEnd)
 {
+    auto [clampedStart, clampedEnd] = run.selectableRange().clamp(rangeStart, rangeEnd);
+    if (clampedStart >= clampedEnd)
+        return { };
+
+    if (auto* svgTextBox = dynamicDowncast<SVGInlineTextBox>(run.legacyInlineBox())) {
+        Vector<LayoutRect> rects;
+        rects.reserveInitialCapacity(clampedEnd - clampedStart);
+        for (auto index = clampedStart; index < clampedEnd; ++index)
+            rects.uncheckedAppend(svgTextBox->localSelectionRect(index, index + 1));
+        return rects;
+    }
+
+    auto lineSelectionRect = LineSelection::logicalRect(*run.lineBox());
+    auto selectionRect = LayoutRect { run.logicalLeftIgnoringInlineDirection(), lineSelectionRect.y(), run.logicalWidth(), lineSelectionRect.height() };
+    return run.fontCascade().characterSelectionRectsForText(run.textRun(), selectionRect, clampedStart, clampedEnd).map([&](auto& characterRect) {
+        return snappedSelectionRect(characterRect, run.logicalRightIgnoringInlineDirection(), lineSelectionRect.y(), lineSelectionRect.height(), run.isHorizontal());
+    });
+}
+
+Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end, OptionSet<RenderObject::BoundingRectBehavior> behavior, bool* wasFixed) const
+{
+    bool useSelectionHeight = behavior.contains(RenderObject::BoundingRectBehavior::UseSelectionHeight);
+    bool ignoreEmptyTextSelections = behavior.contains(RenderObject::BoundingRectBehavior::IgnoreEmptyTextSelections);
+    bool computeIndividualCharacterRects = behavior.contains(RenderObject::BoundingRectBehavior::ComputeIndividualCharacterRects);
+
     // Work around signed/unsigned issues. This function takes unsigneds, and is often passed UINT_MAX
     // to mean "all the way to the end". LegacyInlineTextBox coordinates are unsigneds, so changing this
     // function to take ints causes various internal mismatches. But selectionRect takes ints, and
@@ -502,6 +540,32 @@ Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end
     for (auto& run : InlineIterator::textBoxesFor(*this)) {
         if (ignoreEmptyTextSelections && !run.selectableRange().intersects(start, end))
             continue;
+
+        if (computeIndividualCharacterRects) {
+            auto rects = characterRects(run, start, end);
+            if (!quads.tryReserveCapacity(quads.size() + rects.size()))
+                continue;
+
+            if (!useSelectionHeight) {
+                for (auto& rect : rects) {
+                    auto visualRect = run.visualRectIgnoringBlockDirection();
+                    if (run.isHorizontal()) {
+                        rect.setHeight(visualRect.height());
+                        rect.setY(visualRect.y());
+                    } else {
+                        rect.setWidth(visualRect.width());
+                        rect.setX(visualRect.x());
+                    }
+                }
+            }
+
+            for (auto& rect : rects) {
+                if (FloatRect localRect { rect }; !localRect.isZero())
+                    quads.uncheckedAppend(localToAbsoluteQuad(localRect, UseTransforms, wasFixed));
+            }
+            continue;
+        }
+
         if (start <= run.start() && run.end() <= end) {
             auto boundaries = boundariesForTextRun(run);
 
@@ -825,7 +889,7 @@ RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& str
 
     unsigned length = this->length();
 
-    if (!length || (stripFrontSpaces && text().isAllSpecialCharacters<isHTMLSpace>()))
+    if (!length || (stripFrontSpaces && text().isAllSpecialCharacters<isASCIIWhitespace>()))
         return widths;
 
     widths.min = m_minWidth.value_or(-1);
@@ -895,7 +959,7 @@ static inline bool isSpaceAccordingToStyle(UChar c, const RenderStyle& style)
 float RenderText::minLogicalWidth() const
 {
     if (preferredLogicalWidthsDirty() || !m_minWidth)
-        const_cast<RenderText*>(this)->computePreferredLogicalWidths(0);
+        const_cast<RenderText*>(this)->computePreferredLogicalWidths(0, !preferredLogicalWidthsDirty());
 
     return *m_minWidth;
 }
@@ -903,7 +967,7 @@ float RenderText::minLogicalWidth() const
 float RenderText::maxLogicalWidth() const
 {
     if (preferredLogicalWidthsDirty() || !m_maxWidth)
-        const_cast<RenderText*>(this)->computePreferredLogicalWidths(0);
+        const_cast<RenderText*>(this)->computePreferredLogicalWidths(0, !preferredLogicalWidthsDirty());
 
     return *m_maxWidth;
 }
@@ -926,11 +990,11 @@ LineBreakIteratorMode mapLineBreakToIteratorMode(LineBreak lineBreak)
     return LineBreakIteratorMode::Default;
 }
 
-void RenderText::computePreferredLogicalWidths(float leadWidth)
+void RenderText::computePreferredLogicalWidths(float leadWidth, bool forcedMinMaxWidthComputation)
 {
     HashSet<const Font*> fallbackFonts;
     GlyphOverflow glyphOverflow;
-    computePreferredLogicalWidths(leadWidth, fallbackFonts, glyphOverflow);
+    computePreferredLogicalWidths(leadWidth, fallbackFonts, glyphOverflow, forcedMinMaxWidthComputation);
     if (fallbackFonts.isEmpty() && !glyphOverflow.left && !glyphOverflow.right && !glyphOverflow.top && !glyphOverflow.bottom)
         m_knownToHaveNoOverflowAndNoFallbackFonts = true;
 }
@@ -995,9 +1059,9 @@ float RenderText::maxWordFragmentWidth(const RenderStyle& style, const FontCasca
     return std::max(maxFragmentWidth, suffixWidth);
 }
 
-void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Font*>& fallbackFonts, GlyphOverflow& glyphOverflow)
+void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Font*>& fallbackFonts, GlyphOverflow& glyphOverflow, bool forcedMinMaxWidthComputation)
 {
-    ASSERT(m_hasTab || preferredLogicalWidthsDirty() || !m_knownToHaveNoOverflowAndNoFallbackFonts);
+    ASSERT_UNUSED(forcedMinMaxWidthComputation, m_hasTab || preferredLogicalWidthsDirty() || forcedMinMaxWidthComputation || !m_knownToHaveNoOverflowAndNoFallbackFonts);
 
     m_minWidth = 0;
     m_beginMinWidth = 0;
@@ -1298,19 +1362,6 @@ void RenderText::setSelectionState(HighlightState state)
         containingBlock->setSelectionState(state);
 }
 
-void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned length, bool force)
-{
-    if (!force && text() == newText)
-        return;
-
-    int delta = newText.length() - text().length();
-    unsigned end = offset + length;
-
-    m_linesDirty = m_lineBoxes.dirtyRange(*this, offset, end, delta);
-
-    setText(newText, force || m_linesDirty);
-}
-
 static inline bool isInlineFlowOrEmptyText(const RenderObject& renderer)
 {
     return is<RenderInline>(renderer) || (is<RenderText>(renderer) && downcast<RenderText>(renderer).text().isEmpty());
@@ -1399,20 +1450,27 @@ static String convertToFullSizeKana(const String& string)
 
 String applyTextTransform(const RenderStyle& style, const String& text, UChar previousCharacter)
 {
-    switch (style.textTransform()) {
-    case TextTransform::None:
+    auto transform = style.textTransform();
+
+    if (transform.isEmpty())
         return text;
-    case TextTransform::Capitalize:
-        return capitalize(text, previousCharacter); // FIXME: Need to take locale into account.
-    case TextTransform::Uppercase:
-        return text.convertToUppercaseWithLocale(style.computedLocale());
-    case TextTransform::Lowercase:
-        return text.convertToLowercaseWithLocale(style.computedLocale());
-    case TextTransform::FullSizeKana:
-        return convertToFullSizeKana(text);
-    }
-    ASSERT_NOT_REACHED();
-    return text;
+
+    // https://w3c.github.io/csswg-drafts/css-text/#text-transform-order
+    auto modified = text;
+    if (transform.contains(TextTransform::Capitalize))
+        modified = capitalize(modified, previousCharacter); // FIXME: Need to take locale into account.
+    else if (transform.contains(TextTransform::Uppercase))
+        modified = modified.convertToUppercaseWithLocale(style.computedLocale());
+    else if (transform.contains(TextTransform::Lowercase))
+        modified = modified.convertToLowercaseWithLocale(style.computedLocale());
+
+    if (transform.contains(TextTransform::FullWidth))
+        modified = transformToFullWidth(modified);
+
+    if (transform.contains(TextTransform::FullSizeKana))
+        modified = convertToFullSizeKana(modified);
+
+    return modified;
 }
 
 void RenderText::setRenderedText(const String& newText)
@@ -1427,7 +1485,7 @@ void RenderText::setRenderedText(const String& newText)
         m_text = makeStringByReplacingAll(m_text, '\\', yenSign);
     
     const auto& style = this->style();
-    if (style.textTransform() != TextTransform::None)
+    if (!style.textTransform().isEmpty())
         m_text = applyTextTransform(style, m_text, previousCharacter());
 
     // At rendering time, if certain fonts are used, these characters get swapped out with higher-quality PUA characters.
@@ -1459,7 +1517,6 @@ void RenderText::setRenderedText(const String& newText)
 
     m_isAllASCII = text().isAllASCII();
     m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
-    m_canUseSimplifiedTextMeasuring = computeCanUseSimplifiedTextMeasuring();
     
     if (m_text != originalText) {
         originalTextMap().set(this, originalText);
@@ -1502,43 +1559,26 @@ void RenderText::secureText(UChar maskingCharacter)
         characters[revealedCharactersOffset] = characterToReveal;
 }
 
-bool RenderText::computeCanUseSimplifiedTextMeasuring() const
+static void invalidateLineLayoutPathOnContentChangeIfNeeded(const RenderText& renderer, size_t offset, int delta)
 {
-    if (!m_canUseSimpleFontCodePath)
-        return false;
-    
-    // FIXME: All these checks should be more fine-grained at the inline item level.
-    auto& style = this->style();
-    auto& fontCascade = style.fontCascade();
-    if (fontCascade.wordSpacing() || fontCascade.letterSpacing())
-        return false;
+    auto* container = LayoutIntegration::LineLayout::blockContainer(renderer);
+    if (!container)
+        return;
 
-    // Additional check on the font codepath.
-    TextRun run(m_text);
-    run.setCharacterScanForCodePath(false);
-    if (fontCascade.codePath(run) != FontCascade::CodePath::Simple)
-        return false;
+    auto* modernLineLayout = container->modernLineLayout();
+    if (!modernLineLayout)
+        return;
 
-    if (&style != &firstLineStyle() && fontCascade != firstLineStyle().fontCascade())
-        return false;
-
-    auto& primaryFont = fontCascade.primaryFont();
-    if (primaryFont.syntheticBoldOffset())
-        return false;
-
-    auto whitespaceIsCollapsed = style.collapseWhiteSpace();
-    for (unsigned i = 0; i < text().length(); ++i) {
-        auto character = text()[i];
-        if (!WidthIterator::characterCanUseSimplifiedTextMeasuring(character, whitespaceIsCollapsed))
-            return false;
-        auto glyphData = fontCascade.glyphDataForCharacter(character, false);
-        if (!glyphData.isValid() || glyphData.font != &primaryFont)
-            return false;
+    if (LayoutIntegration::LineLayout::shouldInvalidateLineLayoutPathAfterContentChange(*container, renderer, *modernLineLayout)) {
+        container->invalidateLineLayoutPath();
+        return;
     }
-    return true;
+    modernLineLayout->updateTextContent(renderer, offset, delta);
+    if (!modernLineLayout->isDamaged())
+        container->invalidateLineLayoutPath();
 }
 
-void RenderText::setText(const String& text, bool force)
+void RenderText::setTextInternal(const String& text, bool force)
 {
     ASSERT(!text.isNull());
 
@@ -1556,11 +1596,28 @@ void RenderText::setText(const String& text, bool force)
     setNeedsLayoutAndPrefWidthsRecalc();
     m_knownToHaveNoOverflowAndNoFallbackFonts = false;
 
-    if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this))
-        container->invalidateLineLayoutPath();
-
     if (AXObjectCache* cache = document().existingAXObjectCache())
         cache->deferTextChangedIfNeeded(textNode());
+}
+
+void RenderText::setText(const String& newContent, bool force)
+{
+    setTextInternal(newContent, force);
+    invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
+}
+
+void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned length, bool force)
+{
+    if (!force && text() == newText)
+        return;
+
+    int delta = newText.length() - text().length();
+    unsigned end = offset + length;
+
+    m_linesDirty = m_lineBoxes.dirtyRange(*this, offset, end, delta);
+
+    setTextInternal(newText, force || m_linesDirty);
+    invalidateLineLayoutPathOnContentChangeIfNeeded(*this, offset, delta);
 }
 
 String RenderText::textWithoutConvertingBackslashToYenSymbol() const
@@ -1568,7 +1625,7 @@ String RenderText::textWithoutConvertingBackslashToYenSymbol() const
     if (!m_useBackslashAsYenSymbol || style().textSecurity() != TextSecurity::None)
         return text();
 
-    if (style().textTransform() == TextTransform::None)
+    if (style().textTransform().isEmpty())
         return originalText();
 
     return applyTextTransform(style(), originalText(), previousCharacter());
@@ -1628,7 +1685,7 @@ float RenderText::width(unsigned from, unsigned length, const FontCascade& fontC
         return *width;
 
     if (length == 1 && (characterAt(from) == space))
-        return canUseSimplifiedTextMeasuring() ? fontCascade.primaryFont().spaceWidth() : fontCascade.widthOfSpaceString();
+        return fontCascade.widthOfSpaceString();
 
     float width = 0.f;
     if (&fontCascade == &style.fontCascade()) {
@@ -1640,6 +1697,9 @@ float RenderText::width(unsigned from, unsigned length, const FontCascade& fontC
                     if (fallbackFonts->isEmpty() && !glyphOverflow->left && !glyphOverflow->right && !glyphOverflow->top && !glyphOverflow->bottom)
                         m_knownToHaveNoOverflowAndNoFallbackFonts = true;
                 }
+                // The rare case of when we switch between IFC and legacy preferred width computation.
+                if (!m_maxWidth)
+                    width = maxLogicalWidth();
                 width = *m_maxWidth;
             } else
                 width = maxLogicalWidth();

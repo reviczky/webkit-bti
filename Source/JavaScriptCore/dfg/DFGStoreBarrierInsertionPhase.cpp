@@ -234,7 +234,8 @@ private:
             switch (m_node->op()) {
             case PutByValDirect:
             case PutByVal:
-            case PutByValAlias: {
+            case PutByValAlias:
+            case PutByValMegamorphic: {
                 switch (m_node->arrayMode().modeForPut().type()) {
                 case Array::Generic:
                 case Array::BigInt64Array:
@@ -298,7 +299,8 @@ private:
             case PutById:
             case PutByIdFlush:
             case PutByIdDirect:
-            case PutStructure: {
+            case PutStructure:
+            case PutByIdMegamorphic: {
                 considerBarrier(m_node->child1());
                 break;
             }
@@ -328,6 +330,13 @@ private:
             case SetRegExpObjectLastIndex:
             case PutInternalField: {
                 considerBarrier(m_node->child1(), m_node->child2());
+                break;
+            }
+
+            case EnumeratorPutByVal: {
+                Edge child1 = m_graph.varArgChild(m_node, 0);
+                Edge child3 = m_graph.varArgChild(m_node, 2);
+                considerBarrier(child1, child3);
                 break;
             }
                 
@@ -385,11 +394,11 @@ private:
             case CreateDirectArguments:
             case CreateScopedArguments:
             case CreateClonedArguments:
-            case CreateArgumentsButterflyExcludingThis:
             case NewFunction:
             case NewGeneratorFunction:
             case NewAsyncGeneratorFunction:
             case NewAsyncFunction:
+            case NewBoundFunction:
             case AllocatePropertyStorage:
             case ReallocatePropertyStorage:
                 // Nodes that allocate get to set their epoch because for those nodes we know

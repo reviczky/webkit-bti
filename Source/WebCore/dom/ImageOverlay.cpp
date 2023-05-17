@@ -31,7 +31,8 @@
 #include "DOMTokenList.h"
 #include "DOMURL.h"
 #include "Document.h"
-#include "ElementChildIterator.h"
+#include "ElementAncestorIteratorInlines.h"
+#include "ElementChildIteratorInlines.h"
 #include "ElementRareData.h"
 #include "EventHandler.h"
 #include "EventLoop.h"
@@ -46,7 +47,8 @@
 #include "ImageOverlayController.h"
 #include "MediaControlsHost.h"
 #include "Page.h"
-#include "Quirks.h"
+#include "RenderBoxInlines.h"
+#include "RenderElementInlines.h"
 #include "RenderImage.h"
 #include "RenderText.h"
 #include "ShadowRoot.h"
@@ -438,11 +440,6 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
             elements.root->appendChild(blockContainer);
             elements.blocks.uncheckedAppend(WTFMove(blockContainer));
         }
-
-        if (document->quirks().needsToForceUserSelectAndUserDragWhenInstallingImageOverlay()) {
-            element.setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueText);
-            element.setInlineStyleProperty(CSSPropertyWebkitUserDrag, CSSValueAuto);
-        }
     }
 
     if (!hadExistingElements)
@@ -583,10 +580,13 @@ void updateWithTextRecognitionResult(HTMLElement& element, const TextRecognition
             ));
 
             textContainer->setInlineStyleProperty(CSSPropertyWebkitUserSelect, applyUserSelectAll ? CSSValueAll : CSSValueNone);
+
+            if (line.isVertical)
+                textContainer->setInlineStyleProperty(CSSPropertyWritingMode, CSSValueVerticalRl);
         }
 
         if (document->isImageDocument())
-            lineContainer->setInlineStyleProperty(CSSPropertyCursor, CSSValueText);
+            lineContainer->setInlineStyleProperty(CSSPropertyCursor, line.isVertical ? CSSValueVerticalText : CSSValueText);
     }
 
 #if ENABLE(DATA_DETECTION)

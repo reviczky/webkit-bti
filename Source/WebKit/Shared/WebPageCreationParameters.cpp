@@ -88,7 +88,8 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 #if PLATFORM(MAC)
     encoder << colorSpace;
     encoder << useSystemAppearance;
-    encoder << useFormSemanticContext;
+    encoder << headerBannerHeight;
+    encoder << footerBannerHeight;
 #endif
 
 #if ENABLE(META_VIEWPORT)
@@ -109,6 +110,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << keyboardIsAttached;
     encoder << canShowWhileLocked;
     encoder << isCapturingScreen;
+    encoder << insertionPointColor;
 #endif
 #if PLATFORM(COCOA)
     encoder << smartInsertDeleteEnabled;
@@ -199,8 +201,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
     encoder << contentSecurityPolicyModeForExtension;
-    encoder << mainFrameIdentifier;
-    encoder << layerHostingContextIdentifier;
+    encoder << subframeProcessFrameTreeCreationParameters;
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
     encoder << lookalikeCharacterStrings;
@@ -365,6 +366,10 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
     if (!decoder.decode(parameters.useFormSemanticContext))
         return std::nullopt;
+    if (!decoder.decode(parameters.headerBannerHeight))
+        return std::nullopt;
+    if (!decoder.decode(parameters.footerBannerHeight))
+        return std::nullopt;
 #endif
 
 #if ENABLE(META_VIEWPORT)
@@ -401,6 +406,8 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.canShowWhileLocked))
         return std::nullopt;
     if (!decoder.decode(parameters.isCapturingScreen))
+        return std::nullopt;
+    if (!decoder.decode(parameters.insertionPointColor))
         return std::nullopt;
 #endif
 
@@ -642,14 +649,11 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.contentSecurityPolicyModeForExtension))
         return std::nullopt;
 
-    if (!decoder.decode(parameters.mainFrameIdentifier))
-        return std::nullopt;
-
-    if (!decoder.decode(parameters.layerHostingContextIdentifier))
+    if (!decoder.decode(parameters.subframeProcessFrameTreeCreationParameters))
         return std::nullopt;
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    std::optional<Vector<String>> lookalikeCharacterStrings;
+    std::optional<Vector<WebCore::LookalikeCharactersSanitizationData>> lookalikeCharacterStrings;
     decoder >> lookalikeCharacterStrings;
     if (!lookalikeCharacterStrings)
         return std::nullopt;

@@ -72,7 +72,7 @@ private:
 #endif
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer);
     void updateAffineTransform(CGAffineTransform);
-    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation);
+    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation, std::optional<WTF::MachSendRight>&&);
     void flush();
     void flushAndRemoveImage();
     void play();
@@ -80,7 +80,7 @@ private:
     void enqueueVideoFrame(SharedVideoFrame&&);
     void clearVideoFrames();
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);
-    void setSharedVideoFrameMemory(const SharedMemory::Handle&);
+    void setSharedVideoFrameMemory(SharedMemory::Handle&&);
 
     // IPC::MessageSender
     IPC::Connection* messageSenderConnection() const final;

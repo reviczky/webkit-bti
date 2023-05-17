@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2019 Adobe. All rights reserved.
+ * Copyright (C) 2014 Google. All rights reserved.
  * Copyright (C) 2020 Igalia S.L.
  *
  * Portions are Copyright (C) 1998 Netscape Communications Corporation.
@@ -55,7 +56,11 @@
 #include "FrameSelection.h"
 #include "HitTestResult.h"
 #include "InspectorInstrumentation.h"
+#include "LineClampValue.h"
 #include "Logging.h"
+#include "RenderBoxInlines.h"
+#include "RenderBoxModelObjectInlines.h"
+#include "RenderElementInlines.h"
 #include "RenderFlexibleBox.h"
 #include "RenderGeometryMap.h"
 #include "RenderLayerBacking.h"
@@ -63,9 +68,11 @@
 #include "RenderMarquee.h"
 #include "RenderScrollbar.h"
 #include "RenderScrollbarPart.h"
+#include "RenderStyleInlines.h"
 #include "RenderView.h"
 #include "ScrollAnimator.h"
 #include "ScrollbarTheme.h"
+#include "ScrollbarsController.h"
 #include "ScrollingCoordinator.h"
 #include "ShadowRoot.h"
 #include <wtf/SetForScope.h>
@@ -246,17 +253,18 @@ ScrollOffset RenderLayerScrollableArea::clampScrollOffset(const ScrollOffset& sc
     return scrollOffset.constrainedBetween(minimumScrollOffset(), maximumScrollOffset());
 }
 
-bool RenderLayerScrollableArea::requestScrollPositionUpdate(const ScrollPosition& position, ScrollType scrollType, ScrollClamping clamping)
+bool RenderLayerScrollableArea::requestScrollToPosition(const ScrollPosition& position, ScrollType scrollType, ScrollClamping clamping, ScrollIsAnimated animated)
 {
 #if ENABLE(ASYNC_SCROLLING)
-    LOG_WITH_STREAM(Scrolling, stream << m_layer << " requestScrollPositionUpdate " << position);
+    LOG_WITH_STREAM(Scrolling, stream << "RenderLayerScrollableArea::requestScrollToPosition " << position << " animated  " << (animated == ScrollIsAnimated::Yes));
 
     if (auto* scrollingCoordinator = m_layer.page().scrollingCoordinator())
-        return scrollingCoordinator->requestScrollPositionUpdate(*this, position, scrollType, clamping);
+        return scrollingCoordinator->requestScrollToPosition(*this, position, scrollType, clamping, animated);
 #else
     UNUSED_PARAM(position);
     UNUSED_PARAM(scrollType);
     UNUSED_PARAM(clamping);
+    UNUSED_PARAM(animated);
 #endif
     return false;
 }
@@ -274,20 +282,6 @@ bool RenderLayerScrollableArea::requestStopKeyboardScrollAnimation(bool immediat
     if (auto* scrollingCoordinator = m_layer.page().scrollingCoordinator())
         return scrollingCoordinator->requestStopKeyboardScrollAnimation(*this, immediate);
 
-    return false;
-}
-
-bool RenderLayerScrollableArea::requestAnimatedScrollToPosition(const ScrollPosition& destinationPosition, ScrollClamping clamping)
-{
-#if ENABLE(ASYNC_SCROLLING)
-    LOG_WITH_STREAM(Scrolling, stream << m_layer << " requestAnimatedScrollToPosition " << destinationPosition);
-
-    if (auto* scrollingCoordinator = m_layer.page().scrollingCoordinator())
-        return scrollingCoordinator->requestAnimatedScrollToPosition(*this, destinationPosition, clamping);
-#else
-    UNUSED_PARAM(destinationPosition);
-    UNUSED_PARAM(clamping);
-#endif
     return false;
 }
 
@@ -319,7 +313,7 @@ ScrollOffset RenderLayerScrollableArea::scrollToOffset(const ScrollOffset& scrol
     if (options.animated == ScrollIsAnimated::Yes) {
         registerScrollableAreaForAnimatedScroll();
         ScrollableArea::scrollToPositionWithAnimation(snappedPosition);
-    } else if (!requestScrollPositionUpdate(snappedPosition, options.type, options.clamping))
+    } else if (!requestScrollToPosition(snappedPosition, options.type, options.clamping))
         scrollToPositionWithoutAnimation(snappedPosition, options.clamping);
 
     setCurrentScrollType(previousScrollType);
@@ -386,7 +380,7 @@ void RenderLayerScrollableArea::scrollTo(const ScrollPosition& position)
         DebugPageOverlays::didLayout(renderer.frame());
     }
 
-    Frame& frame = renderer.frame();
+    LocalFrame& frame = renderer.frame();
     auto* repaintContainer = renderer.containerForRepaint().renderer;
     // The caret rect needs to be invalidated after scrolling
     frame.selection().setCaretRectNeedsUpdate();
@@ -874,6 +868,10 @@ Ref<Scrollbar> RenderLayerScrollableArea::createScrollbar(ScrollbarOrientation o
         widget = RenderScrollbar::createCustomScrollbar(*this, orientation, element);
     else {
         widget = Scrollbar::createNativeScrollbar(*this, orientation, ScrollbarControlSize::Regular);
+        
+        if (auto scrollbarController = m_layer.page().chrome().client().createScrollbarsController(m_layer.page(), *this))
+            setScrollbarsController(WTFMove(scrollbarController));
+        
         didAddScrollbar(widget.get(), orientation);
         if (m_layer.page().isMonitoringWheelEvents())
             scrollAnimator().setWheelEventTestMonitor(m_layer.page().wheelEventTestMonitor());
@@ -1078,7 +1076,7 @@ void RenderLayerScrollableArea::computeScrollDimensions()
     m_scrollHeight = roundToInt(overflowBottom() - overflowTop());
 
     computeScrollOrigin();
-    computeHasCompositedScrollableOverflow();
+    computeHasCompositedScrollableOverflow(LayoutUpToDate::Yes);
 }
 
 void RenderLayerScrollableArea::computeScrollOrigin()
@@ -1098,9 +1096,21 @@ void RenderLayerScrollableArea::computeScrollOrigin()
         m_hBar->offsetDidChange();
 }
 
-void RenderLayerScrollableArea::computeHasCompositedScrollableOverflow()
+void RenderLayerScrollableArea::computeHasCompositedScrollableOverflow(LayoutUpToDate layoutUpToDate)
 {
-    bool hasCompositedScrollableOverflow = canUseCompositedScrolling() && (hasScrollableHorizontalOverflow() || hasScrollableVerticalOverflow());
+    bool hasCompositedScrollableOverflow = m_hasCompositedScrollableOverflow;
+
+    switch (layoutUpToDate) {
+    case LayoutUpToDate::No:
+        // If layout is not up to date, the only thing we can reliably know is that style prevents overflow scrolling.
+        if (!canUseCompositedScrolling())
+            hasCompositedScrollableOverflow = false;
+        break;
+    case LayoutUpToDate::Yes:
+        hasCompositedScrollableOverflow = canUseCompositedScrolling() && (hasScrollableHorizontalOverflow() || hasScrollableVerticalOverflow());
+        break;
+    }
+
     if (hasCompositedScrollableOverflow == m_hasCompositedScrollableOverflow)
         return;
 
@@ -1279,7 +1289,6 @@ void RenderLayerScrollableArea::updateScrollbarSteps()
         m_vBar->setSteps(Scrollbar::pixelsPerLineStep(height), Scrollbar::pageStep(height));
     }
 }
-
 
 // This is called from layout code (before updateLayerPositions).
 void RenderLayerScrollableArea::updateScrollInfoAfterLayout()
@@ -1670,14 +1679,14 @@ bool RenderLayerScrollableArea::scrollingMayRevealBackground() const
 bool RenderLayerScrollableArea::isVisibleToHitTesting() const
 {
     auto& renderer = m_layer.renderer();
-    FrameView& frameView = renderer.view().frameView();
+    LocalFrameView& frameView = renderer.view().frameView();
     return renderer.visibleToHitTesting() && frameView.isVisibleToHitTesting();
 }
 
 void RenderLayerScrollableArea::updateScrollableAreaSet(bool hasOverflow)
 {
     auto& renderer = m_layer.renderer();
-    FrameView& frameView = renderer.view().frameView();
+    LocalFrameView& frameView = renderer.view().frameView();
 
     bool isVisibleToHitTest = renderer.visibleToHitTesting();
     if (HTMLFrameOwnerElement* owner = frameView.frame().ownerElement())
@@ -1714,7 +1723,7 @@ void RenderLayerScrollableArea::updateScrollableAreaSet(bool hasOverflow)
 void RenderLayerScrollableArea::registerScrollableAreaForAnimatedScroll()
 {
     auto& renderer = m_layer.renderer();
-    FrameView& frameView = renderer.view().frameView();
+    LocalFrameView& frameView = renderer.view().frameView();
     if (!m_registeredScrollableArea) {
         frameView.addScrollableAreaForAnimatedScroll(this);
         m_isRegisteredForAnimatedScroll = true;
@@ -1751,6 +1760,9 @@ void RenderLayerScrollableArea::clearScrollCorner()
 
 void RenderLayerScrollableArea::updateResizerStyle()
 {
+    if (!m_resizer && !m_layer.canResize())
+        return;
+
     auto& renderer = m_layer.renderer();
     RenderElement* actualRenderer = rendererForScrollbar(renderer);
     auto resizer = renderer.hasNonVisibleOverflow() ? actualRenderer->getUncachedPseudoStyle({ PseudoId::Resizer }, &actualRenderer->style()) : nullptr;
@@ -1826,9 +1838,9 @@ void RenderLayerScrollableArea::panScrollFromPoint(const IntPoint& sourcePoint)
 
     IntSize delta = lastKnownMousePosition - sourcePoint;
 
-    if (abs(delta.width()) <= ScrollView::noPanScrollRadius) // at the center we let the space for the icon
+    if (std::abs(delta.width()) <= ScrollView::noPanScrollRadius) // at the center we let the space for the icon
         delta.setWidth(0);
-    if (abs(delta.height()) <= ScrollView::noPanScrollRadius)
+    if (std::abs(delta.height()) <= ScrollView::noPanScrollRadius)
         delta.setHeight(0);
 
     scrollByRecursively(adjustedScrollDelta(delta));
@@ -1956,10 +1968,15 @@ void RenderLayerScrollableArea::animatedScrollDidEnd()
 {
     if (m_isRegisteredForAnimatedScroll) {
         auto& renderer = m_layer.renderer();
-        FrameView& frameView = renderer.view().frameView();
+        LocalFrameView& frameView = renderer.view().frameView();
         m_isRegisteredForAnimatedScroll = false;
         frameView.removeScrollableAreaForAnimatedScroll(this);
     }
+}
+
+float RenderLayerScrollableArea::deviceScaleFactor() const
+{
+    return m_layer.renderer().document().deviceScaleFactor();
 }
 
 } // namespace WebCore

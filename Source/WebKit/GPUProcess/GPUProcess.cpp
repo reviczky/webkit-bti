@@ -51,6 +51,7 @@
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <wtf/Algorithms.h>
 #include <wtf/CallbackAggregator.h>
+#include <wtf/Language.h>
 #include <wtf/LogInitialization.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/OptionSet.h>
@@ -69,6 +70,7 @@
 #endif
 
 #if PLATFORM(COCOA)
+#include "ArgumentCodersCocoa.h"
 #include <WebCore/CoreAudioSharedUnit.h>
 #include <WebCore/VP9UtilitiesCocoa.h>
 #endif
@@ -81,8 +83,8 @@
 #include <WebCore/ScreenCaptureKitCaptureSource.h>
 #endif
 
-#if HAVE(SC_CONTENT_SHARING_SESSION)
-#include <WebCore/ScreenCaptureKitSharingSessionManager.h>
+#if USE(GBM)
+#include <WebCore/GBMDevice.h>
 #endif
 
 namespace WebKit {
@@ -225,8 +227,9 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
     WebCore::initializeCommonAtomStrings();
 
     auto& memoryPressureHandler = MemoryPressureHandler::singleton();
-    memoryPressureHandler.setLowMemoryHandler([this] (Critical critical, Synchronous synchronous) {
-        lowMemoryHandler(critical, synchronous);
+    memoryPressureHandler.setLowMemoryHandler([weakThis = WeakPtr { *this }] (Critical critical, Synchronous synchronous) {
+        if (RefPtr process = weakThis.get())
+            process->lowMemoryHandler(critical, synchronous);
     });
     memoryPressureHandler.install();
 
@@ -240,8 +243,9 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
     SandboxExtension::consumePermanently(parameters.microphoneSandboxExtensionHandle);
 #endif
 #if PLATFORM(IOS_FAMILY)
-    CoreAudioSharedUnit::unit().setStatusBarWasTappedCallback([this](auto completionHandler) {
-        parentProcessConnection()->sendWithAsyncReply(Messages::GPUProcessProxy::StatusBarWasTapped(), [] { }, 0);
+    CoreAudioSharedUnit::unit().setStatusBarWasTappedCallback([weakProcess = WeakPtr { *this }] (auto completionHandler) {
+        if (RefPtr process = weakProcess.get())
+            process->parentProcessConnection()->sendWithAsyncReply(Messages::GPUProcessProxy::StatusBarWasTapped(), [] { }, 0);
         completionHandler();
     });
 #endif
@@ -258,17 +262,31 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
 
     populateMobileGestaltCache(WTFMove(parameters.mobileGestaltExtensionHandle));
 
+#if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
+    SandboxExtension::consumePermanently(parameters.gpuToolsExtensionHandles);
+#endif
+
 #if HAVE(CGIMAGESOURCE_WITH_SET_ALLOWABLE_TYPES)
     auto emptyArray = adoptCF(CFArrayCreate(kCFAllocatorDefault, nullptr, 0, &kCFTypeArrayCallBacks));
     CGImageSourceSetAllowableTypes(emptyArray.get());
 #endif
 
+#if USE(GBM)
+    WebCore::GBMDevice::singleton().initialize(parameters.renderDeviceFile);
+#endif
+
     m_applicationVisibleName = WTFMove(parameters.applicationVisibleName);
+#if PLATFORM(COCOA)
+    IPC::setStrictSecureDecodingForAllObjCEnabled(parameters.strictSecureDecodingForAllObjCEnabled);
+#endif
 
     // Match the QoS of the UIProcess since the GPU process is doing rendering on its behalf.
     WTF::Thread::setCurrentThreadIsUserInteractive(0);
 
     WebCore::setPresentingApplicationPID(parameters.parentPID);
+
+    if (!parameters.overrideLanguages.isEmpty())
+        overrideUserPreferredLanguages(parameters.overrideLanguages);
 
 #if USE(OS_STATE)
     registerWithStateDumper("GPUProcess state"_s);
@@ -306,10 +324,15 @@ void GPUProcess::updateGPUProcessPreferences(GPUProcessPreferences&& preferences
     if (updatePreference(m_preferences.sampleBufferContentKeySessionSupportEnabled, preferences.sampleBufferContentKeySessionSupportEnabled))
         MediaSessionManagerCocoa::setSampleBufferContentKeySessionSupportEnabled(*m_preferences.sampleBufferContentKeySessionSupportEnabled);
 #endif
-    
+
 #if ENABLE(ALTERNATE_WEBM_PLAYER)
     if (updatePreference(m_preferences.alternateWebMPlayerEnabled, preferences.alternateWebMPlayerEnabled))
         PlatformMediaSessionManager::setAlternateWebMPlayerEnabled(*m_preferences.alternateWebMPlayerEnabled);
+#endif
+
+#if HAVE(SC_CONTENT_SHARING_PICKER)
+    if (updatePreference(m_preferences.useSCContentSharingPicker, preferences.useSCContentSharingPicker))
+        PlatformMediaSessionManager::setUseSCContentSharingPicker(*m_preferences.useSCContentSharingPicker);
 #endif
 }
 
@@ -326,6 +349,11 @@ bool GPUProcess::updatePreference(std::optional<bool>& oldPreference, std::optio
     }
     
     return false;
+}
+
+void GPUProcess::userPreferredLanguagesChanged(Vector<String>&& languages)
+{
+    overrideUserPreferredLanguages(languages);
 }
 
 void GPUProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime, CompletionHandler<void()>&& completionHandler)
@@ -351,13 +379,28 @@ GPUConnectionToWebProcess* GPUProcess::webProcessConnection(WebCore::ProcessIden
     return m_webProcessConnections.get(identifier);
 }
 
+void GPUProcess::updateSandboxAccess(const Vector<SandboxExtension::Handle>& extensions)
+{
+    for (auto& extension : extensions)
+        SandboxExtension::consumePermanently(extension);
+}
+
 #if ENABLE(MEDIA_STREAM)
 void GPUProcess::setMockCaptureDevicesEnabled(bool isEnabled)
 {
     MockRealtimeMediaSourceCenter::setMockRealtimeMediaSourceCenterEnabled(isEnabled);
 }
 
-void GPUProcess::setOrientationForMediaCapture(uint64_t orientation)
+void GPUProcess::setUseSCContentSharingPicker(bool use)
+{
+#if HAVE(SC_CONTENT_SHARING_PICKER)
+    WebCore::PlatformMediaSessionManager::setUseSCContentSharingPicker(use);
+#else
+    UNUSED_PARAM(use);
+#endif
+}
+
+void GPUProcess::setOrientationForMediaCapture(IntDegrees orientation)
 {
     m_orientation = orientation;
     for (auto& connection : m_webProcessConnections.values())
@@ -387,12 +430,6 @@ void GPUProcess::updateCaptureOrigin(const WebCore::SecurityOriginData& originDa
 {
     if (auto* connection = webProcessConnection(processID))
         connection->updateCaptureOrigin(originData);
-}
-
-void GPUProcess::updateSandboxAccess(const Vector<SandboxExtension::Handle>& extensions)
-{
-    for (auto& extension : extensions)
-        SandboxExtension::consumePermanently(extension);
 }
 
 void GPUProcess::addMockMediaDevice(const WebCore::MockMediaDevice& device)
@@ -431,17 +468,12 @@ void GPUProcess::triggerMockMicrophoneConfigurationChange()
 }
 #endif // ENABLE(MEDIA_STREAM)
 
-#if HAVE(SC_CONTENT_SHARING_SESSION)
-void GPUProcess::showWindowPicker(CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&& completionHandler)
+#if HAVE(SCREEN_CAPTURE_KIT)
+void GPUProcess::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType type, CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&& completionHandler)
 {
-    WebCore::ScreenCaptureKitSharingSessionManager::singleton().showWindowPicker(WTFMove(completionHandler));
+    WebCore::ScreenCaptureKitSharingSessionManager::singleton().promptForGetDisplayMedia(type, WTFMove(completionHandler));
 }
-
-void GPUProcess::showScreenPicker(CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&& completionHandler)
-{
-    WebCore::ScreenCaptureKitSharingSessionManager::singleton().showScreenPicker(WTFMove(completionHandler));
-}
-#endif // HAVE(SC_CONTENT_SHARING_SESSION)
+#endif // HAVE(SCREEN_CAPTURE_KIT)
 
 #if PLATFORM(MAC)
 void GPUProcess::displayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
@@ -559,7 +591,7 @@ void GPUProcess::processIsStartingToCaptureAudio(GPUConnectionToWebProcess& proc
 #endif
 
 #if ENABLE(VIDEO)
-void GPUProcess::requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier, CompletionHandler<void(const ShareableBitmapHandle&)>&& completion)
+void GPUProcess::requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier, CompletionHandler<void(ShareableBitmap::Handle&&)>&& completion)
 {
     auto iterator = m_webProcessConnections.find(processIdentifier);
     if (iterator == m_webProcessConnections.end()) {

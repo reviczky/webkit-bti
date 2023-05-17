@@ -30,10 +30,11 @@
 #include "config.h"
 #include "DOMSelection.h"
 
+#include "CommonAtomStrings.h"
 #include "Document.h"
 #include "Editing.h"
-#include "Frame.h"
 #include "FrameSelection.h"
+#include "LocalFrame.h"
 #include "Range.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -42,7 +43,7 @@
 
 namespace WebCore {
 
-static RefPtr<Node> selectionShadowAncestor(Frame& frame)
+static RefPtr<Node> selectionShadowAncestor(LocalFrame& frame)
 {
     ASSERT(!frame.settings().liveRangeSelectionEnabled());
     auto* node = frame.selection().selection().base().anchorNode();
@@ -51,19 +52,19 @@ static RefPtr<Node> selectionShadowAncestor(Frame& frame)
     return node->document().ancestorNodeInThisScope(node);
 }
 
-DOMSelection::DOMSelection(DOMWindow& window)
-    : DOMWindowProperty(&window)
+DOMSelection::DOMSelection(LocalDOMWindow& window)
+    : LocalDOMWindowProperty(&window)
 {
 }
 
-Ref<DOMSelection> DOMSelection::create(DOMWindow& window)
+Ref<DOMSelection> DOMSelection::create(LocalDOMWindow& window)
 {
     return adoptRef(*new DOMSelection(window));
 }
 
-RefPtr<Frame> DOMSelection::frame() const
+RefPtr<LocalFrame> DOMSelection::frame() const
 {
-    return DOMWindowProperty::frame();
+    return LocalDOMWindowProperty::frame();
 }
 
 std::optional<SimpleRange> DOMSelection::range() const
@@ -510,7 +511,7 @@ String DOMSelection::toString() const
     if (!frame)
         return String();
     if (frame->settings().liveRangeSelectionEnabled()) {
-        auto range = this->range();
+        auto range = frame->selection().selection().range();
         return range ? plainText(*range, TextIteratorBehavior::IgnoresUserSelectNone) : emptyString();
     }
     auto range = frame->selection().selection().firstRange();

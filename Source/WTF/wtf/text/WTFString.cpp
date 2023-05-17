@@ -41,29 +41,25 @@ using namespace Unicode;
 
 // Construct a string with UTF-16 data.
 String::String(const UChar* characters, unsigned length)
+    : m_impl(characters ? RefPtr { StringImpl::create(characters, length) } : nullptr)
 {
-    if (characters)
-        m_impl = StringImpl::create(characters, length);
 }
 
 // Construct a string with latin1 data.
 String::String(const LChar* characters, unsigned length)
+    : m_impl(characters ? RefPtr { StringImpl::create(characters, length) } : nullptr)
 {
-    if (characters)
-        m_impl = StringImpl::create(characters, length);
 }
 
 String::String(const char* characters, unsigned length)
+    : m_impl(characters ? RefPtr { StringImpl::create(reinterpret_cast<const LChar*>(characters), length) } : nullptr)
 {
-    if (characters)
-        m_impl = StringImpl::create(reinterpret_cast<const LChar*>(characters), length);
 }
 
 // Construct a string with Latin-1 data, from a null-terminated source.
 String::String(const char* nullTerminatedString)
+    : m_impl(nullTerminatedString ? RefPtr { StringImpl::createFromCString(nullTerminatedString) } : nullptr)
 {
-    if (nullTerminatedString)
-        m_impl = StringImpl::createFromCString(nullTerminatedString);
 }
 
 int codePointCompare(const String& a, const String& b)
@@ -78,7 +74,7 @@ UChar32 String::characterStartingAt(unsigned i) const
     return m_impl->characterStartingAt(i);
 }
 
-String makeStringByJoining(Span<const String> strings, const String& separator)
+String makeStringByJoining(std::span<const String> strings, const String& separator)
 {
     StringBuilder builder;
     for (const auto& string : strings) {
@@ -578,7 +574,7 @@ template<typename CharacterType, TrailingJunkPolicy policy>
 static inline double toDoubleType(const CharacterType* data, size_t length, bool* ok, size_t& parsedLength)
 {
     size_t leadingSpacesLength = 0;
-    while (leadingSpacesLength < length && isASCIISpace(data[leadingSpacesLength]))
+    while (leadingSpacesLength < length && isUnicodeCompatibleASCIIWhitespace(data[leadingSpacesLength]))
         ++leadingSpacesLength;
 
     double number = parseDouble(data + leadingSpacesLength, length - leadingSpacesLength, parsedLength);

@@ -35,11 +35,14 @@
 #include "RemoteComputePipeline.h"
 #include "RemoteDeviceMessages.h"
 #include "RemoteExternalTexture.h"
+#include "RemoteGPU.h"
+#include "RemoteMediaPlayerManagerProxy.h"
 #include "RemotePipelineLayout.h"
 #include "RemoteQuerySet.h"
 #include "RemoteQueue.h"
 #include "RemoteRenderBundleEncoder.h"
 #include "RemoteRenderPipeline.h"
+#include "RemoteRenderingBackend.h"
 #include "RemoteSampler.h"
 #include "RemoteShaderModule.h"
 #include "RemoteTexture.h"
@@ -48,6 +51,7 @@
 #include "WebGPUObjectHeap.h"
 #include "WebGPUOutOfMemoryError.h"
 #include "WebGPUValidationError.h"
+#include <WebCore/VideoFrame.h>
 #include <pal/graphics/WebGPU/WebGPUBindGroup.h>
 #include <pal/graphics/WebGPU/WebGPUBindGroupDescriptor.h>
 #include <pal/graphics/WebGPU/WebGPUBindGroupLayout.h>
@@ -79,12 +83,13 @@
 
 namespace WebKit {
 
-RemoteDevice::RemoteDevice(PAL::WebGPU::Device& device, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier, WebGPUIdentifier queueIdentifier)
+RemoteDevice::RemoteDevice(PerformWithMediaPlayerOnMainThread& performWithMediaPlayerOnMainThread, PAL::WebGPU::Device& device, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier, WebGPUIdentifier queueIdentifier)
     : m_backing(device)
     , m_objectHeap(objectHeap)
     , m_streamConnection(streamConnection.copyRef())
     , m_identifier(identifier)
     , m_queue(RemoteQueue::create(device.queue(), objectHeap, WTFMove(streamConnection), queueIdentifier))
+    , m_performWithMediaPlayerOnMainThread(performWithMediaPlayerOnMainThread)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteDevice::messageReceiverName(), m_identifier.toUInt64());
 }
@@ -104,6 +109,11 @@ Ref<RemoteQueue> RemoteDevice::queue()
 void RemoteDevice::destroy()
 {
     m_backing->destroy();
+}
+
+void RemoteDevice::destruct()
+{
+    m_objectHeap.removeObject(m_identifier);
 }
 
 void RemoteDevice::createBuffer(const WebGPU::BufferDescriptor& descriptor, WebGPUIdentifier identifier)
@@ -146,8 +156,20 @@ void RemoteDevice::importExternalTexture(const WebGPU::ExternalTextureDescriptor
 {
     auto convertedDescriptor = m_objectHeap.convertFromBacking(descriptor);
     ASSERT(convertedDescriptor);
-    if (!convertedDescriptor)
+    if (!convertedDescriptor || !convertedDescriptor->mediaIdentifier)
         return;
+
+    m_performWithMediaPlayerOnMainThread(WebCore::MediaPlayerIdentifier(convertedDescriptor->mediaIdentifier), [&convertedDescriptor](auto& player) mutable {
+        auto videoFrame = player.videoFrameForCurrentTime();
+        if (!videoFrame)
+            return;
+
+#if PLATFORM(COCOA)
+        CVPixelBufferRef pixelBuffer = videoFrame->pixelBuffer();
+        ASSERT(pixelBuffer);
+        convertedDescriptor->pixelBuffer = pixelBuffer;
+#endif
+    });
 
     auto externalTexture = m_backing->importExternalTexture(*convertedDescriptor);
     auto remoteExternalTexture = RemoteExternalTexture::create(externalTexture, m_objectHeap, m_streamConnection.copyRef(), identifier);
@@ -226,35 +248,41 @@ void RemoteDevice::createRenderPipeline(const WebGPU::RenderPipelineDescriptor& 
     m_objectHeap.addObject(identifier, remoteRenderPipeline);
 }
 
-void RemoteDevice::createComputePipelineAsync(const WebGPU::ComputePipelineDescriptor& descriptor, WebGPUIdentifier identifier, CompletionHandler<void()>&& callback)
+void RemoteDevice::createComputePipelineAsync(const WebGPU::ComputePipelineDescriptor& descriptor, WebGPUIdentifier identifier, CompletionHandler<void(bool)>&& callback)
 {
     auto convertedDescriptor = m_objectHeap.convertFromBacking(descriptor);
     ASSERT(convertedDescriptor);
     if (!convertedDescriptor) {
-        callback();
+        callback(false);
         return;
     }
 
-    m_backing->createComputePipelineAsync(*convertedDescriptor, [callback = WTFMove(callback), objectHeap = Ref { m_objectHeap }, streamConnection = m_streamConnection.copyRef(), identifier] (Ref<PAL::WebGPU::ComputePipeline>&& computePipeline) mutable {
-        auto remoteComputePipeline = RemoteComputePipeline::create(computePipeline, objectHeap, WTFMove(streamConnection), identifier);
-        objectHeap->addObject(identifier, remoteComputePipeline);
-        callback();
+    m_backing->createComputePipelineAsync(*convertedDescriptor, [callback = WTFMove(callback), objectHeap = Ref { m_objectHeap }, streamConnection = m_streamConnection.copyRef(), identifier] (RefPtr<PAL::WebGPU::ComputePipeline>&& computePipeline) mutable {
+        bool result = computePipeline.get();
+        if (result) {
+            auto remoteComputePipeline = RemoteComputePipeline::create(computePipeline.releaseNonNull(), objectHeap, WTFMove(streamConnection), identifier);
+            objectHeap->addObject(identifier, remoteComputePipeline);
+        }
+        callback(result);
     });
 }
 
-void RemoteDevice::createRenderPipelineAsync(const WebGPU::RenderPipelineDescriptor& descriptor, WebGPUIdentifier identifier, CompletionHandler<void()>&& callback)
+void RemoteDevice::createRenderPipelineAsync(const WebGPU::RenderPipelineDescriptor& descriptor, WebGPUIdentifier identifier, CompletionHandler<void(bool)>&& callback)
 {
     auto convertedDescriptor = m_objectHeap.convertFromBacking(descriptor);
     ASSERT(convertedDescriptor);
     if (!convertedDescriptor) {
-        callback();
+        callback(false);
         return;
     }
 
-    m_backing->createRenderPipelineAsync(*convertedDescriptor, [callback = WTFMove(callback), objectHeap = Ref { m_objectHeap }, streamConnection = m_streamConnection.copyRef(), identifier] (Ref<PAL::WebGPU::RenderPipeline>&& renderPipeline) mutable {
-        auto remoteRenderPipeline = RemoteRenderPipeline::create(renderPipeline, objectHeap, WTFMove(streamConnection), identifier);
-        objectHeap->addObject(identifier, remoteRenderPipeline);
-        callback();
+    m_backing->createRenderPipelineAsync(*convertedDescriptor, [callback = WTFMove(callback), objectHeap = Ref { m_objectHeap }, streamConnection = m_streamConnection.copyRef(), identifier] (RefPtr<PAL::WebGPU::RenderPipeline>&& renderPipeline) mutable {
+        bool result = renderPipeline.get();
+        if (result) {
+            auto remoteRenderPipeline = RemoteRenderPipeline::create(renderPipeline.releaseNonNull(), objectHeap, WTFMove(streamConnection), identifier);
+            objectHeap->addObject(identifier, remoteRenderPipeline);
+        }
+        callback(result);
     });
 }
 
@@ -315,6 +343,13 @@ void RemoteDevice::popErrorScope(CompletionHandler<void(std::optional<WebGPU::Er
         }, [&] (Ref<PAL::WebGPU::ValidationError> validationError) {
             callback({ WebGPU::ValidationError { validationError->message() } });
         });
+    });
+}
+
+void RemoteDevice::resolveDeviceLostPromise(CompletionHandler<void(PAL::WebGPU::DeviceLostReason)>&& callback)
+{
+    m_backing->resolveDeviceLostPromise([callback = WTFMove(callback)] (PAL::WebGPU::DeviceLostReason reason) mutable {
+        callback(reason);
     });
 }
 

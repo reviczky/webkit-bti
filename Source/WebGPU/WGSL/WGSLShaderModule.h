@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Apple Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,10 +25,13 @@
 
 #pragma once
 
+#include "ASTBuilder.h"
 #include "ASTDirective.h"
 #include "ASTFunction.h"
+#include "ASTIdentityExpression.h"
 #include "ASTStructure.h"
 #include "ASTVariable.h"
+#include "TypeStore.h"
 #include "WGSL.h"
 
 #include <wtf/text/StringHash.h>
@@ -54,6 +57,77 @@ public:
     AST::Function::List& functions() { return m_functions; }
     AST::Structure::List& structures() { return m_structures; }
     AST::Variable::List& variables() { return m_variables; }
+    TypeStore& types() { return m_types; }
+    AST::Builder& astBuilder() { return m_astBuilder; }
+
+    template<typename T>
+    std::enable_if_t<std::is_base_of_v<AST::Node, T>, void> replace(T* current, T&& replacement)
+    {
+        RELEASE_ASSERT(current->kind() == replacement.kind());
+        std::swap(*current, replacement);
+        m_replacements.append([current, replacement = WTFMove(replacement)]() mutable {
+            std::exchange(*current, WTFMove(replacement));
+        });
+    }
+
+    template<typename T>
+    std::enable_if_t<std::is_fundamental_v<T> || std::is_enum_v<T>, void> replace(T* current, T&& replacement)
+    {
+        std::swap(*current, replacement);
+        m_replacements.append([current, replacement = WTFMove(replacement)]() mutable {
+            std::exchange(*current, WTFMove(replacement));
+        });
+    }
+
+    template<typename CurrentType, typename ReplacementType>
+    void replace(CurrentType& current, ReplacementType& replacement)
+    {
+        m_replacements.append([&current, currentCopy = current]() mutable {
+            bitwise_cast<AST::IdentityExpression*>(&current)->~IdentityExpression();
+            new (&current) CurrentType(WTFMove(currentCopy));
+        });
+
+        current.~CurrentType();
+        new (&current) AST::IdentityExpression(replacement.span(), replacement);
+    }
+
+    template<typename T, size_t size>
+    T takeLast(const Vector<T, size>& constVector)
+    {
+        auto& vector = const_cast<Vector<T, size>&>(constVector);
+        auto last = vector.takeLast();
+        m_replacements.append([&vector, last]() mutable {
+            vector.append(WTFMove(last));
+        });
+        return last;
+    }
+
+    template<typename T, typename U, size_t size>
+    void append(const Vector<U, size>& constVector, T&& value)
+    {
+        auto& vector = const_cast<Vector<U, size>&>(constVector);
+        vector.append(std::forward<T>(value));
+        m_replacements.append([&vector]() {
+            vector.takeLast();
+        });
+    }
+
+    template<typename T, size_t size>
+    void insert(const Vector<T, size>& constVector, size_t position, T&& value)
+    {
+        auto& vector = const_cast<Vector<T, size>&>(constVector);
+        vector.insert(position, std::forward<T>(value));
+        m_replacements.append([&vector, position]() {
+            vector.remove(position);
+        });
+    }
+
+    void revertReplacements()
+    {
+        for (int i = m_replacements.size() - 1; i >= 0; --i)
+            m_replacements[i]();
+        m_replacements.clear();
+    }
 
 private:
     String m_source;
@@ -62,6 +136,9 @@ private:
     AST::Function::List m_functions;
     AST::Structure::List m_structures;
     AST::Variable::List m_variables;
+    TypeStore m_types;
+    AST::Builder m_astBuilder;
+    Vector<std::function<void()>> m_replacements;
 };
 
 } // namespace WGSL

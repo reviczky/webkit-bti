@@ -49,6 +49,8 @@ enum CSSValueID : uint16_t;
 enum class PseudoId : uint16_t;
 enum class SVGPaintType : uint8_t;
 
+using CSSValueListBuilder = Vector<Ref<CSSValue>, 4>;
+
 class ComputedStyleExtractor {
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -66,7 +68,7 @@ public:
     RefPtr<CSSValue> customPropertyValue(const AtomString& propertyName);
 
     // Helper methods for HTML editing.
-    Ref<MutableStyleProperties> copyProperties(Span<const CSSPropertyID>);
+    Ref<MutableStyleProperties> copyProperties(std::span<const CSSPropertyID>);
     Ref<MutableStyleProperties> copyProperties();
     RefPtr<CSSPrimitiveValue> getFontSizeCSSValuePreferringKeyword();
     bool useFixedFontDefaultSize();
@@ -78,7 +80,7 @@ public:
 
     static Ref<CSSPrimitiveValue> currentColorOrValidColor(const RenderStyle&, const StyleColor&);
 
-    static void addValueForAnimationPropertyToList(CSSValueList&, CSSPropertyID, const Animation*);
+    static void addValueForAnimationPropertyToList(CSSValueListBuilder&, CSSPropertyID, const Animation*);
 
     static bool updateStyleIfNeededForProperty(Element&, CSSPropertyID);
 

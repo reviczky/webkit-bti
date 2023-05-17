@@ -29,9 +29,11 @@
 
 ALLOW_UNUSED_PARAMETERS_BEGIN
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+ALLOW_COMMA_BEGIN
 
 #include <webrtc/api/frame_transformer_interface.h>
 
+ALLOW_COMMA_END
 ALLOW_DEPRECATED_DECLARATIONS_END
 ALLOW_UNUSED_PARAMETERS_END
 
@@ -52,7 +54,7 @@ std::unique_ptr<webrtc::TransformableFrameInterface> LibWebRTCRtpTransformableFr
     return WTFMove(m_rtcFrame);
 }
 
-Span<const uint8_t> LibWebRTCRtpTransformableFrame::data() const
+std::span<const uint8_t> LibWebRTCRtpTransformableFrame::data() const
 {
     if (!m_rtcFrame)
         return { };
@@ -60,7 +62,7 @@ Span<const uint8_t> LibWebRTCRtpTransformableFrame::data() const
     return { data.begin(), data.size() };
 }
 
-void LibWebRTCRtpTransformableFrame::setData(Span<const uint8_t> data)
+void LibWebRTCRtpTransformableFrame::setData(std::span<const uint8_t> data)
 {
     if (m_rtcFrame)
         m_rtcFrame->SetData({ data.data(), data.size() });

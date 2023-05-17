@@ -24,7 +24,6 @@
 
 #include "CachedImage.h"
 #include "CommonVM.h"
-#include "DOMWindow.h"
 #include "Element.h"
 #include "Event.h"
 #include "EventNames.h"
@@ -32,6 +31,7 @@
 #include "HTMLObjectElement.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLVideoElement.h"
+#include "LocalDOMWindow.h"
 #include "Settings.h"
 
 #include "JSDOMWindowBase.h"
@@ -53,6 +53,18 @@ void HTMLImageLoader::dispatchLoadEvent()
     // HTMLVideoElement uses this class to load the poster image, but it should not fire events for loading or failure.
     if (is<HTMLVideoElement>(element()))
         return;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    // iOS loads PDF inside <object> elements as images since we don't support loading them
+    // as plugins (see logic in WebFrameLoaderClient::objectContentType()). However, WebKit
+    // doesn't normally fire load/error events when loading <object> as plugins. Therefore,
+    // firing such events for PDF loads on iOS can cause confusion on some sites.
+    // See rdar://107795151.
+    if (auto* objectElement = dynamicDowncast<HTMLObjectElement>(element())) {
+        if (MIMETypeRegistry::isPDFOrPostScriptMIMEType(objectElement->serviceType()))
+            return;
+    }
 #endif
 
     bool errorOccurred = image()->errorOccurred();

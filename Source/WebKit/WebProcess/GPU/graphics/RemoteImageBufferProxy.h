@@ -76,10 +76,8 @@ private:
 
     bool hasPendingFlush() const;
 
-    void waitForDidFlushWithTimeout();
-
     RefPtr<WebCore::NativeImage> copyNativeImage(WebCore::BackingStoreCopy = WebCore::CopyBackingStore) const final;
-    RefPtr<WebCore::NativeImage> copyNativeImageForDrawing(WebCore::BackingStoreCopy = WebCore::CopyBackingStore) const final;
+    RefPtr<WebCore::NativeImage> copyNativeImageForDrawing(WebCore::GraphicsContext&) const final;
     RefPtr<WebCore::NativeImage> sinkIntoNativeImage() final;
 
     RefPtr<ImageBuffer> sinkIntoBufferForDifferentThread() final;
@@ -99,7 +97,6 @@ private:
 
     bool prefersPreparationForDisplay() final { return true; }
     
-    void flushContext() final;
     void flushDrawingContext() final;
     bool flushDrawingContextAsync() final;
 
@@ -120,7 +117,7 @@ class RemoteImageBufferProxyFlushState : public ThreadSafeRefCounted<RemoteImage
     WTF_MAKE_FAST_ALLOCATED;
 public:
     RemoteImageBufferProxyFlushState() = default;
-    void waitForDidFlushOnSecondaryThread(DisplayListRecorderFlushIdentifier);
+    void waitForDidFlush(DisplayListRecorderFlushIdentifier, Seconds timeout);
     void markCompletedFlush(DisplayListRecorderFlushIdentifier);
     void cancel();
     DisplayListRecorderFlushIdentifier identifierForCompletedFlush() const;

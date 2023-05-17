@@ -39,6 +39,7 @@
 #include <WebCore/InspectorController.h>
 #include <WebCore/InspectorFrontendHost.h>
 #include <WebCore/NotImplemented.h>
+#include <WebCore/Page.h>
 #include <WebCore/Settings.h>
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
@@ -350,7 +351,7 @@ bool WebInspectorUI::supportsWebExtensions()
     return true;
 }
 
-void WebInspectorUI::didShowExtensionTab(const String& extensionID, const String& extensionTabID, WebCore::FrameIdentifier frameID)
+void WebInspectorUI::didShowExtensionTab(const String& extensionID, const String& extensionTabID, const WebCore::FrameIdentifier& frameID)
 {
     if (!m_extensionController)
         return;

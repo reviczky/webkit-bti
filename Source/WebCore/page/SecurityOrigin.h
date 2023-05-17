@@ -37,6 +37,8 @@
 
 namespace WebCore {
 
+class OriginAccessPatterns;
+
 class SecurityOrigin : public ThreadSafeRefCounted<SecurityOrigin> {
 public:
     enum Policy {
@@ -105,7 +107,7 @@ public:
     // Returns true if this SecurityOrigin can read content retrieved from
     // the given URL. For example, call this function before issuing
     // XMLHttpRequests.
-    WEBCORE_EXPORT bool canRequest(const URL&) const;
+    WEBCORE_EXPORT bool canRequest(const URL&, const OriginAccessPatterns&) const;
 
     // Returns true if this SecurityOrigin can receive drag content from the
     // initiator. For example, call this function before allowing content to be
@@ -115,7 +117,7 @@ public:
     // Returns true if |document| can display content from the given URL (e.g.,
     // in an iframe or as an image). For example, web sites generally cannot
     // display content from the user's files system.
-    WEBCORE_EXPORT bool canDisplay(const URL&) const;
+    WEBCORE_EXPORT bool canDisplay(const URL&, const OriginAccessPatterns&) const;
 
     // Returns true if this SecurityOrigin can load local resources, such
     // as images, iframes, and style sheets, and can link to local URLs.
@@ -138,7 +140,7 @@ public:
     // Explicitly grant the ability to access very other SecurityOrigin.
     //
     // WARNING: This is an extremely powerful ability. Use with caution!
-    void grantUniversalAccess();
+    WEBCORE_EXPORT void grantUniversalAccess();
     bool hasUniversalAccess() const { return m_universalAccess; }
 
     void grantStorageAccessFromFileURLsQuirk();
@@ -213,9 +215,6 @@ public:
     WEBCORE_EXPORT static bool isLocalHostOrLoopbackIPAddress(StringView);
 
     const SecurityOriginData& data() const { return m_data; }
-
-    template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static RefPtr<SecurityOrigin> decode(Decoder&);
 
 private:
     friend struct IPC::ArgumentCoder<SecurityOrigin, void>;

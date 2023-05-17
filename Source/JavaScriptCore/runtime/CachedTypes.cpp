@@ -51,7 +51,7 @@
 namespace JSC {
 
 namespace Yarr {
-enum class Flags : uint8_t;
+enum class Flags : uint16_t;
 }
 
 template <typename T, typename = void>
@@ -587,7 +587,7 @@ ptrdiff_t CachedWriteBarrierOffsets::ptrOffset()
     return OBJECT_OFFSETOF(CachedWriteBarrier<void>, m_ptr);
 }
 
-template<typename T, size_t InlineCapacity = 0, typename OverflowHandler = CrashOnOverflow, typename Malloc = WTF::VectorMalloc>
+template<typename T, size_t InlineCapacity = 0, typename OverflowHandler = CrashOnOverflow, typename Malloc = WTF::VectorBufferMalloc>
 class CachedVector : public VariableLengthObject<Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>> {
 public:
     template<typename VectorContainer>
@@ -1178,7 +1178,7 @@ public:
     {
         m_map.encode(encoder, symbolTable.m_map);
         m_maxScopeOffset = symbolTable.m_maxScopeOffset;
-        m_usesNonStrictEval = symbolTable.m_usesNonStrictEval;
+        m_usesSloppyEval = symbolTable.m_usesSloppyEval;
         m_nestedLexicalScope = symbolTable.m_nestedLexicalScope;
         m_scopeType = symbolTable.m_scopeType;
         m_arguments.encode(encoder, symbolTable.m_arguments.get());
@@ -1190,7 +1190,7 @@ public:
         SymbolTable* symbolTable = SymbolTable::create(decoder.vm());
         m_map.decode(decoder, symbolTable->m_map);
         symbolTable->m_maxScopeOffset = m_maxScopeOffset;
-        symbolTable->m_usesNonStrictEval = m_usesNonStrictEval;
+        symbolTable->m_usesSloppyEval = m_usesSloppyEval;
         symbolTable->m_nestedLexicalScope = m_nestedLexicalScope;
         symbolTable->m_scopeType = m_scopeType;
         ScopedArgumentsTable* scopedArgumentsTable = m_arguments.decode(decoder);
@@ -1207,7 +1207,7 @@ public:
 private:
     CachedHashMap<CachedRefPtr<CachedUniquedStringImpl>, CachedSymbolTableEntry, IdentifierRepHash, HashTraits<RefPtr<UniquedStringImpl>>, SymbolTableIndexHashTraits> m_map;
     ScopeOffset m_maxScopeOffset;
-    unsigned m_usesNonStrictEval : 1;
+    unsigned m_usesSloppyEval : 1;
     unsigned m_nestedLexicalScope : 1;
     unsigned m_scopeType : 3;
     CachedPtr<CachedScopedArgumentsTable> m_arguments;
