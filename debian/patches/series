@@ -12,3 +12,4 @@ revert-cmake-3.16-bump.patch
 revert-gstreamer-1.16-bump.patch
 cmake-dont-use-NAME_WLE.patch
 revert-gstreamer-extended-colorspace-mapping.patch
+gstreamer-dont-use-gst_buffer_new_wrapped_bytes.patch

@@ -1,0 +1,18 @@
+diff --git a/Source/WebCore/platform/graphics/gstreamer/ImageDecoderGStreamer.cpp b/Source/WebCore/platform/graphics/gstreamer/ImageDecoderGStreamer.cpp
+index 8630e0498b..494db68915 100644
+--- a/Source/WebCore/platform/graphics/gstreamer/ImageDecoderGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/ImageDecoderGStreamer.cpp
+@@ -238,8 +238,11 @@ void ImageDecoderGStreamer::storeDecodedSample(GRefPtr<GstSample>&& sample)
+ void ImageDecoderGStreamer::pushEncodedData(const FragmentedSharedBuffer& sharedBuffer)
+ {
+     auto data = sharedBuffer.makeContiguous();
+-    auto bytes = data->createGBytes();
+-    auto buffer = adoptGRef(gst_buffer_new_wrapped_bytes(bytes.get()));
++    auto bytes = data->createGBytes().get();
++    gsize size;
++    guint8 *bytes_data = (guint8 *) g_bytes_get_data (bytes, &size);
++    auto buffer = adoptGRef(gst_buffer_new_wrapped_full (GST_MEMORY_FLAG_READONLY, bytes_data,
++      size, 0, size, g_bytes_ref (bytes), (GDestroyNotify) g_bytes_unref));
+     m_eos = false;
+ 
+     auto scopeExit = makeScopeExit([&] {
