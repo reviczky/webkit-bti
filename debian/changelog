@@ -9,6 +9,8 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     - Add patches to support buster's cmake.
   * debian/patches/revert-gstreamer-1.16-bump.patch:
     - Revert bump to GStreamer 1.16, not available in buster.
+  * debian/patches/revert-gstreamer-extended-colorspace-mapping.patch:
+    - Revert GStreamer colorspace mappings added in 1.16.
   * debian/patches/no-gtk-overlay-scrolling.patch:
     - Gtk in buster does not have 'gtk-overlay-scrolling' so remove the
       constant warnings about its absence (see #1024535).

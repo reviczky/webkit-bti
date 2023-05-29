@@ -11,3 +11,4 @@ no-gtk-overlay-scrolling.patch
 revert-cmake-3.16-bump.patch
 revert-gstreamer-1.16-bump.patch
 cmake-dont-use-NAME_WLE.patch
+revert-gstreamer-extended-colorspace-mapping.patch
