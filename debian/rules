@@ -40,6 +40,8 @@ EXTRA_CMAKE_ARGUMENTS += \
 	   -DCMAKE_C_COMPILER=clang-13 \
 	   -DCMAKE_CXX_COMPILER=clang++-13
 
+CFLAGS += -stdlib=libc++
+
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)
