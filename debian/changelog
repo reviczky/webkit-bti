@@ -13,6 +13,9 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     - Revert GStreamer colorspace mappings added in 1.16.
   * gstreamer-dont-use-gst_buffer_new_wrapped_bytes.patch:
     - Avoid a constructor added in 1.16.
+  * debian/patches/revert-gstreamer-audio-source.patch:
+    - Revert WebKitWebAudioSourceGStreamer changes that require GStreamer
+      1.16.
   * debian/patches/no-gtk-overlay-scrolling.patch:
     - Gtk in buster does not have 'gtk-overlay-scrolling' so remove the
       constant warnings about its absence (see #1024535).
