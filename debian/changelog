@@ -1,5 +1,6 @@
-webkit2gtk (2.40.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.40.2-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/rules:
     - Pass -VNone to dh_makeshlibs for javascriptcore to keep the behavior
       of the debhelper compat level 11 and earlier.
