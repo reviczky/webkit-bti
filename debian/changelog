@@ -20,8 +20,8 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     - Gtk in buster does not have 'gtk-overlay-scrolling' so remove the
       constant warnings about its absence (see #1024535).
   * debian/control.in:
-    - Remove build dependencies on ccache, libwpebackend-fdo-1.0-dev,
-      libmanette-0.2-dev, liblcms2-dev and libavif-dev.
+    - Remove build dependencies on ccache, libmanette-0.2-dev,
+      liblcms2-dev and libavif-dev.
     - Switch build dependency from libenchant-2-dev to libenchant-dev.
     - Switch build dependency from libfreetype-dev to libfreetype6-dev.
     - Switch build dependencies on libegl-dev, libgl-dev and libgles-dev
@@ -35,8 +35,6 @@ webkit2gtk (2.40.1-1~deb10u1) UNRELEASED; urgency=high
     - Build with -DENABLE_GAMEPAD=OFF -DUSE_LCMS=OFF.
     - Disable USE_AVIF, USE_GBM and USE_GSTREAMER_TRANSCODER due to missing
       or additional build dependencies.
-    - Disable wayland target, as it now requires libwpe which is not
-      available in buster.
   * Set the debhelper compatibility level back to 10. This fixes a dh_dwz
     error ".debug_info section not present"
     - Add debian/compat file.
