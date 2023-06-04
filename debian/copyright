@@ -2761,8 +2761,9 @@ Files: Source/WebCore/platform/ScrollAlignment.cpp
        Source/WebCore/rendering/RenderMarquee.h
 Copyright: 1998 Netscape Communications Corporation
            2001-2006 mozilla.org
-           2003, 2006-2020 Apple Inc
+           2003, 2006-2023 Apple Inc
            2007-2009 Torch Mobile Inc
+           2014 Google Inc
            2019 Adobe
            2020-2022 Igalia S.L.
 License: LGPL-2.1+ or MPL-1.1
