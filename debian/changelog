@@ -1,4 +1,4 @@
-wpewebkit (2.40.2-1) UNRELEASED; urgency=medium
+wpewebkit (2.40.2-1) experimental; urgency=medium
 
   * New upstream release.
   * Update copyright information of all files.
