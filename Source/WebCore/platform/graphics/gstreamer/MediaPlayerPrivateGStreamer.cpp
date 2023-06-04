@@ -198,6 +198,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
 
     ensureGStreamerInitialized();
     m_audioSink = createAudioSink();
+    ensureSeekFlags();
 
 #if USE(WPE_VIDEO_PLANE_DISPLAY_DMABUF)
     auto& sharedDisplay = PlatformDisplay::sharedDisplay();
@@ -329,7 +330,7 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
         m_fillTimer.stop();
 
     ASSERT(m_pipeline);
-
+    setVisibleInViewport(m_player->isVisibleInViewport());
     setPlaybinURL(url);
 
     GST_DEBUG_OBJECT(pipeline(), "preload: %s", convertEnumerationToString(m_preload).utf8().data());
@@ -402,6 +403,10 @@ void MediaPlayerPrivateGStreamer::play()
         m_preload = MediaPlayer::Preload::Auto;
         updateDownloadBufferingFlag();
         GST_INFO_OBJECT(pipeline(), "Play");
+        if (m_player->isLooping()) {
+            GST_DEBUG_OBJECT(pipeline(), "Scheduling initial SEGMENT seek");
+            doSeek(playbackPosition(), m_playbackRate);
+        }
     } else
         loadingFailed(MediaPlayer::NetworkState::Empty);
 }
@@ -442,7 +447,7 @@ bool MediaPlayerPrivateGStreamer::paused() const
     return paused;
 }
 
-bool MediaPlayerPrivateGStreamer::doSeek(const MediaTime& position, float rate, GstSeekFlags seekFlags)
+bool MediaPlayerPrivateGStreamer::doSeek(const MediaTime& position, float rate)
 {
     // Default values for rate >= 0.
     MediaTime startTime = position, endTime = MediaTime::invalidTime();
@@ -461,9 +466,20 @@ bool MediaPlayerPrivateGStreamer::doSeek(const MediaTime& position, float rate, 
         g_object_set(m_downloadBuffer.get(), "high-percent", 0, nullptr);
     }
 
-    GST_DEBUG_OBJECT(pipeline(), "[Seek] Performing actual seek to %" GST_TIME_FORMAT " (endTime: %" GST_TIME_FORMAT ") at rate %f", GST_TIME_ARGS(toGstClockTime(startTime)), GST_TIME_ARGS(toGstClockTime(endTime)), rate);
-    return gst_element_seek(m_pipeline.get(), rate, GST_FORMAT_TIME, seekFlags,
-        GST_SEEK_TYPE_SET, toGstClockTime(startTime), GST_SEEK_TYPE_SET, toGstClockTime(endTime));
+    if (paused() && !m_isEndReached && m_player->isLooping()) {
+        GST_DEBUG_OBJECT(pipeline(), "Segment non-flushing seek attempt not supported on a paused pipeline, enabling flush");
+        m_seekFlags = static_cast<GstSeekFlags>((m_seekFlags | GST_SEEK_FLAG_FLUSH) & ~GST_SEEK_FLAG_SEGMENT);
+    }
+
+    if (rate && m_player->isLooping() && startTime >= durationMediaTime()) {
+        didEnd();
+        return true;
+    }
+
+    auto seekStart = toGstClockTime(startTime);
+    auto seekStop = toGstClockTime(endTime);
+    GST_DEBUG_OBJECT(pipeline(), "[Seek] Performing actual seek to %" GST_TIMEP_FORMAT " (endTime: %" GST_TIMEP_FORMAT ") at rate %f", &seekStart, &seekStop, rate);
+    return gst_element_seek(m_pipeline.get(), rate, GST_FORMAT_TIME, m_seekFlags, GST_SEEK_TYPE_SET, seekStart, GST_SEEK_TYPE_SET, seekStop);
 }
 
 void MediaPlayerPrivateGStreamer::seek(const MediaTime& mediaTime)
@@ -501,9 +517,25 @@ void MediaPlayerPrivateGStreamer::seek(const MediaTime& mediaTime)
         GST_DEBUG_OBJECT(pipeline(), "[Seek] cannot seek, current state change is %s", gst_element_state_change_return_get_name(getStateResult));
         return;
     }
+
+    if (m_player->isLooping() && isSeamlessSeekingEnabled() && state > GST_STATE_PAUSED) {
+        // Segment seeking is synchronous, the pipeline state is not changed, no flush is done.
+        GST_DEBUG_OBJECT(pipeline(), "Performing segment seek");
+        m_isSeeking = true;
+        if (!doSeek(time, m_player->rate())) {
+            GST_DEBUG_OBJECT(pipeline(), "[Seek] seeking to %s failed", toString(time).utf8().data());
+            return;
+        }
+        m_isEndReached = false;
+        m_isSeeking = false;
+        m_cachedPosition = MediaTime::zeroTime();
+        timeChanged();
+        return;
+    }
+
     if (getStateResult == GST_STATE_CHANGE_ASYNC || state < GST_STATE_PAUSED || m_isEndReached) {
         m_isSeekPending = true;
-        if (m_isEndReached) {
+        if (m_isEndReached && (!m_player->isLooping() || !isSeamlessSeekingEnabled())) {
             GST_DEBUG_OBJECT(pipeline(), "[Seek] reset pipeline");
             m_shouldResetPipeline = true;
             if (!changePipelineState(GST_STATE_PAUSED))
@@ -511,7 +543,7 @@ void MediaPlayerPrivateGStreamer::seek(const MediaTime& mediaTime)
         }
     } else {
         // We can seek now.
-        if (!doSeek(time, m_player->rate(), static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE))) {
+        if (!doSeek(time, m_player->rate())) {
             GST_DEBUG_OBJECT(pipeline(), "[Seek] seeking to %s failed", toString(time).utf8().data());
             return;
         }
@@ -535,7 +567,7 @@ void MediaPlayerPrivateGStreamer::updatePlaybackRate()
     GST_INFO_OBJECT(pipeline(), mute ? "Need to mute audio" : "Do not need to mute audio");
 
     if (m_lastPlaybackRate != m_playbackRate) {
-        if (doSeek(playbackPosition(), m_playbackRate, static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH))) {
+        if (doSeek(playbackPosition(), m_playbackRate)) {
             g_object_set(m_pipeline.get(), "mute", mute, nullptr);
             m_lastPlaybackRate = m_playbackRate;
         } else {
@@ -865,15 +897,14 @@ bool MediaPlayerPrivateGStreamer::changePipelineState(GstState newState)
 {
     ASSERT(m_pipeline);
 
-    GstState currentState, pending;
-
-    gst_element_get_state(m_pipeline.get(), &currentState, &pending, 0);
-    if (currentState == newState || pending == newState) {
-        GST_DEBUG_OBJECT(pipeline(), "Rejected state change to %s from %s with %s pending", gst_element_state_get_name(newState),
-            gst_element_state_get_name(currentState), gst_element_state_get_name(pending));
+    if (!m_isVisibleInViewport && newState > GST_STATE_PAUSED) {
+        GST_DEBUG_OBJECT(pipeline(), "Saving state for when player becomes visible: %s", gst_element_state_get_name(newState));
+        m_invisiblePlayerState = newState;
         return true;
     }
 
+    GstState currentState, pending;
+    gst_element_get_state(m_pipeline.get(), &currentState, &pending, 0);
     GST_DEBUG_OBJECT(pipeline(), "Changing state change to %s from %s with %s pending", gst_element_state_get_name(newState),
         gst_element_state_get_name(currentState), gst_element_state_get_name(pending));
 
@@ -1224,16 +1255,6 @@ GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
 #else
     return audioSink;
 #endif
-}
-
-GstElement* MediaPlayerPrivateGStreamer::audioSink() const
-{
-    if (!m_pipeline)
-        return nullptr;
-
-    GstElement* sink;
-    g_object_get(m_pipeline.get(), "audio-sink", &sink, nullptr);
-    return sink;
 }
 
 bool MediaPlayerPrivateGStreamer::isMediaStreamPlayer() const
@@ -1752,7 +1773,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         MediaTime duration = durationMediaTime();
         GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
         bool eosFlagIsSetInSink = false;
-        if (m_videoSink) {
+        if (m_player->isVideoPlayer()) {
             GRefPtr<GstPad> sinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
             eosFlagIsSetInSink = sinkPad && GST_PAD_IS_EOS(sinkPad.get());
         }
@@ -2473,7 +2494,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
         if (m_isSeekPending) {
             GST_DEBUG_OBJECT(pipeline(), "[Seek] committing pending seek to %s", toString(m_seekTime).utf8().data());
             m_isSeekPending = false;
-            m_isSeeking = doSeek(m_seekTime, m_player->rate(), static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE));
+            m_isSeeking = doSeek(m_seekTime, m_player->rate());
             if (!m_isSeeking) {
                 invalidateCachedPosition();
                 GST_DEBUG_OBJECT(pipeline(), "[Seek] seeking to %s failed", toString(m_seekTime).utf8().data());
@@ -2623,6 +2644,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
         wpe_video_plane_display_dmabuf_source_end_of_stream(m_wpeVideoPlaneDisplayDmaBuf.get());
 #endif
     }
+
     timeChanged();
 }
 
@@ -2812,6 +2834,15 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
         player->handleNeedContextMessage(message);
     }), this);
 
+    g_signal_connect_swapped(bus.get(), "message::segment-done", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage*) {
+        callOnMainThread([weakThis = WeakPtr { *player }, player] {
+            if (!weakThis || !player->m_player->isLooping())
+                return;
+            GST_DEBUG_OBJECT(player->pipeline(), "Handling segment-done message");
+            player->didEnd();
+        });
+    }), this);
+
     // In the MSE case stream collection messages are emitted from the main thread right before the
     // initilization segment is parsed and "updateend" is fired. We need therefore to handle these
     // synchronously in the same main thread tick to make the tracks information available to JS no
@@ -2999,6 +3030,12 @@ bool MediaPlayerPrivateGStreamer::performTaskAtMediaTime(Function<void()>&& task
         RunLoop::main().dispatch(WTFMove(taskToSchedule.value()));
 
     return true;
+}
+
+void MediaPlayerPrivateGStreamer::isLoopingChanged()
+{
+    GST_DEBUG_OBJECT(m_pipeline.get(), "Looping attribute changed to: %s", boolForPrinting(m_player->isLooping()));
+    ensureSeekFlags();
 }
 
 #if USE(TEXTURE_MAPPER_GL)
@@ -3517,6 +3554,12 @@ void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() cons
     });
 }
 
+void MediaPlayerPrivateGStreamer::ensureSeekFlags()
+{
+    auto flag = m_player->isLooping() ? GST_SEEK_FLAG_SEGMENT : GST_SEEK_FLAG_FLUSH;
+    m_seekFlags = static_cast<GstSeekFlags>(flag | GST_SEEK_FLAG_ACCURATE);
+}
+
 void MediaPlayerPrivateGStreamer::triggerRepaint(GRefPtr<GstSample>&& sample)
 {
     ASSERT(!isMainThread());
@@ -3667,6 +3710,35 @@ void MediaPlayerPrivateGStreamer::flushCurrentBuffer()
 }
 #endif
 
+void MediaPlayerPrivateGStreamer::setVisibleInViewport(bool isVisible)
+{
+    if (isMediaStreamPlayer())
+        return;
+
+    // Some layout tests (webgl) expect playback of invisible videos to not be suspended, so allow
+    // this using an environment variable, set from the webkitpy glib port sub-classes.
+    const char* allowPlaybackOfInvisibleVideos = g_getenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS");
+    if (!isVisible && allowPlaybackOfInvisibleVideos && !strcmp(allowPlaybackOfInvisibleVideos, "1"))
+        return;
+
+    GST_INFO_OBJECT(m_pipeline.get(), "%s %s player %svisible in viewport", m_isMuted ? "Muted" : "Un-muted", m_player->isVideoPlayer() ? "video" : "audio", isVisible ? "" : "no longer ");
+    if (!m_player->isVideoPlayer() || !m_isMuted)
+        return;
+
+    if (!isVisible) {
+        GstState currentState;
+        gst_element_get_state(m_pipeline.get(), &currentState, nullptr, 0);
+        if (currentState > GST_STATE_NULL)
+            m_invisiblePlayerState = currentState;
+        m_isVisibleInViewport = false;
+        gst_element_set_state(m_pipeline.get(), GST_STATE_PAUSED);
+    } else {
+        m_isVisibleInViewport = true;
+        if (m_invisiblePlayerState != GST_STATE_VOID_PENDING)
+            changePipelineState(m_invisiblePlayerState);
+    }
+}
+
 void MediaPlayerPrivateGStreamer::setPresentationSize(const IntSize& size)
 {
     m_size = size;
@@ -3677,7 +3749,7 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (context.paintingDisabled())
         return;
 
-    if (!m_visible)
+    if (!m_visible || !m_isVisibleInViewport)
         return;
 
     Locker sampleLocker { m_sampleMutex };
@@ -3964,7 +4036,7 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
         m_isUsingFallbackVideoSink = true;
         m_videoSink = webkitVideoSinkNew();
         g_signal_connect_swapped(m_videoSink.get(), "repaint-requested", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstSample* sample) {
-            player->triggerRepaint(adoptGRef(sample));
+            player->triggerRepaint(GRefPtr<GstSample>(sample));
         }), this);
         g_signal_connect_swapped(m_videoSink.get(), "repaint-cancelled", G_CALLBACK(repaintCancelledCallback), this);
     }
