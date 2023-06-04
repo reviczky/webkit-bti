@@ -705,12 +705,15 @@ void HTMLImageElement::setDecoding(AtomString&& decodingMode)
 String HTMLImageElement::decoding() const
 {
     switch (decodingMode()) {
+    case DecodingMode::Auto:
+        break;
+    case DecodingMode::SynchronousThumbnail:
+        ASSERT_NOT_REACHED();
+        break;
     case DecodingMode::Synchronous:
         return "sync"_s;
     case DecodingMode::Asynchronous:
         return "async"_s;
-    case DecodingMode::Auto:
-        break;
     }
     return autoAtom();
 }
@@ -1018,6 +1021,32 @@ Ref<Element> HTMLImageElement::cloneElementWithoutAttributesAndChildren(Document
     }
 #endif
     return clone;
+}
+
+bool HTMLImageElement::originClean(const SecurityOrigin& origin) const
+{
+    UNUSED_PARAM(origin);
+
+    auto* cachedImage = this->cachedImage();
+    if (!cachedImage)
+        return true;
+
+    RefPtr image = cachedImage->image();
+    if (!image)
+        return true;
+
+    if (image->sourceURL().protocolIsData())
+        return true;
+
+    if (image->renderingTaintsOrigin())
+        return false;
+
+    if (cachedImage->isCORSCrossOrigin())
+        return false;
+
+    ASSERT(cachedImage->origin());
+    ASSERT(origin.toString() == cachedImage->origin()->toString());
+    return true;
 }
 
 }
