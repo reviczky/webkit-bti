@@ -1,4 +1,4 @@
-webkit2gtk (2.41.5-1) UNRELEASED; urgency=medium
+webkit2gtk (2.41.5-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -9,7 +9,7 @@ webkit2gtk (2.41.5-1) UNRELEASED; urgency=medium
     - Add build dependency on libjxl-dev, JPEGXL is now enabled by
       default.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 14 Jun 2023 11:39:15 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 14 Jun 2023 15:10:20 +0200
 
 webkit2gtk (2.41.4-1) experimental; urgency=medium
 
