@@ -31,6 +31,7 @@
 #include "AbstractMacroAssembler.h"
 #include "JITOperationValidation.h"
 #include <wtf/MathExtras.h>
+#include <wtf/StdLibExtras.h>
 
 namespace JSC {
 
@@ -177,8 +178,8 @@ public:
     {
         if (isUInt12(imm.m_value))
             m_assembler.add<32>(dest, src, UInt12(imm.m_value));
-        else if (isUInt12(-imm.m_value))
-            m_assembler.sub<32>(dest, src, UInt12(-imm.m_value));
+        else if (isUInt12(toTwosComplement(imm.m_value)))
+            m_assembler.sub<32>(dest, src, UInt12(toTwosComplement(imm.m_value)));
         else if (src != dest) {
             move(imm, dest);
             add32(src, dest);
@@ -194,8 +195,8 @@ public:
 
         if (isUInt12(imm.m_value))
             m_assembler.add<32>(dataTempRegister, dataTempRegister, UInt12(imm.m_value));
-        else if (isUInt12(-imm.m_value))
-            m_assembler.sub<32>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        else if (isUInt12(toTwosComplement(imm.m_value)))
+            m_assembler.sub<32>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
         else {
             move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
             m_assembler.add<32>(dataTempRegister, dataTempRegister, memoryTempRegister);
@@ -214,8 +215,8 @@ public:
             return;
         }
 
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<32>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<32>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
             store32(dataTempRegister, address.m_ptr);
             return;
         }
@@ -255,34 +256,12 @@ public:
 
     void add64(TrustedImm32 imm, RegisterID dest)
     {
-        if (isUInt12(imm.m_value)) {
-            m_assembler.add<64>(dest, dest, UInt12(imm.m_value));
-            return;
-        }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<64>(dest, dest, UInt12(-imm.m_value));
-            return;
-        }
-
-        signExtend32ToPtr(imm, getCachedDataTempRegisterIDAndInvalidate());
-        m_assembler.add<64>(dest, dest, dataTempRegister);
+        add64(imm, dest, dest);
     }
 
     void add64(TrustedImm64 imm, RegisterID dest)
     {
-        intptr_t immediate = imm.m_value;
-
-        if (isUInt12(immediate)) {
-            m_assembler.add<64>(dest, dest, UInt12(static_cast<int32_t>(immediate)));
-            return;
-        }
-        if (isUInt12(-immediate)) {
-            m_assembler.sub<64>(dest, dest, UInt12(static_cast<int32_t>(-immediate)));
-            return;
-        }
-
-        move(imm, getCachedDataTempRegisterIDAndInvalidate());
-        m_assembler.add<64>(dest, dest, dataTempRegister);
+        add64(imm, dest, dest);
     }
 
     void add64(TrustedImm32 imm, RegisterID src, RegisterID dest)
@@ -291,8 +270,8 @@ public:
             m_assembler.add<64>(dest, src, UInt12(imm.m_value));
             return;
         }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<64>(dest, src, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<64>(dest, src, UInt12(toTwosComplement(imm.m_value)));
             return;
         }
 
@@ -308,9 +287,21 @@ public:
             m_assembler.add<64>(dest, src, UInt12(static_cast<int32_t>(immediate)));
             return;
         }
-        if (isUInt12(-immediate)) {
-            m_assembler.sub<64>(dest, src, UInt12(static_cast<int32_t>(-immediate)));
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.sub<64>(dest, src, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
             return;
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.add<64>(dest, src, UInt12(static_cast<int32_t>(shifted)), 12);
+                return;
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.sub<64>(dest, src, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                return;
+            }
         }
 
         move(imm, getCachedDataTempRegisterIDAndInvalidate());
@@ -323,8 +314,8 @@ public:
 
         if (isUInt12(imm.m_value))
             m_assembler.add<64>(dataTempRegister, dataTempRegister, UInt12(imm.m_value));
-        else if (isUInt12(-imm.m_value))
-            m_assembler.sub<64>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        else if (isUInt12(toTwosComplement(imm.m_value)))
+            m_assembler.sub<64>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
         else {
             signExtend32ToPtr(imm, getCachedMemoryTempRegisterIDAndInvalidate());
             m_assembler.add<64>(dataTempRegister, dataTempRegister, memoryTempRegister);
@@ -343,8 +334,8 @@ public:
             return;
         }
 
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<64>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<64>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
             store64(dataTempRegister, address.m_ptr);
             return;
         }
@@ -869,20 +860,20 @@ public:
         m_assembler.illegalInstruction();
     }
 
-    void countPopulation32(RegisterID src, RegisterID dst)
+    void countPopulation32(RegisterID src, RegisterID dst, FPRegisterID temp)
     {
-        move32ToFloat(src, fpTempRegister);
-        m_assembler.vectorCnt(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
-        m_assembler.addv(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
-        moveFloatTo32(fpTempRegister, dst);
+        move32ToFloat(src, temp);
+        m_assembler.vectorCnt(temp, temp, SIMDLane::i8x16);
+        m_assembler.addv(temp, temp, SIMDLane::i8x16);
+        moveFloatTo32(temp, dst);
     }
 
-    void countPopulation64(RegisterID src, RegisterID dst)
+    void countPopulation64(RegisterID src, RegisterID dst, FPRegisterID temp)
     {
-        move64ToDouble(src, fpTempRegister);
-        m_assembler.vectorCnt(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
-        m_assembler.addv(fpTempRegister, fpTempRegister, SIMDLane::i8x16);
-        moveDoubleTo64(fpTempRegister, dst);
+        move64ToDouble(src, temp);
+        m_assembler.vectorCnt(temp, temp, SIMDLane::i8x16);
+        m_assembler.addv(temp, temp, SIMDLane::i8x16);
+        moveDoubleTo64(temp, dst);
     }
 
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
@@ -1312,8 +1303,8 @@ public:
             m_assembler.sub<32>(dest, left, UInt12(immediate));
             return;
         }
-        if (isUInt12(-immediate)) {
-            m_assembler.add<32>(dest, left, UInt12(-immediate));
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.add<32>(dest, left, UInt12(toTwosComplement(immediate)));
             return;
         }
 
@@ -1327,8 +1318,8 @@ public:
 
         if (isUInt12(imm.m_value))
             m_assembler.sub<32>(dataTempRegister, dataTempRegister, UInt12(imm.m_value));
-        else if (isUInt12(-imm.m_value))
-            m_assembler.add<32>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        else if (isUInt12(toTwosComplement(imm.m_value)))
+            m_assembler.add<32>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
         else {
             move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
             m_assembler.sub<32>(dataTempRegister, dataTempRegister, memoryTempRegister);
@@ -1347,8 +1338,8 @@ public:
             return;
         }
 
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.add<32>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.add<32>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
             store32(dataTempRegister, address.m_ptr);
             return;
         }
@@ -1387,8 +1378,8 @@ public:
             m_assembler.sub<64>(dest, left, UInt12(immediate));
             return;
         }
-        if (isUInt12(-immediate)) {
-            m_assembler.add<64>(dest, left, UInt12(-immediate));
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.add<64>(dest, left, UInt12(toTwosComplement(immediate)));
             return;
         }
 
@@ -1409,9 +1400,21 @@ public:
             m_assembler.sub<64>(dest, left, UInt12(static_cast<int32_t>(immediate)));
             return;
         }
-        if (isUInt12(-immediate)) {
-            m_assembler.add<64>(dest, left, UInt12(static_cast<int32_t>(-immediate)));
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.add<64>(dest, left, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
             return;
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.sub<64>(dest, left, UInt12(static_cast<int32_t>(shifted)), 12);
+                return;
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.add<64>(dest, left, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                return;
+            }
         }
 
         move(imm, getCachedDataTempRegisterIDAndInvalidate());
@@ -1894,7 +1897,7 @@ public:
 
     void zeroExtend16To32(RegisterID src, RegisterID dest)
     {
-        m_assembler.uxth<32>(dest, src);
+        and32(TrustedImm32(0xffff), src, dest);
     }
 
     void signExtend16To32(RegisterID src, RegisterID dest)
@@ -1904,7 +1907,7 @@ public:
 
     void zeroExtend16To64(RegisterID src, RegisterID dest)
     {
-        m_assembler.uxth<64>(dest, src);
+        and64(TrustedImm64(0xffff), src, dest);
     }
 
     void signExtend16To64(RegisterID src, RegisterID dest)
@@ -1981,7 +1984,7 @@ public:
 
     void zeroExtend8To32(RegisterID src, RegisterID dest)
     {
-        m_assembler.uxtb<32>(dest, src);
+        and32(TrustedImm32(0xff), src, dest);
     }
 
     void signExtend8To32(RegisterID src, RegisterID dest)
@@ -1991,7 +1994,7 @@ public:
 
     void zeroExtend8To64(RegisterID src, RegisterID dest)
     {
-        m_assembler.uxtb<64>(dest, src);
+        and64(TrustedImm64(0xff), src, dest);
     }
 
     void signExtend8To64(RegisterID src, RegisterID dest)
@@ -2301,6 +2304,30 @@ public:
         store16(dataTempRegister, address);
     }
 
+    void store16(TrustedImm32 imm, Address address)
+    {
+        TrustedImm32 imm16(static_cast<int16_t>(imm.m_value));
+        if (!imm16.m_value) {
+            store16(ARM64Registers::zr, address);
+            return;
+        }
+
+        move(imm16, getCachedDataTempRegisterIDAndInvalidate());
+        store16(dataTempRegister, address);
+    }
+
+    void store16(TrustedImm32 imm, BaseIndex address)
+    {
+        TrustedImm32 imm16(static_cast<int16_t>(imm.m_value));
+        if (!imm16.m_value) {
+            store16(ARM64Registers::zr, address);
+            return;
+        }
+
+        move(imm16, getCachedDataTempRegisterIDAndInvalidate());
+        store16(dataTempRegister, address);
+    }
+
     void store8(RegisterID src, BaseIndex address)
     {
         if (address.scale == TimesOne) {
@@ -2343,6 +2370,18 @@ public:
     }
 
     void store8(TrustedImm32 imm, Address address)
+    {
+        TrustedImm32 imm8(static_cast<int8_t>(imm.m_value));
+        if (!imm8.m_value) {
+            store8(ARM64Registers::zr, address);
+            return;
+        }
+
+        move(imm8, getCachedDataTempRegisterIDAndInvalidate());
+        store8(dataTempRegister, address);
+    }
+
+    void store8(TrustedImm32 imm, BaseIndex address)
     {
         TrustedImm32 imm8(static_cast<int8_t>(imm.m_value));
         if (!imm8.m_value) {
@@ -3279,7 +3318,12 @@ public:
 
     void zeroExtend32ToWord(RegisterID src, RegisterID dest)
     {
-        m_assembler.uxtw(dest, src);
+        and64(TrustedImm64(0xffffffffU), src, dest);
+    }
+
+    void zeroExtend48ToWord(RegisterID src, RegisterID dest)
+    {
+        m_assembler.ubfx<64>(dest, src, 0, 48);
     }
 
     void moveConditionally32(RelationalCondition cond, RegisterID left, RegisterID right, RegisterID src, RegisterID dest)
@@ -3305,8 +3349,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<32>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<32>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<32>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<32>(left, dataTempRegister);
@@ -3337,12 +3381,52 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<64>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<64>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<64>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<64>(left, dataTempRegister);
         }
+        m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
+    }
+
+    void moveConditionally64(RelationalCondition cond, RegisterID left, TrustedImm64 right, RegisterID thenCase, RegisterID elseCase, RegisterID dest)
+    {
+        intptr_t immediate = right.m_value;
+        if (!immediate) {
+            if (auto resultCondition = commuteCompareToZeroIntoTest(cond)) {
+                moveConditionallyTest64(*resultCondition, left, left, thenCase, elseCase, dest);
+                return;
+            }
+        }
+
+        if (isUInt12(immediate)) {
+            m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(immediate)));
+            m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
+            return;
+        }
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
+            m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
+            return;
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(shifted)), 12);
+                m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
+                return;
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
+                return;
+            }
+        }
+
+        moveToCachedReg(right, dataMemoryTempRegister());
+        m_assembler.cmp<64>(left, dataTempRegister);
         m_assembler.csel<64>(dest, thenCase, elseCase, ARM64Condition(cond));
     }
 
@@ -3393,8 +3477,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<32>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<32>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<32>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<32>(left, dataTempRegister);
@@ -3419,8 +3503,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<64>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<64>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<64>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<64>(left, dataTempRegister);
@@ -3479,8 +3563,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<32>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<32>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<32>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<32>(left, dataTempRegister);
@@ -3549,8 +3633,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<64>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<64>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<64>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             moveToCachedReg(right, dataMemoryTempRegister());
             m_assembler.cmp<64>(left, dataTempRegister);
@@ -3566,14 +3650,29 @@ public:
                 return branchTest64(*resultCondition, left, left);
         }
 
-        if (isUInt12(immediate))
+        if (isUInt12(immediate)) {
             m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(immediate)));
-        else if (isUInt12(-immediate))
-            m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(-immediate)));
-        else {
-            moveToCachedReg(right, dataMemoryTempRegister());
-            m_assembler.cmp<64>(left, dataTempRegister);
+            return Jump(makeBranch(cond));
         }
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
+            return Jump(makeBranch(cond));
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(shifted)), 12);
+                return Jump(makeBranch(cond));
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                return Jump(makeBranch(cond));
+            }
+        }
+
+        moveToCachedReg(right, dataMemoryTempRegister());
+        m_assembler.cmp<64>(left, dataTempRegister);
         return Jump(makeBranch(cond));
     }
 
@@ -3893,8 +3992,8 @@ public:
             m_assembler.add<32, S>(dest, op1, UInt12(imm.m_value));
             return Jump(makeBranch(cond));
         }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<32, S>(dest, op1, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<32, S>(dest, op1, UInt12(toTwosComplement(imm.m_value)));
             return Jump(makeBranch(cond));
         }
 
@@ -3925,8 +4024,8 @@ public:
         if (isUInt12(imm.m_value)) {
             m_assembler.add<32, S>(dataTempRegister, dataTempRegister, UInt12(imm.m_value));
             store32(dataTempRegister, address.m_ptr);
-        } else if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<32, S>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        } else if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<32, S>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
             store32(dataTempRegister, address.m_ptr);
         } else {
             move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
@@ -3943,8 +4042,8 @@ public:
 
         if (isUInt12(imm.m_value))
             m_assembler.add<32, S>(dataTempRegister, dataTempRegister, UInt12(imm.m_value));
-        else if (isUInt12(-imm.m_value))
-            m_assembler.sub<32, S>(dataTempRegister, dataTempRegister, UInt12(-imm.m_value));
+        else if (isUInt12(toTwosComplement(imm.m_value)))
+            m_assembler.sub<32, S>(dataTempRegister, dataTempRegister, UInt12(toTwosComplement(imm.m_value)));
         else {
             move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
             m_assembler.add<32, S>(dataTempRegister, dataTempRegister, memoryTempRegister);
@@ -3966,8 +4065,8 @@ public:
             m_assembler.add<64, S>(dest, op1, UInt12(imm.m_value));
             return Jump(makeBranch(cond));
         }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.sub<64, S>(dest, op1, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.sub<64, S>(dest, op1, UInt12(toTwosComplement(imm.m_value)));
             return Jump(makeBranch(cond));
         }
 
@@ -3987,12 +4086,13 @@ public:
 
     Jump branchAdd64(RelationalCondition cond, TrustedImm32 imm, RegisterID dest)
     {
+        // This is not supporting -imm.m_value UInt12. Thus we are not listing BranchAdd64 RelCond, Imm, Tmp in AirOpcode.opcodes.
         ASSERT(isUInt12(imm.m_value));
         m_assembler.add<64, S>(dest, dest, UInt12(imm.m_value));
         return Jump(makeBranch(cond));
     }
 
-    Jump branchMul32(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID scratch1, RegisterID scratch2, RegisterID dest)
+    Jump branchMul32(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID dest)
     {
         ASSERT(cond != Signed);
 
@@ -4003,19 +4103,9 @@ public:
 
         // This is a signed multiple of two 32-bit values, producing a 64-bit result.
         m_assembler.smull(dest, src1, src2);
-        // Copy bits 63..32 of the result to bits 31..0 of scratch1.
-        m_assembler.asr<64>(scratch1, dest, 32);
-        // Splat bit 31 of the result to bits 31..0 of scratch2.
-        m_assembler.asr<32>(scratch2, dest, 31);
-        // After a mul32 the top 32 bits of the register should be clear.
+        m_assembler.cmp<64>(dest, dest, Assembler::SXTW, 0);
         zeroExtend32ToWord(dest, dest);
-        // Check that bits 31..63 of the original result were all equal.
-        return branch32(NotEqual, scratch2, scratch1);
-    }
-
-    Jump branchMul32(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID dest)
-    {
-        return branchMul32(cond, src1, src2, getCachedDataTempRegisterIDAndInvalidate(), getCachedMemoryTempRegisterIDAndInvalidate(), dest);
+        return Jump(makeBranch(NotEqual));
     }
 
     Jump branchMul32(ResultCondition cond, RegisterID src, RegisterID dest)
@@ -4029,7 +4119,7 @@ public:
         return branchMul32(cond, dataTempRegister, src, dest);
     }
 
-    Jump branchMul64(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID scratch1, RegisterID scratch2, RegisterID dest)
+    Jump branchMul64(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID scratch1, RegisterID dest)
     {
         ASSERT(cond != Signed);
 
@@ -4041,15 +4131,15 @@ public:
 
         // Compute bits 127..64 of the result into scratch1.
         m_assembler.smulh(scratch1, src1, src2);
-        // Splat bit 63 of the result to bits 63..0 of scratch2.
-        m_assembler.asr<64>(scratch2, dest, 63);
+        // Splat bit 63 of the result to bits 63..0 of scratch1.
+        m_assembler.cmp<64>(scratch1, dest, Assembler::ASR, 63);
         // Check that bits 31..63 of the original result were all equal.
-        return branch64(NotEqual, scratch2, scratch1);
+        return Jump(makeBranch(NotEqual));
     }
 
     Jump branchMul64(ResultCondition cond, RegisterID src1, RegisterID src2, RegisterID dest)
     {
-        return branchMul64(cond, src1, src2, getCachedDataTempRegisterIDAndInvalidate(), getCachedMemoryTempRegisterIDAndInvalidate(), dest);
+        return branchMul64(cond, src1, src2, getCachedDataTempRegisterIDAndInvalidate(), dest);
     }
 
     Jump branchMul64(ResultCondition cond, RegisterID src, RegisterID dest)
@@ -4087,8 +4177,8 @@ public:
             m_assembler.sub<32, S>(dest, op1, UInt12(imm.m_value));
             return Jump(makeBranch(cond));
         }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.add<32, S>(dest, op1, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.add<32, S>(dest, op1, UInt12(toTwosComplement(imm.m_value)));
             return Jump(makeBranch(cond));
         }
 
@@ -4118,8 +4208,8 @@ public:
             m_assembler.sub<64, S>(dest, op1, UInt12(imm.m_value));
             return Jump(makeBranch(cond));
         }
-        if (isUInt12(-imm.m_value)) {
-            m_assembler.add<64, S>(dest, op1, UInt12(-imm.m_value));
+        if (isUInt12(toTwosComplement(imm.m_value))) {
+            m_assembler.add<64, S>(dest, op1, UInt12(toTwosComplement(imm.m_value)));
             return Jump(makeBranch(cond));
         }
 
@@ -4139,11 +4229,11 @@ public:
 
     Jump branchSub64(RelationalCondition cond, TrustedImm32 imm, RegisterID dest)
     {
+        // This is not supporting -imm.m_value UInt12. Thus we are not listing BranchSub64 RelCond, Imm, Tmp in AirOpcode.opcodes.
         ASSERT(isUInt12(imm.m_value));
         m_assembler.sub<64, S>(dest, dest, UInt12(imm.m_value));
         return Jump(makeBranch(cond));
     }
-
 
     // Jumps, calls, returns
 
@@ -4295,8 +4385,8 @@ public:
 
         if (isUInt12(right.m_value))
             m_assembler.cmp<32>(left, UInt12(right.m_value));
-        else if (isUInt12(-right.m_value))
-            m_assembler.cmn<32>(left, UInt12(-right.m_value));
+        else if (isUInt12(toTwosComplement(right.m_value)))
+            m_assembler.cmn<32>(left, UInt12(toTwosComplement(right.m_value)));
         else {
             move(right, getCachedDataTempRegisterIDAndInvalidate());
             m_assembler.cmp<32>(left, dataTempRegister);
@@ -4312,14 +4402,80 @@ public:
     
     void compare64(RelationalCondition cond, RegisterID left, TrustedImm32 right, RegisterID dest)
     {
-        if (!right.m_value) {
+        intptr_t immediate = right.m_value;
+        if (!immediate) {
             if (auto resultCondition = commuteCompareToZeroIntoTest(cond)) {
                 test64(*resultCondition, left, left, dest);
                 return;
             }
         }
 
+        if (isUInt12(immediate)) {
+            m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(immediate)));
+            m_assembler.cset<32>(dest, ARM64Condition(cond));
+            return;
+        }
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
+            m_assembler.cset<32>(dest, ARM64Condition(cond));
+            return;
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(shifted)), 12);
+                m_assembler.cset<32>(dest, ARM64Condition(cond));
+                return;
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                m_assembler.cset<32>(dest, ARM64Condition(cond));
+                return;
+            }
+        }
+
         signExtend32ToPtr(right, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.cmp<64>(left, dataTempRegister);
+        m_assembler.cset<32>(dest, ARM64Condition(cond));
+    }
+
+    void compare64(RelationalCondition cond, RegisterID left, TrustedImm64 right, RegisterID dest)
+    {
+        intptr_t immediate = right.m_value;
+        if (!immediate) {
+            if (auto resultCondition = commuteCompareToZeroIntoTest(cond)) {
+                test64(*resultCondition, left, left, dest);
+                return;
+            }
+        }
+
+        if (isUInt12(immediate)) {
+            m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(immediate)));
+            m_assembler.cset<32>(dest, ARM64Condition(cond));
+            return;
+        }
+        if (isUInt12(toTwosComplement(immediate))) {
+            m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(immediate))));
+            m_assembler.cset<32>(dest, ARM64Condition(cond));
+            return;
+        }
+
+        int64_t shifted = immediate >> 12;
+        if ((shifted << 12) == immediate) {
+            if (isUInt12(shifted)) {
+                m_assembler.cmp<64>(left, UInt12(static_cast<int32_t>(shifted)), 12);
+                m_assembler.cset<32>(dest, ARM64Condition(cond));
+                return;
+            }
+            if (isUInt12(toTwosComplement(shifted))) {
+                m_assembler.cmn<64>(left, UInt12(static_cast<int32_t>(toTwosComplement(shifted))), 12);
+                m_assembler.cset<32>(dest, ARM64Condition(cond));
+                return;
+            }
+        }
+
+        move(right, getCachedDataTempRegisterIDAndInvalidate());
         m_assembler.cmp<64>(left, dataTempRegister);
         m_assembler.cset<32>(dest, ARM64Condition(cond));
     }
@@ -6179,8 +6335,8 @@ protected:
             m_assembler.add<64>(getCachedMemoryTempRegisterIDAndInvalidate(), address.base, UInt12(address.offset));
             return memoryTempRegister;
         }
-        if (isUInt12(-address.offset)) {
-            m_assembler.sub<64>(getCachedMemoryTempRegisterIDAndInvalidate(), address.base, UInt12(-address.offset));
+        if (isUInt12(toTwosComplement(address.offset))) {
+            m_assembler.sub<64>(getCachedMemoryTempRegisterIDAndInvalidate(), address.base, UInt12(toTwosComplement(address.offset)));
             return memoryTempRegister;
         }
         return std::nullopt;

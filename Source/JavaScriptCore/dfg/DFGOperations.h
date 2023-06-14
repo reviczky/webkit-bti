@@ -310,6 +310,9 @@ JSC_DECLARE_JIT_OPERATION(operationMakeRope2, JSString*, (JSGlobalObject*, JSStr
 JSC_DECLARE_JIT_OPERATION(operationMakeRope3, JSString*, (JSGlobalObject*, JSString*, JSString*, JSString*));
 JSC_DECLARE_JIT_OPERATION(operationStrCat2, JSString*, (JSGlobalObject*, EncodedJSValue, EncodedJSValue));
 JSC_DECLARE_JIT_OPERATION(operationStrCat3, JSString*, (JSGlobalObject*, EncodedJSValue, EncodedJSValue, EncodedJSValue));
+JSC_DECLARE_JIT_OPERATION(operationMakeAtomString1, JSString*, (JSGlobalObject*, JSString*));
+JSC_DECLARE_JIT_OPERATION(operationMakeAtomString2, JSString*, (JSGlobalObject*, JSString*, JSString*));
+JSC_DECLARE_JIT_OPERATION(operationMakeAtomString3, JSString*, (JSGlobalObject*, JSString*, JSString*, JSString*));
 JSC_DECLARE_JIT_OPERATION(operationFindSwitchImmTargetForDouble, char*, (VM*, EncodedJSValue, size_t tableIndex, int32_t));
 JSC_DECLARE_JIT_OPERATION(operationSwitchString, char*, (JSGlobalObject*, size_t tableIndex, const UnlinkedStringJumpTable*, JSString*));
 JSC_DECLARE_JIT_OPERATION(operationCompareStringImplLess, uintptr_t, (StringImpl*, StringImpl*));
@@ -350,6 +353,8 @@ JSC_DECLARE_JIT_OPERATION(operationConvertBoxedDoubleToInt52, int64_t, (EncodedJ
 JSC_DECLARE_JIT_OPERATION(operationConvertDoubleToInt52, int64_t, (double));
 
 JSC_DECLARE_JIT_OPERATION(operationNumberIsInteger, size_t, (JSGlobalObject*, EncodedJSValue));
+JSC_DECLARE_JIT_OPERATION(operationNumberIsNaN, UCPUStrictInt32, (EncodedJSValue));
+JSC_DECLARE_JIT_OPERATION(operationIsNaN, UCPUStrictInt32, (JSGlobalObject*, EncodedJSValue));
 
 JSC_DECLARE_JIT_OPERATION(operationNewRawObject, char*, (VM*, Structure*, int32_t, Butterfly*));
 JSC_DECLARE_JIT_OPERATION(operationNewObjectWithButterfly, JSCell*, (VM*, Structure*, Butterfly*));

@@ -596,6 +596,15 @@ enum class WhiteSpace : uint8_t {
     BreakSpaces
 };
 
+enum class WhiteSpaceCollapse : uint8_t {
+    Collapse,
+    Discard,
+    Preserve,
+    PreserveBreaks,
+    PreserveSpaces,
+    BreakSpaces
+};
+
 enum class ReflectionDirection : uint8_t {
     Below,
     Above,
@@ -746,9 +755,7 @@ enum class EmptyCell : bool {
 
 enum class CaptionSide : uint8_t {
     Top,
-    Bottom,
-    Left,
-    Right
+    Bottom
 };
 
 enum class ListStylePosition : bool {
@@ -1276,6 +1283,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, UserSelect);
 WTF::TextStream& operator<<(WTF::TextStream&, VerticalAlign);
 WTF::TextStream& operator<<(WTF::TextStream&, Visibility);
 WTF::TextStream& operator<<(WTF::TextStream&, WhiteSpace);
+WTF::TextStream& operator<<(WTF::TextStream&, WhiteSpaceCollapse);
 WTF::TextStream& operator<<(WTF::TextStream&, WordBreak);
 WTF::TextStream& operator<<(WTF::TextStream&, MathStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, ContainIntrinsicSizeType);

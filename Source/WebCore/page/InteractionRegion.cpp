@@ -46,6 +46,7 @@
 #include "PathUtilities.h"
 #include "PlatformMouseEvent.h"
 #include "PseudoClassChangeInvalidation.h"
+#include "RenderAncestorIterator.h"
 #include "RenderBoxInlines.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
@@ -159,6 +160,27 @@ static bool shouldAllowNonPointerCursorForElement(const Element& element)
     return false;
 }
 
+static bool isOverlay(const RenderElement& renderer)
+{
+    if (renderer.style().specifiedZIndex() > 0)
+        return true;
+
+    if (renderer.isFixedPositioned())
+        return true;
+
+    if (auto* renderBox = dynamicDowncast<RenderBox>(renderer)) {
+        auto refContentBox = renderBox->absoluteContentBox();
+        for (auto& ancestor : ancestorsOfType<RenderBox>(renderer)) {
+            if (ancestor.absoluteContentBox() != refContentBox)
+                return false;
+            if (ancestor.isFixedPositioned())
+                return true;
+        }
+    }
+
+    return false;
+}
+
 std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject& regionRenderer, const Region& region)
 {
     if (!regionRenderer.node())
@@ -236,15 +258,14 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     bool detectedHoverRules = false;
     if (!hasPointer) {
         // The hover check can be expensive (it may end up doing selector matching), so we only run it on some elements.
-        bool hasVisualEdges = !renderer.style().borderAndBackgroundEqual(RenderStyle::defaultStyle());
+        bool hasVisibleBoxDecorations = renderer.hasVisibleBoxDecorations();
         bool nonScrollable = !renderer.hasPotentiallyScrollableOverflow();
-        if (hasVisualEdges && nonScrollable)
+        if (hasVisibleBoxDecorations && nonScrollable)
             detectedHoverRules = elementMatchesHoverRules(*matchedElement);
     }
 
     if (!hasListener || !(hasPointer || detectedHoverRules) || isTooBigForInteraction) {
-        bool isOverlay = renderer.style().specifiedZIndex() > 0 || renderer.isFixedPositioned();
-        if (isOverlay && isOriginalMatch) {
+        if (isOriginalMatch && isOverlay(renderer)) {
             return { {
                 InteractionRegion::Type::Occlusion,
                 elementIdentifier,
@@ -258,7 +279,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     bool isInlineNonBlock = renderer.isInline() && !renderer.isReplacedOrInlineBlock();
 
     // The parent will get its own InteractionRegion.
-    if (!isOriginalMatch && !isInlineNonBlock)
+    if (!isOriginalMatch && !isInlineNonBlock && !renderer.style().isDisplayTableOrTablePart())
         return std::nullopt;
 
     float borderRadius = 0;
@@ -294,12 +315,12 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         }
     }
 
-    bool hasNoVisualEdges = regionRenderer.style().borderAndBackgroundEqual(RenderStyle::defaultStyle());
-    if (isInlineNonBlock && hasNoVisualEdges)
-        bounds.inflate(regionRenderer.document().settings().interactionRegionInlinePadding());
-
-    if (hasNoVisualEdges)
+    if (!regionRenderer.hasVisibleBoxDecorations() && !renderer.hasVisibleBoxDecorations()) {
+        // We can safely tweak the bounds and radius without causing visual mismatch.
         borderRadius = std::max<float>(borderRadius, regionRenderer.document().settings().interactionRegionMinimumCornerRadius());
+        if (isInlineNonBlock)
+            bounds.inflate(regionRenderer.document().settings().interactionRegionInlinePadding());
+    }
 
     return { {
         InteractionRegion::Type::Interaction,

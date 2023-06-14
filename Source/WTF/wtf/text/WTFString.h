@@ -1,6 +1,6 @@
 /*
  * (C) 1999 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -46,7 +46,7 @@ WTF_EXPORT_PRIVATE float charactersToFloat(const UChar*, size_t, bool* ok = null
 WTF_EXPORT_PRIVATE float charactersToFloat(const LChar*, size_t, size_t& parsedLength);
 WTF_EXPORT_PRIVATE float charactersToFloat(const UChar*, size_t, size_t& parsedLength);
 
-template<bool isSpecialCharacter(UChar), typename CharacterType> bool isAllSpecialCharacters(const CharacterType*, size_t);
+template<bool isSpecialCharacter(UChar), typename CharacterType> bool containsOnly(const CharacterType*, size_t);
 
 enum TrailingZerosTruncatingPolicy { KeepTrailingZeros, TruncateTrailingZeros };
 
@@ -198,11 +198,9 @@ public:
     WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN convertToLowercaseWithLocale(const AtomString& localeIdentifier) const;
     WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN convertToUppercaseWithLocale(const AtomString& localeIdentifier) const;
 
-    WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN stripWhiteSpace() const;
-    WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN simplifyWhiteSpace() const;
     WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN simplifyWhiteSpace(CodeUnitMatchFunction) const;
 
-    WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN stripLeadingAndTrailingCharacters(CodeUnitMatchFunction) const;
+    WTF_EXPORT_PRIVATE String WARN_UNUSED_RETURN trim(CodeUnitMatchFunction) const;
     template<typename Predicate> String WARN_UNUSED_RETURN removeCharacters(const Predicate&) const;
 
     // Returns the string with case folded for case insensitive comparison.
@@ -244,7 +242,7 @@ public:
     WTF_EXPORT_PRIVATE RetainPtr<CFStringRef> createCFString() const;
 #endif
 
-#ifdef __OBJC__
+#if USE(FOUNDATION) && defined(__OBJC__)
 #if HAVE(SAFARI_FOR_WEBKIT_DEVELOPMENT_REQUIRING_EXTRA_SYMBOLS)
     WTF_EXPORT_PRIVATE String(NSString *);
 #else
@@ -289,9 +287,9 @@ public:
     // Determines the writing direction using the Unicode Bidi Algorithm rules P2 and P3.
     std::optional<UCharDirection> defaultWritingDirection() const;
 
-    bool isAllASCII() const { return !m_impl || m_impl->isAllASCII(); }
-    bool isAllLatin1() const { return !m_impl || m_impl->isAllLatin1(); }
-    template<bool isSpecialCharacter(UChar)> bool isAllSpecialCharacters() const { return !m_impl || m_impl->isAllSpecialCharacters<isSpecialCharacter>(); }
+    bool containsOnlyASCII() const { return !m_impl || m_impl->containsOnlyASCII(); }
+    bool containsOnlyLatin1() const { return !m_impl || m_impl->containsOnlyLatin1(); }
+    template<bool isSpecialCharacter(UChar)> bool containsOnly() const { return !m_impl || m_impl->containsOnly<isSpecialCharacter>(); }
 
     // Hash table deleted values, which are only constructed and never copied or destroyed.
     String(WTF::HashTableDeletedValueType) : m_impl(WTF::HashTableDeletedValue) { }
@@ -502,12 +500,12 @@ inline Expected<std::invoke_result_t<Func, std::span<const char>>, UTF8Conversio
 {
     if (!m_impl) {
         constexpr const char* emptyString = "";
-        return function(makeSpan(emptyString, emptyString));
+        return function(std::span(emptyString, emptyString));
     }
     return m_impl->tryGetUTF8(function, mode);
 }
 
-#ifdef __OBJC__
+#if USE(FOUNDATION) && defined(__OBJC__)
 
 inline String::operator NSString *() const
 {
@@ -563,24 +561,6 @@ inline bool startsWithLettersIgnoringASCIICase(const String& string, ASCIILitera
     return startsWithLettersIgnoringASCIICase(string.impl(), literal);
 }
 
-struct HashTranslatorASCIILiteral {
-    static unsigned hash(ASCIILiteral literal)
-    {
-        return StringHasher::computeHashAndMaskTop8Bits(literal.characters(), literal.length());
-    }
-
-    static bool equal(const String& a, ASCIILiteral b)
-    {
-        return a == b;
-    }
-
-    static void translate(String& location, ASCIILiteral literal, unsigned hash)
-    {
-        location = literal;
-        location.impl()->setHash(hash);
-    }
-};
-
 inline namespace StringLiterals {
 
 inline String operator"" _str(const char* characters, size_t)
@@ -588,11 +568,15 @@ inline String operator"" _str(const char* characters, size_t)
     return ASCIILiteral::fromLiteralUnsafe(characters);
 }
 
+inline String operator"" _str(const UChar* characters, size_t length)
+{
+    return String(characters, length);
+}
+
 } // inline StringLiterals
 
 } // namespace WTF
 
-using WTF::HashTranslatorASCIILiteral;
 using WTF::KeepTrailingZeros;
 using WTF::String;
 using WTF::charactersToDouble;
@@ -604,7 +588,7 @@ using WTF::makeStringByReplacingAll;
 using WTF::nullString;
 using WTF::equal;
 using WTF::find;
-using WTF::isAllSpecialCharacters;
+using WTF::containsOnly;
 using WTF::reverseFind;
 
 #include <wtf/text/AtomString.h>

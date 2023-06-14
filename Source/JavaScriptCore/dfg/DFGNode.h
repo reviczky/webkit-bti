@@ -668,7 +668,7 @@ public:
     
     void convertToPutByOffset(StorageAccessData& data, Edge storage, Edge base)
     {
-        ASSERT(m_op == PutById || m_op == PutByIdDirect || m_op == PutByIdFlush || m_op == MultiPutByOffset || m_op == PutPrivateNameById);
+        ASSERT(m_op == PutById || m_op == PutByIdDirect || m_op == PutByIdFlush || m_op == MultiPutByOffset || m_op == PutPrivateNameById || m_op == PutByIdMegamorphic);
         m_opInfo = &data;
         children.setChild3(children.child2());
         children.setChild2(base);
@@ -678,7 +678,7 @@ public:
     
     void convertToMultiPutByOffset(MultiPutByOffsetData* data)
     {
-        ASSERT(m_op == PutById || m_op == PutByIdDirect || m_op == PutByIdFlush || m_op == PutPrivateNameById);
+        ASSERT(m_op == PutById || m_op == PutByIdDirect || m_op == PutByIdFlush || m_op == PutPrivateNameById || m_op == PutByIdMegamorphic);
         m_opInfo = data;
         m_op = MultiPutByOffset;
     }
@@ -1037,6 +1037,7 @@ public:
     {
         switch (op()) {
         case MovHint:
+        case ZombieHint:
             return true;
         default:
             return false;
@@ -1079,6 +1080,7 @@ public:
         switch (op()) {
         case ExtractOSREntryLocal:
         case MovHint:
+        case ZombieHint:
         case KillStack:
             return true;
         default:

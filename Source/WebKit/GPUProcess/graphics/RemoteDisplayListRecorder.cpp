@@ -192,9 +192,19 @@ void RemoteDisplayListRecorder::clip(const FloatRect& rect)
     handleItem(DisplayList::Clip(rect));
 }
 
+void RemoteDisplayListRecorder::clipRoundedRect(const FloatRoundedRect& rect)
+{
+    handleItem(DisplayList::ClipRoundedRect(rect));
+}
+
 void RemoteDisplayListRecorder::clipOut(const FloatRect& rect)
 {
     handleItem(DisplayList::ClipOut(rect));
+}
+
+void RemoteDisplayListRecorder::clipOutRoundedRect(const FloatRoundedRect& rect)
+{
+    handleItem(DisplayList::ClipOutRoundedRect(rect));
 }
 
 void RemoteDisplayListRecorder::clipToImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const WebCore::FloatRect& destinationRect)
@@ -522,7 +532,7 @@ void RemoteDisplayListRecorder::transformToColorSpace(const WebCore::Destination
 #if ENABLE(VIDEO)
 void RemoteDisplayListRecorder::paintFrameForMedia(MediaPlayerIdentifier identifier, const FloatRect& destination)
 {
-    m_renderingBackend->performWithMediaPlayerOnMainThread(identifier, [imageBuffer = RefPtr { m_imageBuffer.get() }, destination](MediaPlayer& player) {
+    m_renderingBackend->gpuConnectionToWebProcess().performWithMediaPlayerOnMainThread(identifier, [imageBuffer = RefPtr { m_imageBuffer.get() }, destination](MediaPlayer& player) {
         // It is currently not safe to call paintFrameForMedia() off the main thread.
         imageBuffer->context().paintFrameForMedia(player, destination);
     });

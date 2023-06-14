@@ -655,7 +655,7 @@ void Internals::resetToConsistentState(Page& page)
     CanvasBase::setMaxCanvasAreaForTesting(std::nullopt);
     LocalDOMWindow::overrideTransientActivationDurationForTesting(std::nullopt);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     WebCore::setContentSizeCategory(kCTFontContentSizeCategoryL);
 #endif
 
@@ -4709,7 +4709,7 @@ ExceptionOr<void> Internals::postRemoteControlCommand(const String& commandStrin
 
 void Internals::activeAudioRouteDidChange(bool shouldPause)
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     MediaSessionHelper::sharedHelper().activeAudioRouteDidChange(shouldPause ? MediaSessionHelperClient::ShouldPause::Yes : MediaSessionHelperClient::ShouldPause::No);
 #else
     UNUSED_PARAM(shouldPause);
@@ -5099,7 +5099,7 @@ RefPtr<File> Internals::createFile(const String& path)
         return nullptr;
 
     URL url = document->completeURL(path);
-    if (!url.isLocalFile())
+    if (!url.protocolIsFile())
         return nullptr;
 
     return File::create(document, url.fileSystemPath());
@@ -5671,15 +5671,6 @@ void Internals::simulateEventForWebGLContext(SimulatedWebGLContextEvent event, W
     context.simulateEventForTesting(contextEvent);
 }
 
-bool Internals::hasLowAndHighPowerGPUs()
-{
-#if PLATFORM(MAC)
-    return WebCore::hasLowAndHighPowerGPUs();
-#else
-    return false;
-#endif
-}
-
 Internals::RequestedGPU Internals::requestedGPU(WebGLRenderingContext& context)
 {
     UNUSED_PARAM(context);
@@ -5698,20 +5689,6 @@ Internals::RequestedGPU Internals::requestedGPU(WebGLRenderingContext& context)
     }
 
     return RequestedGPU::Default;
-}
-
-bool Internals::requestedMetal(WebGLRenderingContext& context)
-{
-    UNUSED_PARAM(context);
-#if PLATFORM(COCOA)
-    if (auto optionalAttributes = context.getContextAttributes()) {
-        auto attributes = *optionalAttributes;
-
-        return attributes.useMetal;
-    }
-#endif
-
-    return false;
 }
 #endif
 
@@ -6798,7 +6775,7 @@ unsigned Internals::mediaKeySessionInternalInstanceSessionObjectRefCount(const M
 
 void Internals::setContentSizeCategory(Internals::ContentSizeCategory category)
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     CFStringRef ctCategory = nil;
     switch (category) {
     case Internals::ContentSizeCategory::L:
@@ -7037,13 +7014,6 @@ ExceptionOr<void> Internals::setDocumentAutoplayPolicy(Document& document, Inter
 
     return { };
 }
-
-#if ENABLE(WEBGL) && !PLATFORM(COCOA)
-bool Internals::platformSupportsMetal(bool)
-{
-    return false;
-}
-#endif
 
 void Internals::retainTextIteratorForDocumentContent()
 {

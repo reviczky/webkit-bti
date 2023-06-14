@@ -144,6 +144,8 @@ public:
             , m_tryStart(tryStart)
             , m_tryCatchDepth(tryDepth)
         {
+            ASSERT(type == BlockType::Try);
+            m_stackSize -= signature->as<FunctionSignature>()->argumentCount();
             for (unsigned i = 0; i < signature->as<FunctionSignature>()->returnCount(); ++i)
                 phis.append(proc.add<Value>(Phi, toB3Type(signature->as<FunctionSignature>()->returnType(i)), origin));
         }
@@ -533,6 +535,7 @@ public:
         B3_OP_CASE(Pmin)
         B3_OP_CASE(Or)
         B3_OP_CASE(Swizzle)
+        B3_OP_CASE(RelaxedSwizzle)
         B3_OP_CASE(Xor)
         B3_OP_CASE(Narrow)
         B3_OP_CASE(AddSat)
@@ -1095,7 +1098,7 @@ B3IRGenerator::B3IRGenerator(const ModuleInformation& info, OptimizingJITCallee&
         stackOverflowCheck->appendSomeRegister(instanceValue());
         stackOverflowCheck->appendSomeRegister(framePointer());
         stackOverflowCheck->clobber(RegisterSetBuilder::macroClobberedGPRs());
-        stackOverflowCheck->numGPScratchRegisters = 2;
+        stackOverflowCheck->numGPScratchRegisters = 0;
         stackOverflowCheck->setGenerator([=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
             const Checked<int32_t> wasmFrameSize = params.proc().frameSize();
             const Checked<int32_t> wasmTailCallFrameSize = -m_tailCallStackOffsetFromFP;
@@ -1136,16 +1139,7 @@ B3IRGenerator::B3IRGenerator(const ModuleInformation& info, OptimizingJITCallee&
                 AllowMacroScratchRegisterUsage allowScratch(jit);
                 GPRReg contextInstance = params[0].gpr();
                 GPRReg fp = params[1].gpr();
-                GPRReg scratch1 = params.gpScratch(0);
-                GPRReg scratch2 = params.gpScratch(1);
-
-                jit.loadPtr(CCallHelpers::Address(contextInstance, Instance::offsetOfVM()), scratch2);
-                jit.loadPtr(CCallHelpers::Address(scratch2, VM::offsetOfSoftStackLimit()), scratch2);
-                jit.addPtr(CCallHelpers::TrustedImm32(-checkSize), fp, scratch1);
-                MacroAssembler::JumpList overflow;
-                if (UNLIKELY(needUnderflowCheck))
-                    overflow.append(jit.branchPtr(CCallHelpers::Above, scratch1, fp));
-                overflow.append(jit.branchPtr(CCallHelpers::Below, scratch1, scratch2));
+                CCallHelpers::JumpList overflow = jit.checkWasmStackOverflow(contextInstance, CCallHelpers::TrustedImm32(checkSize), fp);
                 jit.addLinkTask([overflow] (LinkBuffer& linkBuffer) {
                     linkBuffer.link(overflow, CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwStackOverflowFromWasmThunkGenerator).code()));
                 });
@@ -5208,9 +5202,16 @@ auto B3IRGenerator::addI32Popcnt(ExpressionType argVar, ExpressionType& result) 
     if (MacroAssembler::supportsCountPopulation()) {
         PatchpointValue* patchpoint = m_currentBlock->appendNew<PatchpointValue>(m_proc, Int32, origin());
         patchpoint->append(arg, ValueRep::SomeRegister);
+#if CPU(X86_64)
         patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
             jit.countPopulation32(params[1].gpr(), params[0].gpr());
         });
+#else
+        patchpoint->numFPScratchRegisters = 1;
+        patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
+            jit.countPopulation32(params[1].gpr(), params[0].gpr(), params.fpScratch(0));
+        });
+#endif
         patchpoint->effects = Effects::none();
         result = push(patchpoint);
         return { };
@@ -5228,9 +5229,16 @@ auto B3IRGenerator::addI64Popcnt(ExpressionType argVar, ExpressionType& result) 
     if (MacroAssembler::supportsCountPopulation()) {
         PatchpointValue* patchpoint = m_currentBlock->appendNew<PatchpointValue>(m_proc, Int64, origin());
         patchpoint->append(arg, ValueRep::SomeRegister);
+#if CPU(X86_64)
         patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
             jit.countPopulation64(params[1].gpr(), params[0].gpr());
         });
+#else
+        patchpoint->numFPScratchRegisters = 1;
+        patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
+            jit.countPopulation64(params[1].gpr(), params[0].gpr(), params.fpScratch(0));
+        });
+#endif
         patchpoint->effects = Effects::none();
         result = push(patchpoint);
         return { };

@@ -35,6 +35,8 @@
 #include "PathOperation.h"
 #include "RotateTransformOperation.h"
 #include "ScaleTransformOperation.h"
+#include "ScrollTypes.h"
+#include "ScrollbarGutter.h"
 #include "ShapeValue.h"
 #include "StyleColor.h"
 #include "StyleContentAlignmentData.h"
@@ -169,6 +171,9 @@ public:
     ScrollSnapType scrollSnapType;
     ScrollSnapAlign scrollSnapAlign;
     ScrollSnapStop scrollSnapStop { ScrollSnapStop::Normal };
+
+    ScrollbarGutter scrollbarGutter;
+    ScrollbarWidth scrollbarWidth { ScrollbarWidth::Auto };
 
     float zoom;
 

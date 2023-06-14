@@ -699,7 +699,7 @@ RenderLayer::OverflowControlRects RenderLayerScrollableArea::overflowControlsRec
     bool haveNonOverlayVerticalScrollbar = isNonOverlayScrollbar(m_vBar.get());
     bool placeVerticalScrollbarOnTheLeft = shouldPlaceVerticalScrollbarOnLeft();
     bool haveResizer = renderer.style().resize() != Resize::None;
-    bool scrollbarsAvoidCorner = (haveNonOverlayHorizontalScrollbar && haveNonOverlayVerticalScrollbar) || (haveResizer && (haveNonOverlayHorizontalScrollbar || haveNonOverlayVerticalScrollbar));
+    bool scrollbarsAvoidCorner = ((haveNonOverlayHorizontalScrollbar && haveNonOverlayVerticalScrollbar) || (haveResizer && (haveNonOverlayHorizontalScrollbar || haveNonOverlayVerticalScrollbar))) && renderer.style().scrollbarWidth() != ScrollbarWidth::None;
 
     IntSize cornerSize;
     if (scrollbarsAvoidCorner) {
@@ -844,6 +844,16 @@ bool RenderLayerScrollableArea::canShowNonOverlayScrollbars() const
     return canHaveScrollbars() && !(m_layer.renderBox() && m_layer.renderBox()->canUseOverlayScrollbars());
 }
 
+void RenderLayerScrollableArea::createScrollbarsController()
+{
+    if (auto scrollbarController = m_layer.page().chrome().client().createScrollbarsController(m_layer.page(), *this)) {
+        setScrollbarsController(WTFMove(scrollbarController));
+        return;
+    }
+
+    ScrollableArea::createScrollbarsController();
+}
+
 static inline RenderElement* rendererForScrollbar(RenderLayerModelObject& renderer)
 {
     if (Element* element = renderer.element()) {
@@ -867,10 +877,7 @@ Ref<Scrollbar> RenderLayerScrollableArea::createScrollbar(ScrollbarOrientation o
     if (hasCustomScrollbarStyle && element)
         widget = RenderScrollbar::createCustomScrollbar(*this, orientation, element);
     else {
-        widget = Scrollbar::createNativeScrollbar(*this, orientation, ScrollbarControlSize::Regular);
-        
-        if (auto scrollbarController = m_layer.page().chrome().client().createScrollbarsController(m_layer.page(), *this))
-            setScrollbarsController(WTFMove(scrollbarController));
+        widget = Scrollbar::createNativeScrollbar(*this, orientation, scrollbarWidthStyle());
         
         didAddScrollbar(widget.get(), orientation);
         if (m_layer.page().isMonitoringWheelEvents())
@@ -970,21 +977,33 @@ bool RenderLayerScrollableArea::hasScrollableOrRubberbandableAncestor()
     return false;
 }
 
-int RenderLayerScrollableArea::verticalScrollbarWidth(OverlayScrollbarSizeRelevancy relevancy) const
+int RenderLayerScrollableArea::verticalScrollbarWidth(OverlayScrollbarSizeRelevancy relevancy, bool isHorizontalWritingMode) const
 {
-    if (!m_vBar
-        || !showsOverflowControls()
-        || (m_vBar->isOverlayScrollbar() && (relevancy == IgnoreOverlayScrollbarSize || !m_vBar->shouldParticipateInHitTesting())))
+    if (m_vBar && m_vBar->isOverlayScrollbar() && (relevancy == IgnoreOverlayScrollbarSize || !m_vBar->shouldParticipateInHitTesting()))
+        return 0;
+
+    if (!m_vBar && m_layer.renderBox() && !(m_layer.renderer().style().scrollbarGutter().isAuto
+        || ScrollbarTheme::theme().usesOverlayScrollbars()) && isHorizontalWritingMode) {
+        return ScrollbarTheme::theme().scrollbarThickness(scrollbarWidthStyle());
+    }
+
+    if (!m_vBar || !showsOverflowControls())
         return 0;
 
     return m_vBar->width();
 }
 
-int RenderLayerScrollableArea::horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy relevancy) const
+int RenderLayerScrollableArea::horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy relevancy, bool isHorizontalWritingMode) const
 {
-    if (!m_hBar
-        || !showsOverflowControls()
-        || (m_hBar->isOverlayScrollbar() && (relevancy == IgnoreOverlayScrollbarSize || !m_hBar->shouldParticipateInHitTesting())))
+    if (m_hBar && m_hBar->isOverlayScrollbar() && (relevancy == IgnoreOverlayScrollbarSize || !m_hBar->shouldParticipateInHitTesting()))
+        return 0;
+
+    if (!m_hBar && m_layer.renderBox() && !(m_layer.renderer().style().scrollbarGutter().isAuto
+        || ScrollbarTheme::theme().usesOverlayScrollbars()) && !isHorizontalWritingMode) {
+        return ScrollbarTheme::theme().scrollbarThickness(scrollbarWidthStyle());
+    }
+
+    if (!m_hBar || !showsOverflowControls())
         return 0;
 
     return m_hBar->height();
@@ -1002,6 +1021,13 @@ OverscrollBehavior RenderLayerScrollableArea::verticalOverscrollBehavior() const
     if (m_layer.renderBox())
         return m_layer.renderer().style().overscrollBehaviorY();
     return OverscrollBehavior::Auto;
+}
+
+ScrollbarWidth RenderLayerScrollableArea::scrollbarWidthStyle()  const
+{
+    if (m_layer.renderBox())
+        return m_layer.renderer().style().scrollbarWidth();
+    return ScrollbarWidth::Auto;
 }
 
 bool RenderLayerScrollableArea::hasOverflowControls() const
@@ -1086,7 +1112,7 @@ void RenderLayerScrollableArea::computeScrollOrigin()
 
     int scrollableLeftOverflow = roundToInt(overflowLeft() - box->borderLeft());
     if (shouldPlaceVerticalScrollbarOnLeft() /*|| box->style().writingMode() == WritingMode::RightToLeft*/)
-        scrollableLeftOverflow -= verticalScrollbarWidth();
+        scrollableLeftOverflow -= verticalScrollbarWidth(IgnoreOverlayScrollbarSize, box->style().isHorizontalWritingMode());
     int scrollableTopOverflow = roundToInt(overflowTop() - box->borderTop());
     setScrollOrigin(IntPoint(-scrollableLeftOverflow, -scrollableTopOverflow));
 
@@ -1513,7 +1539,7 @@ void RenderLayerScrollableArea::paintResizer(GraphicsContext& context, const Lay
 
     // Draw a frame around the resizer (1px grey line) if there are any scrollbars present.
     // Clipping will exclude the right and bottom edges of this frame.
-    if (!hasOverlayScrollbars() && (m_vBar || m_hBar)) {
+    if (!hasOverlayScrollbars() && (m_vBar || m_hBar) && renderer.style().scrollbarWidth() != ScrollbarWidth::None) {
         GraphicsContextStateSaver stateSaver(context);
         context.clip(resizerAbsRect);
         LayoutRect largerCorner = resizerAbsRect;

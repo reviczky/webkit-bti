@@ -32,6 +32,9 @@
 #if PLATFORM(COCOA)
 #include <wtf/NumberOfCores.h>
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#if PLATFORM(IOS_FAMILY)
+#include "UserInterfaceIdiom.h"
+#endif
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -65,17 +68,15 @@ bool defaultShouldPrintBackgrounds()
     return result;
 }
 
-#if !USE(APPLE_INTERNAL_SDK)
 bool defaultAlternateFormControlDesignEnabled()
 {
-    return false;
+    return currentUserInterfaceIdiomIsReality();
 }
 
 bool defaultVideoFullscreenRequiresElementFullscreen()
 {
-    return false;
+    return currentUserInterfaceIdiomIsReality();
 }
-#endif
 
 #endif
 
@@ -188,6 +189,17 @@ bool defaultManagedMediaSourceEnabled()
 }
 #endif
 
+#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE) && ENABLE(WIRELESS_PLAYBACK_TARGET)
+bool defaultManagedMediaSourceNeedsAirPlay()
+{
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
+    return true;
+#else
+    return false;
+#endif
+}
+#endif
+
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
 bool defaultMediaSessionCoordinatorEnabled()
 {
@@ -259,7 +271,7 @@ bool defaultShouldEnableScreenOrientationAPI()
 #if PLATFORM(MAC)
     return true;
 #elif PLATFORM(IOS_FAMILY)
-    static bool shouldEnableScreenOrientationAPI = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::ScreenOrientationAPIEnabled) || IOSApplication::isHoYoLAB();
+    static bool shouldEnableScreenOrientationAPI = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::ScreenOrientationAPIEnabled) || WebCore::IOSApplication::isHoYoLAB();
     return shouldEnableScreenOrientationAPI;
 #else
     return false;

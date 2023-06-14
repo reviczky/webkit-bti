@@ -52,7 +52,6 @@
 #include "DocumentInlines.h"
 #include "DocumentLoader.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "HTMLElement.h"
 #include "HTMLFrameOwnerElement.h"
 #include "HTTPHeaderField.h"
@@ -60,6 +59,7 @@
 #include "LoaderStrategy.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalizedStrings.h"
 #include "Logging.h"
 #include "MemoryCache.h"
@@ -1034,7 +1034,7 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
                 return resource;
             }
             if (RefPtr document = this->document()) {
-                if (auto message = ContentExtensions::customLoadBlockingMessageForConsole(results, resourceRequest.url()))
+                if (auto message = ContentExtensions::customTrackerBlockingMessageForConsole(results, resourceRequest.url()))
                     document->addConsoleMessage(MessageSource::ContentBlocker, MessageLevel::Info, WTFMove(*message));
             }
             return makeUnexpected(ResourceError { errorDomainWebKitInternal, 0, url, "Resource blocked by content blocker"_s, ResourceError::Type::AccessControl });

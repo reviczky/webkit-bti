@@ -91,6 +91,7 @@ class TransformOperations;
 class TransformationMatrix;
 class TranslateTransformOperation;
 class WillChangeData;
+class WordBoundaryDetection;
 
 enum CSSPropertyID : uint16_t;
 enum GridAutoFlow : uint8_t;
@@ -182,6 +183,7 @@ enum class Resize : uint8_t;
 enum class RubyPosition : uint8_t;
 enum class SVGPaintType : uint8_t;
 enum class ScrollSnapStop : bool;
+enum class ScrollbarWidth : uint8_t;
 enum class SpeakAs : uint8_t;
 enum class StyleAppearance : uint8_t;
 enum class StyleDifference : uint8_t;
@@ -221,6 +223,7 @@ enum class UserSelect : uint8_t;
 enum class VerticalAlign : uint8_t;
 enum class Visibility : uint8_t;
 enum class WhiteSpace : uint8_t;
+enum class WhiteSpaceCollapse : uint8_t;
 enum class WordBreak : uint8_t;
 enum class WritingMode : uint8_t;
 
@@ -241,6 +244,7 @@ struct NamedGridLinesMap;
 struct OrderedNamedGridLinesMap;
 struct ScrollSnapAlign;
 struct ScrollSnapType;
+struct ScrollbarGutter;
 
 struct TabSize;
 struct TextAutospace;
@@ -288,7 +292,7 @@ public:
 
     static RenderStyle& defaultStyle();
 
-    static RenderStyle create();
+    WEBCORE_EXPORT static RenderStyle create();
     static std::unique_ptr<RenderStyle> createPtr();
     static std::unique_ptr<RenderStyle> createPtrWithRegisteredInitialValues(const Style::CustomPropertyRegistry&);
 
@@ -572,6 +576,9 @@ public:
     inline bool breakOnlyAfterWhiteSpace() const;
     inline bool breakWords() const;
 
+    WhiteSpaceCollapse whiteSpaceCollapse() const { return static_cast<WhiteSpaceCollapse>(m_inheritedFlags.whiteSpaceCollapse); }
+    TextWrap textWrap() const { return static_cast<TextWrap>(m_inheritedFlags.textWrap); }
+
     inline FillRepeatXY backgroundRepeat() const;
     inline FillAttachment backgroundAttachment() const;
     inline FillBox backgroundClip() const;
@@ -791,7 +798,6 @@ public:
     WEBCORE_EXPORT UserSelect effectiveUserSelect() const;
     inline UserSelect userSelect() const;
     inline TextOverflow textOverflow() const;
-    inline TextWrap textWrap() const;
     inline WordBreak wordBreak() const;
     inline OverflowWrap overflowWrap() const;
     inline NBSPMode nbspMode() const;
@@ -819,6 +825,7 @@ public:
     inline unsigned short columnRuleWidth() const;
     inline bool columnRuleIsTransparent() const;
     inline ColumnSpan columnSpan() const;
+    inline const WordBoundaryDetection& wordBoundaryDetection() const;
 
     inline const TransformOperations& transform() const;
     inline bool hasTransform() const;
@@ -962,6 +969,9 @@ public:
     const ScrollSnapAlign& scrollSnapAlign() const;
     ScrollSnapStop scrollSnapStop() const;
 
+    const ScrollbarGutter scrollbarGutter() const;
+    WEBCORE_EXPORT ScrollbarWidth scrollbarWidth() const;
+
 #if ENABLE(TOUCH_EVENTS)
     inline StyleColor tapHighlightColor() const;
 #endif
@@ -995,12 +1005,6 @@ public:
     inline ImageOrientation imageOrientation() const;
     inline ImageRendering imageRendering() const;
 
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    inline ImageResolutionSource imageResolutionSource() const;
-    inline ImageResolutionSnap imageResolutionSnap() const;
-    inline float imageResolution() const;
-#endif
-    
     inline OptionSet<SpeakAs> speakAs() const;
 
     inline FilterOperations& mutableFilter();
@@ -1159,7 +1163,7 @@ public:
     void setClear(Clear v) { m_nonInheritedFlags.clear = static_cast<unsigned>(v); }
     void setTableLayout(TableLayoutType v) { m_nonInheritedFlags.tableLayout = static_cast<unsigned>(v); }
 
-    bool setFontDescription(FontCascadeDescription&&);
+    WEBCORE_EXPORT bool setFontDescription(FontCascadeDescription&&);
 
     // Only used for blending font sizes when animating, for MathML anonymous blocks, and for text autosizing.
     void setFontSize(float);
@@ -1209,13 +1213,9 @@ public:
     inline void setImageOrientation(ImageOrientation);
     inline void setImageRendering(ImageRendering);
 
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    inline void setImageResolutionSource(ImageResolutionSource);
-    inline void setImageResolutionSnap(ImageResolutionSnap);
-    inline void setImageResolution(float);
-#endif
-
     void setWhiteSpace(WhiteSpace v) { m_inheritedFlags.whiteSpace = static_cast<unsigned>(v); }
+    void setWhiteSpaceCollapse(WhiteSpaceCollapse v) { m_inheritedFlags.whiteSpaceCollapse = static_cast<unsigned>(v); }
+    void setTextWrap(TextWrap v) { m_inheritedFlags.textWrap = static_cast<unsigned>(v); }
 
     void setWordSpacing(Length&&);
 
@@ -1388,7 +1388,6 @@ public:
     inline void setUserDrag(UserDrag);
     inline void setUserSelect(UserSelect);
     inline void setTextOverflow(TextOverflow);
-    inline void setTextWrap(TextWrap);
     inline void setWordBreak(WordBreak);
     inline void setOverflowWrap(OverflowWrap);
     inline void setNBSPMode(NBSPMode);
@@ -1413,6 +1412,7 @@ public:
     inline void setColumnRuleWidth(unsigned short);
     inline void resetColumnRule();
     inline void setColumnSpan(ColumnSpan);
+    inline void setWordBoundaryDetection(const WordBoundaryDetection&);
     inline void inheritColumnPropertiesFrom(const RenderStyle& parent);
 
     inline void setTransform(const TransformOperations&);
@@ -1505,6 +1505,9 @@ public:
     void setScrollSnapType(ScrollSnapType);
     void setScrollSnapAlign(const ScrollSnapAlign&);
     void setScrollSnapStop(ScrollSnapStop);
+
+    void setScrollbarGutter(ScrollbarGutter);
+    void setScrollbarWidth(ScrollbarWidth);
 
 #if ENABLE(TOUCH_EVENTS)
     inline void setTapHighlightColor(const StyleColor&);
@@ -1768,6 +1771,7 @@ public:
     static constexpr OptionSet<TextTransform> initialTextTransform();
     static constexpr Visibility initialVisibility();
     static constexpr WhiteSpace initialWhiteSpace();
+    static constexpr WhiteSpaceCollapse initialWhiteSpaceCollapse();
     static float initialHorizontalBorderSpacing() { return 0; }
     static float initialVerticalBorderSpacing() { return 0; }
     static constexpr CursorType initialCursor();
@@ -1862,6 +1866,7 @@ public:
     static Vector<AtomString> initialContainerNames();
     static double initialAspectRatioWidth() { return 1.0; }
     static double initialAspectRatioHeight() { return 1.0; }
+    static WordBoundaryDetection initialWordBoundaryDetection();
 
     static constexpr ContainIntrinsicSizeType initialContainIntrinsicWidthType();
     static constexpr ContainIntrinsicSizeType initialContainIntrinsicHeightType();
@@ -1935,6 +1940,9 @@ public:
     static ScrollSnapType initialScrollSnapType();
     static ScrollSnapAlign initialScrollSnapAlign();
     static ScrollSnapStop initialScrollSnapStop();
+
+    static ScrollbarGutter initialScrollbarGutter();
+    static ScrollbarWidth initialScrollbarWidth();
 
 #if ENABLE(APPLE_PAY)
     static constexpr ApplePayButtonStyle initialApplePayButtonStyle();
@@ -2161,7 +2169,9 @@ private:
 #endif
         unsigned direction : 1; // TextDirection
         unsigned whiteSpace : 3; // WhiteSpace
-        // 38 bits
+        unsigned whiteSpaceCollapse : 3; // WhiteSpaceCollapse
+        unsigned textWrap : 3; // TextWrap
+        // 36 bits
         unsigned borderCollapse : 1; // BorderCollapse
         unsigned boxDirection : 1; // BoxDirection
 
@@ -2171,16 +2181,16 @@ private:
         unsigned pointerEvents : 4; // PointerEvents
         unsigned insideLink : 2; // InsideLink
         unsigned insideDefaultButton : 1;
-        // 49 bits
+        // 47 bits
 
         // CSS Text Layout Module Level 3: Vertical writing support
         unsigned writingMode : 2; // WritingMode
-        // 51 bits
+        // 49 bits
 
 #if ENABLE(TEXT_AUTOSIZING)
         unsigned autosizeStatus : 5;
 #endif
-        // 56 bits
+        // 54 bits
     };
 
     // This constructor is used to implement the replace operation.

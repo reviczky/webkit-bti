@@ -865,6 +865,16 @@ break-word
 break-spaces
 
 //
+// CSS_PROP_WHITE_SPACE_COLLAPSE
+//
+// collapse
+// discard
+preserve
+preserve-breaks
+preserve-spaces
+// break-spaces
+
+//
 // CSS_PROP__KHTML_NBSP_MODE
 //
 space
@@ -1441,8 +1451,6 @@ NaN
 
 from-image
 
-snap enable-if=ENABLE_CSS_IMAGE_RESOLUTION
-
 // overflow
 -webkit-paged-x
 -webkit-paged-y
@@ -1705,3 +1713,8 @@ false
 space-all
 // text-autospace
 no-autospace
+
+// scrollbar-gutter
+// auto
+// stable
+both-edges

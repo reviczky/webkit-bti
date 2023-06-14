@@ -1278,7 +1278,7 @@ private:
                 break;
             case Array::ForceExit:
             case Array::Generic:
-                if (child1->shouldSpeculateCell()) {
+                if (child1->shouldSpeculateCell() || (child1->shouldSpeculateCellOrOther() && !m_graph.hasExitSite(node->origin.semantic, BadType))) {
                     if (child2->shouldSpeculateString()) {
                         fixEdge<CellUse>(child1);
                         fixEdge<StringUse>(child2);
@@ -2194,7 +2194,8 @@ private:
         }
 
         case InByVal: {
-            if (node->child1()->shouldSpeculateObject()
+            if ((node->child1()->shouldSpeculateObject()
+                || (node->child1()->shouldSpeculateObjectOrOther() && !m_graph.hasExitSite(node->origin.semantic, BadType)))
                 && node->child2()->shouldSpeculateInt32()) {
                 convertToHasIndexedProperty(node);
                 break;
@@ -2904,6 +2905,33 @@ private:
             }
             break;
 
+        case GlobalIsNaN: {
+            if (node->child1()->shouldSpeculateInt32()) {
+                fixEdge<Int32Use>(node->child1());
+                m_graph.convertToConstant(node, jsBoolean(false));
+                break;
+            }
+            if (node->child1()->shouldSpeculateNumber()) {
+                fixEdge<DoubleRepUse>(node->child1());
+                node->clearFlags(NodeMustGenerate);
+                break;
+            }
+            break;
+        }
+
+        case NumberIsNaN: {
+            if (node->child1()->shouldSpeculateInt32()) {
+                fixEdge<Int32Use>(node->child1());
+                m_graph.convertToConstant(node, jsBoolean(false));
+                break;
+            }
+            if (node->child1()->shouldSpeculateNumber()) {
+                fixEdge<DoubleRepUse>(node->child1());
+                break;
+            }
+            break;
+        }
+
         case SetCallee:
             fixEdge<CellUse>(node->child1());
             break;
@@ -3055,6 +3083,7 @@ private:
         case LoopHint:
         case MovHint:
         case InitializeEntrypointArguments:
+        case ZombieHint:
         case ExitOK:
         case BottomValue:
         case TypeOf:
@@ -3074,6 +3103,7 @@ private:
         case InvalidationPoint:
         case GetWebAssemblyInstanceExports:
         case NewBoundFunction:
+        case MakeAtomString:
             break;
 #else // not ASSERT_ENABLED
         default:
@@ -3115,8 +3145,8 @@ private:
     template<UseKind useKind>
     void attemptToForceStringArrayModeByToStringConversion(ArrayMode& arrayMode, Node* node)
     {
-        ASSERT(arrayMode == ArrayMode(Array::Generic, Array::Read) || arrayMode == ArrayMode(Array::Generic, Array::OriginalNonArray, Array::Read));
-        
+        ASSERT(arrayMode.type() == Array::Generic && arrayMode.action() == Array::Read);
+
         if (!m_graph.canOptimizeStringObjectAccess(node->origin.semantic))
             return;
         

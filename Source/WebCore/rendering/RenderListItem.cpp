@@ -31,6 +31,9 @@
 #include "HTMLOListElement.h"
 #include "HTMLUListElement.h"
 #include "PseudoElement.h"
+#include "RenderBoxInlines.h"
+#include "RenderBoxModelObjectInlines.h"
+#include "RenderElementInlines.h"
 #include "RenderStyleSetters.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
@@ -110,7 +113,7 @@ static Element* enclosingList(const RenderListItem& listItem)
     auto& element = listItem.element();
     auto* parent = is<PseudoElement>(element) ? downcast<PseudoElement>(element).hostElement() : element.parentElement();
     for (auto* ancestor = parent; ancestor; ancestor = ancestor->parentElement()) {
-        if (isHTMLListElement(*ancestor))
+        if (isHTMLListElement(*ancestor) || (ancestor->renderer() && ancestor->renderer()->shouldApplyStyleContainment()))
             return ancestor;
     }
 

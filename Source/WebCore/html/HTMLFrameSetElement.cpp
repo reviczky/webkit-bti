@@ -30,7 +30,6 @@
 #include "ElementAncestorIteratorInlines.h"
 #include "Event.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "HTMLBodyElement.h"
 #include "HTMLCollection.h"
 #include "HTMLFrameElement.h"
@@ -38,6 +37,7 @@
 #include "HTMLParserIdioms.h"
 #include "Length.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "MouseEvent.h"
 #include "NodeName.h"
 #include "RenderFrameSet.h"
@@ -219,6 +219,11 @@ WindowProxy* HTMLFrameSetElement::namedItem(const AtomString& name)
         return nullptr;
 
     return downcast<HTMLFrameElement>(*frameElement).contentWindow();
+}
+
+bool HTMLFrameSetElement::isSupportedPropertyName(const AtomString& name)
+{
+    return namedItem(name);
 }
 
 Vector<AtomString> HTMLFrameSetElement::supportedPropertyNames() const

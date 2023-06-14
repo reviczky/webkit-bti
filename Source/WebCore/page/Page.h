@@ -244,7 +244,7 @@ enum class RenderingUpdateStep : uint32_t {
     RestoreScrollPositionAndViewState = 1 << 21,
 };
 
-enum class LookalikeCharacterSanitizationTrigger : uint8_t {
+enum class LinkDecorationFilteringTrigger : uint8_t {
     Unspecified,
     Navigation,
     Copy,
@@ -352,7 +352,7 @@ public:
     void setCurrentKeyboardScrollingAnimator(KeyboardScrollingAnimator*);
     KeyboardScrollingAnimator* currentKeyboardScrollingAnimator() const { return m_currentKeyboardScrollingAnimator.get(); }
 
-    bool isLoadingInHeadlessMode() const;
+    bool fingerprintingProtectionsEnabled() const;
 
 #if ENABLE(REMOTE_INSPECTOR)
     WEBCORE_EXPORT bool inspectable() const;
@@ -510,8 +510,8 @@ public:
         IncludeAnimationsFrameRate  = 1 << 1
     };
     static constexpr OptionSet<PreferredRenderingUpdateOption> allPreferredRenderingUpdateOptions = { PreferredRenderingUpdateOption::IncludeThrottlingReasons, PreferredRenderingUpdateOption::IncludeAnimationsFrameRate };
-    std::optional<FramesPerSecond> preferredRenderingUpdateFramesPerSecond(OptionSet<PreferredRenderingUpdateOption> = allPreferredRenderingUpdateOptions) const;
-    Seconds preferredRenderingUpdateInterval() const;
+    WEBCORE_EXPORT std::optional<FramesPerSecond> preferredRenderingUpdateFramesPerSecond(OptionSet<PreferredRenderingUpdateOption> = allPreferredRenderingUpdateOptions) const;
+    WEBCORE_EXPORT Seconds preferredRenderingUpdateInterval() const;
 
     float topContentInset() const { return m_topContentInset; }
     WEBCORE_EXPORT void setTopContentInset(float);
@@ -999,9 +999,9 @@ public:
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
-    URL sanitizeLookalikeCharacters(const URL&, LookalikeCharacterSanitizationTrigger) const;
-    String sanitizeLookalikeCharacters(const String&, LookalikeCharacterSanitizationTrigger) const;
-    URL allowedLookalikeCharacters(const URL&) const;
+    URL applyLinkDecorationFiltering(const URL&, LinkDecorationFilteringTrigger) const;
+    String applyLinkDecorationFiltering(const String&, LinkDecorationFilteringTrigger) const;
+    URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&) const;
 
     LoadSchedulingMode loadSchedulingMode() const { return m_loadSchedulingMode; }
     void setLoadSchedulingMode(LoadSchedulingMode);
@@ -1098,6 +1098,7 @@ private:
     void prioritizeVisibleResources();
 
     RenderingUpdateScheduler& renderingUpdateScheduler();
+    RenderingUpdateScheduler* existingRenderingUpdateScheduler();
 
     WheelEventTestMonitor& ensureWheelEventTestMonitor();
 

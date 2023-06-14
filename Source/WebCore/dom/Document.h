@@ -148,6 +148,7 @@ class HTMLMapElement;
 class HTMLMediaElement;
 class HTMLMetaElement;
 class HTMLVideoElement;
+class HighlightRangeData;
 class HighlightRegister;
 class HitTestLocation;
 class HitTestRequest;
@@ -248,7 +249,6 @@ struct ApplicationManifest;
 struct BoundaryPoint;
 struct ClientOrigin;
 struct FocusOptions;
-struct HighlightRangeData;
 struct IntersectionObserverData;
 struct SecurityPolicyViolationEventInit;
 
@@ -895,11 +895,7 @@ public:
 
     void attachNodeIterator(NodeIterator&);
     void detachNodeIterator(NodeIterator&);
-    void moveNodeIteratorsToNewDocument(Node& node, Document& newDocument)
-    {
-        if (!m_nodeIterators.isEmpty())
-            moveNodeIteratorsToNewDocumentSlowCase(node, newDocument);
-    }
+    void moveNodeIteratorsToNewDocument(Node&, Document&);
 
     void attachRange(Range&);
     void detachRange(Range&);
@@ -1634,10 +1630,12 @@ public:
     const ListHashSet<Ref<Element>>& topLayerElements() const { return m_topLayerElements; }
     bool hasTopLayerElement() const { return !m_topLayerElements.isEmpty(); }
 
+    const ListHashSet<Ref<HTMLElement>>& autoPopoverList() const { return m_autoPopoverList; }
+
     HTMLDialogElement* activeModalDialog() const;
     HTMLElement* topmostAutoPopover() const;
 
-    void hideAllPopoversUntil(Element*, FocusPreviousElement, FireEvents);
+    void hideAllPopoversUntil(HTMLElement*, FocusPreviousElement, FireEvents);
     void handlePopoverLightDismiss(const PointerEvent&, Node&);
 
 #if ENABLE(ATTACHMENT_ELEMENT)
@@ -1771,13 +1769,12 @@ public:
     void sendReportToEndpoints(const URL& baseURL, const Vector<String>& endpointURIs, const Vector<String>& endpointTokens, Ref<FormData>&& report, ViolationReportType) final;
     String httpUserAgent() const final;
 
-    // This should be used over the settings lazy loading image flag due to a quirk, which may occur causing website images to fail to load properly.
-    bool lazyImageLoadingEnabled() const;
-
 #if ENABLE(DOM_AUDIO_SESSION)
     void setAudioSessionType(DOMAudioSessionType type) { m_audioSessionType = type; }
     DOMAudioSessionType audioSessionType() const { return m_audioSessionType; }
 #endif
+
+    virtual void didChangeViewSize() { }
 
 protected:
     enum class ConstructionFlag : uint8_t {
@@ -1845,8 +1842,6 @@ private:
 
     void invalidateAccessKeyCacheSlowCase();
     void buildAccessKeyCache();
-
-    void moveNodeIteratorsToNewDocumentSlowCase(Node&, Document&);
 
     void intersectionObserversInitialUpdateTimerFired();
 
@@ -1934,7 +1929,7 @@ private:
     URL m_cookieURL; // The URL to use for cookie access.
     URL m_firstPartyForCookies; // The policy URL for third-party cookie blocking.
     URL m_siteForCookies; // The policy URL for Same-Site cookies.
-    URL m_adjustedURL; // The URL to return for bindings after a cross-site navigation when the "network connection integrity" setting is enabled.
+    URL m_adjustedURL; // The URL to return for bindings after a cross-site navigation when advanced privacy protections are enabled.
 
     // Document.documentURI:
     // Although URL-like, Document.documentURI can actually be set to any
@@ -1965,7 +1960,7 @@ private:
 
     mutable String m_uniqueIdentifier;
 
-    HashSet<NodeIterator*> m_nodeIterators;
+    WeakHashSet<NodeIterator> m_nodeIterators;
     WeakHashSet<Range> m_ranges;
 
     std::unique_ptr<Style::Scope> m_styleScope;
@@ -2214,10 +2209,11 @@ private:
     Ref<UndoManager> m_undoManager;
     UniqueRef<Editor> m_editor;
     UniqueRef<FrameSelection> m_selection;
-        
+
     String m_fragmentDirective;
 
     ListHashSet<Ref<Element>> m_topLayerElements;
+    ListHashSet<Ref<HTMLElement>> m_autoPopoverList;
 
     WeakPtr<HTMLElement, WeakPtrImplWithEventTargetData> m_popoverPointerDownTarget;
 

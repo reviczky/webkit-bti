@@ -23,12 +23,12 @@
 
 #if USE(GSTREAMER)
 
-#include "AppSinkWorkaround.h"
 #include "ApplicationGLib.h"
 #include "DMABufVideoSinkGStreamer.h"
 #include "GLVideoSinkGStreamer.h"
 #include "GStreamerAudioMixer.h"
 #include "GStreamerRegistryScanner.h"
+#include "GStreamerSinksWorkarounds.h"
 #include "GUniquePtrGStreamer.h"
 #include "GstAllocatorFastMalloc.h"
 #include "IntSize.h"
@@ -303,8 +303,7 @@ bool ensureGStreamerInitialized()
             gst_mpegts_initialize();
 #endif
 
-        // Workaround for https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/2413
-        registerAppsinkWorkaroundIfNeeded();
+        registerAppsinkWithWorkaroundsIfNeeded();
 #endif
     });
     return isGStreamerInitialized;
@@ -382,6 +381,14 @@ void registerWebKitGStreamerElements()
         const char* hlsSupport = g_getenv("WEBKIT_GST_ENABLE_HLS_SUPPORT");
         if (!hlsSupport || !g_strcmp0(hlsSupport, "0")) {
             if (auto factory = adoptGRef(gst_element_factory_find("hlsdemux")))
+                gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(factory.get()), GST_RANK_NONE);
+        }
+
+        // Prevent decodebin(3) from auto-plugging dashdemux if it was disabled. UAs should be able
+        // to fallback to MSE when this happens.
+        const char* dashSupport = g_getenv("WEBKIT_GST_ENABLE_DASH_SUPPORT");
+        if (!dashSupport || !g_strcmp0(dashSupport, "0")) {
+            if (auto factory = adoptGRef(gst_element_factory_find("dashdemux")))
                 gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(factory.get()), GST_RANK_NONE);
         }
 
@@ -1019,6 +1026,8 @@ bool gstObjectHasProperty(GstPad* pad, const char* name)
 {
     return gstObjectHasProperty(GST_OBJECT_CAST(pad), name);
 }
+
+#undef GST_CAT_DEFAULT
 
 } // namespace WebCore
 

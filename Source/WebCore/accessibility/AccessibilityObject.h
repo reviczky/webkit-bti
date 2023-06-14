@@ -30,6 +30,7 @@
 #pragma once
 
 #include "AccessibilityObjectInterface.h"
+#include "CharacterRange.h"
 #include "FloatQuad.h"
 #include "LayoutRect.h"
 #include "Path.h"
@@ -239,6 +240,7 @@ public:
     bool hasSameStyle(const AXCoreObject&) const override { return false; }
     bool hasUnderline() const override { return false; }
     bool hasHighlighting() const override;
+    std::optional<CharacterRange> textInputMarkedRange() const final;
 
     bool supportsDatetimeAttribute() const override;
     String datetimeAttributeValue() const override;
@@ -258,7 +260,7 @@ public:
     virtual bool computeAccessibilityIsIgnored() const { return true; }
     bool accessibilityIsIgnored() const override;
     void recomputeIsIgnored();
-    virtual AccessibilityObjectInclusion defaultObjectInclusion() const;
+    AccessibilityObjectInclusion defaultObjectInclusion() const;
     bool accessibilityIsIgnoredByDefault() const;
 
     bool isShowingValidationMessage() const;
@@ -422,6 +424,7 @@ public:
     static AccessibilityObject* anchorElementForNode(Node*);
     static AccessibilityObject* headingElementForNode(Node*);
     virtual Element* anchorElement() const { return nullptr; }
+    virtual Element* popoverTargetElement() const { return nullptr; }
     bool supportsPressAction() const override;
     Element* actionElement() const override { return nullptr; }
     virtual LayoutRect boundingBoxRect() const { return { }; }
@@ -439,7 +442,7 @@ public:
     bool supportsPath() const override { return false; }
 
     TextIteratorBehaviors textIteratorBehaviorForTextRange() const;
-    PlainTextRange selectedTextRange() const override { return { }; }
+    CharacterRange selectedTextRange() const override { return { }; }
     int insertionPointLineNumber() const override { return -1; }
 
     URL url() const override { return URL(); }
@@ -475,10 +478,10 @@ public:
     void setFocused(bool) override;
 
     void setSelectedText(const String&) override { }
-    void setSelectedTextRange(PlainTextRange&&) override { }
+    void setSelectedTextRange(CharacterRange&&) override { }
     bool setValue(const String&) override { return false; }
     void setValueIgnoringResult(const String& value) final { setValue(value); }
-    bool replaceTextInRange(const String&, const PlainTextRange&) override;
+    bool replaceTextInRange(const String&, const CharacterRange&) override;
     bool insertText(const String&) override;
 
     bool setValue(float) override { return false; }
@@ -545,11 +548,11 @@ public:
     VisiblePositionRange sentenceForPosition(const VisiblePosition&) const override;
     VisiblePositionRange paragraphForPosition(const VisiblePosition&) const override;
     VisiblePositionRange styleRangeForPosition(const VisiblePosition&) const override;
-    VisiblePositionRange visiblePositionRangeForRange(const PlainTextRange&) const override;
+    VisiblePositionRange visiblePositionRangeForRange(const CharacterRange&) const override;
     VisiblePositionRange lineRangeForPosition(const VisiblePosition&) const override;
     VisiblePositionRange selectedVisiblePositionRange() const override { return { }; }
 
-    std::optional<SimpleRange> rangeForPlainTextRange(const PlainTextRange&) const override;
+    std::optional<SimpleRange> rangeForCharacterRange(const CharacterRange&) const override;
 #if PLATFORM(COCOA)
     AXTextMarkerRange textMarkerRangeForNSRange(const NSRange&) const override;
 #endif
@@ -573,17 +576,17 @@ public:
     int indexForVisiblePosition(const VisiblePosition&) const override { return 0; }
 
     int lineForPosition(const VisiblePosition&) const override;
-    PlainTextRange plainTextRangeForVisiblePositionRange(const VisiblePositionRange&) const;
+    CharacterRange plainTextRangeForVisiblePositionRange(const VisiblePositionRange&) const;
     virtual int index(const VisiblePosition&) const { return -1; }
 
-    PlainTextRange doAXRangeForLine(unsigned) const override { return PlainTextRange(); }
-    PlainTextRange doAXRangeForPosition(const IntPoint&) const override;
-    PlainTextRange doAXRangeForIndex(unsigned) const override { return PlainTextRange(); }
-    PlainTextRange doAXStyleRangeForIndex(unsigned) const override;
+    CharacterRange doAXRangeForLine(unsigned) const override { return { }; }
+    CharacterRange characterRangeForPoint(const IntPoint&) const override;
+    CharacterRange doAXRangeForIndex(unsigned) const override { return { }; }
+    CharacterRange doAXStyleRangeForIndex(unsigned) const override;
 
-    String doAXStringForRange(const PlainTextRange&) const override { return String(); }
-    IntRect doAXBoundsForRange(const PlainTextRange&) const override { return IntRect(); }
-    IntRect doAXBoundsForRangeUsingCharacterOffset(const PlainTextRange&) const override { return IntRect(); }
+    String doAXStringForRange(const CharacterRange&) const override { return { }; }
+    IntRect doAXBoundsForRange(const CharacterRange&) const override { return { }; }
+    IntRect doAXBoundsForRangeUsingCharacterOffset(const CharacterRange&) const override { return { }; }
     static StringView listMarkerTextForNodeAndPosition(Node*, const VisiblePosition&);
 
     unsigned doAXLineForIndex(unsigned) override;
@@ -809,6 +812,8 @@ private:
 
     // Special handling of click point for links.
     IntPoint linkClickPoint();
+
+    bool isNodeForComposition(const Editor&) const;
 
 protected: // FIXME: Make the data members private.
     AccessibilityChildrenVector m_children;

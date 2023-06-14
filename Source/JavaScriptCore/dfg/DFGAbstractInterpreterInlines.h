@@ -444,6 +444,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
         
+    case ZombieHint:
     case MovHint: {
         // Don't need to do anything. A MovHint only informs us about what would have happened
         // in bytecode, but this code is just concerned with what is actually happening during
@@ -923,7 +924,29 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         setForNode(node, m_vm.stringStructure.get());
         break;
     }
-            
+
+    case MakeAtomString: {
+        unsigned numberOfRemovedChildren = 0;
+        for (unsigned i = 0; i < AdjacencyList::Size; ++i) {
+            Edge& edge = node->children.child(i);
+            if (!edge)
+                break;
+            JSValue childConstant = m_state.forNode(edge).value();
+            if (!childConstant)
+                continue;
+            if (!childConstant.isString())
+                continue;
+            if (asString(childConstant)->length())
+                continue;
+            ++numberOfRemovedChildren;
+        }
+
+        if (numberOfRemovedChildren)
+            m_state.setShouldTryConstantFolding(true);
+        setTypeForNode(node, SpecStringIdent);
+        break;
+    }
+
     case ArithSub: {
         JSValue left = forNode(node->child1()).value();
         JSValue right = forNode(node->child2()).value();
@@ -1498,6 +1521,26 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     }
 
     case ToLowerCase: {
+        AbstractValue& property = forNode(m_graph.child(node, 0));
+        if (JSValue value = property.value()) {
+            if (value.isString()) {
+                JSString* string = asString(value);
+                if (const StringImpl* a = asString(string)->tryGetValueImpl()) {
+                    bool lower = true;
+                    for (unsigned index = 0; index < a->length(); ++index) {
+                        UChar character = a->at(index);
+                        if (!isASCII(character) || isASCIIUpper(character)) {
+                            lower = false;
+                            break;
+                        }
+                    }
+                    if (lower) {
+                        setConstant(node, *m_graph.freeze(string));
+                        break;
+                    }
+                }
+            }
+        }
         setTypeForNode(node, SpecString);
         break;
     }
@@ -1880,6 +1923,30 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         if (constantWasSet)
             break;
         
+        setNonCellTypeForNode(node, SpecBoolean);
+        break;
+    }
+
+    case GlobalIsNaN: {
+        AbstractValue child = forNode(node->child1());
+        if (JSValue value = child.value(); value && value.isNumber()) {
+            if (node->child1().useKind() != DoubleRepUse)
+                didFoldClobberWorld();
+            setConstant(node, jsBoolean(std::isnan(value.asNumber())));
+            break;
+        }
+        if (node->child1().useKind() != DoubleRepUse)
+            clobberWorld();
+        setNonCellTypeForNode(node, SpecBoolean);
+        break;
+    }
+
+    case NumberIsNaN: {
+        AbstractValue child = forNode(node->child1());
+        if (JSValue value = child.value()) {
+            setConstant(node, jsBoolean(value.isNumber() && std::isnan(value.asNumber())));
+            break;
+        }
         setNonCellTypeForNode(node, SpecBoolean);
         break;
     }
@@ -2425,7 +2492,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                         JSString* string = asString(constant);
                         if (CacheableIdentifier::isCacheableIdentifierCell(string) && !parseIndex(CacheableIdentifier::createFromCell(string).uid())) {
                             m_state.setShouldTryConstantFolding(true);
-                            didFoldClobberWorld();
+                            clobberWorld(); // Regardless of folding (to PutById etc.), we still clobber world.
                             makeHeapTopForNode(node);
                             break;
                         }
@@ -2600,14 +2667,14 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             break;
         case Array::Generic: {
             if (node->op() == PutByVal || node->op() == PutByValMegamorphic) {
-                if (m_graph.child(node, 0).useKind() == CellUse) {
+                if (m_graph.child(node, 0).useKind() == CellUse && m_graph.child(node, 1).useKind() == StringUse) {
                     AbstractValue& property = forNode(m_graph.child(node, 1));
                     if (JSValue constant = property.value()) {
                         if (constant.isString()) {
                             JSString* string = asString(constant);
                             if (CacheableIdentifier::isCacheableIdentifierCell(string) && !parseIndex(CacheableIdentifier::createFromCell(string).uid())) {
                                 m_state.setShouldTryConstantFolding(true);
-                                didFoldClobberWorld();
+                                clobberWorld(); // Regardless of folding (to PutById etc.), we still clobber world.
                                 break;
                             }
                         }
@@ -4614,6 +4681,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             }
         }
         m_state.setNonCellTypeForTupleNode(node, 0, SpecInt32Only);
+        clearForNode(node);
         break;
     }
 

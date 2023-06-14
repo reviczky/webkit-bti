@@ -154,6 +154,7 @@
 #if USE(GRAPHICS_LAYER_WC)
 #include "RemoteWCLayerTreeHost.h"
 #include "WCContentBufferManager.h"
+#include "WCRemoteFrameHostLayerManager.h"
 #endif
 
 #if ENABLE(IPC_TESTING_API)
@@ -195,7 +196,7 @@ private:
         case CaptureDevice::DeviceType::Camera:
             if (!m_process.allowsVideoCapture())
                 return false;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
             MediaSessionManageriOS::providePresentingApplicationPID();
 #endif
             return true;
@@ -272,6 +273,7 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     , m_routingArbitrator(LocalAudioSessionRoutingArbitrator::create(*this))
 #endif
+    , m_webGPUEnabled(parameters.isWebGPUEnabled)
 {
     RELEASE_ASSERT(RunLoop::isMain());
 
@@ -342,6 +344,10 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
         m_audioSessionProxy = nullptr;
     }
 #endif
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    if (auto userMediaCaptureManagerProxy = std::exchange(m_userMediaCaptureManagerProxy, { }))
+        userMediaCaptureManagerProxy->close();
+#endif
 #if ENABLE(VIDEO)
     m_videoFrameObjectHeap->close();
     m_remoteMediaPlayerManagerProxy->clear();
@@ -354,9 +360,12 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
     // RemoteGraphicsContextsGL objects are unneeded after connection closes.
     m_remoteGraphicsContextGLMap.clear();
 #endif
-#if USE(GRAPHICS_LAYER_WC) && ENABLE(WEBGL)
-    remoteGraphicsContextGLStreamWorkQueue().dispatch([webProcessIdentifier = m_webProcessIdentifier] {
+#if USE(GRAPHICS_LAYER_WC)
+    remoteGraphicsStreamWorkQueue().dispatch([webProcessIdentifier = m_webProcessIdentifier] {
+#if ENABLE(WEBGL)
         WCContentBufferManager::singleton().removeAllContentBuffersForProcess(webProcessIdentifier);
+#endif
+        WCRemoteFrameHostLayerManager::singleton().removeAllLayersForProcess(webProcessIdentifier);
     });
 #endif
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
@@ -585,9 +594,9 @@ void GPUConnectionToWebProcess::releaseRenderingBackend(RenderingBackendIdentifi
     gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
 }
 
-void GPUConnectionToWebProcess::releaseSerializedImageBuffer(RemoteSerializedImageBufferWriteReference&& reference)
+void GPUConnectionToWebProcess::releaseSerializedImageBuffer(WebCore::RenderingResourceIdentifier identifier)
 {
-    m_remoteSerializedImageBufferObjectHeap.retireRemove(WTFMove(reference));
+    m_remoteSerializedImageBufferObjectHeap.remove({ { identifier, 0 }, 0 });
 }
 
 #if ENABLE(WEBGL)
@@ -627,6 +636,57 @@ RemoteRenderingBackend* GPUConnectionToWebProcess::remoteRenderingBackend(Render
     if (it == m_remoteRenderingBackendMap.end())
         return nullptr;
     return it->value.get();
+}
+
+#if ENABLE(VIDEO)
+void GPUConnectionToWebProcess::performWithMediaPlayerOnMainThread(MediaPlayerIdentifier identifier, Function<void(MediaPlayer&)>&& callback)
+{
+    callOnMainRunLoopAndWait([&, gpuConnectionToWebProcess = Ref { *this }, identifier] {
+        if (auto player = gpuConnectionToWebProcess->remoteMediaPlayerManagerProxy().mediaPlayer(identifier))
+            callback(*player);
+    });
+}
+#endif
+
+void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle&& connectionHandle)
+{
+    MESSAGE_CHECK(m_webGPUEnabled);
+
+    auto it = m_remoteRenderingBackendMap.find(renderingBackendIdentifier);
+    if (it == m_remoteRenderingBackendMap.end())
+        return;
+    auto* renderingBackend = it->value.get();
+
+    auto addResult = m_remoteGPUMap.ensure(identifier, [&] {
+        return IPC::ScopedActiveMessageReceiveQueue { RemoteGPU::create(
+#if ENABLE(VIDEO) && PLATFORM(COCOA)
+            [&] (std::variant<WebCore::MediaPlayerIdentifier, WebKit::RemoteVideoFrameReference> identifier, Function<void(RefPtr<WebCore::VideoFrame>)>&& callback) mutable {
+                return WTF::switchOn(identifier, [&] (WebCore::MediaPlayerIdentifier i) {
+                    performWithMediaPlayerOnMainThread(i, [&callback](auto& player) {
+                        callback(player.videoFrameForCurrentTime());
+                    });
+                }, [&] (WebKit::RemoteVideoFrameReference i) {
+                    callback(videoFrameObjectHeap().get(RemoteVideoFrameReadReference(WTFMove(i))));
+                });
+            },
+#else
+            [] () mutable {
+            },
+#endif
+            identifier, *this, *renderingBackend, WTFMove(connectionHandle)) };
+    });
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+}
+
+void GPUConnectionToWebProcess::releaseRemoteGPU(WebGPUIdentifier identifier)
+{
+    bool result = m_remoteGPUMap.remove(identifier);
+    ASSERT_UNUSED(result, result);
+    if (m_remoteGPUMap.isEmpty()) {
+        ensureOnMainRunLoop([gpuProcess = Ref { gpuProcess() }] {
+            gpuProcess->tryExitIfUnusedAndUnderMemoryPressure();
+        });
+    }
 }
 
 void GPUConnectionToWebProcess::clearNowPlayingInfo()

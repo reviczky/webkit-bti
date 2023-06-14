@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2004 Zack Rusin <zack@kde.org>
- * Copyright (C) 2004-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alexey Proskuryakov <ap@webkit.org>
  * Copyright (C) 2007 Nicholas Shanks <webkit@nickshanks.com>
  * Copyright (C) 2011 Sencha, Inc. All rights reserved.
@@ -52,6 +52,7 @@
 #include "CSSValueList.h"
 #include "CSSValuePair.h"
 #include "CSSValuePool.h"
+#include "CSSWordBoundaryDetectionValue.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ContentData.h"
 #include "CursorList.h"
@@ -1214,6 +1215,13 @@ static Ref<CSSValueList> valueForScrollSnapAlignment(const ScrollSnapAlign& alig
         createConvertingToCSSValueID(alignment.inlineAlign));
 }
 
+static Ref<CSSValue> valueForScrollbarGutter(const ScrollbarGutter& gutter)
+{
+    if (!gutter.bothEdges)
+        return CSSPrimitiveValue::create(gutter.isAuto ? CSSValueAuto : CSSValueStable);
+    return CSSValuePair::create(CSSPrimitiveValue::create(CSSValueStable), CSSPrimitiveValue::create(CSSValueBothEdges));
+}
+
 static Ref<CSSValueList> valueForTextBoxEdge(const TextBoxEdge& textBoxEdge)
 {
     return CSSValueList::createSpaceSeparated(createConvertingToCSSValueID(textBoxEdge.over),
@@ -1447,16 +1455,16 @@ static Ref<CSSPrimitiveValue> valueForAnimationIterationCount(double iterationCo
     return CSSPrimitiveValue::create(iterationCount);
 }
 
-static Ref<CSSPrimitiveValue> valueForAnimationDirection(Animation::AnimationDirection direction)
+static Ref<CSSPrimitiveValue> valueForAnimationDirection(Animation::Direction direction)
 {
     switch (direction) {
-    case Animation::AnimationDirectionNormal:
+    case Animation::Direction::Normal:
         return CSSPrimitiveValue::create(CSSValueNormal);
-    case Animation::AnimationDirectionAlternate:
+    case Animation::Direction::Alternate:
         return CSSPrimitiveValue::create(CSSValueAlternate);
-    case Animation::AnimationDirectionReverse:
+    case Animation::Direction::Reverse:
         return CSSPrimitiveValue::create(CSSValueReverse);
-    case Animation::AnimationDirectionAlternateReverse:
+    case Animation::Direction::AlternateReverse:
         return CSSPrimitiveValue::create(CSSValueAlternateReverse);
     }
     RELEASE_ASSERT_NOT_REACHED();
@@ -2078,6 +2086,11 @@ static Ref<CSSValue> counterToCSSValue(const RenderStyle& style, CSSPropertyID p
     if (!list.isEmpty())
         return CSSValueList::createSpaceSeparated(WTFMove(list));
     return CSSPrimitiveValue::create(CSSValueNone);
+}
+
+static Ref<CSSValue> wordBoundaryDetection(WordBoundaryDetection wordBoundaryDetection)
+{
+    return CSSWordBoundaryDetectionValue::create(WTFMove(wordBoundaryDetection));
 }
 
 static Ref<CSSValueList> fontFamilyList(const RenderStyle& style)
@@ -3372,9 +3385,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
                 return zoomAdjustedPixelValue(sizingBox(*renderer).height(), style);
         }
         return zoomAdjustedPixelValueForLength(style.height(), style);
-    case CSSPropertyWebkitHyphens:
+    case CSSPropertyHyphens:
         return createConvertingToCSSValueID(style.hyphens());
-    case CSSPropertyWebkitHyphenateCharacter:
+    case CSSPropertyHyphenateCharacter:
         if (style.hyphenationString().isNull())
             return CSSPrimitiveValue::create(CSSValueAuto);
         return CSSPrimitiveValue::create(style.hyphenationString());
@@ -3396,10 +3409,6 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return CSSPrimitiveValue::create(CSSValueNone);
     case CSSPropertyImageRendering:
         return createConvertingToCSSValueID(style.imageRendering());
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    case CSSPropertyImageResolution:
-        return CSSPrimitiveValue::create(style.imageResolution(), CSSUnitType::CSS_DPPX);
-#endif
     case CSSPropertyInputSecurity:
         return createConvertingToCSSValueID(style.inputSecurity());
     case CSSPropertyLeft:
@@ -3715,6 +3724,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return createConvertingToCSSValueID(style.visibility());
     case CSSPropertyWhiteSpace:
         return createConvertingToCSSValueID(style.whiteSpace());
+    case CSSPropertyWhiteSpaceCollapse:
+        return createConvertingToCSSValueID(style.whiteSpaceCollapse());
     case CSSPropertyWidows:
         if (style.hasAutoWidows())
             return CSSPrimitiveValue::create(CSSValueAuto);
@@ -4182,6 +4193,10 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return createConvertingToCSSValueID(style.scrollSnapStop());
     case CSSPropertyScrollSnapType:
         return valueForScrollSnapType(style.scrollSnapType());
+    case CSSPropertyScrollbarGutter:
+        return valueForScrollbarGutter(style.scrollbarGutter());
+    case CSSPropertyScrollbarWidth:
+        return createConvertingToCSSValueID(style.scrollbarWidth());
     case CSSPropertyOverflowAnchor:
         return createConvertingToCSSValueID(style.overflowAnchor());
     case CSSPropertyTextBoxEdge:
@@ -4247,6 +4262,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
 
     case CSSPropertyQuotes:
         return valueForQuotes(style.quotes());
+
+    case CSSPropertyWordBoundaryDetection:
+        return wordBoundaryDetection(style.wordBoundaryDetection());
 
     // Unimplemented CSS 3 properties (including CSS3 shorthand properties).
     case CSSPropertyAll:

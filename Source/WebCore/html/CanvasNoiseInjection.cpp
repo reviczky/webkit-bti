@@ -40,9 +40,9 @@ void CanvasNoiseInjection::updateDirtyRect(const IntRect& rect)
 
 static inline bool isIndexInBounds(int size, int index)
 {
-    ASSERT(index < size);
+    ASSERT(index <= size);
     return index < size;
-};
+}
 
 static inline void setTightnessBounds(const std::span<uint8_t>& bytes, std::array<int, 4>& tightestBoundingDiff, int index1, int index2)
 {
@@ -174,7 +174,7 @@ bool CanvasNoiseInjection::postProcessPixelBufferResults(PixelBuffer& pixelBuffe
     ASSERT(pixelBuffer.format().pixelFormat == PixelFormat::RGBA8);
 
     constexpr int bytesPerPixel = 4;
-    std::span<uint8_t> bytes = makeSpan(pixelBuffer.bytes(), pixelBuffer.sizeInBytes());
+    std::span<uint8_t> bytes = std::span(pixelBuffer.bytes(), pixelBuffer.sizeInBytes());
     bool wasPixelBufferModified { false };
 
     for (size_t i = 0; i < bytes.size_bytes(); i += bytesPerPixel) {

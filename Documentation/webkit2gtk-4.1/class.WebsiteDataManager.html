@@ -67,7 +67,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.41.4</p>
+        <p>Library Version: 2.41.5</p>
         
       </div>
       
@@ -239,17 +239,10 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 <p>You can use WebKitWebsiteDataManager to configure the local directories
 where website data will be stored. Use <code>WebKitWebsiteDataManager:base-data-directory</code>
 and <code>WebKitWebsiteDataManager:base-cache-directory</code> set a common base directory for all
-website data and caches. The newly created WebKitWebsiteDataManager must be passed as
-a construct property to a <code>WebKitWebContext</code>; you can use <code>webkit_web_context_new_with_website_data_manager()</code>
-to create a new <code>WebKitWebContext</code> with a WebKitWebsiteDataManager.
-If you don&#8217;t want to set any specific configuration, you don&#8217;t need to create
-a WebKitWebsiteDataManager: the <code>WebKitWebContext</code> will create a WebKitWebsiteDataManager
-with the default configuration. To get the WebKitWebsiteDataManager of a <code>WebKitWebContext</code>,
-you can use&nbsp;webkit_web_context_get_website_data_manager().</p>
-<p>A WebKitWebsiteDataManager can also be ephemeral, in which case all the directory configuration
+website data and&nbsp;caches.</p>
+<p>A WebKitWebsiteDataManager can be ephemeral, in which case all the directory configuration
 is not needed because website data will never persist. You can create an ephemeral WebKitWebsiteDataManager
-with <code>webkit_website_data_manager_new_ephemeral()</code> and pass the ephemeral WebKitWebsiteDataManager to
-a <code>WebKitWebContext</code>, or simply use&nbsp;webkit_web_context_new_ephemeral().</p>
+with&nbsp;webkit_website_data_manager_new_ephemeral().</p>
 <p>WebKitWebsiteDataManager can also be used to fetch website data, remove data
 stored by particular websites, or clear data for all websites modified since a given
 period of&nbsp;time.</p>

@@ -51,6 +51,7 @@ inline CapabilityLevel canCompile(Node* node)
     case KillStack:
     case GetStack:
     case MovHint:
+    case ZombieHint:
     case ExitOK:
     case Phantom:
     case Flush:
@@ -237,6 +238,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ObjectToString:
     case ReflectOwnKeys:
     case MakeRope:
+    case MakeAtomString:
     case NewArrayWithSize:
     case NewArrayWithSpecies:
     case TryGetById:
@@ -285,6 +287,8 @@ inline CapabilityLevel canCompile(Node* node)
     case IsNumber:
     case IsBigInt:
     case NumberIsInteger:
+    case GlobalIsNaN:
+    case NumberIsNaN:
     case IsObject:
     case IsCallable:
     case IsConstructor:

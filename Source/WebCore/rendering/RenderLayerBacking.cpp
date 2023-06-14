@@ -572,6 +572,9 @@ void RenderLayerBacking::createPrimaryGraphicsLayer()
 #if ENABLE(CSS_COMPOSITING)
     updateBlendMode(style);
 #endif
+#if ENABLE(VIDEO)
+    updateVideoGravity(style);
+#endif
     updateContentsScalingFilters(style);
 }
 
@@ -826,6 +829,32 @@ void RenderLayerBacking::updateBlendMode(const RenderStyle& style)
 }
 #endif
 
+#if ENABLE(VIDEO)
+void RenderLayerBacking::updateVideoGravity(const RenderStyle& style)
+{
+    if (!renderer().isVideo())
+        return;
+
+    MediaPlayerVideoGravity videoGravity;
+    switch (style.objectFit()) {
+    case ObjectFit::None:
+    case ObjectFit::ScaleDown:
+        // FIXME: Add support for "None" and "ScaleDown" with video gravity modes
+        FALLTHROUGH;
+    case ObjectFit::Fill:
+        videoGravity = MediaPlayerVideoGravity::Resize;
+        break;
+    case ObjectFit::Contain:
+        videoGravity = MediaPlayerVideoGravity::ResizeAspect;
+        break;
+    case ObjectFit::Cover:
+        videoGravity = MediaPlayerVideoGravity::ResizeAspectFill;
+        break;
+    }
+    m_graphicsLayer->setVideoGravity(videoGravity);
+}
+#endif
+
 void RenderLayerBacking::updateContentsScalingFilters(const RenderStyle& style)
 {
     if (!renderer().isCanvas() || canvasCompositingStrategy(renderer()) != CanvasAsLayerContents)
@@ -1026,6 +1055,10 @@ void RenderLayerBacking::updateConfigurationAfterStyleChange()
     updateBlendMode(style);
 #endif
     updateContentsScalingFilters(style);
+
+#if ENABLE(VIDEO)
+    updateVideoGravity(style);
+#endif
 }
 
 bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAncestor)
@@ -1381,6 +1414,10 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     updateBlendMode(style);
 #endif
     updateContentsScalingFilters(style);
+
+#if ENABLE(VIDEO)
+    updateVideoGravity(style);
+#endif
 
     ASSERT(compositedAncestor == m_owningLayer.ancestorCompositingLayer());
     LayoutRect parentGraphicsLayerRect = computeParentGraphicsLayerRect(compositedAncestor);
@@ -1829,6 +1866,12 @@ void RenderLayerBacking::updateDrawsContent(PaintedContentsInfo& contentsInfo)
 
     bool hasPaintedContent = containsPaintedContent(contentsInfo);
 
+#if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
+    // We need to clean-up existing Interaction Regions since we won't repaint.
+    if (!hasPaintedContent)
+        clearInteractionRegions();
+#endif
+
     // FIXME: we could refine this to only allocate backing for one of these layers if possible.
     m_graphicsLayer->setDrawsContent(hasPaintedContent);
     if (m_foregroundLayer)
@@ -1960,6 +2003,28 @@ void RenderLayerBacking::updateEventRegion()
     renderer().view().setNeedsEventRegionUpdateForNonCompositedFrame(false);
     
     setNeedsEventRegionUpdate(false);
+}
+#endif
+
+#if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
+void RenderLayerBacking::clearInteractionRegions()
+{
+    auto clearInteractionRegionsForLayer = [&](GraphicsLayer& graphicsLayer) {
+        if (graphicsLayer.eventRegion().isEmpty())
+            return;
+
+        EventRegion eventRegion = graphicsLayer.eventRegion();
+        eventRegion.clearInteractionRegions();
+        graphicsLayer.setEventRegion(WTFMove(eventRegion));
+    };
+
+    clearInteractionRegionsForLayer(*m_graphicsLayer);
+
+    if (m_scrolledContentsLayer)
+        clearInteractionRegionsForLayer(*m_scrolledContentsLayer);
+
+    if (m_foregroundLayer)
+        clearInteractionRegionsForLayer(*m_foregroundLayer);
 }
 #endif
 
@@ -3113,12 +3178,12 @@ bool RenderLayerBacking::isUnscaledBitmapOnly() const
 void RenderLayerBacking::contentChanged(ContentChangeType changeType)
 {
     PaintedContentsInfo contentsInfo(*this);
-    if (changeType == ImageChanged) {
+    if (changeType == ImageChanged || changeType == CanvasChanged) {
         if (contentsInfo.isDirectlyCompositedImage()) {
             updateImageContents(contentsInfo);
             return;
         }
-        if (contentsInfo.isUnscaledBitmapOnly()) {
+        if (contentsInfo.isUnscaledBitmapOnly() != m_graphicsLayer->appliesDeviceScale()) {
             compositor().scheduleCompositingLayerUpdate();
             return;
         }
@@ -4065,9 +4130,9 @@ void RenderLayerBacking::notifyFlushRequired(const GraphicsLayer* layer)
     compositor().notifyFlushRequired(layer);
 }
 
-void RenderLayerBacking::notifyFlushBeforeDisplayRefresh(const GraphicsLayer* layer)
+void RenderLayerBacking::notifySubsequentFlushRequired(const GraphicsLayer* layer)
 {
-    compositor().notifyFlushBeforeDisplayRefresh(layer);
+    compositor().notifySubsequentFlushRequired(layer);
 }
 
 // This is used for the 'freeze' API, for testing only.

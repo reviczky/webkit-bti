@@ -57,7 +57,6 @@
 #include "EventLoop.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FullscreenManager.h"
 #include "HTMLAudioElement.h"
 #include "HTMLParserIdioms.h"
@@ -75,6 +74,7 @@
 #include "JSMediaControlsHost.h"
 #include "LoadableTextTrack.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
@@ -423,7 +423,7 @@ static bool mediaSessionMayBeConfusedWithMainContent(const MediaElementSessionIn
 
 static bool defaultVolumeLocked()
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     return true;
 #else
     return false;
@@ -828,7 +828,14 @@ void HTMLMediaElement::attributeChanged(const QualifiedName& name, const AtomStr
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     case AttributeNames::webkitwirelessvideoplaybackdisabledAttr:
         mediaSession().setWirelessVideoPlaybackDisabled(newValue != nullAtom());
-        return;
+        FALLTHROUGH;
+    case AttributeNames::disableremoteplaybackAttr:
+#if ENABLE(MEDIA_SOURCE)
+    case AttributeNames::webkitairplayAttr:
+        if (m_mediaSource && isWirelessPlaybackTargetDisabled())
+            m_mediaSource->openIfDeferredOpen();
+        break;
+#endif
 #endif
     default:
         break;
@@ -1264,6 +1271,7 @@ void HTMLMediaElement::prepareForLoad()
 
         // 6.6 - If the paused attribute is false, then set it to true.
         setPaused(true);
+        setPlaying(false);
 
         // 6.7 - If seeking is true, set it to false.
         clearSeeking();
@@ -1540,7 +1548,7 @@ void HTMLMediaElement::loadResource(const URL& initialURL, ContentType& contentT
 
     URL url = initialURL;
 #if PLATFORM(COCOA)
-    if (url.isLocalFile() && !frame->loader().willLoadMediaElementURL(url, *this)) {
+    if (url.protocolIsFile() && !frame->loader().willLoadMediaElementURL(url, *this)) {
         mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
         return;
     }
@@ -2333,7 +2341,7 @@ CueList HTMLMediaElement::currentlyActiveCues() const
     return m_cueData->currentlyActiveCues;
 }
 
-static inline bool isAllowedToLoadMediaURL(HTMLMediaElement& element, const URL& url, bool isInUserAgentShadowTree)
+static inline bool isAllowedToLoadMediaURL(const HTMLMediaElement& element, const URL& url, bool isInUserAgentShadowTree)
 {
     // Elements in user agent show tree should load whatever the embedding document policy is.
     if (isInUserAgentShadowTree)
@@ -2343,10 +2351,11 @@ static inline bool isAllowedToLoadMediaURL(HTMLMediaElement& element, const URL&
     return element.document().contentSecurityPolicy()->allowMediaFromSource(url);
 }
 
-bool HTMLMediaElement::isSafeToLoadURL(const URL& url, InvalidURLAction actionIfInvalid)
+bool HTMLMediaElement::isSafeToLoadURL(const URL& url, InvalidURLAction actionIfInvalid, bool shouldLog) const
 {
     if (!url.isValid()) {
-        ERROR_LOG(LOGIDENTIFIER, url, " is invalid");
+        if (shouldLog)
+            ERROR_LOG(LOGIDENTIFIER, url, " is invalid");
         return false;
     }
 
@@ -2354,7 +2363,8 @@ bool HTMLMediaElement::isSafeToLoadURL(const URL& url, InvalidURLAction actionIf
     if (!frame || !document().securityOrigin().canDisplay(url, OriginAccessPatternsForWebProcess::singleton())) {
         if (actionIfInvalid == Complain) {
             FrameLoader::reportLocalLoadFailed(frame.get(), url.stringCenterEllipsizedToLength());
-            ERROR_LOG(LOGIDENTIFIER, url , " was rejected by SecurityOrigin");
+            if (shouldLog)
+                ERROR_LOG(LOGIDENTIFIER, url , " was rejected by SecurityOrigin");
         }
         return false;
     }
@@ -2363,13 +2373,15 @@ bool HTMLMediaElement::isSafeToLoadURL(const URL& url, InvalidURLAction actionIf
         if (actionIfInvalid == Complain) {
             if (frame)
                 FrameLoader::reportBlockedLoadFailed(*frame, url);
-            ERROR_LOG(LOGIDENTIFIER, url , " was rejected because the port is not allowed");
+            if (shouldLog)
+                ERROR_LOG(LOGIDENTIFIER, url , " was rejected because the port is not allowed");
         }
         return false;
     }
 
     if (!isAllowedToLoadMediaURL(*this, url, isInUserAgentShadowTree())) {
-        ERROR_LOG(LOGIDENTIFIER, url, " was rejected by Content Security Policy");
+        if (shouldLog)
+            ERROR_LOG(LOGIDENTIFIER, url, " was rejected by Content Security Policy");
         return false;
     }
 
@@ -4137,6 +4149,24 @@ void HTMLMediaElement::pauseInternal()
     updatePlayState();
 }
 
+bool HTMLMediaElement::hasMediaSource() const
+{
+#if ENABLE(MEDIA_SOURCE)
+    return m_mediaSource;
+#else
+    return false;
+#endif
+}
+
+bool HTMLMediaElement::hasManagedMediaSource() const
+{
+#if ENABLE(MANAGED_MEDIA_SOURCE)
+    return is<ManagedMediaSource>(m_mediaSource);
+#else
+    return false;
+#endif
+}
+
 #if ENABLE(MEDIA_SOURCE)
 
 void HTMLMediaElement::detachMediaSource()
@@ -5205,7 +5235,7 @@ URL HTMLMediaElement::selectNextSourceChild(ContentType* contentType, String* ke
             parameters.type = ContentType(type);
             parameters.url = mediaURL;
 #if ENABLE(MEDIA_SOURCE)
-            parameters.isMediaSource = mediaURL.protocolIs(mediaSourceBlobProtocol);
+            parameters.isMediaSource = mediaURL.protocolIs(mediaSourceBlobProtocol) && MediaSource::lookup(mediaURL.string());
 #endif
             parameters.requiresRemotePlayback = !!m_remotePlaybackConfiguration;
             if (!document().settings().allowMediaContentTypesRequiringHardwareSupportAsFallback() || Traversal<HTMLSourceElement>::nextSkippingChildren(source))
@@ -5262,6 +5292,11 @@ void HTMLMediaElement::sourceWasAdded(HTMLSourceElement& source)
         INFO_LOG(LOGIDENTIFIER, "<source> inserted inside a document without a browsing context is not loaded");
         return;
     }
+
+#if ENABLE(MEDIA_SOURCE)
+    if (m_mediaSource)
+        m_mediaSource->openIfDeferredOpen();
+#endif
 
     // We should only consider a <source> element when there is not src attribute at all.
     if (hasAttributeWithoutSynchronization(srcAttr))
@@ -6506,6 +6541,30 @@ void HTMLMediaElement::remoteHasAvailabilityCallbacksChanged()
     mediaSession().setHasPlaybackTargetAvailabilityListeners(hasListeners);
     scheduleUpdateMediaState();
 }
+
+bool HTMLMediaElement::hasWirelessPlaybackTargetAlternative() const
+{
+    for (auto& source : childrenOfType<HTMLSourceElement>(*this)) {
+        auto mediaURL = source.getNonEmptyURLAttribute(srcAttr);
+        bool maybeSuitable = !mediaURL.isEmpty();
+#if ENABLE(MEDIA_SOURCE)
+        maybeSuitable &= !mediaURL.protocolIs(mediaSourceBlobProtocol);
+#endif
+        if (!maybeSuitable || !isSafeToLoadURL(mediaURL, DoNothing, false))
+            continue;
+
+        return true;
+    }
+    return false;
+}
+
+bool HTMLMediaElement::isWirelessPlaybackTargetDisabled() const
+{
+    return equalLettersIgnoringASCIICase(attributeWithoutSynchronization(HTMLNames::webkitairplayAttr), "deny"_s)
+        || hasAttributeWithoutSynchronization(HTMLNames::webkitwirelessvideoplaybackdisabledAttr)
+        || hasAttributeWithoutSynchronization(HTMLNames::disableremoteplaybackAttr);
+}
+
 #endif // ENABLE(WIRELESS_PLAYBACK_TARGET)
 
 void HTMLMediaElement::dispatchEvent(Event& event)
@@ -7301,6 +7360,9 @@ void HTMLMediaElement::createMediaPlayer() WTF_IGNORES_THREAD_SAFETY_ANALYSIS
     if (m_isPlayingToWirelessTarget)
         setIsPlayingToWirelessTarget(false);
 #endif
+
+    if (auto player = std::exchange(m_player, { }))
+        player->invalidate();
 
     m_player = MediaPlayer::create(*this);
     m_player->setBufferingPolicy(m_bufferingPolicy);
@@ -8276,11 +8338,11 @@ String HTMLMediaElement::mediaSessionTitle() const
     if (!document().page() || document().page()->usesEphemeralSession())
         return emptyString();
 
-    auto title = String(attributeWithoutSynchronization(titleAttr)).stripWhiteSpace().simplifyWhiteSpace();
+    auto title = String(attributeWithoutSynchronization(titleAttr)).trim(deprecatedIsSpaceOrNewline).simplifyWhiteSpace(deprecatedIsSpaceOrNewline);
     if (!title.isEmpty())
         return title;
 
-    title = document().title().stripWhiteSpace().simplifyWhiteSpace();
+    title = document().title().trim(deprecatedIsSpaceOrNewline).simplifyWhiteSpace(deprecatedIsSpaceOrNewline);
     if (!title.isEmpty())
         return title;
 
@@ -8444,13 +8506,15 @@ FloatSize HTMLMediaElement::naturalSize()
 
 FloatSize HTMLMediaElement::videoInlineSize() const
 {
-    if (m_player)
-        return m_player->videoInlineSize();
-    return { };
+    return m_videoInlineSize;
 }
 
 void HTMLMediaElement::setVideoInlineSizeFenced(const FloatSize& size, const WTF::MachSendRight& fence)
 {
+    if (m_videoInlineSize == size)
+        return;
+
+    m_videoInlineSize = size;
     if (m_player)
         m_player->setVideoInlineSizeFenced(size, fence);
 }
@@ -8643,7 +8707,7 @@ void HTMLMediaElement::setBufferingPolicy(BufferingPolicy policy)
     m_bufferingPolicy = policy;
     if (m_player)
         m_player->setBufferingPolicy(policy);
-#if ENABLE(MEDIA_SOURCE)
+#if ENABLE(MANAGED_MEDIA_SOURCE)
     if (m_mediaSource && policy == BufferingPolicy::PurgeResources)
         m_mediaSource->memoryPressure();
 #endif
@@ -8654,7 +8718,7 @@ void HTMLMediaElement::purgeBufferedDataIfPossible()
     ALWAYS_LOG(LOGIDENTIFIER);
 
     bool isPausedOrMSE = [&] {
-#if ENABLE(MEDIA_SOURCE)
+#if ENABLE(MANAGED_MEDIA_SOURCE)
         if (m_mediaSource)
             return true;
 #endif

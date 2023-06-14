@@ -78,7 +78,6 @@ public:
     SMILTime elapsed() const; 
 
     SMILTime intervalBegin() const { return m_intervalBegin; }
-    SMILTime intervalEnd() const { return m_intervalEnd; }
     SMILTime previousIntervalBegin() const { return m_previousIntervalBegin; }
     SMILTime simpleDuration() const;
 
@@ -92,7 +91,6 @@ public:
     static SMILTime parseOffsetValue(StringView);
 
     bool isContributing(SMILTime elapsed) const;
-    bool isInactive() const;
     bool isFrozen() const;
 
     unsigned documentOrderIndex() const { return m_documentOrderIndex; }
@@ -139,7 +137,7 @@ private:
     enum BeginOrEnd { Begin, End };
     SMILTime findInstanceTime(BeginOrEnd, SMILTime minimumTime, bool equalsMinimumOK) const;
     void resolveFirstInterval();
-    void resolveNextInterval();
+    bool resolveNextInterval();
     void resolveInterval(bool first, SMILTime& beginResult, SMILTime& endResult) const;
     SMILTime resolveActiveEnd(SMILTime resolvedBegin, SMILTime resolvedEnd) const;
     SMILTime repeatingDuration() const;

@@ -38,7 +38,6 @@
 #include "Document.h"
 #include "ElementInlines.h"
 #include "EventNames.h"
-#include "FrameLoaderClient.h"
 #include "GPU.h"
 #include "GPUBasedCanvasRenderingContext.h"
 #include "GPUCanvasContext.h"
@@ -56,6 +55,7 @@
 #include "JSDOMConvertDictionary.h"
 #include "JSNodeCustomInlines.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "Navigator.h"
@@ -839,8 +839,9 @@ RefPtr<VideoFrame> HTMLCanvasElement::toVideoFrame()
     if (!pixelBuffer)
         return nullptr;
 
+    // FIXME: Set color space.
 #if PLATFORM(COCOA)
-    return VideoFrameCV::createFromPixelBuffer(pixelBuffer.releaseNonNull());
+    return VideoFrame::createFromPixelBuffer(pixelBuffer.releaseNonNull());
 #elif USE(GSTREAMER)
     // FIXME: Hardcoding 30fps here is not great. Ideally we should get this from the compositor refresh rate, somehow.
     return VideoFrameGStreamer::createFromPixelBuffer(pixelBuffer.releaseNonNull(), VideoFrameGStreamer::CanvasContentType::Canvas2D, VideoFrameGStreamer::Rotation::None, MediaTime::invalidTime(), { }, 30, false, { });

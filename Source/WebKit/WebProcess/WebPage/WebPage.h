@@ -148,8 +148,8 @@
 #include <WebCore/PlatformTouchEvent.h>
 #endif
 
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-#include <WebCore/LookalikeCharactersSanitizationData.h>
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+#include <WebCore/LinkDecorationFilteringData.h>
 #endif
 
 #if ENABLE(MAC_GESTURE_EVENTS)
@@ -243,7 +243,7 @@ enum class DragHandlingMethod : uint8_t;
 enum class EventMakesGamepadsVisible : bool;
 enum class FinalizeRenderingUpdateFlags : uint8_t;
 enum class HighlightRequestOriginatedInApp : bool;
-enum class LookalikeCharacterSanitizationTrigger : uint8_t;
+enum class LinkDecorationFilteringTrigger : uint8_t;
 enum class MediaProducerMediaCaptureKind : uint8_t;
 enum class MediaProducerMediaState : uint32_t;
 enum class MediaProducerMutedState : uint8_t;
@@ -1025,7 +1025,7 @@ public:
     void getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>&&);
     void characterIndexForPointAsync(const WebCore::IntPoint&, CompletionHandler<void(uint64_t)>&&);
     void firstRectForCharacterRangeAsync(const EditingRange&, CompletionHandler<void(const WebCore::IntRect&, const EditingRange&)>&&);
-    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>&, const Vector<WebCore::CompositionHighlight>&, const EditingRange& selectionRange, const EditingRange& replacementRange);
+    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>&, const Vector<WebCore::CompositionHighlight>&, const HashMap<String, Vector<WebCore::CharacterRange>>&, const EditingRange& selectionRange, const EditingRange& replacementRange);
     void confirmCompositionAsync();
 
     void readSelectionFromPasteboard(const String& pasteboardName, CompletionHandler<void(bool&&)>&&);
@@ -1055,7 +1055,7 @@ public:
     void replaceImageForRemoveBackground(const WebCore::ElementContext&, const Vector<String>& types, const IPC::DataReference&);
 #endif
 
-    void setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<WebCore::CompositionHighlight>&);
+    void setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<WebCore::CompositionHighlight>&, const HashMap<String, Vector<WebCore::CharacterRange>>&);
     bool hasCompositionForTesting();
     void confirmCompositionForTesting(const String& compositionString);
 
@@ -1526,8 +1526,8 @@ public:
 
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags);
 
-    URL sanitizeLookalikeCharacters(const URL&, WebCore::LookalikeCharacterSanitizationTrigger);
-    URL allowedLookalikeCharacters(const URL&);
+    URL applyLinkDecorationFiltering(const URL&, WebCore::LinkDecorationFilteringTrigger);
+    URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&);
 
 #if ENABLE(IMAGE_ANALYSIS)
     void requestTextRecognition(WebCore::Element&, WebCore::TextRecognitionOptions&&, CompletionHandler<void(RefPtr<WebCore::Element>&&)>&& = { });
@@ -1643,6 +1643,8 @@ public:
     bool isInStableState() const { return m_isInStableState; }
 #endif
 
+    WebCore::FloatSize screenSizeForFingerprintingProtections(const WebCore::LocalFrame&, WebCore::FloatSize defaultSize) const;
+
     const Logger& logger() const;
     const void* logIdentifier() const;
 
@@ -1703,9 +1705,9 @@ private:
     void clearSelectionAfterTapIfNeeded();
 #endif
 
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    void setLookalikeCharacterStrings(Vector<WebCore::LookalikeCharactersSanitizationData>&&);
-    void setAllowedLookalikeCharacterStrings(Vector<WebCore::LookalikeCharactersSanitizationData>&&);
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    void setLinkDecorationFilteringData(Vector<WebCore::LinkDecorationFilteringData>&&);
+    void setAllowedQueryParametersForAdvancedPrivacyProtections(Vector<WebCore::LinkDecorationFilteringData>&&);
 #endif
 
 #if ENABLE(META_VIEWPORT)
@@ -2035,6 +2037,8 @@ private:
 
     void handleAcceptedCandidate(WebCore::TextCheckingResult);
 #endif
+
+    void performHitTestForMouseEvent(const WebMouseEvent&, CompletionHandler<void(WebHitTestResultData&&, OptionSet<WebEventModifier>, UserData&&)>&&);
 
 #if PLATFORM(COCOA)
     void requestActiveNowPlayingSessionInfo(CompletionHandler<void(bool, bool, const String&, double, double, uint64_t)>&&);
@@ -2606,10 +2610,10 @@ private:
     WebCore::HighlightVisibility m_appHighlightsVisible { WebCore::HighlightVisibility::Hidden };
 #endif
 
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    HashSet<String> m_lookalikeCharacterStrings;
-    HashMap<WebCore::RegistrableDomain, HashSet<String>> m_domainScopedLookalikeCharacterStrings;
-    HashMap<WebCore::RegistrableDomain, HashSet<String>> m_allowedLookalikeCharacterStrings;
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    HashSet<String> m_linkDecorationFilteringData;
+    HashMap<WebCore::RegistrableDomain, HashSet<String>> m_domainScopedLinkDecorationFilteringData;
+    HashMap<WebCore::RegistrableDomain, HashSet<String>> m_allowedQueryParametersForAdvancedPrivacyProtections;
 #endif
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
@@ -2630,8 +2634,8 @@ inline bool WebPage::shouldAvoidComputingPostLayoutDataForEditorState() const { 
 #endif
 
 #if !PLATFORM(COCOA)
-inline URL WebPage::sanitizeLookalikeCharacters(const URL& url, WebCore::LookalikeCharacterSanitizationTrigger) { return url; }
-inline URL WebPage::allowedLookalikeCharacters(const URL& url) { return url; }
+inline URL WebPage::applyLinkDecorationFiltering(const URL& url, WebCore::LinkDecorationFilteringTrigger) { return url; }
+inline URL WebPage::allowedQueryParametersForAdvancedPrivacyProtections(const URL& url) { return url; }
 #endif
 
 #if PLATFORM(IOS_FAMILY)

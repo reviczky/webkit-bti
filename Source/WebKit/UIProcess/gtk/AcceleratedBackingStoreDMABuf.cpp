@@ -28,6 +28,7 @@
 
 #if USE(GBM)
 #include "AcceleratedBackingStoreDMABufMessages.h"
+#include "AcceleratedSurfaceDMABufMessages.h"
 #include "LayerTreeContext.h"
 #include "ShareableBitmap.h"
 #include "WebPageProxy.h"
@@ -112,7 +113,7 @@ AcceleratedBackingStoreDMABuf::Texture::Texture(GdkGLContext* glContext, const U
                 EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT, static_cast<EGLAttrib>(modifier >> 32),
                 EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, static_cast<EGLAttrib>(modifier & 0xffffffff),
             };
-            attributes.append(Span<const EGLAttrib> { modifierAttributes });
+            attributes.append(std::span<const EGLAttrib> { modifierAttributes });
         }
         attributes.append(EGL_NONE);
 
@@ -159,9 +160,13 @@ AcceleratedBackingStoreDMABuf::Texture::~Texture()
         glDeleteTextures(1, &m_textureID);
 }
 
-bool AcceleratedBackingStoreDMABuf::Texture::swap()
+void AcceleratedBackingStoreDMABuf::Texture::swap()
 {
     std::swap(m_backImage, m_frontImage);
+}
+
+bool AcceleratedBackingStoreDMABuf::Texture::prepareForRendering()
+{
     if (!m_textureID)
         return false;
 
@@ -273,15 +278,21 @@ RefPtr<cairo_surface_t> AcceleratedBackingStoreDMABuf::Surface::map(RefPtr<Share
     return bitmap->createCairoSurface();
 }
 
-bool AcceleratedBackingStoreDMABuf::Surface::swap()
+void AcceleratedBackingStoreDMABuf::Surface::swap()
 {
-    if (m_backBitmap && m_frontBitmap) {
+    if (m_backBitmap && m_frontBitmap)
         std::swap(m_backBitmap, m_frontBitmap);
-        m_surface = map(m_frontBitmap);
-    } else {
+    else
         std::swap(m_backBuffer, m_frontBuffer);
+}
+
+bool AcceleratedBackingStoreDMABuf::Surface::prepareForRendering()
+{
+    if (m_backBitmap && m_frontBitmap)
+        m_surface = map(m_frontBitmap);
+    else
         m_surface = map(m_frontBuffer);
-    }
+
     if (m_surface) {
         cairo_surface_mark_dirty(m_surface.get());
         return true;
@@ -354,8 +365,13 @@ std::unique_ptr<AcceleratedBackingStoreDMABuf::RenderSource> AcceleratedBackingS
     return makeUnique<Texture>(m_gdkGLContext.get(), m_surface.backFD, m_surface.frontFD, m_surface.size, m_surface.format, m_surface.offset, m_surface.stride, m_surface.modifier, m_webPage.deviceScaleFactor());
 }
 
-void AcceleratedBackingStoreDMABuf::frame(CompletionHandler<void()>&& completionHandler)
+void AcceleratedBackingStoreDMABuf::frame()
 {
+    ASSERT(!m_frameCompletionHandler);
+    m_frameCompletionHandler = [this] {
+        m_webPage.process().send(Messages::AcceleratedSurfaceDMABuf::FrameDone(), m_surface.id);
+    };
+
     if (m_pendingSource)
         m_committedSource = WTFMove(m_pendingSource);
 
@@ -364,14 +380,21 @@ void AcceleratedBackingStoreDMABuf::frame(CompletionHandler<void()>&& completion
     else
         std::swap(m_surface.backFD, m_surface.frontFD);
 
-    if (!m_committedSource || !m_committedSource->swap()) {
-        completionHandler();
-        return;
+    if (m_committedSource) {
+        m_committedSource->swap();
+        if (m_committedSource->prepareForRendering()) {
+            gtk_widget_queue_draw(m_webPage.viewWidget());
+            return;
+        }
     }
 
-    ASSERT(!m_frameCompletionHandler);
-    m_frameCompletionHandler = WTFMove(completionHandler);
-    gtk_widget_queue_draw(m_webPage.viewWidget());
+    frameDone();
+}
+
+void AcceleratedBackingStoreDMABuf::frameDone()
+{
+    if (auto completionHandler = std::exchange(m_frameCompletionHandler, nullptr))
+        completionHandler();
 }
 
 void AcceleratedBackingStoreDMABuf::realize()
@@ -383,7 +406,8 @@ void AcceleratedBackingStoreDMABuf::realize()
         return;
 
     m_committedSource = createSource();
-    gtk_widget_queue_draw(m_webPage.viewWidget());
+    if (m_committedSource->prepareForRendering())
+        gtk_widget_queue_draw(m_webPage.viewWidget());
 }
 
 void AcceleratedBackingStoreDMABuf::unrealize()
@@ -413,10 +437,6 @@ void AcceleratedBackingStoreDMABuf::ensureGLContext()
     if (!m_gdkGLContext)
         g_error("GDK is not able to create a GL context: %s.", error->message);
 
-#if USE(OPENGL_ES)
-    gdk_gl_context_set_use_es(m_gdkGLContext.get(), TRUE);
-#endif
-
     if (!gdk_gl_context_realize(m_gdkGLContext.get(), &error.outPtr()))
         g_error("GDK failed to realize the GL context: %s.", error->message);
 }
@@ -440,8 +460,7 @@ void AcceleratedBackingStoreDMABuf::update(const LayerTreeContext& context)
         return;
 
     if (m_surface.id) {
-        if (auto completionHandler = std::exchange(m_frameCompletionHandler, nullptr))
-            completionHandler();
+        frameDone();
         m_webPage.process().removeMessageReceiver(Messages::AcceleratedBackingStoreDMABuf::messageReceiverName(), m_surface.id);
     }
 
@@ -457,8 +476,7 @@ void AcceleratedBackingStoreDMABuf::snapshot(GtkSnapshot* gtkSnapshot)
         return;
 
     m_committedSource->snapshot(gtkSnapshot);
-    if (auto completionHandler = std::exchange(m_frameCompletionHandler, nullptr))
-        completionHandler();
+    frameDone();
 }
 #else
 bool AcceleratedBackingStoreDMABuf::paint(cairo_t* cr, const WebCore::IntRect& clipRect)
@@ -467,8 +485,7 @@ bool AcceleratedBackingStoreDMABuf::paint(cairo_t* cr, const WebCore::IntRect& c
         return false;
 
     m_committedSource->paint(m_webPage.viewWidget(), cr, clipRect);
-    if (auto completionHandler = std::exchange(m_frameCompletionHandler, nullptr))
-        completionHandler();
+    frameDone();
 
     return true;
 }

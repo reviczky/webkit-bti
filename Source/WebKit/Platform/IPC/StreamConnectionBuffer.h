@@ -27,9 +27,9 @@
 
 #include "SharedMemory.h"
 #include <cstddef>
+#include <span>
 #include <wtf/Atomics.h>
 #include <wtf/Ref.h>
-#include <wtf/Span.h>
 
 namespace IPC {
 class Decoder;
@@ -76,7 +76,7 @@ public:
 
     struct Handle {
         WebKit::SharedMemory::Handle memory;
-        void encode(Encoder&) const;
+        void encode(Encoder&) &&;
         static std::optional<Handle> decode(Decoder&);
     };
     Handle createHandle();

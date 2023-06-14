@@ -157,7 +157,7 @@ void WebSWServerConnection::setRegistrationUpdateViaCache(ServiceWorkerRegistrat
     send(Messages::WebSWClientConnection::SetRegistrationUpdateViaCache(identifier, updateViaCache));
 }
 
-void WebSWServerConnection::notifyClientsOfControllerChange(const HashSet<ScriptExecutionContextIdentifier>& contextIdentifiers, const ServiceWorkerData& newController)
+void WebSWServerConnection::notifyClientsOfControllerChange(const HashSet<ScriptExecutionContextIdentifier>& contextIdentifiers, const std::optional<ServiceWorkerData>& newController)
 {
     send(Messages::WebSWClientConnection::NotifyClientsOfControllerChange(contextIdentifiers, newController));
 }
@@ -217,7 +217,6 @@ std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(N
 
         serviceWorkerRegistrationIdentifier = registration->identifier();
         controlClient(loader.parameters(), *registration, request, loader.connectionToWebProcess().webProcessIdentifier());
-        loader.setResultingClientIdentifier(resultingClientIdentifier->toString());
         loader.setServiceWorkerRegistration(*registration);
     } else {
         if (!loader.parameters().serviceWorkerRegistrationIdentifier)

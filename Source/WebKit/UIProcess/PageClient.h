@@ -210,7 +210,7 @@ public:
     virtual ~PageClient() { }
 
     // Create a new drawing area proxy for the given page.
-    virtual std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) = 0;
+    virtual std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy() = 0;
 
     // Tell the view to invalidate the given region. The region is in view coordinates.
     virtual void setViewNeedsDisplay(const WebCore::Region&) = 0;
@@ -463,8 +463,6 @@ public:
     virtual void registerInsertionUndoGrouping() = 0;
 
     virtual void setEditableElementIsFocused(bool) = 0;
-
-    virtual void setCaretDecorationVisibility(bool) = 0;
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(COCOA)

@@ -589,6 +589,7 @@ public:
     PopoverData* popoverData() const;
     PopoverData& ensurePopoverData();
     void clearPopoverData();
+    bool isPopoverShowing() const;
 
     ExceptionOr<void> setPointerCapture(int32_t);
     ExceptionOr<void> releasePointerCapture(int32_t);
@@ -789,7 +790,7 @@ private:
     void updateId(const AtomString& oldId, const AtomString& newId, NotifyObservers = NotifyObservers::Yes);
     void updateIdForTreeScope(TreeScope&, const AtomString& oldId, const AtomString& newId, NotifyObservers = NotifyObservers::Yes);
 
-    enum HTMLDocumentNamedItemMapsUpdatingCondition { AlwaysUpdateHTMLDocumentNamedItemMaps, UpdateHTMLDocumentNamedItemMapsOnlyIfDiffersFromNameAttribute };
+    enum class HTMLDocumentNamedItemMapsUpdatingCondition : bool { Always, UpdateOnlyIfDiffersFromNameAttribute };
     void updateIdForDocument(HTMLDocument&, const AtomString& oldId, const AtomString& newId, HTMLDocumentNamedItemMapsUpdatingCondition);
 
     ExceptionOr<Node*> insertAdjacent(const String& where, Ref<Node>&& newChild);
@@ -800,10 +801,10 @@ private:
     bool childTypeAllowed(NodeType) const final;
 
     void notifyAttributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason = AttributeModificationReason::Directly);
-    enum SynchronizationOfLazyAttribute { NotInSynchronizationOfLazyAttribute, InSynchronizationOfLazyAttribute };
-    void setAttributeInternal(unsigned index, const QualifiedName&, const AtomString& value, SynchronizationOfLazyAttribute);
-    void addAttributeInternal(const QualifiedName&, const AtomString& value, SynchronizationOfLazyAttribute);
-    void removeAttributeInternal(unsigned index, SynchronizationOfLazyAttribute);
+    enum class InSynchronizationOfLazyAttribute : bool { No, Yes };
+    void setAttributeInternal(unsigned index, const QualifiedName&, const AtomString& value, InSynchronizationOfLazyAttribute);
+    void addAttributeInternal(const QualifiedName&, const AtomString& value, InSynchronizationOfLazyAttribute);
+    void removeAttributeInternal(unsigned index, InSynchronizationOfLazyAttribute);
 
     void setSavedLayerScrollPositionSlow(const IntPoint&);
     void clearBeforePseudoElementSlow();
@@ -826,7 +827,7 @@ private:
     inline void removeShadowRoot(); // Defined in ElementRareData.h.
     void removeShadowRootSlow(ShadowRoot&);
 
-    enum class ResolveComputedStyleMode { Normal, RenderedOnly };
+    enum class ResolveComputedStyleMode : bool { Normal, RenderedOnly };
     const RenderStyle* resolveComputedStyle(ResolveComputedStyleMode = ResolveComputedStyleMode::Normal);
     const RenderStyle& resolvePseudoElementStyle(PseudoId);
 

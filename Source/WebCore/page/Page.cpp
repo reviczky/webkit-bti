@@ -68,7 +68,6 @@
 #include "FocusController.h"
 #include "FontCache.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FrameSelection.h"
 #include "FrameTree.h"
 #include "FullscreenManager.h"
@@ -90,6 +89,7 @@
 #include "LayoutDisallowedScope.h"
 #include "LegacySchemeRegistry.h"
 #include "LoaderStrategy.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "LogInitialization.h"
 #include "Logging.h"
@@ -266,9 +266,9 @@ static constexpr OptionSet<ActivityState> pageInitialActivityState()
     return { ActivityState::IsVisible, ActivityState::IsInWindow };
 }
 
-static Ref<Frame> createMainFrame(Page& page, std::variant<UniqueRef<FrameLoaderClient>, PageConfiguration::RemoteMainFrameCreationParameters>&& frameCreationParameter, FrameIdentifier identifier)
+static Ref<Frame> createMainFrame(Page& page, std::variant<UniqueRef<LocalFrameLoaderClient>, PageConfiguration::RemoteMainFrameCreationParameters>&& frameCreationParameter, FrameIdentifier identifier)
 {
-    return switchOn(WTFMove(frameCreationParameter), [&] (UniqueRef<FrameLoaderClient>&& localFrameClient) -> Ref<Frame> {
+    return switchOn(WTFMove(frameCreationParameter), [&] (UniqueRef<LocalFrameLoaderClient>&& localFrameClient) -> Ref<Frame> {
         auto localFrame = LocalFrame::createMainFrame(page, WTFMove(localFrameClient), identifier);
         page.addRootFrame(localFrame.get());
         return localFrame;
@@ -1394,11 +1394,6 @@ void Page::windowScreenDidChange(PlatformDisplayID displayID, std::optional<Fram
 
     m_displayID = displayID;
     m_displayNominalFramesPerSecond = nominalFramesPerSecond;
-    if (!m_displayNominalFramesPerSecond) {
-        // If the caller didn't give us a refresh rate, maybe the relevant DisplayRefreshMonitor can? This happens in WebKitLegacy
-        // because WebView doesn't have a convenient way to access the display refresh rate.
-        m_displayNominalFramesPerSecond = DisplayRefreshMonitorManager::sharedManager().nominalFramesPerSecondForDisplay(m_displayID, chrome().client().displayRefreshMonitorFactory());
-    }
 
     forEachDocument([&] (Document& document) {
         document.windowScreenDidChange(displayID);
@@ -1416,7 +1411,9 @@ void Page::windowScreenDidChange(PlatformDisplayID displayID, std::optional<Fram
     if (m_scrollingCoordinator)
         m_scrollingCoordinator->windowScreenDidChange(displayID, m_displayNominalFramesPerSecond);
 
-    renderingUpdateScheduler().windowScreenDidChange(displayID);
+    if (auto *scheduler = existingRenderingUpdateScheduler())
+        scheduler->windowScreenDidChange(displayID);
+    chrome().client().renderingUpdateFramesPerSecondChanged();
 
     setNeedsRecalcStyleInAllFrames();
 }
@@ -1464,10 +1461,6 @@ void Page::didCommitLoad()
 {
 #if ENABLE(EDITABLE_REGION)
     m_isEditableRegionEnabled = false;
-#endif
-
-#if HAVE(OS_DARK_MODE_SUPPORT)
-    setUseDarkAppearanceOverride(std::nullopt);
 #endif
 
     resetSeenPlugins();
@@ -1703,7 +1696,7 @@ void Page::computeUnfulfilledRenderingSteps(OptionSet<RenderingUpdateStep> reque
 void Page::triggerRenderingUpdateForTesting()
 {
     LOG_WITH_STREAM(EventLoop, stream << "Page " << this << " triggerRenderingUpdateForTesting()");
-    renderingUpdateScheduler().triggerRenderingUpdateForTesting();
+    chrome().client().triggerRenderingUpdate();
 }
 
 void Page::startTrackingRenderingUpdates()
@@ -1978,6 +1971,9 @@ void Page::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags
 {
     for (auto& rootFrame : m_rootFrames)
         finalizeRenderingUpdateForRootFrame(rootFrame, flags);
+
+    ASSERT(m_renderingUpdateRemainingSteps.last().isEmpty());
+    renderingUpdateCompleted();
 }
 
 void Page::finalizeRenderingUpdateForRootFrame(LocalFrame& rootFrame, OptionSet<FinalizeRenderingUpdateFlags> flags)
@@ -2007,9 +2003,6 @@ void Page::finalizeRenderingUpdateForRootFrame(LocalFrame& rootFrame, OptionSet<
         scrollingCoordinator->didCompleteRenderingUpdate();
     }
 #endif
-
-    ASSERT(m_renderingUpdateRemainingSteps.last().isEmpty());
-    renderingUpdateCompleted();
 }
 
 void Page::renderingUpdateCompleted()
@@ -2169,7 +2162,9 @@ void Page::resumeScriptedAnimations()
 
 void Page::timelineControllerMaximumAnimationFrameRateDidChange(DocumentTimelinesController&)
 {
-    renderingUpdateScheduler().adjustRenderingUpdateFrequency();
+    if (auto *scheduler = existingRenderingUpdateScheduler())
+        scheduler->adjustRenderingUpdateFrequency();
+    chrome().client().renderingUpdateFramesPerSecondChanged();
 }
 
 std::optional<FramesPerSecond> Page::preferredRenderingUpdateFramesPerSecond(OptionSet<PreferredRenderingUpdateOption> flags) const
@@ -2216,7 +2211,9 @@ void Page::setIsVisuallyIdleInternal(bool isVisuallyIdle)
         return;
 
     m_throttlingReasons.set(ThrottlingReason::VisuallyIdle, isVisuallyIdle);
-    renderingUpdateScheduler().adjustRenderingUpdateFrequency();
+    if (auto *scheduler = existingRenderingUpdateScheduler())
+        scheduler->adjustRenderingUpdateFrequency();
+    chrome().client().renderingUpdateFramesPerSecondChanged();
 }
 
 void Page::handleLowModePowerChange(bool isLowPowerModeEnabled)
@@ -2228,7 +2225,9 @@ void Page::handleLowModePowerChange(bool isLowPowerModeEnabled)
         return;
 
     m_throttlingReasons.set(ThrottlingReason::LowPowerMode, isLowPowerModeEnabled);
-    renderingUpdateScheduler().adjustRenderingUpdateFrequency();
+    if (auto *scheduler = existingRenderingUpdateScheduler())
+        scheduler->adjustRenderingUpdateFrequency();
+    chrome().client().renderingUpdateFramesPerSecondChanged();
 
     updateDOMTimerAlignmentInterval();
 }
@@ -2688,8 +2687,9 @@ void Page::setActivityState(OptionSet<ActivityState> activityState)
         setIsInWindowInternal(activityState.contains(ActivityState::IsInWindow));
     if (changed & ActivityState::IsVisuallyIdle)
         setIsVisuallyIdleInternal(activityState.contains(ActivityState::IsVisuallyIdle));
+
+    WeakPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
     if (changed & ActivityState::WindowIsActive) {
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
         if (auto* view = localMainFrame ? localMainFrame->view() : nullptr)
             view->updateTiledBackingAdaptiveSizing();
     }
@@ -2703,6 +2703,11 @@ void Page::setActivityState(OptionSet<ActivityState> activityState)
     if (wasVisibleAndActive != isVisibleAndActive()) {
         PlatformMediaSessionManager::updateNowPlayingInfoIfNecessary();
         stopKeyboardScrollAnimation();
+    }
+
+    if (auto* document = localMainFrame ? localMainFrame->document() : nullptr) {
+        if (auto* cache = document->existingAXObjectCache())
+            cache->onPageActivityStateChange(m_activityState);
     }
 
     if (m_performanceMonitor)
@@ -2922,7 +2927,7 @@ void Page::setCurrentKeyboardScrollingAnimator(KeyboardScrollingAnimator* animat
     m_currentKeyboardScrollingAnimator = animator;
 }
 
-bool Page::isLoadingInHeadlessMode() const
+bool Page::fingerprintingProtectionsEnabled() const
 {
     auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
     RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
@@ -2930,7 +2935,7 @@ bool Page::isLoadingInHeadlessMode() const
         return false;
 
     RefPtr loader = document->loader();
-    return loader && loader->isLoadingInHeadlessMode();
+    return loader && loader->fingerprintingProtectionsEnabled();
 }
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -3762,6 +3767,11 @@ RenderingUpdateScheduler& Page::renderingUpdateScheduler()
     return *m_renderingUpdateScheduler;
 }
 
+RenderingUpdateScheduler* Page::existingRenderingUpdateScheduler()
+{
+    return m_renderingUpdateScheduler.get();
+}
+
 void Page::forEachDocumentFromMainFrame(const LocalFrame& mainFrame, const Function<void(Document&)>& functor)
 {
     Vector<Ref<Document>> documents;
@@ -3822,7 +3832,7 @@ bool Page::allowsLoadFromURL(const URL& url, MainFrameMainResource mainFrameMain
 
 bool Page::hasLocalDataForURL(const URL& url)
 {
-    if (url.isLocalFile())
+    if (url.protocolIsFile())
         return true;
 
     auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
@@ -4383,37 +4393,31 @@ ScreenOrientationManager* Page::screenOrientationManager() const
     return m_screenOrientationManager.get();
 }
 
-URL Page::sanitizeLookalikeCharacters(const URL& url, LookalikeCharacterSanitizationTrigger trigger) const
+URL Page::applyLinkDecorationFiltering(const URL& url, LinkDecorationFilteringTrigger trigger) const
 {
-    return chrome().client().sanitizeLookalikeCharacters(url, trigger);
+    return chrome().client().applyLinkDecorationFiltering(url, trigger);
 }
 
-String Page::sanitizeLookalikeCharacters(const String& urlString, LookalikeCharacterSanitizationTrigger trigger) const
+String Page::applyLinkDecorationFiltering(const String& urlString, LinkDecorationFilteringTrigger trigger) const
 {
     if (auto url = URL { urlString }; url.isValid()) {
-        if (auto sanitizedURL = sanitizeLookalikeCharacters(WTFMove(url), trigger); sanitizedURL != url)
+        if (auto sanitizedURL = applyLinkDecorationFiltering(WTFMove(url), trigger); sanitizedURL != url)
             return sanitizedURL.string();
     }
     return urlString;
 }
 
-URL Page::allowedLookalikeCharacters(const URL& url) const
+URL Page::allowedQueryParametersForAdvancedPrivacyProtections(const URL& url) const
 {
-    return chrome().client().allowedLookalikeCharacters(url);
+    return chrome().client().allowedQueryParametersForAdvancedPrivacyProtections(url);
 }
 
 void Page::willBeginScrolling()
 {
-#if USE(APPKIT)
-    editorClient().setCaretDecorationVisibility(false);
-#endif
 }
 
 void Page::didFinishScrolling()
 {
-#if USE(APPKIT)
-    editorClient().setCaretDecorationVisibility(true);
-#endif
 }
 
 void Page::addRootFrame(LocalFrame& frame)

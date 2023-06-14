@@ -251,6 +251,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case BooleanToNumber:
     case FiatInt52:
     case MakeRope:
+    case MakeAtomString:
     case StrCat:
     case ValueToInt32:
     case GetExecutable:
@@ -258,6 +259,18 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case TypeOf:
         def(PureValue(node));
         return;
+
+    case NumberIsNaN:
+        def(PureValue(node));
+        return;
+
+    case GlobalIsNaN: {
+        if (node->child1().useKind() == DoubleRepUse)
+            def(PureValue(node));
+        else
+            clobberTop();
+        return;
+    }
 
     case StringLocaleCompare:
         read(World);
@@ -510,6 +523,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         return;
          
     case MovHint:
+    case ZombieHint:
     case ExitOK:
     case Upsilon:
     case Phi:

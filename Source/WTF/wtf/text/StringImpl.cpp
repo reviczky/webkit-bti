@@ -713,7 +713,7 @@ Ref<StringImpl> StringImpl::convertToASCIIUppercase()
     return convertASCIICase<CaseConvertType::Upper>(*this, m_data16, m_length);
 }
 
-template<typename CodeUnitPredicate> inline Ref<StringImpl> StringImpl::stripMatchedCharacters(CodeUnitPredicate predicate)
+template<typename CodeUnitPredicate> inline Ref<StringImpl> StringImpl::trimMatchedCharacters(CodeUnitPredicate predicate)
 {
     if (!m_length)
         return *this;
@@ -740,14 +740,9 @@ template<typename CodeUnitPredicate> inline Ref<StringImpl> StringImpl::stripMat
     return create(m_data16 + start, end + 1 - start);
 }
 
-Ref<StringImpl> StringImpl::stripWhiteSpace()
+Ref<StringImpl> StringImpl::trim(CodeUnitMatchFunction predicate)
 {
-    return stripMatchedCharacters(isSpaceOrNewline);
-}
-
-Ref<StringImpl> StringImpl::stripLeadingAndTrailingCharacters(CodeUnitMatchFunction predicate)
-{
-    return stripMatchedCharacters(predicate);
+    return trimMatchedCharacters(predicate);
 }
 
 template<typename CharacterType, class UCharPredicate> inline Ref<StringImpl> StringImpl::simplifyMatchedCharactersToSpace(UCharPredicate predicate)
@@ -784,13 +779,6 @@ template<typename CharacterType, class UCharPredicate> inline Ref<StringImpl> St
     data.shrink(outc);
 
     return adopt(WTFMove(data));
-}
-
-Ref<StringImpl> StringImpl::simplifyWhiteSpace()
-{
-    if (is8Bit())
-        return StringImpl::simplifyMatchedCharactersToSpace<LChar>(isSpaceOrNewline);
-    return StringImpl::simplifyMatchedCharactersToSpace<UChar>(isSpaceOrNewline);
 }
 
 Ref<StringImpl> StringImpl::simplifyWhiteSpace(CodeUnitMatchFunction isWhiteSpace)

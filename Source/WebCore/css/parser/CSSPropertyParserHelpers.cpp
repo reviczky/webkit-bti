@@ -80,6 +80,7 @@
 #include "CSSValuePool.h"
 #include "CSSVariableData.h"
 #include "CSSVariableParser.h"
+#include "CSSWordBoundaryDetectionValue.h"
 #include "CalculationCategory.h"
 #include "ColorConversion.h"
 #include "ColorInterpolation.h"
@@ -94,6 +95,7 @@
 #include "StyleColor.h"
 #include "TimingFunction.h"
 #include "WebKitFontFamilyNames.h"
+#include "WordBoundaryDetection.h"
 #include <wtf/SortedArrayMap.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/TextStream.h>
@@ -837,11 +839,18 @@ struct ImageSetTypeCSSPrimitiveValueKnownTokenTypeFunctionConsumer {
     static RefPtr<CSSPrimitiveValue> consume(CSSParserTokenRange& range, const CSSCalcSymbolTable&, ValueRange, CSSParserMode, UnitlessQuirk, UnitlessZeroQuirk)
     {
         ASSERT(range.peek().type() == FunctionToken);
-        if (range.peek().functionId() != CSSValueType || range.peek(1).type() != StringToken)
+        if (range.peek().functionId() != CSSValueType)
             return nullptr;
 
-        auto typeArg = consumeFunction(range);
-        return consumeString(typeArg);
+        auto rangeCopy = range;
+        auto typeArg = consumeFunction(rangeCopy);
+        auto result = consumeString(typeArg);
+
+        if (!result || !typeArg.atEnd())
+            return nullptr;
+
+        range = rangeCopy;
+        return result;
     }
 };
 
@@ -4468,12 +4477,13 @@ static RefPtr<CSSImageSetOptionValue> consumeImageSetOption(CSSParserTokenRange&
 
     // Optional resolution and type in any order.
     for (size_t i = 0; i < 2 && !range.atEnd(); ++i) {
-        if (auto optionalArgument = consumeMetaConsumer<ImageSetResolutionOrTypeConsumer>(range, { }, { }, { }, { }, { })) {
+        if (auto optionalArgument = consumeMetaConsumer<ImageSetResolutionOrTypeConsumer>(range, { }, ValueRange::NonNegative, { }, { }, { })) {
             if ((resolution && optionalArgument->isResolution()) || (type && optionalArgument->isString()))
                 return nullptr;
 
             if (optionalArgument->isResolution()) {
-                if (optionalArgument->floatValue() <= 0)
+                // ValueRange only clamps calc() expressions so we still need to check for negative "raw" resolutions (e.g. -2x) which are invalid.
+                if (optionalArgument->floatValue() < 0)
                     return nullptr;
                 resolution = optionalArgument;
                 result->setResolution(optionalArgument.releaseNonNull());
@@ -6661,6 +6671,26 @@ RefPtr<CSSValue> consumeScrollSnapType(CSSParserTokenRange& range)
     return CSSValueList::createSpaceSeparated(firstValue.releaseNonNull());
 }
 
+RefPtr<CSSValue> consumeScrollbarGutter(CSSParserTokenRange& range)
+{
+    if (auto ident = consumeIdent<CSSValueAuto>(range))
+        return CSSPrimitiveValue::create(CSSValueAuto);
+
+    if (auto first = consumeIdent<CSSValueStable>(range)) {
+        if (auto second = consumeIdent<CSSValueBothEdges>(range))
+            return CSSValuePair::create(first.releaseNonNull(), second.releaseNonNull());
+        return first;
+    }
+
+    if (auto first = consumeIdent<CSSValueBothEdges>(range)) {
+        if (auto second = consumeIdent<CSSValueStable>(range))
+            return CSSValuePair::create(second.releaseNonNull(), first.releaseNonNull());
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
 RefPtr<CSSValue> consumeTextBoxEdge(CSSParserTokenRange& range)
 {
     if (range.peek().id() == CSSValueLeading)
@@ -7558,7 +7588,7 @@ static Vector<String> parseGridTemplateAreasColumnNames(StringView gridRowNames)
 
 bool parseGridTemplateAreasRow(StringView gridRowNames, NamedGridAreaMap& gridAreaMap, const size_t rowCount, size_t& columnCount)
 {
-    if (gridRowNames.isAllSpecialCharacters<isCSSSpace>())
+    if (gridRowNames.containsOnly<isCSSSpace>())
         return false;
 
     auto columnNames = parseGridTemplateAreasColumnNames(gridRowNames);
@@ -8469,6 +8499,34 @@ RefPtr<CSSValue> consumeTextAutospace(CSSParserTokenRange& range)
         return value;
     }
     return nullptr;
+}
+
+RefPtr<CSSPrimitiveValue> consumeLang(CSSParserTokenRange& range)
+{
+    // https://drafts.csswg.org/css-text-4/#typedef-word-boundary-detection-lang
+    if (auto ident = consumeCustomIdent(range))
+        return ident;
+    return consumeString(range);
+}
+
+RefPtr<CSSWordBoundaryDetectionValue> consumeWordBoundaryDetection(CSSParserTokenRange& range)
+{
+    // https://drafts.csswg.org/css-text-4/#propdef-word-boundary-detection
+    // normal | auto(<lang>)
+    if (auto value = consumeIdent<CSSValueNormal>(range))
+        return CSSWordBoundaryDetectionValue::create(WordBoundaryDetectionNormal { });
+
+    if (range.peek().functionId() != CSSValueAuto)
+        return nullptr;
+
+    auto args = consumeFunction(range);
+
+    auto lang = consumeLang(args);
+    if (!lang || !args.atEnd())
+        return nullptr;
+
+    ASSERT(lang->isString() || lang->isCustomIdent());
+    return CSSWordBoundaryDetectionValue::create(WordBoundaryDetectionAuto { lang->stringValue() });
 }
 
 } // namespace CSSPropertyParserHelpers

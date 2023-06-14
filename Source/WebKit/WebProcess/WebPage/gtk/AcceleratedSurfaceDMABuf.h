@@ -28,8 +28,8 @@
 #include "AcceleratedSurface.h"
 
 #if USE(GBM)
+#include "MessageReceiver.h"
 #include <WebCore/PageIdentifier.h>
-#include <wtf/WeakPtr.h>
 #include <wtf/unix/UnixFileDescriptor.h>
 
 typedef void *EGLImage;
@@ -41,7 +41,7 @@ class ShareableBitmap;
 class ShareableBitmapHandle;
 class WebPage;
 
-class AcceleratedSurfaceDMABuf final : public AcceleratedSurface, public CanMakeWeakPtr<AcceleratedSurfaceDMABuf, WeakPtrFactoryInitialization::Eager> {
+class AcceleratedSurfaceDMABuf final : public AcceleratedSurface, public IPC::MessageReceiver {
 public:
     static std::unique_ptr<AcceleratedSurfaceDMABuf> create(WebPage&, Client&);
     ~AcceleratedSurfaceDMABuf();
@@ -62,8 +62,16 @@ public:
     void willRenderFrame() override;
     void didRenderFrame() override;
 
+    void didCreateCompositingRunLoop(WTF::RunLoop&) override;
+    void willDestroyCompositingRunLoop() override;
+
 private:
     AcceleratedSurfaceDMABuf(WebPage&, Client&);
+
+    // IPC::MessageReceiver.
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+
+    void frameDone();
 
     class RenderTarget {
         WTF_MAKE_FAST_ALLOCATED;

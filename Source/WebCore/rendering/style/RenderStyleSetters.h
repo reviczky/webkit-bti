@@ -309,7 +309,6 @@ inline void RenderStyle::setTextStrokeWidth(float value) { SET(m_rareInheritedDa
 inline void RenderStyle::setTextTransform(OptionSet<TextTransform> value) { m_inheritedFlags.textTransform = value.toRaw(); }
 inline void RenderStyle::setTextUnderlineOffset(TextUnderlineOffset textUnderlineOffset) { SET(m_rareInheritedData, textUnderlineOffset, textUnderlineOffset); }
 inline void RenderStyle::setTextUnderlinePosition(TextUnderlinePosition position) { SET(m_rareInheritedData, textUnderlinePosition, static_cast<unsigned>(position)); }
-inline void RenderStyle::setTextWrap(TextWrap wrap) { SET(m_rareInheritedData, textWrap, static_cast<unsigned>(wrap)); }
 inline void RenderStyle::setTextZoom(TextZoom zoom) { SET(m_rareInheritedData, textZoom, static_cast<unsigned>(zoom)); }
 inline void RenderStyle::setTop(Length&& length) { SET_NESTED(m_nonInheritedData, surroundData, offset.top(), WTFMove(length)); }
 inline void RenderStyle::setTouchActions(OptionSet<TouchAction> actions) { SET_NESTED(m_nonInheritedData, rareData, touchActions, actions); }
@@ -340,6 +339,7 @@ inline void RenderStyle::setVisitedLinkTextFillColor(const StyleColor& value) { 
 inline void RenderStyle::setVisitedLinkTextStrokeColor(const StyleColor& value) { SET(m_rareInheritedData, visitedLinkTextStrokeColor, value); }
 inline void RenderStyle::setWidth(Length&& length) { SET_NESTED(m_nonInheritedData, boxData, m_width, WTFMove(length)); }
 inline void RenderStyle::setWordBreak(WordBreak rule) { SET(m_rareInheritedData, wordBreak, static_cast<unsigned>(rule)); }
+inline void RenderStyle::setWordBoundaryDetection(const WordBoundaryDetection& wordBoundaryDetection) { SET(m_rareInheritedData, wordBoundaryDetection, wordBoundaryDetection); }
 
 #if ENABLE(APPLE_PAY)
 inline void RenderStyle::setApplePayButtonStyle(ApplePayButtonStyle style) { SET_NESTED(m_nonInheritedData, rareData, applePayButtonStyle, static_cast<unsigned>(style)); }
@@ -348,12 +348,6 @@ inline void RenderStyle::setApplePayButtonType(ApplePayButtonType type) { SET_NE
 
 #if ENABLE(CSS_BOX_DECORATION_BREAK)
 inline void RenderStyle::setBoxDecorationBreak(BoxDecorationBreak value) { SET_NESTED(m_nonInheritedData, boxData, m_boxDecorationBreak, static_cast<unsigned>(value)); }
-#endif
-
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-inline void RenderStyle::setImageResolution(float resolution) { SET(m_rareInheritedData, imageResolution, resolution); }
-inline void RenderStyle::setImageResolutionSnap(ImageResolutionSnap value) { SET(m_rareInheritedData, imageResolutionSnap, value); }
-inline void RenderStyle::setImageResolutionSource(ImageResolutionSource value) { SET(m_rareInheritedData, imageResolutionSource, value); }
 #endif
 
 #if ENABLE(DARK_MODE_CSS)

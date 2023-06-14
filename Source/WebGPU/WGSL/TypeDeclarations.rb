@@ -105,6 +105,38 @@ operator :textureSampleBaseClampToEdge, {
   [].(Texture[F32, Texture2d], Sampler, Vector[F32, 2]) => Vector[F32, 4],
 }
 
+# 16.1. Constructor Built-in Functions
+
+# 16.1.1. Zero Value Built-in Functions
+operator :bool, {
+    [].() => Bool,
+}
+operator :i32, {
+    [].() => I32,
+}
+operator :u32, {
+    [].() => U32,
+}
+operator :f32, {
+    [].() => F32,
+}
+operator :vec2, {
+    [T < ConcreteScalar].() => Vector[T, 2],
+}
+operator :vec3, {
+    [T < ConcreteScalar].() => Vector[T, 3],
+}
+operator :vec4, {
+    [T < ConcreteScalar].() => Vector[T, 4],
+}
+(2..4).each do |columns|
+    (2..4).each do |rows|
+        operator :"mat#{columns}x#{rows}", {
+            [T < ConcreteFloat].() => Matrix[T, columns, rows],
+        }
+    end
+end
+
 operator :vec2, {
     [T < Scalar].(T) => Vector[T, 2],
     [T < ConcreteScalar, S < Scalar].(Vector[S, 2]) => Vector[T, 2],
@@ -145,6 +177,31 @@ operator :vec4, {
         }
     end
 end
+
+# 7.6. Logical Expressions (https://gpuweb.github.io/gpuweb/wgsl/#logical-expr)
+
+operator :!, {
+    [].(Bool) => Bool,
+    [N].(Vector[Bool, N]) => Vector[Bool, N],
+}
+
+operator :'||', {
+    [].(Bool, Bool) => Bool,
+}
+
+operator :'&&', {
+    [].(Bool, Bool) => Bool,
+}
+
+operator :'|', {
+    [].(Bool, Bool) => Bool,
+    [N].(Vector[Bool, N], Vector[Bool, N]) => Vector[Bool, N],
+}
+
+operator :'&', {
+    [].(Bool, Bool) => Bool,
+    [N].(Vector[Bool, N], Vector[Bool, N]) => Vector[Bool, N],
+}
 
 # 17.3. Logical Built-in Functions (https://www.w3.org/TR/WGSL/#logical-builtin-functions)
 
@@ -459,4 +516,20 @@ operator :transpose, {
 operator :trunc, {
     [T < Float].(T) => T,
     [T < Float, N].(Vector[T, N]) => Vector[T, N],
+}
+
+# 17.7. Texture Built-in Functions (https://gpuweb.github.io/gpuweb/wgsl/#texture-builtin-functions)
+
+# 17.7.4
+operator :textureLoad, {
+    [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture1d], T, U) => Vector[S, 4],
+    [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture2d], Vector[T, 2], U) => Vector[S, 4],
+    [T < ConcreteInteger, V < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture2dArray], Vector[T, 2], V, U) => Vector[S, 4],
+    [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture3d], Vector[T, 3], U) => Vector[S, 4],
+    [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, TextureMultisampled2d], Vector[T, 2], U) => Vector[S, 4],
+
+    [T < ConcreteInteger].(TextureExternal, Vector[T, 2]) => Vector[F32, 4],
+
+    # FIXME: add overloads for texture_depth
+    # https://bugs.webkit.org/show_bug.cgi?id=254515
 }

@@ -89,7 +89,6 @@
 #include "FontFaceSet.h"
 #include "FormController.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FullscreenManager.h"
 #include "GCReachableRef.h"
 #include "GPUCanvasContext.h"
@@ -120,7 +119,6 @@
 #include "HTMLMediaElement.h"
 #include "HTMLMetaElement.h"
 #include "HTMLNameCollection.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLPictureElement.h"
 #include "HTMLPlugInElement.h"
 #include "HTMLScriptElement.h"
@@ -153,6 +151,7 @@
 #include "LoaderStrategy.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "MediaCanStartListener.h"
@@ -933,11 +932,11 @@ void Document::invalidateAccessKeyCacheSlowCase()
 ExceptionOr<SelectorQuery&> Document::selectorQueryForString(const String& selectorString)
 {
     if (selectorString.isEmpty())
-        return Exception { SyntaxError };
+        return Exception { SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
 
     auto* query = SelectorQueryCache::singleton().add(selectorString, *this);
     if (!query)
-        return Exception { SyntaxError };
+        return Exception { SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
 
     return *query;
 }
@@ -2988,9 +2987,10 @@ void Document::collectRangeDataFromRegister(Vector<WeakPtr<HighlightRangeData>>&
 {
     for (auto& highlight : highlightRegister.map()) {
         for (auto& rangeData : highlight.value->rangesData()) {
-            if (rangeData->startPosition && rangeData->endPosition)
+            if (rangeData->startPosition().isNotNull() && rangeData->endPosition().isNotNull())
                 continue;
-            if (&rangeData->range->startContainer().treeScope() != &rangeData->range->endContainer().treeScope())
+            auto simpleRange = makeSimpleRange(rangeData->range());
+            if (&simpleRange.startContainer().treeScope() != &simpleRange.endContainer().treeScope())
                 continue;
             rangesData.append(rangeData.get());
         }
@@ -3011,18 +3011,18 @@ void Document::updateHighlightPositions()
 
     for (auto& weakRangeData : rangesData) {
         if (auto* rangeData = weakRangeData.get()) {
-            VisibleSelection visibleSelection(rangeData->range);
+            VisibleSelection visibleSelection(makeSimpleRange(rangeData->range()));
             Position startPosition;
             Position endPosition;
-            if (!rangeData->startPosition.has_value())
+            if (rangeData->startPosition().isNull())
                 startPosition = visibleSelection.visibleStart().deepEquivalent();
-            if (!rangeData->endPosition.has_value())
+            if (rangeData->endPosition().isNull())
                 endPosition = visibleSelection.visibleEnd().deepEquivalent();
             if (!weakRangeData.get())
                 continue;
 
-            rangeData->startPosition = startPosition;
-            rangeData->endPosition = endPosition;
+            rangeData->setStartPosition(WTFMove(startPosition));
+            rangeData->setEndPosition(WTFMove(endPosition));
         }
     }
 }
@@ -3571,7 +3571,7 @@ const URL& Document::urlForBindings() const
         if (policySourceLoader && !policySourceLoader->request().url().hasSpecialScheme() && url().protocolIsInHTTPFamily())
             policySourceLoader = loader();
 
-        if (!policySourceLoader || !policySourceLoader->originatorNetworkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::Enabled))
+        if (!policySourceLoader || !policySourceLoader->originatorAdvancedPrivacyProtections().contains(AdvancedPrivacyProtections::BaselineProtections))
             return false;
 
         auto preNavigationURL = URL { loader()->originalRequest().httpReferrer() };
@@ -3617,7 +3617,7 @@ const URL& Document::urlForBindings() const
 
 URL Document::adjustedURL() const
 {
-    return page() ? page()->chrome().client().allowedLookalikeCharacters(m_url.url()) : m_url.url();
+    return page() ? page()->chrome().client().allowedQueryParametersForAdvancedPrivacyProtections(m_url.url()) : m_url.url();
 }
 
 // https://html.spec.whatwg.org/#fallback-base-url
@@ -3696,9 +3696,9 @@ void Document::processBaseElement()
     // FIXME: Since this doesn't share code with completeURL it may not handle encodings correctly.
     URL baseElementURL;
     if (href) {
-        String strippedHref = stripLeadingAndTrailingHTMLSpaces(*href);
-        if (!strippedHref.isEmpty())
-            baseElementURL = URL(fallbackBaseURL(), strippedHref);
+        auto trimmedHref = href->string().trim(isASCIIWhitespace);
+        if (!trimmedHref.isEmpty())
+            baseElementURL = URL(fallbackBaseURL(), trimmedHref);
     }
     if (m_baseElementURL != baseElementURL && contentSecurityPolicy()->allowBaseURI(baseElementURL)) {
         if (settings().shouldRestrictBaseURLSchemes() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL))
@@ -5173,23 +5173,22 @@ void Document::collectionWillClearIdNameMap(const HTMLCollection& collection)
 
 void Document::attachNodeIterator(NodeIterator& iterator)
 {
-    m_nodeIterators.add(&iterator);
+    m_nodeIterators.add(iterator);
 }
 
 void Document::detachNodeIterator(NodeIterator& iterator)
 {
     // The node iterator can be detached without having been attached if its root node didn't have a document
     // when the iterator was created, but has it now.
-    m_nodeIterators.remove(&iterator);
+    m_nodeIterators.remove(iterator);
 }
 
-void Document::moveNodeIteratorsToNewDocumentSlowCase(Node& node, Document& newDocument)
+void Document::moveNodeIteratorsToNewDocument(Node& node, Document& newDocument)
 {
-    ASSERT(!m_nodeIterators.isEmpty());
-    for (auto* iterator : copyToVector(m_nodeIterators)) {
-        if (&iterator->root() == &node) {
-            detachNodeIterator(*iterator);
-            newDocument.attachNodeIterator(*iterator);
+    for (auto& it : copyToVectorOf<Ref<NodeIterator>>(m_nodeIterators)) {
+        if (&it->root() == &node) {
+            detachNodeIterator(it.get());
+            newDocument.attachNodeIterator(it.get());
         }
     }
 }
@@ -5210,9 +5209,9 @@ void Document::nodeChildrenWillBeRemoved(ContainerNode& container)
     for (auto& range : m_ranges)
         range.nodeChildrenWillBeRemoved(container);
 
-    for (auto* it : m_nodeIterators) {
+    for (auto& it : m_nodeIterators) {
         for (Node* n = container.firstChild(); n; n = n->nextSibling())
-            it->nodeWillBeRemoved(*n);
+            it.nodeWillBeRemoved(*n);
     }
 
     if (RefPtr frame = this->frame()) {
@@ -5236,8 +5235,8 @@ void Document::nodeWillBeRemoved(Node& node)
     adjustFocusedNodeOnNodeRemoval(node);
     adjustFocusNavigationNodeOnNodeRemoval(node);
 
-    for (auto* it : m_nodeIterators)
-        it->nodeWillBeRemoved(node);
+    for (auto& it : m_nodeIterators)
+        it.nodeWillBeRemoved(node);
 
     for (auto& range : m_ranges)
         range.nodeWillBeRemoved(node);
@@ -5576,7 +5575,7 @@ bool Document::isCookieAverse() const
 
     // This is not part of the specification but we have historically allowed cookies over file protocol
     // and some developers rely on this for testing.
-    if (cookieURL.isLocalFile())
+    if (cookieURL.protocolIsFile())
         return false;
 
     // A Document whose URL's scheme is not a network scheme is cookie-averse (https://fetch.spec.whatwg.org/#network-scheme).
@@ -5656,7 +5655,7 @@ String Document::referrerForBindings()
     if (!policySourceLoader->request().url().hasSpecialScheme() && url().protocolIsInHTTPFamily())
         policySourceLoader = loader();
 
-    if (policySourceLoader && policySourceLoader->originatorNetworkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::Enabled)
+    if (policySourceLoader && policySourceLoader->originatorAdvancedPrivacyProtections().contains(AdvancedPrivacyProtections::BaselineProtections)
         && !RegistrableDomain { URL { frame()->loader().referrer() } }.matches(securityOrigin().data()))
         return String();
     return referrer();
@@ -7097,11 +7096,6 @@ void Document::serviceRequestVideoFrameCallbacks()
 
 void Document::windowScreenDidChange(PlatformDisplayID displayID)
 {
-    if (RenderView* view = renderView()) {
-        if (view->usesCompositing())
-            view->compositor().windowScreenDidChange(displayID);
-    }
-
     for (auto& observer : copyToVector(m_displayChangedObservers)) {
         if (observer)
             (*observer)(displayID);
@@ -8990,9 +8984,18 @@ void Document::keyframesRuleDidChange(const String& name)
 void Document::addTopLayerElement(Element& element)
 {
     RELEASE_ASSERT(&element.document() == this && element.isConnected() && !element.isInTopLayer());
-    // To add an element to a top layer, remove it from top layer and then append it to top layer.
     auto result = m_topLayerElements.add(element);
     RELEASE_ASSERT(result.isNewEntry);
+    if (auto* candidatePopover = dynamicDowncast<HTMLElement>(element); candidatePopover && candidatePopover->popoverState() == PopoverState::Auto) {
+#if ENABLE(FULLSCREEN_API)
+        if (candidatePopover->hasFullscreenFlag())
+            return;
+#endif
+        if (is<HTMLDialogElement>(*candidatePopover) && downcast<HTMLDialogElement>(*candidatePopover).isModal())
+            return;
+        auto result = m_autoPopoverList.add(*candidatePopover);
+        RELEASE_ASSERT(result.isNewEntry);
+    }
 }
 
 void Document::removeTopLayerElement(Element& element)
@@ -9000,6 +9003,10 @@ void Document::removeTopLayerElement(Element& element)
     RELEASE_ASSERT(&element.document() == this && element.isInTopLayer());
     auto didRemove = m_topLayerElements.remove(element);
     RELEASE_ASSERT(didRemove);
+    if (auto* candidatePopover = dynamicDowncast<HTMLElement>(element); candidatePopover && candidatePopover->isPopoverShowing() && candidatePopover->popoverState() == PopoverState::Auto) {
+        auto didRemove = m_autoPopoverList.remove(*candidatePopover);
+        RELEASE_ASSERT(didRemove);
+    }
 }
 
 HTMLDialogElement* Document::activeModalDialog() const
@@ -9014,31 +9021,45 @@ HTMLDialogElement* Document::activeModalDialog() const
 
 HTMLElement* Document::topmostAutoPopover() const
 {
-    for (auto& element : makeReversedRange(m_topLayerElements)) {
-        if (auto* candidate = dynamicDowncast<HTMLElement>(element.get()); candidate && candidate->popoverState() == PopoverState::Auto)
-            return candidate;
-    }
-
-    return nullptr;
+    if (m_autoPopoverList.isEmpty())
+        return nullptr;
+    return m_autoPopoverList.last().ptr();
 }
 
 // https://html.spec.whatwg.org/#hide-all-popovers-until
-void Document::hideAllPopoversUntil(Element* endpoint, FocusPreviousElement focusPreviousElement, FireEvents fireEvents)
+void Document::hideAllPopoversUntil(HTMLElement* endpoint, FocusPreviousElement focusPreviousElement, FireEvents fireEvents)
 {
-    Vector<Ref<HTMLElement>> popoversToHide;
-    for (auto& item : makeReversedRange(m_topLayerElements)) {
-        if (!is<HTMLElement>(item))
-            continue;
-        auto& element = downcast<HTMLElement>(item.get());
-        if (element.popoverState() == PopoverState::Auto) {
-            if (&element == endpoint)
-                break;
-            popoversToHide.append(element);
-        }
-    }
+    auto closeAllOpenPopovers = [&]() {
+        while (RefPtr popover = topmostAutoPopover())
+            popover->hidePopoverInternal(focusPreviousElement, fireEvents);
+    };
+    if (!endpoint)
+        return closeAllOpenPopovers();
 
-    for (auto& popover : popoversToHide)
-        popover->hidePopoverInternal(focusPreviousElement, fireEvents);
+    bool repeatingHide = false;
+    do {
+        RefPtr<Element> lastToHide;
+        bool foundEndPoint = false;
+        for (auto& popover : autoPopoverList()) {
+            if (popover.ptr() == endpoint)
+                foundEndPoint = true;
+            else if (foundEndPoint) {
+                lastToHide = popover.ptr();
+                break;
+            }
+        }
+        if (!foundEndPoint)
+            return closeAllOpenPopovers();
+        while (lastToHide && lastToHide->isPopoverShowing()) {
+            auto* topmostAutoPopover = this->topmostAutoPopover();
+            if (!topmostAutoPopover)
+                break;
+            topmostAutoPopover->hidePopoverInternal(focusPreviousElement, fireEvents);
+        }
+        repeatingHide = m_autoPopoverList.contains(*endpoint) && topmostAutoPopover() != endpoint;
+        if (repeatingHide)
+            fireEvents = FireEvents::No;
+    } while (repeatingHide);
 }
 
 // https://html.spec.whatwg.org/#popover-light-dismiss
@@ -9079,9 +9100,9 @@ void Document::handlePopoverLightDismiss(const PointerEvent& event, Node& target
                 return second;
             if (!second)
                 return first;
-            for (auto& element : makeReversedRange(m_topLayerElements)) {
+            for (auto& element : makeReversedRange(m_autoPopoverList)) {
                 if (element.ptr() == first || element.ptr() == second)
-                    return downcast<HTMLElement>(element.ptr());
+                    return element.ptr();
             }
             ASSERT_NOT_REACHED();
             return nullptr;
@@ -9314,16 +9335,23 @@ bool Document::hitTest(const HitTestRequest& request, HitTestResult& result)
 bool Document::hitTest(const HitTestRequest& request, const HitTestLocation& location, HitTestResult& result)
 {
     Ref<Document> protectedThis(*this);
-    updateLayout();
+
     if (!renderView())
         return false;
+
+    auto& frameView = renderView()->frameView();
+    Ref<FrameView> protector(frameView);
+
+    // If hit testing can descend into child frames, then we should make sure those frames have an updated layout
+    // before proceeding
+    if (request.allowsAnyFrameContent())
+        frameView.updateLayoutAndStyleIfNeededRecursive();
+    else
+        updateLayout();
 
 #if ASSERT_ENABLED
     SetForScope hitTestRestorer { m_inHitTesting, true };
 #endif
-
-    auto& frameView = renderView()->frameView();
-    Ref<LocalFrameView> protector(frameView);
 
     bool resultLayer = renderView()->layer()->hitTest(request, location, result);
 
@@ -9652,11 +9680,6 @@ void Document::sendReportToEndpoints(const URL& baseURL, const Vector<String>& e
     }
 }
 
-bool Document::lazyImageLoadingEnabled() const
-{
-    return m_settings->lazyImageLoadingEnabled() && !m_quirks->shouldDisableLazyImageLoadingQuirk();
-}
-
 void Document::addElementWithLangAttrMatchingDocumentElement(Element& element)
 {
     m_elementsWithLangAttrMatchingDocumentElement.add(element);
@@ -9694,14 +9717,14 @@ void Document::resetObservationSizeForContainIntrinsicSize(Element& target)
     m_resizeObserverForContainIntrinsicSize->resetObservationSize(target);
 }
 
-#if __has_include(<WebKitAdditions/DocumentAdditions.cpp>)
-#include <WebKitAdditions/DocumentAdditions.cpp>
-#else
 NoiseInjectionPolicy Document::noiseInjectionPolicy() const
 {
+    if (auto* loader = topDocument().loader()) {
+        if (loader->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::FingerprintingProtections))
+            return NoiseInjectionPolicy::Minimal;
+    }
     return NoiseInjectionPolicy::None;
 }
-#endif
 
 std::optional<uint64_t> Document::noiseInjectionHashSalt() const
 {

@@ -1930,6 +1930,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.perOriginStorageQuota = perOriginStorageQuota();
     networkSessionParameters.originQuotaRatio = originQuotaRatio();
     networkSessionParameters.totalQuotaRatio = m_configuration->totalQuotaRatio();
+    networkSessionParameters.standardVolumeCapacity = m_configuration->standardVolumeCapacity();
     networkSessionParameters.volumeCapacityOverride = m_configuration->volumeCapacityOverride();
     networkSessionParameters.localStorageDirectory = resolvedLocalStorageDirectory();
     createHandleFromResolvedPathIfPossible(networkSessionParameters.localStorageDirectory, networkSessionParameters.localStorageDirectoryExtensionHandle);
@@ -2361,6 +2362,16 @@ void WebsiteDataStore::reportServiceWorkerConsoleMessage(const URL& scriptURL, c
 void WebsiteDataStore::workerUpdatedAppBadge(const WebCore::SecurityOriginData& origin, std::optional<uint64_t> badge)
 {
     m_client->workerUpdatedAppBadge(origin, badge);
+}
+
+bool WebsiteDataStore::hasClientGetDisplayedNotifications() const
+{
+    return m_client->hasGetDisplayedNotifications();
+}
+
+void WebsiteDataStore::getNotifications(const URL& registrationalURL, CompletionHandler<void(Vector<WebCore::NotificationData>&&)>&& completionHandler)
+{
+    m_client->getDisplayedNotifications(WebCore::SecurityOriginData::fromURL(registrationalURL), WTFMove(completionHandler));
 }
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)

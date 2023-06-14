@@ -265,7 +265,7 @@ void DocumentThreadableLoader::cancel()
 
     // Cancel can re-enter and m_resource might be null here as a result.
     if (m_client && m_resource) {
-        // FIXME: This error is sent to the client in didFail(), so it should not be an internal one. Use FrameLoaderClient::cancelledError() instead.
+        // FIXME: This error is sent to the client in didFail(), so it should not be an internal one. Use LocalFrameLoaderClient::cancelledError() instead.
         ResourceError error(errorDomainWebKitInternal, 0, m_resource->url(), "Load cancelled"_s, ResourceError::Type::Cancellation);
         m_client->didFail(error);
     }
@@ -628,7 +628,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     loadTiming.markEndTime();
 
     if (!error.isNull() && response.httpStatusCode() <= 0) {
-        if (requestURL.isLocalFile()) {
+        if (requestURL.protocolIsFile()) {
             // We don't want XMLHttpRequest to raise an exception for file:// resources, see <rdar://problem/4962298>.
             // FIXME: XMLHttpRequest quirks should be in XMLHttpRequest code, not in DocumentThreadableLoader.cpp.
             didReceiveResponse(identifier, response);

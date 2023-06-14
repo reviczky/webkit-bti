@@ -510,12 +510,6 @@ void Line::appendTextContent(const InlineTextItem& inlineTextItem, const RenderS
             m_trimmableTrailingContent.addFullyTrimmableContent(lastRunIndex, trimmableContentOffset, trimmableWidth);
             return true;
         }
-        // FIXME: Move it to InlineTextItem after removing the integration codepath check.
-        auto isPartiallyTrimmable = !inlineTextItem.isWhitespace() && style.letterSpacing() > 0 && !formattingContext().layoutState().shouldIgnoreTrailingLetterSpacing();
-        if (isPartiallyTrimmable) {
-            m_trimmableTrailingContent.addPartiallyTrimmableContent(lastRunIndex, style.letterSpacing());
-            return true;
-        }
         m_trimmableTrailingContent.reset();
         return false;
     };
@@ -726,7 +720,9 @@ inline static Line::Run::Type toLineRunType(const InlineItem& inlineItem)
     case InlineItem::Type::WordBreakOpportunity:
         return Line::Run::Type::WordBreakOpportunity;
     case InlineItem::Type::Box:
-        return inlineItem.layoutBox().isListMarkerBox() ? Line::Run::Type::ListMarker : Line::Run::Type::GenericInlineLevelBox;
+        if (inlineItem.layoutBox().isListMarkerBox())
+            return downcast<ElementBox>(inlineItem.layoutBox()).isListMarkerOutside() ? Line::Run::Type::ListMarkerOutside : Line::Run::Type::ListMarkerInside;
+        return Line::Run::Type::GenericInlineLevelBox;
     case InlineItem::Type::InlineBoxStart:
         return Line::Run::Type::InlineBoxStart;
     case InlineItem::Type::InlineBoxEnd:

@@ -308,7 +308,7 @@ void RenderGrid::layoutGrid(bool relayoutChildren)
         placeItemsOnGrid(availableSpaceForColumns);
 
         m_trackSizingAlgorithm.setAvailableSpace(ForColumns, availableSpaceForColumns);
-        performGridItemsPreLayout(m_trackSizingAlgorithm);
+        performGridItemsPreLayout(m_trackSizingAlgorithm, ShouldUpdateGridAreaLogicalSize::Yes);
 
         // 1- First, the track sizing algorithm is used to resolve the sizes of the grid columns. At this point the
         // logical width is always definite as the above call to updateLogicalWidth() properly resolves intrinsic
@@ -429,7 +429,7 @@ void RenderGrid::layoutMasonry(bool relayoutChildren)
         placeItemsOnGrid(availableSpaceForColumns);
 
         m_trackSizingAlgorithm.setAvailableSpace(ForColumns, availableSpaceForColumns);
-        performGridItemsPreLayout(m_trackSizingAlgorithm);
+        performGridItemsPreLayout(m_trackSizingAlgorithm, ShouldUpdateGridAreaLogicalSize::Yes);
 
         // 1- First, the track sizing algorithm is used to resolve the sizes of the grid columns. At this point the
         // logical width is always definite as the above call to updateLogicalWidth() properly resolves intrinsic
@@ -637,7 +637,7 @@ void RenderGrid::computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, Layo
     // so here since we've overriden m_currentGrid with a stack based temporary.
     const_cast<RenderGrid&>(*this).placeItemsOnGrid(std::nullopt);
 
-    performGridItemsPreLayout(algorithm);
+    performGridItemsPreLayout(algorithm, ShouldUpdateGridAreaLogicalSize::No);
 
     if (m_baselineItemsCached)
         algorithm.copyBaselineItemsCache(m_trackSizingAlgorithm, GridRowAxis);
@@ -925,8 +925,14 @@ void RenderGrid::placeItemsOnGrid(std::optional<LayoutUnit> availableLogicalWidt
     unsigned autoRepeatRows = computeAutoRepeatTracksCount(ForRows, availableLogicalHeightForPercentageComputation());
     autoRepeatRows = clampAutoRepeatTracks(ForRows, autoRepeatRows);
     autoRepeatColumns = clampAutoRepeatTracks(ForColumns, autoRepeatColumns);
-
-    if (autoRepeatColumns != currentGrid().autoRepeatTracks(ForColumns) 
+    
+    if (isSubgridInParentDirection(ForColumns) || isSubgridInParentDirection(ForRows)) {
+        auto* parent = dynamicDowncast<RenderGrid>(this->parent());
+        if (parent && parent->currentGrid().needsItemsPlacement())
+            currentGrid().setNeedsItemsPlacement(true);
+    }
+    
+    if (autoRepeatColumns != currentGrid().autoRepeatTracks(ForColumns)
         || autoRepeatRows != currentGrid().autoRepeatTracks(ForRows)
         || isMasonry()) {
         currentGrid().setNeedsItemsPlacement(true);
@@ -1007,7 +1013,7 @@ LayoutUnit RenderGrid::masonryContentSize() const
     return m_masonryLayout.gridContentSize();
 }
 
-void RenderGrid::performGridItemsPreLayout(const GridTrackSizingAlgorithm& algorithm) const
+void RenderGrid::performGridItemsPreLayout(const GridTrackSizingAlgorithm& algorithm, const ShouldUpdateGridAreaLogicalSize shouldUpdateGridAreaLogicalSize) const
 {
     ASSERT(!algorithm.grid().needsItemsPlacement());
     // FIXME: We need a way when we are calling this during intrinsic size compuation before performing
@@ -1028,7 +1034,9 @@ void RenderGrid::performGridItemsPreLayout(const GridTrackSizingAlgorithm& algor
         // FIXME: We also want to layout baseline aligned items within subgrids, but
         // we don't currently have a way to do that here.
         if (isBaselineAlignmentForChild(*child)) {
-            updateGridAreaLogicalSize(*child, algorithm.estimatedGridAreaBreadthForChild(*child, ForColumns), algorithm.estimatedGridAreaBreadthForChild(*child, ForRows));
+            // FIXME: Hack to fix nested grid text size overflow during re-layouts.
+            if (shouldUpdateGridAreaLogicalSize == ShouldUpdateGridAreaLogicalSize::Yes)
+                updateGridAreaLogicalSize(*child, algorithm.estimatedGridAreaBreadthForChild(*child, ForColumns), algorithm.estimatedGridAreaBreadthForChild(*child, ForRows));
             child->layoutIfNeeded();
         }
     }
@@ -1752,7 +1760,7 @@ LayoutUnit RenderGrid::baselinePosition(FontBaseline, bool, LineDirectionMode di
 
 std::optional<LayoutUnit> RenderGrid::firstLineBaseline() const
 {
-    if (isWritingModeRoot() || !currentGrid().hasGridItems() || shouldApplyLayoutContainment())
+    if ((isWritingModeRoot() && !isFlexItem()) || !currentGrid().hasGridItems() || shouldApplyLayoutContainment())
         return std::nullopt;
 
     // Finding the first grid item in grid order.

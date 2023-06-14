@@ -107,6 +107,7 @@ public:
     WEBCORE_EXPORT void invalidateRect(const IntRect&) final;
     void setFrameRect(const IntRect&) final;
     Type viewType() const final { return Type::Local; }
+    void writeRenderTreeAsText(TextStream&, OptionSet<RenderAsTextFlag>) override;
 
     // FIXME: This should return Frame. If it were a RemoteFrame, we would have a RemoteFrameView.
     WEBCORE_EXPORT Frame& frame() const;
@@ -731,9 +732,12 @@ public:
     OverscrollBehavior horizontalOverscrollBehavior() const final;
     OverscrollBehavior verticalOverscrollBehavior() const final;
 
+    ScrollbarWidth scrollbarWidthStyle() const final;
+
 private:
     explicit LocalFrameView(LocalFrame&);
 
+    bool isLocalFrameView() const final { return true; }
     bool scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect) final;
     void scrollContentsSlowPath(const IntRect& updateRect) final;
 
@@ -753,8 +757,6 @@ private:
         InViewSizeAdjust,
         InPostLayout
     };
-
-    bool isFrameView() const final { return true; }
 
     friend class RenderWidget;
     bool useSlowRepaints(bool considerOverlap = true) const;
@@ -837,9 +839,11 @@ private:
     NativeScrollbarVisibility horizontalNativeScrollbarVisibility() const final;
     NativeScrollbarVisibility verticalNativeScrollbarVisibility() const final;
 
+    void createScrollbarsController() final;
     // Override scrollbar notifications to update the AXObject cache.
     void didAddScrollbar(Scrollbar*, ScrollbarOrientation) final;
     void willRemoveScrollbar(Scrollbar*, ScrollbarOrientation) final;
+    void scrollbarFrameRectChanged(const Scrollbar&) const final;
 
     IntSize sizeForResizeEvent() const;
     void scheduleResizeEventIfNeeded();
@@ -932,6 +936,7 @@ private:
     std::unique_ptr<WeakHashSet<RenderElement>> m_slowRepaintObjects;
 
     RefPtr<ContainerNode> m_maintainScrollPositionAnchor;
+    RefPtr<ContainerNode> m_scheduledMaintainScrollPositionAnchor;
     RefPtr<Node> m_nodeToDraw;
     std::optional<SimpleRange> m_pendingTextFragmentIndicatorRange;
     String m_pendingTextFragmentIndicatorText;
@@ -1073,5 +1078,5 @@ WTF::TextStream& operator<<(WTF::TextStream&, const LocalFrameView&);
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::LocalFrameView)
 static bool isType(const WebCore::FrameView& view) { return view.viewType() == WebCore::FrameView::Type::Local; }
-static bool isType(const WebCore::Widget& widget) { return widget.isFrameView(); }
+static bool isType(const WebCore::Widget& widget) { return widget.isLocalFrameView(); }
 SPECIALIZE_TYPE_TRAITS_END()

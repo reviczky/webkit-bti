@@ -50,7 +50,6 @@
 #include "FragmentDirectiveParser.h"
 #include "FragmentDirectiveRangeFinder.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FrameSelection.h"
 #include "FrameTree.h"
 #include "GraphicsContext.h"
@@ -71,6 +70,7 @@
 #include "LegacyRenderSVGRoot.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "Logging.h"
 #include "MemoryCache.h"
 #include "NullGraphicsContext.h"
@@ -96,6 +96,7 @@
 #include "RenderStyleSetters.h"
 #include "RenderText.h"
 #include "RenderTheme.h"
+#include "RenderTreeAsText.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
 #include "ResizeObserver.h"
@@ -486,6 +487,9 @@ void LocalFrameView::setFrameRect(const IntRect& newRect)
     if (m_frame->isMainFrame() && m_frame->page())
         m_frame->page()->pageOverlayController().didChangeViewSize();
 
+    if (auto* document = m_frame->document())
+        document->didChangeViewSize();
+
     viewportContentsChanged();
     setCurrentScrollType(oldScrollType);
 }
@@ -539,7 +543,7 @@ Ref<Scrollbar> LocalFrameView::createScrollbar(ScrollbarOrientation orientation)
         return RenderScrollbar::createCustomScrollbar(*this, orientation, nullptr, m_frame.ptr());
 
     // Nobody set a custom style, so we just use a native scrollbar.
-    return ScrollView::createScrollbar(orientation);
+    return Scrollbar::createNativeScrollbar(*this, orientation, scrollbarWidthStyle());
 }
 
 void LocalFrameView::didRestoreFromBackForwardCache()
@@ -3643,6 +3647,11 @@ bool LocalFrameView::safeToPropagateScrollToParent() const
 
 void LocalFrameView::scheduleScrollToAnchorAndTextFragment()
 {
+    RefPtr<ContainerNode> anchorNode = m_maintainScrollPositionAnchor;
+    if (!anchorNode)
+        return;
+    m_scheduledMaintainScrollPositionAnchor = anchorNode;
+
     if (m_scheduledToScrollToAnchor)
         return;
 
@@ -3654,7 +3663,12 @@ void LocalFrameView::scheduleScrollToAnchorAndTextFragment()
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
-        protectedThis->scrollToAnchorAndTextFragmentNowIfNeeded();
+        if (!protectedThis->m_maintainScrollPositionAnchor) {
+            SetForScope scrollPositionAnchor(protectedThis->m_maintainScrollPositionAnchor, protectedThis->m_scheduledMaintainScrollPositionAnchor);
+            protectedThis->scrollToAnchorAndTextFragmentNowIfNeeded();
+        } else
+            protectedThis->scrollToAnchorAndTextFragmentNowIfNeeded();
+        protectedThis->m_scheduledMaintainScrollPositionAnchor = nullptr;
     });
 }
 
@@ -5806,13 +5820,22 @@ void LocalFrameView::setScrollingPerformanceTestingEnabled(bool scrollingPerform
         tiledBacking->setScrollingPerformanceTestingEnabled(scrollingPerformanceTestingEnabled);
 }
 
+void LocalFrameView::createScrollbarsController()
+{
+    auto* page = m_frame->page();
+    if (page) {
+        if (auto scrollbarController = page->chrome().client().createScrollbarsController(*page, *this)) {
+            setScrollbarsController(WTFMove(scrollbarController));
+            return;
+        }
+    }
+
+    ScrollView::createScrollbarsController();
+}
+
 void LocalFrameView::didAddScrollbar(Scrollbar* scrollbar, ScrollbarOrientation orientation)
 {
-    Page* page = m_frame->page();
-    if (page) {
-        if (auto scrollbarController = page->chrome().client().createScrollbarsController(*page, *this))
-            setScrollbarsController(WTFMove(scrollbarController));
-    }
+    auto* page = m_frame->page();
 
     ScrollableArea::didAddScrollbar(scrollbar, orientation);
 
@@ -5829,6 +5852,12 @@ void LocalFrameView::willRemoveScrollbar(Scrollbar* scrollbar, ScrollbarOrientat
         cache->remove(scrollbar);
         cache->onScrollbarUpdate(this);
     }
+}
+
+void LocalFrameView::scrollbarFrameRectChanged(const Scrollbar& scrollbar) const
+{
+    if (auto* cache = axObjectCache())
+        cache->onScrollbarFrameRectChange(scrollbar);
 }
 
 void LocalFrameView::addPaintPendingMilestones(OptionSet<LayoutMilestone> milestones)
@@ -6278,6 +6307,15 @@ OverscrollBehavior LocalFrameView::verticalOverscrollBehavior()  const
     return OverscrollBehavior::Auto;
 }
 
+ScrollbarWidth LocalFrameView::scrollbarWidthStyle()  const
+{
+    auto* document = m_frame->document();
+    auto scrollingObject = document && document->documentElement() ? document->documentElement()->renderer() : nullptr;
+    if (scrollingObject && renderView())
+        return scrollingObject->style().scrollbarWidth();
+    return ScrollbarWidth::Auto;
+}
+
 bool LocalFrameView::isVisibleToHitTesting() const
 {
     bool isVisibleToHitTest = true;
@@ -6328,6 +6366,14 @@ float LocalFrameView::deviceScaleFactor() const
     if (auto* page = m_frame->page())
         return page->deviceScaleFactor();
     return 1;
+}
+
+void LocalFrameView::writeRenderTreeAsText(TextStream& ts, OptionSet<RenderAsTextFlag> behavior)
+{
+    auto* localFrame = dynamicDowncast<LocalFrame>(frame());
+    if (!localFrame)
+        return;
+    externalRepresentationForLocalFrame(ts, *localFrame, behavior);
 }
 
 } // namespace WebCore

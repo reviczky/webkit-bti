@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,7 +65,6 @@
 #include "FocusController.h"
 #include "FrameLoadRequest.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FrameTree.h"
 #include "HTTPParsers.h"
 #include "History.h"
@@ -76,6 +75,7 @@
 #include "JSDOMWindowBase.h"
 #include "JSExecState.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Location.h"
 #include "Logging.h"
@@ -933,11 +933,20 @@ void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject
         if (!globalObject)
             return;
 
+        auto& vm = globalObject->vm();
+        auto scope = DECLARE_CATCH_SCOPE(vm);
+
         UserGestureIndicator userGestureIndicator(userGestureToForward);
         InspectorInstrumentation::willDispatchPostMessage(frame, postMessageIdentifier);
 
         auto ports = MessagePort::entanglePorts(*document(), WTFMove(message.transferredPorts));
         auto event = MessageEvent::create(*globalObject, message.message.releaseNonNull(), sourceOrigin, { }, incumbentWindowProxy ? std::make_optional(MessageEventSource(WTFMove(incumbentWindowProxy))) : std::nullopt, WTFMove(ports));
+        if (UNLIKELY(scope.exception())) {
+            // Currently, we assume that the only way we can get here is if we have a termination.
+            RELEASE_ASSERT(vm.hasPendingTerminationException());
+            return;
+        }
+
         dispatchEvent(event.event);
 
         InspectorInstrumentation::didDispatchPostMessage(frame, postMessageIdentifier);
@@ -1140,6 +1149,7 @@ void LocalDOMWindow::stop()
     if (!frame)
         return;
 
+    SetForScope isStopping { m_isStopping, true };
     // We must check whether the load is complete asynchronously, because we might still be parsing
     // the document until the callstack unwinds.
     frame->loader().stopForUserCancel(true);
@@ -1270,7 +1280,7 @@ int LocalDOMWindow::outerHeight() const
     if (!page)
         return 0;
 
-    if (page->isLoadingInHeadlessMode())
+    if (page->fingerprintingProtectionsEnabled())
         return innerHeight();
 
 #if PLATFORM(IOS_FAMILY)
@@ -1298,7 +1308,7 @@ int LocalDOMWindow::outerWidth() const
     if (!page)
         return 0;
 
-    if (page->isLoadingInHeadlessMode())
+    if (page->fingerprintingProtectionsEnabled())
         return innerWidth();
 
 #if PLATFORM(IOS_FAMILY)
@@ -1363,7 +1373,7 @@ int LocalDOMWindow::screenX() const
         return 0;
 
     Page* page = frame->page();
-    if (!page || page->isLoadingInHeadlessMode())
+    if (!page || page->fingerprintingProtectionsEnabled())
         return 0;
 
     return static_cast<int>(page->chrome().windowRect().x());
@@ -1376,7 +1386,7 @@ int LocalDOMWindow::screenY() const
         return 0;
 
     Page* page = frame->page();
-    if (!page || page->isLoadingInHeadlessMode())
+    if (!page || page->fingerprintingProtectionsEnabled())
         return 0;
 
     return static_cast<int>(page->chrome().windowRect().y());

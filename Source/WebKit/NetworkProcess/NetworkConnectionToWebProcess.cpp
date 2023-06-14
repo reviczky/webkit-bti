@@ -482,10 +482,10 @@ void NetworkConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection&, I
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::TerminateWebProcess(m_webProcessIdentifier), 0);
 }
 
-void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier,  WebPageProxyIdentifier webPageProxyID, const ClientOrigin& clientOrigin, bool hadMainFrameMainResourcePrivateRelayed, bool allowPrivacyProxy, OptionSet<NetworkConnectionIntegrity> networkConnectionIntegrityPolicy)
+void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier, WebPageProxyIdentifier webPageProxyID, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, const ClientOrigin& clientOrigin, bool hadMainFrameMainResourcePrivateRelayed, bool allowPrivacyProxy, OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, WebCore::StoredCredentialsPolicy storedCredentialsPolicy)
 {
     ASSERT(!m_networkSocketChannels.contains(identifier));
-    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier, webPageProxyID, clientOrigin, hadMainFrameMainResourcePrivateRelayed, allowPrivacyProxy, networkConnectionIntegrityPolicy))
+    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier, webPageProxyID, frameID, pageID, clientOrigin, hadMainFrameMainResourcePrivateRelayed, allowPrivacyProxy, advancedPrivacyProtections, shouldRelaxThirdPartyCookieBlocking, storedCredentialsPolicy))
         m_networkSocketChannels.add(identifier, WTFMove(channel));
 }
 
@@ -1435,7 +1435,7 @@ void NetworkConnectionToWebProcess::logOnBehalfOfWebContent(IPC::DataReference&&
 
     // Use '%{public}s' in the format string for the preprocessed string from the WebContent process.
     // This should not reveal any redacted information in the string, since it has already been composed in the WebContent process.
-    os_log_with_type(osLogChannel.get() ? osLogChannel.get() : OS_LOG_DEFAULT, static_cast<os_log_type_t>(logType), "WebContent[pid=%d, identifier=%llu]: %{public}s", pid, m_webProcessIdentifier.toUInt64(), logString.data());
+    os_log_with_type(osLogChannel.get() ? osLogChannel.get() : OS_LOG_DEFAULT, static_cast<os_log_type_t>(logType), "WebContent[%d]: %{public}s", pid, logString.data());
 }
 #endif
 

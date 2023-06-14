@@ -28,13 +28,11 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "Connection.h"
-#include "DisplayListRecorderFlushIdentifier.h"
 #include "ImageBufferBackendHandle.h"
 #include "MarkSurfacesAsVolatileRequestIdentifier.h"
 #include "MessageReceiver.h"
 #include "MessageSender.h"
 #include "QualifiedRenderingResourceIdentifier.h"
-#include "RemoteGPU.h"
 #include "RemoteRenderingBackendCreationParameters.h"
 #include "RemoteResourceCache.h"
 #include "RemoteSerializedImageBufferIdentifier.h"
@@ -46,7 +44,6 @@
 #include "StreamConnectionWorkQueue.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
-#include "WebGPUIdentifier.h"
 #include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/ProcessIdentity.h>
 #include <wtf/HashMap.h>
@@ -102,9 +99,6 @@ public:
     void dispatch(Function<void()>&&);
 
     IPC::StreamServerConnection& streamConnection() const { return m_streamConnection.get(); }
-#if ENABLE(VIDEO)
-    void performWithMediaPlayerOnMainThread(WebCore::MediaPlayerIdentifier, Function<void(WebCore::MediaPlayer&)>&&);
-#endif
 
     void lowMemoryHandler(WTF::Critical, WTF::Synchronous);
 
@@ -128,8 +122,8 @@ private:
 
     // Messages to be received.
     void createImageBuffer(const WebCore::FloatSize& logicalSize, WebCore::RenderingMode, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, WebCore::RenderingResourceIdentifier);
-    void moveToSerializedBuffer(WebCore::RenderingResourceIdentifier, RemoteSerializedImageBufferWriteReference&&);
-    void moveToImageBuffer(RemoteSerializedImageBufferWriteReference&&, WebCore::RenderingResourceIdentifier);
+    void moveToSerializedBuffer(WebCore::RenderingResourceIdentifier);
+    void moveToImageBuffer(WebCore::RenderingResourceIdentifier);
     void getPixelBufferForImageBuffer(WebCore::RenderingResourceIdentifier, WebCore::PixelBufferFormat&&, WebCore::IntRect&& srcRect, CompletionHandler<void()>&&);
     void getPixelBufferForImageBufferWithNewMemory(WebCore::RenderingResourceIdentifier, SharedMemory::Handle&&, WebCore::PixelBufferFormat&& destinationFormat, WebCore::IntRect&& srcRect, CompletionHandler<void()>&&);
     void destroyGetPixelBufferSharedMemory();
@@ -148,7 +142,7 @@ private:
     void finalizeRenderingUpdate(RenderingUpdateID);
     void markSurfacesVolatile(MarkSurfacesAsVolatileRequestIdentifier, const Vector<WebCore::RenderingResourceIdentifier>&);
 #if PLATFORM(COCOA)
-    void prepareBuffersForDisplay(Vector<PrepareBackingStoreBuffersInputData> swapBuffersInput, CompletionHandler<void(const Vector<PrepareBackingStoreBuffersOutputData>&)>&&);
+    void prepareBuffersForDisplay(Vector<PrepareBackingStoreBuffersInputData> swapBuffersInput, CompletionHandler<void(Vector<PrepareBackingStoreBuffersOutputData>&&)>&&);
 #endif
     
     // Received messages translated to use QualifiedRenderingResourceIdentifier.
@@ -164,9 +158,6 @@ private:
 #if PLATFORM(COCOA)
     void prepareLayerBuffersForDisplay(const PrepareBackingStoreBuffersInputData&, PrepareBackingStoreBuffersOutputData&);
 #endif
-
-    void createRemoteGPU(WebGPUIdentifier, IPC::StreamServerConnection::Handle&&);
-    void releaseRemoteGPU(WebGPUIdentifier);
 
     void createRemoteBarcodeDetector(ShapeDetectionIdentifier, const WebCore::ShapeDetection::BarcodeDetectorOptions&);
     void releaseRemoteBarcodeDetector(ShapeDetectionIdentifier);
@@ -190,10 +181,6 @@ private:
 #endif
 
     HashMap<QualifiedRenderingResourceIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteDisplayListRecorder>> m_remoteDisplayLists WTF_GUARDED_BY_CAPABILITY(workQueue());
-
-    using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
-    RemoteGPUMap m_remoteGPUMap;
-
     Ref<ShapeDetection::ObjectHeap> m_shapeDetectionObjectHeap;
 };
 

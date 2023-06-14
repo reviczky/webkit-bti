@@ -125,7 +125,7 @@ public:
         return encoders;
     }
 
-    static void registerEncoder(EncoderId id, const char* name, const char* parserName, const char* caps, const char* encodedFormat,
+    static void registerEncoder(EncoderId id, const char* name, const char* parserName, const char* capsString, const char* encodedFormatString,
         SetupFunc&& setupEncoder, const char* bitratePropertyName, SetBitrateFunc&& setBitrate, const char* keyframeIntervalPropertyName, SetBitrateModeFunc&& setBitrateMode, SetLatencyModeFunc&& setLatency)
     {
         auto encoderFactory = adoptGRef(gst_element_factory_find(name));
@@ -147,12 +147,21 @@ public:
             }
         }
 
+        auto caps = adoptGRef(gst_caps_from_string(capsString));
+        GST_MINI_OBJECT_FLAG_SET(caps.get(), GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+
+        GRefPtr<GstCaps> encodedFormat;
+        if (encodedFormatString) {
+            encodedFormat = adoptGRef(gst_caps_from_string(encodedFormatString));
+            GST_MINI_OBJECT_FLAG_SET(encodedFormat.get(), GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+        }
+
         singleton().emplace(std::make_pair(id, EncoderDefinition {
-            .caps = adoptGRef(gst_caps_from_string(caps)),
+            .caps = WTFMove(caps),
             .name = name,
             .parserName = parserName,
             .factory = WTFMove(encoderFactory),
-            .encodedFormat = encodedFormat ? adoptGRef(gst_caps_from_string(encodedFormat)) : nullptr,
+            .encodedFormat = WTFMove(encodedFormat),
             .setBitrate = WTFMove(setBitrate),
             .setupEncoder = WTFMove(setupEncoder),
             .setBitrateMode = WTFMove(setBitrateMode),
@@ -633,9 +642,11 @@ static void webkit_video_encoder_class_init(WebKitVideoEncoderClass* klass)
             };
         }, [](GstElement* encoder, LatencyMode mode) {
             switch (mode) {
-            case REALTIME_LATENCY_MODE:
-                g_object_set(encoder, "threads", NUMBER_OF_THREADS, "cpu-used", NUMBER_OF_THREADS, "deadline", 1, "lag-in-frames", 0, nullptr);
+            case REALTIME_LATENCY_MODE: {
+                int64_t deadline = 1000000;
+                g_object_set(encoder, "threads", NUMBER_OF_THREADS, "cpu-used", NUMBER_OF_THREADS, "deadline", deadline, "lag-in-frames", 0, nullptr);
                 break;
+            }
             case QUALITY_LATENCY_MODE:
                 g_object_set(encoder, "threads", NUMBER_OF_THREADS, "cpu-used", NUMBER_OF_THREADS, "deadline", 0, "lag-in-frames", 25, nullptr);
                 gst_util_set_object_arg(G_OBJECT(encoder), "end-usage", "cq");
@@ -756,5 +767,6 @@ static void webkit_video_encoder_class_init(WebKitVideoEncoderClass* klass)
 }
 
 #undef NUMBER_OF_THREADS
+#undef GST_CAT_DEFAULT
 
 #endif // ENABLE(VIDEO) && USE(GSTREAMER)

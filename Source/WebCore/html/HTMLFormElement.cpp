@@ -37,7 +37,6 @@
 #include "FormData.h"
 #include "FormDataEvent.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "HTMLDialogElement.h"
 #include "HTMLFieldSetElement.h"
 #include "HTMLFormControlsCollection.h"
@@ -45,11 +44,11 @@
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "HTMLObjectElement.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLTableElement.h"
 #include "InputTypeNames.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "MixedContentChecker.h"
 #include "NodeName.h"
 #include "NodeRareData.h"
@@ -723,7 +722,7 @@ String HTMLFormElement::action() const
     auto& value = attributeWithoutSynchronization(actionAttr);
     if (value.isEmpty())
         return document().url().string();
-    return document().completeURL(stripLeadingAndTrailingHTMLSpaces(value)).string();
+    return document().completeURL(value).string();
 }
 
 void HTMLFormElement::setAction(const AtomString& value)
@@ -932,6 +931,11 @@ Vector<Ref<Element>> HTMLFormElement::namedElements(const AtomString& name)
         namedItems.append(*elementFromPast);
 
     return namedItems;
+}
+
+bool HTMLFormElement::isSupportedPropertyName(const AtomString& name)
+{
+    return !name.isEmpty() && elements()->isSupportedPropertyName(name);
 }
 
 void HTMLFormElement::resumeFromDocumentSuspension()

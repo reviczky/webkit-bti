@@ -54,9 +54,9 @@
 #include "OverrideLanguages.h"
 #include "PageLoadState.h"
 #include "PerActivityStateCPUUsageSampler.h"
+#include "RemotePageProxy.h"
 #include "RemoteWorkerType.h"
 #include "SandboxExtension.h"
-#include "SubframePageProxy.h"
 #include "SuspendedPageProxy.h"
 #include "TextChecker.h"
 #include "UIGamepad.h"
@@ -290,7 +290,7 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 
     updateBackForwardCacheCapacity();
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     if (WebCore::IOSApplication::isLutron() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SharedNetworkProcess)) {
         callOnMainRunLoop([] {
             if (WebsiteDataStore::defaultDataStoreExists())
@@ -512,7 +512,9 @@ void WebProcessPool::createGPUProcessConnection(WebProcessProxy& webProcessProxy
 #endif
 
     parameters.isLockdownModeEnabled = webProcessProxy.lockdownMode() == WebProcessProxy::LockdownMode::Enabled;
-    
+    parameters.isWebGPUEnabled = WTF::anyOf(webProcessProxy.pages(), [](const auto& page) {
+        return page && page->preferences().webGPUEnabled();
+    });
     parameters.allowTestOnlyIPC = webProcessProxy.allowTestOnlyIPC();
     
     ensureGPUProcess().createGPUProcessConnection(webProcessProxy, WTFMove(connectionIdentifier), WTFMove(parameters));
@@ -712,7 +714,7 @@ void WebProcessPool::registerDisplayConfigurationCallback()
 }
 #endif // !PLATFORM(MAC)
 
-#if !PLATFORM(MAC) && !PLATFORM(IOS)
+#if !PLATFORM(MAC) && !PLATFORM(IOS) && !PLATFORM(VISION)
 void WebProcessPool::registerHighDynamicRangeChangeCallback()
 {
 }
@@ -1846,8 +1848,8 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
                 completionHandler(Ref { page.mainFrame()->process() }, nullptr, "Found process for the same registration domain as mainFrame domain"_s, DidCreateNewProcess::No);
                 return;
             }
-            if (auto* subframePageProxy = page.subpageFrameProxyForRegistrableDomain(registrableDomain)) {
-                completionHandler(Ref { subframePageProxy->process() }, nullptr, "Found process for the same registration domain"_s, DidCreateNewProcess::No);
+            if (auto* remotePageProxy = page.remotePageProxyForRegistrableDomain(registrableDomain)) {
+                completionHandler(Ref { remotePageProxy->process() }, nullptr, "Found process for the same registration domain"_s, DidCreateNewProcess::No);
                 return;
             }
         }
@@ -1857,10 +1859,8 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
 
     if (!frame.isMainFrame() && page.preferences().siteIsolationEnabled()) {
         RegistrableDomain navigationDomain(navigation.currentRequest().url());
-        if (!navigationDomain.isEmpty() && navigationDomain != mainFrameDomain) {
-            auto subFramePageProxy = makeUniqueRef<SubframePageProxy>(page, process, frame.isMainFrame());
-            page.addSubframePageProxyForFrameID(frame.frameID(), navigationDomain, WTFMove(subFramePageProxy));
-        }
+        if (!navigationDomain.isEmpty() && navigationDomain != mainFrameDomain)
+            frame.setRemotePageProxy(RemotePageProxy::create(page, process, navigationDomain));
     }
 
     // We are process-swapping so automatic process prewarming would be beneficial if the client has not explicitly enabled / disabled it.
@@ -1939,7 +1939,7 @@ std::tuple<Ref<WebProcessProxy>, SuspendedPageProxy*, ASCIILiteral> WebProcessPo
 
     // FIXME: We should support process swap when a window has been opened via window.open() without 'noopener'.
     // The issue is that the opener has a handle to the WindowProxy.
-    if (navigation.openedByDOMWithOpener() && !m_configuration->processSwapsOnWindowOpenWithOpener())
+    if (navigation.openedByDOMWithOpener() && !page.preferences().processSwapOnCrossSiteWindowOpenEnabled())
         return { WTFMove(sourceProcess), nullptr, "Browsing context been opened by DOM without 'noopener'"_s };
 
     // FIXME: We should support process swap when a window has opened other windows via window.open.
