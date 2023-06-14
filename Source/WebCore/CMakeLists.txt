@@ -407,6 +407,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediasession/Navigator+MediaSession.idl
 
     Modules/mediasource/AudioTrack+MediaSource.idl
+    Modules/mediasource/BufferedChangeEvent.idl
     Modules/mediasource/DOMURL+MediaSource.idl
     Modules/mediasource/ManagedMediaSource.idl
     Modules/mediasource/ManagedSourceBuffer.idl
@@ -835,7 +836,6 @@ set(WebCore_NON_SVG_IDL_FILES
     css/CSSFontFeatureValuesRule.idl
     css/CSSFontPaletteValuesRule.idl
     css/CSSGroupingRule.idl
-    css/CSSImportRule+Layer.idl
     css/CSSImportRule.idl
     css/CSSKeyframeRule.idl
     css/CSSKeyframesRule.idl
@@ -1833,11 +1833,7 @@ elseif (USE_LIBEPOXY)
     )
     add_definitions(${LIBEPOXY_DEFINITIONS})
 else ()
-    if (USE_OPENGL)
-        list(APPEND WebCore_LIBRARIES OpenGL::OpenGL)
-    elseif (USE_OPENGL_ES)
-        list(APPEND WebCore_LIBRARIES OpenGL::GLES)
-    endif ()
+    list(APPEND WebCore_LIBRARIES OpenGL::GLES)
 
     if (USE_EGL)
         list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
@@ -2062,10 +2058,6 @@ elseif (USE_ANGLE_EGL)
     list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
         ${WEBCORE_DIR}/platform/graphics/angle
         ${WEBCORE_DIR}/platform/graphics/opengl
-    )
-
-    list(APPEND WebCore_SOURCES
-        platform/graphics/opengl/TemporaryOpenGLSetting.cpp
     )
 endif ()
 
@@ -2581,7 +2573,6 @@ set(WebCore_BUILTINS_SOURCES
     ${WEBCORE_DIR}/Modules/streams/ReadableStreamInternals.js
     ${WEBCORE_DIR}/Modules/streams/ReadableStreamDefaultReader.js
     ${WEBCORE_DIR}/Modules/streams/StreamInternals.js
-    ${WEBCORE_DIR}/Modules/streams/TransformStream.js
     ${WEBCORE_DIR}/Modules/streams/TransformStreamDefaultController.js
     ${WEBCORE_DIR}/Modules/streams/TransformStreamInternals.js
     ${WEBCORE_DIR}/Modules/streams/WritableStreamDefaultController.js

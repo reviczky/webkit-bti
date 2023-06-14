@@ -84,7 +84,7 @@ class StorageAreaRegistry;
 
 class NetworkStorageManager final : public IPC::WorkQueueMessageReceiver {
 public:
-    static Ref<NetworkStorageManager> create(NetworkProcess&, PAL::SessionID, Markable<UUID>, IPC::Connection::UniqueID, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel);
+    static Ref<NetworkStorageManager> create(NetworkProcess&, PAL::SessionID, Markable<UUID>, IPC::Connection::UniqueID, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel);
     static bool canHandleTypes(OptionSet<WebsiteDataType>);
     static OptionSet<WebsiteDataType> allManagedTypes();
 
@@ -127,7 +127,7 @@ public:
 #endif // ENABLE(SERVICE_WORKER)
 
 private:
-    NetworkStorageManager(NetworkProcess&, PAL::SessionID, Markable<UUID>, IPC::Connection::UniqueID, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel);
+    NetworkStorageManager(NetworkProcess&, PAL::SessionID, Markable<UUID>, IPC::Connection::UniqueID, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel);
     ~NetworkStorageManager();
     void writeOriginToFileIfNecessary(const WebCore::ClientOrigin&, StorageAreaBase* = nullptr);
     enum class ShouldWriteOriginFile : bool { No, Yes };
@@ -229,6 +229,9 @@ private:
     void schedulePerformEviction();
     bool persistedInternal(const WebCore::ClientOrigin&);
     String persistedFilePath(const WebCore::ClientOrigin&);
+    void fetchRegistrableDomainsForPersist();
+    void didFetchRegistrableDomainsForPersist(HashSet<WebCore::RegistrableDomain>&&);
+    bool persistOrigin(const WebCore::ClientOrigin&);
     struct AccessRecord {
         bool isActive { false };
         std::optional<bool> isPersisted;
@@ -259,6 +262,7 @@ private:
     uint64_t m_defaultOriginQuota;
     std::optional<double> m_originQuotaRatio;
     std::optional<double> m_totalQuotaRatio;
+    std::optional<uint64_t> m_standardVolumeCapacity;
     std::optional<uint64_t> m_volumeCapacityOverride;
     std::optional<uint64_t> m_totalUsage;
     uint64_t m_totalQuota;
@@ -266,6 +270,9 @@ private:
     UnifiedOriginStorageLevel m_unifiedOriginStorageLevel;
     IPC::Connection::UniqueID m_parentConnection;
     HashMap<IPC::Connection::UniqueID, HashSet<String>> m_temporaryBlobPathsByConnection WTF_GUARDED_BY_CAPABILITY(workQueue());
+    using OriginPersistCompletionHandler = std::pair<WebCore::ClientOrigin, CompletionHandler<void(bool)>>;
+    Vector<OriginPersistCompletionHandler> m_persistCompletionHandlers WTF_GUARDED_BY_CAPABILITY(workQueue());
+    std::optional<HashSet<WebCore::RegistrableDomain>> m_domainsExemptFromEviction WTF_GUARDED_BY_CAPABILITY(workQueue());
 #if PLATFORM(IOS_FAMILY)
     Seconds m_backupExclusionPeriod;
 #endif

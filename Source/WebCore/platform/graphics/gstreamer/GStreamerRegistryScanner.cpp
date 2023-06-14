@@ -306,7 +306,10 @@ GStreamerRegistryScanner::RegistryLookupResult GStreamerRegistryScanner::Element
     }
 
     gst_plugin_feature_list_free(candidates);
-    if (!isSupported)
+    // Valid `selectedFactory` ends up stored in the scanner singleton.
+    if (isSupported)
+        GST_OBJECT_FLAG_SET(selectedFactory.get(), GST_OBJECT_FLAG_MAY_BE_LEAKED);
+    else
         selectedFactory.clear();
 
     GST_LOG("Lookup result for %s matching caps %" GST_PTR_FORMAT " : isSupported=%s, isUsingHardware=%s", elementFactoryTypeToString(factoryType), caps.get(), boolForPrinting(isSupported), boolForPrinting(isUsingHardware));
@@ -515,7 +518,6 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
         { ElementFactories::Type::Demuxer, "application/vnd.rn-realmedia", { }, { } },
         { ElementFactories::Type::Demuxer, "application/x-3gp", { }, { } },
         { ElementFactories::Type::Demuxer, "application/x-pn-realaudio", { }, { } },
-        { ElementFactories::Type::Demuxer, "application/dash+xml", { }, { } },
         { ElementFactories::Type::Demuxer, "audio/x-aiff", { }, { } },
         { ElementFactories::Type::Demuxer, "audio/x-wav", { "audio/x-wav"_s, "audio/wav"_s, "audio/vnd.wave"_s }, { "1"_s } },
         { ElementFactories::Type::Demuxer, "video/quicktime", { }, { } },
@@ -526,6 +528,11 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
     if (const char* hlsSupport = g_getenv("WEBKIT_GST_ENABLE_HLS_SUPPORT")) {
         if (!g_strcmp0(hlsSupport, "1"))
             mapping.append({ ElementFactories::Type::Demuxer, "application/x-hls", { "application/vnd.apple.mpegurl"_s, "application/x-mpegurl"_s }, { } });
+    }
+
+    if (const char* dashSupport = g_getenv("WEBKIT_GST_ENABLE_DASH_SUPPORT")) {
+        if (!g_strcmp0(dashSupport, "1"))
+            mapping.append({ ElementFactories::Type::Demuxer, "application/dash+xml", { }, { } });
     }
 
     fillMimeTypeSetFromCapsMapping(factories, mapping);
@@ -1084,5 +1091,8 @@ Vector<RTCRtpCapabilities::HeaderExtensionCapability> GStreamerRegistryScanner::
 
 #endif // USE(GSTREAMER_WEBRTC)
 
-}
-#endif
+#undef GST_CAT_DEFAULT
+
+} // namespace WebCore
+
+#endif // USE(GSTREAMER)

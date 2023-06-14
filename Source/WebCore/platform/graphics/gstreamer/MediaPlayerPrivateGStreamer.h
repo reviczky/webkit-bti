@@ -74,10 +74,6 @@ typedef struct _GstMpegtsSection GstMpegtsSection;
 typedef struct _GstStreamVolume GstStreamVolume;
 typedef struct _GstVideoInfo GstVideoInfo;
 
-#if USE(WPE_VIDEO_PLANE_DISPLAY_DMABUF)
-struct wpe_video_plane_display_dmabuf_source;
-#endif
-
 namespace WebCore {
 
 class BitmapTextureGL;
@@ -86,7 +82,6 @@ class GraphicsContext;
 class GraphicsContextGL;
 class IntSize;
 class IntRect;
-class VideoTextureCopierGStreamer;
 
 #if USE(TEXTURE_MAPPER_GL)
 class TextureMapperPlatformLayerProxy;
@@ -210,10 +205,6 @@ public:
     void handleProtectionEvent(GstEvent*);
 #endif
 
-#if USE(GSTREAMER_GL)
-    bool copyVideoTextureToPlatformTexture(GraphicsContextGL*, PlatformGLObject, GCGLenum, GCGLint, GCGLenum, GCGLenum, GCGLenum, bool, bool) override;
-    RefPtr<NativeImage> nativeImageForCurrentTime() override;
-#endif
     RefPtr<VideoFrame> videoFrameForCurrentTime() override;
 
     void updateEnabledVideoTrack();
@@ -339,7 +330,7 @@ protected:
 #endif
 
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
-    MediaPlayer* m_player;
+    WeakPtr<MediaPlayer> m_player;
     String m_referrer;
     mutable std::optional<MediaTime> m_cachedPosition;
     mutable MediaTime m_cachedDuration;
@@ -382,10 +373,6 @@ protected:
     bool m_canRenderingBeAccelerated { false };
 
     bool m_isBeingDestroyed WTF_GUARDED_BY_LOCK(m_drawLock) { false };
-
-#if USE(GSTREAMER_GL)
-    std::unique_ptr<VideoTextureCopierGStreamer> m_videoTextureCopier;
-#endif
 
     ImageOrientation m_videoSourceOrientation;
 
@@ -449,7 +436,7 @@ private:
 
     GstElement* createVideoSink();
     GstElement* createAudioSink();
-    GstElement* audioSink() const;
+    GstElement* audioSink() const { return m_audioSink.get(); }
 
     bool isMediaStreamPlayer() const;
 
@@ -598,9 +585,6 @@ private:
     uint64_t m_sampleCount { 0 };
     uint64_t m_lastVideoFrameMetadataSampleCount { 0 };
     mutable PlatformTimeRanges m_buffered;
-#if USE(WPE_VIDEO_PLANE_DISPLAY_DMABUF)
-    GUniquePtr<struct wpe_video_plane_display_dmabuf_source> m_wpeVideoPlaneDisplayDmaBuf;
-#endif
 #if !RELEASE_LOG_DISABLED
     Ref<const Logger> m_logger;
     const void* m_logIdentifier;

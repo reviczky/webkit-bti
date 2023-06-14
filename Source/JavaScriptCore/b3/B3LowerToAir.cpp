@@ -731,6 +731,16 @@ private:
         return Arg();
     }
 
+    Arg imm64(Value* value)
+    {
+        if (value->hasInt()) {
+            int64_t intValue = value->asInt();
+            if (Arg::isValidImm64Form(intValue))
+                return Arg::imm64(intValue);
+        }
+        return Arg();
+    }
+
     Arg bitImm(Value* value)
     {
         if (value->hasInt()) {
@@ -994,6 +1004,21 @@ private:
             }
         }
 
+        if (isValidForm(opcode, Arg::Imm64, Arg::Tmp, Arg::Tmp)) {
+            if (commutativity == Commutative) {
+                if (imm64(right)) {
+                    append(opcode, imm64(right), tmp(left), result);
+                    return;
+                }
+            } else {
+                // A non-commutative operation could have an immediate in left.
+                if (imm64(left)) {
+                    append(opcode, imm64(left), tmp(right), result);
+                    return;
+                }
+            }
+        }
+
         if (isValidForm(opcode, Arg::BitImm, Arg::Tmp, Arg::Tmp)) {
             if (commutativity == Commutative) {
                 if (Arg rightArg = bitImm(right)) {
@@ -1225,6 +1250,14 @@ private:
             if (!imm_value.value()) {
                 switch (move.opcode) {
                 default:
+                    break;
+                case Air::Store8:
+                    if (isValidForm(Air::Store8, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width8))
+                        return Inst(Air::Store8, m_value, zeroReg(), dest);
+                    break;
+                case Air::Store16:
+                    if (isValidForm(Air::Store16, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width16))
+                        return Inst(Air::Store16, m_value, zeroReg(), dest);
                     break;
                 case Air::Move32:
                     if (isValidForm(Store32, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width32))
@@ -2867,7 +2900,11 @@ private:
                 if (incrementArg) {
                     append(relaxedMoveForType(address->type()), tmp(address->child(0)), tmp(address));
                     append(opcode, incrementArg, tmp(memory));
-                    m_locked.add(address);
+                    // Since `MoveWithIncrement` increments `address` by `offset` internally,
+                    // I think we should `commitInternal(address)` in case other pattern
+                    // matching optimization related to `address` might happen. If so, we
+                    // might compute `Add(base, offset)` internally twice.
+                    commitInternal(address);
                     return true;
                 }
                 return false;
@@ -3536,31 +3573,60 @@ private:
             Value* left = m_value->child(0);
             Value* right = m_value->child(1);
 
-            // UBFIZ Pattern: d = (n & mask) << lsb 
+            // UBFIZ Pattern: d = (n & mask) << lsb
             // Where: mask = (1 << width) - 1
             auto tryAppendUBFIZ = [&] () -> bool {
                 Air::Opcode opcode = opcodeForType(InsertUnsignedBitfieldInZero32, InsertUnsignedBitfieldInZero64, m_value->type());
                 if (!isValidForm(opcode, Arg::Tmp, Arg::Imm, Arg::Imm, Arg::Tmp))
                     return false;
-                if (left->opcode() != BitAnd)
+                if (!imm(right) || right->asInt() < 0)
                     return false;
-
-                Value* nValue = left->child(0);
-                Value* maskValue = left->child(1);
-                if (m_locked.contains(nValue) || !maskValue->hasInt() || !imm(right) || right->asInt() < 0) 
+                if (!canBeInternal(left))
                     return false;
-
                 uint64_t lsb = right->asInt();
-                uint64_t mask = maskValue->asInt();
-                if (!mask || mask & (mask + 1))
-                    return false;
-                uint64_t width = WTF::bitCount(mask);
-                uint64_t datasize = opcode == InsertUnsignedBitfieldInZero32 ? 32 : 64;
-                if (lsb + width > datasize)
-                    return false;
 
-                append(opcode, tmp(nValue), imm(right), imm(width), tmp(m_value));
-                return true;
+                auto doAppend = [&](Value* nValue, uint64_t mask) -> bool {
+                    if (m_locked.contains(nValue))
+                        return false;
+
+                    if (!mask || mask & (mask + 1))
+                        return false;
+
+                    uint64_t width = WTF::bitCount(mask);
+                    uint64_t datasize = opcode == InsertUnsignedBitfieldInZero32 ? 32 : 64;
+                    if (lsb + width > datasize)
+                        return false;
+
+                    append(opcode, tmp(nValue), imm(right), imm(width), tmp(m_value));
+                    return true;
+                };
+
+                if (left->opcode() == BitAnd) {
+                    Value* nValue = left->child(0);
+                    Value* maskValue = left->child(1);
+                    if (!maskValue->hasInt())
+                        return false;
+                    uint64_t mask = maskValue->asInt();
+                    if (doAppend(nValue, mask)) {
+                        commitInternal(left);
+                        return true;
+                    }
+                    return false;
+                }
+
+                if (left->opcode() == ZExt32 && left->child(0)->opcode() == Trunc && canBeInternal(left->child(0))) {
+                    Value* nValue = left->child(0)->child(0);
+                    uint64_t mask = 0xffffffffULL;
+                    if (doAppend(nValue, mask)) {
+                        commitInternal(left->child(0));
+                        commitInternal(left);
+                        return true;
+                    }
+                    return false;
+                }
+
+                return false;
+
             };
 
             if (tryAppendUBFIZ())
@@ -3740,7 +3806,11 @@ private:
                 if (incrementArg) {
                     append(relaxedMoveForType(address->type()), tmp(base1), tmp(address));
                     append(opcode, tmp(value), incrementArg);
-                    m_locked.add(address);
+                    // Since `MoveWithIncrement` increments `address` by `offset` internally,
+                    // I think we should `commitInternal(address)` in case other pattern
+                    // matching optimization related to `address` might happen. If so, we
+                    // might compute `Add(base, offset)` internally twice.
+                    commitInternal(address);
                     return true;
                 }
                 return false;
@@ -4256,6 +4326,10 @@ private:
             }
             return;
 
+        case B3::VectorRelaxedSwizzle:
+            emitSIMDMonomorphicBinaryOp(Air::VectorSwizzle);
+            return;
+
         case Fence: {
             FenceValue* fence = m_value->as<FenceValue>();
             if (!fence->write && !fence->read)
@@ -4424,6 +4498,26 @@ private:
         }
 
         case Select: {
+            if (m_value->type().isVector()) {
+                // Conditional moves aren't available for vectors on currently
+                // supported architectures, so we lower vector Select to a
+                // branching construct.
+
+                auto ifTrueBlock = newBlock();
+                Air::BasicBlock* beginBlock;
+                Air::BasicBlock* doneBlock;
+                splitBlock(beginBlock, doneBlock);
+
+                append(Air::MoveVector, tmp(m_value->child(2)), tmp(m_value));
+                append(createBranch(m_value->child(0)));
+                beginBlock->setSuccessors(ifTrueBlock, doneBlock);
+
+                ifTrueBlock->append(Air::MoveVector, m_value, tmp(m_value->child(1)), tmp(m_value));
+                ifTrueBlock->append(Air::Jump, m_value);
+                ifTrueBlock->setSuccessors(doneBlock);
+                return;
+            }
+
             MoveConditionallyConfig config;
             if (m_value->type().isInt()) {
                 config.moveConditionally32 = MoveConditionally32;
@@ -4624,10 +4718,9 @@ private:
                     sources.append(tmp(right));
                     append(Move, tmp(left), result);
                 }
-            } else if (isValidForm(opcode, Arg::ResCond, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp)) {
+            } else if (isValidForm(opcode, Arg::ResCond, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp)) {
                 sources.append(tmp(left));
                 sources.append(tmp(right));
-                sources.append(m_code.newTmp(m_value->resultBank()));
                 sources.append(m_code.newTmp(m_value->resultBank()));
             }
 

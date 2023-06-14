@@ -1130,6 +1130,8 @@ private:
         case IsNumber:
         case IsBigInt:
         case NumberIsInteger:
+        case GlobalIsNaN:
+        case NumberIsNaN:
         case IsObject:
         case IsCallable:
         case IsConstructor:
@@ -1256,6 +1258,10 @@ private:
         case MakeRope:
         case StrCat: {
             setPrediction(SpecString);
+            break;
+        }
+        case MakeAtomString: {
+            setPrediction(SpecStringIdent);
             break;
         }
         case NewStringObject: {
@@ -1529,6 +1535,7 @@ private:
         case NotifyWrite:
         case ConstantStoragePointer:
         case MovHint:
+        case ZombieHint:
         case ExitOK:
         case VarargsLength:
         case LoadVarargs:

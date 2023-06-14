@@ -26,7 +26,7 @@
 #include "config.h"
 #include "ManagedMediaSource.h"
 
-#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE)
+#if ENABLE(MANAGED_MEDIA_SOURCE)
 
 #include "Event.h"
 #include "EventNames.h"
@@ -124,6 +124,7 @@ void ManagedMediaSource::ensurePrefsRead()
 {
     if (m_lowThreshold && m_highThreshold)
         return;
+    ASSERT(mediaElement());
     m_lowThreshold = mediaElement()->document().settings().managedMediaSourceLowThreshold();
     m_highThreshold = mediaElement()->document().settings().managedMediaSourceHighThreshold();
 }
@@ -165,6 +166,18 @@ void ManagedMediaSource::streamingTimerFired()
 {
     m_streamingAllowed = false;
     notifyElementUpdateMediaState();
+}
+
+bool ManagedMediaSource::isOpen() const
+{
+#if !ENABLE(WIRELESS_PLAYBACK_TARGET)
+    return MediaSource::isOpen();
+#else
+    return MediaSource::isOpen()
+        && (mediaElement() && (!mediaElement()->document().settings().managedMediaSourceNeedsAirPlay()
+            || mediaElement()->isWirelessPlaybackTargetDisabled()
+            || mediaElement()->hasWirelessPlaybackTargetAlternative()));
+#endif
 }
 
 }

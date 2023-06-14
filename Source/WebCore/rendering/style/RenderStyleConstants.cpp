@@ -224,8 +224,6 @@ TextStream& operator<<(TextStream& ts, CaptionSide side)
     switch (side) {
     case CaptionSide::Top: ts << "top"; break;
     case CaptionSide::Bottom: ts << "bottom"; break;
-    case CaptionSide::Left: ts << "left"; break;
-    case CaptionSide::Right: ts << "right"; break;
     }
     return ts;
 }
@@ -945,7 +943,6 @@ TextStream& operator<<(TextStream& ts, ScrollSnapStop stop)
     }
     return ts;
 }
-
 TextStream& operator<<(TextStream& ts, SpeakAs speakAs)
 {
     switch (speakAs) {
@@ -1307,6 +1304,18 @@ TextStream& operator<<(TextStream& ts, WhiteSpace whiteSpace)
     case WhiteSpace::PreLine: ts << "pre-line"; break;
     case WhiteSpace::NoWrap: ts << "nowrap"; break;
     case WhiteSpace::BreakSpaces: ts << "break-spaces"; break;
+    }
+    return ts;
+}
+TextStream& operator<<(TextStream& ts, WhiteSpaceCollapse whiteSpaceCollapse)
+{
+    switch (whiteSpaceCollapse) {
+    case WhiteSpaceCollapse::Collapse: ts << "collapse"; break;
+    case WhiteSpaceCollapse::Discard: ts << "discard"; break;
+    case WhiteSpaceCollapse::Preserve: ts << "preserve"; break;
+    case WhiteSpaceCollapse::PreserveBreaks: ts << "preserve-breaks"; break;
+    case WhiteSpaceCollapse::PreserveSpaces: ts << "preserve-spaces"; break;
+    case WhiteSpaceCollapse::BreakSpaces: ts << "break-spaces"; break;
     }
     return ts;
 }

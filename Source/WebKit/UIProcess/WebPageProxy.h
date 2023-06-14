@@ -132,6 +132,7 @@ enum ScrollDirection : uint8_t;
 enum ScrollbarOverlayStyle : uint8_t;
 
 enum class ActivityState : uint16_t;
+enum class AdvancedPrivacyProtections : uint16_t;
 enum class AlternativeTextType : uint8_t;
 enum class AutocorrectionResponse : uint8_t;
 enum class AutoplayEvent : uint8_t;
@@ -196,6 +197,7 @@ struct AttributedString;
 struct BackForwardItemIdentifierType;
 struct CaptureDeviceWithCapabilities;
 struct CaptureSourceOrError;
+struct CharacterRange;
 struct ClientOrigin;
 struct CompositionHighlight;
 struct CompositionUnderline;
@@ -220,7 +222,7 @@ struct HTMLModelElementCamera;
 struct ImageBufferBackendParameters;
 struct InspectorOverlayHighlight;
 struct LinkIcon;
-struct LookalikeCharactersSanitizationData;
+struct LinkDecorationFilteringData;
 struct MediaControlsContextMenuItem;
 struct MediaDeviceHashSalts;
 struct MediaKeySystemRequestIdentifierType;
@@ -317,7 +319,7 @@ class DrawingAreaProxy;
 class GamepadData;
 class GeolocationPermissionRequestManagerProxy;
 class LayerTreeContext;
-class LookalikeCharactersObserver;
+class LinkDecorationFilteringDataObserver;
 class MediaKeySystemPermissionRequestManagerProxy;
 class MediaSessionCoordinatorProxyPrivate;
 class MediaUsageManager;
@@ -341,6 +343,7 @@ class RemoteLayerTreeNode;
 class RemoteLayerTreeScrollingPerformanceData;
 class RemoteLayerTreeTransaction;
 class RemoteMediaSessionCoordinatorProxy;
+class RemotePageProxy;
 class RemoteScrollingCoordinatorProxy;
 class RevealItem;
 class SandboxExtensionHandle;
@@ -351,7 +354,6 @@ class ShareableResourceHandle;
 class SharedMemory;
 class SharedMemoryHandle;
 class SpeechRecognitionPermissionManager;
-class SubframePageProxy;
 class SuspendedPageProxy;
 class SystemPreviewController;
 class TouchBarMenuData;
@@ -528,6 +530,8 @@ public:
 
     bool isLockdownModeExplicitlySet() const { return m_isLockdownModeExplicitlySet; }
     bool shouldEnableLockdownMode() const;
+
+    void processIsNoLongerAssociatedWithPage(WebProcessProxy&);
 
 #if ENABLE(DATA_DETECTION)
     NSArray *dataDetectionResults() { return m_dataDetectionResults.get(); }
@@ -1040,7 +1044,7 @@ public:
     void getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>&&);
     void characterIndexForPointAsync(const WebCore::IntPoint&, CompletionHandler<void(uint64_t)>&&);
     void firstRectForCharacterRangeAsync(const EditingRange&, CompletionHandler<void(const WebCore::IntRect&, const EditingRange&)>&&);
-    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>&, const Vector<WebCore::CompositionHighlight>&, const EditingRange& selectionRange, const EditingRange& replacementRange);
+    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>&, const Vector<WebCore::CompositionHighlight>&, const HashMap<String, Vector<WebCore::CharacterRange>>&, const EditingRange& selectionRange, const EditingRange& replacementRange);
     void confirmCompositionAsync();
 
     void setScrollPerformanceDataCollectionEnabled(bool);
@@ -1094,6 +1098,7 @@ public:
     bool isProcessingMouseEvents() const;
     void processNextQueuedMouseEvent();
     void handleMouseEvent(const NativeWebMouseEvent&);
+    void dispatchMouseDidMoveOverElementAsynchronously(const NativeWebMouseEvent&);
 
     void doAfterProcessingAllPendingMouseEvents(Function<void()>&&);
     void didFinishProcessingAllPendingMouseEvents();
@@ -1186,7 +1191,7 @@ public:
 
     void accessibilitySettingsDidChange();
 
-    void windowScreenDidChange(WebCore::PlatformDisplayID, std::optional<WebCore::FramesPerSecond> nominalFramesPerSecond);
+    void windowScreenDidChange(WebCore::PlatformDisplayID);
     std::optional<WebCore::PlatformDisplayID> displayID() const { return m_displayID; }
 
 #if PLATFORM(IOS_FAMILY)
@@ -1602,8 +1607,8 @@ public:
     void negotiatedLegacyTLS();
     void didNegotiateModernTLS(const URL&);
 
-    void didFailLoadDueToNetworkConnectionIntegrity(const URL&);
-    void didChangeLookalikeCharacters(const URL&, const URL&);
+    void didBlockLoadToKnownTracker(const URL&);
+    void didApplyLinkDecorationFiltering(const URL&, const URL&);
 
     SpellDocumentTag spellDocumentTag();
 
@@ -1900,6 +1905,7 @@ public:
     void backForwardAddItemShared(Ref<WebProcessProxy>&&, BackForwardListItemState&&);
     void backForwardGoToItemShared(Ref<WebProcessProxy>&&, const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, WebCore::FrameIdentifier, bool isMainFrame, FrameInfoData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&, FrameInfoData&& originatingFrameInfo, std::optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody, WebCore::ResourceResponse&& redirectResponse, CompletionHandler<void(PolicyDecision&&)>&&);
+    void didDestroyNavigationShared(Ref<WebProcessProxy>&&, uint64_t navigationID);
 #if USE(QUICK_LOOK)
     void requestPasswordForQuickLookDocumentInMainFrameShared(const String& fileName, CompletionHandler<void(const String&)>&&);
 #endif
@@ -2154,8 +2160,10 @@ public:
     WKQuickLookPreviewController *quickLookPreviewController() const { return m_quickLookPreviewController.get(); }
 #endif
 
-    SubframePageProxy* subpageFrameProxyForRegistrableDomain(WebCore::RegistrableDomain) const;
-    SubframePageProxy* subframePageProxyForFrameID(WebCore::FrameIdentifier) const;
+    RemotePageProxy* remotePageProxyForRegistrableDomain(WebCore::RegistrableDomain) const;
+    void addRemotePageProxy(const WebCore::RegistrableDomain&, WeakPtr<RemotePageProxy>&&);
+    void removeRemotePageProxy(const WebCore::RegistrableDomain&);
+
     void createRemoteSubframesInOtherProcesses(WebFrameProxy&);
 
     void requestImageBitmap(const WebCore::ElementContext&, CompletionHandler<void(ShareableBitmapHandle&&, const String& sourceMIMEType)>&&);
@@ -2220,10 +2228,6 @@ public:
     void didCreateSleepDisabler(WebCore::SleepDisablerIdentifier, const String& reason, bool display);
     void didDestroySleepDisabler(WebCore::SleepDisablerIdentifier);
 
-#if PLATFORM(MAC)
-    void setCaretDecorationVisibility(bool);
-#endif
-
 #if ENABLE(NETWORK_ISSUE_REPORTING)
     void reportNetworkIssue(const URL&);
 #endif
@@ -2245,7 +2249,10 @@ public:
 #endif
 
     WebPopupMenuProxyClient& popupMenuClient();
-    void addSubframePageProxyForFrameID(WebCore::FrameIdentifier, WebCore::RegistrableDomain, UniqueRef<SubframePageProxy>&&);
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtectionsPolicies() const { return m_advancedPrivacyProtectionsPolicies; }
+#endif
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);
@@ -2361,7 +2368,7 @@ private:
     void runJavaScriptConfirm(WebCore::FrameIdentifier, FrameInfoData&&, const String&, CompletionHandler<void(bool)>&&);
     void runJavaScriptPrompt(WebCore::FrameIdentifier, FrameInfoData&&, const String&, const String&, CompletionHandler<void(const String&)>&&);
     void setStatusText(const String&);
-    void mouseDidMoveOverElement(WebHitTestResultData&&, uint32_t modifiers, UserData&&);
+    void mouseDidMoveOverElement(WebHitTestResultData&&, OptionSet<WebEventModifier>, UserData&&);
 
     void setToolbarsAreVisible(bool toolbarsAreVisible);
     void getToolbarsAreVisible(CompletionHandler<void(bool)>&&);
@@ -2757,11 +2764,11 @@ private:
     static bool isInHardwareKeyboardMode();
 #endif
 
-    void waitForInitialLookalikeCharacterStrings(WebFramePolicyListenerProxy&);
-    void sendCachedLookalikeCharacterStrings();
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    static Vector<WebCore::LookalikeCharactersSanitizationData>& cachedAllowedLookalikeStrings();
-    void updateAllowedLookalikeCharacterStringsIfNeeded();
+    void waitForInitialLinkDecorationFilteringData(WebFramePolicyListenerProxy&);
+    void sendCachedLinkDecorationFilteringData();
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    static Vector<WebCore::LinkDecorationFilteringData>& cachedAllowedQueryParametersForAdvancedPrivacyProtections();
+    void updateAllowedQueryParametersForAdvancedPrivacyProtectionsIfNeeded();
 #endif
 
     void clearAudibleActivity();
@@ -3272,10 +3279,11 @@ private:
     bool m_isSuspended { false };
     bool m_isLockdownModeExplicitlySet { false };
 
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    RefPtr<LookalikeCharactersObserver> m_lookalikeCharacterUpdateObserver;
-    bool m_needsInitialLookalikeCharacterStrings { true };
-    bool m_shouldUpdateAllowedLookalikeCharacterStrings { false };
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    RefPtr<LinkDecorationFilteringDataObserver> m_linkDecorationFilteringDataUpdateObserver;
+    bool m_needsInitialLinkDecorationFilteringData { true };
+    bool m_shouldUpdateAllowedQueryParametersForAdvancedPrivacyProtections { false };
+    OptionSet<WebCore::AdvancedPrivacyProtections> m_advancedPrivacyProtectionsPolicies;
 #endif
 
 #if ENABLE(APP_HIGHLIGHTS)

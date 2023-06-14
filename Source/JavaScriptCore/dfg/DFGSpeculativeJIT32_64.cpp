@@ -2248,7 +2248,8 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
-    case MovHint: {
+    case MovHint:
+    case ZombieHint: {
         compileMovHint(m_currentNode);
         noResult(node);
         break;
@@ -2408,6 +2409,10 @@ void SpeculativeJIT::compile(Node* node)
 
     case MakeRope:
         compileMakeRope(node);
+        break;
+
+    case MakeAtomString:
+        compileMakeAtomString(node);
         break;
 
     case ArithSub:
@@ -3688,6 +3693,16 @@ void SpeculativeJIT::compile(Node* node)
         GPRReg resultGPR = result.gpr();
         callOperation(operationNumberIsInteger, resultGPR, LinkableConstant::globalObject(*this, node), inputRegs);
         booleanResult(resultGPR, node);
+        break;
+    }
+
+    case GlobalIsNaN: {
+        compileGlobalIsNaN(node);
+        break;
+    }
+
+    case NumberIsNaN: {
+        compileNumberIsNaN(node);
         break;
     }
 

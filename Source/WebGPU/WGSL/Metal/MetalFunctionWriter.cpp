@@ -34,7 +34,7 @@
 #include "Constraints.h"
 #include "Types.h"
 #include "WGSLShaderModule.h"
-
+#include <wtf/HashSet.h>
 #include <wtf/SortedArrayMap.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -63,29 +63,34 @@ public:
     void visit(AST::GroupAttribute&) override;
     void visit(AST::BindingAttribute&) override;
     void visit(AST::WorkgroupSizeAttribute&) override;
+    void visit(AST::SizeAttribute&) override;
+    void visit(AST::AlignAttribute&) override;
 
     void visit(AST::Function&) override;
     void visit(AST::Structure&) override;
     void visit(AST::Variable&) override;
 
+    void visit(const Type*, AST::Expression&);
+    void visit(const Type*, AST::CallExpression&);
+
     void visit(AST::BoolLiteral&) override;
     void visit(AST::AbstractFloatLiteral&) override;
     void visit(AST::AbstractIntegerLiteral&) override;
     void visit(AST::BinaryExpression&) override;
-    void visit(AST::CallExpression&) override;
     void visit(AST::Expression&) override;
     void visit(AST::FieldAccessExpression&) override;
     void visit(AST::Float32Literal&) override;
     void visit(AST::IdentifierExpression&) override;
     void visit(AST::IndexAccessExpression&) override;
     void visit(AST::PointerDereferenceExpression&) override;
+    void visit(AST::UnaryExpression&) override;
     void visit(AST::Signed32Literal&) override;
     void visit(AST::Unsigned32Literal&) override;
-    void visit(AST::UnaryExpression&) override;
 
     void visit(AST::Statement&) override;
     void visit(AST::AssignmentStatement&) override;
     void visit(AST::CompoundStatement&) override;
+    void visit(AST::DecrementIncrementStatement&) override;
     void visit(AST::IfStatement&) override;
     void visit(AST::PhonyAssignmentStatement&) override;
     void visit(AST::ReturnStatement&) override;
@@ -103,6 +108,8 @@ private:
     void visit(const Type*);
     void visitGlobal(AST::Variable&);
     void serializeVariable(AST::Variable&);
+    void generatePackingHelpers(AST::Structure&);
+    bool emitPackedVector(const Types::Vector&);
 
     StringBuilder& m_stringBuilder;
     CallGraph& m_callGraph;
@@ -111,12 +118,27 @@ private:
     std::optional<AST::StageAttribute::Stage> m_entryPointStage;
     std::optional<String> m_suffix;
     unsigned m_functionConstantIndex { 0 };
+    HashSet<AST::Function*> m_visitedFunctions;
 };
 
 void FunctionDefinitionWriter::write()
 {
+    if (m_callGraph.ast().usesExternalTextures()) {
+        m_callGraph.ast().clearUsesExternalTextures();
+        m_stringBuilder.append("struct texture_external {\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "texture2d<float> FirstPlane;\n");
+            m_stringBuilder.append(m_indent, "texture2d<float> SecondPlane;\n");
+            m_stringBuilder.append(m_indent, "float3x2 UVRemapMatrix;\n");
+            m_stringBuilder.append(m_indent, "float4x3 ColorSpaceConversionMatrix;\n");
+        }
+        m_stringBuilder.append("};\n\n");
+    }
     for (auto& structure : m_callGraph.ast().structures())
         visit(structure);
+    for (auto& structure : m_callGraph.ast().structures())
+        generatePackingHelpers(structure);
     for (auto& variable : m_callGraph.ast().variables())
         visitGlobal(variable);
     for (auto& entryPoint : m_callGraph.entrypoints())
@@ -125,6 +147,12 @@ void FunctionDefinitionWriter::write()
 
 void FunctionDefinitionWriter::visit(AST::Function& functionDefinition)
 {
+    if (!m_visitedFunctions.add(&functionDefinition).isNewEntry)
+        return;
+
+    for (auto& callee : m_callGraph.callees(functionDefinition))
+        visit(*callee.target);
+
     // FIXME: visit return attributes
     for (auto& attribute : functionDefinition.attributes()) {
         checkErrorAndVisit(attribute);
@@ -160,7 +188,7 @@ void FunctionDefinitionWriter::visit(AST::Function& functionDefinition)
 
     m_stringBuilder.append(")\n");
     checkErrorAndVisit(functionDefinition.body());
-    m_stringBuilder.append("\n");
+    m_stringBuilder.append("\n\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
@@ -170,20 +198,49 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
     m_stringBuilder.append(m_indent, "struct ", structDecl.name(), " {\n");
     {
         IndentationScope scope(m_indent);
+        unsigned alignment = 0;
+        unsigned size = 0;
+        unsigned paddingID = 0;
+        bool shouldPack = structDecl.role() == AST::StructureRole::PackedResource;
+        const auto& addPadding = [&](unsigned paddingSize) {
+            ASSERT(shouldPack);
+            m_stringBuilder.append(m_indent, "uint8_t __padding", ++paddingID, "[", String::number(paddingSize), "]; \n");
+        };
+
         for (auto& member : structDecl.members()) {
+            auto& name = member.name();
             auto* type = member.type().resolvedType();
-            if (auto* primitive = std::get_if<Types::Primitive>(type); primitive && primitive->kind == Types::Primitive::TextureExternal) {
-                auto& name = member.name();
-                m_stringBuilder.append(m_indent, "texture2d<half> ", name, "_FirstPlane;\n");
-                m_stringBuilder.append(m_indent, "texture2d<half> ", name, "_SecondPlane;\n");
-                m_stringBuilder.append(m_indent, "float3x2 ", name, "_UVRemapMatrix;\n");
-                m_stringBuilder.append(m_indent, "float4x3 ", name, "_ColorSpaceConversionMatrix;\n");
+            if (isPrimitiveReference(type, Types::Primitive::TextureExternal)) {
+                m_stringBuilder.append(m_indent, "texture2d<float> __", name, "_FirstPlane;\n");
+                m_stringBuilder.append(m_indent, "texture2d<float> __", name, "_SecondPlane;\n");
+                m_stringBuilder.append(m_indent, "float3x2 __", name, "_UVRemapMatrix;\n");
+                m_stringBuilder.append(m_indent, "float4x3 __", name, "_ColorSpaceConversionMatrix;\n");
                 continue;
+            }
+
+            unsigned fieldSize = 0;
+            unsigned explicitSize = 0;
+            unsigned fieldAlignment = 0;
+            unsigned offset = 0;
+            if (shouldPack) {
+                fieldSize = type->size();
+                fieldAlignment = type->alignment();
+                explicitSize = fieldSize;
+                for (auto &attribute : member.attributes()) {
+                    if (is<AST::SizeAttribute>(attribute))
+                        explicitSize = *AST::extractInteger(downcast<AST::SizeAttribute>(attribute).size());
+                    else if (is<AST::AlignAttribute>(attribute))
+                        fieldAlignment = *AST::extractInteger(downcast<AST::AlignAttribute>(attribute).alignment());
+                }
+
+                offset = WTF::roundUpToMultipleOf(fieldAlignment, size);
+                if (offset != size)
+                    addPadding(offset - size);
             }
 
             m_stringBuilder.append(m_indent);
             visit(member.type());
-            m_stringBuilder.append(" ", member.name());
+            m_stringBuilder.append(" ", name);
             if (m_suffix.has_value()) {
                 m_stringBuilder.append(*m_suffix);
                 m_suffix.reset();
@@ -193,16 +250,113 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
                 visit(attribute);
             }
             m_stringBuilder.append(";\n");
+
+            if (shouldPack) {
+                if (explicitSize != fieldSize)
+                    addPadding(explicitSize - fieldSize);
+
+                alignment = std::max(alignment, fieldAlignment);
+                size = offset + explicitSize;
+            }
+        }
+
+        if (shouldPack) {
+            auto finalSize = WTF::roundUpToMultipleOf(alignment, size);
+            if (finalSize != size)
+                addPadding(finalSize - size);
+        }
+
+        if (structDecl.role() == AST::StructureRole::VertexOutput) {
+            m_stringBuilder.append("\n");
+            m_stringBuilder.append(m_indent, "template<typename T>\n");
+            m_stringBuilder.append(m_indent, structDecl.name(), "(const thread T& other)\n");
+            {
+                IndentationScope scope(m_indent);
+                char prefix = ':';
+                for (auto& member : structDecl.members()) {
+                    auto& name = member.name();
+                    m_stringBuilder.append(m_indent, prefix, " ", name, "(other.", name, ")\n");
+                    prefix = ',';
+                }
+            }
+            m_stringBuilder.append(m_indent, "{ }\n");
         }
     }
     m_stringBuilder.append(m_indent, "};\n\n");
     m_structRole = std::nullopt;
 }
 
+void FunctionDefinitionWriter::generatePackingHelpers(AST::Structure& structure)
+{
+    if (structure.role() != AST::StructureRole::PackedResource)
+        return;
+
+    const String& packedName = structure.name();
+    auto unpackedName = structure.original()->name();
+
+    m_stringBuilder.append(m_indent, packedName, " __pack(", unpackedName, " unpacked)\n");
+    m_stringBuilder.append(m_indent, "{\n");
+    {
+        IndentationScope scope(m_indent);
+        m_stringBuilder.append(m_indent, packedName, " packed;\n");
+        for (auto& member : structure.members()) {
+            auto& name = member.name();
+            m_stringBuilder.append(m_indent, "packed.", name, " = unpacked.", name, ";\n");
+        }
+        m_stringBuilder.append(m_indent, "return packed;\n");
+    }
+    m_stringBuilder.append(m_indent, "}\n\n");
+
+    m_stringBuilder.append(m_indent, unpackedName, " __unpack(", packedName, " packed)\n");
+    m_stringBuilder.append(m_indent, "{\n");
+    {
+        IndentationScope scope(m_indent);
+        m_stringBuilder.append(m_indent, unpackedName, " unpacked;\n");
+        for (auto& member : structure.members()) {
+            auto& name = member.name();
+            m_stringBuilder.append(m_indent, "unpacked.", name, " = packed.", name, ";\n");
+        }
+        m_stringBuilder.append(m_indent, "return unpacked;\n");
+    }
+    m_stringBuilder.append(m_indent, "}\n\n");
+}
+
+bool FunctionDefinitionWriter::emitPackedVector(const Types::Vector& vector)
+{
+    if (!m_structRole.has_value())
+        return false;
+    if (*m_structRole != AST::StructureRole::PackedResource)
+        return false;
+    // The only vectors that need to be packed are the vectors with 3 elements,
+    // because their size differs between Metal and WGSL (4 * element size vs
+    // 3 * element size, respectively)
+    if (vector.size != 3)
+        return false;
+    auto& primitive = std::get<Types::Primitive>(*vector.element);
+    switch (primitive.kind) {
+    case Types::Primitive::AbstractInt:
+    case Types::Primitive::I32:
+        m_stringBuilder.append("packed_int", String::number(vector.size));
+        break;
+    case Types::Primitive::U32:
+        m_stringBuilder.append("packed_uint", String::number(vector.size));
+        break;
+    case Types::Primitive::AbstractFloat:
+    case Types::Primitive::F32:
+        m_stringBuilder.append("packed_float", String::number(vector.size));
+        break;
+    case Types::Primitive::Bool:
+    case Types::Primitive::Void:
+    case Types::Primitive::Sampler:
+    case Types::Primitive::TextureExternal:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+    return true;
+}
+
 void FunctionDefinitionWriter::visit(AST::Variable& variable)
 {
     serializeVariable(variable);
-    m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visitGlobal(AST::Variable& variable)
@@ -217,17 +371,29 @@ void FunctionDefinitionWriter::visitGlobal(AST::Variable& variable)
 
 void FunctionDefinitionWriter::serializeVariable(AST::Variable& variable)
 {
-    if (variable.maybeTypeName())
-        visit(*variable.maybeTypeName());
-    else {
+    if (variable.flavor() == AST::VariableFlavor::Const)
+        return;
+
+    const Type* type = variable.storeType();
+    if (isPrimitiveReference(type, Types::Primitive::TextureExternal)) {
         ASSERT(variable.maybeInitializer());
-        const Type* inferredType = variable.maybeInitializer()->inferredType();
-        visit(inferredType);
+        m_stringBuilder.append("texture_external ", variable.name(), " { ");
+        visit(*variable.maybeInitializer());
+        m_stringBuilder.append("_FirstPlane, ");
+        visit(*variable.maybeInitializer());
+        m_stringBuilder.append("_SecondPlane, ");
+        visit(*variable.maybeInitializer());
+        m_stringBuilder.append("_UVRemapMatrix, ");
+        visit(*variable.maybeInitializer());
+        m_stringBuilder.append("_ColorSpaceConversionMatrix }");
+        return;
     }
+
+    visit(type);
     m_stringBuilder.append(" ", variable.name());
     if (variable.maybeInitializer()) {
         m_stringBuilder.append(" = ");
-        visit(*variable.maybeInitializer());
+        visit(type, *variable.maybeInitializer());
     }
 }
 
@@ -238,6 +404,12 @@ void FunctionDefinitionWriter::visit(AST::Attribute& attribute)
 
 void FunctionDefinitionWriter::visit(AST::BuiltinAttribute& builtin)
 {
+    // Built-in attributes are only valid for parameters. If a struct member originally
+    // had a built-in attribute it must have already been hoisted into a parameter, but
+    // we keep the original struct so we can reconstruct it.
+    if (m_structRole.has_value() && *m_structRole != AST::StructureRole::VertexOutput)
+        return;
+
     // FIXME: we should replace this with something more efficient, like a trie
     static constexpr std::pair<ComparableASCIILiteral, ASCIILiteral> builtinMappings[] {
         { "frag_depth", "depth(any)"_s },
@@ -282,7 +454,7 @@ void FunctionDefinitionWriter::visit(AST::StageAttribute& stage)
 
 void FunctionDefinitionWriter::visit(AST::GroupAttribute& group)
 {
-    unsigned bufferIndex = group.group();
+    unsigned bufferIndex = *AST::extractInteger(group.group());
     if (m_entryPointStage.has_value() && *m_entryPointStage == AST::StageAttribute::Stage::Vertex) {
         auto max = m_callGraph.ast().configuration().maxBuffersPlusVertexBuffersForVertexStage;
         bufferIndex = vertexBufferIndexForBindGroup(bufferIndex, max);
@@ -292,7 +464,7 @@ void FunctionDefinitionWriter::visit(AST::GroupAttribute& group)
 
 void FunctionDefinitionWriter::visit(AST::BindingAttribute& binding)
 {
-    m_stringBuilder.append("[[id(", binding.binding(), ")]]");
+    m_stringBuilder.append("[[id(", *AST::extractInteger(binding.binding()), ")]]");
 }
 
 void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
@@ -300,21 +472,21 @@ void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
     if (m_structRole.has_value()) {
         auto role = *m_structRole;
         switch (role) {
-        case AST::StructureRole::UserDefined:
-            break;
         case AST::StructureRole::VertexOutput:
         case AST::StructureRole::FragmentInput:
-            m_stringBuilder.append("[[user(loc", location.location(), ")]]");
+            m_stringBuilder.append("[[user(loc", *AST::extractInteger(location.location()), ")]]");
             return;
         case AST::StructureRole::BindGroup:
+        case AST::StructureRole::UserDefined:
+        case AST::StructureRole::ComputeInput:
+        case AST::StructureRole::UserDefinedResource:
+        case AST::StructureRole::PackedResource:
             return;
         case AST::StructureRole::VertexInput:
-        case AST::StructureRole::ComputeInput:
-            // FIXME: not sure if these should actually be attributes or not
+            m_stringBuilder.append("[[attribute(", *AST::extractInteger(location.location()), ")]]");
             break;
         }
     }
-    m_stringBuilder.append("[[attribute(", location.location(), ")]]");
 }
 
 void FunctionDefinitionWriter::visit(AST::WorkgroupSizeAttribute&)
@@ -323,19 +495,21 @@ void FunctionDefinitionWriter::visit(AST::WorkgroupSizeAttribute&)
     // to the API through the EntryPointInformation.
 }
 
+void FunctionDefinitionWriter::visit(AST::SizeAttribute&)
+{
+    // This attribute shouldn't generate any code. The size is used when serializing
+    // structs.
+}
+
+void FunctionDefinitionWriter::visit(AST::AlignAttribute&)
+{
+    // This attribute shouldn't generate any code. The alignment is used when
+    // serializing structs.
+}
+
 // Types
 void FunctionDefinitionWriter::visit(AST::TypeName& type)
 {
-    // FIXME:Remove this when the type checker is aware of reference types
-    if (is<AST::ReferenceTypeName>(type)) {
-        // FIXME: We can't assume this will always be device. The ReferenceType should
-        // have knowledge about the memory region
-        m_stringBuilder.append("device ");
-        visit(downcast<AST::ReferenceTypeName>(type).type());
-        m_stringBuilder.append("&");
-        return;
-    }
-
     visit(type.resolvedType());
 }
 
@@ -361,12 +535,14 @@ void FunctionDefinitionWriter::visit(const Type* type)
             case Types::Primitive::Sampler:
                 m_stringBuilder.append(*type);
                 break;
-
             case Types::Primitive::TextureExternal:
-                RELEASE_ASSERT_NOT_REACHED();
+                m_stringBuilder.append("texture_external");
+                break;
             }
         },
         [&](const Vector& vector) {
+            if (emitPackedVector(vector))
+                return;
             m_stringBuilder.append("vec<");
             visit(vector.element);
             m_stringBuilder.append(", ", vector.size, ">");
@@ -390,13 +566,6 @@ void FunctionDefinitionWriter::visit(const Type* type)
         },
         [&](const Struct& structure) {
             m_stringBuilder.append(structure.structure.name());
-        },
-        [&](const Function&) {
-            // FIXME: implement this
-            RELEASE_ASSERT_NOT_REACHED();
-        },
-        [&](const Bottom&) {
-            RELEASE_ASSERT_NOT_REACHED();
         },
         [&](const Texture& texture) {
             const char* type;
@@ -444,6 +613,41 @@ void FunctionDefinitionWriter::visit(const Type* type)
             m_stringBuilder.append(type, "<");
             visit(texture.element);
             m_stringBuilder.append(", access::", mode, ">");
+        },
+        [&](const Reference& reference) {
+            const char* addressSpace = nullptr;
+            switch (reference.addressSpace) {
+            case AddressSpace::Function:
+                addressSpace = "thread";
+                break;
+            case AddressSpace::Workgroup:
+                addressSpace = "threadgroup";
+                break;
+            case AddressSpace::Uniform:
+                addressSpace = "constant";
+                break;
+            case AddressSpace::Storage:
+                addressSpace = "device";
+                break;
+            case AddressSpace::Handle:
+            case AddressSpace::Private:
+                break;
+            }
+            if (!addressSpace) {
+                visit(reference.element);
+                return;
+            }
+            if (reference.accessMode == AccessMode::Read)
+                m_stringBuilder.append("const ");
+            m_stringBuilder.append(addressSpace, " ");
+            visit(reference.element);
+            m_stringBuilder.append("&");
+        },
+        [&](const Function&) {
+            RELEASE_ASSERT_NOT_REACHED();
+        },
+        [&](const Bottom&) {
+            RELEASE_ASSERT_NOT_REACHED();
         });
 }
 
@@ -470,7 +674,22 @@ void FunctionDefinitionWriter::visitArgumentBufferParameter(AST::Parameter& para
 
 void FunctionDefinitionWriter::visit(AST::Expression& expression)
 {
-    AST::Visitor::visit(expression);
+    visit(expression.inferredType(), expression);
+}
+
+void FunctionDefinitionWriter::visit(const Type* type, AST::Expression& expression)
+{
+    switch (expression.kind()) {
+    case AST::NodeKind::CallExpression:
+        visit(type, downcast<AST::CallExpression>(expression));
+        break;
+    case AST::NodeKind::IdentityExpression:
+        visit(type, downcast<AST::IdentityExpression>(expression).expression());
+        break;
+    default:
+        AST::Visitor::visit(expression);
+        break;
+    }
 }
 
 static void visitArguments(FunctionDefinitionWriter* writer, AST::CallExpression& call, unsigned startOffset = 0)
@@ -484,24 +703,34 @@ static void visitArguments(FunctionDefinitionWriter* writer, AST::CallExpression
         first = false;
     }
     writer->stringBuilder().append(")");
-};
+}
 
-void FunctionDefinitionWriter::visit(AST::CallExpression& call)
+void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call)
 {
     auto isArray = is<AST::ArrayTypeName>(call.target());
     auto isStruct = !isArray && std::holds_alternative<Types::Struct>(*call.target().resolvedType());
     if (isArray || isStruct) {
         if (isStruct) {
-            visit(call.target().resolvedType());
+            visit(type);
             m_stringBuilder.append(" ");
         }
+        const Type* arrayElementType = nullptr;
+        if (isArray)
+            arrayElementType = std::get<Types::Array>(*type).element;
+
+        const auto& visitArgument = [&](auto& argument) {
+            if (isStruct)
+                visit(argument);
+            else
+                visit(arrayElementType, argument);
+        };
 
         m_stringBuilder.append("{\n");
         {
             IndentationScope scope(m_indent);
             for (auto& argument : call.arguments()) {
                 m_stringBuilder.append(m_indent);
-                visit(argument);
+                visitArgument(argument);
                 m_stringBuilder.append(",\n");
             }
         }
@@ -511,6 +740,50 @@ void FunctionDefinitionWriter::visit(AST::CallExpression& call)
 
     if (is<AST::NamedTypeName>(call.target())) {
         static constexpr std::pair<ComparableASCIILiteral, void(*)(FunctionDefinitionWriter*, AST::CallExpression&)> builtinMappings[] {
+            { "textureLoad", [](FunctionDefinitionWriter* writer, AST::CallExpression& call) {
+                auto& texture = call.arguments()[0];
+                auto* textureType = texture.inferredType();
+
+                // FIXME: this should become isPrimitiveReference once PR#14299 lands
+                auto* primitive = std::get_if<Types::Primitive>(textureType);
+                bool isExternalTexture = primitive && primitive->kind == Types::Primitive::TextureExternal;
+                if (!isExternalTexture) {
+                    writer->visit(call.arguments()[0]);
+                    writer->stringBuilder().append(".read");
+                    visitArguments(writer, call, 1);
+                    return;
+                }
+
+                auto& coordinates = call.arguments()[1];
+                writer->stringBuilder().append("({\n");
+                {
+                    IndentationScope scope(writer->indent());
+                    {
+                        writer->stringBuilder().append(writer->indent(), "auto __coords = (");
+                        writer->visit(texture);
+                        writer->stringBuilder().append(".UVRemapMatrix * float3(");
+                        writer->visit(coordinates);
+                        writer->stringBuilder().append(", 1)).xy;\n");
+                    }
+                    {
+                        writer->stringBuilder().append(writer->indent(), "auto __y = float(");
+                        writer->visit(texture);
+                        writer->stringBuilder().append(".FirstPlane.read(__cords).r);\n");
+                    }
+                    {
+                        writer->stringBuilder().append(writer->indent(), "auto __cbcr = float2(");
+                        writer->visit(texture);
+                        writer->stringBuilder().append(".SecondPlane.read(__coords).rg);\n");
+                    }
+                    writer->stringBuilder().append(writer->indent(), "auto __ycbcr = float3(__y, __cbcr);\n");
+                    {
+                        writer->stringBuilder().append(writer->indent(), "float4(");
+                        writer->visit(texture);
+                        writer->stringBuilder().append(".ColorSpaceConversionMatrix * float4(__ycbcr, 1), 1);\n");
+                    }
+                }
+                writer->stringBuilder().append(writer->indent(), "})");
+            } },
             { "textureSample", [](FunctionDefinitionWriter* writer, AST::CallExpression& call) {
                 ASSERT(call.arguments().size() > 1);
                 writer->visit(call.arguments()[0]);
@@ -528,21 +801,21 @@ void FunctionDefinitionWriter::visit(AST::CallExpression& call)
                     {
                         writer->stringBuilder().append(writer->indent(), "auto __coords = (");
                         writer->visit(texture);
-                        writer->stringBuilder().append("_UVRemapMatrix * float3(");
+                        writer->stringBuilder().append(".UVRemapMatrix * float3(");
                         writer->visit(coordinates);
                         writer->stringBuilder().append(", 1)).xy;\n");
                     }
                     {
                         writer->stringBuilder().append(writer->indent(), "auto __y = float(");
                         writer->visit(texture);
-                        writer->stringBuilder().append("_FirstPlane.sample(");
+                        writer->stringBuilder().append(".FirstPlane.sample(");
                         writer->visit(sampler);
                         writer->stringBuilder().append(", __coords).r);\n");
                     }
                     {
                         writer->stringBuilder().append(writer->indent(), "auto __cbcr = float2(");
                         writer->visit(texture);
-                        writer->stringBuilder().append("_SecondPlane.sample(");
+                        writer->stringBuilder().append(".SecondPlane.sample(");
                         writer->visit(sampler);
                         writer->stringBuilder().append(", __coords).rg);\n");
                     }
@@ -550,7 +823,7 @@ void FunctionDefinitionWriter::visit(AST::CallExpression& call)
                     {
                         writer->stringBuilder().append(writer->indent(), "float4(");
                         writer->visit(texture);
-                        writer->stringBuilder().append("_ColorSpaceConversionMatrix * float4(__ycbcr, 1), 1);\n");
+                        writer->stringBuilder().append(".ColorSpaceConversionMatrix * float4(__ycbcr, 1), 1);\n");
                     }
                 }
                 writer->stringBuilder().append(writer->indent(), "})");
@@ -563,15 +836,24 @@ void FunctionDefinitionWriter::visit(AST::CallExpression& call)
             return;
         }
 
+        static constexpr std::pair<ComparableASCIILiteral, ASCIILiteral> baseTypesMappings[] {
+            { "f32", "float"_s },
+            { "i32", "int"_s },
+            { "u32", "unsigned"_s }
+        };
+        static constexpr SortedArrayMap baseTypes { baseTypesMappings };
+
         if (AST::ParameterizedTypeName::stringViewToKind(targetName).has_value())
-            visit(call.inferredType());
+            visit(type);
+        else if (auto mappedName = baseTypes.get(targetName))
+            m_stringBuilder.append(mappedName);
         else
             m_stringBuilder.append(targetName);
         visitArguments(this, call);
         return;
     }
 
-    visit(call.inferredType());
+    visit(type);
     visitArguments(this, call);
 }
 
@@ -584,10 +866,12 @@ void FunctionDefinitionWriter::visit(AST::UnaryExpression& unary)
     case AST::UnaryOperation::Negate:
         m_stringBuilder.append("-");
         break;
+    case AST::UnaryOperation::Not:
+        m_stringBuilder.append("!");
+        break;
 
     case AST::UnaryOperation::AddressOf:
     case AST::UnaryOperation::Dereference:
-    case AST::UnaryOperation::Not:
         // FIXME: Implement these
         RELEASE_ASSERT_NOT_REACHED();
         break;
@@ -664,9 +948,10 @@ void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
         break;
 
     case AST::BinaryOperation::ShortCircuitAnd:
+        m_stringBuilder.append(" && ");
+        break;
     case AST::BinaryOperation::ShortCircuitOr:
-        // FIXME: Implement these
-        RELEASE_ASSERT_NOT_REACHED();
+        m_stringBuilder.append(" || ");
         break;
     }
     visit(binary.rightExpression());
@@ -743,30 +1028,59 @@ void FunctionDefinitionWriter::visit(AST::AssignmentStatement& assignment)
     visit(assignment.lhs());
     m_stringBuilder.append(" = ");
     visit(assignment.rhs());
-    m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::CompoundStatement& statement)
 {
-    m_stringBuilder.append(m_indent, "{\n");
+    m_stringBuilder.append("{\n");
     {
         IndentationScope scope(m_indent);
         for (auto& statement : statement.statements()) {
             m_stringBuilder.append(m_indent);
             checkErrorAndVisit(statement);
+            switch (statement.kind()) {
+            case AST::NodeKind::AssignmentStatement:
+            case AST::NodeKind::BreakStatement:
+            case AST::NodeKind::CallStatement:
+            case AST::NodeKind::CompoundAssignmentStatement:
+            case AST::NodeKind::ContinueStatement:
+            case AST::NodeKind::DecrementIncrementStatement:
+            case AST::NodeKind::DiscardStatement:
+            case AST::NodeKind::PhonyAssignmentStatement:
+            case AST::NodeKind::ReturnStatement:
+            case AST::NodeKind::VariableStatement:
+                m_stringBuilder.append(';');
+                break;
+            default:
+                break;
+            }
+            m_stringBuilder.append('\n');
         }
     }
-    m_stringBuilder.append(m_indent, "}\n");
+    m_stringBuilder.append(m_indent, "}");
+}
+
+void FunctionDefinitionWriter::visit(AST::DecrementIncrementStatement& statement)
+{
+    visit(statement.expression());
+    switch (statement.operation()) {
+    case AST::DecrementIncrementStatement::Operation::Increment:
+        m_stringBuilder.append("++");
+        break;
+    case AST::DecrementIncrementStatement::Operation::Decrement:
+        m_stringBuilder.append("--");
+        break;
+    }
 }
 
 void FunctionDefinitionWriter::visit(AST::IfStatement& statement)
 {
     m_stringBuilder.append("if (");
     visit(statement.test());
-    m_stringBuilder.append(")\n");
+    m_stringBuilder.append(") ");
     visit(statement.trueBody());
     if (statement.maybeFalseBody()) {
-        m_stringBuilder.append(m_indent, "else ");
+        m_stringBuilder.append(" else ");
         visit(*statement.maybeFalseBody());
     }
 }
@@ -775,7 +1089,7 @@ void FunctionDefinitionWriter::visit(AST::PhonyAssignmentStatement& statement)
 {
     m_stringBuilder.append("(void)(");
     visit(statement.rhs());
-    m_stringBuilder.append(");\n");
+    m_stringBuilder.append(")");
 }
 
 void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
@@ -785,7 +1099,6 @@ void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
         m_stringBuilder.append(" ");
         visit(*statement.maybeExpression());
     }
-    m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
@@ -794,12 +1107,16 @@ void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
     if (auto* initializer = statement.maybeInitializer())
         visit(*initializer);
     m_stringBuilder.append(";");
-    if (auto* test = statement.maybeTest())
+    if (auto* test = statement.maybeTest()) {
+        m_stringBuilder.append(" ");
         visit(*test);
+    }
     m_stringBuilder.append(";");
-    if (auto* update = statement.maybeUpdate())
+    if (auto* update = statement.maybeUpdate()) {
+        m_stringBuilder.append(" ");
         visit(*update);
-    m_stringBuilder.append(")");
+    }
+    m_stringBuilder.append(") ");
     visit(statement.body());
 }
 

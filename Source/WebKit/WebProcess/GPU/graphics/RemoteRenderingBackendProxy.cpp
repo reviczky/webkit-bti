@@ -61,7 +61,6 @@ std::unique_ptr<RemoteRenderingBackendProxy> RemoteRenderingBackendProxy::create
 RemoteRenderingBackendProxy::RemoteRenderingBackendProxy(const RemoteRenderingBackendCreationParameters& parameters, SerialFunctionDispatcher& dispatcher)
     : m_parameters(parameters)
     , m_dispatcher(dispatcher)
-    , m_flushWorkQueue(WorkQueue::create("RemoteRenderingBackendProxy flush queue"_s))
 {
 }
 
@@ -154,14 +153,14 @@ RefPtr<ImageBuffer> RemoteRenderingBackendProxy::createImageBuffer(const FloatSi
     return nullptr;
 }
 
-void RemoteRenderingBackendProxy::moveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier, RemoteSerializedImageBufferWriteReference&& reference)
+void RemoteRenderingBackendProxy::moveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier)
 {
-    send(Messages::RemoteRenderingBackend::MoveToSerializedBuffer(identifier, reference));
+    send(Messages::RemoteRenderingBackend::MoveToSerializedBuffer(identifier));
 }
 
-void RemoteRenderingBackendProxy::moveToImageBuffer(RemoteSerializedImageBufferWriteReference&& reference, WebCore::RenderingResourceIdentifier identifier)
+void RemoteRenderingBackendProxy::moveToImageBuffer(WebCore::RenderingResourceIdentifier identifier)
 {
-    send(Messages::RemoteRenderingBackend::MoveToImageBuffer(reference, identifier));
+    send(Messages::RemoteRenderingBackend::MoveToImageBuffer(identifier));
 }
 
 bool RemoteRenderingBackendProxy::getPixelBufferForImageBuffer(RenderingResourceIdentifier imageBuffer, const PixelBufferFormat& destinationFormat, const IntRect& srcRect, std::span<uint8_t> result)
@@ -476,16 +475,6 @@ void RemoteRenderingBackendProxy::didInitialize(IPC::Semaphore&& wakeUp, IPC::Se
         return;
     }
     m_streamConnection->setSemaphores(WTFMove(wakeUp), WTFMove(clientWait));
-}
-
-void RemoteRenderingBackendProxy::addPendingFlush(RemoteImageBufferProxyFlushState& flushState, IPC::Semaphore&& semaphore, DisplayListRecorderFlushIdentifier identifier)
-{
-    m_flushWorkQueue->dispatch([flushState = Ref { flushState }, semaphore = WTFMove(semaphore), identifier] () mutable {
-        if (semaphore.waitFor(RemoteDisplayListRecorderProxy::defaultSendTimeout))
-            flushState->markCompletedFlush(identifier);
-        else
-            flushState->cancel();
-    });
 }
 
 bool RemoteRenderingBackendProxy::isCached(const ImageBuffer& imageBuffer) const

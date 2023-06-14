@@ -240,7 +240,6 @@ Shared/SharedStringHashTable.cpp
 Shared/TouchBarMenuData.cpp
 Shared/TouchBarMenuItemData.cpp
 Shared/URLSchemeTaskParameters.cpp
-Shared/UpdateInfo.cpp
 Shared/UserData.cpp
 Shared/UserContentControllerParameters.cpp
 Shared/WebBackForwardListItem.cpp
@@ -254,6 +253,7 @@ Shared/WebCoreArgumentCoders.cpp
 Shared/WebErrors.cpp
 Shared/WebEvent.cpp
 Shared/WebEventConversion.cpp
+Shared/WebEventModifier.cpp
 Shared/WebFindOptions.cpp
 Shared/WebFoundTextRange.cpp
 Shared/WebGeolocationPosition.cpp
@@ -403,11 +403,11 @@ UIProcess/ProcessAssertion.cpp
 UIProcess/ProcessThrottler.cpp
 UIProcess/ProvisionalFrameProxy.cpp
 UIProcess/ProvisionalPageProxy.cpp
+UIProcess/RemotePageProxy.cpp
 UIProcess/ResponsivenessTimer.cpp
 UIProcess/SpeechRecognitionRemoteRealtimeMediaSource.cpp
 UIProcess/SpeechRecognitionRemoteRealtimeMediaSourceManager.cpp
 UIProcess/SpeechRecognitionServer.cpp
-UIProcess/SubframePageProxy.cpp
 UIProcess/SuspendedPageProxy.cpp
 UIProcess/SystemPreviewController.cpp
 UIProcess/SpeechRecognitionPermissionManager.cpp
@@ -816,6 +816,7 @@ WebProcess/WebCoreSupport/WebEditorClient.cpp
 WebProcess/WebCoreSupport/WebFileSystemStorageConnection.cpp
 WebProcess/WebCoreSupport/WebFrameLoaderClient.cpp
 WebProcess/WebCoreSupport/WebGeolocationClient.cpp
+WebProcess/WebCoreSupport/WebLocalFrameLoaderClient.cpp
 WebProcess/WebCoreSupport/WebMediaKeySystemClient.cpp
 WebProcess/WebCoreSupport/WebMessagePortChannelProvider.cpp
 WebProcess/WebCoreSupport/WebNotificationClient.cpp

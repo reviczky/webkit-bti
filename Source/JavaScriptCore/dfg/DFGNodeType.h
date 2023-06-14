@@ -82,6 +82,7 @@ namespace JSC { namespace DFG {
     macro(GetStack, NodeResultJS) \
     \
     macro(MovHint, NodeMustGenerate) \
+    macro(ZombieHint, NodeMustGenerate) \
     macro(ExitOK, NodeMustGenerate) /* Indicates that exit state is intact and it is safe to exit back to the beginning of the exit origin. */ \
     macro(Phantom, NodeMustGenerate) \
     macro(Check, NodeMustGenerate) /* Used if we want just a type check but not liveness. Non-checking uses will be removed. */\
@@ -431,6 +432,8 @@ namespace JSC { namespace DFG {
     macro(IsNumber, NodeResultBoolean) \
     /* IsBigInt is only used when USE_BIGINT32. Otherwise we emit IsCellWithType */\
     macro(IsBigInt, NodeResultBoolean) \
+    macro(GlobalIsNaN, NodeMustGenerate | NodeResultBoolean) \
+    macro(NumberIsNaN, NodeResultBoolean) \
     macro(NumberIsInteger, NodeResultBoolean) \
     macro(IsObject, NodeResultBoolean) \
     macro(IsCallable, NodeResultBoolean) \
@@ -453,6 +456,7 @@ namespace JSC { namespace DFG {
     macro(FunctionToString, NodeResultJS) \
     macro(FunctionBind, NodeResultJS | NodeMustGenerate | NodeHasVarArgs) \
     macro(MakeRope, NodeResultJS) \
+    macro(MakeAtomString, NodeResultJS) \
     macro(InByVal, NodeResultBoolean | NodeMustGenerate) \
     macro(InById, NodeResultBoolean | NodeMustGenerate) \
     macro(HasPrivateName, NodeResultBoolean | NodeMustGenerate) \

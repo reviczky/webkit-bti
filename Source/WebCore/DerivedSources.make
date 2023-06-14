@@ -396,6 +396,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/mediarecorder/MediaRecorder.idl \
     $(WebCore)/Modules/mediarecorder/MediaRecorderErrorEvent.idl \
     $(WebCore)/Modules/mediasource/AudioTrack+MediaSource.idl \
+    $(WebCore)/Modules/mediasource/BufferedChangeEvent.idl \
     $(WebCore)/Modules/mediasource/DOMURL+MediaSource.idl \
     $(WebCore)/Modules/mediasource/ManagedMediaSource.idl \
     $(WebCore)/Modules/mediasource/ManagedSourceBuffer.idl \
@@ -857,7 +858,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/CSSFontPaletteValuesRule.idl \
     $(WebCore)/css/CSSGroupingRule.idl \
     $(WebCore)/css/CSSImportRule.idl \
-    $(WebCore)/css/CSSImportRule+Layer.idl \
     $(WebCore)/css/CSSLayerBlockRule.idl \
     $(WebCore)/css/CSSLayerStatementRule.idl \
     $(WebCore)/css/CSSKeyframeRule.idl \
@@ -1856,15 +1856,6 @@ LocalizableAdditions.strings.out : $(WebCore)/preprocess-localizable-strings.pl 
 
 # modern media controls
 
-POSSIBLE_ADDITIONAL_MODERN_MEDIA_CONTROLS_STYLE_SHEETS = \
-    $(foreach \
-        STYLE_SHEET, \
-        $(ADDITIONAL_MODERN_MEDIA_CONTROLS_STYLE_SHEETS), \
-        $(firstword $(realpath $(foreach \
-            ADDITIONS_PATH, \
-            $(ADDITIONS_PATHS), \
-            $(ADDITIONS_PATH)/$(STYLE_SHEET)))))
-
 MODERN_MEDIA_CONTROLS_STYLE_SHEETS = \
     $(WebCore)/Modules/modern-media-controls/controls/activity-indicator.css \
     $(WebCore)/Modules/modern-media-controls/controls/airplay-button.css \
@@ -1884,9 +1875,10 @@ MODERN_MEDIA_CONTROLS_STYLE_SHEETS = \
     $(WebCore)/Modules/modern-media-controls/controls/status-label.css \
     $(WebCore)/Modules/modern-media-controls/controls/text-tracks.css \
     $(WebCore)/Modules/modern-media-controls/controls/time-label.css \
+    $(WebCore)/Modules/modern-media-controls/controls/vision-media-controls.css \
+    $(WebCore)/Modules/modern-media-controls/controls/vision-slider.css \
     $(WebCore)/Modules/modern-media-controls/controls/watchos-activity-indicator.css \
     $(WebCore)/Modules/modern-media-controls/controls/watchos-media-controls.css \
-    $(POSSIBLE_ADDITIONAL_MODERN_MEDIA_CONTROLS_STYLE_SHEETS) \
 #
 
 all : ModernMediaControls.css
@@ -1938,15 +1930,6 @@ $(USER_AGENT_STYLE_SHEETS_FILES_PATTERNS) : $(WebCore)/css/make-css-file-arrays.
 
 # modern media controls
 
-POSSIBLE_ADDITIONAL_MODERN_MEDIA_CONTROLS_SCRIPTS = \
-    $(foreach \
-        SCRIPT, \
-        $(ADDITIONAL_MODERN_MEDIA_CONTROLS_SCRIPTS), \
-        $(firstword $(realpath $(foreach \
-            ADDITIONS_PATH, \
-            $(ADDITIONS_PATHS), \
-            $(ADDITIONS_PATH)/$(SCRIPT)))))
-
 MODERN_MEDIA_CONTROLS_SCRIPTS = \
     $(WebCore)/Modules/modern-media-controls/main.js \
     $(WebCore)/Modules/modern-media-controls/gesture-recognizers/gesture-recognizer.js \
@@ -1992,6 +1975,9 @@ MODERN_MEDIA_CONTROLS_SCRIPTS = \
     $(WebCore)/Modules/modern-media-controls/controls/airplay-placard.js \
     $(WebCore)/Modules/modern-media-controls/controls/invalid-placard.js \
     $(WebCore)/Modules/modern-media-controls/controls/pip-placard.js \
+    $(WebCore)/Modules/modern-media-controls/controls/vision-slider.js \
+    $(WebCore)/Modules/modern-media-controls/controls/vision-media-controls.js \
+    $(WebCore)/Modules/modern-media-controls/controls/vision-layout-traits.js \
     $(WebCore)/Modules/modern-media-controls/controls/watchos-activity-indicator.js \
     $(WebCore)/Modules/modern-media-controls/controls/watchos-media-controls.js \
     $(WebCore)/Modules/modern-media-controls/controls/watchos-layout-traits.js \
@@ -2020,7 +2006,6 @@ MODERN_MEDIA_CONTROLS_SCRIPTS = \
     $(WebCore)/Modules/modern-media-controls/media/media-document-controller.js \
     $(WebCore)/Modules/modern-media-controls/media/watchos-media-controls-support.js \
     $(WebCore)/Modules/modern-media-controls/media/media-controller.js \
-    $(POSSIBLE_ADDITIONAL_MODERN_MEDIA_CONTROLS_SCRIPTS) \
 #
 
 all : ModernMediaControls.js
@@ -2097,7 +2082,7 @@ all : $(XML_NS_NAMES_FILES)
 
 $(XML_NS_NAMES_FILES_PATTERNS) : $(WebCore)/dom/make_names.pl $(WebCore)/bindings/scripts/Hasher.pm $(WebCore)/bindings/scripts/StaticString.pm $(WebCore)/xml/xmlnsattrs.in
 	$(PERL) $< --attrs $(WebCore)/xml/xmlnsattrs.in
-	
+
 XML_NAMES_FILES = XMLNames.cpp XMLNames.h
 XML_NAMES_FILES_PATTERNS = $(subst .,%,$(XML_NAMES_FILES))
 
@@ -2413,7 +2398,6 @@ WebCore_BUILTINS_SOURCES = \
     $(WebCore)/Modules/streams/ReadableStreamBYOBReader.js \
     $(WebCore)/Modules/streams/ReadableStreamDefaultReader.js \
     $(WebCore)/Modules/streams/StreamInternals.js \
-    $(WebCore)/Modules/streams/TransformStream.js \
     $(WebCore)/Modules/streams/TransformStreamDefaultController.js \
     $(WebCore)/Modules/streams/TransformStreamInternals.js \
     $(WebCore)/Modules/streams/WritableStreamDefaultController.js \

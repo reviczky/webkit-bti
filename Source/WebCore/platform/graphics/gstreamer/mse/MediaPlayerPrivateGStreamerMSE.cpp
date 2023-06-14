@@ -281,7 +281,7 @@ void MediaPlayerPrivateGStreamerMSE::sourceSetup(GstElement* sourceElement)
     GST_DEBUG_OBJECT(pipeline(), "Source %p setup (old was: %p)", sourceElement, m_source.get());
     m_source = sourceElement;
 
-    if (m_hasAllTracks)
+    if (m_mediaSourcePrivate->hasAllTracks())
         webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), m_tracks);
 }
 
@@ -400,6 +400,8 @@ bool MediaPlayerPrivateGStreamerMSE::currentMediaTimeMayProgress() const
         return false;
     return m_mediaSourcePrivate->hasFutureTime(currentMediaTime(), durationMediaTime(), buffered());
 }
+
+#undef GST_CAT_DEFAULT
 
 } // namespace WebCore.
 

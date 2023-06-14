@@ -85,6 +85,11 @@ bool RemoteFrame::preventsParentFromBeingComplete() const
     return m_preventsParentFromBeingComplete;
 }
 
+void RemoteFrame::changeLocation(FrameLoadRequest&& request)
+{
+    m_client->changeLocation(WTFMove(request));
+}
+
 FrameView* RemoteFrame::virtualView() const
 {
     return m_view.get();
@@ -98,6 +103,11 @@ void RemoteFrame::setView(RefPtr<RemoteFrameView>&& view)
 void RemoteFrame::frameDetached()
 {
     m_client->frameDetached();
+}
+
+String RemoteFrame::renderTreeAsText(size_t baseIndent, OptionSet<RenderAsTextFlag> behavior)
+{
+    return m_client->renderTreeAsText(m_remoteProcessIdentifier, frameID(), baseIndent, behavior);
 }
 
 } // namespace WebCore

@@ -36,7 +36,6 @@
 #include "EventNames.h"
 #include "HTMLImageLoader.h"
 #include "HTMLNames.h"
-#include "HTMLParserIdioms.h"
 #include "ImageBuffer.h"
 #include "JSDOMPromiseDeferred.h"
 #include "LocalFrame.h"
@@ -151,12 +150,8 @@ void HTMLVideoElement::attributeChanged(const QualifiedName& name, const AtomStr
         HTMLMediaElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(WIRELESS_PLAYBACK_TARGET)
-        if (name == webkitairplayAttr) {
-            bool disabled = false;
-            if (equalLettersIgnoringASCIICase(attributeWithoutSynchronization(HTMLNames::webkitairplayAttr), "deny"_s))
-                disabled = true;
-            mediaSession().setWirelessVideoPlaybackDisabled(disabled);
-        }
+        if (name == webkitairplayAttr)
+            mediaSession().setWirelessVideoPlaybackDisabled(isWirelessPlaybackTargetDisabled());
 #endif
     }
 }
@@ -245,8 +240,8 @@ bool HTMLVideoElement::isURLAttribute(const Attribute& attribute) const
 
 const AtomString& HTMLVideoElement::imageSourceURL() const
 {
-    const AtomString& url = attributeWithoutSynchronization(posterAttr);
-    if (!stripLeadingAndTrailingHTMLSpaces(url).isEmpty())
+    const auto& url = attributeWithoutSynchronization(posterAttr);
+    if (!StringView(url).containsOnly<isASCIIWhitespace<UChar>>())
         return url;
     return m_defaultPosterURL;
 }
@@ -423,7 +418,7 @@ unsigned HTMLVideoElement::webkitDroppedFrameCount() const
 
 URL HTMLVideoElement::posterImageURL() const
 {
-    String url = stripLeadingAndTrailingHTMLSpaces(imageSourceURL());
+    auto url = imageSourceURL().string().trim(isASCIIWhitespace);
     if (url.isEmpty())
         return URL();
     return document().completeURL(url);

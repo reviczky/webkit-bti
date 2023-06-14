@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2011 Adobe Systems Incorporated. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -44,6 +44,7 @@
 #include "RenderStyleSetters.h"
 #include "RenderTheme.h"
 #include "ScaleTransformOperation.h"
+#include "ScrollbarGutter.h"
 #include "ShadowData.h"
 #include "StyleBuilderConverter.h"
 #include "StyleImage.h"
@@ -896,11 +897,6 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.lineBoxContain != second.lineBoxContain
         || first.lineGrid != second.lineGrid
         || first.imageOrientation != second.imageOrientation
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-        || first.imageResolutionSource != second.imageResolutionSource
-        || first.imageResolutionSnap != second.imageResolutionSnap
-        || first.imageResolution != second.imageResolution
-#endif
         || first.lineSnap != second.lineSnap
         || first.lineAlign != second.lineAlign
         || first.hangingPunctuation != second.hangingPunctuation
@@ -908,7 +904,8 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.useTouchOverflowScrolling != second.useTouchOverflowScrolling
 #endif
         || first.listStyleType != second.listStyleType
-        || first.listStyleImage != second.listStyleImage) // FIXME: needs arePointingToEqualData()?
+        || first.listStyleImage != second.listStyleImage
+        || first.wordBoundaryDetection != second.wordBoundaryDetection)
         return true;
 
     if (first.textStrokeWidth != second.textStrokeWidth)
@@ -1281,13 +1278,13 @@ bool RenderStyle::changeRequiresRepaint(const RenderStyle& other, OptionSet<Styl
         return true;
 
 
-    if (m_nonInheritedData.ptr() != other.m_nonInheritedData.ptr()) {
-        if (m_nonInheritedData->backgroundData.ptr() != other.m_nonInheritedData->backgroundData.ptr()) {
+    if (currentColorDiffers || m_nonInheritedData.ptr() != other.m_nonInheritedData.ptr()) {
+        if (currentColorDiffers || m_nonInheritedData->backgroundData.ptr() != other.m_nonInheritedData->backgroundData.ptr()) {
             if (!m_nonInheritedData->backgroundData->isEquivalentForPainting(*other.m_nonInheritedData->backgroundData, currentColorDiffers))
                 return true;
         }
 
-        if (m_nonInheritedData->surroundData.ptr() != other.m_nonInheritedData->surroundData.ptr()) {
+        if (currentColorDiffers || m_nonInheritedData->surroundData.ptr() != other.m_nonInheritedData->surroundData.ptr()) {
             if (!m_nonInheritedData->surroundData->border.isEquivalentForPainting(other.m_nonInheritedData->surroundData->border, currentColorDiffers))
                 return true;
         }
@@ -1692,7 +1689,7 @@ void RenderStyle::applyMotionPathTransform(TransformationMatrix& transform, cons
         anchor = floatPointForLengthPoint(offsetAnchor(), boundingBox.size()) + boundingBox.location();
     
     // Shift element to the point on path specified by offset-path and offset-distance.
-    auto path = offsetPath()->getPath(boundingBox, anchor, offsetRotate());
+    auto path = offsetPath()->getPath(boundingBox);
     if (!path)
         return;
     auto traversalState = getTraversalStateAtDistance(*path, offsetDistance());
@@ -2872,6 +2869,16 @@ ScrollSnapStop RenderStyle::initialScrollSnapStop()
     return ScrollSnapStop::Normal;
 }
 
+ScrollbarGutter RenderStyle::initialScrollbarGutter()
+{
+    return { };
+}
+
+ScrollbarWidth RenderStyle::initialScrollbarWidth()
+{
+    return ScrollbarWidth::Auto;
+}
+
 const ScrollSnapType RenderStyle::scrollSnapType() const
 {
     return m_nonInheritedData->rareData->scrollSnapType;
@@ -2887,6 +2894,16 @@ ScrollSnapStop RenderStyle::scrollSnapStop() const
     return m_nonInheritedData->rareData->scrollSnapStop;
 }
 
+const ScrollbarGutter RenderStyle::scrollbarGutter() const
+{
+    return m_nonInheritedData->rareData->scrollbarGutter;
+}
+
+ScrollbarWidth RenderStyle::scrollbarWidth() const
+{
+    return m_nonInheritedData->rareData->scrollbarWidth;
+}
+
 void RenderStyle::setScrollSnapType(const ScrollSnapType type)
 {
     SET_NESTED_VAR(m_nonInheritedData, rareData, scrollSnapType, type);
@@ -2900,6 +2917,16 @@ void RenderStyle::setScrollSnapAlign(const ScrollSnapAlign& alignment)
 void RenderStyle::setScrollSnapStop(const ScrollSnapStop stop)
 {
     SET_NESTED_VAR(m_nonInheritedData, rareData, scrollSnapStop, stop);
+}
+
+void RenderStyle::setScrollbarGutter(const ScrollbarGutter gutter)
+{
+    SET_NESTED_VAR(m_nonInheritedData, rareData, scrollbarGutter, gutter);
+}
+
+void RenderStyle::setScrollbarWidth(const ScrollbarWidth width)
+{
+    SET_NESTED_VAR(m_nonInheritedData, rareData, scrollbarWidth, width);
 }
 
 bool RenderStyle::hasSnapPosition() const

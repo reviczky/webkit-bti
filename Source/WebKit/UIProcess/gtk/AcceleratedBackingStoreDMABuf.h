@@ -67,7 +67,8 @@ private:
 
     void configure(WTF::UnixFileDescriptor&&, WTF::UnixFileDescriptor&&, const WebCore::IntSize&, uint32_t format, uint32_t offset, uint32_t stride, uint64_t modifier);
     void configureSHM(ShareableBitmapHandle&&, ShareableBitmapHandle&&);
-    void frame(CompletionHandler<void()>&&);
+    void frame();
+    void frameDone();
     void ensureGLContext();
 
 #if USE(GTK4)
@@ -84,7 +85,8 @@ private:
         WTF_MAKE_FAST_ALLOCATED;
     public:
         virtual ~RenderSource() = default;
-        virtual bool swap() = 0;
+        virtual void swap() = 0;
+        virtual bool prepareForRendering() = 0;
 #if USE(GTK4)
         virtual void snapshot(GtkSnapshot*) const = 0;
 #else
@@ -108,7 +110,8 @@ private:
         unsigned texture() const { return m_textureID; }
 
     private:
-        bool swap() override;
+        void swap() override;
+        bool prepareForRendering() override;
 #if USE(GTK4)
         void snapshot(GtkSnapshot*) const override;
 #else
@@ -134,7 +137,8 @@ private:
         cairo_surface_t* surface() const { return m_surface.get(); }
 
     private:
-        bool swap() override;
+        void swap() override;
+        bool prepareForRendering() override;
 #if USE(GTK4)
         void snapshot(GtkSnapshot*) const override;
 #else

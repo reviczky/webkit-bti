@@ -68,7 +68,6 @@
 #include "FloatRoundedRect.h"
 #include "FocusController.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FrameSelection.h"
 #include "FrameTree.h"
 #include "Gradient.h"
@@ -85,6 +84,7 @@
 #include "LegacyRenderSVGForeignObject.h"
 #include "LegacyRenderSVGRoot.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "OverflowEvent.h"
@@ -1654,6 +1654,9 @@ bool RenderLayer::computeHasVisibleContent() const
     if (renderer().document().settings().layerBasedSVGEngineEnabled() && lineageOfType<RenderSVGHiddenContainer>(renderer()).first())
         return false;
 #endif
+    if (m_isHiddenByOverflowTruncation)
+        return false;
+
     if (renderer().style().visibility() == Visibility::Visible)
         return true;
 
@@ -5258,6 +5261,13 @@ void RenderLayer::updateSelfPaintingLayer()
     else {
         parent()->dirtyAncestorChainHasSelfPaintingLayerDescendantStatus();
         clearRepaintRects();
+        auto updateFloatBoxShouldPaintIfApplicable = [&] {
+            auto* renderBox = this->renderBox();
+            if (!renderBox || !renderBox->isFloating())
+                return;
+            renderBox->updateFloatPainterAfterSelfPaintingLayerChange();
+        };
+        updateFloatBoxShouldPaintIfApplicable();
     }
 }
 
@@ -5285,7 +5295,7 @@ static void determineNonLayerDescendantsPaintedContent(const RenderElement& rend
             if (renderer.style().effectiveUserSelect() != UserSelect::None)
                 request.setHasPaintedContent();
 
-            if (!renderText.text().isAllSpecialCharacters<isASCIIWhitespace>())
+            if (!renderText.text().containsOnly<isASCIIWhitespace>())
                 request.setHasPaintedContent();
 
             if (request.isSatisfied())

@@ -142,7 +142,7 @@ private:
     bool shouldUnavailablePluginMessageBeButton(WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
     void unavailablePluginButtonClicked(WebCore::Element&, WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
 
-    void mouseDidMoveOverElement(const WebCore::HitTestResult&, unsigned modifierFlags, const String& toolTip, WebCore::TextDirection) final;
+    void mouseDidMoveOverElement(const WebCore::HitTestResult&, OptionSet<WebCore::PlatformEventModifier>, const String& toolTip, WebCore::TextDirection) final;
 
     void print(WebCore::LocalFrame&, const WebCore::StringWithDirection&) final;
 
@@ -231,6 +231,8 @@ private:
     void setNeedsOneShotDrawingSynchronization() final;
     bool shouldTriggerRenderingUpdate(unsigned rescheduledRenderingUpdateCount) const final;
     void triggerRenderingUpdate() final;
+    bool scheduleRenderingUpdate() final;
+    void renderingUpdateFramesPerSecondChanged() final;
     unsigned remoteImagesCountForTesting() const final; 
 
     void contentRuleListNotification(const URL&, const WebCore::ContentRuleListResults&) final;
@@ -462,8 +464,8 @@ private:
     void textAutosizingUsesIdempotentModeChanged() final;
 #endif
 
-    URL sanitizeLookalikeCharacters(const URL&, WebCore::LookalikeCharacterSanitizationTrigger) const final;
-    URL allowedLookalikeCharacters(const URL&) const final;
+    URL applyLinkDecorationFiltering(const URL&, WebCore::LinkDecorationFilteringTrigger) const final;
+    URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&) const final;
 
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     void showMediaControlsContextMenu(WebCore::FloatRect&&, Vector<WebCore::MediaControlsContextMenuItem>&&, CompletionHandler<void(WebCore::MediaControlsContextMenuItem::ID)>&&) final;
@@ -488,6 +490,8 @@ private:
     bool isUsingUISideCompositing() const;
 
     bool isInStableState() const final;
+
+    WebCore::FloatSize screenSizeForFingerprintingProtections(const WebCore::LocalFrame&, WebCore::FloatSize defaultSize) const final;
 
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };
     mutable bool m_cachedMainFrameHasVerticalScrollbar { false };

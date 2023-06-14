@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -11976,7 +11976,7 @@ void SpeculativeJIT::emitNewTypedArrayWithSizeInRegister(Node* node, TypedArrayT
     done.link(this);
 #if CPU(ARM64E)
     // sizeGPR is still boxed as a number and there is no 32-bit variant of the PAC instructions.
-    zeroExtend32ToWord(sizeGPR, scratchGPR);
+    zeroExtend48ToWord(sizeGPR, scratchGPR); // See rdar://107561209, rdar://107724053.
     tagArrayPtr(scratchGPR, storageGPR);
 #endif
 
@@ -16857,6 +16857,48 @@ void SpeculativeJIT::compileMakeRope(Node* node)
 #endif
 }
 
+void SpeculativeJIT::compileMakeAtomString(Node* node)
+{
+    SpeculateCellOperand op1(this, node->child1());
+    SpeculateCellOperand op2(this, node->child2());
+    SpeculateCellOperand op3(this, node->child3());
+    GPRReg opGPRs[3] { InvalidGPRReg, InvalidGPRReg, InvalidGPRReg };
+    unsigned numOpGPRs;
+    opGPRs[0] = op1.gpr();
+    if (node->child2()) {
+        opGPRs[1] = op2.gpr();
+        if (node->child3()) {
+            opGPRs[2] = op3.gpr();
+            numOpGPRs = 3;
+        } else
+            numOpGPRs = 2;
+    } else
+        numOpGPRs = 1;
+
+    flushRegisters();
+    GPRFlushedCallResult result(this);
+    GPRReg resultGPR = result.gpr();
+    switch (numOpGPRs) {
+    case 1:
+        callOperation(operationMakeAtomString1, resultGPR, LinkableConstant::globalObject(*this, node), opGPRs[0]);
+        exceptionCheck();
+        break;
+    case 2:
+        callOperation(operationMakeAtomString2, resultGPR, LinkableConstant::globalObject(*this, node), opGPRs[0], opGPRs[1]);
+        exceptionCheck();
+        break;
+    case 3:
+        callOperation(operationMakeAtomString3, resultGPR, LinkableConstant::globalObject(*this, node), opGPRs[0], opGPRs[1], opGPRs[2]);
+        exceptionCheck();
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+
+    cellResult(resultGPR, node);
+}
+
 void SpeculativeJIT::compileEnumeratorGetByVal(Node* node)
 {
     Edge baseEdge = m_graph.varArgChild(node, 0);
@@ -16985,6 +17027,89 @@ void SpeculativeJIT::compileStringLocaleCompare(Node* node)
     exceptionCheck();
 
     strictInt32Result(resultGPR, node);
+}
+
+void SpeculativeJIT::compileGlobalIsNaN(Node* node)
+{
+    switch (node->child1().useKind()) {
+    case DoubleRepUse: {
+        SpeculateDoubleOperand argument(this, node->child1());
+        GPRTemporary scratch(this);
+
+        FPRReg argumentFPR = argument.fpr();
+        GPRReg scratchGPR = scratch.gpr();
+
+        compareDouble(DoubleNotEqualOrUnordered, argumentFPR, argumentFPR, scratchGPR);
+        unblessedBooleanResult(scratchGPR, node);
+        break;
+    }
+    case UntypedUse: {
+        JSValueOperand argument(this, node->child1());
+        GPRTemporary scratch1(this);
+
+        bool mayBeInt32 = m_interpreter.forNode(node->child1()).m_type & SpecInt32Only;
+
+        JSValueRegs argumentRegs = argument.jsValueRegs();
+        GPRReg scratch1GPR = scratch1.gpr();
+
+        flushRegisters();
+        Jump isInt32;
+        if (mayBeInt32) {
+            move(TrustedImm32(0), scratch1GPR);
+            isInt32 = branchIfInt32(argumentRegs);
+        }
+        callOperation(operationIsNaN, scratch1GPR, LinkableConstant::globalObject(*this, node), argumentRegs);
+        exceptionCheck();
+        if (mayBeInt32)
+            isInt32.link(this);
+        unblessedBooleanResult(scratch1GPR, node);
+        break;
+    }
+    default:
+        DFG_CRASH(m_graph, node, "Bad use kind");
+        break;
+    }
+}
+
+void SpeculativeJIT::compileNumberIsNaN(Node* node)
+{
+    switch (node->child1().useKind()) {
+    case DoubleRepUse: {
+        SpeculateDoubleOperand argument(this, node->child1());
+        GPRTemporary scratch(this);
+
+        FPRReg argumentFPR = argument.fpr();
+        GPRReg scratchGPR = scratch.gpr();
+
+        compareDouble(DoubleNotEqualOrUnordered, argumentFPR, argumentFPR, scratchGPR);
+        unblessedBooleanResult(scratchGPR, node);
+        break;
+    }
+    case UntypedUse: {
+        JSValueOperand argument(this, node->child1());
+        GPRTemporary scratch1(this);
+
+        bool mayBeInt32 = m_interpreter.forNode(node->child1()).m_type & SpecInt32Only;
+
+        JSValueRegs argumentRegs = argument.jsValueRegs();
+        GPRReg scratch1GPR = scratch1.gpr();
+
+        flushRegisters();
+        Jump isInt32;
+        if (mayBeInt32) {
+            move(TrustedImm32(0), scratch1GPR);
+            isInt32 = branchIfInt32(argumentRegs);
+        }
+        callOperation(operationNumberIsNaN, scratch1GPR, argumentRegs);
+        if (mayBeInt32)
+            isInt32.link(this);
+        unblessedBooleanResult(scratch1GPR, node);
+        break;
+    }
+    default:
+        DFG_CRASH(m_graph, node, "Bad use kind");
+        break;
+    }
 }
 
 } } // namespace JSC::DFG

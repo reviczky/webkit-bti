@@ -109,6 +109,8 @@ public:
     OverscrollBehavior horizontalOverscrollBehavior() const final;
     OverscrollBehavior verticalOverscrollBehavior() const final;
 
+    ScrollbarWidth scrollbarWidthStyle() const final;
+
     bool requiresScrollPositionReconciliation() const { return m_requiresScrollPositionReconciliation; }
     void setRequiresScrollPositionReconciliation(bool requiresReconciliation = true) { m_requiresScrollPositionReconciliation = requiresReconciliation; }
 
@@ -117,8 +119,8 @@ public:
     // Returns true when there is actually scrollable overflow (requires layout to be up-to-date).
     bool hasCompositedScrollableOverflow() const { return m_hasCompositedScrollableOverflow; }
 
-    int verticalScrollbarWidth(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
-    int horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
+    int verticalScrollbarWidth(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize, bool isHorizontalWritingMode = true) const;
+    int horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize, bool isHorizontalWritingMode = true) const;
 
     bool hasOverflowControls() const;
     bool hitTestOverflowControls(HitTestResult&, const IntPoint& localPoint);
@@ -277,6 +279,8 @@ private:
     void registerScrollableAreaForAnimatedScroll();
 
     float deviceScaleFactor() const final;
+
+    void createScrollbarsController() final;
 
 private:
     bool m_scrollDimensionsDirty { true };

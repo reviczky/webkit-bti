@@ -28,7 +28,6 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "Decoder.h"
-#include "DisplayListRecorderFlushIdentifier.h"
 #include "QualifiedRenderingResourceIdentifier.h"
 #include "RemoteRenderingBackend.h"
 #include "SharedVideoFrame.h"
@@ -73,7 +72,9 @@ public:
     void setMiterLimit(float);
     void clearShadow();
     void clip(const WebCore::FloatRect&);
+    void clipRoundedRect(const WebCore::FloatRoundedRect&);
     void clipOut(const WebCore::FloatRect&);
+    void clipOutRoundedRect(const WebCore::FloatRoundedRect&);
     void clipToImageBuffer(WebCore::RenderingResourceIdentifier, const WebCore::FloatRect& destinationRect);
     void clipOutToPath(const WebCore::Path&);
     void clipPath(const WebCore::Path&, WebCore::WindRule);

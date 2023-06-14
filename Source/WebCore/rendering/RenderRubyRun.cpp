@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2023 Apple Inc. All right reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -275,17 +276,17 @@ std::pair<float, float> RenderRubyRun::startAndEndOverhang(bool forFirstLine) co
     return { std::min(startOverhang, halfWidthOfFontSize), std::min(endOverhang, halfWidthOfFontSize) };
 }
 
-void RenderRubyRun::updatePriorContextFromCachedBreakIterator(LazyLineBreakIterator& iterator) const
+void RenderRubyRun::updatePriorContextFromCachedBreakIterator(CachedLineBreakIteratorFactory& lineBreakIteratorFactory) const
 {
-    iterator.setPriorContext(m_lastCharacter, m_secondToLastCharacter);
+    lineBreakIteratorFactory.priorContext().set({ m_secondToLastCharacter, m_lastCharacter });
 }
 
-bool RenderRubyRun::canBreakBefore(const LazyLineBreakIterator& iterator) const
+bool RenderRubyRun::canBreakBefore(const CachedLineBreakIteratorFactory& lineBreakIteratorFactory) const
 {
     RenderRubyText* rubyText = this->rubyText();
     if (!rubyText)
         return true;
-    return rubyText->canBreakBefore(iterator);
+    return rubyText->canBreakBefore(lineBreakIteratorFactory);
 }
 
 std::pair<LayoutUnit, LayoutUnit> RenderRubyRun::annotationsAboveAndBelow() const

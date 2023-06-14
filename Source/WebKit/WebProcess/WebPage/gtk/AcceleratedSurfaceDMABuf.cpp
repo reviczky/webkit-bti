@@ -28,6 +28,7 @@
 
 #if USE(GBM)
 #include "AcceleratedBackingStoreDMABufMessages.h"
+#include "AcceleratedSurfaceDMABufMessages.h"
 #include "ShareableBitmap.h"
 #include "WebPage.h"
 #include "WebProcess.h"
@@ -131,7 +132,7 @@ std::unique_ptr<AcceleratedSurfaceDMABuf::RenderTarget> AcceleratedSurfaceDMABuf
                 EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT, static_cast<EGLAttrib>(metadata.modifier >> 32),
                 EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT, static_cast<EGLAttrib>(metadata.modifier & 0xffffffff),
             };
-            attributes.append(Span<const EGLAttrib> { modifierAttributes });
+            attributes.append(std::span<const EGLAttrib> { modifierAttributes });
         }
         attributes.append(EGL_NONE);
 
@@ -230,13 +231,23 @@ AcceleratedSurfaceDMABuf::RenderTargetSHMImage::RenderTargetSHMImage(WebCore::Pa
 
 void AcceleratedSurfaceDMABuf::RenderTargetSHMImage::didRenderFrame() const
 {
-    glReadPixels(0, 0, m_backBitmap->size().width(), m_backBitmap->size().height(), GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, m_backBitmap->data());
+    glReadPixels(0, 0, m_backBitmap->size().width(), m_backBitmap->size().height(), GL_BGRA, GL_UNSIGNED_BYTE, m_backBitmap->data());
 }
 
 void AcceleratedSurfaceDMABuf::RenderTargetSHMImage::swap()
 {
     std::swap(m_backBitmap, m_frontBitmap);
     RenderTarget::swap();
+}
+
+void AcceleratedSurfaceDMABuf::didCreateCompositingRunLoop(RunLoop& runLoop)
+{
+    WebProcess::singleton().parentProcessConnection()->addMessageReceiver(runLoop, *this, Messages::AcceleratedSurfaceDMABuf::messageReceiverName(), m_webPage.identifier().toUInt64());
+}
+
+void AcceleratedSurfaceDMABuf::willDestroyCompositingRunLoop()
+{
+    WebProcess::singleton().parentProcessConnection()->removeMessageReceiver(Messages::AcceleratedSurfaceDMABuf::messageReceiverName(), m_webPage.identifier().toUInt64());
 }
 
 void AcceleratedSurfaceDMABuf::didCreateGLContext()
@@ -287,18 +298,14 @@ void AcceleratedSurfaceDMABuf::didRenderFrame()
     glFlush();
 
     m_target->didRenderFrame();
-    WebProcess::singleton().parentProcessConnection()->sendWithAsyncReply(Messages::AcceleratedBackingStoreDMABuf::Frame(), [this, weakThis = WeakPtr { *this }, runLoop = Ref { RunLoop::current() }]() mutable {
-        // FIXME: it would be great if there was an option to send replies to the current run loop directly.
-        runLoop->dispatch([this, weakThis = WTFMove(weakThis)] {
-            if (!weakThis)
-                return;
+    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::Frame(), m_webPage.identifier());
+}
 
-            if (m_target)
-                m_target->swap();
-
-            m_client.frameComplete();
-        });
-    }, m_webPage.identifier());
+void AcceleratedSurfaceDMABuf::frameDone()
+{
+    if (m_target)
+        m_target->swap();
+    m_client.frameComplete();
 }
 
 } // namespace WebKit

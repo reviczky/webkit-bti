@@ -132,6 +132,20 @@ def surround_in_condition(string, condition):
     return '#if %s\n%s#endif\n' % (condition, string)
 
 
+def types_that_must_be_moved():
+    return [
+        'IPC::Connection::Handle',
+        'IPC::StreamServerConnection::Handle',
+        'Vector<WebKit::SharedMemory::Handle>',
+        'WebKit::ConsumerSharedCARingBuffer::Handle',
+        'WebKit::ImageBufferBackendHandle',
+        'WebKit::ShareableBitmap::Handle',
+        'WebKit::ShareableResource::Handle',
+        'WebKit::SharedMemory::Handle',
+        'WebKit::UpdateInfo',
+    ]
+
+
 def function_parameter_type(type, kind):
     # Don't use references for built-in types.
     builtin_types = frozenset([
@@ -152,15 +166,26 @@ def function_parameter_type(type, kind):
     if type in builtin_types:
         return type
 
+    if type in types_that_must_be_moved():
+        return '%s&&' % type
+
     if kind.startswith('enum:'):
         return type
 
     return 'const %s&' % type
 
 
+def arguments_constructor_name(type, name):
+    if type in types_that_must_be_moved():
+        return 'WTFMove(%s)' % name
+
+    return name
+
 def message_to_struct_declaration(receiver, message):
     result = []
     function_parameters = [(function_parameter_type(x.type, x.kind), x.name) for x in message.parameters]
+
+    arguments_constructor_parameters = [arguments_constructor_name(x.type, x.name) for x in message.parameters]
 
     result.append('class %s {\n' % message.name)
     result.append('public:\n')
@@ -189,12 +214,12 @@ def message_to_struct_declaration(receiver, message):
 
     if len(function_parameters):
         result.append('    %s%s(%s)' % (len(function_parameters) == 1 and 'explicit ' or '', message.name, ', '.join([' '.join(x) for x in function_parameters])))
-        result.append('\n        : m_arguments(%s)\n' % ', '.join([x[1] for x in function_parameters]))
+        result.append('\n        : m_arguments(%s)\n' % ', '.join(arguments_constructor_parameters))
         result.append('    {\n')
         result.append('    }\n\n')
-    result.append('    const auto& arguments() const\n')
+    result.append('    auto&& arguments()\n')
     result.append('    {\n')
-    result.append('        return m_arguments;\n')
+    result.append('        return WTFMove(m_arguments);\n')
     result.append('    }\n')
     result.append('\n')
     result.append('private:\n')
@@ -340,6 +365,7 @@ def types_that_cannot_be_forward_declared():
         'WebCore::DictationContext',
         'WebCore::DragApplicationFlags',
         'WebCore::FrameIdentifier',
+        'WebCore::GraphicsContextGL::ExternalImageSource',
         'WebCore::GraphicsContextGLAttributes',
         'WebCore::IntDegrees',
         'WebCore::ModalContainerControlType',
@@ -372,8 +398,6 @@ def types_that_cannot_be_forward_declared():
         'WebKit::RemoteSourceBufferIdentifier',
         'WebKit::RemoteVideoFrameWriteReference',
         'WebKit::RemoteVideoFrameReadReference',
-        'WebKit::RemoteSerializedImageBufferWriteReference',
-        'WebKit::RemoteSerializedImageBufferReadReference',
         'WebKit::RenderingUpdateID',
         'WebKit::TextCheckerRequestID',
         'WebKit::TransactionID',
@@ -381,7 +405,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::WCContentBufferIdentifier',
         'WebKit::WebExtensionEventListenerType',
         'WebKit::XRDeviceIdentifier',
-    ] + serialized_identifiers())
+    ] + serialized_identifiers() + types_that_must_be_moved())
 
 
 def conditions_for_header(header):
@@ -725,6 +749,7 @@ def headers_for_type(type):
         'WebCore::FrameLoadType': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::GenericCueData': ['<WebCore/InbandGenericCue.h>'],
         'WebCore::GrammarDetail': ['<WebCore/TextCheckerClient.h>'],
+        'WebCore::GraphicsContextGL::ExternalImageSource': ['<WebCore/GraphicsContextGL.h>'],
         'WebCore::GraphicsContextGLActiveInfo': ['<WebCore/GraphicsContextGL.h>'],
         'WebCore::HasInsecureContent': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::HighlightRequestOriginatedInApp': ['<WebCore/AppHighlight.h>'],
@@ -772,6 +797,7 @@ def headers_for_type(type):
         'WebCore::ReasonForDismissingAlternativeText': ['<WebCore/AlternativeTextClient.h>'],
         'WebCore::RecentSearch': ['<WebCore/SearchPopupMenu.h>'],
         'WebCore::ReloadOption': ['<WebCore/FrameLoaderTypes.h>'],
+        'WebCore::RenderAsTextFlag': ['<WebCore/RenderTreeAsText.h>'],
         'WebCore::RenderingPurpose': ['<WebCore/RenderingMode.h>'],
         'WebCore::RequestStorageAccessResult': ['<WebCore/DocumentStorageAccess.h>'],
         'WebCore::RouteSharingPolicy': ['<WebCore/AudioSession.h>'],
@@ -843,8 +869,6 @@ def headers_for_type(type):
         'WebKit::PaymentSetupFeatures': ['"ApplePayPaymentSetupFeaturesWebKit.h"'],
         'WebKit::PrepareBackingStoreBuffersInputData': ['"PrepareBackingStoreBuffersData.h"'],
         'WebKit::PrepareBackingStoreBuffersOutputData': ['"PrepareBackingStoreBuffersData.h"'],
-        'WebKit::RemoteSerializedImageBufferReadReference': ['"RemoteSerializedImageBufferIdentifier.h"'],
-        'WebKit::RemoteSerializedImageBufferWriteReference': ['"RemoteSerializedImageBufferIdentifier.h"'],
         'WebKit::RemoteVideoFrameReadReference': ['"RemoteVideoFrameIdentifier.h"'],
         'WebKit::RemoteVideoFrameWriteReference': ['"RemoteVideoFrameIdentifier.h"'],
         'WebKit::RespectSelectionAnchor': ['"GestureTypes.h"'],
@@ -880,6 +904,7 @@ def headers_for_type(type):
         'WebKit::WebGPU::ExternalTextureBindingLayout': ['"WebGPUExternalTextureBindingLayout.h"'],
         'WebKit::WebGPU::ExternalTextureDescriptor': ['"WebGPUExternalTextureDescriptor.h"'],
         'WebKit::WebGPU::FragmentState': ['"WebGPUFragmentState.h"'],
+        'WebKit::WebGPU::HTMLVideoElementIdentifier': ['"WebGPUExternalTextureDescriptor.h"'],
         'WebKit::WebGPU::Identifier': ['"WebGPUIdentifier.h"'],
         'WebKit::WebGPU::ImageCopyBuffer': ['"WebGPUImageCopyBuffer.h"'],
         'WebKit::WebGPU::ImageCopyExternalImage': ['"WebGPUImageCopyExternalImage.h"'],
@@ -921,6 +946,7 @@ def headers_for_type(type):
         'WebKit::WebGPU::VertexAttribute': ['"WebGPUVertexAttribute.h"'],
         'WebKit::WebGPU::VertexBufferLayout': ['"WebGPUVertexBufferLayout.h"'],
         'WebKit::WebGPU::VertexState': ['"WebGPUVertexState.h"'],
+        'WebKit::WebGPU::WebCodecsVideoFrameIdentifier': ['"WebGPUExternalTextureDescriptor.h"'],
         'WebKit::WebScriptMessageHandlerData': ['"WebUserContentControllerDataTypes.h"'],
         'WebKit::WebUserScriptData': ['"WebUserContentControllerDataTypes.h"'],
         'WebKit::WebUserStyleSheetData': ['"WebUserContentControllerDataTypes.h"'],

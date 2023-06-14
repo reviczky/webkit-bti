@@ -64,7 +64,7 @@ public:
     bool isNamespaceRule() const { return type() == StyleRuleType::Namespace; }
     bool isMediaRule() const { return type() == StyleRuleType::Media; }
     bool isPageRule() const { return type() == StyleRuleType::Page; }
-    bool isStyleRule() const { return type() == StyleRuleType::Style; }
+    bool isStyleRule() const { return type() == StyleRuleType::Style || type() == StyleRuleType::StyleWithNesting; }
     bool isStyleRuleWithNesting() const { return type() == StyleRuleType::StyleWithNesting; }
     bool isGroupRule() const { return type() == StyleRuleType::Media || type() == StyleRuleType::Supports || type() == StyleRuleType::LayerBlock || type() == StyleRuleType::Container; }
     bool isSupportsRule() const { return type() == StyleRuleType::Supports; }
@@ -439,8 +439,13 @@ inline void StyleRuleWithNesting::wrapperAdoptOriginalSelectorList(CSSSelectorLi
 
 inline CompiledSelector& StyleRule::compiledSelectorForListIndex(unsigned index) const
 {
-    if (!m_compiledSelectors)
-        m_compiledSelectors = makeUniqueArray<CompiledSelector>(m_selectorList.listSize());
+    ASSERT(index < m_selectorList.listSize());
+
+    if (!m_compiledSelectors) {
+        auto listSize = m_selectorList.listSize();
+        RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(index < listSize);
+        m_compiledSelectors = makeUniqueArray<CompiledSelector>(listSize);
+    }
     return m_compiledSelectors[index];
 }
 
@@ -449,11 +454,11 @@ inline CompiledSelector& StyleRule::compiledSelectorForListIndex(unsigned index)
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::StyleRule)
-    static bool isType(const WebCore::StyleRuleBase& rule) { return rule.type() == WebCore::StyleRuleType::Style; }
+    static bool isType(const WebCore::StyleRuleBase& rule) { return rule.isStyleRule(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::StyleRuleWithNesting)
-    static bool isType(const WebCore::StyleRuleBase& rule) { return rule.type() == WebCore::StyleRuleType::StyleWithNesting; }
+    static bool isType(const WebCore::StyleRuleBase& rule) { return rule.isStyleRuleWithNesting(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::StyleRuleGroup)

@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE)
+#if ENABLE(MANAGED_MEDIA_SOURCE)
 
 #include "MediaSource.h"
 #include "Timer.h"
@@ -52,6 +52,7 @@ public:
 private:
     explicit ManagedMediaSource(ScriptExecutionContext&);
     void monitorSourceBuffers() final;
+    bool isOpen() const final;
     bool isBuffered(const PlatformTimeRanges&) const;
     void setStreaming(bool);
     void streamingTimerFired();

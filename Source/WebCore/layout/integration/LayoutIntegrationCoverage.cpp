@@ -150,7 +150,7 @@ static void printTextForSubtree(const RenderElement& renderer, unsigned& charact
     for (auto& child : childrenOfType<RenderObject>(downcast<RenderElement>(renderer))) {
         if (is<RenderText>(child)) {
             String text = downcast<RenderText>(child).text();
-            auto textView = StringView(text).stripWhiteSpace();
+            auto textView = StringView(text).trim(isUnicodeCompatibleASCIIWhitespace<UChar>);
             auto length = std::min(charactersLeft, textView.length());
             stream << textView.left(length);
             charactersLeft -= length;
@@ -460,6 +460,21 @@ bool canUseForLineLayoutAfterStyleChange(const RenderBlockFlow& blockContainer, 
     }
     ASSERT_NOT_REACHED();
     return canUseForLineLayout(blockContainer);
+}
+
+bool canUseForPreferredWidthComputation(const RenderBlockFlow& blockContainer)
+{
+    for (auto walker = InlineWalker(blockContainer); !walker.atEnd(); walker.advance()) {
+        auto& renderer = *walker.current();
+        if (renderer.isText())
+            continue;
+        if (is<RenderLineBreak>(renderer))
+            continue;
+        if (is<RenderInline>(renderer))
+            continue;
+        return false;
+    }
+    return true;
 }
 
 bool shouldInvalidateLineLayoutPathAfterChangeFor(const RenderBlockFlow& rootBlockContainer, const RenderObject& renderer, const LineLayout& lineLayout, TypeOfChangeForInvalidation typeOfChange)

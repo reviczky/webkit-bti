@@ -69,7 +69,7 @@ private:
     Vector<MemberOrParameter> m_builtins;
     Vector<MemberOrParameter> m_parameters;
     AST::Statement::List m_materializations;
-    Type* m_structType;
+    const Type* m_structType;
     String m_structTypeName;
     String m_structParameterName;
     Reflection::EntryPointInformation m_information;
@@ -81,9 +81,24 @@ EntryPointRewriter::EntryPointRewriter(ShaderModule& shaderModule, const AST::Fu
     , m_function(function)
 {
     switch (m_stage) {
-    case AST::StageAttribute::Stage::Compute:
-        m_information.typedEntryPoint = Reflection::Compute { 1, 1, 1 };
+    case AST::StageAttribute::Stage::Compute: {
+        unsigned x = 0;
+        unsigned y = 1;
+        unsigned z = 1;
+        for (auto& attribute : function.attributes()) {
+            if (!is<AST::WorkgroupSizeAttribute>(attribute))
+                continue;
+            auto& workgroupSize = downcast<AST::WorkgroupSizeAttribute>(attribute);
+            x = *AST::extractInteger(workgroupSize.x());
+            if (auto* maybeY = workgroupSize.maybeY())
+                y = *AST::extractInteger(*maybeY);
+            if (auto* maybeZ = workgroupSize.maybeZ())
+                z = *AST::extractInteger(*maybeZ);
+        }
+        ASSERT(x);
+        m_information.typedEntryPoint = Reflection::Compute { x, y, z };
         break;
+    }
     case AST::StageAttribute::Stage::Vertex:
         m_information.typedEntryPoint = Reflection::Vertex { false };
         break;
@@ -100,27 +115,23 @@ void EntryPointRewriter::rewrite()
 
     collectParameters();
     checkReturnType();
-
-    // nothing to rewrite
-    if (m_parameters.isEmpty()) {
-        appendBuiltins();
-        return;
-    }
-
-    constructInputStruct();
     appendBuiltins();
 
-    // add parameter to builtins: ${structName} : ${structType}
-    auto& type = m_shaderModule.astBuilder().construct<AST::NamedTypeName>(SourceSpan::empty(), AST::Identifier::make(m_structTypeName));
-    type.m_resolvedType = m_structType;
-    auto& parameter = m_shaderModule.astBuilder().construct<AST::Parameter>(
-        SourceSpan::empty(),
-        AST::Identifier::make(m_structParameterName),
-        type,
-        AST::Attribute::List { },
-        AST::ParameterRole::StageIn
-    );
-    m_shaderModule.append(m_function.parameters(), parameter);
+    if (!m_parameters.isEmpty()) {
+        constructInputStruct();
+
+        // add parameter to builtins: ${structName} : ${structType}
+        auto& type = m_shaderModule.astBuilder().construct<AST::NamedTypeName>(SourceSpan::empty(), AST::Identifier::make(m_structTypeName));
+        type.m_resolvedType = m_structType;
+        auto& parameter = m_shaderModule.astBuilder().construct<AST::Parameter>(
+            SourceSpan::empty(),
+            AST::Identifier::make(m_structParameterName),
+            type,
+            AST::Attribute::List { },
+            AST::ParameterRole::StageIn
+        );
+        m_shaderModule.append(m_function.parameters(), parameter);
+    }
 
     while (m_materializations.size())
         m_shaderModule.insert(m_function.body().statements(), 0, m_materializations.takeLast());
@@ -145,11 +156,31 @@ void EntryPointRewriter::checkReturnType()
     if (m_stage != AST::StageAttribute::Stage::Vertex)
         return;
 
-    // FIXME: we might have to duplicate this struct if it has other uses
     if (auto* maybeReturnType = m_function.maybeReturnType()) {
-        if (auto* structType = std::get_if<Types::Struct>(maybeReturnType->resolvedType())) {
+        if (!is<AST::NamedTypeName>(*maybeReturnType))
+            return;
+
+        auto& namedTypeName = downcast<AST::NamedTypeName>(*maybeReturnType);
+        if (auto* structType = std::get_if<Types::Struct>(namedTypeName.resolvedType())) {
             ASSERT(structType->structure.role() == AST::StructureRole::UserDefined);
-            m_shaderModule.replace(&structType->structure.role(), AST::StructureRole::VertexOutput);
+
+            String returnStructName = makeString("__", structType->structure.name(), "_VertexOutput");
+            auto& returnStruct = m_shaderModule.astBuilder().construct<AST::Structure>(
+                SourceSpan::empty(),
+                AST::Identifier::make(returnStructName),
+                AST::StructureMember::List(structType->structure.members()),
+                AST::Attribute::List { },
+                AST::StructureRole::VertexOutput
+
+            );
+            m_shaderModule.append(m_shaderModule.structures(), returnStruct);
+
+            auto& returnType = m_shaderModule.astBuilder().construct<AST::NamedTypeName>(
+                SourceSpan::empty(),
+                AST::Identifier::make(returnStructName)
+            );
+            returnType.m_resolvedType = m_shaderModule.types().structType(returnStruct);
+            m_shaderModule.replace(namedTypeName, returnType);
         }
     }
 }

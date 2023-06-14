@@ -3080,6 +3080,33 @@ JSC_DEFINE_JIT_OPERATION(operationStrCat3, JSString*, (JSGlobalObject* globalObj
     RELEASE_AND_RETURN(scope, jsString(globalObject, str1, str2, str3));
 }
 
+JSC_DEFINE_JIT_OPERATION(operationMakeAtomString1, JSString*, (JSGlobalObject* globalObject, JSString* a))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    return jsAtomString(globalObject, vm, a);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationMakeAtomString2, JSString*, (JSGlobalObject* globalObject, JSString* a, JSString* b))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    return jsAtomString(globalObject, vm, a, b);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationMakeAtomString3, JSString*, (JSGlobalObject* globalObject, JSString* a, JSString* b, JSString* c))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    return jsAtomString(globalObject, vm, a, b, c);
+}
+
 JSC_DEFINE_JIT_OPERATION(operationFindSwitchImmTargetForDouble, char*, (VM* vmPointer, EncodedJSValue encodedValue, size_t tableIndex, int32_t min))
 {
     VM& vm = *vmPointer;
@@ -3222,6 +3249,23 @@ JSC_DEFINE_JIT_OPERATION(operationNumberIsInteger, size_t, (JSGlobalObject* glob
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     return NumberConstructor::isIntegerImpl(JSValue::decode(value));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationNumberIsNaN, UCPUStrictInt32, (EncodedJSValue value))
+{
+    JSValue argument = JSValue::decode(value);
+    if (!argument.isNumber())
+        return toUCPUStrictInt32(0);
+    return toUCPUStrictInt32(!!std::isnan(argument.asNumber()));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationIsNaN, UCPUStrictInt32, (JSGlobalObject* globalObject, EncodedJSValue value))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    JSValue argument = JSValue::decode(value);
+    return toUCPUStrictInt32(std::isnan(argument.toNumber(globalObject)));
 }
 
 static ALWAYS_INLINE UCPUStrictInt32 arrayIndexOfString(JSGlobalObject* globalObject, Butterfly* butterfly, JSString* searchElement, int32_t index)

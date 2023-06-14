@@ -321,7 +321,7 @@ inline bool RenderElement::shouldRepaintForStyleDifference(StyleDifference diff)
 {
     auto hasImmediateNonWhitespaceTextChild = [&] {
         for (auto& child : childrenOfType<RenderText>(*this)) {
-            if (!child.isAllCollapsibleWhitespace())
+            if (!child.containsOnlyCollapsibleWhitespace())
                 return true;
         }
         return false;
@@ -1103,7 +1103,6 @@ void RenderElement::clearChildNeedsLayout()
     setNormalChildNeedsLayoutBit(false);
     setPosChildNeedsLayoutBit(false);
     setNeedsSimplifiedNormalFlowLayoutBit(false);
-    setNormalChildNeedsLayoutBit(false);
     setNeedsPositionedMovementLayoutBit(false);
 }
 
@@ -1422,15 +1421,7 @@ bool RenderElement::isVisibleInDocumentRect(const IntRect& documentRect) const
     // FIXME: This is overly conservative as the image may not be a background-image, in which case it will not
     // be propagated to the root. At this point, we unfortunately don't have access to the image anymore so we
     // can no longer check if it is a background image.
-    bool backgroundIsPaintedByRoot = isDocumentElementRenderer();
-    if (isBody()) {
-        auto& rootRenderer = *parent(); // If <body> has a renderer then <html> does too.
-        ASSERT(rootRenderer.isDocumentElementRenderer());
-        ASSERT(is<HTMLHtmlElement>(rootRenderer.element()));
-        // FIXME: Should share body background propagation code.
-        backgroundIsPaintedByRoot = !rootRenderer.hasBackground();
-    }
-
+    auto backgroundIsPaintedByRoot = isDocumentElementRenderer() || (isBody() && !rendererHasBackground(document().documentElement()->renderer()));
     LayoutRect backgroundPaintingRect = backgroundIsPaintedByRoot ? view().backgroundRect() : absoluteClippedOverflowRectForRepaint();
     if (!documentRect.intersects(enclosingIntRect(backgroundPaintingRect)))
         return false;

@@ -700,7 +700,7 @@ bool Quirks::needsFullscreenDisplayNoneQuirk() const
 // FIXME: weChat <rdar://problem/74377902>
 bool Quirks::needsWeChatScrollingQuirk() const
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     return needsQuirks() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::NoWeChatScrollingQuirk) && IOSApplication::isWechat();
 #else
     return false;
@@ -720,7 +720,7 @@ bool Quirks::shouldOmitHTMLDocumentSupportedPropertyNames()
 
 bool Quirks::shouldSilenceWindowResizeEvents() const
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     if (!needsQuirks())
         return false;
 
@@ -741,7 +741,7 @@ bool Quirks::shouldSilenceWindowResizeEvents() const
 
 bool Quirks::shouldSilenceMediaQueryListChangeEvents() const
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     if (!needsQuirks())
         return false;
 
@@ -1404,6 +1404,25 @@ bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFull
 #endif
 }
 
+bool Quirks::shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk() const
+{
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    // This quirk delay the "webkitstartfullscreen" and "fullscreenchange" event when a video exits picture-in-picture
+    // to fullscreen.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk) {
+        auto domain = RegistrableDomain(m_document->topDocument().url());
+        m_shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk = domain == "bbc.com"_s;
+    }
+
+    return *m_shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk;
+#else
+    return false;
+#endif
+}
+
 // teams.live.com rdar://88678598
 // teams.microsoft.com rdar://90434296
 bool Quirks::shouldAllowNavigationToCustomProtocolWithoutUserGesture(StringView protocol, const SecurityOriginData& requesterOrigin)
@@ -1411,7 +1430,7 @@ bool Quirks::shouldAllowNavigationToCustomProtocolWithoutUserGesture(StringView 
     return protocol == "msteams"_s && (requesterOrigin.host() == "teams.live.com"_s || requesterOrigin.host() == "teams.microsoft.com"_s);
 }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
 bool Quirks::allowLayeredFullscreenVideos() const
 {
     if (!needsQuirks())
@@ -1521,33 +1540,6 @@ bool Quirks::shouldDisableLazyIframeLoadingQuirk() const
 #endif
     }
     return *m_shouldDisableLazyIframeLoadingQuirk;
-}
-
-bool Quirks::shouldDisableLazyImageLoadingQuirk() const
-{
-    // Images are displaying as fully grey when loaded lazily in significant percentage of page loads.
-    // This issue is not observed when lazy image loading is disabled, and has been fixed in future Gatsby versions.
-    // This quirk is only applied to IKEA.com when "<meta name="generator" content="Gatsby 4.24.1" />" is present.
-    // This quirk can be removed once the gatsby version has been upgraded.
-    // Further discussion can be found here https://github.com/webcompat/web-bugs/issues/113635.
-
-    if (!needsQuirks())
-        return false;
-
-    if (m_shouldDisableLazyImageLoadingQuirk)
-        return m_shouldDisableLazyImageLoadingQuirk.value();
-
-    m_shouldDisableLazyImageLoadingQuirk = false;
-
-    if (RegistrableDomain(m_document->url()).string() != "ikea.com"_s)
-        return false;
-
-    auto* metaElement = m_document->getElementsByTagName("meta"_s)->namedItem("generator"_s);
-
-    if (metaElement && metaElement->getAttribute("content"_s) == "Gatsby 4.24.1"_s)
-        m_shouldDisableLazyImageLoadingQuirk = true;
-
-    return m_shouldDisableLazyImageLoadingQuirk.value();
 }
 
 // Breaks express checkout on victoriassecret.com (rdar://104818312).

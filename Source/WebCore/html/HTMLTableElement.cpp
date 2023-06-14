@@ -325,7 +325,7 @@ void HTMLTableElement::collectPresentationalHintsForAttribute(const QualifiedNam
         addHTMLColorToStyle(style, CSSPropertyBackgroundColor, value);
         break;
     case AttributeNames::backgroundAttr:
-        if (String url = stripLeadingAndTrailingHTMLSpaces(value); !url.isEmpty())
+        if (auto url = value.string().trim(isASCIIWhitespace); !url.isEmpty())
             style.setProperty(CSSProperty(CSSPropertyBackgroundImage, CSSImageValue::create(document().completeURL(url), LoadedFromOpaqueSource::No)));
         break;
     case AttributeNames::valignAttr:

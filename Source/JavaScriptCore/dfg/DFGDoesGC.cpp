@@ -70,6 +70,7 @@ bool doesGC(Graph& graph, Node* node)
     case SetLocal:
     case MovHint:
     case InitializeEntrypointArguments:
+    case ZombieHint:
     case ExitOK:
     case Phantom:
     case Upsilon:
@@ -261,6 +262,7 @@ bool doesGC(Graph& graph, Node* node)
     case DataViewSet:
     case PutByOffset:
     case WeakMapGet:
+    case NumberIsNaN:
         return false;
 
 #if ASSERT_ENABLED
@@ -392,6 +394,7 @@ bool doesGC(Graph& graph, Node* node)
     case NewStringObject:
     case NewSymbol:
     case MakeRope:
+    case MakeAtomString:
     case NewFunction:
     case NewGeneratorFunction:
     case NewAsyncGeneratorFunction:
@@ -444,6 +447,9 @@ bool doesGC(Graph& graph, Node* node)
     default:
 #endif // not ASSERT_ENABLED
         return true;
+
+    case GlobalIsNaN:
+        return node->child1().useKind() != DoubleRepUse;
 
     case CallNumberConstructor:
         switch (node->child1().useKind()) {

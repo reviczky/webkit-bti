@@ -67,7 +67,6 @@
 #include "FormState.h"
 #include "FormSubmission.h"
 #include "FrameLoadRequest.h"
-#include "FrameLoaderClient.h"
 #include "FrameNetworkingContext.h"
 #include "FrameTree.h"
 #include "GCController.h"
@@ -88,6 +87,7 @@
 #include "LoaderStrategy.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
 #include "MemoryCache.h"
@@ -314,7 +314,7 @@ private:
     bool m_inProgress;
 };
 
-FrameLoader::FrameLoader(LocalFrame& frame, UniqueRef<FrameLoaderClient>&& client)
+FrameLoader::FrameLoader(LocalFrame& frame, UniqueRef<LocalFrameLoaderClient>&& client)
     : m_frame(frame)
     , m_client(WTFMove(client))
     , m_policyChecker(makeUnique<PolicyChecker>(frame))
@@ -440,9 +440,9 @@ bool FrameLoader::upgradeRequestforHTTPSOnlyIfNeeded(const URL& originalURL, Res
     auto& newURL = request.url();
     const auto& isSameSiteBypassEnabled = (originalURL.isEmpty()
         || (originalURL.protocolIs("http"_s) && RegistrableDomain(newURL) == RegistrableDomain(originalURL)))
-        && documentLoader->networkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::HTTPSOnlyExplicitlyBypassedForDomain);
+        && documentLoader->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnlyExplicitlyBypassedForDomain);
 
-    if (documentLoader && documentLoader->networkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::HTTPSOnly)
+    if (documentLoader && documentLoader->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnly)
         && newURL.protocolIs("http"_s)
         && !isSameSiteBypassEnabled) {
         FRAMELOADER_RELEASE_LOG(ResourceLoading, "upgradeRequestforHTTPSOnlyIfNeeded: upgrading navigation request");
@@ -750,8 +750,8 @@ static AtomString extractContentLanguageFromHeader(const String& header)
 {
     auto commaIndex = header.find(',');
     if (commaIndex == notFound)
-        return AtomString { stripLeadingAndTrailingHTMLSpaces(header) };
-    return StringView(header).left(commaIndex).stripLeadingAndTrailingMatchedCharacters(isASCIIWhitespace<UChar>).toAtomString();
+        return AtomString { header.trim(isASCIIWhitespace) };
+    return StringView(header).left(commaIndex).trim(isASCIIWhitespace<UChar>).toAtomString();
 }
 
 void FrameLoader::didBeginDocument(bool dispatch)
@@ -1228,7 +1228,7 @@ void FrameLoader::loadInSameDocument(URL url, RefPtr<SerializedScriptValue> stat
         && !m_frame.document()->securityOrigin().isSameOriginAs(parentFrame->document()->securityOrigin()))
         m_frame.ownerElement()->dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No));
 
-    // FrameLoaderClient::didFinishLoad() tells the internal load delegate the load finished with no error
+    // LocalFrameLoaderClient::didFinishLoad() tells the internal load delegate the load finished with no error
     m_client->didFinishLoad();
 }
 
@@ -1252,6 +1252,9 @@ void FrameLoader::completed()
         if (auto* localParent = dynamicDowncast<LocalFrame>(parent))
             localParent->loader().checkCompleted();
     }
+
+    if (m_frame.view())
+        m_frame.view()->maintainScrollPositionAtAnchor(nullptr);
 }
 
 void FrameLoader::started()
@@ -1534,7 +1537,7 @@ void FrameLoader::load(FrameLoadRequest&& request)
     Ref<DocumentLoader> loader = m_client->createDocumentLoader(request.resourceRequest(), request.substituteData());
     loader->setIsRequestFromClientOrUserInput(request.isRequestFromClientOrUserInput());
     loader->setIsContinuingLoadAfterProvisionalLoadStarted(request.shouldTreatAsContinuingLoad() == ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted);
-    loader->setOriginatorNetworkConnectionIntegrityPolicy(request.networkConnectionIntegrityPolicy());
+    loader->setOriginatorAdvancedPrivacyProtections(request.advancedPrivacyProtections());
     addSameSiteInfoToRequestIfNeeded(loader->request());
     applyShouldOpenExternalURLsPolicyToNewDocumentLoader(m_frame, loader, request);
 
@@ -2627,7 +2630,7 @@ void FrameLoader::checkLoadCompleteForThisFrame()
             }
         }
 
-        bool isHTTPSFirstApplicable = protector->networkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::HTTPSFirst) && !protector->networkConnectionIntegrityPolicy().contains(NetworkConnectionIntegrity::HTTPSOnly) && !isHTTPFallbackInProgress() && (!protector->mainResourceLoader() || !protector->mainResourceLoader()->redirectCount());
+        bool isHTTPSFirstApplicable = protector->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSFirst) && !protector->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnly) && !isHTTPFallbackInProgress() && (!protector->mainResourceLoader() || !protector->mainResourceLoader()->redirectCount());
 
         // Only reset if we aren't already going to a new provisional item.
         bool shouldReset = !history().provisionalItem();
@@ -3140,8 +3143,8 @@ void FrameLoader::updateRequestAndAddExtraFields(ResourceRequest& request, IsMai
     if (shouldUpdate == ShouldUpdateAppInitiatedValue::Yes && localFrame->loader().documentLoader())
         request.setIsAppInitiated(localFrame->loader().documentLoader()->lastNavigationWasAppInitiated());
 
-    if (page)
-        request.setURL(page->chrome().client().sanitizeLookalikeCharacters(request.url(), LookalikeCharacterSanitizationTrigger::Navigation));
+    if (page && isMainResource)
+        request.setURL(page->chrome().client().applyLinkDecorationFiltering(request.url(), LinkDecorationFilteringTrigger::Navigation));
 }
 
 void FrameLoader::scheduleRefreshIfNeeded(Document& document, const String& content, IsMetaRefresh isMetaRefresh)
@@ -4332,7 +4335,7 @@ void FrameLoader::clearTestingOverrides()
     m_isStrictRawResourceValidationPolicyDisabledForTesting = false;
 }
 
-bool FrameLoaderClient::hasHTMLView() const
+bool LocalFrameLoaderClient::hasHTMLView() const
 {
     return true;
 }

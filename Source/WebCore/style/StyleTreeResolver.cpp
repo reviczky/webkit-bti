@@ -257,8 +257,11 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     auto resolveAndAddPseudoElementStyle = [&](PseudoId pseudoId) {
         auto pseudoElementUpdate = resolvePseudoElement(element, pseudoId, update);
         auto pseudoElementChange = [&] {
-            if (pseudoElementUpdate)
+            if (pseudoElementUpdate) {
+                if (pseudoId == PseudoId::Scrollbar)
+                    return pseudoElementUpdate->change;
                 return pseudoElementUpdate->change == Change::None ? Change::None : Change::NonInherited;
+            }
             if (!existingStyle || !existingStyle->getCachedPseudoStyle(pseudoId))
                 return Change::None;
             // If ::first-letter goes aways rebuild the renderers.
@@ -276,6 +279,8 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     if (resolveAndAddPseudoElementStyle(PseudoId::FirstLine) != Change::None)
         descendantsToResolve = DescendantsToResolve::All;
     if (resolveAndAddPseudoElementStyle(PseudoId::FirstLetter) != Change::None)
+        descendantsToResolve = DescendantsToResolve::All;
+    if (resolveAndAddPseudoElementStyle(PseudoId::Scrollbar) != Change::None)
         descendantsToResolve = DescendantsToResolve::All;
 
     resolveAndAddPseudoElementStyle(PseudoId::Marker);
@@ -309,6 +314,8 @@ inline bool supportsFirstLineAndLetterPseudoElement(const RenderStyle& style)
 
 std::optional<ElementUpdate> TreeResolver::resolvePseudoElement(Element& element, PseudoId pseudoId, const ElementUpdate& elementUpdate)
 {
+    if (elementUpdate.style->display() == DisplayType::None)
+        return { };
     if (pseudoId == PseudoId::Backdrop && !element.isInTopLayer())
         return { };
     if (pseudoId == PseudoId::Marker && elementUpdate.style->display() != DisplayType::ListItem)
@@ -317,7 +324,7 @@ std::optional<ElementUpdate> TreeResolver::resolvePseudoElement(Element& element
         return { };
     if (pseudoId == PseudoId::FirstLetter && !scope().resolver->usesFirstLetterRules())
         return { };
-    if (elementUpdate.style->display() == DisplayType::None)
+    if (pseudoId == PseudoId::Scrollbar && elementUpdate.style->overflowX() != Overflow::Scroll && elementUpdate.style->overflowY() != Overflow::Scroll)
         return { };
 
     if (!elementUpdate.style->hasPseudoStyle(pseudoId))
@@ -336,7 +343,8 @@ std::optional<ElementUpdate> TreeResolver::resolvePseudoElement(Element& element
     bool alwaysNeedsPseudoElement = resolvedStyle->style->hasAnimationsOrTransitions()
         || element.hasKeyframeEffects(pseudoId)
         || pseudoId == PseudoId::FirstLine
-        || pseudoId == PseudoId::FirstLetter;
+        || pseudoId == PseudoId::FirstLetter
+        || pseudoId == PseudoId::Scrollbar;
     if (!alwaysNeedsPseudoElement && !pseudoElementRendererIsNeeded(resolvedStyle->style.get()))
         return { };
 
@@ -835,7 +843,7 @@ void TreeResolver::resolveComposedTree()
                 m_update->addText(text, parent.element, WTFMove(textUpdate));
             }
 
-            if (!text.data().isAllSpecialCharacters<isASCIIWhitespace>())
+            if (!text.data().containsOnly<isASCIIWhitespace>())
                 parent.resolvedFirstLineAndLetterChild = true;
 
             text.setHasValidStyle();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Google Inc. All rights reserved.
+ * Copyright (C) 2013-2014 Google Inc. All rights reserved.
  * Copyright (C) 2014-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -107,9 +107,6 @@ public:
     DECLARE_PROPERTY_CUSTOM_HANDLERS(GridTemplateAreas);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(GridTemplateColumns);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(GridTemplateRows);
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    DECLARE_PROPERTY_CUSTOM_HANDLERS(ImageResolution);
-#endif
     DECLARE_PROPERTY_CUSTOM_HANDLERS(LetterSpacing);
 #if ENABLE(TEXT_AUTOSIZING)
     DECLARE_PROPERTY_CUSTOM_HANDLERS(LineHeight);
@@ -178,7 +175,6 @@ private:
 
     template <CSSPropertyID id>
     static void applyTextOrBoxShadowValue(BuilderState&, CSSValue&);
-    static bool isValidDisplayValue(BuilderState&, DisplayType);
 
     enum CounterBehavior {Increment = 0, Reset};
     template <CounterBehavior counterBehavior>
@@ -335,43 +331,6 @@ inline void BuilderCustom::applyValueVerticalAlign(BuilderState& builderState, C
     else
         builderState.style().setVerticalAlignLength(primitiveValue.convertToLength<FixedIntegerConversion | PercentConversion | CalculatedConversion>(builderState.cssToLengthConversionData()));
 }
-
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-
-inline void BuilderCustom::applyInheritImageResolution(BuilderState& builderState)
-{
-    builderState.style().setImageResolutionSource(builderState.parentStyle().imageResolutionSource());
-    builderState.style().setImageResolutionSnap(builderState.parentStyle().imageResolutionSnap());
-    builderState.style().setImageResolution(builderState.parentStyle().imageResolution());
-}
-
-inline void BuilderCustom::applyInitialImageResolution(BuilderState& builderState)
-{
-    builderState.style().setImageResolutionSource(RenderStyle::initialImageResolutionSource());
-    builderState.style().setImageResolutionSnap(RenderStyle::initialImageResolutionSnap());
-    builderState.style().setImageResolution(RenderStyle::initialImageResolution());
-}
-
-inline void BuilderCustom::applyValueImageResolution(BuilderState& builderState, CSSValue& value)
-{
-    ImageResolutionSource source = RenderStyle::initialImageResolutionSource();
-    ImageResolutionSnap snap = RenderStyle::initialImageResolutionSnap();
-    double resolution = RenderStyle::initialImageResolution();
-    for (auto& item : downcast<CSSValueList>(value)) {
-        CSSPrimitiveValue& primitiveValue = downcast<CSSPrimitiveValue>(item.get());
-        if (primitiveValue.valueID() == CSSValueFromImage)
-            source = ImageResolutionSource::FromImage;
-        else if (primitiveValue.valueID() == CSSValueSnap)
-            snap = ImageResolutionSnap::Pixels;
-        else
-            resolution = primitiveValue.doubleValue(CSSUnitType::CSS_DPPX);
-    }
-    builderState.style().setImageResolutionSource(source);
-    builderState.style().setImageResolutionSnap(snap);
-    builderState.style().setImageResolution(resolution);
-}
-
-#endif // ENABLE(CSS_IMAGE_RESOLUTION)
 
 inline void BuilderCustom::applyInheritSize(BuilderState&)
 {
@@ -1129,13 +1088,6 @@ inline void BuilderCustom::applyValueBorderTopRightRadius(BuilderState& builderS
     builderState.style().setHasExplicitlySetBorderTopRightRadius(true);
 }
 
-inline bool BuilderCustom::isValidDisplayValue(BuilderState& builderState, DisplayType display)
-{
-    if (is<SVGElement>(builderState.element()) && builderState.style().styleType() == PseudoId::None)
-        return display == DisplayType::Inline || display == DisplayType::Block || display == DisplayType::None;
-    return true;
-}
-
 inline void BuilderCustom::applyInitialFontVariationSettings(BuilderState& builderState)
 {
     builderState.style().setFontVariationSettings({ });
@@ -1144,20 +1096,6 @@ inline void BuilderCustom::applyInitialFontVariationSettings(BuilderState& build
 inline void BuilderCustom::applyInheritFontVariationSettings(BuilderState& builderState)
 {
     builderState.style().setFontVariationSettings(builderState.parentStyle().fontVariationSettings());
-}
-
-inline void BuilderCustom::applyInheritDisplay(BuilderState& builderState)
-{
-    DisplayType display = builderState.parentStyle().display();
-    if (isValidDisplayValue(builderState, display))
-        builderState.style().setDisplay(display);
-}
-
-inline void BuilderCustom::applyValueDisplay(BuilderState& builderState, CSSValue& value)
-{
-    auto display = fromCSSValue<DisplayType>(value);
-    if (isValidDisplayValue(builderState, display))
-        builderState.style().setDisplay(display);
 }
 
 inline void BuilderCustom::applyInheritBaselineShift(BuilderState& builderState)

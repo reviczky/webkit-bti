@@ -1437,6 +1437,7 @@ public:
     void compileValueSub(Node*);
     void compileArithAdd(Node*);
     void compileMakeRope(Node*);
+    void compileMakeAtomString(Node*);
     void compileArithAbs(Node*);
     void compileArithClz32(Node*);
     void compileArithSub(Node*);
@@ -1626,6 +1627,8 @@ public:
     void compileStringCodePointAt(Node*);
     void compileStringLocaleCompare(Node*);
     void compileDateGet(Node*);
+    void compileGlobalIsNaN(Node*);
+    void compileNumberIsNaN(Node*);
 
     template<typename JSClass, typename Operation>
     void compileCreateInternalFieldObject(Node*, Operation);

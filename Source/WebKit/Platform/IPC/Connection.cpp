@@ -43,11 +43,13 @@
 #include <wtf/threads/BinarySemaphore.h>
 
 #if PLATFORM(COCOA)
+#include "ArgumentCodersDarwin.h"
 #include "MachMessage.h"
 #include "WKCrashReporter.h"
 #endif
 
 #if USE(UNIX_DOMAIN_SOCKETS)
+#include "ArgumentCodersUnix.h"
 #include "UnixMessage.h"
 #endif
 
@@ -1444,5 +1446,23 @@ std::optional<Connection::ConnectionIdentifierPair> Connection::createConnection
     return std::nullopt;
 }
 #endif
+
+void Connection::Handle::encode(Encoder& encoder)
+{
+    encoder << WTFMove(handle);
+}
+
+std::optional<Connection::Handle> Connection::Handle::decode(Decoder& decoder)
+{
+#if USE(UNIX_DOMAIN_SOCKETS)
+    auto handle = decoder.decode<UnixFileDescriptor>();
+#elif OS(WINDOWS)
+    auto handle = decoder.decode<Win32Handle>();
+#elif OS(DARWIN)
+    auto handle = decoder.decode<MachSendRight>();
+#endif
+    return handle;
+}
+
 
 } // namespace IPC

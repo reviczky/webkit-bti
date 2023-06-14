@@ -31,7 +31,7 @@
 #include "Path.h"
 #include "RenderAncestorIterator.h"
 #include "RenderBox.h"
-#include "RenderStyle.h"
+#include "RenderStyleInlines.h"
 #include "SimpleRange.h"
 #include "WindRule.h"
 #include <wtf/text/TextStream.h>
@@ -175,7 +175,7 @@ void EventRegionContext::uniteInteractionRegions(const Region& region, RenderObj
 
 bool EventRegionContext::shouldConsolidateInteractionRegion(IntRect bounds, RenderObject& renderer)
 {
-    if (!renderer.style().borderAndBackgroundEqual(RenderStyle::defaultStyle()))
+    if (renderer.hasVisibleBoxDecorations())
         return false;
 
     for (auto& ancestor : ancestorsOfType<RenderElement>(renderer)) {
@@ -206,7 +206,7 @@ bool EventRegionContext::shouldConsolidateInteractionRegion(IntRect bounds, Rend
         }
 
         // If we find a border / background, stop the search.
-        if (!ancestor.style().borderAndBackgroundEqual(RenderStyle::defaultStyle()))
+        if (ancestor.hasVisibleBoxDecorations())
             return false;
     }
 
@@ -538,6 +538,11 @@ bool EventRegion::containsEditableElementsInRect(const IntRect& rect) const
 void EventRegion::appendInteractionRegions(const Vector<InteractionRegion>& interactionRegions)
 {
     m_interactionRegions.appendVector(interactionRegions);
+}
+
+void EventRegion::clearInteractionRegions()
+{
+    m_interactionRegions.clear();
 }
 
 #endif

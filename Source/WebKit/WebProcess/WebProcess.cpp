@@ -134,6 +134,7 @@
 #include <WebCore/ProcessWarming.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/RemoteCommandListener.h>
+#include <WebCore/RenderTreeAsText.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/ScriptController.h>
@@ -919,7 +920,7 @@ bool WebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder
 {
     if (messageReceiverMap().dispatchSyncMessage(connection, decoder, replyEncoder))
         return true;
-    return false;
+    return didReceiveSyncWebProcessMessage(connection, decoder, replyEncoder);
 }
 
 void WebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -1384,10 +1385,10 @@ void WebProcess::remotePostMessage(WebCore::FrameIdentifier identifier, std::opt
     if (!webFrame)
         return;
 
-    if (!webFrame->coreFrame())
+    if (!webFrame->coreLocalFrame())
         return;
 
-    auto* domWindow = webFrame->coreFrame()->window();
+    auto* domWindow = webFrame->coreLocalFrame()->window();
     if (!domWindow)
         return;
 
@@ -1401,6 +1402,32 @@ void WebProcess::remotePostMessage(WebCore::FrameIdentifier identifier, std::opt
         return;
 
     domWindow->postMessageFromRemoteFrame(*globalObject, target, message);
+}
+
+void WebProcess::renderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String)>&& completionHandler)
+{
+    auto* webFrame = WebProcess::singleton().webFrame(frameIdentifier);
+    if (!webFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ });
+    }
+
+    auto* coreLocalFrame = webFrame->coreLocalFrame();
+    if (!coreLocalFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ });
+    }
+
+    auto* renderer = coreLocalFrame->contentRenderer();
+    if (!renderer) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ });
+    }
+
+    auto ts = WebCore::createTextStream(*renderer);
+    ts.setIndent(baseIndent);
+    WebCore::externalRepresentationForLocalFrame(ts, *coreLocalFrame, behavior);
+    completionHandler(ts.release());
 }
     
 void WebProcess::startMemorySampler(SandboxExtension::Handle&& sampleLogFileHandle, const String& sampleLogFilePath, const double interval)
@@ -2197,7 +2224,7 @@ void WebProcess::setUseGPUProcessForMedia(bool useGPUProcessForMedia)
 
 #if PLATFORM(IOS_FAMILY)
     if (useGPUProcessForMedia)
-        MediaSessionHelper::setSharedHelper(makeUniqueRef<RemoteMediaSessionHelper>(*this));
+        MediaSessionHelper::setSharedHelper(adoptRef(*new RemoteMediaSessionHelper(*this)));
     else
         MediaSessionHelper::resetSharedHelper();
 #endif

@@ -131,6 +131,8 @@ public:
 
     static constexpr uintptr_t isRopeInPointer = 0x1;
 
+    static constexpr unsigned maxLengthForOnStackResolve = 2048;
+
 private:
     String& uninitializedValueInternal() const
     {
@@ -280,6 +282,9 @@ private:
     friend JSString* jsSubstring(VM&, JSGlobalObject*, JSString*, unsigned, unsigned);
     friend JSString* jsSubstringOfResolved(VM&, GCDeferralContext*, JSString*, unsigned, unsigned);
     friend JSString* jsOwnedString(VM&, const String&);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*, JSString*);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*, JSString*, JSString*);
 };
 
 // NOTE: This class cannot override JSString's destructor. JSString's destructor is called directly
@@ -589,7 +594,13 @@ public:
     // The rope value will remain a null string in that case.
     JS_EXPORT_PRIVATE const String& resolveRope(JSGlobalObject* nullOrGlobalObjectForOOM) const;
 
+    template<typename Fibers, typename CharacterType>
+    static void resolveToBuffer(Fibers*, CharacterType* buffer, unsigned length);
+
 private:
+    template<typename Fibers, typename CharacterType>
+    static void resolveToBufferSlow(Fibers*, CharacterType* buffer, unsigned length);
+
     static JSRopeString* create(VM& vm, JSString* s1, JSString* s2)
     {
         JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm)) JSRopeString(vm, s1, s2);
@@ -621,7 +632,6 @@ private:
     template<typename Function> const String& resolveRopeWithFunction(JSGlobalObject* nullOrGlobalObjectForOOM, Function&&) const;
     JS_EXPORT_PRIVATE AtomString resolveRopeToAtomString(JSGlobalObject*) const;
     JS_EXPORT_PRIVATE RefPtr<AtomStringImpl> resolveRopeToExistingAtomString(JSGlobalObject*) const;
-    template<typename CharacterType> NEVER_INLINE void resolveRopeSlowCase(CharacterType*) const;
     template<typename CharacterType> void resolveRopeInternalNoSubstring(CharacterType*) const;
     Identifier toIdentifier(JSGlobalObject*) const;
     void outOfMemory(JSGlobalObject* nullOrGlobalObjectForOOM) const;
@@ -704,6 +714,9 @@ private:
     friend JSString* jsString(JSGlobalObject*, const String&, const String&, const String&);
     friend JSString* jsSubstringOfResolved(VM&, GCDeferralContext*, JSString*, unsigned, unsigned);
     friend JSString* jsSubstring(VM&, JSGlobalObject*, JSString*, unsigned, unsigned);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*, JSString*);
+    friend JSString* jsAtomString(JSGlobalObject*, VM&, JSString*, JSString*, JSString*);
 };
 
 JS_EXPORT_PRIVATE JSString* jsStringWithCacheSlowCase(VM&, StringImpl&);

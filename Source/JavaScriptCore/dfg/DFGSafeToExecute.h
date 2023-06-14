@@ -282,6 +282,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case StrCat:
     case CallStringConstructor:
     case MakeRope:
+    case MakeAtomString:
     case GetFromArguments:
     case GetArgument:
     case StringFromCharCode:
@@ -324,7 +325,11 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case DataViewGetFloat:
     case ResolveRope:
     case GetWebAssemblyInstanceExports:
+    case NumberIsNaN:
         return true;
+
+    case GlobalIsNaN:
+        return node->child1().useKind() == DoubleRepUse;
 
     case GetButterfly:
         return state.forNode(node->child1()).isType(SpecObject);
@@ -524,6 +529,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case PutStack:
     case KillStack:
     case MovHint:
+    case ZombieHint:
     case Upsilon:
     case Phi:
     case Flush:

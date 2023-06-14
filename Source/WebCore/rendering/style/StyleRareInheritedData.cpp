@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -55,10 +55,6 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
     TextSizeAdjustment textSizeAdjust;
 #endif
 
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    float imageResolutionFloats;
-#endif
-
 #if ENABLE(TOUCH_EVENTS)
     StyleColor tapHighlightColor;
 #endif
@@ -70,6 +66,8 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
     TextAutospace textAutospace;
 
     ListStyleType listStyleType;
+
+    WordBoundaryDetection wordBoundaryDetection;
 };
 
 static_assert(sizeof(StyleRareInheritedData) <= sizeof(GreaterThanOrSameSizeAsStyleRareInheritedData), "StyleRareInheritedData should bit pack");
@@ -121,15 +119,10 @@ StyleRareInheritedData::StyleRareInheritedData()
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     , useTouchOverflowScrolling(RenderStyle::initialUseTouchOverflowScrolling())
 #endif
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    , imageResolutionSource(RenderStyle::initialImageResolutionSource())
-    , imageResolutionSnap(RenderStyle::initialImageResolutionSnap())
-#endif
     , textAlignLast(static_cast<unsigned>(RenderStyle::initialTextAlignLast()))
     , textJustify(static_cast<unsigned>(RenderStyle::initialTextJustify()))
     , textDecorationSkipInk(static_cast<unsigned>(RenderStyle::initialTextDecorationSkipInk()))
     , textUnderlinePosition(static_cast<unsigned>(RenderStyle::initialTextUnderlinePosition()))
-    , textWrap(static_cast<unsigned>(RenderStyle::initialTextWrap()))
     , rubyPosition(static_cast<unsigned>(RenderStyle::initialRubyPosition()))
     , textZoom(static_cast<unsigned>(RenderStyle::initialTextZoom()))
 #if PLATFORM(IOS_FAMILY)
@@ -159,9 +152,6 @@ StyleRareInheritedData::StyleRareInheritedData()
     , tabSize(RenderStyle::initialTabSize())
 #if ENABLE(TEXT_AUTOSIZING)
     , textSizeAdjust(RenderStyle::initialTextSizeAdjust())
-#endif
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    , imageResolution(RenderStyle::initialImageResolution())
 #endif
 #if ENABLE(TOUCH_EVENTS)
     , tapHighlightColor(RenderStyle::initialTapHighlightColor())
@@ -221,15 +211,10 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     , useTouchOverflowScrolling(o.useTouchOverflowScrolling)
 #endif
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    , imageResolutionSource(o.imageResolutionSource)
-    , imageResolutionSnap(o.imageResolutionSnap)
-#endif
     , textAlignLast(o.textAlignLast)
     , textJustify(o.textJustify)
     , textDecorationSkipInk(o.textDecorationSkipInk)
     , textUnderlinePosition(o.textUnderlinePosition)
-    , textWrap(o.textWrap)
     , rubyPosition(o.rubyPosition)
     , textZoom(o.textZoom)
 #if PLATFORM(IOS_FAMILY)
@@ -266,9 +251,6 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , tabSize(o.tabSize)
 #if ENABLE(TEXT_AUTOSIZING)
     , textSizeAdjust(o.textSizeAdjust)
-#endif
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-    , imageResolution(o.imageResolution)
 #endif
 #if ENABLE(TOUCH_EVENTS)
     , tapHighlightColor(o.tapHighlightColor)
@@ -353,16 +335,10 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && lineGrid == o.lineGrid
         && imageOrientation == o.imageOrientation
         && imageRendering == o.imageRendering
-#if ENABLE(CSS_IMAGE_RESOLUTION)
-        && imageResolutionSource == o.imageResolutionSource
-        && imageResolutionSnap == o.imageResolutionSnap
-        && imageResolution == o.imageResolution
-#endif
         && textAlignLast == o.textAlignLast
         && textJustify == o.textJustify
         && textDecorationSkipInk == o.textDecorationSkipInk
         && textUnderlinePosition == o.textUnderlinePosition
-        && textWrap == o.textWrap
         && rubyPosition == o.rubyPosition
         && textZoom == o.textZoom
         && lineSnap == o.lineSnap

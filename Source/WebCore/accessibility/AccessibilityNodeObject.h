@@ -83,6 +83,7 @@ public:
     void setNode(Node*);
     Node* node() const override { return m_node.get(); }
     Document* document() const override;
+    LocalFrameView* documentFrameView() const override;
 
     void setFocused(bool) override;
     bool isFocused() const override;
@@ -120,6 +121,7 @@ public:
     Element* actionElement() const override;
     Element* mouseButtonListener(MouseButtonListenerResultFilter = ExcludeBodyElement) const;
     Element* anchorElement() const override;
+    Element* popoverTargetElement() const final;
     AccessibilityObject* internalLinkElement() const;
     void addRadioButtonGroupMembers(AccessibilityChildrenVector& linkedUIElements) const;
     void addRadioButtonGroupChildren(AXCoreObject&, AccessibilityChildrenVector&) const;
@@ -161,6 +163,7 @@ protected:
     virtual AccessibilityRole determineAriaRoleAttribute() const;
     AccessibilityRole remapAriaRoleDueToParent(AccessibilityRole) const;
 
+    bool computeAccessibilityIsIgnored() const override;
     void addChildren() override;
     void clearChildren() override;
     void updateChildrenIfNecessary() override;
@@ -210,13 +213,13 @@ private:
     void visibleText(Vector<AccessibilityText>&) const;
     String alternativeTextForWebArea() const;
     void ariaLabeledByText(Vector<AccessibilityText>&) const;
-    bool computeAccessibilityIsIgnored() const override;
     bool usesAltTagForTextComputation() const;
     bool roleIgnoresTitle() const;
     bool postKeyboardKeysForValueChange(StepAction);
     void setNodeValue(StepAction, float);
     bool performDismissAction() final;
     bool hasTextAlternative() const;
+    LayoutRect checkboxOrRadioRect() const;
 
     void setNeedsToUpdateChildren() override { m_childrenDirty = true; }
     bool needsToUpdateChildren() const override { return m_childrenDirty; }

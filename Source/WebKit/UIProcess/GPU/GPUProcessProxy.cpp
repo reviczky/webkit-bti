@@ -330,7 +330,7 @@ static inline bool addDisplayCaptureSandboxExtension(std::optional<audit_token_t
 }
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
 static inline bool addTCCDSandboxExtension(Vector<SandboxExtension::Handle>& extensions)
 {
     auto handle = SandboxExtension::createHandleForMachLookup("com.apple.tccd"_s, std::nullopt);
@@ -362,10 +362,10 @@ void GPUProcessProxy::updateSandboxAccess(bool allowAudioCapture, bool allowVide
         m_hasSentDisplayCaptureSandboxExtension = true;
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || PLATFORM(VISION)
     if ((allowAudioCapture || allowVideoCapture) && !m_hasSentTCCDSandboxExtension && addTCCDSandboxExtension(extensions))
         m_hasSentTCCDSandboxExtension = true;
-#endif // PLATFORM(IOS)
+#endif // PLATFORM(IOS) || PLATFORM(VISION)
 
     if (!extensions.isEmpty())
         send(Messages::GPUProcess::UpdateSandboxAccess { extensions }, 0);
@@ -447,6 +447,11 @@ void GPUProcessProxy::processWillShutDown(IPC::Connection& connection)
 std::optional<bool> GPUProcessProxy::s_hasVP9HardwareDecoder;
 std::optional<bool> GPUProcessProxy::s_hasVP9ExtensionSupport;
 #endif
+
+void GPUProcessProxy::updateWebGPUEnabled(WebProcessProxy& webProcessProxy, bool webGPUEnabled)
+{
+    send(Messages::GPUProcess::UpdateWebGPUEnabled(webProcessProxy.coreProcessIdentifier(), webGPUEnabled), 0);
+}
 
 void GPUProcessProxy::createGPUProcessConnection(WebProcessProxy& webProcessProxy, IPC::Connection::Handle&& connectionIdentifier, GPUProcessConnectionParameters&& parameters)
 {

@@ -146,6 +146,127 @@ fn testTextureSample() {
   }
 }
 
+fn testTextureLoad()
+{
+    // [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture1d], T, U) => Vector[S, 4],
+    {
+        {
+            let t: texture_1d<f32>;
+            _ = textureLoad(t, 0, 0);
+            _ = textureLoad(t, 0i, 0u);
+            _ = textureLoad(t, 0u, 0i);
+        }
+        {
+            let t: texture_1d<i32>;
+            _ = textureLoad(t, 0, 0);
+            _ = textureLoad(t, 0i, 0u);
+            _ = textureLoad(t, 0u, 0i);
+        }
+        {
+            let t: texture_1d<u32>;
+            _ = textureLoad(t, 0, 0);
+            _ = textureLoad(t, 0i, 0u);
+            _ = textureLoad(t, 0u, 0i);
+        }
+    }
+
+    // [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture2d], Vector[T, 2], U) => Vector[S, 4],
+    {
+        {
+            let t: texture_2d<f32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+        {
+            let t: texture_2d<i32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+        {
+            let t: texture_2d<u32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+    }
+
+    // [T < ConcreteInteger, V < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture2dArray], Vector[T, 2], V, U) => Vector[S, 4],
+    {
+        {
+            let t: texture_2d_array<f32>;
+            _ = textureLoad(t, vec2(0), 0, 0);
+            _ = textureLoad(t, vec2(0i), 0u, 0i);
+            _ = textureLoad(t, vec2(0u), 0i, 0u);
+        }
+        {
+            let t: texture_2d_array<i32>;
+            _ = textureLoad(t, vec2(0), 0, 0);
+            _ = textureLoad(t, vec2(0i), 0u, 0i);
+            _ = textureLoad(t, vec2(0u), 0i, 0u);
+        }
+        {
+            let t: texture_2d_array<u32>;
+            _ = textureLoad(t, vec2(0), 0, 0);
+            _ = textureLoad(t, vec2(0i), 0u, 0i);
+            _ = textureLoad(t, vec2(0u), 0i, 0u);
+        }
+    }
+
+    // [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture3d], Vector[T, 3], U) => Vector[S, 4],
+    {
+        {
+            let t: texture_3d<f32>;
+            _ = textureLoad(t, vec3(0), 0);
+            _ = textureLoad(t, vec3(0i), 0u);
+            _ = textureLoad(t, vec3(0u), 0i);
+        }
+        {
+            let t: texture_3d<i32>;
+            _ = textureLoad(t, vec3(0), 0);
+            _ = textureLoad(t, vec3(0i), 0u);
+            _ = textureLoad(t, vec3(0u), 0i);
+        }
+        {
+            let t: texture_3d<u32>;
+            _ = textureLoad(t, vec3(0), 0);
+            _ = textureLoad(t, vec3(0i), 0u);
+            _ = textureLoad(t, vec3(0u), 0i);
+        }
+    }
+
+    // [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, TextureMultisampled2d], Vector[T, 2], U) => Vector[S, 4],
+    {
+        {
+            let t: texture_multisampled_2d<f32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+        {
+            let t: texture_multisampled_2d<i32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+        {
+            let t: texture_multisampled_2d<u32>;
+            _ = textureLoad(t, vec2(0), 0);
+            _ = textureLoad(t, vec2(0i), 0u);
+            _ = textureLoad(t, vec2(0u), 0i);
+        }
+    }
+
+    // [T < ConcreteInteger].(TextureExternal, Vector[T, 2]) => Vector[F32, 4],
+    {
+        let t: texture_external;
+        _ = textureLoad(t, vec2(0));
+        _ = textureLoad(t, vec2(0i));
+        _ = textureLoad(t, vec2(0u));
+    }
+}
+
 fn testVec2() {
   _ = vec2<f32>(0);
   _ = vec2<f32>(0, 0);
@@ -364,6 +485,115 @@ fn testBitwise()
     _ = 0i ^ 1i;
     _ = 0u ^ 1u;
   }
+}
+
+// 7.6. Logical Expressions (https://gpuweb.github.io/gpuweb/wgsl/#logical-expr)
+
+fn testLogicalNegation()
+{
+    // [].(Bool) => Bool,
+    _ = !true;
+    _ = !false;
+
+    // [N].(Vector[Bool, N]) => Vector[Bool, N],
+    _ = !vec2(true);
+    _ = !vec3(true);
+    _ = !vec4(true);
+    _ = !vec2(false);
+    _ = !vec3(false);
+    _ = !vec4(false);
+}
+
+fn testShortCircuitingOr()
+{
+    // [].(Bool, Bool) => Bool,
+    _ = false || false;
+    _ = true || false;
+    _ = false || true;
+    _ = true || true;
+}
+
+fn testShortCircuitingAnd()
+{
+    // [].(Bool, Bool) => Bool,
+    _ = false && false;
+    _ = true && false;
+    _ = false && true;
+    _ = true && true;
+}
+
+fn testLogicalOr()
+{
+    // [].(Bool, Bool) => Bool,
+    _ = false | false;
+    _ = true | false;
+    _ = false | true;
+    _ = true | true;
+
+    // [N].(Vector[Bool, N], Vector[Bool, N]) => Vector[Bool, N],
+    _ = vec2(false) | vec2(false);
+    _ = vec2( true) | vec2(false);
+    _ = vec2(false) | vec2( true);
+    _ = vec2( true) | vec2( true);
+    _ = vec3(false) | vec3(false);
+    _ = vec3( true) | vec3(false);
+    _ = vec3(false) | vec3( true);
+    _ = vec3( true) | vec3( true);
+    _ = vec4(false) | vec4(false);
+    _ = vec4( true) | vec4(false);
+    _ = vec4(false) | vec4( true);
+    _ = vec4( true) | vec4( true);
+}
+
+fn testLogicalAnd()
+{
+    // [].(Bool, Bool) => Bool,
+    _ = false & false;
+    _ = true & false;
+    _ = false & true;
+    _ = true & true;
+
+    // [N].(Vector[Bool, N], Vector[Bool, N]) => Vector[Bool, N],
+    _ = vec2(false) & vec2(false);
+    _ = vec2( true) & vec2(false);
+    _ = vec2(false) & vec2( true);
+    _ = vec2( true) & vec2( true);
+    _ = vec3(false) & vec3(false);
+    _ = vec3( true) & vec3(false);
+    _ = vec3(false) & vec3( true);
+    _ = vec3( true) & vec3( true);
+    _ = vec4(false) & vec4(false);
+    _ = vec4( true) & vec4(false);
+    _ = vec4(false) & vec4( true);
+    _ = vec4( true) & vec4( true);
+}
+
+// 16.1. Constructor Built-in Functions
+
+// 16.1.1. Zero Value Built-in Functions
+struct S { x: i32 };
+fn testZeroValueBuiltInFunctions()
+{
+    _ = bool();
+    _ = i32();
+    _ = u32();
+    _ = f32();
+
+    _ = vec2<f32>();
+    _ = vec3<f32>();
+    _ = vec4<f32>();
+
+    _ = mat2x2<f32>();
+    _ = mat2x3<f32>();
+    _ = mat2x4<f32>();
+    _ = mat3x2<f32>();
+    _ = mat3x3<f32>();
+    _ = mat3x4<f32>();
+    _ = mat4x2<f32>();
+    _ = mat4x3<f32>();
+    _ = mat4x4<f32>();
+    _ = S();
+    _ = array<f32, 1>();
 }
 
 // 17.3. Logical Built-in Functions (https://www.w3.org/TR/WGSL/#logical-builtin-functions)

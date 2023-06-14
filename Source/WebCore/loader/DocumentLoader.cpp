@@ -50,7 +50,6 @@
 #include "ExtensionStyleSheets.h"
 #include "FormState.h"
 #include "FrameLoader.h"
-#include "FrameLoaderClient.h"
 #include "FrameTree.h"
 #include "HTMLFormElement.h"
 #include "HTMLFrameOwnerElement.h"
@@ -67,6 +66,7 @@
 #include "LoaderStrategy.h"
 #include "LocalDOMWindow.h"
 #include "LocalFrame.h"
+#include "LocalFrameLoaderClient.h"
 #include "Logging.h"
 #include "MemoryCache.h"
 #include "MixedContentChecker.h"
@@ -136,15 +136,6 @@
 
 #if USE(APPLE_INTERNAL_SDK)
 #include <WebKitAdditions/DocumentLoaderAdditions.cpp>
-#else
-namespace WebCore {
-
-bool DocumentLoader::isLoadingInHeadlessMode() const
-{
-    return false;
-}
-
-} // namespace WebCore
 #endif
 
 namespace WebCore {
@@ -2580,6 +2571,11 @@ bool DocumentLoader::allowsActiveContentRuleListActionsForURL(const String& cont
             return true;
     }
     return false;
+}
+
+bool DocumentLoader::fingerprintingProtectionsEnabled() const
+{
+    return m_advancedPrivacyProtections.contains(AdvancedPrivacyProtections::FingerprintingProtections);
 }
 
 } // namespace WebCore

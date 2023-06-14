@@ -658,6 +658,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSValueList.h
     css/CSSVariableData.h
     css/CSSVariableReferenceValue.h
+    css/CSSWordBoundaryDetectionValue.h
     css/ContainerQuery.h
     css/Counter.h
     css/DeprecatedCSSOMCounter.h
@@ -1195,6 +1196,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     loader/LinkLoaderClient.h
     loader/LoadSchedulingMode.h
     loader/LoaderStrategy.h
+    loader/LocalFrameLoaderClient.h
     loader/MediaResourceLoader.h
     loader/MixedContentChecker.h
     loader/NavigationAction.h
@@ -1304,12 +1306,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ImageAnalysisQueue.h
     page/InteractionRegion.h
     page/LayoutMilestone.h
+    page/LinkDecorationFilteringData.h
     page/LocalDOMWindow.h
     page/LocalDOMWindowProperty.h
     page/LocalFrame.h
     page/LocalFrameView.h
     page/LocalFrameViewLayoutContext.h
-    page/LookalikeCharactersSanitizationData.h
     page/MediaCanStartListener.h
     page/MediaControlsContextMenuItem.h
     page/MediaProducer.h
@@ -1717,7 +1719,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/GraphicsLayerContentsDisplayDelegate.h
     platform/graphics/GraphicsLayerFactory.h
     platform/graphics/GraphicsLayerTransform.h
-    platform/graphics/GraphicsLayerUpdater.h
     platform/graphics/GraphicsStyle.h
     platform/graphics/GraphicsTypes.h
     platform/graphics/GraphicsTypesGL.h
@@ -1767,12 +1768,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/MediaUsageInfo.h
     platform/graphics/NativeImage.h
     platform/graphics/NullGraphicsContext.h
-    platform/graphics/OpenGLESShims.h
-    platform/graphics/OpenGLShims.h
     platform/graphics/Path.h
     platform/graphics/PathUtilities.h
     platform/graphics/Pattern.h
     platform/graphics/PixelBuffer.h
+    platform/graphics/PixelBufferConversion.h
     platform/graphics/PixelBufferFormat.h
     platform/graphics/PixelFormat.h
     platform/graphics/PlatformAudioTrackConfiguration.h
@@ -1915,8 +1915,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/graphics/libwpe/PlatformDisplayLibWPE.h
 
-    platform/graphics/opengl/TemporaryOpenGLSetting.h
-
     platform/graphics/opentype/OpenTypeMathData.h
     platform/graphics/opentype/OpenTypeVerticalData.h
 
@@ -1995,6 +1993,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mock/MockRealtimeMediaSourceCenter.h
     platform/mock/MockRealtimeVideoSource.h
 
+    platform/network/AdvancedPrivacyProtections.h
     platform/network/AuthenticationChallengeBase.h
     platform/network/AuthenticationClient.h
     platform/network/BlobData.h
@@ -2018,7 +2017,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/HTTPHeaderMap.h
     platform/network/HTTPHeaderValues.h
     platform/network/HTTPParsers.h
-    platform/network/NetworkConnectionIntegrity.h
     platform/network/NetworkLoadInformation.h
     platform/network/NetworkLoadMetrics.h
     platform/network/NetworkStateNotifier.h
@@ -2141,7 +2139,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderTheme.h
     rendering/RenderThemeCocoa.h
     rendering/RenderThemeIOS.h
-    rendering/RenderThemeWin.h
     rendering/RenderTreeAsText.h
     rendering/RenderVideo.h
     rendering/RenderView.h
@@ -2174,6 +2171,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/RenderStyleConstants.h
     rendering/style/RenderStyleInlines.h
     rendering/style/RenderStyleSetters.h
+    rendering/style/ScrollbarGutter.h
     rendering/style/SVGRenderStyle.h
     rendering/style/SVGRenderStyleDefs.h
     rendering/style/ShadowData.h
@@ -2207,6 +2205,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/TextSizeAdjustment.h
     rendering/style/TextUnderlineOffset.h
     rendering/style/WillChangeData.h
+    rendering/style/WordBoundaryDetection.h
 
     rendering/svg/RenderSVGModelObject.h
     rendering/svg/SVGBoundingBoxComputation.h

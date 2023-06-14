@@ -27,7 +27,6 @@
 
 #if ENABLE(GPU_PROCESS)
 
-#include "DisplayListRecorderFlushIdentifier.h"
 #include "GPUProcessConnection.h"
 #include "IPCSemaphore.h"
 #include "ImageBufferBackendHandle.h"
@@ -45,11 +44,10 @@
 #include "StreamClientConnection.h"
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <WebCore/Timer.h>
+#include <span>
 #include <wtf/Deque.h>
 #include <wtf/HashMap.h>
-#include <wtf/Span.h>
 #include <wtf/WeakPtr.h>
-#include <wtf/WorkQueue.h>
 
 namespace WebCore {
 
@@ -82,8 +80,8 @@ public:
     RemoteResourceCacheProxy& remoteResourceCacheProxy() { return m_remoteResourceCacheProxy; }
 
     void transferImageBuffer(std::unique_ptr<RemoteSerializedImageBufferProxy>, WebCore::ImageBuffer&);
-    void moveToSerializedBuffer(WebCore::RenderingResourceIdentifier, RemoteSerializedImageBufferWriteReference&&);
-    void moveToImageBuffer(RemoteSerializedImageBufferWriteReference&&, WebCore::RenderingResourceIdentifier);
+    void moveToSerializedBuffer(WebCore::RenderingResourceIdentifier);
+    void moveToImageBuffer(WebCore::RenderingResourceIdentifier);
 
     void createRemoteImageBuffer(WebCore::ImageBuffer&);
     bool isCached(const WebCore::ImageBuffer&) const;
@@ -160,8 +158,6 @@ public:
 
     SerialFunctionDispatcher& dispatcher() { return m_dispatcher; }
 
-    void addPendingFlush(RemoteImageBufferProxyFlushState&, IPC::Semaphore&&, DisplayListRecorderFlushIdentifier);
-
 private:
     explicit RemoteRenderingBackendProxy(const RemoteRenderingBackendCreationParameters&, SerialFunctionDispatcher&);
 
@@ -205,7 +201,6 @@ private:
 
     RenderingUpdateID m_renderingUpdateID;
     RenderingUpdateID m_didRenderingUpdateID;
-    Ref<WorkQueue> m_flushWorkQueue;
 };
 
 } // namespace WebKit

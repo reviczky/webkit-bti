@@ -25,11 +25,13 @@
 messages -> GPUConnectionToWebProcess WantsDispatchMessage {
     void CreateRenderingBackend(struct WebKit::RemoteRenderingBackendCreationParameters creationParameters, IPC::StreamServerConnection::Handle connectionHandle) AllowedWhenWaitingForSyncReply
     void ReleaseRenderingBackend(WebKit::RenderingBackendIdentifier renderingBackendIdentifier) AllowedWhenWaitingForSyncReply
-    void ReleaseSerializedImageBuffer(WebKit::RemoteSerializedImageBufferWriteReference reference)
+    void ReleaseSerializedImageBuffer(WebCore::RenderingResourceIdentifier imageBuffer)
 #if ENABLE(WEBGL)
     void CreateGraphicsContextGL(struct WebCore::GraphicsContextGLAttributes attributes, WebKit::GraphicsContextGLIdentifier graphicsContextGLIdentifier, WebKit::RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle serverConnection) AllowedWhenWaitingForSyncReply
     void ReleaseGraphicsContextGL(WebKit::GraphicsContextGLIdentifier graphicsContextGLIdentifier) AllowedWhenWaitingForSyncReply
 #endif
+    void CreateRemoteGPU(WebKit::WebGPUIdentifier identifier, WebKit::RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle serverConnection) AllowedWhenWaitingForSyncReply
+    void ReleaseRemoteGPU(WebKit::WebGPUIdentifier identifier) AllowedWhenWaitingForSyncReply
     void ClearNowPlayingInfo()
     void SetNowPlayingInfo(struct WebCore::NowPlayingInfo nowPlayingInfo)
 #if USE(AUDIO_SESSION)

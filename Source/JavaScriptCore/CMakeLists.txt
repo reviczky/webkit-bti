@@ -1138,6 +1138,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSWeakMapInlines.h
     runtime/JSWithScope.h
     runtime/JSWrapperObject.h
+    runtime/KeyAtomStringCache.h
+    runtime/KeyAtomStringCacheInlines.h
     runtime/LazyClassStructure.h
     runtime/LazyProperty.h
     runtime/LeafExecutable.h
@@ -1207,6 +1209,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/StackFrame.h
     runtime/StringObject.h
     runtime/StringPrototype.h
+    runtime/StringReplaceCache.h
+    runtime/StringSplitCache.h
     runtime/Structure.h
     runtime/StructureCache.h
     runtime/StructureChain.h

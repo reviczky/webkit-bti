@@ -46,6 +46,7 @@ HashMap<PageIdentifier, Ref<AXIsolatedTree>>& AXIsolatedTree::treePageCache()
 AXIsolatedTree::AXIsolatedTree(AXObjectCache& axObjectCache)
     : AXTreeStore(axObjectCache.treeID())
     , m_axObjectCache(&axObjectCache)
+    , m_pageActivityState(axObjectCache.pageActivityState())
     , m_geometryManager(axObjectCache.m_geometryManager.ptr())
     , m_usedOnAXThread(axObjectCache.usedOnAXThread())
 {
@@ -99,8 +100,11 @@ void AXIsolatedTree::createEmptyContent(AccessibilityObject& axRoot)
     auto appends = resolveAppends();
 
     // Set the ScreenRelativePosition for the objects so that there is no need to hit the main thread on client's request.
-    for (auto& append : appends)
+    for (auto& append : appends) {
         append.isolatedObject->setProperty(AXPropertyName::ScreenRelativePosition, axRoot.screenRelativePosition());
+        if (append.isolatedObject->isWebArea())
+            setFocusedNodeID(append.isolatedObject->objectID());
+    }
 
     // Queue the appends to be performed on the AX thread.
     queueAppendsAndRemovals(WTFMove(appends), { });
@@ -222,6 +226,8 @@ void AXIsolatedTree::generateSubtree(AccessibilityObject& axObject)
     if (axObject.isDetached())
         return;
 
+    // We're about to a lot of read-only work, so start the attribute cache.
+    AXAttributeCacheEnabler enableCache(axObject.axObjectCache());
     collectNodeChangesForSubtree(axObject);
     queueRemovalsAndUnresolvedChanges({ });
 }
@@ -571,6 +577,13 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const Vector<A
         case AXPropertyName::SupportsSetSize:
             propertyMap.set(AXPropertyName::SupportsSetSize, axObject.supportsSetSize());
             break;
+        case AXPropertyName::TextInputMarkedRange:
+            // FIXME: We should have a mechanism to remove a property from the map for when textInputMarkedRange is std::nullopt.
+            if (auto textInputMarkedRange = axObject.textInputMarkedRange())
+                propertyMap.set(AXPropertyName::TextInputMarkedRange, *textInputMarkedRange);
+            else
+                propertyMap.set(AXPropertyName::TextInputMarkedRange, nullptr);
+            break;
         case AXPropertyName::URL:
             propertyMap.set(AXPropertyName::URL, axObject.url().isolatedCopy());
             break;
@@ -613,6 +626,9 @@ void AXIsolatedTree::updateChildren(AccessibilityObject& axObject, ResolveNodeCh
 
     if (!axObject.document() || !axObject.document()->hasLivingRenderTree())
         return;
+
+    // We're about to a lot of read-only work, so start the attribute cache.
+    AXAttributeCacheEnabler enableCache(axObject.axObjectCache());
 
     // updateChildren may be called as the result of a children changed
     // notification for an axObject that has no associated isolated object.
@@ -702,6 +718,26 @@ void AXIsolatedTree::updateChildren(AccessibilityObject& axObject, ResolveNodeCh
 
     // Also queue updates to the target node itself and any properties that depend on children().
     updateNodeAndDependentProperties(*axAncestor);
+}
+
+void AXIsolatedTree::setPageActivityState(OptionSet<ActivityState> state)
+{
+    ASSERT(isMainThread());
+
+    Locker locker { s_storeLock };
+    m_pageActivityState = state;
+}
+
+OptionSet<ActivityState> AXIsolatedTree::pageActivityState() const
+{
+    Locker locker { s_storeLock };
+    return m_pageActivityState;
+}
+
+OptionSet<ActivityState> AXIsolatedTree::lockedPageActivityState() const
+{
+    ASSERT(s_storeLock.isLocked());
+    return m_pageActivityState;
 }
 
 RefPtr<AXIsolatedObject> AXIsolatedTree::focusedNode()
@@ -932,10 +968,6 @@ void AXIsolatedTree::applyPendingChanges()
         // The reference count of the just added IsolatedObject must be 2
         // because it is referenced by m_readerThreadNodeMap and m_pendingAppends.
         // When m_pendingAppends is cleared, the object will be held only by m_readerThreadNodeMap. The exception is the root node whose reference count is 3.
-        ASSERT_WITH_MESSAGE(
-            addResult.iterator->value->refCount() == 2 || (addResult.iterator->value.ptr() == m_rootNode.get() && m_rootNode->refCount() == 3),
-            "unexpected ref count after adding object to m_readerThreadNodeMap: %d", addResult.iterator->value->refCount()
-        );
     }
     m_pendingAppends.clear();
 
@@ -953,6 +985,33 @@ void AXIsolatedTree::applyPendingChanges()
         }
     }
     m_pendingPropertyChanges.clear();
+}
+
+AXTreePtr findAXTree(Function<bool(AXTreePtr)>&& match)
+{
+    if (isMainThread()) {
+        for (WeakPtr tree : AXTreeStore<AXObjectCache>::liveTreeMap().values()) {
+            if (!tree)
+                continue;
+
+            if (match(tree))
+                return tree;
+        }
+        return nullptr;
+    }
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    Locker locker { AXTreeStore<AXIsolatedTree>::s_storeLock };
+    for (auto it = AXTreeStore<AXIsolatedTree>::isolatedTreeMap().begin(); it != AXTreeStore<AXIsolatedTree>::isolatedTreeMap().end(); ++it) {
+        RefPtr tree = it->value.get();
+        if (!tree)
+            continue;
+
+        if (match(tree))
+            return tree;
+    }
+    return nullptr;
+#endif
 }
 
 } // namespace WebCore

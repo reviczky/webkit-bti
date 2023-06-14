@@ -30,7 +30,6 @@
 
 #include "BufferIdentifierSet.h"
 #include "GPUConnectionToWebProcess.h"
-#include "GPUProcess.h"
 #include "Logging.h"
 #include "MessageSenderInlines.h"
 #include "PlatformImageBufferShareableBackend.h"
@@ -101,17 +100,15 @@
 namespace WebKit {
 using namespace WebCore;
 
+#if PLATFORM(COCOA)
 static bool isSmallLayerBacking(const ImageBufferBackendParameters& parameters)
 {
-#if PLATFORM(COCOA)
     const unsigned maxSmallLayerBackingArea = 64u * 64u; // 4096 == 16kb backing store which equals 1 page on AS.
     return parameters.purpose == RenderingPurpose::LayerBacking
         && ImageBufferBackend::calculateBackendSize(parameters).area() <= maxSmallLayerBackingArea
         && (parameters.pixelFormat == PixelFormat::BGRA8 || parameters.pixelFormat == PixelFormat::BGRX8);
-#else
-    return false;
-#endif
 }
+#endif
 
 Ref<RemoteRenderingBackend> RemoteRenderingBackend::create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteRenderingBackendCreationParameters&& creationParameters, IPC::StreamServerConnection::Handle&& connectionHandle)
 {
@@ -122,7 +119,7 @@ Ref<RemoteRenderingBackend> RemoteRenderingBackend::create(GPUConnectionToWebPro
 
 RemoteRenderingBackend::RemoteRenderingBackend(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteRenderingBackendCreationParameters&& creationParameters, IPC::StreamServerConnection::Handle&& connectionHandle)
     : m_workQueue(IPC::StreamConnectionWorkQueue::create("RemoteRenderingBackend work queue"))
-    , m_streamConnection(IPC::StreamServerConnection::create(WTFMove(connectionHandle), m_workQueue.get()))
+    , m_streamConnection(IPC::StreamServerConnection::create(WTFMove(connectionHandle)))
     , m_remoteResourceCache(gpuConnectionToWebProcess.webProcessIdentifier())
     , m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
     , m_resourceOwner(gpuConnectionToWebProcess.webProcessIdentity())
@@ -146,27 +143,27 @@ void RemoteRenderingBackend::startListeningForIPC()
 
 void RemoteRenderingBackend::stopListeningForIPC()
 {
-    dispatch([this] {
+    workQueue().stopAndWaitForCompletion([this] {
         workQueueUninitialize();
     });
-    workQueue().stopAndWaitForCompletion();
 }
 
 void RemoteRenderingBackend::workQueueInitialize()
 {
+    assertIsCurrent(workQueue());
+    m_streamConnection->open(m_workQueue.get());
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteRenderingBackend::messageReceiverName(), m_renderingBackendIdentifier.toUInt64());
-    m_streamConnection->open();
     send(Messages::RemoteRenderingBackendProxy::DidInitialize(workQueue().wakeUpSemaphore(), m_streamConnection->clientWaitSemaphore()), m_renderingBackendIdentifier);
 }
 
 void RemoteRenderingBackend::workQueueUninitialize()
 {
     assertIsCurrent(workQueue());
-    m_streamConnection->invalidate();
-    m_streamConnection->stopReceivingMessages(Messages::RemoteRenderingBackend::messageReceiverName(), m_renderingBackendIdentifier.toUInt64());
     m_remoteDisplayLists.clear();
     // Make sure we destroy the ResourceCache on the WorkQueue since it gets populated on the WorkQueue.
     m_remoteResourceCache = { m_gpuConnectionToWebProcess->webProcessIdentifier() };
+    m_streamConnection->stopReceivingMessages(Messages::RemoteRenderingBackend::messageReceiverName(), m_renderingBackendIdentifier.toUInt64());
+    m_streamConnection->invalidate();
 }
 
 void RemoteRenderingBackend::dispatch(Function<void()>&& task)
@@ -196,7 +193,7 @@ void RemoteRenderingBackend::didCreateImageBuffer(Ref<RemoteImageBuffer> imageBu
     send(Messages::RemoteRenderingBackendProxy::DidCreateImageBufferBackend(WTFMove(handle), renderingResourceIdentifier.object()), m_renderingBackendIdentifier);
 }
 
-void RemoteRenderingBackend::moveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier, RemoteSerializedImageBufferWriteReference&& reference)
+void RemoteRenderingBackend::moveToSerializedBuffer(WebCore::RenderingResourceIdentifier identifier)
 {
     assertIsCurrent(workQueue());
     QualifiedRenderingResourceIdentifier qualifiedIdentifier { identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() };
@@ -208,20 +205,19 @@ void RemoteRenderingBackend::moveToSerializedBuffer(WebCore::RenderingResourceId
         ASSERT_IS_TESTING_IPC();
         return;
     }
-    m_gpuConnectionToWebProcess->serializedImageBufferHeap().retire(WTFMove(reference), WTFMove(imageBuffer), std::nullopt);
+    m_gpuConnectionToWebProcess->serializedImageBufferHeap().add({ identifier, 0 }, WTFMove(imageBuffer));
 }
 
-void RemoteRenderingBackend::moveToImageBuffer(RemoteSerializedImageBufferWriteReference&& reference, WebCore::RenderingResourceIdentifier identifier)
+void RemoteRenderingBackend::moveToImageBuffer(WebCore::RenderingResourceIdentifier identifier)
 {
     assertIsCurrent(workQueue());
-    QualifiedRenderingResourceIdentifier qualifiedIdentifier { identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() };
-    RemoteSerializedImageBufferReadReference readReference(reference.reference());
-    auto imageBuffer = m_gpuConnectionToWebProcess->serializedImageBufferHeap().retire(WTFMove(readReference), IPC::Timeout::infinity());
-    m_gpuConnectionToWebProcess->serializedImageBufferHeap().retireRemove(WTFMove(reference));
+    auto imageBuffer = m_gpuConnectionToWebProcess->serializedImageBufferHeap().take({ { identifier, 0 }, 0 }, IPC::Timeout::infinity());
     if (!imageBuffer) {
         ASSERT_IS_TESTING_IPC();
         return;
     }
+    QualifiedRenderingResourceIdentifier qualifiedIdentifier { identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() };
+
     WebCore::ImageBufferCreationContext creationContext { nullptr };
 #if HAVE(IOSURFACE)
     creationContext.surfacePool = &ioSurfacePool();
@@ -495,7 +491,7 @@ static std::optional<ImageBufferBackendHandle> handleFromBuffer(ImageBuffer& buf
     return std::nullopt;
 }
 
-void RemoteRenderingBackend::prepareBuffersForDisplay(Vector<PrepareBackingStoreBuffersInputData> swapBuffersInput, CompletionHandler<void(const Vector<PrepareBackingStoreBuffersOutputData>&)>&& completionHandler)
+void RemoteRenderingBackend::prepareBuffersForDisplay(Vector<PrepareBackingStoreBuffersInputData> swapBuffersInput, CompletionHandler<void(Vector<PrepareBackingStoreBuffersOutputData>&&)>&& completionHandler)
 {
     Vector<PrepareBackingStoreBuffersOutputData> outputData;
     outputData.resizeToFit(swapBuffersInput.size());
@@ -607,43 +603,12 @@ void RemoteRenderingBackend::finalizeRenderingUpdate(RenderingUpdateID rendering
     send(Messages::RemoteRenderingBackendProxy::DidFinalizeRenderingUpdate(renderingUpdateID), m_renderingBackendIdentifier);
 }
 
-#if ENABLE(VIDEO)
-void RemoteRenderingBackend::performWithMediaPlayerOnMainThread(MediaPlayerIdentifier identifier, Function<void(MediaPlayer&)>&& callback)
-{
-    callOnMainRunLoopAndWait([&, gpuConnectionToWebProcess = m_gpuConnectionToWebProcess, identifier] {
-        if (auto player = gpuConnectionToWebProcess->remoteMediaPlayerManagerProxy().mediaPlayer(identifier))
-            callback(*player);
-    });
-}
-#endif
-
 void RemoteRenderingBackend::lowMemoryHandler(Critical, Synchronous)
 {
     ASSERT(isMainRunLoop());
 #if HAVE(IOSURFACE)
     m_ioSurfacePool->discardAllSurfaces();
 #endif
-}
-
-void RemoteRenderingBackend::createRemoteGPU(WebGPUIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle)
-{
-    auto addResult = m_remoteGPUMap.ensure(identifier, [&] {
-        return IPC::ScopedActiveMessageReceiveQueue { RemoteGPU::create([this] (MediaPlayerIdentifier identifier, Function<void(MediaPlayer&)>&& callback) mutable {
-            this->performWithMediaPlayerOnMainThread(identifier, WTFMove(callback));
-        }, identifier, WTFMove(connectionHandle)) };
-    });
-    ASSERT_UNUSED(addResult, addResult.isNewEntry);
-}
-
-void RemoteRenderingBackend::releaseRemoteGPU(WebGPUIdentifier identifier)
-{
-    bool result = m_remoteGPUMap.remove(identifier);
-    ASSERT_UNUSED(result, result);
-    if (m_remoteGPUMap.isEmpty()) {
-        ensureOnMainRunLoop([connectionToWebProcess = m_gpuConnectionToWebProcess] {
-            connectionToWebProcess->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
-        });
-    }
 }
 
 void RemoteRenderingBackend::createRemoteBarcodeDetector(ShapeDetectionIdentifier identifier, const WebCore::ShapeDetection::BarcodeDetectorOptions& barcodeDetectorOptions)

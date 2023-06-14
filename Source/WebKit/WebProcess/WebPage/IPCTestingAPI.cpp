@@ -124,7 +124,7 @@ public:
     JSObjectRef createJSWrapper(JSContextRef);
     static JSIPCConnectionHandle* toWrapped(JSContextRef, JSValueRef);
 
-    void encode(IPC::Encoder& encoder) const { encoder << m_handle; }
+    void encode(IPC::Encoder& encoder) { encoder << WTFMove(m_handle); }
 
 private:
     JSIPCConnectionHandle(IPC::Connection::Handle&& handle)
@@ -243,7 +243,7 @@ public:
     }
     JSObjectRef createJSWrapper(JSContextRef);
     static JSIPCStreamServerConnectionHandle* toWrapped(JSContextRef, JSValueRef);
-    void encode(IPC::Encoder& encoder) const { encoder << m_handle; }
+    void encode(IPC::Encoder& encoder) { encoder << WTFMove(m_handle); }
 private:
     JSIPCStreamServerConnectionHandle(IPC::StreamServerConnection::Handle&& handle)
         : m_handle { WTFMove(handle) }
@@ -1884,7 +1884,7 @@ static bool encodeTypedArray(IPC::Encoder& encoder, JSContextRef context, JSValu
     if (!data.buffer)
         return false;
 
-    encoder.encodeSpan(makeSpan(reinterpret_cast<const uint8_t*>(data.buffer), data.length));
+    encoder.encodeSpan(std::span(reinterpret_cast<const uint8_t*>(data.buffer), data.length));
     return true;
 }
 
@@ -2925,7 +2925,7 @@ JSC::JSObject* JSMessageListener::jsDescriptionFromDecoder(JSC::JSGlobalObject* 
 
 void inject(WebPage& webPage, WebFrame& webFrame, WebCore::DOMWrapperWorld& world)
 {
-    auto* globalObject = webFrame.coreFrame()->script().globalObject(world);
+    auto* globalObject = webFrame.coreLocalFrame()->script().globalObject(world);
 
     auto& vm = globalObject->vm();
     JSC::JSLockHolder lock(vm);

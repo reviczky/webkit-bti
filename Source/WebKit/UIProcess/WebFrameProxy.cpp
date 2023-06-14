@@ -35,7 +35,7 @@
 #include "MessageSenderInlines.h"
 #include "ProvisionalFrameProxy.h"
 #include "ProvisionalPageProxy.h"
-#include "SubframePageProxy.h"
+#include "RemotePageProxy.h"
 #include "WebFramePolicyListenerProxy.h"
 #include "WebNavigationState.h"
 #include "WebPageMessages.h"
@@ -275,7 +275,7 @@ void WebFrameProxy::didChangeTitle(const String& title)
     m_title = title;
 }
 
-WebFramePolicyListenerProxy& WebFrameProxy::setUpPolicyListenerProxy(CompletionHandler<void(PolicyAction, API::WebsitePolicies*, ProcessSwapRequestedByClient, RefPtr<SafeBrowsingWarning>&&, std::optional<NavigatingToAppBoundDomain>)>&& completionHandler, ShouldExpectSafeBrowsingResult expectSafeBrowsingResult, ShouldExpectAppBoundDomainResult expectAppBoundDomainResult, ShouldWaitForInitialLookalikeCharacterStrings shouldWaitForInitialLookalikeCharacterStrings)
+WebFramePolicyListenerProxy& WebFrameProxy::setUpPolicyListenerProxy(CompletionHandler<void(PolicyAction, API::WebsitePolicies*, ProcessSwapRequestedByClient, RefPtr<SafeBrowsingWarning>&&, std::optional<NavigatingToAppBoundDomain>)>&& completionHandler, ShouldExpectSafeBrowsingResult expectSafeBrowsingResult, ShouldExpectAppBoundDomainResult expectAppBoundDomainResult, ShouldWaitForInitialLinkDecorationFilteringData shouldWaitForInitialLinkDecorationFilteringData)
 {
     if (m_activeListener)
         m_activeListener->ignore();
@@ -285,7 +285,7 @@ WebFramePolicyListenerProxy& WebFrameProxy::setUpPolicyListenerProxy(CompletionH
 
         completionHandler(action, policies, processSwapRequestedByClient, WTFMove(safeBrowsingWarning), isNavigatingToAppBoundDomain);
         m_activeListener = nullptr;
-    }, expectSafeBrowsingResult, expectAppBoundDomainResult, shouldWaitForInitialLookalikeCharacterStrings);
+    }, expectSafeBrowsingResult, expectAppBoundDomainResult, shouldWaitForInitialLinkDecorationFilteringData);
     return *m_activeListener;
 }
 
@@ -387,13 +387,22 @@ void WebFrameProxy::swapToProcess(Ref<WebProcessProxy>&& process, const WebCore:
 
 void WebFrameProxy::commitProvisionalFrame(FrameIdentifier frameID, FrameInfoData&& frameInfo, ResourceRequest&& request, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType frameLoadType, const WebCore::CertificateInfo& certificateInfo, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent hasInsecureContent, WebCore::MouseEventPolicy mouseEventPolicy, const UserData& userData)
 {
+    ASSERT(m_page);
     if (m_provisionalFrame) {
         m_provisionalFrame->process().provisionalFrameCommitted(*this);
         m_process->send(Messages::WebPage::DidCommitLoadInAnotherProcess(frameID, m_provisionalFrame->layerHostingContextIdentifier(), m_provisionalFrame->process().coreProcessIdentifier()), m_page->webPageID());
         m_process = std::exchange(m_provisionalFrame, nullptr)->process();
+        m_provisionalFrame = nullptr;
+
+        RegistrableDomain oldDomain(url());
+        m_remotePageProxy = m_page->remotePageProxyForRegistrableDomain(RegistrableDomain(request.url()));
     }
-    if (m_page)
-        m_page->didCommitLoadForFrame(frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, containsPluginDocument, hasInsecureContent, mouseEventPolicy, userData);
+    m_page->didCommitLoadForFrame(frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, containsPluginDocument, hasInsecureContent, mouseEventPolicy, userData);
+}
+
+void WebFrameProxy::setRemotePageProxy(RemotePageProxy& remotePageProxy)
+{
+    m_remotePageProxy = &remotePageProxy;
 }
 
 void WebFrameProxy::getFrameInfo(CompletionHandler<void(FrameTreeNodeData&&)>&& completionHandler)

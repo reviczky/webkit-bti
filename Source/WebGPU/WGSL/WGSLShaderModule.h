@@ -60,6 +60,10 @@ public:
     TypeStore& types() { return m_types; }
     AST::Builder& astBuilder() { return m_astBuilder; }
 
+    bool usesExternalTextures() const { return m_usesExternalTextures; }
+    void setUsesExternalTextures() { m_usesExternalTextures = true; }
+    void clearUsesExternalTextures() { m_usesExternalTextures = false; }
+
     template<typename T>
     std::enable_if_t<std::is_base_of_v<AST::Node, T>, void> replace(T* current, T&& replacement)
     {
@@ -80,7 +84,7 @@ public:
     }
 
     template<typename CurrentType, typename ReplacementType>
-    void replace(CurrentType& current, ReplacementType& replacement)
+    std::enable_if_t<sizeof(CurrentType) < sizeof(ReplacementType), void> replace(CurrentType& current, ReplacementType& replacement)
     {
         m_replacements.append([&current, currentCopy = current]() mutable {
             bitwise_cast<AST::IdentityExpression*>(&current)->~IdentityExpression();
@@ -89,6 +93,18 @@ public:
 
         current.~CurrentType();
         new (&current) AST::IdentityExpression(replacement.span(), replacement);
+    }
+
+    template<typename CurrentType, typename ReplacementType>
+    std::enable_if_t<sizeof(CurrentType) >= sizeof(ReplacementType), void> replace(CurrentType& current, ReplacementType& replacement)
+    {
+        m_replacements.append([&current, currentCopy = current]() mutable {
+            bitwise_cast<ReplacementType*>(&current)->~ReplacementType();
+            new (bitwise_cast<void*>(&current)) CurrentType(WTFMove(currentCopy));
+        });
+
+        current.~CurrentType();
+        new (bitwise_cast<void*>(&current)) ReplacementType(replacement);
     }
 
     template<typename T, size_t size>
@@ -129,8 +145,28 @@ public:
         m_replacements.clear();
     }
 
+    class Compilation {
+    public:
+        Compilation(ShaderModule& shaderModule)
+            : m_shaderModule(shaderModule)
+            , m_builderState(shaderModule.astBuilder().saveCurrentState())
+        {
+        }
+
+        ~Compilation()
+        {
+            m_shaderModule.revertReplacements();
+            m_shaderModule.astBuilder().restore(WTFMove(m_builderState));
+        }
+
+    private:
+        ShaderModule& m_shaderModule;
+        AST::Builder::State m_builderState;
+    };
+
 private:
     String m_source;
+    bool m_usesExternalTextures { false };
     Configuration m_configuration;
     AST::Directive::List m_directives;
     AST::Function::List m_functions;

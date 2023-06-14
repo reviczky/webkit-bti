@@ -323,7 +323,7 @@ void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProces
         reply(NetworkProcessConnectionInfo { WTFMove(*identifier), cookieAcceptPolicy });
         UNUSED_VARIABLE(this);
 #elif OS(DARWIN)
-        MESSAGE_CHECK(MACH_PORT_VALID(identifier->sendRight()));
+        MESSAGE_CHECK(*identifier);
         reply(NetworkProcessConnectionInfo { WTFMove(*identifier) , cookieAcceptPolicy, connection()->getAuditToken() });
 #else
         notImplemented();
@@ -350,10 +350,12 @@ Ref<DownloadProxy> NetworkProcessProxy::createDownloadProxy(WebsiteDataStore& da
 void NetworkProcessProxy::dataTaskWithRequest(WebPageProxy& page, PAL::SessionID sessionID, WebCore::ResourceRequest&& request, CompletionHandler<void(API::DataTask&)>&& completionHandler)
 {
     sendWithAsyncReply(Messages::NetworkProcess::DataTaskWithRequest(page.identifier(), sessionID, request, IPC::FormDataReference(request.httpBody())), [this, protectedThis = Ref { *this }, weakPage = WeakPtr { page }, completionHandler = WTFMove(completionHandler), originalURL = request.url()] (DataTaskIdentifier identifier) mutable {
-        MESSAGE_CHECK(decltype(m_dataTasks)::isValidKey(identifier));
         auto dataTask = API::DataTask::create(identifier, WTFMove(weakPage), WTFMove(originalURL));
         completionHandler(dataTask);
-        m_dataTasks.add(identifier, WTFMove(dataTask));
+        if (decltype(m_dataTasks)::isValidKey(identifier))
+            m_dataTasks.add(identifier, WTFMove(dataTask));
+        else
+            dataTask->networkProcessCrashed();
     });
 }
 
@@ -447,7 +449,7 @@ void NetworkProcessProxy::networkProcessDidTerminate(ProcessTerminationReason re
     for (auto& websiteDataStore : copyToVectorOf<Ref<WebsiteDataStore>>(m_websiteDataStores))
         websiteDataStore->networkProcessDidTerminate(*this);
     for (auto& task : m_dataTasks.values())
-        task->client().didCompleteWithError(task, WebCore::internalError(task->originalURL()));
+        task->networkProcessCrashed();
     m_dataTasks.clear();
 }
 
@@ -553,10 +555,10 @@ void NetworkProcessProxy::didNegotiateModernTLS(WebPageProxyIdentifier pageID, c
         page->didNegotiateModernTLS(url);
 }
 
-void NetworkProcessProxy::didFailLoadDueToNetworkConnectionIntegrity(WebPageProxyIdentifier pageID, const URL& url) 
+void NetworkProcessProxy::didBlockLoadToKnownTracker(WebPageProxyIdentifier pageID, const URL& url)
 {
     if (auto page = pageID ? WebProcessProxy::webPage(pageID) : nullptr)
-        page->didFailLoadDueToNetworkConnectionIntegrity(url);
+        page->didBlockLoadToKnownTracker(url);
 }
 
 void NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation(WebPageProxyIdentifier pageID, uint64_t navigationID, BrowsingContextGroupSwitchDecision browsingContextGroupSwitchDecision, const WebCore::RegistrableDomain& responseDomain, NetworkResourceLoadIdentifier existingNetworkResourceLoadIdentifierToResume, CompletionHandler<void(bool success)>&& completionHandler)
