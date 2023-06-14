@@ -6,6 +6,8 @@ webkit2gtk (2.41.5-1) UNRELEASED; urgency=medium
     - Update copyright information of all files.
   * debian/control.in:
     - Enable the bubblewrap sandbox in riscv64.
+    - Add build dependency on libjxl-dev, JPEGXL is now enabled by
+      default.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 14 Jun 2023 11:39:15 +0200
 
