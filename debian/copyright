@@ -84,6 +84,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2012 Sony Network Entertainment
            2012 Victor Carbune <victor@rosedu.org>
            2012, 2016 SoftAtHome
+           2012, 2019 the V8 project authors
            2012-2013 Company 100 Inc
            2012-2013 Digia Plc
            2012-2013 Michael Pruett <michael@68k.org>
@@ -138,7 +139,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2019 Joe Drago
            2019 Luca Barbato
            2019 Michail Alvanos
-           2019 the V8 project authors
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
@@ -183,7 +183,7 @@ Copyright: 2008-2021 The Khronos Group Inc
            2015-2016 LunarG Inc
            2015-2016 Valve Corporation
            2015-2018 Google Inc
-           2017 The Abseil Authors
+           2017, 2020 The Abseil Authors
            2019, 2022 The ANGLE Project
            2020 The SwiftShader Authors
            2022 Google LLC
@@ -296,10 +296,10 @@ Files: Source/JavaScriptCore/API/*
        Source/WebCore/loader/FormState.h
        Source/WebCore/loader/FrameLoader.cpp
        Source/WebCore/loader/FrameLoader.h
-       Source/WebCore/loader/FrameLoaderClient.h
        Source/WebCore/loader/FrameLoaderTypes.h
        Source/WebCore/loader/HistoryController.cpp
        Source/WebCore/loader/HistoryController.h
+       Source/WebCore/loader/LocalFrameLoaderClient.h
        Source/WebCore/loader/MixedContentChecker.cpp
        Source/WebCore/loader/NavigationAction.cpp
        Source/WebCore/loader/NavigationAction.h
@@ -1697,8 +1697,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/freetype/FontSetCache.h
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.cpp
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.h
-       Source/WebCore/platform/graphics/gstreamer/AppSinkWorkaround.cpp
-       Source/WebCore/platform/graphics/gstreamer/AppSinkWorkaround.h
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
@@ -1711,6 +1709,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerCommon.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.h
+       Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.cpp
+       Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameHolder.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameHolder.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoSinkCommon.cpp
@@ -1738,8 +1738,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/VideoFrameMetadataGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/VideoSinkGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/VideoSinkGStreamer.h
-       Source/WebCore/platform/graphics/gstreamer/VideoTextureCopierGStreamer.cpp
-       Source/WebCore/platform/graphics/gstreamer/VideoTextureCopierGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/WebKitAudioSinkGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/WebKitAudioSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
@@ -1925,8 +1923,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderTheme.cpp
        Source/WebCore/rendering/RenderTheme.h
        Source/WebCore/rendering/RenderThemeMac.h
-       Source/WebCore/rendering/RenderThemeWin.cpp
-       Source/WebCore/rendering/RenderThemeWin.h
        Source/WebCore/rendering/RenderView.cpp
        Source/WebCore/rendering/RenderView.h
        Source/WebCore/rendering/RenderWidget.cpp
@@ -2627,7 +2623,6 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009 Jakub Wieczorek <faw217@gmail.com>
            2009 Jeff Schiller <codedread@gmail.com>
            2009 John Kjellberg <john.kjellberg@power.alstom.com>
-           2009 Kenneth Rohde Christiansen
            2009 Martin Robinson
            2009 Michelangelo De Simone <micdesim@gmail.com>
            2009, 2012 Ericsson AB
@@ -2678,7 +2673,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2015 Jordan Harband <ljharb@gmail.com>
            2015 Yusuke Suzuki<utatane.tea@gmail.com>
            2015-2016 Canon Inc
-           2015-2022 Metrological Group B.V
+           2015-2023 Metrological Group B.V
            2017 Aidan Holm <aidanholm@gmail.com>
            2017 Endless Mobile Inc
            2017, 2020-2022 Sony Interactive Entertainment
@@ -2701,9 +2696,7 @@ Copyright: 2002 Cyrus Patel <cyp@fb14.uni-mainz.de>
            2007-2023 Apple Inc
 License: LGPL-2.1
 
-Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
-       Source/WebCore/platform/graphics/OpenGLShims.h
-       Source/WebCore/rendering/RenderLayerInlines.h
+Files: Source/WebCore/rendering/RenderLayerInlines.h
        Source/WebKit/UIProcess/API/glib/WebKitCookieManager.cpp
        Source/WebKit/UIProcess/API/glib/WebKitFaviconDatabase.cpp
        Source/WebKit/UIProcess/API/glib/WebKitFindController.cpp
@@ -2760,7 +2753,6 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebKitVersion.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebViewEditor.cpp
 Copyright: 2003-2023 Apple Inc
-           2010 Tieto Corporation
            2011-2015, 2017-2020, 2022-2023 Igalia S.L.
            2014, 2021 Collabora Ltd
            2015 Red Hat Inc
