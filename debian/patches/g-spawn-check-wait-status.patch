@@ -1,0 +1,17 @@
+From: Patrick Griffis <pgriffis@igalia.com>
+Subject: Remove accidental dependency on GLib 2.70
+Bug: https://bugs.webkit.org/show_bug.cgi?id=257482
+Origin: https://github.com/WebKit/WebKit/commit/3f0a21271a6f67f4ed669c969f183fa0bc626684
+diff --git a/Source/WTF/wtf/glib/Sandbox.cpp b/Source/WTF/wtf/glib/Sandbox.cpp
+index 9b07bb8cb5a9..a8169511fe85 100644
+--- a/Source/WTF/wtf/glib/Sandbox.cpp
++++ b/Source/WTF/wtf/glib/Sandbox.cpp
+@@ -58,7 +58,7 @@ bool isInsideUnsupportedContainer()
+         int waitStatus = 0;
+         gboolean spawnSucceeded = g_spawn_sync(nullptr, const_cast<char**>(bwrapArgs), nullptr,
+             G_SPAWN_STDERR_TO_DEV_NULL, nullptr, nullptr, nullptr, nullptr, &waitStatus, nullptr);
+-        supportedContainer = spawnSucceeded && g_spawn_check_wait_status(waitStatus, nullptr);
++        supportedContainer = spawnSucceeded && g_spawn_check_exit_status(waitStatus, nullptr);
+         if (!supportedContainer)
+             WTFLogAlways("Bubblewrap does not work inside of this container, sandboxing will be disabled.");
+     }
