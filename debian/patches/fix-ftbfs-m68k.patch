@@ -80,7 +80,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -80,7 +80,9 @@ struct SameSizeAsBorderValue {
+@@ -81,7 +81,9 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -90,7 +90,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* nonInheritedDataRefs[1];
-@@ -99,7 +101,9 @@ struct SameSizeAsRenderStyle {
+@@ -100,7 +102,9 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -183,7 +183,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -88,7 +88,9 @@ struct SameSizeAsCSSValue {
+@@ -89,7 +89,9 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
