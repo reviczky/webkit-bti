@@ -1,4 +1,4 @@
-wpewebkit (2.40.2-2) UNRELEASED; urgency=medium
+wpewebkit (2.40.2-2) unstable; urgency=medium
 
   * Replace the 2.0 API with the older 1.1 API.
     - Let's wait until all reverse dependencies are ready before making
