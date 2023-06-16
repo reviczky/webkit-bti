@@ -1,3 +1,11 @@
+wpewebkit (2.40.2-2) UNRELEASED; urgency=medium
+
+  * Replace the 2.0 API with the older 1.1 API.
+    - Let's wait until all reverse dependencies are ready before making
+      the switch to the 2.0 API in unstable (see #1037139).
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 16 Jun 2023 16:38:10 +0200
+
 wpewebkit (2.40.2-1) experimental; urgency=medium
 
   * New upstream release.
