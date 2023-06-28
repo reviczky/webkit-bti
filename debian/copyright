@@ -126,22 +126,24 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
-           2018 Google LLC
            2018 Niklas Haas
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
+           2018, 2020, 2022 Google LLC
            2018-2022 Two Orioles, LLC
            2018-2022 VideoLAN and dav1d authors
            2019 B Krishnan Iyer
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
            2019 James Almer <jamrial@gmail.com>
-           2019 Joe Drago
            2019 Luca Barbato
            2019 Michail Alvanos
            2019 the V8 project authors
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
+           2019-2021 Joe Drago
+           2020 Cloudinary
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
+           2020 Emmanuel Gil Peyrot
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 RDK Management
            2020 WikiMedia Foundation. All Rights Reserve
@@ -151,6 +153,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2022 Jarred Sumner
            2022 Leaning Technologies Inc
            2022 Leonardo Taccari <leot@NetBSD.org>
+           2022 Yuan Tong
            2023 ChangSeok Oh <changseok@webkit.org>
 License: BSD-2-clause
 Comment:
@@ -164,12 +167,16 @@ Copyright: 2003-2004 Jonathan Blandford <jrb@alum.mit.edu>
 License: AFL-2.0 or LGPL-2+
 
 Files: Source/ThirdParty/ANGLE/include/CL/*
+       Source/ThirdParty/ANGLE/include/EGL/*
        Source/ThirdParty/ANGLE/include/GLES/*
+       Source/ThirdParty/ANGLE/include/GLES2/gl2platform.h
+       Source/ThirdParty/ANGLE/include/GLES3/gl3platform.h
        Source/ThirdParty/ANGLE/src/android_system_settings/src/com/android/angle/*
        Source/ThirdParty/ANGLE/src/common/vulkan/vk_google_filtering_precision.h
        Source/ThirdParty/ANGLE/src/libANGLE/*
        Source/ThirdParty/ANGLE/src/tests/deqp_support/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
+       Source/ThirdParty/ANGLE/third_party/logdog/get.sh
        Source/ThirdParty/ANGLE/util/android/third_party/*
        Source/ThirdParty/pdfjs/build/*
        Source/ThirdParty/pdfjs/web/*
@@ -177,7 +184,7 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/WebCore/PAL/ThirdParty/libavif/android_jni/gradlew
        Source/WebCore/PAL/ThirdParty/libavif/tests/test_cmd.sh
        Tools/TestWebKitAPI/Tests/WTF/Int128.cpp
-Copyright: 2008-2021 The Khronos Group Inc
+Copyright: 2007-2021 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
            2012, 2014, 2023 Mozilla Foundation
            2015-2016 LunarG Inc
@@ -186,6 +193,7 @@ Copyright: 2008-2021 The Khronos Group Inc
            2017 The Abseil Authors
            2019, 2022 The ANGLE Project
            2020 The SwiftShader Authors
+           2021 The Chromium Authors
            2022 Google LLC
 License: Apache-2.0
 
@@ -916,16 +924,21 @@ License: BSL-1.0
 
 Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/JavaScriptCore/disassembler/zydis/Zydis/*
+       Source/ThirdParty/ANGLE/include/GLES2/gl2.h
+       Source/ThirdParty/ANGLE/include/GLES2/gl2ext.h
+       Source/ThirdParty/ANGLE/include/GLES3/gl3.h
+       Source/ThirdParty/ANGLE/include/GLES3/gl31.h
+       Source/ThirdParty/ANGLE/include/GLES3/gl32.h
+       Source/ThirdParty/ANGLE/include/GLX/glxext.h
        Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/etc_decoder/etc_decoder.h
-       Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/ffx_spd/*
        Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/ThirdParty/ANGLE/third_party/renderdoc/src/renderdoc_app.h
        Source/WebCore/xml/XSLTExtensions.cpp
 Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2007 Alexey Proskuryakov <ap@webkit.org>
            2013 Dave St.Germain
+           2013-2020 The Khronos Group Inc
            2015-2018 Baldur Karlsson
-           2017-2020 Advanced Micro Devices Inc
            2018-2019 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
            2020-2022 Hans-Kristian Arntzen
 License: Expat
@@ -2771,8 +2784,9 @@ Files: Source/WebCore/platform/ScrollAlignment.cpp
        Source/WebCore/rendering/RenderMarquee.h
 Copyright: 1998 Netscape Communications Corporation
            2001-2006 mozilla.org
-           2003, 2006-2020 Apple Inc
+           2003, 2006-2023 Apple Inc
            2007-2009 Torch Mobile Inc
+           2014 Google Inc
            2019 Adobe
            2020-2022 Igalia S.L.
 License: LGPL-2.1+ or MPL-1.1

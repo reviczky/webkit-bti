@@ -3,6 +3,8 @@ webkit2gtk (2.40.3-1) UNRELEASED; urgency=medium
   * New upstream release (Closes: #1036946).
   * debian/control.in:
     - Enable the bubblewrap sandbox in riscv64.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 31 May 2023 10:52:48 +0200
 
