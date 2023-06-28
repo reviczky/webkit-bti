@@ -1,8 +1,6 @@
 webkit2gtk (2.40.3-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
-  * debian/patches/build-without-bwrap.patch
-    - Fix build when ENABLE_BUBBLEWRAP_SANDBOX is OFF (Closes: #1036946).
+  * New upstream release (Closes: #1036946).
   * debian/control.in:
     - Enable the bubblewrap sandbox in riscv64.
 
