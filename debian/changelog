@@ -1,5 +1,6 @@
-webkit2gtk (2.40.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.40.3-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/patches/build-without-bwrap.patch
     - Fix build when ENABLE_BUBBLEWRAP_SANDBOX is OFF (Closes: #1036946).
   * debian/control.in:
