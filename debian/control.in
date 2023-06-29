@@ -9,7 +9,6 @@ Build-Depends: debhelper-compat (= 12),
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
                cmake (>= 3.10),
                gperf,
-               jdupes,
                libatk-bridge2.0-dev,
                libatk1.0-dev,
                libavif-dev,
@@ -39,7 +38,7 @@ Build-Depends: debhelper-compat (= 12),
                ruby:native,
                unifdef,
                wayland-protocols
-Build-Depends-Indep: gi-docgen, gobject-introspection, libgirepository1.0-dev, libglib2.0-doc, libsoup-3.0-doc
+Build-Depends-Indep: gi-docgen, gobject-introspection, libgirepository1.0-dev, libglib2.0-doc, libsoup-3.0-doc, jdupes
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
