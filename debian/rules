@@ -177,7 +177,7 @@ override_dh_auto_clean: debian/control
 
 # If USE_PREBUILT_DOCS=YES then install them. Otherwise create dummy
 # doc directories in case the "nodoc" build option is set.
-override_dh_install:
+override_dh_install-indep:
 ifeq ($(USE_PREBUILT_DOCS),YES)
 	mkdir -p debian/tmp/usr/share/gtk-doc/html
 	cp -r Documentation/wpe-webkit-2.0 debian/tmp/usr/share/gtk-doc/html/wpe-webkit-1.1
@@ -191,7 +191,7 @@ else
 	mkdir -p debian/tmp/usr/share/gtk-doc/html/wpe-javascriptcore-1.1
 	touch debian/tmp/usr/share/gtk-doc/html/wpe-javascriptcore-1.1/index.html
 endif
-	dh_install
+	dh_install -i
 	jdupes -rl debian/libwpewebkit-1.0-doc/usr
 
 override_dh_shlibdeps:
