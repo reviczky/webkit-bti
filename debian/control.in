@@ -12,7 +12,6 @@ Build-Depends: debhelper-compat (= 12),
                xdg-dbus-proxy [!alpha !ia64 !m68k !sh4 !sparc64 !hurd-any !kfreebsd-any],
                libseccomp-dev [!alpha !ia64 !m68k !sh4 !sparc64 !hurd-any !kfreebsd-any],
                cmake (>= 3.16),
-               jdupes,
                libglib2.0-dev,
                libharfbuzz-dev,
                libcairo2-dev,
@@ -55,7 +54,7 @@ Build-Depends: debhelper-compat (= 12),
                libegl-dev,
                libgl-dev,
                libgles-dev
-Build-Depends-Indep: gi-docgen, libglib2.0-doc, libgtk-3-doc, libsoup2.4-doc
+Build-Depends-Indep: gi-docgen, libglib2.0-doc, libgtk-3-doc, libsoup2.4-doc, jdupes
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
