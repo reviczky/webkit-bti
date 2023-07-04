@@ -1,4 +1,4 @@
-webkit2gtk (2.41.6-1) UNRELEASED; urgency=medium
+webkit2gtk (2.41.6-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -11,7 +11,7 @@ webkit2gtk (2.41.6-1) UNRELEASED; urgency=medium
   * debian/patches/fix-jsc-timestamp.patch:
     - Ensure reproducibility of __TIMESTAMP__ in JSCBytecodeCacheVersion.cpp.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 04 Jul 2023 11:40:18 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 04 Jul 2023 16:15:48 +0200
 
 webkit2gtk (2.41.5-1) experimental; urgency=medium
 
