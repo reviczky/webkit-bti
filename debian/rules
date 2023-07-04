@@ -327,7 +327,7 @@ override_dh_auto_clean: debian/control
 # If USE_PREBUILT_DOCS=YES then install them (they are from the 4.1 API build
 # but they're equally valid for the 4.0-doc package once we rename them).
 # Otherwise create a dummy doc directory in case the "nodoc" build option is set.
-override_dh_install:
+override_dh_install-indep:
 ifeq ($(USE_PREBUILT_DOCS),YES)
 	mkdir -p debian/tmp/usr/share/gtk-doc/html
 	cp -r Documentation/webkit2gtk-4.1 debian/tmp/usr/share/gtk-doc/html/
@@ -337,7 +337,7 @@ else
 	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1
 	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1/index.html
 endif
-	dh_install
+	dh_install -i
 	jdupes -rl debian/libwebkit2gtk-4.0-doc/usr
 
 override_dh_makeshlibs:
