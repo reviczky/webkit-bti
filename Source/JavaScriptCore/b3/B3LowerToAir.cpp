@@ -731,16 +731,6 @@ private:
         return Arg();
     }
 
-    Arg imm64(Value* value)
-    {
-        if (value->hasInt()) {
-            int64_t intValue = value->asInt();
-            if (Arg::isValidImm64Form(intValue))
-                return Arg::imm64(intValue);
-        }
-        return Arg();
-    }
-
     Arg bitImm(Value* value)
     {
         if (value->hasInt()) {
@@ -1004,21 +994,6 @@ private:
             }
         }
 
-        if (isValidForm(opcode, Arg::Imm64, Arg::Tmp, Arg::Tmp)) {
-            if (commutativity == Commutative) {
-                if (imm64(right)) {
-                    append(opcode, imm64(right), tmp(left), result);
-                    return;
-                }
-            } else {
-                // A non-commutative operation could have an immediate in left.
-                if (imm64(left)) {
-                    append(opcode, imm64(left), tmp(right), result);
-                    return;
-                }
-            }
-        }
-
         if (isValidForm(opcode, Arg::BitImm, Arg::Tmp, Arg::Tmp)) {
             if (commutativity == Commutative) {
                 if (Arg rightArg = bitImm(right)) {
@@ -1252,20 +1227,20 @@ private:
                 default:
                     break;
                 case Air::Store8:
-                    if (isValidForm(Air::Store8, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width8))
-                        return Inst(Air::Store8, m_value, zeroReg(), dest);
+                    if (isValidForm(move.opcode, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width8))
+                        return Inst(move, m_value, zeroReg(), dest);
                     break;
                 case Air::Store16:
-                    if (isValidForm(Air::Store16, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width16))
-                        return Inst(Air::Store16, m_value, zeroReg(), dest);
+                    if (isValidForm(move.opcode, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width16))
+                        return Inst(move, m_value, zeroReg(), dest);
                     break;
                 case Air::Move32:
-                    if (isValidForm(Store32, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width32))
-                        return Inst(Store32, m_value, zeroReg(), dest);
+                    if (isValidForm(move.opcode, Arg::ZeroReg, dest.kind()) && dest.isValidForm(move.opcode, Width32))
+                        return Inst(move, m_value, zeroReg(), dest);
                     break;
                 case Air::Move:
-                    if (isValidForm(Store64, Arg::ZeroReg, dest.kind()) && dest.isValidForm(Move, Width64))
-                        return Inst(Store64, m_value, zeroReg(), dest);
+                    if (isValidForm(move.opcode, Arg::ZeroReg, dest.kind()) && dest.isValidForm(move.opcode, Width64))
+                        return Inst(move, m_value, zeroReg(), dest);
                     break;
                 }
             }
@@ -1622,13 +1597,15 @@ private:
     }
     
     // Create an Inst to do the comparison specified by the given value.
-    template<typename CompareFunctor, typename TestFunctor, typename CompareDoubleFunctor, typename CompareFloatFunctor>
+    template<typename CompareFunctor, typename TestFunctor, typename CompareDoubleFunctor, typename CompareFloatFunctor, typename CompareDoubleWithZeroFunctor, typename CompareFloatWithZeroFunctor>
     Inst createGenericCompare(
         Value* value,
         const CompareFunctor& compare, // Signature: (Width, Arg relCond, Arg, Arg) -> Inst
         const TestFunctor& test, // Signature: (Width, Arg resCond, Arg, Arg) -> Inst
         const CompareDoubleFunctor& compareDouble, // Signature: (Arg doubleCond, Arg, Arg) -> Inst
         const CompareFloatFunctor& compareFloat, // Signature: (Arg doubleCond, Arg, Arg) -> Inst
+        const CompareDoubleWithZeroFunctor& compareDoubleWithZero, // Signature: (Arg doubleCond, Arg) -> Inst
+        const CompareFloatWithZeroFunctor& compareFloatWithZero, // Signature: (Arg doubleCond, Arg) -> Inst
         bool inverted = false)
     {
         // NOTE: This is totally happy to match comparisons that have already been computed elsewhere
@@ -1868,8 +1845,28 @@ private:
                 return compare(width, relCond, leftPromise, rightPromise);
             }
 
-            // Floating point comparisons can't really do anything smart.
             ArgPromise leftPromise = tmpPromise(left);
+            if (value->child(0)->type() == Double) {
+                if (right->hasDouble() && bitwise_cast<uint64_t>(right->asDouble()) == bitwise_cast<uint64_t>(0.0)) {
+                    if (Inst result = compareDoubleWithZero(doubleCond, leftPromise)) {
+                        if (canBeInternal(right))
+                            commitInternal(right);
+                        return result;
+                    }
+                }
+            }
+
+            if (value->child(0)->type() == Float) {
+                if (right->hasFloat() && bitwise_cast<uint32_t>(right->asFloat()) == bitwise_cast<uint32_t>(0.0f)) {
+                    if (Inst result = compareFloatWithZero(doubleCond, leftPromise)) {
+                        if (canBeInternal(right))
+                            commitInternal(right);
+                        return result;
+                    }
+                }
+            }
+
+            // Floating point comparisons can't really do anything smart at this point.
             ArgPromise rightPromise = tmpPromise(right);
             if (value->child(0)->type() == Float)
                 return compareFloat(doubleCond, leftPromise, rightPromise);
@@ -2154,19 +2151,23 @@ private:
                 ASSERT_NOT_REACHED();
             },
             [this] (Arg doubleCond, ArgPromise& left, ArgPromise& right) -> Inst {
-                if (isValidForm(BranchDouble, Arg::DoubleCond, left.kind(), right.kind())) {
-                    return left.inst(right.inst(
-                        BranchDouble, m_value, doubleCond,
-                        left.consume(*this), right.consume(*this)));
-                }
+                if (isValidForm(BranchDouble, Arg::DoubleCond, left.kind(), right.kind()))
+                    return left.inst(right.inst(BranchDouble, m_value, doubleCond, left.consume(*this), right.consume(*this)));
                 return Inst();
             },
             [this] (Arg doubleCond, ArgPromise& left, ArgPromise& right) -> Inst {
-                if (isValidForm(BranchFloat, Arg::DoubleCond, left.kind(), right.kind())) {
-                    return left.inst(right.inst(
-                        BranchFloat, m_value, doubleCond,
-                        left.consume(*this), right.consume(*this)));
-                }
+                if (isValidForm(BranchFloat, Arg::DoubleCond, left.kind(), right.kind()))
+                    return left.inst(right.inst(BranchFloat, m_value, doubleCond, left.consume(*this), right.consume(*this)));
+                return Inst();
+            },
+            [this] (Arg doubleCond, ArgPromise& left) -> Inst {
+                if (isValidForm(BranchDoubleWithZero, Arg::DoubleCond, left.kind()))
+                    return left.inst(BranchDoubleWithZero, m_value, doubleCond, left.consume(*this));
+                return Inst();
+            },
+            [this] (Arg doubleCond, ArgPromise& left) -> Inst {
+                if (isValidForm(BranchFloatWithZero, Arg::DoubleCond, left.kind()))
+                    return left.inst(BranchFloatWithZero, m_value, doubleCond, left.consume(*this));
                 return Inst();
             },
             inverted);
@@ -2249,6 +2250,16 @@ private:
                 }
                 return Inst();
             },
+            [this] (const Arg& doubleCond, ArgPromise& left) -> Inst {
+                if (isValidForm(CompareDoubleWithZero, Arg::DoubleCond, left.kind(), Arg::Tmp))
+                    return left.inst(CompareDoubleWithZero, m_value, doubleCond, left.consume(*this), tmp(m_value));
+                return Inst();
+            },
+            [this] (const Arg& doubleCond, ArgPromise& left) -> Inst {
+                if (isValidForm(CompareFloatWithZero, Arg::DoubleCond, left.kind(), Arg::Tmp))
+                    return left.inst(CompareFloatWithZero, m_value, doubleCond, left.consume(*this), tmp(m_value));
+                return Inst();
+            },
             inverted);
     }
 
@@ -2259,6 +2270,8 @@ private:
         Air::Opcode moveConditionallyTest64;
         Air::Opcode moveConditionallyDouble;
         Air::Opcode moveConditionallyFloat;
+        Air::Opcode moveConditionallyDoubleWithZero;
+        Air::Opcode moveConditionallyFloatWithZero;
     };
     Inst createSelect(const MoveConditionallyConfig& config)
     {
@@ -2326,6 +2339,38 @@ private:
             },
             [&] (Arg doubleCond, ArgPromise& left, ArgPromise& right) -> Inst {
                 return createSelectInstruction(config.moveConditionallyFloat, doubleCond, left, right);
+            },
+            [&] (Arg doubleCond, ArgPromise& left) -> Inst {
+                Air::Opcode opcode = config.moveConditionallyDoubleWithZero;
+                if (isValidForm(opcode, doubleCond.kind(), left.kind(), Arg::Tmp, Arg::Tmp, Arg::Tmp)) {
+                    Tmp result = tmp(m_value);
+                    Tmp thenCase = tmp(m_value->child(1));
+                    Tmp elseCase = tmp(m_value->child(2));
+                    return left.inst(opcode, m_value, doubleCond, left.consume(*this), thenCase, elseCase, result);
+                }
+                if (isValidForm(opcode, doubleCond.kind(), left.kind(), Arg::Tmp, Arg::Tmp)) {
+                    Tmp result = tmp(m_value);
+                    Tmp source = tmp(m_value->child(1));
+                    append(relaxedMoveForType(m_value->type()), tmp(m_value->child(2)), result);
+                    return left.inst(opcode, m_value, doubleCond, left.consume(*this), source, result);
+                }
+                return Inst();
+            },
+            [&] (Arg doubleCond, ArgPromise& left) -> Inst {
+                Air::Opcode opcode = config.moveConditionallyFloatWithZero;
+                if (isValidForm(opcode, doubleCond.kind(), left.kind(), Arg::Tmp, Arg::Tmp, Arg::Tmp)) {
+                    Tmp result = tmp(m_value);
+                    Tmp thenCase = tmp(m_value->child(1));
+                    Tmp elseCase = tmp(m_value->child(2));
+                    return left.inst(opcode, m_value, doubleCond, left.consume(*this), thenCase, elseCase, result);
+                }
+                if (isValidForm(opcode, doubleCond.kind(), left.kind(), Arg::Tmp, Arg::Tmp)) {
+                    Tmp result = tmp(m_value);
+                    Tmp source = tmp(m_value->child(1));
+                    append(relaxedMoveForType(m_value->type()), tmp(m_value->child(2)), result);
+                    return left.inst(opcode, m_value, doubleCond, left.consume(*this), source, result);
+                }
+                return Inst();
             },
             false);
     }
@@ -4207,6 +4252,7 @@ private:
             emitSIMDUnaryOp(Air::VectorTrunc);
             return;
         case B3::VectorTruncSat:
+        case B3::VectorRelaxedTruncSat:
             if (isX86()) {
                 SIMDValue* value = m_value->as<SIMDValue>();
                 Tmp v = tmp(value->child(0));
@@ -4329,6 +4375,18 @@ private:
         case B3::VectorRelaxedSwizzle:
             emitSIMDMonomorphicBinaryOp(Air::VectorSwizzle);
             return;
+
+        case B3::VectorRelaxedMAdd: {
+            SIMDValue* value = m_value->as<SIMDValue>();
+            append(Air::VectorFusedMulAdd, Arg::simdInfo(value->simdInfo()), tmp(m_value->child(0)), tmp(m_value->child(1)), tmp(m_value->child(2)), tmp(m_value), m_code.newTmp(FP));
+            return;
+        }
+
+        case B3::VectorRelaxedNMAdd: {
+            SIMDValue* value = m_value->as<SIMDValue>();
+            append(Air::VectorFusedNegMulAdd, Arg::simdInfo(value->simdInfo()), tmp(m_value->child(0)), tmp(m_value->child(1)), tmp(m_value->child(2)), tmp(m_value), m_code.newTmp(FP));
+            return;
+        }
 
         case Fence: {
             FenceValue* fence = m_value->as<FenceValue>();
@@ -4526,6 +4584,8 @@ private:
                 config.moveConditionallyTest64 = MoveConditionallyTest64;
                 config.moveConditionallyDouble = MoveConditionallyDouble;
                 config.moveConditionallyFloat = MoveConditionallyFloat;
+                config.moveConditionallyDoubleWithZero = MoveConditionallyDoubleWithZero;
+                config.moveConditionallyFloatWithZero = MoveConditionallyFloatWithZero;
             } else {
                 // FIXME: it's not obvious that these are particularly efficient.
                 // https://bugs.webkit.org/show_bug.cgi?id=169251
@@ -4535,6 +4595,8 @@ private:
                 config.moveConditionallyTest64 = MoveDoubleConditionallyTest64;
                 config.moveConditionallyDouble = MoveDoubleConditionallyDouble;
                 config.moveConditionallyFloat = MoveDoubleConditionallyFloat;
+                config.moveConditionallyDoubleWithZero = MoveDoubleConditionallyDoubleWithZero;
+                config.moveConditionallyFloatWithZero = MoveDoubleConditionallyFloatWithZero;
             }
             
             m_insts.last().append(createSelect(config));

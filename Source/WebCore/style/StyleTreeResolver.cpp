@@ -4,7 +4,7 @@
  *           (C) 2001 Peter Kelly (pmk@post.com)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
  *           (C) 2007 David Smith (catfish.man@gmail.com)
- * Copyright (C) 2004-2010, 2012-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  *           (C) 2007 Eric Seidel (eric@webkit.org)
  *
  * This library is free software; you can redistribute it and/or
@@ -43,6 +43,7 @@
 #include "Quirks.h"
 #include "RenderElement.h"
 #include "RenderStyleSetters.h"
+#include "RenderView.h"
 #include "ResolvedStyle.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -232,7 +233,7 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     auto descendantsToResolve = computeDescendantsToResolve(update.change, element.styleValidity(), parent().descendantsToResolve);
 
     if (&element == m_document.documentElement()) {
-        if (!existingStyle || existingStyle->computedFontPixelSize() != update.style->computedFontPixelSize()) {
+        if (!existingStyle || existingStyle->computedFontSize() != update.style->computedFontSize()) {
             // "rem" units are relative to the document element's font size so we need to recompute everything.
             scope().resolver->invalidateMatchedDeclarationsCache();
             descendantsToResolve = DescendantsToResolve::All;
@@ -337,15 +338,6 @@ std::optional<ElementUpdate> TreeResolver::resolvePseudoElement(Element& element
 
     auto resolvedStyle = scope().resolver->styleForPseudoElement(element, { pseudoId }, resolutionContext);
     if (!resolvedStyle)
-        return { };
-
-    // FIXME: This test shouldn't be needed.
-    bool alwaysNeedsPseudoElement = resolvedStyle->style->hasAnimationsOrTransitions()
-        || element.hasKeyframeEffects(pseudoId)
-        || pseudoId == PseudoId::FirstLine
-        || pseudoId == PseudoId::FirstLetter
-        || pseudoId == PseudoId::Scrollbar;
-    if (!alwaysNeedsPseudoElement && !pseudoElementRendererIsNeeded(resolvedStyle->style.get()))
         return { };
 
     auto animatedUpdate = createAnimatedElementUpdate(WTFMove(*resolvedStyle), { element, pseudoId }, elementUpdate.change, resolutionContext);
@@ -510,11 +502,14 @@ ResolutionContext TreeResolver::makeResolutionContext()
 
 ResolutionContext TreeResolver::makeResolutionContextForPseudoElement(const ElementUpdate& elementUpdate, PseudoId pseudoId)
 {
-    auto parentStyle = [&] {
+    auto parentStyle = [&]() -> const RenderStyle* {
         if (pseudoId == PseudoId::FirstLetter) {
             if (auto* firstLineStyle = elementUpdate.style->getCachedPseudoStyle(PseudoId::FirstLine))
                 return firstLineStyle;
         }
+        // ::backdrop does not inherit style, hence using the view style as parent style
+        if (pseudoId == PseudoId::Backdrop)
+            return &m_document.renderView()->style();
         return elementUpdate.style.get();
     };
 

@@ -3284,23 +3284,24 @@ void SpeculativeJIT::compile(Node* node)
             
         case DoubleRepAnyIntUse: {
             SpeculateDoubleOperand value(this, node->child1());
+            GPRTemporary result(this);
+            GPRTemporary scratch1(this);
+            FPRTemporary scratch2(this);
+
             FPRReg valueFPR = value.fpr();
-            
-            flushRegisters();
-            GPRFlushedCallResult result(this);
             GPRReg resultGPR = result.gpr();
-            callOperation(operationConvertDoubleToInt52, resultGPR, valueFPR);
-            
-            DFG_TYPE_CHECK_WITH_EXIT_KIND(Int52Overflow,
-                JSValueRegs(), node->child1(), SpecAnyIntAsDouble,
-                branch64(
-                    Equal, resultGPR,
-                    TrustedImm64(JSValue::notInt52)));
-            
+            GPRReg scratch1GPR = scratch1.gpr();
+            FPRReg scratch2FPR = scratch2.fpr();
+
+            JumpList failureCases;
+            branchConvertDoubleToInt52(valueFPR, resultGPR, failureCases, scratch1GPR, scratch2FPR);
+
+            DFG_TYPE_CHECK_WITH_EXIT_KIND(Int52Overflow, JSValueRegs(), node->child1(), SpecAnyIntAsDouble, failureCases);
+
             strictInt52Result(resultGPR, node);
             break;
         }
-            
+
         default:
             DFG_CRASH(m_graph, node, "Bad use kind");
         }
@@ -4233,6 +4234,11 @@ void SpeculativeJIT::compile(Node* node)
         
     case NewArrayWithSize: {
         compileNewArrayWithSize(node);
+        break;
+    }
+
+    case NewArrayWithConstantSize: {
+        compileNewArrayWithConstantSize(node);
         break;
     }
 
@@ -5913,6 +5919,10 @@ void SpeculativeJIT::compile(Node* node)
         compileDateGet(node);
         break;
 
+    case DateSetTime:
+        compileDateSet(node);
+        break;
+
     case DataViewSet: {
         SpeculateCellOperand dataView(this, m_graph.varArgChild(node, 0));
         GPRReg dataViewGPR = dataView.gpr();
@@ -6294,24 +6304,27 @@ void SpeculativeJIT::blessBoolean(GPRReg gpr)
 void SpeculativeJIT::convertAnyInt(Edge valueEdge, GPRReg resultGPR)
 {
     JSValueOperand value(this, valueEdge, ManualOperandSpeculation);
-    GPRReg valueGPR = value.gpr();
-    
-    Jump notInt32 = branchIfNotInt32(valueGPR);
-    
-    signExtend32ToPtr(valueGPR, resultGPR);
-    Jump done = jump();
-    
-    notInt32.link(this);
-    silentSpillAllRegisters(resultGPR);
-    callOperation(operationConvertBoxedDoubleToInt52, resultGPR, valueGPR);
-    silentFillAllRegisters();
+    GPRTemporary scratch1(this);
+    FPRTemporary scratch2(this);
+    FPRTemporary scratch3(this);
 
-    DFG_TYPE_CHECK(
-        JSValueRegs(valueGPR), valueEdge, SpecInt32Only | SpecAnyIntAsDouble,
-        branch64(
-            Equal, resultGPR,
-            TrustedImm64(JSValue::notInt52)));
+    GPRReg valueGPR = value.gpr();
+    GPRReg scratch1GPR = scratch1.gpr();
+    FPRReg scratch2FPR = scratch2.fpr();
+    FPRReg scratch3FPR = scratch3.fpr();
+
+    JumpList failureCases;
+
+    failureCases.append(branchIfNotNumber(valueGPR));
+    Jump notInt32 = branchIfNotInt32(valueGPR);
+    signExtend32ToPtr(valueGPR, resultGPR);
+    auto done = jump();
+
+    notInt32.link(this);
+    unboxDouble(valueGPR, resultGPR, scratch2FPR);
+    branchConvertDoubleToInt52(scratch2FPR, resultGPR, failureCases, scratch1GPR, scratch3FPR);
     done.link(this);
+    DFG_TYPE_CHECK(JSValueRegs(valueGPR), valueEdge, SpecInt32Only | SpecAnyIntAsDouble, failureCases);
 }
 
 void SpeculativeJIT::speculateAnyInt(Edge edge)
@@ -6332,20 +6345,20 @@ void SpeculativeJIT::speculateDoubleRepAnyInt(Edge edge)
 {
     if (!needsTypeCheck(edge, SpecAnyIntAsDouble))
         return;
-    
+
     SpeculateDoubleOperand value(this, edge);
+    GPRTemporary result(this);
+    GPRTemporary scratch1(this);
+    FPRTemporary scratch2(this);
+
     FPRReg valueFPR = value.fpr();
-    
-    flushRegisters();
-    GPRFlushedCallResult result(this);
     GPRReg resultGPR = result.gpr();
-    callOperation(operationConvertDoubleToInt52, resultGPR, valueFPR);
-    
-    DFG_TYPE_CHECK(
-        JSValueRegs(), edge, SpecAnyIntAsDouble,
-        branch64(
-            Equal, resultGPR,
-            TrustedImm64(JSValue::notInt52)));
+    GPRReg scratch1GPR = scratch1.gpr();
+    FPRReg scratch2FPR = scratch2.fpr();
+
+    JumpList failureCases;
+    branchConvertDoubleToInt52(valueFPR, resultGPR, failureCases, scratch1GPR, scratch2FPR);
+    DFG_TYPE_CHECK(JSValueRegs(), edge, SpecAnyIntAsDouble, failureCases);
 }
 
 void SpeculativeJIT::compileArithRandom(Node* node)
@@ -6544,6 +6557,40 @@ void SpeculativeJIT::compileDateGet(Node* node)
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
+}
+
+void SpeculativeJIT::compileDateSet(Node* node)
+{
+    SpeculateCellOperand base(this, node->child1());
+    SpeculateDoubleOperand time(this, node->child2());
+
+    FPRTemporary scratch1(this);
+    FPRTemporary scratch2(this);
+    FPRTemporary scratch3(this);
+    FPRTemporary scratch4(this);
+
+    GPRReg baseGPR = base.gpr();
+    FPRReg timeFPR = time.fpr();
+    FPRReg scratch1FPR = scratch1.fpr();
+    FPRReg scratch2FPR = scratch2.fpr();
+    FPRReg scratch3FPR = scratch3.fpr();
+    FPRReg scratch4FPR = scratch4.fpr();
+
+    speculateDateObject(node->child1(), baseGPR);
+
+    roundTowardZeroDouble(timeFPR, scratch1FPR);
+    moveZeroToDouble(scratch2FPR);
+    addDouble(scratch2FPR, scratch1FPR);
+
+    static const double NaN = PNaN;
+    static const double max = WTF::maxECMAScriptTime;
+    loadDouble(TrustedImmPtr(&max), scratch3FPR);
+    loadDouble(TrustedImmPtr(&NaN), scratch4FPR);
+    absDouble(timeFPR, scratch2FPR);
+    moveDoubleConditionallyDouble(DoubleGreaterThanAndOrdered, scratch2FPR, scratch3FPR, scratch4FPR, scratch1FPR, scratch1FPR);
+
+    storeDouble(scratch1FPR, Address(baseGPR, DateInstance::offsetOfInternalNumber()));
+    doubleResult(scratch1FPR, node);
 }
 
 void SpeculativeJIT::compileGetByValWithThis(Node* node)

@@ -240,6 +240,7 @@ inline CapabilityLevel canCompile(Node* node)
     case MakeRope:
     case MakeAtomString:
     case NewArrayWithSize:
+    case NewArrayWithConstantSize:
     case NewArrayWithSpecies:
     case TryGetById:
     case GetById:
@@ -448,6 +449,7 @@ inline CapabilityLevel canCompile(Node* node)
     case DataViewSet:
     case DateGetInt32OrNaN:
     case DateGetTime:
+    case DateSetTime:
         // These are OK.
         break;
 

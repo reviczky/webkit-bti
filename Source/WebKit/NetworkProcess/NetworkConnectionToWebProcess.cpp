@@ -1439,6 +1439,17 @@ void NetworkConnectionToWebProcess::logOnBehalfOfWebContent(IPC::DataReference&&
 }
 #endif
 
+void NetworkConnectionToWebProcess::addAllowedFirstPartyForCookies(const RegistrableDomain& firstPartyForCookies)
+{
+    connection().send(Messages::NetworkProcessConnection::AddAllowedFirstPartyForCookies(firstPartyForCookies), 0);
+}
+
+void NetworkConnectionToWebProcess::useRedirectionForCurrentNavigation(WebCore::ResourceLoaderIdentifier identifier, WebCore::ResourceResponse&& response)
+{
+    if (auto* loader = m_networkResourceLoaders.get(identifier))
+        loader->useRedirectionForCurrentNavigation(WTFMove(response));
+}
+
 } // namespace WebKit
 
 #undef CONNECTION_RELEASE_LOG

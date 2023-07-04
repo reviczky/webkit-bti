@@ -42,7 +42,7 @@
 #include <wtf/Ref.h>
 #include <wtf/ThreadAssertions.h>
 
-namespace PAL::WebGPU {
+namespace WebCore::WebGPU {
 class GPU;
 struct PresentationContextDescriptor;
 }
@@ -102,7 +102,7 @@ private:
     void workQueueUninitialize();
 
     template<typename T>
-    bool send(T&& message) const
+    IPC::Error send(T&& message) const
     {
         return m_streamConnection->send(WTFMove(message), m_identifier);
     }
@@ -118,7 +118,7 @@ private:
     WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     Ref<IPC::StreamConnectionWorkQueue> m_workQueue;
     RefPtr<IPC::StreamServerConnection> m_streamConnection;
-    RefPtr<PAL::WebGPU::GPU> m_backing WTF_GUARDED_BY_CAPABILITY(workQueue());
+    RefPtr<WebCore::WebGPU::GPU> m_backing WTF_GUARDED_BY_CAPABILITY(workQueue());
     Ref<WebGPU::ObjectHeap> m_objectHeap WTF_GUARDED_BY_CAPABILITY(workQueue());
     PerformWithMediaPlayerOnMainThread m_performWithMediaPlayerOnMainThread;
     const WebGPUIdentifier m_identifier;

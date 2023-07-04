@@ -1804,6 +1804,11 @@ private:
             break;
         }
 
+        case NewArrayWithConstantSize: {
+            watchHavingABadTime(node);
+            break;
+        }
+
         case NewArrayWithSpecies: {
             ArrayMode arrayMode = node->arrayMode().refine(m_graph, node, node->child2()->prediction(), ArrayMode::unusedIndexSpeculatedType);
             node->setArrayMode(arrayMode);
@@ -2907,7 +2912,7 @@ private:
 
         case GlobalIsNaN: {
             if (node->child1()->shouldSpeculateInt32()) {
-                fixEdge<Int32Use>(node->child1());
+                insertCheck<Int32Use>(node->child1().node());
                 m_graph.convertToConstant(node, jsBoolean(false));
                 break;
             }
@@ -2921,7 +2926,7 @@ private:
 
         case NumberIsNaN: {
             if (node->child1()->shouldSpeculateInt32()) {
-                fixEdge<Int32Use>(node->child1());
+                insertCheck<Int32Use>(node->child1().node());
                 m_graph.convertToConstant(node, jsBoolean(false));
                 break;
             }
@@ -2939,6 +2944,11 @@ private:
         case DateGetInt32OrNaN:
         case DateGetTime:
             fixEdge<DateObjectUse>(node->child1());
+            break;
+
+        case DateSetTime:
+            fixEdge<DateObjectUse>(node->child1());
+            fixEdge<DoubleRepUse>(node->child2());
             break;
 
         case DataViewGetInt:
@@ -3702,21 +3712,34 @@ private:
 
     bool attemptToMakeFastStringAdd(Node* node)
     {
+        bool atLeastOneString = false;
         bool goodToGo = true;
         m_graph.doToChildren(
             node,
             [&] (Edge& edge) {
-                if (edge->shouldSpeculateString())
+                if (edge->shouldSpeculateString()) {
+                    atLeastOneString = true;
+                    return;
+                }
+                if (edge->shouldSpeculateInt32())
                     return;
                 if (m_graph.canOptimizeStringObjectAccess(node->origin.semantic)) {
-                    if (edge->shouldSpeculateStringObject())
+                    if (edge->shouldSpeculateStringObject()) {
+                        atLeastOneString = true;
                         return;
-                    if (edge->shouldSpeculateStringOrStringObject())
+                    }
+                    if (edge->shouldSpeculateStringOrStringObject()) {
+                        atLeastOneString = true;
                         return;
+                    }
                 }
+                if (edge->op() == ToPrimitive)
+                    return;
                 goodToGo = false;
             });
         if (!goodToGo)
+            return false;
+        if (!atLeastOneString)
             return false;
 
         m_graph.doToChildren(
@@ -3724,6 +3747,10 @@ private:
             [&] (Edge& edge) {
                 if (edge->shouldSpeculateString()) {
                     convertStringAddUse<StringUse>(node, edge);
+                    return;
+                }
+                if (edge->shouldSpeculateInt32()) {
+                    convertStringAddUse<Int32Use>(node, edge);
                     return;
                 }
                 if (!Options::useConcurrentJIT())
@@ -3736,6 +3763,10 @@ private:
                 if (edge->shouldSpeculateStringOrStringObject()) {
                     addCheckStructureForOriginalStringObjectUse(StringOrStringObjectUse, node->origin, edge.node());
                     convertStringAddUse<StringOrStringObjectUse>(node, edge);
+                    return;
+                }
+                if (edge->op() == ToPrimitive) {
+                    convertStringAddUse<KnownPrimitiveUse>(node, edge);
                     return;
                 }
                 RELEASE_ASSERT_NOT_REACHED();

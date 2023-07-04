@@ -1125,30 +1125,60 @@ static void notifyTextFromControls(Element* startRoot, Element* endRoot)
         endingTextControl->didEditInnerTextValue();
 }
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/EditorAdditions.cpp>
-#else
 static inline bool shouldRemoveAutocorrectionIndicator(bool shouldConsiderApplyingAutocorrection, bool autocorrectionWasApplied, bool isAutocompletion)
 {
+#if HAVE(AUTOCORRECTION_ENHANCEMENTS)
+    bool shouldRemoveIndicator = shouldConsiderApplyingAutocorrection && !autocorrectionWasApplied;
+#if PLATFORM(IOS_FAMILY)
+    // On iOS, unlike macOS, autocorrection is applied as two separate text insertions. The first insertion is
+    // an autocompletion.
+    return shouldRemoveIndicator && !isAutocompletion;
+#else // !PLATFORM(IOS_FAMILY)
+    UNUSED_PARAM(isAutocompletion);
+    return shouldRemoveIndicator;
+#endif // !PLATFORM(IOS_FAMILY)
+#else // !HAVE(AUTOCORRECTION_ENHANCEMENTS)
     UNUSED_PARAM(shouldConsiderApplyingAutocorrection);
     UNUSED_PARAM(isAutocompletion);
+#endif // !HAVE(AUTOCORRECTION_ENHANCEMENTS)
     return !autocorrectionWasApplied;
 }
 
-static inline bool didApplyAutocorrection(Document&, AlternativeTextController& alternativeTextController)
+static inline bool didApplyAutocorrection(Document& document, AlternativeTextController& alternativeTextController)
 {
+#if HAVE(AUTOCORRECTION_ENHANCEMENTS) && PLATFORM(IOS_FAMILY)
+    bool autocorrectionWasApplied = alternativeTextController.applyAutocorrectionBeforeTypingIfAppropriate();
+
+    // On iOS, unlike macOS, autocorrection is applied as two separate text insertions: the correction
+    // itself, followed by a space. This logic detects that an autocorrection was applied after the
+    // space has been inserted.
+
+    auto selection = document.selection().selection();
+    auto startOfSelection = selection.start();
+
+    auto wordStart = startOfWord(startOfSelection, LeftWordIfOnBoundary);
+    auto wordEnd = endOfWord(startOfSelection, LeftWordIfOnBoundary);
+
+    if (auto range = makeSimpleRange(wordStart, wordEnd)) {
+        if (document.markers().hasMarkers(*range, DocumentMarker::CorrectionIndicator))
+            autocorrectionWasApplied = true;
+    }
+
+    return autocorrectionWasApplied;
+#else
+    UNUSED_PARAM(document);
     return alternativeTextController.applyAutocorrectionBeforeTypingIfAppropriate();
-}
-
-static inline void respondToAppliedEditing(Document&, AlternativeTextController& alternativeTextController, CompositeEditCommand& command)
-{
-    alternativeTextController.respondToAppliedEditing(&command);
-}
-
-static inline void adjustMarkerTypesToRemoveForWordsAffectedByEditing(OptionSet<DocumentMarker::MarkerType>&)
-{
-}
 #endif
+}
+
+static inline void adjustMarkerTypesToRemoveForWordsAffectedByEditing(OptionSet<DocumentMarker::MarkerType>& markerTypes)
+{
+#if HAVE(AUTOCORRECTION_ENHANCEMENTS) && PLATFORM(IOS_FAMILY)
+    markerTypes.remove(DocumentMarker::CorrectionIndicator);
+#else
+    UNUSED_PARAM(markerTypes);
+#endif
+}
 
 static bool dispatchBeforeInputEvents(RefPtr<Element> startRoot, RefPtr<Element> endRoot, const AtomString& inputTypeName, IsInputMethodComposing isInputMethodComposing,
     const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
@@ -1219,7 +1249,7 @@ void Editor::appliedEditing(CompositeEditCommand& command)
     if (command.isTopLevelCommand()) {
         updateEditorUINowIfScheduled();
 
-        respondToAppliedEditing(m_document, *m_alternativeTextController, command);
+        m_alternativeTextController->respondToAppliedEditing(m_document, &command);
 
         if (!command.preservesTypingStyle())
             m_document.selection().clearTypingStyle();
@@ -2227,6 +2257,9 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
             // We should send a compositionstart event only when the given text is not empty because this
             // function doesn't create a composition node when the text is empty.
             if (!text.isEmpty()) {
+                // When an inline predicition is being offered, there will be text and a non-zero amount of highlights.
+                m_isHandlingAcceptedCandidate = !highlights.isEmpty();
+
                 target->dispatchEvent(CompositionEvent::create(eventNames().compositionstartEvent, document().windowProxy(), originalText));
                 event = CompositionEvent::create(eventNames().compositionupdateEvent, document().windowProxy(), text);
             }
@@ -2240,6 +2273,9 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
     // If text is empty, then delete the old composition here.  If text is non-empty, InsertTextCommand::input
     // will delete the old composition with an optimized replace operation.
     if (text.isEmpty()) {
+        // The absence of text implies that there are currently no inline predicitions being offered.
+        m_isHandlingAcceptedCandidate = false;
+
         TypingCommand::deleteSelection(document(), TypingCommand::Option::PreventSpellChecking, TypingCommand::TextCompositionType::Pending);
         if (target)
             target->dispatchEvent(CompositionEvent::create(eventNames().compositionendEvent, document().windowProxy(), text));
@@ -2836,6 +2872,10 @@ void Editor::markAllMisspellingsAndBadGrammarInRanges(OptionSet<TextCheckingType
 
     // This function is called with selections already expanded to word boundaries.
     if (!client() || !spellingRange || (shouldMarkGrammar && !grammarRange))
+        return;
+
+    // Do not mark spelling or grammer corrections when an inline prediction candidate is currently being offered.
+    if (m_isHandlingAcceptedCandidate)
         return;
 
     // If we're not in an editable node, bail.
@@ -4353,9 +4393,6 @@ void Editor::cloneAttachmentData(const String& fromIdentifier, const String& toI
 
 void Editor::didInsertAttachmentElement(HTMLAttachmentElement& attachment)
 {
-    if (attachment.isImageOnly())
-        return;
-
     auto identifier = attachment.uniqueIdentifier();
     if (identifier.isEmpty())
         return;

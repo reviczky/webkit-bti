@@ -1338,6 +1338,15 @@ void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest
 {
     LOADER_RELEASE_LOG("continueWillSendRequest: (isAllowedToAskUserForCredentials=%d)", isAllowedToAskUserForCredentials);
 
+    if (m_redirectionForCurrentNavigation) {
+        LOADER_RELEASE_LOG("continueWillSendRequest: using stored redirect response");
+        auto redirection = std::exchange(m_redirectionForCurrentNavigation, { });
+        auto redirectRequest = newRequest.redirectedRequest(*redirection, parameters().shouldClearReferrerOnHTTPSToHTTPRedirect);
+        m_shouldRestartLoad = true;
+        willSendRedirectedRequest(WTFMove(newRequest), WTFMove(redirectRequest), WTFMove(*redirection));
+        return;
+    }
+
 #if ENABLE(SERVICE_WORKER)
     if (shouldTryToMatchRegistrationOnRedirection(parameters().options, !!m_serviceWorkerFetchTask)) {
         m_serviceWorkerRegistration = { };
@@ -2067,10 +2076,23 @@ void NetworkResourceLoader::cancelMainResourceLoadForContentFilter(const WebCore
 
 void NetworkResourceLoader::handleProvisionalLoadFailureFromContentFilter(const URL& blockedPageURL, WebCore::SubstituteData& substituteData)
 {
-    m_connection->networkProcess().addAllowedFirstPartyForCookies(m_connection->webProcessIdentifier(), RegistrableDomain { WebCore::ContentFilter::blockedPageURL() }, LoadedWebArchive::No, [] { });
+    auto blockedPageDomain = RegistrableDomain { WebCore::ContentFilter::blockedPageURL() };
+    if (auto* connection = m_connection->networkProcess().webProcessConnection(m_connection->webProcessIdentifier()))
+        connection->addAllowedFirstPartyForCookies(blockedPageDomain);
+    m_connection->networkProcess().addAllowedFirstPartyForCookies(m_connection->webProcessIdentifier(), WTFMove(blockedPageDomain), LoadedWebArchive::No, [] { });
     send(Messages::WebResourceLoader::ContentFilterDidBlockLoad(m_unblockHandler, m_unblockRequestDeniedScript, m_contentFilter->blockedError(), blockedPageURL, substituteData));
 }
 #endif // ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
+
+void NetworkResourceLoader::useRedirectionForCurrentNavigation(WebCore::ResourceResponse&& response)
+{
+    LOADER_RELEASE_LOG("useRedirectionForCurrentNavigation");
+
+    ASSERT(isMainFrameLoad());
+    ASSERT(response.isRedirection());
+
+    m_redirectionForCurrentNavigation = makeUnique<WebCore::ResourceResponse>(WTFMove(response));
+}
 
 } // namespace WebKit
 

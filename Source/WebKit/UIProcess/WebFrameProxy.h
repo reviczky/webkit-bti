@@ -28,6 +28,7 @@
 #include "APIObject.h"
 #include "FrameLoadState.h"
 #include "WebFramePolicyListenerProxy.h"
+#include "WebProcessProxy.h"
 #include <WebCore/FrameLoaderTypes.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
@@ -149,7 +150,7 @@ public:
 
     void disconnect();
     void didCreateSubframe(WebCore::FrameIdentifier);
-    ProcessID processIdentifier() const;
+    ProcessID processID() const;
     void swapToProcess(Ref<WebProcessProxy>&&, const WebCore::ResourceRequest&);
 
     void commitProvisionalFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
@@ -160,6 +161,7 @@ public:
 
     WebFrameProxy* parentFrame() { return m_parentFrame.get(); }
     WebProcessProxy& process() { return m_process.get(); }
+    void setProcess(WebProcessProxy& process) { m_process = process; }
     ProvisionalFrameProxy* provisionalFrame() { return m_provisionalFrame.get(); }
 
 private:

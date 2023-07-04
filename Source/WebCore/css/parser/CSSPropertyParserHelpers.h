@@ -35,7 +35,6 @@
 #include "CSSPrimitiveValue.h"
 #include "CSSShadowValue.h"
 #include "CSSValuePool.h"
-#include "CSSWordBoundaryDetectionValue.h"
 #include "GridArea.h"
 #include "Length.h"
 #include "StyleColor.h"
@@ -267,6 +266,7 @@ RefPtr<CSSValue> consumeAttr(CSSParserTokenRange args, const CSSParserContext&);
 RefPtr<CSSValue> consumeContent(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeScrollSnapAlign(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeScrollSnapType(CSSParserTokenRange&);
+RefPtr<CSSValue> consumeScrollbarColor(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeScrollbarGutter(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeTextBoxEdge(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeBorderRadiusCorner(CSSParserTokenRange&, CSSParserMode);
@@ -316,8 +316,6 @@ RefPtr<CSSValue> consumeColorScheme(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeOffsetRotate(CSSParserTokenRange&, CSSParserMode);
 RefPtr<CSSValue> consumeTextSpacingTrim(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeTextAutospace(CSSParserTokenRange&);
-RefPtr<CSSPrimitiveValue> consumeLang(CSSParserTokenRange&);
-RefPtr<CSSWordBoundaryDetectionValue> consumeWordBoundaryDetection(CSSParserTokenRange&);
 
 RefPtr<CSSValue> consumeDeclarationValue(CSSParserTokenRange&, const CSSParserContext&);
 

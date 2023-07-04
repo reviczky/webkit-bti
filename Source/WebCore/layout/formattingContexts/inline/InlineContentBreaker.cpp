@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -323,7 +323,7 @@ static inline std::optional<size_t> lastValidBreakingPosition(const InlineConten
         return inlineTextItem.end();
 
     auto& nextInlineTextItem = downcast<InlineTextItem>(runs[*adjactentTextRunIndex].inlineItem);
-    auto canBreakAtRunBoundary = nextInlineTextItem.isWhitespace() ? nextInlineTextItem.style().whiteSpace() != WhiteSpace::BreakSpaces :
+    auto canBreakAtRunBoundary = nextInlineTextItem.isWhitespace() ? nextInlineTextItem.style().whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces :
         canBreakBefore(nextInlineTextItem.inlineTextBox().content()[nextInlineTextItem.start()], lineBreak);
     if (canBreakAtRunBoundary)
         return inlineTextItem.end();
@@ -481,7 +481,7 @@ std::optional<InlineContentBreaker::PartialRun> InlineContentBreaker::tryBreakin
             auto leftSideLength = std::optional<size_t> { };
             if (candidateTextRun.isOverflowingRun) {
                 auto availableWidthExcludingHyphen = availableWidth - hyphenWidth;
-                if (availableWidthExcludingHyphen <= 0 || !enoughWidthForHyphenation(availableWidthExcludingHyphen, fontCascade.pixelSize()))
+                if (availableWidthExcludingHyphen <= 0 || !enoughWidthForHyphenation(availableWidthExcludingHyphen, fontCascade.size()))
                     return { };
                 leftSideLength = TextUtil::breakWord(inlineTextItem, fontCascade, candidateRun.logicalWidth, availableWidthExcludingHyphen, candidateTextRun.logicalLeft).length;
             }
@@ -654,7 +654,7 @@ std::optional<InlineContentBreaker::OverflowingTextContent::BreakingPosition> In
     auto& fontCascade = style.fontCascade();
     auto hyphenWidth = InlineLayoutUnit { fontCascade.width(TextRun { StringView { style.hyphenString() } }) };
     auto availableWidthExcludingHyphen = lineStatus.availableWidth - hyphenWidth;
-    if (availableWidthExcludingHyphen <= 0 || !enoughWidthForHyphenation(availableWidthExcludingHyphen, fontCascade.pixelSize()))
+    if (availableWidthExcludingHyphen <= 0 || !enoughWidthForHyphenation(availableWidthExcludingHyphen, fontCascade.size()))
         return { };
 
     auto& overflowingRun = runs[overflowingRunIndex];

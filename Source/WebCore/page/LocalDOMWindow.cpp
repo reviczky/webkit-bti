@@ -38,6 +38,7 @@
 #include "ContentExtensionActions.h"
 #include "ContentExtensionRule.h"
 #include "ContentRuleListResults.h"
+#include "CookieStore.h"
 #include "CrossOriginOpenerPolicy.h"
 #include "Crypto.h"
 #include "CustomElementRegistry.h"
@@ -1472,7 +1473,7 @@ AtomString LocalDOMWindow::name() const
     if (!frame)
         return nullAtom();
 
-    return frame->tree().name();
+    return frame->tree().specifiedName();
 }
 
 void LocalDOMWindow::setName(const AtomString& string)
@@ -1481,7 +1482,7 @@ void LocalDOMWindow::setName(const AtomString& string)
     if (!frame)
         return;
 
-    frame->tree().setName(string);
+    frame->tree().setSpecifiedName(string);
 }
 
 void LocalDOMWindow::setStatus(const String& string)
@@ -2801,6 +2802,13 @@ void LocalDOMWindow::eventListenersDidChange()
 WebCoreOpaqueRoot root(LocalDOMWindow* window)
 {
     return WebCoreOpaqueRoot { window };
+}
+
+CookieStore& LocalDOMWindow::cookieStore()
+{
+    if (!m_cookieStore)
+        m_cookieStore = CookieStore::create();
+    return *m_cookieStore;
 }
 
 } // namespace WebCore

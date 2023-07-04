@@ -861,6 +861,7 @@ public:
 
     void convertToNewArrayBuffer(FrozenValue* immutableButterfly);
     void convertToNewArrayWithSize();
+    void convertToNewArrayWithConstantSize(Graph&, uint32_t);
 
     void convertToNewBoundFunction(FrozenValue*);
 
@@ -1314,12 +1315,29 @@ public:
             return m_opInfo2.as<unsigned>();
         return newArrayBufferData().vectorLengthHint;
     }
-    
+
+    unsigned hasNewArraySize()
+    {
+        switch (op()) {
+        case NewArrayWithConstantSize:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    unsigned newArraySize()
+    {
+        ASSERT(hasNewArraySize());
+        return m_opInfo2.as<unsigned>();
+    }
+
     bool hasIndexingType()
     {
         switch (op()) {
         case NewArray:
         case NewArrayWithSize:
+        case NewArrayWithConstantSize:
         case NewArrayBuffer:
         case PhantomNewArrayBuffer:
         case NewArrayWithSpecies:
@@ -2795,14 +2813,26 @@ public:
         return isInt32SpeculationForArithmetic(prediction());
     }
     
-    bool shouldSpeculateInt32OrBooleanForArithmetic()
+    bool shouldSpeculateInt32OrBooleanForArithmetic(bool mayHaveDoubleResult = true)
     {
-        return isInt32OrBooleanSpeculationForArithmetic(prediction());
+        if (isInt32OrBooleanSpeculationForArithmetic(prediction()))
+            return true;
+        if (!mayHaveDoubleResult && isInt32OrBooleanSpeculationForArithmetic(prediction() & ~SpecDoubleNaN))
+            return true;
+        return false;
     }
     
-    bool shouldSpeculateInt32OrBooleanExpectingDefined()
+    bool shouldSpeculateInt32OrBooleanExpectingDefined(bool mayHaveDoubleResult)
     {
-        return isInt32OrBooleanSpeculationExpectingDefined(prediction());
+        if (isInt32OrBooleanSpeculationExpectingDefined(prediction()))
+            return true;
+
+        // We found that NaN can be used as an error value (as the same to Other), and it can pollute the graph with Double.
+        // But NaN compuation always produces NaN. So if we do not observe DoubleResult, then likely this site never sees
+        // NaN. We relax Int32 speculation condition based on this behavior.
+        if (!mayHaveDoubleResult && isInt32OrBooleanSpeculationExpectingDefined(prediction() & ~SpecDoubleNaN))
+            return true;
+        return false;
     }
     
     bool shouldSpeculateInt52()
@@ -3109,12 +3139,6 @@ public:
     {
         return op1->shouldSpeculateInt32OrBooleanForArithmetic()
             && op2->shouldSpeculateInt32OrBooleanForArithmetic();
-    }
-    
-    static bool shouldSpeculateInt32OrBooleanExpectingDefined(Node* op1, Node* op2)
-    {
-        return op1->shouldSpeculateInt32OrBooleanExpectingDefined()
-            && op2->shouldSpeculateInt32OrBooleanExpectingDefined();
     }
     
     static bool shouldSpeculateInt52(Node* op1, Node* op2)

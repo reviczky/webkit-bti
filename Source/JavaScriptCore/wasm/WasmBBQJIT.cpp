@@ -26,6 +26,8 @@
 #include "config.h"
 #include "WasmBBQJIT.h"
 
+#if ENABLE(WEBASSEMBLY_BBQJIT)
+
 #include "B3Common.h"
 #include "B3ValueRep.h"
 #include "BinarySwitch.h"
@@ -55,6 +57,7 @@
 #include "WasmOps.h"
 #include "WasmThunks.h"
 #include "WasmTypeDefinition.h"
+#include <bit>
 #include <wtf/Assertions.h>
 #include <wtf/Compiler.h>
 #include <wtf/HashFunctions.h>
@@ -63,8 +66,6 @@
 #include <wtf/PlatformRegisters.h>
 #include <wtf/SmallSet.h>
 #include <wtf/StdLibExtras.h>
-
-#if ENABLE(WEBASSEMBLY_BBQJIT)
 
 namespace JSC { namespace Wasm {
 
@@ -6044,7 +6045,7 @@ public:
     {
         EMIT_UNARY(
             "I32Popcnt", TypeKind::I32,
-            BLOCK(Value::fromI32(__builtin_popcount(operand.asI32()))),
+            BLOCK(Value::fromI32(std::popcount(static_cast<uint32_t>(operand.asI32())))),
             BLOCK(
                 if (m_jit.supportsCountPopulation())
                     m_jit.countPopulation32(operandLocation.asGPR(), resultLocation.asGPR(), wasmScratchFPR);
@@ -6068,7 +6069,7 @@ public:
     {
         EMIT_UNARY(
             "I64Popcnt", TypeKind::I64,
-            BLOCK(Value::fromI64(__builtin_popcountll(operand.asI64()))),
+            BLOCK(Value::fromI64(std::popcount(static_cast<uint64_t>(operand.asI64())))),
             BLOCK(
                 if (m_jit.supportsCountPopulation())
                     m_jit.countPopulation64(operandLocation.asGPR(), resultLocation.asGPR(), wasmScratchFPR);
@@ -7030,13 +7031,10 @@ public:
     PartialResult WARN_UNUSED_RETURN addIf(Value condition, BlockSignature signature, Stack& enclosingStack, ControlData& result, Stack& newStack)
     {
         // Here, we cannot use wasmScratchGPR since it is used for shuffling in flushAndSingleExit.
-        // We cannot use ScratchScope here too since the allocated scratch register can be used for argument locations.
-        // We intentionally exclude GPRInfo::nonPreservedNonArgumentGPR1 for argument locations. This ensures that GPRInfo::nonPreservedNonArgumentGPR1
-        // will not be overridden over flushAndSingleExit.
         static_assert(wasmScratchGPR == GPRInfo::nonPreservedNonArgumentGPR0);
-        clobber(GPRInfo::nonPreservedNonArgumentGPR1);
-        ScratchScope<0, 0> scratches(*this, Location::fromGPR(GPRInfo::nonPreservedNonArgumentGPR1));
-        Location conditionLocation = Location::fromGPR(GPRInfo::nonPreservedNonArgumentGPR1);
+        ScratchScope<1, 0> scratches(*this, RegisterSetBuilder::argumentGPRS());
+        scratches.unbindPreserved();
+        Location conditionLocation = Location::fromGPR(scratches.gpr(0));
         if (!condition.isConst())
             emitMove(condition, conditionLocation);
         consume(condition);
@@ -7917,7 +7915,7 @@ public:
         // TODO: Support tail calls
         UNUSED_PARAM(jsCalleeAnchor);
         RELEASE_ASSERT(callType == CallType::Call);
-        ASSERT(calleeCode == GPRInfo::nonPreservedNonArgumentGPR1);
+        ASSERT(!RegisterSetBuilder::argumentGPRS().contains(calleeCode, IgnoreVectors));
 
         const auto& callingConvention = wasmCallingConvention();
         CallInformation wasmCalleeInfo = callingConvention.callInformationFor(signature, CallRole::Caller);
@@ -7962,10 +7960,9 @@ public:
         GPRReg jsCalleeAnchor;
 
         {
-            clobber(GPRInfo::nonPreservedNonArgumentGPR1);
-            ScratchScope<0, 0> calleeCodeScratch(*this, Location::fromGPR(GPRInfo::nonPreservedNonArgumentGPR1));
-            calleeCode = GPRInfo::nonPreservedNonArgumentGPR1;
-            ASSERT(calleeCode == GPRInfo::nonPreservedNonArgumentGPR1);
+            ScratchScope<1, 0> calleeCodeScratch(*this, RegisterSetBuilder::argumentGPRS());
+            calleeCode = calleeCodeScratch.gpr(0);
+            calleeCodeScratch.unbindPreserved();
 
             {
                 ScratchScope<2, 0> scratches(*this);
@@ -8059,10 +8056,9 @@ public:
         GPRReg calleeCode;
         GPRReg jsCalleeAnchor;
         {
-            clobber(GPRInfo::nonPreservedNonArgumentGPR1);
-            ScratchScope<0, 0> calleeCodeScratch(*this, Location::fromGPR(GPRInfo::nonPreservedNonArgumentGPR1));
-            calleeCode = GPRInfo::nonPreservedNonArgumentGPR1;
-            ASSERT(calleeCode == GPRInfo::nonPreservedNonArgumentGPR1);
+            ScratchScope<1, 0> calleeCodeScratch(*this, RegisterSetBuilder::argumentGPRS());
+            calleeCode = calleeCodeScratch.gpr(0);
+            calleeCodeScratch.unbindPreserved();
 
             ScratchScope<2, 0> otherScratches(*this);
 
@@ -8325,7 +8321,7 @@ public:
             m_jit.vectorExtractLaneInt64(TrustedImm32(1), srcLocation.asFPR(), scratches.gpr(1));
             m_jit.rshift64(shiftRCX, scratches.gpr(0));
             m_jit.rshift64(shiftRCX, scratches.gpr(1));
-            m_jit.vectorReplaceLaneInt64(TrustedImm32(0), scratches.gpr(0), resultLocation.asFPR());
+            m_jit.vectorSplatInt64(scratches.gpr(0), resultLocation.asFPR());
             m_jit.vectorReplaceLaneInt64(TrustedImm32(1), scratches.gpr(1), resultLocation.asFPR());
             return { };
         }
@@ -8371,15 +8367,17 @@ public:
 
         LOG_INSTRUCTION("Vector", op, left, leftLocation, right, rightLocation, RESULT(result));
 
+        ScratchScope<0, 1> scratches(*this, leftLocation, rightLocation, resultLocation);
+        FPRReg scratchFPR = scratches.fpr(0);
         if (op == SIMDLaneOperation::ExtmulLow) {
-            m_jit.vectorExtendLow(info, leftLocation.asFPR(), wasmScratchFPR);
+            m_jit.vectorExtendLow(info, leftLocation.asFPR(), scratchFPR);
             m_jit.vectorExtendLow(info, rightLocation.asFPR(), resultLocation.asFPR());
         } else {
             ASSERT(op == SIMDLaneOperation::ExtmulHigh);
-            m_jit.vectorExtendHigh(info, leftLocation.asFPR(), wasmScratchFPR);
+            m_jit.vectorExtendHigh(info, leftLocation.asFPR(), scratchFPR);
             m_jit.vectorExtendHigh(info, rightLocation.asFPR(), resultLocation.asFPR());
         }
-        emitVectorMul(info, Location::fromFPR(wasmScratchFPR), resultLocation, resultLocation);
+        emitVectorMul(info, Location::fromFPR(scratchFPR), resultLocation, resultLocation);
 
         return { };
     }
@@ -8903,6 +8901,7 @@ public:
             m_jit.vectorExtendLow(info, valueLocation.asFPR(), resultLocation.asFPR());
             return { };
         case JSC::SIMDLaneOperation::TruncSat:
+        case JSC::SIMDLaneOperation::RelaxedTruncSat:
 #if CPU(X86_64)
             switch (info.lane) {
             case SIMDLane::f64x2:
@@ -9080,11 +9079,11 @@ public:
             m_jit.vectorExtractLaneInt64(TrustedImm32(0), left.asFPR(), wasmScratchGPR);
             m_jit.vectorExtractLaneInt64(TrustedImm32(0), right.asFPR(), dataScratchGPR);
             m_jit.mul64(wasmScratchGPR, dataScratchGPR, wasmScratchGPR);
-            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(0), wasmScratchGPR, wasmScratchFPR);
+            m_jit.vectorSplatInt64(wasmScratchGPR, wasmScratchFPR);
             m_jit.vectorExtractLaneInt64(TrustedImm32(1), left.asFPR(), wasmScratchGPR);
             m_jit.vectorExtractLaneInt64(TrustedImm32(1), right.asFPR(), dataScratchGPR);
             m_jit.mul64(wasmScratchGPR, dataScratchGPR, wasmScratchGPR);
-            m_jit.vectorReplaceLane(SIMDLane::i64x2, TrustedImm32(1), wasmScratchGPR, wasmScratchFPR);
+            m_jit.vectorReplaceLaneInt64(TrustedImm32(1), wasmScratchGPR, wasmScratchFPR);
             m_jit.moveVector(wasmScratchFPR, result.asFPR());
         } else
             m_jit.vectorMul(info, left.asFPR(), right.asFPR(), result.asFPR());
@@ -9254,6 +9253,39 @@ public:
             RELEASE_ASSERT_NOT_REACHED();
             return { };
         }
+    }
+
+    PartialResult WARN_UNUSED_RETURN addSIMDRelaxedFMA(SIMDLaneOperation op, SIMDInfo info, ExpressionType mul1, ExpressionType mul2, ExpressionType addend, ExpressionType& result)
+    {
+        Location mul1Location = loadIfNecessary(mul1);
+        Location mul2Location = loadIfNecessary(mul2);
+        Location addendLocation = loadIfNecessary(addend);
+        consume(mul1);
+        consume(mul2);
+        consume(addend);
+
+        result = topValue(TypeKind::V128);
+        Location resultLocation = allocate(result);
+
+        LOG_INSTRUCTION("VectorRelaxedMAdd", mul1, mul1Location, mul2, mul2Location, addend, addendLocation, RESULT(result));
+
+        if (op == SIMDLaneOperation::RelaxedMAdd) {
+#if CPU(X86_64)
+            m_jit.vectorMul(info, mul1Location.asFPR(), mul2Location.asFPR(), wasmScratchFPR);
+            m_jit.vectorAdd(info, wasmScratchFPR, addendLocation.asFPR(), resultLocation.asFPR());
+#else
+            m_jit.vectorFusedMulAdd(info, mul1Location.asFPR(), mul2Location.asFPR(), addendLocation.asFPR(), resultLocation.asFPR(), wasmScratchFPR);
+#endif
+        } else if (op == SIMDLaneOperation::RelaxedNMAdd) {
+#if CPU(X86_64)
+            m_jit.vectorMul(info, mul1Location.asFPR(), mul2Location.asFPR(), wasmScratchFPR);
+            m_jit.vectorSub(info, addendLocation.asFPR(), wasmScratchFPR, resultLocation.asFPR());
+#else
+            m_jit.vectorFusedNegMulAdd(info, mul1Location.asFPR(), mul2Location.asFPR(), addendLocation.asFPR(), resultLocation.asFPR(), wasmScratchFPR);
+#endif
+        } else
+            RELEASE_ASSERT_NOT_REACHED();
+        return { };
     }
 
     void dump(const ControlStack&, const Stack*) { }
@@ -9987,7 +10019,6 @@ private:
         template<typename... Args>
         ScratchScope(BBQJIT& generator, Args... locationsToPreserve)
             : m_generator(generator)
-            , m_endedEarly(false)
         {
             initializedPreservedSet(locationsToPreserve...);
             for (JSC::Reg reg : m_preserved) {
@@ -10004,27 +10035,52 @@ private:
 
         ~ScratchScope()
         {
-            if (!m_endedEarly)
-                unbind();
+            unbindEarly();
         }
 
         void unbindEarly()
         {
-            m_endedEarly = true;
-            unbind();
+            unbindScratches();
+            unbindPreserved();
+        }
+
+        void unbindScratches()
+        {
+            if (m_unboundScratches)
+                return;
+
+            m_unboundScratches = true;
+            for (int i = 0; i < GPRs; i ++)
+                unbindGPRFromScratch(m_tempGPRs[i]);
+            for (int i = 0; i < FPRs; i ++)
+                unbindFPRFromScratch(m_tempFPRs[i]);
+        }
+
+        void unbindPreserved()
+        {
+            if (m_unboundPreserved)
+                return;
+
+            m_unboundPreserved = true;
+            for (JSC::Reg reg : m_preserved) {
+                if (reg.isGPR())
+                    unbindGPRFromScratch(reg.gpr());
+                else
+                    unbindFPRFromScratch(reg.fpr());
+            }
         }
 
         inline GPRReg gpr(unsigned i) const
         {
             ASSERT(i < GPRs);
-            ASSERT(!m_endedEarly);
+            ASSERT(!m_unboundScratches);
             return m_tempGPRs[i];
         }
 
         inline FPRReg fpr(unsigned i) const
         {
             ASSERT(i < FPRs);
-            ASSERT(!m_endedEarly);
+            ASSERT(!m_unboundScratches);
             return m_tempFPRs[i];
         }
 
@@ -10034,6 +10090,7 @@ private:
             if (!m_generator.m_validGPRs.contains(reg, IgnoreVectors))
                 return reg;
             RegisterBinding& binding = m_generator.m_gprBindings[reg];
+            m_generator.m_gprLRU.lock(reg);
             if (m_preserved.contains(reg, IgnoreVectors) && !binding.isNone()) {
                 if (UNLIKELY(Options::verboseBBQJITAllocation()))
                     dataLogLn("BBQ\tPreserving GPR ", MacroAssembler::gprName(reg), " currently bound to ", binding);
@@ -10042,7 +10099,6 @@ private:
             ASSERT(binding.isNone());
             binding = RegisterBinding::scratch();
             m_generator.m_gprSet.remove(reg);
-            m_generator.m_gprLRU.lock(reg);
             if (UNLIKELY(Options::verboseBBQJITAllocation()))
                 dataLogLn("BBQ\tReserving scratch GPR ", MacroAssembler::gprName(reg));
             return reg;
@@ -10053,6 +10109,7 @@ private:
             if (!m_generator.m_validFPRs.contains(reg, Width::Width128))
                 return reg;
             RegisterBinding& binding = m_generator.m_fprBindings[reg];
+            m_generator.m_fprLRU.lock(reg);
             if (m_preserved.contains(reg, Width::Width128) && !binding.isNone()) {
                 if (UNLIKELY(Options::verboseBBQJITAllocation()))
                     dataLogLn("BBQ\tPreserving FPR ", MacroAssembler::fprName(reg), " currently bound to ", binding);
@@ -10061,7 +10118,6 @@ private:
             ASSERT(binding.isNone());
             binding = RegisterBinding::scratch();
             m_generator.m_fprSet.remove(reg);
-            m_generator.m_fprLRU.lock(reg);
             if (UNLIKELY(Options::verboseBBQJITAllocation()))
                 dataLogLn("BBQ\tReserving scratch FPR ", MacroAssembler::fprName(reg));
             return reg;
@@ -10072,6 +10128,7 @@ private:
             if (!m_generator.m_validGPRs.contains(reg, IgnoreVectors))
                 return;
             RegisterBinding& binding = m_generator.m_gprBindings[reg];
+            m_generator.m_gprLRU.unlock(reg);
             if (UNLIKELY(Options::verboseBBQJITAllocation()))
                 dataLogLn("BBQ\tReleasing GPR ", MacroAssembler::gprName(reg));
             if (m_preserved.contains(reg, IgnoreVectors) && !binding.isScratch())
@@ -10079,7 +10136,6 @@ private:
             ASSERT(binding.isScratch());
             binding = RegisterBinding::none();
             m_generator.m_gprSet.add(reg, IgnoreVectors);
-            m_generator.m_gprLRU.unlock(reg);
         }
 
         void unbindFPRFromScratch(FPRReg reg)
@@ -10087,6 +10143,7 @@ private:
             if (!m_generator.m_validFPRs.contains(reg, Width::Width128))
                 return;
             RegisterBinding& binding = m_generator.m_fprBindings[reg];
+            m_generator.m_fprLRU.unlock(reg);
             if (UNLIKELY(Options::verboseBBQJITAllocation()))
                 dataLogLn("BBQ\tReleasing FPR ", MacroAssembler::fprName(reg));
             if (m_preserved.contains(reg, Width::Width128) && !binding.isScratch())
@@ -10094,7 +10151,6 @@ private:
             ASSERT(binding.isScratch());
             binding = RegisterBinding::none();
             m_generator.m_fprSet.add(reg, Width::Width128);
-            m_generator.m_fprLRU.unlock(reg);
         }
 
         template<typename... Args>
@@ -10122,26 +10178,12 @@ private:
         inline void initializedPreservedSet()
         { }
 
-        void unbind()
-        {
-            for (int i = 0; i < GPRs; i ++)
-                unbindGPRFromScratch(m_tempGPRs[i]);
-            for (int i = 0; i < FPRs; i ++)
-                unbindFPRFromScratch(m_tempFPRs[i]);
-
-            for (JSC::Reg reg : m_preserved) {
-                if (reg.isGPR())
-                    unbindGPRFromScratch(reg.gpr());
-                else
-                    unbindFPRFromScratch(reg.fpr());
-            }
-        }
-
         BBQJIT& m_generator;
         GPRReg m_tempGPRs[GPRs];
         FPRReg m_tempFPRs[FPRs];
         RegisterSet m_preserved;
-        bool m_endedEarly;
+        bool m_unboundScratches { false };
+        bool m_unboundPreserved { false };
     };
 
     Location canonicalSlot(Value value)

@@ -225,6 +225,42 @@ private:
     MonotonicTime m_start;
 };
 
+static UserGestureType userGestureTypeForPlatformEvent(const PlatformKeyboardEvent& keyEvent)
+{
+    // https://html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event
+    // An activation triggering input event is any event whose isTrusted attribute is true and whose type is one of:
+    // * "keydown", provided the key is neither the Esc key nor a shortcut key reserved by the user agent.
+    if (keyEvent.windowsVirtualKeyCode() == VK_ESCAPE)
+        return UserGestureType::EscapeKey;
+    if (keyEvent.type() == PlatformEventType::KeyDown)
+        return UserGestureType::ActivationTriggering;
+
+    // FIXME: This check does not yet handle whether the event represents a "shortcut key reserved by the user agent".
+    return UserGestureType::Other;
+}
+
+static UserGestureType userGestureTypeForPlatformEvent(const PlatformMouseEvent& mouseEvent)
+{
+    // ...
+    // * "mousedown".
+    // * "pointerdown", provided the event's pointerType is "mouse".
+    if (mouseEvent.type() == PlatformEventType::MousePressed)
+        return UserGestureType::ActivationTriggering;
+    return UserGestureType::Other;
+}
+
+#if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
+static UserGestureType userGestureTypeForPlatformEvent(const PlatformTouchEvent& touchEvent)
+{
+    // ...
+    // * "pointerup", provided the event's pointerType is not "mouse".
+    // * "touchend".
+    if (touchEvent.type() == PlatformEventType::TouchEnd)
+        return UserGestureType::ActivationTriggering;
+    return UserGestureType::Other;
+}
+#endif
+
 #if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
 class SyntheticTouchPoint : public PlatformTouchPoint {
 public:
@@ -1552,17 +1588,6 @@ std::optional<Cursor> EventHandler::selectCursor(const HitTestResult& result, bo
         }
     }
 
-    // During selection, use an I-beam regardless of the content beneath the cursor.
-    // If a drag may be starting or we're capturing mouse events for a particular node, don't treat this as a selection.
-    if (m_mousePressed
-        && mouseDownMayStartSelect()
-#if ENABLE(DRAG_SUPPORT)
-        && !m_mouseDownMayStartDrag
-#endif
-        && m_frame.selection().isCaretOrRange()
-        && !m_capturingMouseEventsElement)
-        return iBeam;
-
     switch (style ? style->cursor() : CursorType::Auto) {
     case CursorType::Auto: {
         if (ImageOverlay::isOverlayText(node.get())) {
@@ -1584,6 +1609,17 @@ std::optional<Cursor> EventHandler::selectCursor(const HitTestResult& result, bo
             if (inResizer)
                 return layerRenderer.shouldPlaceVerticalScrollbarOnLeft() ? southWestResizeCursor() : southEastResizeCursor();
         }
+
+        // During selection, use an I-beam regardless of the content beneath the cursor.
+        // If a drag may be starting or we're capturing mouse events for a particular node, don't treat this as a selection.
+        if (m_mousePressed
+            && mouseDownMayStartSelect()
+#if ENABLE(DRAG_SUPPORT)
+            && !m_mouseDownMayStartDrag
+#endif
+            && m_frame.selection().isCaretOrRange()
+            && !m_capturingMouseEventsElement)
+                return iBeam;
 
         if ((editable || (renderer && renderer->isText() && node->canStartSelection())) && !inResizer && !result.scrollbar())
             return iBeam;
@@ -1741,7 +1777,7 @@ bool EventHandler::handleMousePressEvent(const PlatformMouseEvent& platformMouse
         return true;
 #endif
 
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document());
+    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), userGestureTypeForPlatformEvent(platformMouseEvent));
 
     // FIXME (bug 68185): this call should be made at another abstraction layer
     m_frame.loader().resetMultipleFormSubmissionProtection();
@@ -1876,7 +1912,7 @@ bool EventHandler::handleMouseDoubleClickEvent(const PlatformMouseEvent& platfor
 
     m_frame.selection().setCaretBlinkingSuspended(false);
 
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document());
+    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), userGestureTypeForPlatformEvent(platformMouseEvent));
 
 #if ENABLE(POINTER_LOCK)
     if (m_frame.page()->pointerLockController().isLocked()) {
@@ -2181,7 +2217,7 @@ bool EventHandler::handleMouseReleaseEvent(const PlatformMouseEvent& platformMou
         return true;
 #endif
 
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), UserGestureType::Other, UserGestureIndicator::ProcessInteractionStyle::Immediate, platformMouseEvent.authorizationToken());
+    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), userGestureTypeForPlatformEvent(platformMouseEvent), UserGestureIndicator::ProcessInteractionStyle::Immediate, platformMouseEvent.authorizationToken());
 
 #if ENABLE(PAN_SCROLLING)
     m_autoscrollController->handleMouseReleaseEvent(platformMouseEvent);
@@ -3684,9 +3720,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     if (!element)
         return false;
 
-    UserGestureType gestureType = UserGestureType::Other;
-    if (initialKeyEvent.windowsVirtualKeyCode() == VK_ESCAPE)
-        gestureType = UserGestureType::EscapeKey;
+    UserGestureType gestureType = userGestureTypeForPlatformEvent(initialKeyEvent);
 
     UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), gestureType, UserGestureIndicator::ProcessInteractionStyle::Delayed);
     UserTypingGestureIndicator typingGestureIndicator(m_frame);
@@ -3723,7 +3757,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
         bool userHasInteractedViaKeyword = keydown->modifierKeys().isEmpty() || ((keydown->shiftKey() || keydown->capsLockKey()) && !initialKeyEvent.text().isEmpty());
 
         if (element.focused() && userHasInteractedViaKeyword) {
-            Style::PseudoClassChangeInvalidation focusVisibleStyleInvalidation(element, CSSSelector::PseudoClassFocusVisible, true);
+            Style::PseudoClassChangeInvalidation focusVisibleStyleInvalidation(element, CSSSelector::PseudoClassType::FocusVisible, true);
             element.setHasFocusVisible(true);
         }
     };
@@ -4765,7 +4799,7 @@ bool EventHandler::handleTouchEvent(const PlatformTouchEvent& event)
 
     const Vector<PlatformTouchPoint>& points = event.touchPoints();
 
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document());
+    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), userGestureTypeForPlatformEvent(event));
 
     bool freshTouchEvents = true;
     bool allTouchReleased = true;

@@ -4,7 +4,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2,1 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -45,6 +45,8 @@
 #endif
 
 #if PLATFORM(GTK)
+#include "AcceleratedBackingStoreDMABuf.h"
+#include <WebCore/PlatformDisplaySurfaceless.h>
 #include <gtk/gtk.h>
 
 #if PLATFORM(WAYLAND)
@@ -57,9 +59,7 @@
 #endif
 
 #if USE(GBM)
-#include "AcceleratedBackingStoreDMABuf.h"
 #include <WebCore/PlatformDisplayGBM.h>
-#include <WebCore/PlatformDisplaySurfaceless.h>
 #endif
 #endif
 
@@ -250,11 +250,7 @@ void WebKitProtocolHandler::handleGPU(WebKitURISchemeRequest* request)
 #if PLATFORM(GTK)
     addTableRow(versionObject, "GTK version"_s, makeString(GTK_MAJOR_VERSION, '.', GTK_MINOR_VERSION, '.', GTK_MICRO_VERSION, " (build) "_s, gtk_get_major_version(), '.', gtk_get_minor_version(), '.', gtk_get_micro_version(), " (runtime)"_s));
 
-#if USE(GBM)
     bool usingDMABufRenderer = AcceleratedBackingStoreDMABuf::checkRequirements();
-#else
-    bool usingDMABufRenderer = false;
-#endif
 
 #if PLATFORM(WAYLAND)
     if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland && !usingDMABufRenderer) {
@@ -348,21 +344,24 @@ void WebKitProtocolHandler::handleGPU(WebKitURISchemeRequest* request)
 #if USE(EGL) && PLATFORM(GTK)
     if (strcmp(policy, "never")) {
         std::unique_ptr<PlatformDisplay> platformDisplay;
-#if USE(GBM)
         if (usingDMABufRenderer) {
-            if (auto* device = PlatformDisplay::sharedDisplay().gbmDevice())
-                platformDisplay = PlatformDisplayGBM::create(device);
-            else
+#if USE(GBM)
+            const char* disableGBM = getenv("WEBKIT_DMABUF_RENDERER_DISABLE_GBM");
+            if (!disableGBM || !strcmp(disableGBM, "0")) {
+                if (auto* device = PlatformDisplay::sharedDisplay().gbmDevice())
+                    platformDisplay = PlatformDisplayGBM::create(device);
+            }
+#endif
+            if (!platformDisplay)
                 platformDisplay = PlatformDisplaySurfaceless::create();
         }
-#endif
 
         if (platformDisplay || !uiProcessContextIsEGL()) {
             auto hardwareAccelerationObject = JSON::Object::create();
             startTable("Hardware Acceleration Information (Render Process)"_s);
 
             if (platformDisplay)
-                addTableRow(hardwareAccelerationObject, "Platform"_s, String::fromUTF8(platformDisplay->type() == PlatformDisplay::Type::GBM ? "GBM"_s : "Surfaceless"_s));
+                addTableRow(hardwareAccelerationObject, "Platform"_s, String::fromUTF8(platformDisplay->type() == PlatformDisplay::Type::Surfaceless ? "Surfaceless"_s : "GBM"_s));
 
             if (uiProcessContextIsEGL()) {
                 GLContext::ScopedGLContext glContext(GLContext::createOffscreen(platformDisplay ? *platformDisplay : PlatformDisplay::sharedDisplay()));

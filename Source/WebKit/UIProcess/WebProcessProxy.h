@@ -491,6 +491,8 @@ public:
     static void permissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
     void sendPermissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
 
+    void addAllowedFirstPartyForCookies(const WebCore::RegistrableDomain&);
+
     Logger& logger();
 
 protected:
@@ -563,6 +565,7 @@ private:
     void updateBlobRegistryPartitioningState() const;
 
     void updateWebGPUEnabledStateInGPUProcess();
+    void updateDOMRenderingStateInGPUProcess();
 
     void processDidTerminateOrFailedToLaunch(ProcessTerminationReason);
 

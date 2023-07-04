@@ -39,7 +39,6 @@
 # Argument kinds:
 # Tmp => temporary or register
 # Imm => 32-bit immediate int
-# Imm64 => 64-bit immediate int with special-shift
 # BigImm => TrustedImm64 on 64-bit targets, TrustedImm32 on 32-bit targets
 # Addr => address as temporary/register+offset
 # Index => BaseIndex address
@@ -147,7 +146,6 @@ x86: Add16 U:G:16, UD:G:16
     x86: Imm, Addr
     x86: Imm, Index
     Imm, Tmp
-    arm64: Imm64, Tmp
     x86: Addr, Tmp
     x86: Index, Tmp
     x86: Tmp, Addr
@@ -156,7 +154,6 @@ x86: Add16 U:G:16, UD:G:16
 64: Add64 U:G:64, U:G:64, D:G:64
     Imm, Tmp, Tmp
     Tmp, Tmp, Tmp
-    arm64: Imm64, Tmp, Tmp
 
 # note that this pseudoinstruction (and others like it) exist right now because
 # air doesn't track live flags: we do support 64-bit addition on e.g. armv7
@@ -206,7 +203,6 @@ arm: Sub32 U:G:32, U:G:32, ZD:G:32
     x86: Imm, Addr
     x86: Imm, Index
     Imm, Tmp
-    arm64: Imm64, Tmp
     x86: Addr, Tmp
     x86: Index, Tmp
     x86: Tmp, Addr
@@ -215,7 +211,6 @@ arm: Sub32 U:G:32, U:G:32, ZD:G:32
 arm64: Sub64 U:G:64, U:G:64, D:G:64
     Tmp, Tmp, Tmp
     Tmp, Imm, Tmp
-    Tmp, Imm64, Tmp
 
 # note see note above, on Add64
 32: Sub64 U:G:32, U:G:32, U:G:32, U:G:32, D:G:32, D:G:32
@@ -726,13 +721,23 @@ arm64: MoveWithIncrement32 UD:G:32, ZD:G:32
 Move32 U:G:32, ZD:G:32, S:G:32
     Addr, Addr, Tmp
 
-arm64: Store32 U:G:32, ZD:G:32
-    ZeroReg, Addr
-    ZeroReg, Index
+arm64: LoadPair32 U:G:64, D:G:32, D:G:32
+    Addr, Tmp, Tmp
 
-arm64: Store64 U:G:64, D:G:64
-    ZeroReg, Addr
-    ZeroReg, Index
+arm64: LoadPair64 U:G:128, D:G:64, D:G:64
+    Addr, Tmp, Tmp
+
+arm64: StorePair32 U:G:32, U:G:32, D:G:64
+    Tmp, Tmp, Addr
+    ZeroReg, Tmp, Addr
+    Tmp, ZeroReg, Addr
+    ZeroReg, ZeroReg, Addr
+
+arm64: StorePair64 U:G:64, U:G:64, D:G:128
+    Tmp, Tmp, Addr
+    ZeroReg, Tmp, Addr
+    Tmp, ZeroReg, Addr
+    ZeroReg, ZeroReg, Addr
 
 64: SignExtend8To64 U:G:8, D:G:64
     Tmp, Tmp
@@ -782,7 +787,19 @@ MoveDouble U:F:64, D:F:64
 
 MoveDouble U:F:64, D:F:64, S:F:64
     Addr, Addr, Tmp
-    
+
+arm64: LoadPairFloat U:F:64, D:F:32, D:F:32
+    Addr, Tmp, Tmp
+
+arm64: LoadPairDouble U:F:128, D:F:64, D:F:64
+    Addr, Tmp, Tmp
+
+arm64: StorePairFloat U:F:32, U:F:32, D:F:64
+    Tmp, Tmp, Addr
+
+arm64: StorePairDouble U:F:64, U:F:64, D:F:128
+    Tmp, Tmp, Addr
+
 64: MoveVector U:F:128, D:F:128
     Tmp, Tmp
     Addr, Tmp as loadVector
@@ -1466,7 +1483,6 @@ Compare32 U:G:32, U:G:32, U:G:32, ZD:G:32
 64: Compare64 U:G:32, U:G:64, U:G:64, ZD:G:32
     RelCond, Tmp, Tmp, Tmp
     RelCond, Tmp, Imm, Tmp
-    arm64: RelCond, Tmp, Imm64, Tmp
 
 Test32 U:G:32, U:G:32, U:G:32, ZD:G:32
     x86: ResCond, Addr, Imm, Tmp
@@ -1482,6 +1498,12 @@ CompareDouble U:G:32, U:F:64, U:F:64, ZD:G:32
 
 CompareFloat U:G:32, U:F:32, U:F:32, ZD:G:32
     DoubleCond, Tmp, Tmp, Tmp
+
+arm64: CompareDoubleWithZero U:G:32, U:F:64, ZD:G:32
+    DoubleCond, Tmp, Tmp
+
+arm64: CompareFloatWithZero U:G:32, U:F:32, ZD:G:32
+    DoubleCond, Tmp, Tmp
 
 # Note that branches have some logic in AirOptimizeBlockOrder.cpp. If you add new branches, please make sure
 # you opt them into the block order optimizations.
@@ -1505,7 +1527,6 @@ Branch32 U:G:32, U:G:32, U:G:32 /branch
     x86: RelCond, Addr, Tmp
     x86: RelCond, Addr, Imm
     x86: RelCond, Index, Tmp
-    arm64: RelCond, Tmp, Imm64
 
 BranchTest8 U:G:32, U:G:8, U:G:8 /branch
     x86: ResCond, Addr, BitImm
@@ -1543,6 +1564,12 @@ BranchDouble U:G:32, U:F:64, U:F:64 /branch
 
 BranchFloat U:G:32, U:F:32, U:F:32 /branch
     DoubleCond, Tmp, Tmp
+
+arm64: BranchDoubleWithZero U:G:32, U:F:64 /branch
+    DoubleCond, Tmp
+
+arm64: BranchFloatWithZero U:G:32, U:F:32 /branch
+    DoubleCond, Tmp
 
 BranchAdd32 U:G:32, U:G:32, U:G:32, ZD:G:32 /branch
     ResCond, Tmp, Tmp, Tmp
@@ -1610,7 +1637,6 @@ BranchNeg32 U:G:32, UZD:G:32 /branch
 64: MoveConditionally64 U:G:32, U:G:64, U:G:64, U:G:Ptr, U:G:Ptr, D:G:Ptr
     RelCond, Tmp, Tmp, Tmp, Tmp, Tmp
     RelCond, Tmp, Imm, Tmp, Tmp, Tmp
-    arm64: RelCond, Tmp, Imm64, Tmp, Tmp, Tmp
 
 64: MoveConditionallyTest32 U:G:32, U:G:32, U:G:32, U:G:Ptr, UD:G:Ptr
     ResCond, Tmp, Tmp, Tmp, Tmp
@@ -1634,11 +1660,23 @@ BranchNeg32 U:G:32, UZD:G:32 /branch
 64: MoveConditionallyDouble U:G:32, U:F:64, U:F:64, U:G:Ptr, UD:G:Ptr
     DoubleCond, Tmp, Tmp, Tmp, Tmp
 
+arm64: MoveConditionallyDoubleWithZero U:G:32, U:F:64, U:G:Ptr, U:G:Ptr, D:G:Ptr
+    DoubleCond, Tmp, Tmp, Tmp, Tmp
+
+arm64: MoveConditionallyDoubleWithZero U:G:32, U:F:64, U:G:Ptr, UD:G:Ptr
+    DoubleCond, Tmp, Tmp, Tmp
+
 64: MoveConditionallyFloat U:G:32, U:F:32, U:F:32, U:G:Ptr, U:G:Ptr, D:G:Ptr
     DoubleCond, Tmp, Tmp, Tmp, Tmp, Tmp
 
 64: MoveConditionallyFloat U:G:32, U:F:32, U:F:32, U:G:Ptr, UD:G:Ptr
     DoubleCond, Tmp, Tmp, Tmp, Tmp
+
+arm64: MoveConditionallyFloatWithZero U:G:32, U:F:32, U:G:Ptr, U:G:Ptr, D:G:Ptr
+    DoubleCond, Tmp, Tmp, Tmp, Tmp
+
+arm64: MoveConditionallyFloatWithZero U:G:32, U:F:32, U:G:Ptr, UD:G:Ptr
+    DoubleCond, Tmp, Tmp, Tmp
 
 64: MoveDoubleConditionally32 U:G:32, U:G:32, U:G:32, U:F:64, U:F:64, D:F:64
     RelCond, Tmp, Tmp, Tmp, Tmp, Tmp
@@ -1674,8 +1712,14 @@ BranchNeg32 U:G:32, UZD:G:32 /branch
 64: MoveDoubleConditionallyDouble U:G:32, U:F:64, U:F:64, U:F:64, U:F:64, D:F:64
     DoubleCond, Tmp, Tmp, Tmp, Tmp, Tmp
 
+arm64: MoveDoubleConditionallyDoubleWithZero U:G:32, U:F:64, U:F:64, U:F:64, D:F:64
+    DoubleCond, Tmp, Tmp, Tmp, Tmp
+
 64: MoveDoubleConditionallyFloat U:G:32, U:F:32, U:F:32, U:F:64, U:F:64, D:F:64
     DoubleCond, Tmp, Tmp, Tmp, Tmp, Tmp
+
+arm64: MoveDoubleConditionallyFloatWithZero U:G:32, U:F:32, U:F:64, U:F:64, D:F:64
+    DoubleCond, Tmp, Tmp, Tmp, Tmp
 
 MemoryFence /effects
 StoreFence /effects
@@ -2016,6 +2060,12 @@ x86_64: VectorDotProduct U:F:128, U:F:128, D:F:128
 
 arm64: VectorSwizzle2 U:F:128, U:F:128, U:F:128, D:F:128
     Tmp, Tmp*, Tmp, Tmp
+
+64: VectorFusedMulAdd U:G:Ptr, U:F:128, U:F:128, U:F:128, D:F:128, S:F:128
+    SIMDInfo, Tmp, Tmp, Tmp, Tmp, Tmp
+
+64: VectorFusedNegMulAdd U:G:Ptr, U:F:128, U:F:128, U:F:128, D:F:128, S:F:128
+    SIMDInfo, Tmp, Tmp, Tmp, Tmp, Tmp
 
 arm64: VectorDupElementInt8 U:G:8, U:F:128, D:F:128
     Imm, Tmp, Tmp

@@ -123,24 +123,24 @@ void BackgroundProcessResponsivenessTimer::setResponsive(bool isResponsive)
     client().didChangeIsResponsive();
 
     if (m_isResponsive) {
-        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become responsive again", m_webProcessProxy.processIdentifier());
+        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become responsive again", m_webProcessProxy.processID());
         client().didBecomeResponsive();
     } else {
-        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become unresponsive", m_webProcessProxy.processIdentifier());
+        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become unresponsive", m_webProcessProxy.processID());
         client().didBecomeUnresponsive();
     }
 }
 
 bool BackgroundProcessResponsivenessTimer::shouldBeActive() const
 {
-#if !PLATFORM(IOS_FAMILY)
+#if !USE(RUNNINGBOARD)
     if (m_webProcessProxy.visiblePageCount())
         return false;
     if (m_webProcessProxy.isStandaloneServiceWorkerProcess())
         return true;
     return m_webProcessProxy.pageCount();
 #else
-    // Disable background process responsiveness checking on iOS since such processes usually get suspended.
+    // Disable background process responsiveness checking when using RunningBoard since such processes usually get suspended.
     return false;
 #endif
 }

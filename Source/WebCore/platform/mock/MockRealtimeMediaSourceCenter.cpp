@@ -49,6 +49,7 @@
 #endif
 
 #if USE(GSTREAMER)
+#include "MockDisplayCaptureSourceGStreamer.h"
 #include "MockRealtimeVideoSourceGStreamer.h"
 #endif
 
@@ -342,6 +343,13 @@ void MockRealtimeMediaSourceCenter::setDevices(Vector<MockMediaDevice>&& newMock
     displayDevices().clear();
 
     auto& mockDevices = devices();
+    for (auto& device : mockDevices) {
+        auto& persistentId = device.persistentId;
+        if (!newMockDevices.containsIf([&persistentId](auto& newDevice) -> bool {
+            return newDevice.persistentId == persistentId;
+        }))
+            RealtimeMediaSourceCenter::singleton().captureDeviceWillBeRemoved(persistentId);
+    }
     mockDevices = WTFMove(newMockDevices);
 
     auto& map = deviceMap();
@@ -379,6 +387,7 @@ void MockRealtimeMediaSourceCenter::removeDevice(const String& persistentId)
     if (iterator == map.end())
         return;
 
+    RealtimeMediaSourceCenter::singleton().captureDeviceWillBeRemoved(persistentId);
     devices().removeFirstMatching([&persistentId](const auto& device) {
         return device.persistentId == persistentId;
     });
@@ -476,7 +485,7 @@ Vector<CaptureDevice>& MockRealtimeMediaSourceCenter::displayDevices()
         Vector<CaptureDevice> displayDevices;
         for (const auto& device : devices()) {
             if (device.isDisplay())
-                displayDevices.append(device.captureDevice());
+                displayDevices.append(toCaptureDevice(device));
         }
         return displayDevices;
     }();

@@ -3412,7 +3412,7 @@ JSC_DEFINE_HOST_FUNCTION(functionReturnTypeFor, (JSGlobalObject* globalObject, C
     RELEASE_ASSERT(functionValue.isCallable());
     FunctionExecutable* executable = (jsDynamicCast<JSFunction*>(functionValue.asCell()->getObject()))->jsExecutable();
 
-    unsigned offset = executable->typeProfilingStartOffset(vm);
+    unsigned offset = executable->functionStart();
     String jsonString = vm.typeProfiler()->typeInformationForExpressionAtOffset(TypeProfilerSearchDescriptorFunctionReturn, offset, executable->sourceID(), vm);
     return JSValue::encode(JSONParse(globalObject, jsonString));
 }
@@ -3422,8 +3422,8 @@ JSC_DEFINE_HOST_FUNCTION(functionFlattenDictionaryObject, (JSGlobalObject* globa
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
     JSValue value = callFrame->argument(0);
-    RELEASE_ASSERT(value.isObject() && value.getObject()->structure()->isDictionary());
-    value.getObject()->flattenDictionaryObject(vm);
+    if (value.isObject() && value.getObject()->structure()->isDictionary())
+        value.getObject()->flattenDictionaryObject(vm);
     return encodedJSUndefined();
 }
 

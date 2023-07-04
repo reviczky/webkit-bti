@@ -241,11 +241,6 @@ public:
         return adoptRef(*new EventFiredCallback(domAgent));
     }
 
-    bool operator==(const EventListener& other) const final
-    {
-        return this == &other;
-    }
-
     void handleEvent(ScriptExecutionContext&, Event& event) final
     {
         if (!is<Node>(event.target()) || m_domAgent.m_dispatchedEvents.contains(&event))
@@ -1482,7 +1477,7 @@ Protocol::ErrorStringOr<void> InspectorDOMAgent::highlightSelector(const String&
         auto& pseudo = descendantElement.pseudo();
 
         for (const auto* selector = selectorList->first(); selector; selector = CSSSelectorList::next(selector)) {
-            if (isInUserAgentShadowTree && (selector->match() != CSSSelector::PseudoElement || selector->value() != pseudo))
+            if (isInUserAgentShadowTree && (selector->match() != CSSSelector::Match::PseudoElement || selector->value() != pseudo))
                 continue;
 
             SelectorChecker::CheckingContext context(SelectorChecker::Mode::ResolvingStyle);

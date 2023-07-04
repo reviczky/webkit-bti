@@ -95,6 +95,8 @@ public:
     void visit(AST::PhonyAssignmentStatement&) override;
     void visit(AST::ReturnStatement&) override;
     void visit(AST::ForStatement&) override;
+    void visit(AST::BreakStatement&) override;
+    void visit(AST::ContinueStatement&) override;
 
     void visit(AST::TypeName&) override;
 
@@ -105,6 +107,7 @@ public:
     Indentation<4>& indent() { return m_indent; }
 
 private:
+    void emitNecessaryHelpers();
     void visit(const Type*);
     void visitGlobal(AST::Variable&);
     void serializeVariable(AST::Variable&);
@@ -116,12 +119,25 @@ private:
     Indentation<4> m_indent { 0 };
     std::optional<AST::StructureRole> m_structRole;
     std::optional<AST::StageAttribute::Stage> m_entryPointStage;
-    std::optional<String> m_suffix;
     unsigned m_functionConstantIndex { 0 };
     HashSet<AST::Function*> m_visitedFunctions;
 };
 
 void FunctionDefinitionWriter::write()
+{
+    emitNecessaryHelpers();
+
+    for (auto& structure : m_callGraph.ast().structures())
+        visit(structure);
+    for (auto& structure : m_callGraph.ast().structures())
+        generatePackingHelpers(structure);
+    for (auto& variable : m_callGraph.ast().variables())
+        visitGlobal(variable);
+    for (auto& entryPoint : m_callGraph.entrypoints())
+        visit(entryPoint.function);
+}
+
+void FunctionDefinitionWriter::emitNecessaryHelpers()
 {
     if (m_callGraph.ast().usesExternalTextures()) {
         m_callGraph.ast().clearUsesExternalTextures();
@@ -135,14 +151,42 @@ void FunctionDefinitionWriter::write()
         }
         m_stringBuilder.append("};\n\n");
     }
-    for (auto& structure : m_callGraph.ast().structures())
-        visit(structure);
-    for (auto& structure : m_callGraph.ast().structures())
-        generatePackingHelpers(structure);
-    for (auto& variable : m_callGraph.ast().variables())
-        visitGlobal(variable);
-    for (auto& entryPoint : m_callGraph.entrypoints())
-        visit(entryPoint.function);
+
+    if (m_callGraph.ast().usesPackArray()) {
+        m_callGraph.ast().clearUsesPackArray();
+        m_stringBuilder.append(m_indent, "template<typename T, size_t N>\n");
+        m_stringBuilder.append(m_indent, "array<typename T::PackedType, N> __pack_array(array<T, N> unpacked)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "array<typename T::PackedType, N> packed;\n");
+            m_stringBuilder.append(m_indent, "for (size_t i = 0; i < N; ++i)\n");
+            {
+                IndentationScope scope(m_indent);
+                m_stringBuilder.append(m_indent, "packed[i] = __pack(unpacked[i]);\n");
+            }
+            m_stringBuilder.append(m_indent, "return packed;\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
+
+    if (m_callGraph.ast().usesUnpackArray()) {
+        m_callGraph.ast().clearUsesUnpackArray();
+        m_stringBuilder.append(m_indent, "template<typename T, size_t N>\n");
+        m_stringBuilder.append(m_indent, "array<typename T::UnpackedType, N> __unpack_array(array<T, N> packed)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "array<typename T::UnpackedType, N> unpacked;\n");
+            m_stringBuilder.append(m_indent, "for (size_t i = 0; i < N; ++i)\n");
+            {
+                IndentationScope scope(m_indent);
+                m_stringBuilder.append(m_indent, "unpacked[i] = __unpack(packed[i]);\n");
+            }
+            m_stringBuilder.append(m_indent, "return unpacked;\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
 }
 
 void FunctionDefinitionWriter::visit(AST::Function& functionDefinition)
@@ -207,6 +251,11 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
             m_stringBuilder.append(m_indent, "uint8_t __padding", ++paddingID, "[", String::number(paddingSize), "]; \n");
         };
 
+        if (structDecl.role() == AST::StructureRole::PackedResource)
+            m_stringBuilder.append(m_indent, "using UnpackedType = struct ", structDecl.original()->name(), ";\n\n");
+        else if (structDecl.role() == AST::StructureRole::UserDefinedResource)
+            m_stringBuilder.append(m_indent, "using PackedType = struct ", structDecl.packed()->name(), ";\n\n");
+
         for (auto& member : structDecl.members()) {
             auto& name = member.name();
             auto* type = member.type().resolvedType();
@@ -241,10 +290,6 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
             m_stringBuilder.append(m_indent);
             visit(member.type());
             m_stringBuilder.append(" ", name);
-            if (m_suffix.has_value()) {
-                m_stringBuilder.append(*m_suffix);
-                m_suffix.reset();
-            }
             for (auto &attribute : member.attributes()) {
                 m_stringBuilder.append(" ");
                 visit(attribute);
@@ -553,16 +598,9 @@ void FunctionDefinitionWriter::visit(const Type* type)
             m_stringBuilder.append(", ", matrix.columns, ", ", matrix.rows, ">");
         },
         [&](const Array& array) {
-            ASSERT(array.element);
-            if (!array.size.has_value()) {
-                visit(array.element);
-                m_suffix = { "[1]"_s };
-                return;
-            }
-
             m_stringBuilder.append("array<");
             visit(array.element);
-            m_stringBuilder.append(", ", *array.size, ">");
+            m_stringBuilder.append(", ", array.size.value_or(1), ">");
         },
         [&](const Struct& structure) {
             m_stringBuilder.append(structure.structure.name());
@@ -992,6 +1030,9 @@ void FunctionDefinitionWriter::visit(AST::AbstractIntegerLiteral& literal)
 {
     // FIXME: this might not serialize all values correctly
     m_stringBuilder.append(literal.value());
+    auto& primitiveType = std::get<Types::Primitive>(*literal.inferredType());
+    if (primitiveType.kind == Types::Primitive::U32)
+        m_stringBuilder.append("u");
 }
 
 void FunctionDefinitionWriter::visit(AST::Signed32Literal& literal)
@@ -1003,7 +1044,7 @@ void FunctionDefinitionWriter::visit(AST::Signed32Literal& literal)
 void FunctionDefinitionWriter::visit(AST::Unsigned32Literal& literal)
 {
     // FIXME: this might not serialize all values correctly
-    m_stringBuilder.append(literal.value());
+    m_stringBuilder.append(literal.value(), "u");
 }
 
 void FunctionDefinitionWriter::visit(AST::AbstractFloatLiteral& literal)
@@ -1118,6 +1159,16 @@ void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
     }
     m_stringBuilder.append(") ");
     visit(statement.body());
+}
+
+void FunctionDefinitionWriter::visit(AST::BreakStatement&)
+{
+    m_stringBuilder.append("break");
+}
+
+void FunctionDefinitionWriter::visit(AST::ContinueStatement&)
+{
+    m_stringBuilder.append("continue");
 }
 
 void emitMetalFunctions(StringBuilder& stringBuilder, CallGraph& callGraph)

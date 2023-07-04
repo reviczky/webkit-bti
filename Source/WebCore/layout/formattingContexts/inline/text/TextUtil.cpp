@@ -36,7 +36,6 @@
 #include "SurrogatePairAwareTextIterator.h"
 #include "TextRun.h"
 #include "WidthIterator.h"
-#include "WordBoundaryDetection.h"
 #include <unicode/ubidi.h>
 #include <wtf/text/TextBreakIterator.h>
 
@@ -337,22 +336,28 @@ unsigned TextUtil::findNextBreakablePosition(CachedLineBreakIteratorFactory& lin
 
 bool TextUtil::shouldPreserveSpacesAndTabs(const Box& layoutBox)
 {
-    // https://www.w3.org/TR/css-text-3/#white-space-property
-    auto whitespace = layoutBox.style().whiteSpace();
-    return whitespace == WhiteSpace::Pre || whitespace == WhiteSpace::PreWrap || whitespace == WhiteSpace::BreakSpaces;
+    // https://www.w3.org/TR/css-text-4/#white-space-collapsing
+    auto whitespaceCollapse = layoutBox.style().whiteSpaceCollapse();
+    return whitespaceCollapse == WhiteSpaceCollapse::Preserve || whitespaceCollapse == WhiteSpaceCollapse::BreakSpaces;
 }
 
 bool TextUtil::shouldPreserveNewline(const Box& layoutBox)
 {
-    auto whitespace = layoutBox.style().whiteSpace();
-    // https://www.w3.org/TR/css-text-3/#white-space-property
-    return whitespace == WhiteSpace::Pre || whitespace == WhiteSpace::PreWrap || whitespace == WhiteSpace::BreakSpaces || whitespace == WhiteSpace::PreLine; 
+    // https://www.w3.org/TR/css-text-4/#white-space-collapsing
+    auto whitespaceCollapse = layoutBox.style().whiteSpaceCollapse();
+    return whitespaceCollapse == WhiteSpaceCollapse::Preserve || whitespaceCollapse == WhiteSpaceCollapse::PreserveBreaks || whitespaceCollapse == WhiteSpaceCollapse::BreakSpaces;
 }
 
 bool TextUtil::isWrappingAllowed(const RenderStyle& style)
 {
-    // Do not try to wrap overflown 'pre' and 'no-wrap' content to next line.
-    return style.whiteSpace() != WhiteSpace::Pre && style.whiteSpace() != WhiteSpace::NoWrap;
+    // https://www.w3.org/TR/css-text-4/#text-wrap
+    return style.textWrap() != TextWrap::NoWrap;
+}
+
+bool TextUtil::shouldTrailingWhitespaceHang(const RenderStyle& style)
+{
+    // https://www.w3.org/TR/css-text-4/#white-space-phase-2
+    return style.whiteSpaceCollapse() == WhiteSpaceCollapse::Preserve && style.textWrap() != TextWrap::NoWrap;
 }
 
 TextBreakIterator::LineMode::Behavior TextUtil::lineBreakIteratorMode(LineBreak lineBreak)
@@ -373,16 +378,18 @@ TextBreakIterator::LineMode::Behavior TextUtil::lineBreakIteratorMode(LineBreak 
     return TextBreakIterator::LineMode::Behavior::Default;
 }
 
-TextBreakIterator::ContentAnalysis TextUtil::contentAnalysis(const WordBoundaryDetection& wordBoundaryDetection)
+TextBreakIterator::ContentAnalysis TextUtil::contentAnalysis(WordBreak wordBreak)
 {
-    // FIXME: Explicit static_cast to work around issue on libstdc++-10. Undo when upgrading GCC from 10 to 11.
-    return WTF::switchOn(static_cast<WordBoundaryDetectionType>(wordBoundaryDetection), [](WordBoundaryDetectionNormal) {
+    switch (wordBreak) {
+    case WordBreak::Normal:
+    case WordBreak::BreakAll:
+    case WordBreak::KeepAll:
+    case WordBreak::BreakWord:
         return TextBreakIterator::ContentAnalysis::Mechanical;
-    }, [](WordBoundaryDetectionManual) {
-        return TextBreakIterator::ContentAnalysis::Mechanical;
-    }, [](const WordBoundaryDetectionAuto&) {
+    case WordBreak::Auto:
         return TextBreakIterator::ContentAnalysis::Linguistic;
-    });
+    }
+    return TextBreakIterator::ContentAnalysis::Mechanical;
 }
 
 bool TextUtil::containsStrongDirectionalityText(StringView text)
