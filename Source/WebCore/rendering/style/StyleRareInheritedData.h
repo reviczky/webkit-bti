@@ -27,6 +27,7 @@
 #include "Length.h"
 #include "ListStyleType.h"
 #include "RenderStyleConstants.h"
+#include "ScrollbarColor.h"
 #include "StyleColor.h"
 #include "StyleCustomPropertyData.h"
 #include "StyleTextBoxEdge.h"
@@ -34,7 +35,6 @@
 #include "TextSpacing.h"
 #include "TextUnderlineOffset.h"
 #include "TouchAction.h"
-#include "WordBoundaryDetection.h"
 #include <wtf/DataRef.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
@@ -111,7 +111,7 @@ public:
     
     unsigned textSecurity : 2; // TextSecurity
     unsigned userModify : 2; // UserModify (editing)
-    unsigned wordBreak : 2; // WordBreak
+    unsigned wordBreak : 3; // WordBreak
     unsigned overflowWrap : 2; // OverflowWrap
     unsigned nbspMode : 1; // NBSPMode
     unsigned lineBreak : 3; // LineBreak
@@ -202,7 +202,7 @@ public:
 
     ListStyleType listStyleType;
 
-    WordBoundaryDetection wordBoundaryDetection;
+    Markable<ScrollbarColor> scrollbarColor;
 
 private:
     StyleRareInheritedData();

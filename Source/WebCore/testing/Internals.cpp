@@ -651,7 +651,6 @@ void Internals::resetToConsistentState(Page& page)
     WebCore::MediaRecorder::setCustomPrivateRecorderCreator(nullptr);
 #endif
 
-    CanvasBase::setMaxPixelMemoryForTesting(std::nullopt);
     CanvasBase::setMaxCanvasAreaForTesting(std::nullopt);
     LocalDOMWindow::overrideTransientActivationDurationForTesting(std::nullopt);
 
@@ -1165,10 +1164,10 @@ unsigned Internals::remoteImagesCountForTesting() const
     return document->page()->chrome().client().remoteImagesCountForTesting();
 }
 
-void Internals::setLargeImageAsyncDecodingEnabledForTesting(HTMLImageElement& element, bool enabled)
+void Internals::setAsyncDecodingEnabledForTesting(HTMLImageElement& element, bool enabled)
 {
     if (auto* bitmapImage = bitmapImageFromImageElement(element))
-        bitmapImage->setLargeImageAsyncDecodingEnabledForTesting(enabled);
+        bitmapImage->setAsyncDecodingEnabledForTesting(enabled);
 }
     
 void Internals::setForceUpdateImageDataEnabledForTesting(HTMLImageElement& element, bool enabled)
@@ -5223,7 +5222,7 @@ ExceptionOr<String> Internals::pathStringWithShrinkWrappedRects(const Vector<dou
         rects.append(FloatRect(rectComponents[i], rectComponents[i + 1], rectComponents[i + 2], rectComponents[i + 3]));
 
     SVGPathStringBuilder builder;
-    PathUtilities::pathWithShrinkWrappedRects(rects, radius).apply([&builder](const PathElement& element) {
+    PathUtilities::pathWithShrinkWrappedRects(rects, radius).applyElements([&builder](const PathElement& element) {
         switch (element.type) {
         case PathElement::Type::MoveToPoint:
             builder.moveTo(element.points[0], false, AbsoluteCoordinates);
@@ -6507,11 +6506,6 @@ void Internals::setMockWebAuthenticationConfiguration(const MockWebAuthenticatio
 }
 #endif
 
-void Internals::setMaxCanvasPixelMemory(unsigned size)
-{
-    CanvasBase::setMaxPixelMemoryForTesting(size);
-}
-
 void Internals::setMaxCanvasArea(unsigned size)
 {
     CanvasBase::setMaxCanvasAreaForTesting(size);
@@ -7077,7 +7071,6 @@ void Internals::avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement& element)
         return;
     page->settings().setMaximumAccelerated2dCanvasSize(UINT_MAX);
     CanvasBase::setMaxCanvasAreaForTesting(UINT_MAX);
-    CanvasBase::setMaxPixelMemoryForTesting(UINT_MAX);
     element.setAvoidIOSurfaceSizeCheckInWebProcessForTesting();
 }
 

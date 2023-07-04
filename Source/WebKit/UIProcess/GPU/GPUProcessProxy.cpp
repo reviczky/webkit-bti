@@ -453,6 +453,11 @@ void GPUProcessProxy::updateWebGPUEnabled(WebProcessProxy& webProcessProxy, bool
     send(Messages::GPUProcess::UpdateWebGPUEnabled(webProcessProxy.coreProcessIdentifier(), webGPUEnabled), 0);
 }
 
+void GPUProcessProxy::updateDOMRenderingEnabled(WebProcessProxy& webProcessProxy, bool isDOMRenderingEnabled)
+{
+    send(Messages::GPUProcess::UpdateDOMRenderingEnabled(webProcessProxy.coreProcessIdentifier(), isDOMRenderingEnabled), 0);
+}
+
 void GPUProcessProxy::createGPUProcessConnection(WebProcessProxy& webProcessProxy, IPC::Connection::Handle&& connectionIdentifier, GPUProcessConnectionParameters&& parameters)
 {
 #if ENABLE(VP9)
@@ -497,7 +502,7 @@ void GPUProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
         singleton() = nullptr;
 
     for (auto& processPool : WebProcessPool::allProcessPools())
-        processPool->gpuProcessExited(processIdentifier(), reason);
+        processPool->gpuProcessExited(processID(), reason);
 }
 
 void GPUProcessProxy::processIsReadyToExit()
@@ -559,7 +564,7 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     beginResponsivenessChecks();
 
     for (auto& processPool : WebProcessPool::allProcessPools())
-        processPool->gpuProcessDidFinishLaunching(processIdentifier());
+        processPool->gpuProcessDidFinishLaunching(processID());
 
 #if HAVE(POWERLOG_TASK_MODE_QUERY)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), makeBlockPtr([weakThis = WeakPtr { *this }] () mutable {
@@ -732,7 +737,7 @@ void GPUProcessProxy::updateScreenPropertiesIfNeeded()
 
 void GPUProcessProxy::didBecomeUnresponsive()
 {
-    RELEASE_LOG_ERROR(Process, "GPUProcessProxy::didBecomeUnresponsive: GPUProcess with PID %d became unresponsive, terminating it", processIdentifier());
+    RELEASE_LOG_ERROR(Process, "GPUProcessProxy::didBecomeUnresponsive: GPUProcess with PID %d became unresponsive, terminating it", processID());
     terminate();
     gpuProcessExited(ProcessTerminationReason::Unresponsive);
 }

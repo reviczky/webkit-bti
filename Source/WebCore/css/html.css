@@ -299,6 +299,11 @@ caption {
     text-align: -webkit-center;
 }
 
+/* for table elements with form inside following rules should apply */
+:is(table, thead, tbody, tfoot, tr) > form:-internal-html-document {
+    display: none !important;
+}
+
 /* lists */
 
 ul, menu, dir {
@@ -1383,6 +1388,8 @@ bdi, output {
     unicode-bidi: isolate;
 }
 
+input[type=tel i]:dir(ltr) { direction: ltr; }
+
 bdo {
     unicode-bidi: bidi-override;
 }
@@ -1410,7 +1417,13 @@ applet, embed, object, img {
     border-width: 0px;
 }
 
-/* noscript is handled internally, as it depends on settings. */
+/* noscript support */
+
+@media (scripting) {
+    noscript {
+        display: none !important;
+    }
+}
 
 /* Default support for "Smart Invert" where all content color except media is inverted. */ 
 @media (inverted-colors) {

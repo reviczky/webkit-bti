@@ -1238,6 +1238,20 @@ CSSScrollAnchoringEnabled:
     WebCore:
       default: false
 
+CSSScrollbarColorEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS scrollbar-color property"
+  humanReadableDescription: "Enable scrollbar-color CSS property"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSScrollbarGutterEnabled:
   type: bool
   status: testable
@@ -1336,9 +1350,9 @@ CSSTextSpacingEnabled:
     WebCore:
       default: false
 
-CSSTextUnderlinePositionLeftRight:
+CSSTextUnderlinePositionLeftRightEnabled:
   type: bool
-  status: testable
+  status: unstable
   category: css
   humanReadableName: "CSS text-underline-position: left right"
   humanReadableDescription: "Enable the property text-underline-position left and right value support"
@@ -1350,12 +1364,12 @@ CSSTextUnderlinePositionLeftRight:
     WebCore:
       default: false
 
-CSSTextWrapEnabled:
+CSSTextWrapNewValuesEnabled:
   type: bool
   status: testable
   category: css
-  humanReadableName: "CSS text-wrap property"
-  humanReadableDescription: "Enable text-wrap CSS property"
+  humanReadableName: "CSS text-wrap: balance stable pretty"
+  humanReadableDescription: "Enable text-wrap: balance/stable/pretty CSS support"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1407,12 +1421,27 @@ CSSTypedOMEnabled:
     WebCore:
       default: true
 
-CSSWhiteSpaceCollapseEnabled:
+CSSWhiteSpaceLonghandsEnabled:
   type: bool
   status: testable
   category: css
-  humanReadableName: "CSS white-space-collapse property"
-  humanReadableDescription: "Enable white-space-collapse CSS property"
+  humanReadableName: "CSS text-wrap & white-space-collapse properties"
+  humanReadableDescription: "Enable text-wrap & white-space-collapse CSS properties"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSWordBreakAutoEnabled:
+  type: bool
+  status: testable
+  category: css
+  webcoreOnChange: setNeedsRecalcStyleInAllFrames
+  humanReadableName: "word-break: auto enabled"
+  humanReadableDescription: "Enables the auto value of the word-break CSS property"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1745,6 +1774,20 @@ CookieEnabled:
     WebCore:
       default: true
 
+CookieStoreAPIEnabled:
+  type: bool
+  category: dom
+  status: testable
+  humanReadableName: "Cookie Store API"
+  humanReadableDescription: "Enable Cookie Store API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CoreMathMLEnabled:
   type: bool
   status: unstable
@@ -1921,11 +1964,11 @@ DataDetectorTypes:
   condition: ENABLE(DATA_DETECTION)
   defaultValue:
     WebKitLegacy:
-      default: DataDetectorType::None
+      default: static_cast<DataDetectorType>(0)
     WebKit:
-      default: DataDetectorType::None
+      default: static_cast<DataDetectorType>(0)
     WebCore:
-      default: DataDetectorType::None
+      default: static_cast<DataDetectorType>(0)
 
 # FIXME: This is on by default in WebKit2 (for everything but WatchOS). Perhaps we should consider turning it on for WebKitLegacy as well.
 DataListElementEnabled:
@@ -2339,8 +2382,18 @@ EnterKeyHintEnabled:
 
 EnumeratingAllNetworkInterfacesEnabled:
   type: bool
-  status: embedder
+  status: internal
   humanReadableName: "Enable Enumerating All Network Interfaces"
+  webcoreBinding: none
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
+
+EnumeratingVisibleNetworkInterfacesEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Enable Enumerating Visible Network Interfaces"
   webcoreBinding: none
   exposed: [ WebKit ]
   defaultValue:
@@ -2694,6 +2747,20 @@ FullscreenRequirementForScreenOrientationLockingEnabled:
       default: true
     WebCore:
       default: true
+
+FullscreenSceneDimmingEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Fullscreen scene dimming"
+  humanReadableDescription: "Enable scene dimming in Fullscreen"
+  condition: PLATFORM(VISION)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 GStreamerEnabled:
   type: bool
@@ -4009,6 +4076,20 @@ MasonryEnabled:
     WebCore:
       default: false
 
+MasonryTrackAlignmentEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS align-tracks & justify-tracks properties for masonry layout"
+  humanReadableDescription: "Enable CSS align-tracks & justify-tracks properties for masonry layout"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 MathMLEnabled:
   type: bool
   status: embedder
@@ -4276,7 +4357,7 @@ MediaSessionPlaylistEnabled:
 
 MediaSourceEnabled:
   type: bool
-  status: stable
+  status: embedder
   category: media
   humanReadableName: "Media Source API"
   humanReadableDescription: "Media Source API"
@@ -7303,7 +7384,7 @@ WebGLTimerQueriesEnabled:
 
 WebGLUsingMetal:
   type: bool
-  status: stable
+  status: internal
   category: dom
   humanReadableName: "WebGL via Metal"
   humanReadableDescription: "Use the Metal backend for ANGLE"
@@ -7808,21 +7889,6 @@ WirelessPlaybackTargetAPIEnabled:
     WebCore:
       "PLATFORM(VISION)" : false
       default: true
-
-WordBoundaryDetectionEnabled:
-  type: bool
-  status: testable
-  category: css
-  webcoreOnChange: setNeedsRecalcStyleInAllFrames
-  humanReadableName: "word-boundary-detection enabled"
-  humanReadableDescription: "Enables the word-boundary-detection CSS property"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
 
 ZoomOnDoubleTapWhenRoot:
   type: bool

@@ -419,6 +419,7 @@ public:
         B3_OP_CASE(ExtendHigh)
         B3_OP_CASE(ExtendLow)
         B3_OP_CASE(TruncSat)
+        B3_OP_CASE(RelaxedTruncSat)
         B3_OP_CASE(Not)
         B3_OP_CASE(Neg)
 
@@ -550,6 +551,17 @@ public:
 
         result = push(m_currentBlock->appendNew<SIMDValue>(m_proc, origin(), b3Op, B3::V128, info,
             get(a), get(b)));
+        return { };
+    }
+
+    auto addSIMDRelaxedFMA(SIMDLaneOperation op, SIMDInfo info, ExpressionType m1, ExpressionType m2, ExpressionType add, ExpressionType& result) -> PartialResult
+    {
+        B3_OP_CASES()
+        B3_OP_CASE(RelaxedMAdd)
+        B3_OP_CASE(RelaxedNMAdd)
+
+        result = push(m_currentBlock->appendNew<SIMDValue>(m_proc, origin(), b3Op, B3::V128, info,
+            get(m1), get(m2), get(add)));
         return { };
     }
 

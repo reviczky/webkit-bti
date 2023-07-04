@@ -1117,6 +1117,13 @@ void HTMLMediaElement::setSrcObject(MediaProvider&& mediaProvider)
 #endif
     m_blob = nullptr;
 
+#if ENABLE(MEDIA_SOURCE)
+    if (m_mediaProvider && std::holds_alternative<RefPtr<MediaSource>>(*m_mediaProvider)) {
+        auto mediaSource = std::get<RefPtr<MediaSource>>(*m_mediaProvider);
+        mediaSource->setAsSrcObject(true);
+    }
+#endif
+
     prepareForLoad();
 }
 
@@ -1435,6 +1442,8 @@ void HTMLMediaElement::selectMediaResource()
         // 9. Run the appropriate steps from the following list:
         // ↳ If mode is object
         if (mode == Object) {
+            m_loadState = LoadingFromSrcAttr;
+
             // 1. Set the currentSrc attribute to the empty string.
             setCurrentSrc(URL());
 
@@ -3637,7 +3646,7 @@ void HTMLMediaElement::setSeeking(bool seeking)
 {
     if (m_seeking == seeking)
         return;
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassSeeking, seeking);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::Seeking, seeking);
     m_seeking = seeking;
 }
 
@@ -3778,6 +3787,11 @@ double HTMLMediaElement::duration() const
 
 MediaTime HTMLMediaElement::durationMediaTime() const
 {
+#if ENABLE(MEDIA_SOURCE)
+    if (m_mediaSource)
+        return m_mediaSource->duration();
+#endif
+
     if (m_player && m_readyState >= HAVE_METADATA)
         return m_player->duration();
 
@@ -3801,8 +3815,8 @@ void HTMLMediaElement::setPaused(bool paused)
     if (m_paused == paused)
         return;
     Style::PseudoClassChangeInvalidation styleInvalidation(*this, {
-        { CSSSelector::PseudoClassPaused, paused },
-        { CSSSelector::PseudoClassPlaying, !paused },
+        { CSSSelector::PseudoClassType::Paused, paused },
+        { CSSSelector::PseudoClassType::Playing, !paused },
     });
     m_paused = paused;
     updateBufferingState();
@@ -4175,6 +4189,7 @@ void HTMLMediaElement::detachMediaSource()
         return;
 
     m_mediaSource->detachFromElement(*this);
+    m_mediaSource->setAsSrcObject(false);
     m_mediaSource = nullptr;
 }
 
@@ -4272,7 +4287,7 @@ void HTMLMediaElement::setMuted(bool muted)
             if (hasAudio() && muted)
                 userDidInterfereWithAutoplay();
         }
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassMuted, muted);
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::Muted, muted);
         m_muted = muted;
         m_explicitlyMuted = true;
 
@@ -4307,7 +4322,7 @@ void HTMLMediaElement::setVolumeLocked(bool locked)
     if (m_volumeLocked == locked)
         return;
 
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassVolumeLocked, locked);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::VolumeLocked, locked);
     m_volumeLocked = locked;
 }
 
@@ -4324,7 +4339,7 @@ void HTMLMediaElement::updateBufferingState()
     // matches the element.)
     bool buffering = !paused() && m_networkState == NETWORK_LOADING && m_readyState <= HAVE_CURRENT_DATA;
     if (m_buffering != buffering) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassBuffering, buffering);
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::Buffering, buffering);
         m_buffering = buffering;
     }
 }
@@ -4343,7 +4358,7 @@ void HTMLMediaElement::updateStalledState()
     // also matches the element.)
     bool stalled = !paused() && m_networkState == NETWORK_LOADING && m_readyState <= HAVE_CURRENT_DATA && m_sentStalledEvent;
     if (m_stalled != stalled) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassStalled, stalled);
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::Stalled, stalled);
         m_stalled = stalled;
     }
 }
@@ -6248,6 +6263,7 @@ void HTMLMediaElement::clearMediaPlayer()
     m_resourceSelectionTaskCancellationGroup.cancel();
 
     updateSleepDisabling();
+    updateRenderer();
 }
 
 const char* HTMLMediaElement::activeDOMObjectName() const
@@ -7390,6 +7406,7 @@ void HTMLMediaElement::createMediaPlayer() WTF_IGNORES_THREAD_SAFETY_ANALYSIS
 #endif
 
     updateSleepDisabling();
+    updateRenderer();
 }
 
 #if ENABLE(WEB_AUDIO)
@@ -8488,6 +8505,16 @@ bool HTMLMediaElement::shouldOverridePauseDuringRouteChange() const
 #else
     return false;
 #endif
+}
+
+void HTMLMediaElement::requestHostingContextID(Function<void(LayerHostingContextID)>&& completionHandler)
+{
+    if (m_player) {
+        m_player->requestHostingContextID(WTFMove(completionHandler));
+        return;
+    }
+
+    completionHandler({ });
 }
 
 LayerHostingContextID HTMLMediaElement::layerHostingContextID()

@@ -148,6 +148,7 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case NewStringObject:
     case NewInternalFieldObject:
     case NewRegexp:
+    case NewArrayWithConstantSize:
     case ToNumber:
     case ToNumeric:
     case ToObject:
@@ -255,6 +256,38 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
             break;
         return Exits;
 
+    case ArrayIndexOf: {
+        Edge& searchElementEdge = graph.child(node, 1);
+        switch (searchElementEdge.useKind()) {
+        case Int32Use:
+        case DoubleRepUse:
+        case ObjectUse:
+        case SymbolUse:
+        case OtherUse:
+            break;
+        default:
+            return Exits;
+        }
+        break;
+    }
+
+    case ToString:
+    case CallStringConstructor:
+        switch (node->child1().useKind()) {
+        case KnownPrimitiveUse:
+        case Int32Use:
+        case Int52RepUse:
+        case DoubleRepUse:
+        case NotCellUse:
+        case StringObjectUse:
+        case StringOrStringObjectUse:
+            result = ExitsForExceptions;
+            break;
+        default:
+            return Exits;
+        }
+        break;
+
     default:
         // If in doubt, return true.
         return Exits;
@@ -284,17 +317,24 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
                 }
             }
             
-            switch (edge.useKind()) {
-            // These are shady because nodes that have these use kinds will typically exit for
-            // unrelated reasons. For example CompareEq doesn't usually exit, but if it uses
-            // ObjectUse then it will.
-            case ObjectUse:
-            case ObjectOrOtherUse:
-                result = Exits;
+            switch (node->op()) {
+            case ArrayIndexOf:
                 break;
-                
-            default:
+            default: {
+                switch (edge.useKind()) {
+                // These are shady because nodes that have these use kinds will typically exit for
+                // unrelated reasons. For example CompareEq doesn't usually exit, but if it uses
+                // ObjectUse then it will.
+                case ObjectUse:
+                case ObjectOrOtherUse:
+                    result = Exits;
+                    break;
+
+                default:
+                    break;
+                }
                 break;
+            }
             }
         });
 

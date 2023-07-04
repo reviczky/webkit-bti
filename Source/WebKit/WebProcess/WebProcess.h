@@ -409,6 +409,13 @@ public:
 
     void deferNonVisibleProcessEarlyMemoryCleanupTimer();
 
+    void addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&&);
+    bool allowsFirstPartyForCookies(const URL&);
+
+#if PLATFORM(MAC)
+    void revokeLaunchServicesSandboxExtension();
+#endif
+
 private:
     WebProcess();
     ~WebProcess();
@@ -721,6 +728,8 @@ private:
 
     String m_uiProcessName;
     WebCore::RegistrableDomain m_registrableDomain;
+
+    RefPtr<SandboxExtension> m_launchServicesExtension;
 #endif
 
 #if PLATFORM(COCOA)
@@ -765,6 +774,7 @@ private:
 
 #if PLATFORM(COCOA)
     HashCountedSet<String> m_pendingPasteboardWriteCounts;
+    std::optional<audit_token_t> m_auditTokenForSelf;
 #endif
 
 #if ENABLE(GPU_PROCESS)
@@ -781,6 +791,8 @@ private:
 #endif
     bool m_hadMainFrameMainResourcePrivateRelayed { false };
     bool m_imageAnimationEnabled { true };
+
+    HashSet<WebCore::RegistrableDomain> m_allowedFirstPartiesForCookies;
 };
 
 } // namespace WebKit

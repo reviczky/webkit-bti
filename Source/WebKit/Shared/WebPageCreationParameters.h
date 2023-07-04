@@ -77,9 +77,6 @@ class Encoder;
 namespace WebKit {
 
 struct WebPageCreationParameters {
-    void encode(IPC::Encoder&) const;
-    static std::optional<WebPageCreationParameters> decode(IPC::Decoder&);
-
     WebCore::IntSize viewSize;
 
     OptionSet<WebCore::ActivityState> activityState;
@@ -291,6 +288,8 @@ struct WebPageCreationParameters {
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
 
     std::optional<FrameTreeCreationParameters> subframeProcessFrameTreeCreationParameters;
+    std::optional<WebCore::FrameIdentifier> openerFrameIdentifier;
+    std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     Vector<WebCore::LinkDecorationFilteringData> linkDecorationFilteringData;

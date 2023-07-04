@@ -48,7 +48,6 @@
 #include "CSSReflectValue.h"
 #include "CSSSubgridValue.h"
 #include "CSSValuePair.h"
-#include "CSSWordBoundaryDetectionValue.h"
 #include "CalcExpressionLength.h"
 #include "CalcExpressionOperation.h"
 #include "CalculationValue.h"
@@ -64,6 +63,7 @@
 #include "SVGPathElement.h"
 #include "SVGRenderStyle.h"
 #include "SVGURIReference.h"
+#include "ScrollbarColor.h"
 #include "ScrollbarGutter.h"
 #include "Settings.h"
 #include "StyleBuilderState.h"
@@ -75,7 +75,6 @@
 #include "TextSpacing.h"
 #include "TouchAction.h"
 #include "TransformFunctions.h"
-#include "WordBoundaryDetection.h"
 
 namespace WebCore {
 namespace Style {
@@ -135,6 +134,7 @@ public:
     static ScrollSnapType convertScrollSnapType(BuilderState&, const CSSValue&);
     static ScrollSnapAlign convertScrollSnapAlign(BuilderState&, const CSSValue&);
     static ScrollSnapStop convertScrollSnapStop(BuilderState&, const CSSValue&);
+    static std::optional<ScrollbarColor> convertScrollbarColor(BuilderState&, const CSSValue&);
     static ScrollbarGutter convertScrollbarGutter(BuilderState&, const CSSValue&);
     static GridTrackSize convertGridTrackSize(BuilderState&, const CSSValue&);
     static Vector<GridTrackSize> convertGridTrackSizeList(BuilderState&, const CSSValue&);
@@ -204,8 +204,6 @@ public:
     static TextAutospace convertTextAutospace(BuilderState&, const CSSValue&);
 
     static std::optional<Length> convertBlockStepSize(BuilderState&, const CSSValue&);
-
-    static WordBoundaryDetection convertWordBoundaryDetection(BuilderState&, const CSSValue&);
     
 private:
     friend class BuilderCustom;
@@ -712,7 +710,12 @@ inline RefPtr<PathOperation> BuilderConverter::convertPathOperation(BuilderState
             auto cssURLValue = primitiveValue.stringValue();
             auto fragment = SVGURIReference::fragmentIdentifierFromIRIString(cssURLValue, builderState.document());
             // FIXME: It doesn't work with external SVG references (see https://bugs.webkit.org/show_bug.cgi?id=126133)
-            auto target = SVGURIReference::targetElementFromIRIString(cssURLValue, builderState.document());
+            const TreeScope* treeScope = nullptr;
+            if (builderState.element())
+                treeScope = &builderState.element()->treeScopeForSVGReferences();
+            else
+                treeScope = &builderState.document();
+            auto target = SVGURIReference::targetElementFromIRIString(cssURLValue, *treeScope);
             return ReferencePathOperation::create(cssURLValue, fragment, dynamicDowncast<SVGElement>(target.element.get()));
         }
         ASSERT(primitiveValue.valueID() == CSSValueNone);
@@ -723,7 +726,7 @@ inline RefPtr<PathOperation> BuilderConverter::convertPathOperation(BuilderState
         auto& rayValue = downcast<CSSRayValue>(value);
 
         RayPathOperation::Size size = RayPathOperation::Size::ClosestCorner;
-        switch (rayValue.size()->valueID()) {
+        switch (rayValue.size()) {
         case CSSValueClosestCorner:
             size = RayPathOperation::Size::ClosestCorner;
             break;
@@ -1006,9 +1009,9 @@ inline RefPtr<ShapeValue> BuilderConverter::convertShapeValue(BuilderState& buil
     if (is<CSSValueList>(value)) {
         for (auto& currentValue : downcast<CSSValueList>(value))
             processSingleValue(currentValue);
-    } else {
+    } else
         processSingleValue(value);
-    }
+
     
     if (shape)
         return ShapeValue::create(shape.releaseNonNull(), referenceBox);
@@ -1052,6 +1055,21 @@ inline ScrollSnapAlign BuilderConverter::convertScrollSnapAlign(BuilderState&, c
 inline ScrollSnapStop BuilderConverter::convertScrollSnapStop(BuilderState&, const CSSValue& value)
 {
     return fromCSSValue<ScrollSnapStop>(value);
+}
+
+inline std::optional<ScrollbarColor> BuilderConverter::convertScrollbarColor(BuilderState& builderState, const CSSValue& value)
+{
+    if (is<CSSPrimitiveValue>(value)) {
+        ASSERT(value.valueID() == CSSValueAuto);
+        return std::nullopt;
+    }
+
+    auto& pair = downcast<CSSValuePair>(value);
+
+    return ScrollbarColor {
+        builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(pair.first())),
+        builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(pair.second()))
+    };
 }
 
 inline ScrollbarGutter BuilderConverter::convertScrollbarGutter(BuilderState&, const CSSValue& value)
@@ -1509,7 +1527,7 @@ inline FontSelectionValue BuilderConverter::convertFontStretchFromValue(const CS
 
 inline FontSelectionValue BuilderConverter::convertFontStyleAngle(const CSSValue& value)
 {
-    return FontSelectionValue { std::clamp(downcast<CSSPrimitiveValue>(value).value<float>(CSSUnitType::CSS_DEG), -90.0f, 90.0f) };
+    return normalizedFontItalicValue(downcast<CSSPrimitiveValue>(value).value<float>(CSSUnitType::CSS_DEG));
 }
 
 // The input value needs to parsed and valid, this function returns std::nullopt if the input was "normal".
@@ -1943,11 +1961,6 @@ inline std::optional<Length> BuilderConverter::convertBlockStepSize(BuilderState
     if (downcast<CSSPrimitiveValue>(value).valueID() == CSSValueNone)
         return { };
     return convertLength(builderState, value);
-}
-
-inline WordBoundaryDetection BuilderConverter::convertWordBoundaryDetection(BuilderState&, const CSSValue& value)
-{
-    return downcast<CSSWordBoundaryDetectionValue>(value).value();
 }
 
 } // namespace Style

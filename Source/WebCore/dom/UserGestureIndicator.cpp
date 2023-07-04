@@ -101,6 +101,11 @@ bool UserGestureToken::isValidForDocument(const Document& document) const
     return m_documentsImpactedByUserGesture.contains(document);
 }
 
+void UserGestureToken::forEachImpactedDocument(Function<void(Document&)>&& function)
+{
+    m_documentsImpactedByUserGesture.forEach(function);
+}
+
 UserGestureIndicator::UserGestureIndicator(std::optional<ProcessingUserGestureState> state, Document* document, UserGestureType gestureType, ProcessInteractionStyle processInteractionStyle, std::optional<UUID> authorizationToken)
     : m_previousToken { currentToken() }
 {
@@ -125,7 +130,11 @@ UserGestureIndicator::UserGestureIndicator(std::optional<ProcessingUserGestureSt
             }
         }
 
-        if (auto* window = document->domWindow())
+        // https://html.spec.whatwg.org/multipage/interaction.html#user-activation-processing-model
+        // When a user interaction causes firing of an activation triggering input event in a Document...
+        // NOTE: Only activate the relevent DOMWindow when the gestureType is an ActivationTriggering one
+        auto* window = document->domWindow();
+        if (window && gestureType == UserGestureType::ActivationTriggering)
             window->notifyActivated(currentToken()->startTime());
     }
 }

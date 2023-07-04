@@ -131,36 +131,6 @@ bool HTMLFormElement::formWouldHaveSecureSubmission(const String& url)
     return document().completeURL(url).protocolIs("https"_s);
 }
 
-bool HTMLFormElement::rendererIsNeeded(const RenderStyle& style)
-{
-    if (!m_wasDemoted)
-        return HTMLElement::rendererIsNeeded(style);
-
-    auto parent = parentNode();
-    auto parentRenderer = parent->renderer();
-
-    if (!parentRenderer)
-        return false;
-
-    // FIXME: Shouldn't we also check for table caption (see |formIsTablePart| below).
-    bool parentIsTableElementPart = (parentRenderer->isTable() && is<HTMLTableElement>(*parent))
-        || (parentRenderer->isTableRow() && parent->hasTagName(trTag))
-        || (parentRenderer->isTableSection() && parent->hasTagName(tbodyTag))
-        || (parentRenderer->isRenderTableCol() && parent->hasTagName(colTag))
-        || (parentRenderer->isTableCell() && parent->hasTagName(trTag));
-
-    if (!parentIsTableElementPart)
-        return true;
-
-    DisplayType display = style.display();
-    bool formIsTablePart = display == DisplayType::Table || display == DisplayType::InlineTable || display == DisplayType::TableRowGroup
-        || display == DisplayType::TableHeaderGroup || display == DisplayType::TableFooterGroup || display == DisplayType::TableRow
-        || display == DisplayType::TableColumnGroup || display == DisplayType::TableColumn || display == DisplayType::TableCell
-        || display == DisplayType::TableCaption;
-
-    return formIsTablePart;
-}
-
 Node::InsertedIntoAncestorResult HTMLFormElement::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
 {
     HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
@@ -662,7 +632,7 @@ void HTMLFormElement::addInvalidFormControl(const HTMLElement& formControlElemen
 
     std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
     if (m_invalidFormControls.isEmptyIgnoringNullReferences())
-        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassValid, false }, { CSSSelector::PseudoClassInvalid, true } });
+        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassType::Valid, false }, { CSSSelector::PseudoClassType::Invalid, true } });
 
     m_invalidFormControls.add(formControlElement);
 }
@@ -674,7 +644,7 @@ void HTMLFormElement::removeInvalidFormControlIfNeeded(const HTMLElement& formCo
 
     std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
     if (m_invalidFormControls.computeSize() == 1)
-        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassValid, true }, { CSSSelector::PseudoClassInvalid, false } });
+        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassType::Valid, true }, { CSSSelector::PseudoClassType::Invalid, false } });
 
     m_invalidFormControls.remove(formControlElement);
 }
@@ -990,12 +960,6 @@ Vector<Ref<ValidatedFormListedElement>> HTMLFormElement::copyValidatedListedElem
     return WTF::compactMap(m_listedElements, [](auto& weakElement) {
         return RefPtr { weakElement->asValidatedFormListedElement() };
     });
-}
-
-void HTMLFormElement::copyNonAttributePropertiesFromElement(const Element& source)
-{
-    m_wasDemoted = static_cast<const HTMLFormElement&>(source).m_wasDemoted;
-    HTMLElement::copyNonAttributePropertiesFromElement(source);
 }
 
 HTMLFormElement* HTMLFormElement::findClosestFormAncestor(const Element& startElement)

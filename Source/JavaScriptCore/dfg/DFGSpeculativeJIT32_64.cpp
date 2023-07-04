@@ -3134,6 +3134,11 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case NewArrayWithConstantSize: {
+        compileNewArrayWithConstantSize(node);
+        break;
+    }
+
     case NewArrayWithSpecies: {
         compileNewArrayWithSpecies(node);
         break;
@@ -4285,6 +4290,7 @@ void SpeculativeJIT::compile(Node* node)
     case DataViewSet:
     case DateGetInt32OrNaN:
     case DateGetTime:
+    case DateSetTime:
     case StringCodePointAt:
     case CallWasm:
     case FunctionBind:

@@ -75,6 +75,7 @@ public:
         case VectorFloor:
         case VectorTrunc:
         case VectorTruncSat:
+        case VectorRelaxedTruncSat:
         case VectorConvert:
         case VectorConvertLow:
         case VectorNearest:
@@ -96,6 +97,8 @@ public:
         case VectorShiftByVector:
         case VectorDotProduct:
         case VectorRelaxedSwizzle:
+        case VectorRelaxedMAdd:
+        case VectorRelaxedNMAdd:
             return true;
         default:
             return false;

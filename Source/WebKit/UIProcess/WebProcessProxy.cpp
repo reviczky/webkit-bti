@@ -119,8 +119,8 @@
 #define MESSAGE_CHECK_URL(url) MESSAGE_CHECK_BASE(checkURLReceivedFromWebProcess(url), connection())
 #define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, connection(), completion)
 
-#define WEBPROCESSPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processIdentifier(), ##__VA_ARGS__)
-#define WEBPROCESSPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processIdentifier(), ##__VA_ARGS__)
+#define WEBPROCESSPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processID(), ##__VA_ARGS__)
+#define WEBPROCESSPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [PID=%i] WebProcessProxy::" fmt, this, processID(), ##__VA_ARGS__)
 
 namespace WebKit {
 using namespace WebCore;
@@ -756,6 +756,7 @@ void WebProcessProxy::addExistingWebPage(WebPageProxy& webPage, BeginsUsingDataS
     updateBackgroundResponsivenessTimer();
     updateBlobRegistryPartitioningState();
     updateWebGPUEnabledStateInGPUProcess();
+    updateDOMRenderingStateInGPUProcess();
 
     // If this was previously a standalone worker process with no pages we need to call didChangeThrottleState()
     // to update our process assertions on the network process since standalone worker processes do not hold
@@ -795,6 +796,7 @@ void WebProcessProxy::removeWebPage(WebPageProxy& webPage, EndsUsingDataStore en
     updateMediaStreamingActivity();
     updateBackgroundResponsivenessTimer();
     updateWebGPUEnabledStateInGPUProcess();
+    updateDOMRenderingStateInGPUProcess();
     updateBlobRegistryPartitioningState();
 
     maybeShutDown();
@@ -1365,11 +1367,11 @@ void WebProcessProxy::renderTreeAsText(WebCore::ProcessIdentifier destinationPro
     if (!webProcessProxy)
         return completionHandler({ });
 
-    auto reply = webProcessProxy->sendSync(Messages::WebProcess::RenderTreeAsText(frameIdentifier, baseIndent, behavior), 0);
-    if (!reply)
+    auto sendResult = webProcessProxy->sendSync(Messages::WebProcess::RenderTreeAsText(frameIdentifier, baseIndent, behavior), 0);
+    if (!sendResult.succeeded())
         return completionHandler({ });
 
-    auto [result] = reply.takeReply();
+    auto [result] = sendResult.takeReply();
     completionHandler(result);
 }
 
@@ -1748,7 +1750,7 @@ String WebProcessProxy::environmentIdentifier() const
     if (m_environmentIdentifier.isEmpty()) {
         StringBuilder builder;
         builder.append(clientName());
-        builder.append(processIdentifier());
+        builder.append(processID());
         m_environmentIdentifier = builder.toString();
     }
     return m_environmentIdentifier;
@@ -1766,7 +1768,7 @@ void WebProcessProxy::updateAudibleMediaAssertions()
     if (hasAudibleWebPage) {
         WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "updateAudibleMediaAssertions: Taking MediaPlayback assertion for WebProcess");
         m_audibleMediaActivity = AudibleMediaActivity {
-            ProcessAssertion::create(processIdentifier(), "WebKit Media Playback"_s, ProcessAssertionType::MediaPlayback),
+            ProcessAssertion::create(processID(), "WebKit Media Playback"_s, ProcessAssertionType::MediaPlayback),
             processPool().webProcessWithAudibleMediaToken()
         };
     } else {
@@ -1940,12 +1942,24 @@ void WebProcessProxy::updateBlobRegistryPartitioningState() const
         networkProcess->setBlobRegistryTopOriginPartitioningEnabled(sessionID(),  dataStore->isBlobRegistryPartitioningEnabled());
 }
 
+
+void WebProcessProxy::updateDOMRenderingStateInGPUProcess()
+{
+#if ENABLE(GPU_PROCESS)
+    if (auto* gpuProcess = processPool().gpuProcess()) {
+        gpuProcess->updateDOMRenderingEnabled(*this, WTF::anyOf(pages(), [](auto& page) {
+            return page->preferences().useGPUProcessForDOMRenderingEnabled();
+        }));
+    }
+#endif
+}
+
 void WebProcessProxy::updateWebGPUEnabledStateInGPUProcess()
 {
 #if ENABLE(GPU_PROCESS)
     if (auto* process = processPool().gpuProcess()) {
         process->updateWebGPUEnabled(*this, WTF::anyOf(pages(), [](const auto& page) {
-            return page && page->preferences().webGPUEnabled();
+            return page->preferences().webGPUEnabled();
         }));
     }
 #endif
@@ -2268,7 +2282,7 @@ void WebProcessProxy::registerRemoteWorkerClientProcess(RemoteWorkerType workerT
     if (!workerInformation)
         return;
 
-    WEBPROCESSPROXY_RELEASE_LOG(Worker, "registerWorkerClientProcess: workerType=%" PUBLIC_LOG_STRING ", clientProcess=%p, clientPID=%d", workerType == RemoteWorkerType::SharedWorker ? "shared" : "service", &proxy, proxy.processIdentifier());
+    WEBPROCESSPROXY_RELEASE_LOG(Worker, "registerWorkerClientProcess: workerType=%" PUBLIC_LOG_STRING ", clientProcess=%p, clientPID=%d", workerType == RemoteWorkerType::SharedWorker ? "shared" : "service", &proxy, proxy.processID());
     workerInformation->clientProcesses.add(proxy);
     updateRemoteWorkerProcessAssertion(workerType);
 }
@@ -2279,7 +2293,7 @@ void WebProcessProxy::unregisterRemoteWorkerClientProcess(RemoteWorkerType worke
     if (!workerInformation)
         return;
 
-    WEBPROCESSPROXY_RELEASE_LOG(Worker, "unregisterWorkerClientProcess: workerType=%" PUBLIC_LOG_STRING ", clientProcess=%p, clientPID=%d", workerType == RemoteWorkerType::SharedWorker ? "shared" : "service", &proxy, proxy.processIdentifier());
+    WEBPROCESSPROXY_RELEASE_LOG(Worker, "unregisterWorkerClientProcess: workerType=%" PUBLIC_LOG_STRING ", clientProcess=%p, clientPID=%d", workerType == RemoteWorkerType::SharedWorker ? "shared" : "service", &proxy, proxy.processID());
     workerInformation->clientProcesses.remove(proxy);
     updateRemoteWorkerProcessAssertion(workerType);
 }
@@ -2493,6 +2507,11 @@ void WebProcessProxy::sendPermissionChanged(WebCore::PermissionName permissionNa
     send(Messages::WebPermissionController::permissionChanged(permissionName, topOrigin), 0);
 }
 
+void WebProcessProxy::addAllowedFirstPartyForCookies(const WebCore::RegistrableDomain& firstPartyDomain)
+{
+    send(Messages::WebProcess::AddAllowedFirstPartyForCookies(firstPartyDomain), 0);
+}
+
 Logger& WebProcessProxy::logger()
 {
     if (!m_logger) {
@@ -2514,7 +2533,7 @@ TextStream& operator<<(TextStream& ts, const WebProcessProxy& process)
             ts << ", " << description;
     };
 
-    ts << "pid: " << process.processIdentifier();
+    ts << "pid: " << process.processID();
     appendCount(process.pageCount(), "pages"_s);
     appendCount(process.visiblePageCount(), "visible-pages"_s);
     appendCount(process.provisionalPageCount(), "provisional-pages"_s);

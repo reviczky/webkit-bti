@@ -420,6 +420,9 @@ enum Opcode : uint8_t {
     // Relaxed SIMD
 
     VectorRelaxedSwizzle,
+    VectorRelaxedTruncSat,
+    VectorRelaxedMAdd,
+    VectorRelaxedNMAdd,
 
     // Currently only some architectures support this.
     // FIXME: Expand this to identical instructions for the other architectures as a macro.

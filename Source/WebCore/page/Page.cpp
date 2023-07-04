@@ -39,6 +39,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "CommonAtomStrings.h"
+#include "CommonVM.h"
 #include "ConstantPropertyMap.h"
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
@@ -100,6 +101,7 @@
 #include "ModelPlayerProvider.h"
 #include "NavigationScheduler.h"
 #include "Navigator.h"
+#include "OpportunisticTaskScheduler.h"
 #include "PageColorSampler.h"
 #include "PageConfiguration.h"
 #include "PageConsoleClient.h"
@@ -172,6 +174,7 @@
 #include "WheelEventTestMonitor.h"
 #include "Widget.h"
 #include "WorkerOrWorkletScriptController.h"
+#include <JavaScriptCore/VM.h>
 #include <wtf/FileSystem.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
@@ -366,6 +369,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #if ENABLE(ATTACHMENT_ELEMENT)
     , m_attachmentElementClient(WTFMove(pageConfiguration.attachmentElementClient))
 #endif
+    , m_opportunisticTaskScheduler(OpportunisticTaskScheduler::create(*this))
     , m_contentSecurityPolicyModeForExtension(WTFMove(pageConfiguration.contentSecurityPolicyModeForExtension))
     , m_badgeClient(WTFMove(pageConfiguration.badgeClient))
 {
@@ -429,8 +433,6 @@ Page::~Page()
         --gNonUtilityPageCount;
         MemoryPressureHandler::setPageCount(gNonUtilityPageCount);
     }
-    
-    m_settings->pageDestroyed();
 
     m_inspectorController->inspectedPageDestroyed();
 
@@ -662,6 +664,11 @@ void Page::progressFinished(LocalFrame& frameWithCompletedProgress) const
         if (auto* axObjectCache = document->existingAXObjectCache())
             axObjectCache->loadingFinished();
     }
+}
+
+void Page::setMainFrame(Ref<Frame>&& frame)
+{
+    m_mainFrame = WTFMove(frame);
 }
 
 bool Page::openedByDOM() const
@@ -1475,6 +1482,13 @@ void Page::didCommitLoad()
     if (auto* geolocationController = GeolocationController::from(this))
         geolocationController->didNavigatePage();
 #endif
+
+    m_opportunisticTaskDeferralScopeForFirstPaint = m_opportunisticTaskScheduler->makeDeferralScope();
+}
+
+void Page::didFirstMeaningfulPaint()
+{
+    m_opportunisticTaskDeferralScopeForFirstPaint = nullptr;
 }
 
 void Page::didFinishLoad()
@@ -2015,6 +2029,9 @@ void Page::renderingUpdateCompleted()
         scheduleRenderingUpdateInternal();
         m_unfulfilledRequestedSteps = { };
     }
+
+    if (!isUtilityPage())
+        m_opportunisticTaskScheduler->reschedule(m_lastRenderingUpdateTimestamp + preferredRenderingUpdateInterval());
 }
 
 void Page::willStartRenderingUpdateDisplay()
@@ -4446,6 +4463,11 @@ void Page::reloadExecutionContextsForOrigin(const ClientOrigin& origin, std::opt
         localFrame->navigationScheduler().scheduleRefresh(*document);
         frame = frame->tree().traverseNextSkippingChildren();
     }
+}
+
+void Page::performOpportunisticallyScheduledTasks(MonotonicTime deadline)
+{
+    commonVM().performOpportunisticallyScheduledTasks(deadline);
 }
 
 } // namespace WebCore

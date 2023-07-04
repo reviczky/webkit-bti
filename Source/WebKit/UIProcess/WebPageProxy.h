@@ -517,6 +517,7 @@ public:
     PAL::SessionID sessionID() const;
 
     WebFrameProxy* mainFrame() const { return m_mainFrame.get(); }
+    WebFrameProxy* openerFrame() const { return m_openerFrame.get(); }
     WebFrameProxy* focusedFrame() const { return m_focusedFrame.get(); }
 
     DrawingAreaProxy* drawingArea() const { return m_drawingArea.get(); }
@@ -1435,9 +1436,9 @@ public:
 
     WebProcessProxy& ensureRunningProcess();
     WebProcessProxy& process() const { return m_process; }
-    ProcessID processIdentifier() const;
+    ProcessID processID() const;
 
-    ProcessID gpuProcessIdentifier() const;
+    ProcessID gpuProcessID() const;
 
     WebBackForwardCache& backForwardCache() const;
 
@@ -2164,6 +2165,9 @@ public:
     void addRemotePageProxy(const WebCore::RegistrableDomain&, WeakPtr<RemotePageProxy>&&);
     void removeRemotePageProxy(const WebCore::RegistrableDomain&);
 
+    void setRemotePageProxyInOpenerProcess(Ref<RemotePageProxy>&&);
+    void addOpenedRemotePageProxy(Ref<RemotePageProxy>&&);
+
     void createRemoteSubframesInOtherProcesses(WebFrameProxy&);
 
     void requestImageBitmap(const WebCore::ElementContext&, CompletionHandler<void(ShareableBitmapHandle&&, const String& sourceMIMEType)>&&);
@@ -2231,6 +2235,8 @@ public:
 #if ENABLE(NETWORK_ISSUE_REPORTING)
     void reportNetworkIssue(const URL&);
 #endif
+
+    void useRedirectionForCurrentNavigation(const WebCore::ResourceResponse&);
 
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     void pauseAllAnimations(CompletionHandler<void()>&&);
@@ -2405,6 +2411,8 @@ private:
     void didReceiveResponseForResource(WebCore::ResourceLoaderIdentifier, WebCore::FrameIdentifier, WebCore::ResourceResponse&&);
     void didFinishLoadForResource(WebCore::ResourceLoaderIdentifier, WebCore::FrameIdentifier, WebCore::ResourceError&&);
 #endif
+
+    bool shouldClosePreviousPage();
 
 #if ENABLE(MEDIA_STREAM)
     UserMediaPermissionRequestManagerProxy& userMediaPermissionRequestManager();
@@ -2893,6 +2901,8 @@ private:
     Ref<WebsiteDataStore> m_websiteDataStore;
 
     RefPtr<WebFrameProxy> m_mainFrame;
+
+    RefPtr<WebFrameProxy> m_openerFrame;
 
     RefPtr<WebFrameProxy> m_focusedFrame;
 

@@ -599,6 +599,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case NewAsyncGenerator:
     case NewArray:
     case NewArrayWithSize:
+    case NewArrayWithConstantSize:
     case NewArrayWithSpecies:
     case NewArrayBuffer:
     case NewArrayWithSpread:
@@ -722,6 +723,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case TryGetById:
     case StringLocaleCompare:
     case FunctionBind:
+    case DateSetTime:
         return false;
 
     case StringReplaceString:

@@ -215,6 +215,8 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     PageAllowedToRunInTheBackgroundCounter::Token pageAllowedToRunInTheBackgroundToken;
 
     HashMap<WebCore::RegistrableDomain, WeakPtr<RemotePageProxy>> domainToRemotePageProxyMap;
+    RefPtr<RemotePageProxy> remotePageProxyInOpenerProcess;
+    HashSet<Ref<RemotePageProxy>> openedRemotePageProxies;
 
 #if ENABLE(APPLE_PAY)
     std::unique_ptr<WebPaymentCoordinatorProxy> paymentCoordinator;
@@ -367,7 +369,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     void setShouldPlayToPlaybackTarget(WebCore::PlaybackTargetClientContextIdentifier, bool) final;
     void playbackTargetPickerWasDismissed(WebCore::PlaybackTargetClientContextIdentifier) final;
     bool alwaysOnLoggingAllowed() const final { return page.sessionID().isAlwaysOnLoggingAllowed(); }
-    PlatformView* platformView() const final;
+    RetainPtr<PlatformView> platformView() const final;
 #endif
 };
 

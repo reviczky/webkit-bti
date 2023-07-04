@@ -309,7 +309,7 @@
             "codegen-properties": {
                 "initial": "initialAlignTracks",
                 "converter": "ContentAlignmentDataList",
-                "settings-flag": "masonryEnabled",
+                "settings-flag": "masonryTrackAlignmentEnabled",
                 "parser-function": "consumeAlignTracks",
                 "parser-grammar-unused": "normal | <baseline-position> | <content-distribution> | [ <overflow-position>? <content-position> ]",
                 "parser-grammar-unused-reason": "Needs support for ordered groups, '&&' groups and optionals",
@@ -1118,7 +1118,7 @@
             "codegen-properties": {
                 "initial": "initialJustifyTracks",
                 "converter": "ContentAlignmentDataList",
-                "settings-flag": "masonryEnabled",
+                "settings-flag": "masonryTrackAlignmentEnabled",
                 "parser-function": "consumeJustifyTracks",
                 "parser-grammar-unused": "normal | <content-distribution> | [ <overflow-position>? [ <content-position> | left | right ] ]",
                 "parser-grammar-unused-reason": "Needs support for ordered groups and optionals.",
@@ -3376,6 +3376,7 @@
             }
         },
         "dominant-baseline": {
+            "inherited": true,
             "values": [
                 "auto",
                 "use-script",
@@ -5854,13 +5855,23 @@
             "values": [
                 "wrap",
                 "nowrap",
-                "balance",
-                "stable",
-                "pretty"
+                {
+                    "value": "balance",
+                    "settings-flag": "cssTextWrapNewValuesEnabled"
+                },
+                {
+                    "value": "stable",
+                    "settings-flag": "cssTextWrapNewValuesEnabled"
+                },
+                {
+                    "value": "pretty",
+                    "settings-flag": "cssTextWrapNewValuesEnabled"
+                }
             ],
             "codegen-properties": {
-                "settings-flag": "cssTextWrapEnabled",
-                "parser-grammar": "<<values>>"
+                "settings-flag": "cssWhiteSpaceLonghandsEnabled",
+                "parser-grammar": "<<values>>",
+                "parser-exported": true
             },
             "specification": {
                 "category": "css-text",
@@ -6048,35 +6059,29 @@
         },
         "white-space": {
             "inherited": true,
-            "values": [
-                "normal",
-                "pre",
-                "pre-wrap",
-                "pre-line",
-                "nowrap",
-                "break-spaces"
-            ],
             "codegen-properties": {
-                "parser-grammar": "<<values>>"
+                "longhands": [
+                    "white-space-collapse",
+                    "text-wrap"
+                ]
             },
             "specification": {
-                "category": "css-22",
-                "url": "https://www.w3.org/TR/CSS22/text.html#propdef-white-space"
+                "category": "css-text",
+                "url": "https://www.w3.org/TR/css-text-4/#white-space-property"
             }
         },
         "white-space-collapse": {
             "inherited": true,
             "values": [
                 "collapse",
-                "discard",
                 "preserve",
                 "preserve-breaks",
-                "preserve-spaces",
                 "break-spaces"
             ],
             "codegen-properties": {
-                "settings-flag": "cssWhiteSpaceCollapseEnabled",
-                "parser-grammar": "<<values>>"
+                "settings-flag": "cssWhiteSpaceLonghandsEnabled",
+                "parser-grammar": "<<values>>",
+                "parser-exported": true
             },
             "specification": {
                 "category": "css-text",
@@ -6123,29 +6128,17 @@
                 "url": "https://www.w3.org/TR/css-will-change/#propdef-will-change"
             }
         },
-        "word-boundary-detection": {
-            "inherited": true,
-            "codegen-properties": {
-                "settings-flag": "wordBoundaryDetectionEnabled",
-                "converter": "WordBoundaryDetection",
-                "parser-function": "consumeWordBoundaryDetection",
-                "parser-grammar-unused": "normal | auto(<lang>)",
-                "parser-grammar-unused-reason": "Only KeywordTerm, ReferenceTerm and UnboundedRepetitionTerm terms are supported inside MatchOneTerm at this time: '[ normal | auto(<lang>) ]' - auto(<lang>)",
-                "parser-grammar-comment": "There is also a 'manual' value which we don't implement yet."
-            },
-            "specification": {
-                "category": "css-text",
-                "url": "https://drafts.csswg.org/css-text-4/#propdef-word-boundary-detection"
-            },
-            "status": "in development"
-        },
         "word-break": {
             "inherited": true,
             "values": [
                 "normal",
                 "break-all",
                 "keep-all",
-                "break-word"
+                "break-word",
+                {
+                    "settings-flag": "cssWordBreakAutoEnabled",
+                    "value": "auto"
+                }
             ],
             "codegen-properties": {
                 "aliases": [
@@ -6331,7 +6324,7 @@
                     "resolver": "horizontal"
                 },
                 "parser-function": "consumeContainIntrinsicSize",
-                "parser-grammar-unused": "none | <length> | [ auto && <length> ]",
+                "parser-grammar-unused": "auto? [none | <<length>>]",
                 "parser-grammar-unused-reason": "Needs support for '&&' groups.",
                 "comment": "Should ensure generator simplifies to 'none | [ <length> && auto? ]"
             },
@@ -6349,7 +6342,7 @@
                     "resolver": "block"
                 },
                 "parser-function": "consumeContainIntrinsicSize",
-                "parser-grammar-unused": "none | <length> | [ auto && <length> ]",
+                "parser-grammar-unused": "auto? [none | <<length>>]",
                 "parser-grammar-unused-reason": "Needs support for '&&' groups.",
                 "comment": "Should ensure generator simplifies to 'none | [ <length> && auto? ]"
             },
@@ -9017,6 +9010,22 @@
                 "category": "css-scroll-snap",
                 "url": "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-snap-stop"
             }
+        },
+        "scrollbar-color": {
+            "codegen-properties": {
+                "converter": "ScrollbarColor",
+                "parser-function": "consumeScrollbarColor",
+                "parser-function-requires-context": true,
+                "parser-grammar-unused": "auto | <color>{2}",
+                "parser-grammar-unused-reason": "Needs support for '{A}' multipliers.",
+                "settings-flag": "cssScrollbarColorEnabled"
+            },
+            "inherited": true,
+            "specification": {
+                "category": "css-scrollbars",
+                "url": "https://drafts.csswg.org/css-scrollbars/#scrollbar-color"
+            },
+            "status": "in development"
         },
         "scrollbar-gutter": {
             "codegen-properties": {

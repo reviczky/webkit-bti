@@ -92,22 +92,26 @@ public:
     const_iterator end() const { return { { } }; }
 
     template<typename U, std::enable_if_t<std::is_convertible_v<U*, T*>>* = nullptr>
-    typename HashSet<std::pair<RefPtr<ThreadSafeWeakPtrControlBlock>, const T*>>::AddResult add(const U& value)
+    void add(const U& value)
     {
-        RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!value.controlBlock().objectHasBeenDeleted());
+        RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!value.controlBlock().objectHasStartedDeletion());
         Locker locker { m_lock };
-        RefPtr retainedControlBlock { &value.controlBlock() };
+        ControlBlockRefPtr retainedControlBlock { &value.controlBlock() };
+        if (!retainedControlBlock)
+            return;
         amortizedCleanupIfNeeded();
-        return m_set.add({ WTFMove(retainedControlBlock), static_cast<const T*>(&value) });
+        m_set.add({ WTFMove(retainedControlBlock), static_cast<const T*>(&value) });
     }
 
     template<typename U, std::enable_if_t<std::is_convertible_v<U*, T*>>* = nullptr>
     bool remove(const U& value)
     {
         Locker locker { m_lock };
-        RefPtr retainedControlBlock { &value.controlBlock() };
+        ControlBlockRefPtr retainedControlBlock { &value.controlBlock() };
+        if (!retainedControlBlock)
+            return false;
         amortizedCleanupIfNeeded();
-        return m_set.remove({ &value.controlBlock(), static_cast<const T*>(&value) });
+        return m_set.remove({ WTFMove(retainedControlBlock), static_cast<const T*>(&value) });
     }
 
     void clear()
@@ -121,7 +125,9 @@ public:
     bool contains(const U& value) const
     {
         Locker locker { m_lock };
-        RefPtr retainedControlBlock { &value.controlBlock() };
+        ControlBlockRefPtr retainedControlBlock { &value.controlBlock() };
+        if (!retainedControlBlock)
+            return false;
         amortizedCleanupIfNeeded();
         return m_set.contains({ WTFMove(retainedControlBlock), static_cast<const T*>(&value) });
     }
@@ -132,7 +138,7 @@ public:
         amortizedCleanupIfNeeded();
         for (auto& pair : m_set) {
             auto& controlBlock = pair.first;
-            if (!controlBlock->objectHasBeenDeleted())
+            if (!controlBlock->objectHasStartedDeletion())
                 return false;
         }
         return true;
@@ -178,15 +184,13 @@ private:
     {
         if (++m_operationCountSinceLastCleanup / 2 > m_set.size()) {
             m_set.removeIf([] (auto& pair) {
-                return pair.first->objectHasBeenDeleted();
+                return pair.first->objectHasStartedDeletion();
             });
             m_operationCountSinceLastCleanup = 0;
         }
     }
 
-    // FIXME: Make PairHashTraits and RefHashTraits work together and change this back to a Ref<ThreadSafeWeakPtrControlBlock>.
-    // We only add non-null pointers.
-    mutable HashSet<std::pair<RefPtr<ThreadSafeWeakPtrControlBlock>, const T*>> m_set WTF_GUARDED_BY_LOCK(m_lock);
+    mutable HashSet<std::pair<ControlBlockRefPtr, const T*>> m_set WTF_GUARDED_BY_LOCK(m_lock);
     mutable unsigned m_operationCountSinceLastCleanup WTF_GUARDED_BY_LOCK(m_lock) { 0 };
     mutable Lock m_lock;
 };
