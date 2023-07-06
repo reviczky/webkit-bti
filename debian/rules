@@ -12,11 +12,11 @@ export CCACHE_DIR=$(CURDIR)/ccache
 # soup3 build -> 4.1 API packages
 # gtk4 build  -> 6.0 API packages
 ENABLE_SOUP2=YES
-ENABLE_SOUP3=YES
-ENABLE_GTK4=YES
+ENABLE_SOUP3=NO
+ENABLE_GTK4=NO
 # Set to YES to use the docs from the tarball instead of generating them.
 # Use only if gi-docgen is not available.
-USE_PREBUILT_DOCS=NO
+USE_PREBUILT_DOCS=YES
 
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
@@ -26,9 +26,20 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+	   -DUSE_AVIF=OFF \
+	   -DUSE_GBM=OFF \
+	   -DUSE_GSTREAMER_TRANSCODER=OFF \
 	   -DENABLE_MINIBROWSER=ON
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
+
+# gcc 10 segfaults when building webkit in amd64 (#1008098) so use clang
+# However in i386, mipsel and arm64 clang is the buggy one (#1010329, #1016811)
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64))
+	EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++
+endif
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
@@ -248,7 +259,7 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 		    -e 's/@WEBDRIVER_DEP_PKG@/$(WEBDRIVER_DEP_PKG)/' \
 		>> debian/control
 ifeq ($(USE_PREBUILT_DOCS),YES)
-	sed -i -e 's/^\(Build-Depends-Indep:\)/# \1/' debian/control
+	sed -i -e 's/^\(Build-Depends-Indep:\).*/\1 jdupes/' debian/control
 endif
 	$(SOUP2_BUILD) cat debian/control-common.in | \
 		sed -e 's/@SOUPDEV_PKG@/libsoup2.4-dev/g' \
