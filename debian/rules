@@ -248,7 +248,7 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 		    -e 's/@WEBDRIVER_DEP_PKG@/$(WEBDRIVER_DEP_PKG)/' \
 		>> debian/control
 ifeq ($(USE_PREBUILT_DOCS),YES)
-	sed -i -e 's/^\(Build-Depends-Indep:\)/# \1/' debian/control
+	sed -i -e 's/^\(Build-Depends-Indep:\).*/\1 jdupes/' debian/control
 endif
 	$(SOUP2_BUILD) cat debian/control-common.in | \
 		sed -e 's/@SOUPDEV_PKG@/libsoup2.4-dev/g' \
