@@ -1,3 +1,10 @@
+webkit2gtk (2.40.3-2~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+    - Fixes CVE-2023-32439.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 06 Jul 2023 15:22:42 +0200
+
 webkit2gtk (2.40.3-2) unstable; urgency=high
 
   * debian/rules:
