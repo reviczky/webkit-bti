@@ -1,4 +1,4 @@
-webkit2gtk (2.40.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.40.4-1) unstable; urgency=high
 
   * New upstream release.
   * debian/rules:
