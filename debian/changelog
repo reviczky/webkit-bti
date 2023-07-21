@@ -1,4 +1,4 @@
-webkit2gtk (2.40.3-2~deb11u2) UNRELEASED; urgency=medium
+webkit2gtk (2.40.3-2~deb11u2) bullseye-security; urgency=medium
 
   * debian/patches/fix-CVE-2023-37450.patch:
     - Cherry pick fix for CVE-2023-37450.
