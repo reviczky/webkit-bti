@@ -1,3 +1,10 @@
+webkit2gtk (2.40.3-2~deb12u2) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-CVE-2023-37450.patch:
+    - Cherry pick fix for CVE-2023-37450.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 21 Jul 2023 11:24:47 +0200
+
 webkit2gtk (2.40.3-2~deb12u1) bookworm-security; urgency=medium
 
   * Rebuild for bookworm-security.

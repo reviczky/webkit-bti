@@ -6,3 +6,4 @@ dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
 fix-jsc-timestamp.patch
+fix-CVE-2023-37450.patch
