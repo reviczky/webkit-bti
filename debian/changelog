@@ -1,5 +1,6 @@
-webkit2gtk (2.40.3-3) UNRELEASED; urgency=medium
+webkit2gtk (2.40.4-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/rules:
     - Set Build-Depends-Indep to jdupes when USE_PREBUILT_DOCS is set.
 
