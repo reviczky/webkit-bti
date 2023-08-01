@@ -1,6 +1,9 @@
 webkit2gtk (2.40.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/rules:
+    - Use -O1 instead of -Os in sh4 (thanks, John Paul Adrian Glaubitz)
+      (Closes: #1042519).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 02 Aug 2023 00:01:52 +0300
 
