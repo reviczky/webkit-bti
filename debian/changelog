@@ -1,3 +1,14 @@
+webkit2gtk (2.40.5-1~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+  * The WebKitGTK security advisory WSA-2023-0007 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2023-38133, CVE-2023-38572, CVE-2023-38592, CVE-2023-38594,
+      CVE-2023-38595, CVE-2023-38597, CVE-2023-38599, CVE-2023-38600,
+      CVE-2023-38611 (fixed in 2.40.5)
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 05 Aug 2023 03:13:42 +0300
+
 webkit2gtk (2.40.5-1) unstable; urgency=high
 
   * New upstream release.
