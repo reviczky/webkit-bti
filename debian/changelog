@@ -1,4 +1,4 @@
-webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.41.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches and drop fix-jsc-timestamp.patch.
@@ -11,7 +11,7 @@ webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 17:42:09 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 20:22:34 +0300
 
 webkit2gtk (2.41.6-1) experimental; urgency=medium
 
