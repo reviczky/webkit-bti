@@ -134,6 +134,7 @@ $(PROJECT_DIR)/NetworkProcess/webrtc/NetworkMDNSRegister.messages.in
 $(PROJECT_DIR)/NetworkProcess/webrtc/NetworkRTCMonitor.messages.in
 $(PROJECT_DIR)/NetworkProcess/webrtc/NetworkRTCProvider.messages.in
 $(PROJECT_DIR)/NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy.messages.in
+$(PROJECT_DIR)/Platform/SharedMemory.serialization.in
 $(PROJECT_DIR)/PluginProcess/PluginControllerProxy.messages.in
 $(PROJECT_DIR)/PluginProcess/PluginProcess.messages.in
 $(PROJECT_DIR)/PluginProcess/WebProcessConnection.messages.in
@@ -182,6 +183,8 @@ $(PROJECT_DIR)/Shared/Cocoa/WebCoreArgumentCodersCocoa.serialization.in
 $(PROJECT_DIR)/Shared/Databases/IndexedDB/WebIDBResult.serialization.in
 $(PROJECT_DIR)/Shared/DisplayListArgumentCoders.serialization.in
 $(PROJECT_DIR)/Shared/EditorState.serialization.in
+$(PROJECT_DIR)/Shared/Extensions/WebExtensionContextParameters.serialization.in
+$(PROJECT_DIR)/Shared/Extensions/WebExtensionControllerParameters.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionEventListenerType.serialization.in
 $(PROJECT_DIR)/Shared/FileSystemSyncAccessHandleInfo.serialization.in
 $(PROJECT_DIR)/Shared/FocusedElementInformation.serialization.in

@@ -351,7 +351,7 @@ static bool videoEncoderSetEncoder(WebKitVideoEncoder* self, EncoderId encoderId
         auto sinkPad = adoptGRef(gst_element_get_static_pad(GST_ELEMENT_CAST(self), "sink"));
         gst_ghost_pad_set_target(GST_GHOST_PAD(sinkPad.get()), sinkPadTarget.get());
     } else {
-        gst_element_unlink(priv->videoConvert.get(), priv->inputCapsFilter.get());
+        gst_element_unlink_many(priv->videoConvert.get(), priv->videoScale.get(), priv->inputCapsFilter.get(), nullptr);
         auto caps = adoptGRef(gst_caps_new_any());
         g_object_set(priv->inputCapsFilter.get(), "caps", caps.get(), nullptr);
     }
@@ -585,15 +585,57 @@ static void webkit_video_encoder_class_init(WebKitVideoEncoderClass* klass)
     Encoders::registerEncoder(X264, "x264enc", "h264parse", "video/x-h264",
         "video/x-h264,alignment=au,stream-format=byte-stream",
         [](WebKitVideoEncoder* self) {
-            g_object_set(self->priv->encoder.get(), "key-int-max", 15, "threads", NUMBER_OF_THREADS, nullptr);
+            g_object_set(self->priv->encoder.get(), "key-int-max", 15, "threads", NUMBER_OF_THREADS, "b-adapt", FALSE, "vbv-buf-capacity", 120, nullptr);
             g_object_set(self->priv->parser.get(), "config-interval", 1, nullptr);
 
             const auto* structure = gst_caps_get_structure(self->priv->encodedCaps.get(), 0);
             auto inputCaps = adoptGRef(gst_caps_new_any());
             if (const char* profileString = gst_structure_get_string(structure, "profile")) {
-                auto profile = StringView::fromLatin1(profileString);
-                if (profile.find("high"_s) != notFound)
-                    inputCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "Y444", nullptr));
+                const char* pixelFormat = nullptr;
+                auto pad = adoptGRef(gst_element_get_static_pad(self->priv->encoder.get(), "sink"));
+                auto allowedCaps = adoptGRef(gst_pad_query_caps(pad.get(), nullptr));
+                const auto* structure = gst_caps_get_structure(allowedCaps.get(), 0);
+                const auto* formatValue = gst_structure_get_value(structure, "format");
+                unsigned size = gst_value_list_get_size(formatValue);
+                bool supports10BitsLittleEndian = false;
+                bool supports10BitsBigEndian = false;
+
+                for (unsigned i = 0; i < size; i++) {
+                    auto* value = gst_value_list_get_value(formatValue, i);
+                    const char* format = g_value_get_string(value);
+                    if (g_str_has_suffix(format, "_10LE")) {
+                        supports10BitsLittleEndian = true;
+                        break;
+                    }
+                    if (g_str_has_suffix(format, "_10BE")) {
+                        supports10BitsBigEndian = true;
+                        break;
+                    }
+                }
+
+                if (g_str_has_prefix(profileString, "high-4:4:4")) {
+                    if (supports10BitsLittleEndian)
+                        pixelFormat = "Y444_10LE";
+                    else if (supports10BitsBigEndian)
+                        pixelFormat = "Y444_10BE";
+                    else
+                        pixelFormat = "Y444";
+                } else if (g_str_has_prefix(profileString, "high-4:2:2")) {
+                    if (supports10BitsLittleEndian)
+                        pixelFormat = "Y422_10LE";
+                    else if (supports10BitsBigEndian)
+                        pixelFormat = "Y422_10BE";
+                    else
+                        pixelFormat = "Y42B";
+                } else if (g_str_has_prefix(profileString, "high-10")) {
+                    if (supports10BitsLittleEndian)
+                        pixelFormat = "Y420_10LE";
+                    else if (supports10BitsBigEndian)
+                        pixelFormat = "Y420_10BE";
+                } else
+                    pixelFormat = "I420";
+                if (pixelFormat)
+                    inputCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, pixelFormat, nullptr));
             }
             g_object_set(self->priv->inputCapsFilter.get(), "caps", inputCaps.get(), nullptr);
             g_object_set(self->priv->outputCapsFilter.get(), "caps", self->priv->encodedCaps.get(), nullptr);
@@ -631,6 +673,8 @@ static void webkit_video_encoder_class_init(WebKitVideoEncoderClass* klass)
         });
 
     auto setVpxEncoderInputFormat = [](auto* self) {
+        g_object_set(self->priv->encoder.get(), "buffer-initial-size", 100, "buffer-optimal-size", 120, "buffer-size" , 150, "max-intra-bitrate", 250, nullptr);
+        gst_util_set_object_arg(G_OBJECT(self->priv->encoder.get()), "error-resilient", "default");
         auto inputCaps = adoptGRef(gst_caps_new_any());
         const auto* structure = gst_caps_get_structure(self->priv->encodedCaps.get(), 0);
         if (const char* profileString = gst_structure_get_string(structure, "profile")) {

@@ -63,7 +63,7 @@
 #endif
 
 /* OS(IOS) - iOS and iPadOS only (iPhone and iPad), not including macCatalyst, not including watchOS, not including tvOS, not including visionOS */
-#if OS(DARWIN) && (TARGET_OS_IOS && !(defined(TARGET_OS_MACCATALYST) && TARGET_OS_MACCATALYST) && !(defined(TARGET_OS_XR) && TARGET_OS_XR))
+#if OS(DARWIN) && (TARGET_OS_IOS && !(defined(TARGET_OS_MACCATALYST) && TARGET_OS_MACCATALYST) && !(defined(TARGET_OS_VISION) && TARGET_OS_VISION))
 #define WTF_OS_IOS 1
 #endif
 
@@ -132,19 +132,6 @@
     || defined(__unix__)
 #define WTF_OS_UNIX 1
 #endif
-
-
-#if CPU(ADDRESS64)
-#if OS(DARWIN)
-#define WTF_OS_CONSTANT_EFFECTIVE_ADDRESS_WIDTH (WTF::getMSBSetConstexpr(MACH_VM_MAX_ADDRESS) + 1)
-#else
-/* We strongly assume that effective address width is <= 48 in 64bit architectures (e.g. NaN boxing). */
-#define WTF_OS_CONSTANT_EFFECTIVE_ADDRESS_WIDTH 48
-#endif
-#else
-#define WTF_OS_CONSTANT_EFFECTIVE_ADDRESS_WIDTH 32
-#endif
-
 
 /* Asserts, invariants for macro definitions */
 

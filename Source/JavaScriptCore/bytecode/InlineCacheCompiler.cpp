@@ -226,6 +226,12 @@ auto InlineCacheCompiler::preserveLiveRegistersToStackForCall(const RegisterSet&
 
     unsigned extraStackPadding = 0;
     unsigned numberOfStackBytesUsedForRegisterPreservation = ScratchRegisterAllocator::preserveRegistersToStackForCall(*m_jit, liveRegisters.buildAndValidate(), extraStackPadding);
+    RELEASE_ASSERT(liveRegisters.buildAndValidate().numberOfSetRegisters() == liveRegisters.buildScalarRegisterSet().numberOfSetRegisters(),
+        liveRegisters.buildAndValidate().numberOfSetRegisters(),
+        liveRegisters.buildScalarRegisterSet().numberOfSetRegisters());
+    RELEASE_ASSERT(liveRegisters.buildScalarRegisterSet().numberOfSetRegisters() || !numberOfStackBytesUsedForRegisterPreservation,
+        liveRegisters.buildScalarRegisterSet().numberOfSetRegisters(),
+        numberOfStackBytesUsedForRegisterPreservation);
     return SpillState {
         liveRegisters.buildScalarRegisterSet(),
         numberOfStackBytesUsedForRegisterPreservation
@@ -242,6 +248,12 @@ auto InlineCacheCompiler::preserveLiveRegistersToStackForCallWithoutExceptions()
 
     constexpr unsigned extraStackPadding = 0;
     unsigned numberOfStackBytesUsedForRegisterPreservation = ScratchRegisterAllocator::preserveRegistersToStackForCall(*m_jit, liveRegisters.buildAndValidate(), extraStackPadding);
+    RELEASE_ASSERT(liveRegisters.buildAndValidate().numberOfSetRegisters() == liveRegisters.buildScalarRegisterSet().numberOfSetRegisters(),
+        liveRegisters.buildAndValidate().numberOfSetRegisters(),
+        liveRegisters.buildScalarRegisterSet().numberOfSetRegisters());
+    RELEASE_ASSERT(liveRegisters.buildScalarRegisterSet().numberOfSetRegisters() || !numberOfStackBytesUsedForRegisterPreservation,
+        liveRegisters.buildScalarRegisterSet().numberOfSetRegisters(),
+        numberOfStackBytesUsedForRegisterPreservation);
     return SpillState {
         liveRegisters.buildScalarRegisterSet(),
         numberOfStackBytesUsedForRegisterPreservation
@@ -1490,7 +1502,8 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
     case AccessCase::CustomValueGetter:
     case AccessCase::CustomAccessorGetter:
     case AccessCase::CustomValueSetter:
-    case AccessCase::CustomAccessorSetter: {
+    case AccessCase::CustomAccessorSetter:
+    case AccessCase::IntrinsicGetter: {
         GPRReg valueRegsPayloadGPR = valueRegs.payloadGPR();
 
         Structure* currStructure = accessCase.hasAlternateBase() ? accessCase.alternateBase()->structure() : accessCase.structure();
@@ -1500,7 +1513,8 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
         bool doesPropertyStorageLoads = accessCase.m_type == AccessCase::Load
             || accessCase.m_type == AccessCase::GetGetter
             || accessCase.m_type == AccessCase::Getter
-            || accessCase.m_type == AccessCase::Setter;
+            || accessCase.m_type == AccessCase::Setter
+            || accessCase.m_type == AccessCase::IntrinsicGetter;
 
         bool takesPropertyOwnerAsCFunctionArgument = accessCase.m_type == AccessCase::CustomValueGetter || accessCase.m_type == AccessCase::CustomValueSetter;
 
@@ -1522,7 +1536,7 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
             // JSGlobalProxy's target. For getters/setters, we'll also invoke them with the JSGlobalProxy as |this|,
             // but we need to load the actual GetterSetter cell from the JSGlobalProxy's target.
 
-            if (accessCase.m_type == AccessCase::Getter || accessCase.m_type == AccessCase::Setter)
+            if (accessCase.m_type == AccessCase::Getter || accessCase.m_type == AccessCase::Setter || accessCase.m_type == AccessCase::IntrinsicGetter)
                 propertyOwnerGPR = scratchGPR;
             else
                 propertyOwnerGPR = valueRegsPayloadGPR;
@@ -1543,7 +1557,7 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
             else
                 loadedValueGPR = scratchGPR;
 
-            ASSERT((accessCase.m_type != AccessCase::Getter && accessCase.m_type != AccessCase::Setter) || loadedValueGPR != baseGPR);
+            ASSERT((accessCase.m_type != AccessCase::Getter && accessCase.m_type != AccessCase::Setter && accessCase.m_type != AccessCase::IntrinsicGetter) || loadedValueGPR != baseGPR);
             ASSERT(accessCase.m_type != AccessCase::Setter || loadedValueGPR != valueRegsPayloadGPR);
 
             GPRReg storageGPR;
@@ -1592,6 +1606,13 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
                 emitDOMJITGetter(access, access.domAttribute()->domJIT, receiverGPR);
                 return;
             }
+        }
+
+        if (accessCase.m_type == AccessCase::IntrinsicGetter) {
+            jit.loadPtr(CCallHelpers::Address(loadedValueGPR, GetterSetter::offsetOfGetter()), loadedValueGPR);
+            m_failAndIgnore.append(jit.branchPtr(CCallHelpers::NotEqual, loadedValueGPR, CCallHelpers::TrustedImmPtr(accessCase.as<IntrinsicGetterAccessCase>().intrinsicFunction())));
+            emitIntrinsicGetter(accessCase.as<IntrinsicGetterAccessCase>());
+            return;
         }
 
         // Stuff for custom getters/setters.
@@ -2142,22 +2163,6 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
         jit.moveTrustedValue(jsUndefined(), valueRegs);
         succeed();
         return;
-
-    case AccessCase::IntrinsicGetter: {
-        RELEASE_ASSERT(isValidOffset(accessCase.offset()));
-
-        // We need to ensure the getter value does not move from under us. Note that GetterSetters
-        // are immutable so we just need to watch the property not any value inside it.
-        Structure* currStructure;
-        if (!accessCase.hasAlternateBase())
-            currStructure = accessCase.structure();
-        else
-            currStructure = accessCase.alternateBase()->structure();
-        currStructure->startWatchingPropertyForReplacements(vm, accessCase.offset());
-
-        emitIntrinsicGetter(accessCase.as<IntrinsicGetterAccessCase>());
-        return;
-    }
 
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
@@ -2953,6 +2958,7 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
         switch (entry->type()) {
         case AccessCase::Getter:
         case AccessCase::Setter:
+        case AccessCase::ProxyObjectHas:
         case AccessCase::ProxyObjectLoad:
         case AccessCase::ProxyObjectStore:
         case AccessCase::IndexedProxyObjectLoad:
@@ -2983,6 +2989,7 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
     bool needsInt32PropertyCheck = false;
     bool needsStringPropertyCheck = false;
     bool needsSymbolPropertyCheck = false;
+    bool acceptValueProperty = false;
     for (auto& newCase : cases) {
         if (!m_stubInfo->hasConstantIdentifier) {
             if (newCase->requiresIdentifierNameMatch()) {
@@ -2992,6 +2999,8 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
                     needsStringPropertyCheck = true;
             } else if (newCase->requiresInt32PropertyCheck())
                 needsInt32PropertyCheck = true;
+            else
+                acceptValueProperty = true;
         }
         commit(locker, vm(), m_watchpoints, codeBlock, *m_stubInfo, *newCase);
         allGuardedByStructureCheck &= newCase->guardedByStructureCheck(*m_stubInfo);
@@ -3042,13 +3051,13 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
         CCallHelpers::JumpList fallThrough;
         if (needsInt32PropertyCheck || needsStringPropertyCheck || needsSymbolPropertyCheck) {
             if (needsInt32PropertyCheck) {
-                CCallHelpers::Jump notInt32;
+                CCallHelpers::JumpList notInt32;
 
                 if (!m_stubInfo->propertyIsInt32) {
 #if USE(JSVALUE64)
-                    notInt32 = jit.branchIfNotInt32(m_stubInfo->propertyGPR());
+                    notInt32.append(jit.branchIfNotInt32(m_stubInfo->propertyGPR()));
 #else
-                    notInt32 = jit.branchIfNotInt32(m_stubInfo->propertyTagGPR());
+                    notInt32.append(jit.branchIfNotInt32(m_stubInfo->propertyTagGPR()));
 #endif
                 }
                 JIT_COMMENT(jit, "Cases start (needsInt32PropertyCheck)");
@@ -3059,15 +3068,12 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
                         generateWithGuard(*cases[i], fallThrough);
                 }
 
-                if (needsStringPropertyCheck || needsSymbolPropertyCheck) {
-                    if (notInt32.isSet())
-                        notInt32.link(&jit);
+                if (needsStringPropertyCheck || needsSymbolPropertyCheck || acceptValueProperty) {
+                    notInt32.link(&jit);
                     fallThrough.link(&jit);
                     fallThrough.clear();
-                } else {
-                    if (notInt32.isSet())
-                        m_failAndRepatch.append(notInt32);
-                }
+                } else
+                    m_failAndRepatch.append(notInt32);
             }
 
             if (needsStringPropertyCheck) {
@@ -3095,7 +3101,7 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
                         generateWithGuard(*cases[i], fallThrough);
                 }
 
-                if (needsSymbolPropertyCheck) {
+                if (needsSymbolPropertyCheck || acceptValueProperty) {
                     notString.link(&jit);
                     fallThrough.link(&jit);
                     fallThrough.clear();
@@ -3124,7 +3130,22 @@ AccessGenerationResult InlineCacheCompiler::regenerate(const GCSafeConcurrentJSL
                         generateWithGuard(*cases[i], fallThrough);
                 }
 
-                m_failAndRepatch.append(notSymbol);
+                if (acceptValueProperty) {
+                    notSymbol.link(&jit);
+                    fallThrough.link(&jit);
+                    fallThrough.clear();
+                } else
+                    m_failAndRepatch.append(notSymbol);
+            }
+
+            if (acceptValueProperty) {
+                JIT_COMMENT(jit, "Cases start (remaining)");
+                for (unsigned i = cases.size(); i--;) {
+                    fallThrough.link(&jit);
+                    fallThrough.clear();
+                    if (!cases[i]->requiresIdentifierNameMatch() && !cases[i]->requiresInt32PropertyCheck())
+                        generateWithGuard(*cases[i], fallThrough);
+                }
             }
         } else {
             // Cascade through the list, preferring newer entries.

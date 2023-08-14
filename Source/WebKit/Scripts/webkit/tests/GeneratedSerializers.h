@@ -54,7 +54,7 @@ namespace WebCore {
 template<typename, typename> class ScrollSnapOffsetsInfo;
 using FloatBoxExtent = ScrollSnapOffsetsInfo<float, double>;
 }
-struct NullableSoftLinkedMember;
+struct SoftLinkedMember;
 namespace WebCore { class TimingFunction; }
 #if ENABLE(TEST_FEATURE)
 namespace Namespace { class ConditionalCommonClass; }
@@ -63,6 +63,9 @@ namespace Namespace { class CommonClass; }
 namespace Namespace { class AnotherCommonClass; }
 namespace WebCore { class MoveOnlyBaseClass; }
 namespace WebCore { class MoveOnlyDerivedClass; }
+namespace WebKit { class PlatformClass; }
+namespace WebKit { class CustomEncoded; }
+namespace WebKit { class LayerProperties; }
 
 namespace IPC {
 
@@ -129,9 +132,9 @@ template<> struct ArgumentCoder<WebCore::FloatBoxExtent> {
     static std::optional<WebCore::FloatBoxExtent> decode(Decoder&);
 };
 
-template<> struct ArgumentCoder<NullableSoftLinkedMember> {
-    static void encode(Encoder&, const NullableSoftLinkedMember&);
-    static std::optional<NullableSoftLinkedMember> decode(Decoder&);
+template<> struct ArgumentCoder<SoftLinkedMember> {
+    static void encode(Encoder&, const SoftLinkedMember&);
+    static std::optional<SoftLinkedMember> decode(Decoder&);
 };
 
 template<> struct ArgumentCoder<WebCore::TimingFunction> {
@@ -164,6 +167,21 @@ template<> struct ArgumentCoder<WebCore::MoveOnlyBaseClass> {
 template<> struct ArgumentCoder<WebCore::MoveOnlyDerivedClass> {
     static void encode(Encoder&, WebCore::MoveOnlyDerivedClass&&);
     static std::optional<WebCore::MoveOnlyDerivedClass> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::PlatformClass> {
+    static void encode(Encoder&, const WebKit::PlatformClass&);
+    static std::optional<WebKit::PlatformClass> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::CustomEncoded> {
+    static void encode(Encoder&, const WebKit::CustomEncoded&);
+    static std::optional<WebKit::CustomEncoded> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::LayerProperties> {
+    static void encode(Encoder&, const WebKit::LayerProperties&);
+    static std::optional<WebKit::LayerProperties> decode(Decoder&);
 };
 
 } // namespace IPC

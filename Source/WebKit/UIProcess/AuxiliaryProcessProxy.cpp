@@ -26,6 +26,7 @@
 #include "config.h"
 #include "AuxiliaryProcessProxy.h"
 
+#include "AuxiliaryProcessCreationParameters.h"
 #include "AuxiliaryProcessMessages.h"
 #include "Logging.h"
 #include "OverrideLanguages.h"
@@ -332,7 +333,8 @@ void AuxiliaryProcessProxy::wakeUpTemporarilyForIPC()
 {
     // If we keep trying to send IPC to a suspended process, the outgoing message queue may grow large and result
     // in increased memory usage. To avoid this, we wake up the process for a bit so we can drain the messages.
-    m_timedActivityForIPC = throttler().backgroundActivity("IPC sending due to large outgoing queue"_s);
+    if (!ProcessThrottler::isValidBackgroundActivity(m_timedActivityForIPC.activity()))
+        m_timedActivityForIPC = throttler().backgroundActivity("IPC sending due to large outgoing queue"_s);
 }
 #endif
 
@@ -475,7 +477,7 @@ AuxiliaryProcessCreationParameters AuxiliaryProcessProxy::auxiliaryProcessParame
     return parameters;
 }
 
-std::optional<SandboxExtension::Handle> AuxiliaryProcessProxy::createMobileGestaltSandboxExtensionIfNeeded() const
+std::optional<SandboxExtensionHandle> AuxiliaryProcessProxy::createMobileGestaltSandboxExtensionIfNeeded() const
 {
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
     if (_MGCacheValid())

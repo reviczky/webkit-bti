@@ -1101,6 +1101,10 @@ enum class RenderPassUsage
     // Right now it is only tracked for depth stencil attachment
     DepthReadOnlyAttachment,
     StencilReadOnlyAttachment,
+    // This is special case of RenderTargetAttachment where the render target access is formed
+    // feedback loop. Right now it is only tracked for depth stencil attachment
+    DepthFeedbackLoop,
+    StencilFeedbackLoop,
     // Attached to the texture sampler of the current renderpass commands
     ColorTextureSampler,
     DepthTextureSampler,
@@ -1110,6 +1114,10 @@ enum class RenderPassUsage
     EnumCount = InvalidEnum,
 };
 using RenderPassUsageFlags = angle::PackedEnumBitSet<RenderPassUsage, uint16_t>;
+constexpr RenderPassUsageFlags kDepthStencilReadOnlyBits = RenderPassUsageFlags(
+    {RenderPassUsage::DepthReadOnlyAttachment, RenderPassUsage::StencilReadOnlyAttachment});
+constexpr RenderPassUsageFlags kDepthStencilFeedbackModeBits = RenderPassUsageFlags(
+    {RenderPassUsage::DepthFeedbackLoop, RenderPassUsage::StencilFeedbackLoop});
 
 // The following are used to help track the state of an invalidated attachment.
 // This value indicates an "infinite" CmdCount that is not valid for comparing
@@ -1195,6 +1203,19 @@ class CommandBufferHelperCommon : angle::NonCopyable
     template <class DerivedT>
     void assertCanBeRecycledImpl();
 
+    void bufferReadImpl(VkAccessFlags readAccessType,
+                        PipelineStage readStage,
+                        BufferHelper *buffer);
+    void bufferReadImpl(VkAccessFlags readAccessType,
+                        const gl::ShaderBitSet &readShaderStages,
+                        BufferHelper *buffer)
+    {
+        for (gl::ShaderType shaderType : readShaderStages)
+        {
+            const vk::PipelineStage readStage = vk::GetPipelineStage(shaderType);
+            bufferReadImpl(readAccessType, readStage, buffer);
+        }
+    }
     void imageReadImpl(ContextVk *contextVk,
                        VkImageAspectFlags aspectFlags,
                        ImageLayout imageLayout,
@@ -1279,7 +1300,20 @@ class OutsideRenderPassCommandBufferHelper final : public CommandBufferHelperCom
     void bufferRead(ContextVk *contextVk,
                     VkAccessFlags readAccessType,
                     PipelineStage readStage,
-                    BufferHelper *buffer);
+                    BufferHelper *buffer)
+    {
+        bufferReadImpl(readAccessType, readStage, buffer);
+        setBufferReadQueueSerial(contextVk, buffer);
+    }
+
+    void bufferRead(ContextVk *contextVk,
+                    VkAccessFlags readAccessType,
+                    const gl::ShaderBitSet &readShaderStages,
+                    BufferHelper *buffer)
+    {
+        bufferReadImpl(readAccessType, readShaderStages, buffer);
+        setBufferReadQueueSerial(contextVk, buffer);
+    }
 
     void imageRead(ContextVk *contextVk,
                    VkImageAspectFlags aspectFlags,
@@ -1313,6 +1347,7 @@ class OutsideRenderPassCommandBufferHelper final : public CommandBufferHelperCom
   private:
     angle::Result initializeCommandBuffer(Context *context);
     angle::Result endCommandBuffer(Context *context);
+    void setBufferReadQueueSerial(ContextVk *contextVk, BufferHelper *buffer);
 
     OutsideRenderPassCommandBuffer mCommandBuffer;
     bool mIsCommandBufferEnded = false;
@@ -1378,7 +1413,7 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
         return mCommandBuffers[mCurrentSubpassCommandBufferIndex];
     }
 
-    bool empty() const { return !started(); }
+    bool empty() const { return mCommandBuffers[0].empty(); }
 
     angle::Result attachCommandPool(Context *context, SecondaryCommandPool *commandPool);
     void detachCommandPool(SecondaryCommandPool **commandPoolOut);
@@ -1409,7 +1444,19 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
     void bufferRead(ContextVk *contextVk,
                     VkAccessFlags readAccessType,
                     PipelineStage readStage,
-                    BufferHelper *buffer);
+                    BufferHelper *buffer)
+    {
+        bufferReadImpl(readAccessType, readStage, buffer);
+        buffer->setQueueSerial(mQueueSerial);
+    }
+    void bufferRead(ContextVk *contextVk,
+                    VkAccessFlags readAccessType,
+                    const gl::ShaderBitSet &readShaderStages,
+                    BufferHelper *buffer)
+    {
+        bufferReadImpl(readAccessType, readShaderStages, buffer);
+        buffer->setQueueSerial(mQueueSerial);
+    }
 
     void colorImagesDraw(gl::LevelIndex level,
                          uint32_t layerStart,
@@ -1453,9 +1500,6 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
     angle::Result endRenderPass(ContextVk *contextVk);
 
     angle::Result nextSubpass(ContextVk *contextVk, RenderPassCommandBuffer **commandBufferOut);
-
-    void updateStartedRenderPassWithDepthMode(bool readOnlyDepthMode);
-    void updateStartedRenderPassWithStencilMode(bool readOnlyStencilMode);
 
     void beginTransformFeedback(size_t validBufferCount,
                                 const VkBuffer *counterBuffers,
@@ -1529,6 +1573,11 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
                    VK_ATTACHMENT_LOAD_OP_CLEAR;
     }
 
+    bool hasDepthStencilWriteOrClear() const
+    {
+        return hasDepthWriteOrClear() || hasStencilWriteOrClear();
+    }
+
     const RenderPassDesc &getRenderPassDesc() const { return mRenderPassDesc; }
     const AttachmentOpsArray &getAttachmentOps() const { return mAttachmentOps; }
 
@@ -1542,6 +1591,12 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
         }
     }
     void addCommandDiagnostics(ContextVk *contextVk);
+
+    // Readonly depth stencil mode and feedback loop mode
+    void updateDepthReadOnlyMode(RenderPassUsageFlags dsUsageFlags);
+    void updateStencilReadOnlyMode(RenderPassUsageFlags dsUsageFlags);
+    void updateDepthStencilReadOnlyMode(RenderPassUsageFlags dsUsageFlags,
+                                        VkImageAspectFlags dsAspectFlags);
 
   private:
     uint32_t getSubpassCommandBufferCount() const { return mCurrentSubpassCommandBufferIndex + 1; }
@@ -1557,7 +1612,9 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
         return mPreviousSubpassesCmdCount + getCommandBuffer().getRenderPassWriteCommandCount();
     }
 
-    void updateStartedRenderPassWithDepthStencilMode(bool readOnlyDepthStencilMode,
+    void updateStartedRenderPassWithDepthStencilMode(RenderPassAttachment *resolveAttachment,
+                                                     bool renderPassHasWriteOrClear,
+                                                     RenderPassUsageFlags dsUsageFlags,
                                                      RenderPassUsage readOnlyAttachmentUsage);
 
     // We can't determine the image layout at the renderpass start time since their full usage
@@ -2332,6 +2389,14 @@ class ImageHelper final : public Resource, public angle::Subject
                                                   uint32_t layerCount,
                                                   void *pixels);
 
+    angle::Result readPixelsWithCompute(ContextVk *contextVk,
+                                        ImageHelper *src,
+                                        const PackPixelsParams &packPixelsParams,
+                                        const VkOffset3D &srcOffset,
+                                        const VkExtent3D &srcExtent,
+                                        ptrdiff_t pixelsOffset,
+                                        const VkImageSubresourceLayers &srcSubresource);
+
     angle::Result readPixels(ContextVk *contextVk,
                              const gl::Rectangle &area,
                              const PackPixelsParams &packPixelsParams,
@@ -2668,6 +2733,9 @@ class ImageHelper final : public Resource, public angle::Subject
 
     bool canCopyWithTransformForReadPixels(const PackPixelsParams &packPixelsParams,
                                            const angle::Format *readFormat);
+    bool canCopyWithComputeForReadPixels(const PackPixelsParams &packPixelsParams,
+                                         const angle::Format *readFormat,
+                                         ptrdiff_t pixelsOffset);
 
     // Returns true if source data and actual image format matches except color space differences.
     bool isDataFormatMatchForCopy(angle::FormatID srcDataFormatID) const
@@ -3264,7 +3332,8 @@ class CommandBufferAccess : angle::NonCopyable
     }
     void onBufferComputeShaderWrite(BufferHelper *buffer)
     {
-        onBufferWrite(VK_ACCESS_SHADER_WRITE_BIT, PipelineStage::ComputeShader, buffer);
+        onBufferWrite(VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                      PipelineStage::ComputeShader, buffer);
     }
 
     void onImageTransferRead(VkImageAspectFlags aspectFlags, ImageHelper *image)

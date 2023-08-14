@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,7 @@
 #include "HeapInlines.h"
 #include "MarkedBlock.h"
 #include "VM.h"
+#include <wtf/SystemTracing.h>
 
 #if !USE(SYSTEM_MALLOC)
 #include <bmalloc/BPlatform.h>
@@ -74,11 +75,16 @@ void IncrementalSweeper::doWork(VM& vm)
 
 void IncrementalSweeper::doSweep(VM& vm, MonotonicTime deadline, SweepTrigger trigger)
 {
+    std::optional<TraceScope> traceScope;
+    if (UNLIKELY(Options::useTracePoints()))
+        traceScope.emplace(IncrementalSweepStart, IncrementalSweepEnd, vm.heap.size(), vm.heap.capacity());
+
     while (sweepNextBlock(vm, trigger)) {
         if (MonotonicTime::now() < deadline)
             continue;
 
-        scheduleTimer();
+        if (trigger == SweepTrigger::Timer)
+            scheduleTimer();
         return;
     }
 

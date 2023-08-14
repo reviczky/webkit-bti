@@ -100,6 +100,7 @@ public:
         IsFirstLast isFirstLast { };
         // Misc
         size_t nonSpanningInlineLevelBoxCount { 0 };
+        std::optional<InlineLayoutUnit> hintForNextLineTopToAvoidIntrusiveFloat { }; // This is only used for cases when intrusive floats prevent any content placement at current vertical position.
     };
     LayoutResult layoutInlineContent(const LineInput&, const std::optional<PreviousLine>&);
 
@@ -130,7 +131,7 @@ private:
     enum MayOverConstrainLine : bool { No, Yes };
     bool tryPlacingFloatBox(const Box&, MayOverConstrainLine);
     Result handleInlineContent(InlineContentBreaker&, const InlineItemRange& needsLayoutRange, const LineCandidate&);
-    std::tuple<InlineRect, bool> lineBoxForCandidateInlineContent(const LineCandidate&) const;
+    std::tuple<InlineRect, bool> adjustedLineRectWithCandidateInlineContent(const LineCandidate&) const;
     size_t rebuildLineWithInlineContent(const InlineItemRange& needsLayoutRange, const InlineItem& lastInlineItemToAdd);
     size_t rebuildLineForTrailingSoftHyphen(const InlineItemRange& layoutRange);
     void commitPartialContent(const InlineContentBreaker::ContinuousContent::RunList&, const InlineContentBreaker::Result::PartialTrailingContent&);
@@ -176,6 +177,7 @@ private:
     InlineRect m_lineLogicalRect;
     InlineLayoutUnit m_lineMarginStart { 0.f };
     InlineLayoutUnit m_initialIntrusiveFloatsWidth { 0.f };
+    InlineLayoutUnit m_candidateInlineContentEnclosingHeight { 0.f };
     const InlineItems& m_inlineItems;
     PlacedFloatList m_placedFloats;
     SuspendedFloatList m_suspendedFloats;

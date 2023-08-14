@@ -258,7 +258,7 @@ AXObjectCache::AXObjectCache(Document& document)
     m_loadingProgress = loadingProgress;
 
     if (m_pageID)
-        m_pageActivityState = m_document.page()->activityState();
+        m_pageActivityState = m_document->page()->activityState();
     AXTreeStore::add(m_id, WeakPtr { this });
 }
 
@@ -907,7 +907,7 @@ AXCoreObject* AXObjectCache::rootObject()
         return isolatedTreeRootObject();
 #endif
 
-    return getOrCreate(m_document.view());
+    return getOrCreate(m_document->view());
 }
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
@@ -974,7 +974,7 @@ AXCoreObject* AXObjectCache::isolatedTreeRootObject()
 void AXObjectCache::setIsolatedTreeRoot(AXCoreObject* root)
 {
     ASSERT(isMainThread());
-    if (auto* frame = m_document.frame())
+    if (auto* frame = m_document->frame())
         frame->loader().client().setAXIsolatedTreeRoot(root);
 }
 #endif
@@ -1076,7 +1076,7 @@ void AXObjectCache::remove(Node& node)
     }
 
     if (is<Element>(node)) {
-        m_deferredTextFormControlValue.remove(downcast<Element>(&node));
+        m_deferredTextFormControlValue.remove(downcast<Element>(node));
         m_deferredAttributeChange.removeAllMatching([&node] (const auto& entry) {
             return entry.element == &node;
         });
@@ -1089,8 +1089,8 @@ void AXObjectCache::remove(Node& node)
         m_deferredModalChangedList.remove(downcast<Element>(node));
         m_deferredMenuListChange.remove(downcast<Element>(node));
     }
-    m_deferredNodeAddedOrRemovedList.remove(&node);
-    m_deferredTextChangedList.remove(&node);
+    m_deferredNodeAddedOrRemovedList.remove(node);
+    m_deferredTextChangedList.remove(node);
 }
 
 void AXObjectCache::remove(Widget* view)
@@ -1204,6 +1204,36 @@ void AXObjectCache::updateLoadingProgress(double newProgressValue)
 #endif
 }
 
+void AXObjectCache::handleAllDeferredChildrenChanged()
+{
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    RefPtr<AXIsolatedTree> tree;
+    if (!m_deferredChildrenChangedList.isEmpty())
+        tree = AXIsolatedTree::treeForPageID(m_pageID);
+#endif
+
+    // Because m_deferredChildrenChangedList can be appended to while we iterate, we have to process
+    // this list in two steps (repeatedly until empty) to ensure the isolated tree is updated correctly.
+    // Specifically, it's possible for an entry to be appended during AXIsolatedTree::updateChildren (e.g.
+    // due to an object re-computing is-ignored to a different value).
+    while (!m_deferredChildrenChangedList.isEmpty()) {
+        // Perform AXObjectCache::handleChildrenChanged on all objects first, then update the isolated tree
+        // afterwards. Doing it in two steps prevents thrashing m_subtreeDirty (i.e. AXObjectCache::handleChildrenChanged
+        // setting m_subtreeDirty on some high-in-the-tree object, clearing that during AXIsolatedTree::updateChildren,
+        // then having it set again by the next children-changed entry, repeat).
+        auto deferredChildrenChangedList = std::exchange(m_deferredChildrenChangedList, { });
+        for (auto& child : deferredChildrenChangedList)
+            handleChildrenChanged(*child);
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+        if (!tree)
+            continue;
+        for (auto& child : deferredChildrenChangedList)
+            tree->updateChildren(*child);
+#endif
+    }
+}
+
 void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
 {
     // Handle MenuLists and MenuListPopups as special cases.
@@ -1254,10 +1284,6 @@ void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
         }
     }
 
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    updateIsolatedTree(object, AXChildrenChanged);
-#endif
-
     // The role of list objects is dependent on their children, so we'll need to re-compute it here.
     if (is<AccessibilityList>(object))
         object.updateRole();
@@ -1303,7 +1329,7 @@ void AXObjectCache::deferNodeAddedOrRemoved(Node* node)
     if (!node)
         return;
 
-    m_deferredNodeAddedOrRemovedList.add(node);
+    m_deferredNodeAddedOrRemovedList.add(*node);
 
     if (is<Element>(node)) {
         auto* changedElement = downcast<Element>(node);
@@ -1361,7 +1387,7 @@ void AXObjectCache::notificationPostTimerFired()
     Ref<Document> protectorForCacheOwner(m_document);
     m_notificationPostTimer.stop();
 
-    if (!m_document.hasLivingRenderTree())
+    if (!m_document->hasLivingRenderTree())
         return;
 
     // In tests, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
@@ -1654,13 +1680,33 @@ void AXObjectCache::onValidityChange(Element& element)
     postNotification(get(&element), nullptr, AXInvalidStatusChanged);
 }
 
-void AXObjectCache::onTextCompositionChange(Node& node)
+void AXObjectCache::onTextCompositionChange(Node& node, CompositionState compositionState, bool valueChanged)
 {
+#if HAVE(INLINE_PREDICTIONS)
+    auto* object = getOrCreate(&node);
+    if (!object)
+        return;
+
+    if (auto* observableObject = object->observableObject())
+        object = observableObject;
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    updateIsolatedTree(textCompositionObjectForNode(node), AXTextCompositionChanged);
+    updateIsolatedTree(object, AXTextCompositionChanged);
+#endif // ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+
+    if (compositionState == CompositionState::Started)
+        postNotification(object, &node.document(), AXTextCompositionBegan);
+
+    if (valueChanged)
+        postNotification(object, &node.document(), AXValueChanged);
+
+    if (compositionState == CompositionState::Ended)
+        postNotification(object, &node.document(), AXTextCompositionEnded);
 #else
     UNUSED_PARAM(node);
-#endif
+    UNUSED_PARAM(compositionState);
+    UNUSED_PARAM(valueChanged);
+#endif // HAVE(INLINE_PREDICTIONS)
 }
 
 #ifndef NDEBUG
@@ -2033,7 +2079,7 @@ static AccessibilityObject* firstFocusableChild(AccessibilityObject* obj)
 
 void AXObjectCache::focusCurrentModal()
 {
-    if (!m_document.hasLivingRenderTree())
+    if (!m_document->hasLivingRenderTree())
         return;
 
     Ref<Document> protectedDocument(m_document);
@@ -3530,7 +3576,7 @@ CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point, AX
 
 CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point)
 {
-    auto range = makeSimpleRange(m_document.caretPositionFromPoint(point));
+    auto range = makeSimpleRange(m_document->caretPositionFromPoint(point));
     if (!range)
         return { };
     return startOrEndCharacterOffsetForRange(*range, true);
@@ -3674,18 +3720,32 @@ static void filterWeakHashSetForRemoval(WeakHashSet& weakHashSet, const Document
     });
 }
 
+template<typename WeakListHashSetType>
+static void filterWeakListHashSetForRemoval(WeakListHashSetType& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
+{
+    for (auto& node : list)
+        conditionallyAddNodeToFilterList(&node, document, nodesToRemove);
+}
+
+template<typename WeakHashMapType>
+static void filterWeakHashMapForRemoval(WeakHashMapType& map, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
+{
+    for (auto elementEntry : map)
+        conditionallyAddNodeToFilterList(&elementEntry.key, document, nodesToRemove);
+}
+
 void AXObjectCache::prepareForDocumentDestruction(const Document& document)
 {
     HashSet<Ref<Node>> nodesToRemove;
     filterListForRemoval(m_textMarkerNodes, document, nodesToRemove);
-    filterListForRemoval(m_deferredTextChangedList, document, nodesToRemove);
-    filterListForRemoval(m_deferredNodeAddedOrRemovedList, document, nodesToRemove);
+    filterWeakListHashSetForRemoval(m_deferredTextChangedList, document, nodesToRemove);
+    filterWeakListHashSetForRemoval(m_deferredNodeAddedOrRemovedList, document, nodesToRemove);
     filterWeakHashSetForRemoval(m_deferredRecomputeIsIgnoredList, document, nodesToRemove);
     filterWeakHashSetForRemoval(m_deferredRecomputeTableIsExposedList, document, nodesToRemove);
     filterWeakHashSetForRemoval(m_deferredSelectedChildredChangedList, document, nodesToRemove);
     filterWeakHashSetForRemoval(m_deferredModalChangedList, document, nodesToRemove);
     filterWeakHashSetForRemoval(m_deferredMenuListChange, document, nodesToRemove);
-    filterMapForRemoval(m_deferredTextFormControlValue, document, nodesToRemove);
+    filterWeakHashMapForRemoval(m_deferredTextFormControlValue, document, nodesToRemove);
     m_deferredFocusedNodeChange = std::nullopt;
 
     for (const auto& entry : m_deferredAttributeChange) {
@@ -3742,16 +3802,14 @@ void AXObjectCache::performDeferredCacheUpdate()
     m_deferredRecomputeTableIsExposedList.clear();
 
     AXLOGDeferredCollection("NodeAddedOrRemovedList"_s, m_deferredNodeAddedOrRemovedList);
-    for (auto* nodeChild : m_deferredNodeAddedOrRemovedList) {
-        handleMenuOpened(nodeChild);
-        handleLiveRegionCreated(nodeChild);
+    for (auto& nodeChild : m_deferredNodeAddedOrRemovedList) {
+        handleMenuOpened(&nodeChild);
+        handleLiveRegionCreated(&nodeChild);
     }
     m_deferredNodeAddedOrRemovedList.clear();
 
     AXLOGDeferredCollection("ChildrenChangedList"_s, m_deferredChildrenChangedList);
-    for (auto& child : m_deferredChildrenChangedList)
-        handleChildrenChanged(*child);
-    m_deferredChildrenChangedList.clear();
+    handleAllDeferredChildrenChanged();
 
     AXLOGDeferredCollection("RecomputeTableCellSlotsList"_s, m_deferredRecomputeTableCellSlotsList);
     m_deferredRecomputeTableCellSlotsList.forEach([this] (auto& axTable) {
@@ -3760,8 +3818,8 @@ void AXObjectCache::performDeferredCacheUpdate()
     m_deferredRecomputeTableCellSlotsList.clear();
 
     AXLOGDeferredCollection("TextChangedList"_s, m_deferredTextChangedList);
-    for (auto* node : m_deferredTextChangedList)
-        handleTextChanged(getOrCreate(node));
+    for (auto& node : m_deferredTextChangedList)
+        handleTextChanged(getOrCreate(&node));
     m_deferredTextChangedList.clear();
 
     AXLOGDeferredCollection("RecomputeIsIgnoredList"_s, m_deferredRecomputeIsIgnoredList);
@@ -3778,15 +3836,15 @@ void AXObjectCache::performDeferredCacheUpdate()
     m_deferredSelectedChildredChangedList.clear();
 
     AXLOGDeferredCollection("TextFormControlValue"_s, m_deferredTextFormControlValue);
-    for (auto& deferredFormControlContext : m_deferredTextFormControlValue) {
-        auto& textFormControlElement = downcast<HTMLTextFormControlElement>(*deferredFormControlContext.key);
+    for (auto deferredFormControlContext : m_deferredTextFormControlValue) {
+        auto& textFormControlElement = downcast<HTMLTextFormControlElement>(deferredFormControlContext.key);
         postTextReplacementNotificationForTextControl(textFormControlElement, deferredFormControlContext.value, textFormControlElement.innerTextValue());
     }
     m_deferredTextFormControlValue.clear();
 
     AXLOGDeferredCollection("AttributeChange"_s, m_deferredAttributeChange);
     for (const auto& attributeChange : m_deferredAttributeChange)
-        handleAttributeChange(attributeChange.element, attributeChange.attrName, attributeChange.oldValue, attributeChange.newValue);
+        handleAttributeChange(attributeChange.element.get(), attributeChange.attrName, attributeChange.oldValue, attributeChange.newValue);
     m_deferredAttributeChange.clear();
 
     if (m_deferredFocusedNodeChange) {
@@ -3993,7 +4051,7 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<RefPtr<Accessibili
             tree->updateNodeProperty(*notification.first, AXPropertyName::ColumnHeaders);
             break;
         case AXTextCompositionChanged:
-            tree->updateNodeProperty(*notification.first, AXPropertyName::TextInputMarkedRange);
+            tree->updateNodeProperty(*notification.first, AXPropertyName::TextInputMarkedTextMarkerRange);
             break;
         case AXURLChanged:
             tree->updateNodeProperty(*notification.first, AXPropertyName::URL);
@@ -4106,7 +4164,7 @@ void AXObjectCache::deferTextChangedIfNeeded(Node* node)
         return;
 
     if (rendererNeedsDeferredUpdate(*node->renderer())) {
-        m_deferredTextChangedList.add(node);
+        m_deferredTextChangedList.add(*node);
         return;
     }
     handleTextChanged(getOrCreate(node));
@@ -4131,7 +4189,7 @@ void AXObjectCache::deferTextReplacementNotificationForTextControl(HTMLTextFormC
     auto* renderer = formControlElement.renderer();
     if (!renderer)
         return;
-    m_deferredTextFormControlValue.add(&formControlElement, previousValue);
+    m_deferredTextFormControlValue.add(formControlElement, previousValue);
 }
 
 bool isNodeAriaVisible(Node* node)
@@ -4174,7 +4232,7 @@ bool isNodeAriaVisible(Node* node)
 
 AccessibilityObject* AXObjectCache::rootWebArea()
 {
-    auto* root = getOrCreate(m_document.view());
+    auto* root = getOrCreate(m_document->view());
     if (!root || !root->isScrollView())
         return nullptr;
     return root->webAreaObject();
@@ -4424,7 +4482,7 @@ void AXObjectCache::updateRelationsIfNeeded()
     relationsNeedUpdate(false);
     m_relations.clear();
     m_relationTargets.clear();
-    updateRelationsForTree(m_document.rootNode());
+    updateRelationsForTree(m_document->rootNode());
 }
 
 void AXObjectCache::updateRelationsForTree(ContainerNode& rootNode)
@@ -4448,13 +4506,13 @@ void AXObjectCache::updateRelationsForTree(ContainerNode& rootNode)
 
 void AXObjectCache::addRelations(Element& origin, const QualifiedName& attribute)
 {
-    if (m_document.settings().ariaReflectionForElementReferencesEnabled()) {
-        if (Element::isElementReflectionAttribute(m_document.settings(), attribute)) {
+    if (m_document->settings().ariaReflectionForElementReferencesEnabled()) {
+        if (Element::isElementReflectionAttribute(m_document->settings(), attribute)) {
             if (auto reflectedElement = origin.getElementAttribute(attribute)) {
                 addRelation(&origin, reflectedElement, attributeToRelationType(attribute));
                 return;
             }
-        } else if (Element::isElementsArrayReflectionAttribute(m_document.settings(), attribute)) {
+        } else if (Element::isElementsArrayReflectionAttribute(m_document->settings(), attribute)) {
             if (auto reflectedElements = origin.getElementsArrayAttribute(attribute)) {
                 for (auto reflectedElement : reflectedElements.value())
                     addRelation(&origin, reflectedElement.get(), attributeToRelationType(attribute));
@@ -4577,20 +4635,6 @@ AXTextChange AXObjectCache::textChangeForEditType(AXTextEditType type)
     return AXTextInserted;
 }
 #endif
-
-AccessibilityObject* AXObjectCache::textCompositionObjectForNode(Node& node)
-{
-    WeakPtr object = get(&node);
-    if (object)
-        object = object->observableObject();
-
-#if PLATFORM(MAC)
-    // In our Mac implementations for posting text notifications, we fall back on the web area if the observable object is nullptr.
-    if (!object)
-        object = rootWebArea();
-#endif
-    return object.get();
-}
 
 } // namespace WebCore
 

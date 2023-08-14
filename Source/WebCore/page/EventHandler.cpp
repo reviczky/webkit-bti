@@ -84,6 +84,7 @@
 #include "Pasteboard.h"
 #include "PlatformEvent.h"
 #include "PlatformKeyboardEvent.h"
+#include "PlatformMouseEvent.h"
 #include "PlatformWheelEvent.h"
 #include "PluginDocument.h"
 #include "PointerCaptureController.h"
@@ -2001,7 +2002,7 @@ bool EventHandler::mouseMoved(const PlatformMouseEvent& event)
     page->chrome().mouseDidMoveOverElement(hitTestResult, event.modifiers());
 
 #if ENABLE(IMAGE_ANALYSIS)
-    if (event.syntheticClickType() == NoTap && m_textRecognitionHoverTimer.isActive())
+    if (event.syntheticClickType() == SyntheticClickType::NoTap && m_textRecognitionHoverTimer.isActive())
         m_textRecognitionHoverTimer.restart();
 #endif
 
@@ -2368,7 +2369,7 @@ bool EventHandler::dispatchDragEvent(const AtomString& eventType, Element& dragT
     auto dragEvent = DragEvent::create(eventType, Event::CanBubble::Yes, Event::IsCancelable::Yes, Event::IsComposed::Yes,
         event.timestamp().approximateMonotonicTime(), &m_frame.windowProxy(), 0,
         event.globalPosition(), event.position(), event.movementDelta().x(), event.movementDelta().y(),
-        event.modifiers(), 0, 0, nullptr, event.force(), NoTap, &dataTransfer);
+        event.modifiers(), 0, 0, nullptr, event.force(), SyntheticClickType::NoTap, &dataTransfer);
 
     dragTarget.dispatchEvent(dragEvent);
 
@@ -3449,7 +3450,7 @@ bool EventHandler::sendContextMenuEventForKey()
 #else
     PlatformEvent::Type eventType = PlatformEvent::Type::MousePressed;
 #endif
-    PlatformMouseEvent platformMouseEvent(position, globalPosition, RightButton, eventType, 1, { }, WallTime::now(), ForceAtClick, NoTap);
+    PlatformMouseEvent platformMouseEvent(position, globalPosition, RightButton, eventType, 1, { }, WallTime::now(), ForceAtClick, SyntheticClickType::NoTap);
 
     return sendContextMenuEvent(platformMouseEvent);
 }
@@ -3535,7 +3536,7 @@ void EventHandler::fakeMouseMoveEventTimerFired()
         return;
 
     auto modifiers = PlatformKeyboardEvent::currentStateOfModifierKeys();
-    PlatformMouseEvent fakeMouseMoveEvent(valueOrDefault(m_lastKnownMousePosition), m_lastKnownMouseGlobalPosition, NoButton, PlatformEvent::Type::MouseMoved, 0, modifiers, WallTime::now(), 0, NoTap);
+    PlatformMouseEvent fakeMouseMoveEvent(valueOrDefault(m_lastKnownMousePosition), m_lastKnownMouseGlobalPosition, NoButton, PlatformEvent::Type::MouseMoved, 0, modifiers, WallTime::now(), 0, SyntheticClickType::NoTap);
     mouseMoved(fakeMouseMoveEvent);
 }
 #endif // !ENABLE(IOS_TOUCH_EVENTS)
@@ -3736,6 +3737,9 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     bool matchedAnAccessKey = false;
     if (initialKeyEvent.type() == PlatformEvent::Type::KeyDown)
         matchedAnAccessKey = handleAccessKey(initialKeyEvent);
+
+    if (initialKeyEvent.type() == PlatformEvent::Type::KeyUp)
+        stopKeyboardScrolling();
 
     // FIXME: it would be fair to let an input method handle KeyUp events before DOM dispatch.
     if (initialKeyEvent.type() == PlatformEvent::Type::KeyUp || initialKeyEvent.type() == PlatformEvent::Type::Char)
@@ -3964,6 +3968,9 @@ void EventHandler::defaultKeyboardEventHandler(KeyboardEvent& event)
 {
     Ref protectedFrame { m_frame };
 
+    // 'keyup' is handled preemptively in `EventHandler::internalKeyEvent` so that keyboard scrolls
+    // can be properly terminated even if the event is default-prevented.
+
     if (event.type() == eventNames().keydownEvent) {
         m_frame.editor().handleKeyboardEvent(event);
         if (event.defaultHandled())
@@ -3997,8 +4004,6 @@ void EventHandler::defaultKeyboardEventHandler(KeyboardEvent& event)
         if (event.charCode() == ' ')
             defaultSpaceEventHandler(event);
     }
-    if (event.type() == eventNames().keyupEvent)
-        stopKeyboardScrolling();
 }
 
 #if ENABLE(DRAG_SUPPORT)

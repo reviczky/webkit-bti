@@ -26,6 +26,8 @@
 #include "config.h"
 #include "WebEditorClient.h"
 
+#include "APIInjectedBundleEditorClient.h"
+#include "APIInjectedBundleFormClient.h"
 #include "EditorState.h"
 #include "MessageSenderInlines.h"
 #include "SharedBufferReference.h"
@@ -240,9 +242,9 @@ void WebEditorClient::didUpdateComposition()
     m_page->didUpdateComposition();
 }
 
-void WebEditorClient::discardedComposition(LocalFrame*)
+void WebEditorClient::discardedComposition(const Document& document)
 {
-    m_page->discardedComposition();
+    m_page->discardedComposition(document);
 }
 
 void WebEditorClient::canceledComposition()

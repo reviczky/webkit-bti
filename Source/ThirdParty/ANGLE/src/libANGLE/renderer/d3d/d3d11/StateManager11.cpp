@@ -434,14 +434,6 @@ void ShaderConstants11::setComputeWorkGroups(GLuint numGroupsX,
     mShaderConstantsDirty.set(gl::ShaderType::Compute);
 }
 
-void ShaderConstants11::setMultiviewWriteToViewportIndex(GLfloat index)
-{
-    mVertex.multiviewWriteToViewportIndex = index;
-    mPixel.multiviewWriteToViewportIndex  = index;
-    mShaderConstantsDirty.set(gl::ShaderType::Vertex);
-    mShaderConstantsDirty.set(gl::ShaderType::Fragment);
-}
-
 void ShaderConstants11::onViewportChange(const gl::Rectangle &glViewport,
                                          const D3D11_VIEWPORT &dxViewport,
                                          const gl::Offset &glFragCoordOffset,
@@ -493,8 +485,6 @@ void ShaderConstants11::onViewportChange(const gl::Rectangle &glViewport,
 
     mPixel.viewScale[0] = 1.0f;
     mPixel.viewScale[1] = presentPathFast ? 1.0f : -1.0f;
-    // Updates to the multiviewWriteToViewportIndex member are to be handled whenever the draw
-    // framebuffer's layout is changed.
 
     mVertex.viewScale[0] = mPixel.viewScale[0];
     mVertex.viewScale[1] = mPixel.viewScale[1];
@@ -573,6 +563,18 @@ bool ShaderConstants11::onClipDistancesEnabledChange(const uint32_t value)
         mShaderConstantsDirty.set(gl::ShaderType::Vertex);
     }
     return clipDistancesEnabledDirty;
+}
+
+bool ShaderConstants11::onMultisamplingChange(bool multisampling)
+{
+    const bool multisamplingDirty =
+        ((mPixel.misc & kPixelMiscMultisamplingMask) != 0) != multisampling;
+    if (multisamplingDirty)
+    {
+        mPixel.misc ^= kPixelMiscMultisamplingMask;
+        mShaderConstantsDirty.set(gl::ShaderType::Fragment);
+    }
+    return multisamplingDirty;
 }
 
 angle::Result ShaderConstants11::updateBuffer(const gl::Context *context,
@@ -710,6 +712,9 @@ StateManager11::StateManager11(Renderer11 *renderer)
     mCurRasterState.cullFace            = false;
     mCurRasterState.cullMode            = gl::CullFaceMode::Back;
     mCurRasterState.frontFace           = GL_CCW;
+    mCurRasterState.polygonMode         = gl::PolygonMode::Fill;
+    mCurRasterState.polygonOffsetPoint  = false;
+    mCurRasterState.polygonOffsetLine   = false;
     mCurRasterState.polygonOffsetFill   = false;
     mCurRasterState.polygonOffsetFactor = 0.0f;
     mCurRasterState.polygonOffsetUnits  = 0.0f;
@@ -926,8 +931,8 @@ angle::Result StateManager11::updateStateForCompute(const gl::Context *context,
 }
 
 void StateManager11::syncState(const gl::Context *context,
-                               const gl::State::DirtyBits &dirtyBits,
-                               const gl::State::ExtendedDirtyBits &extendedDirtyBits,
+                               const gl::state::DirtyBits &dirtyBits,
+                               const gl::state::ExtendedDirtyBits &extendedDirtyBits,
                                gl::Command command)
 {
     if (!dirtyBits.any())
@@ -941,7 +946,7 @@ void StateManager11::syncState(const gl::Context *context,
     {
         switch (dirtyBit)
         {
-            case gl::State::DIRTY_BIT_BLEND_EQUATIONS:
+            case gl::state::DIRTY_BIT_BLEND_EQUATIONS:
             {
                 const gl::BlendStateExt &blendStateExt = state.getBlendStateExt();
                 ASSERT(mCurBlendStateExt.getDrawBufferCount() ==
@@ -956,7 +961,7 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_BLEND_FUNCS:
+            case gl::state::DIRTY_BIT_BLEND_FUNCS:
             {
                 const gl::BlendStateExt &blendStateExt = state.getBlendStateExt();
                 ASSERT(mCurBlendStateExt.getDrawBufferCount() ==
@@ -971,7 +976,7 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_BLEND_ENABLED:
+            case gl::state::DIRTY_BIT_BLEND_ENABLED:
             {
                 if (state.getBlendStateExt().getEnabledMask() != mCurBlendStateExt.getEnabledMask())
                 {
@@ -979,19 +984,19 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_SAMPLE_ALPHA_TO_COVERAGE_ENABLED:
+            case gl::state::DIRTY_BIT_SAMPLE_ALPHA_TO_COVERAGE_ENABLED:
                 if (state.isSampleAlphaToCoverageEnabled() != mCurSampleAlphaToCoverage)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_BLEND_STATE);
                 }
                 break;
-            case gl::State::DIRTY_BIT_DITHER_ENABLED:
+            case gl::state::DIRTY_BIT_DITHER_ENABLED:
                 if (state.getRasterizerState().dither != mCurRasterState.dither)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                 }
                 break;
-            case gl::State::DIRTY_BIT_COLOR_MASK:
+            case gl::state::DIRTY_BIT_COLOR_MASK:
             {
                 if (state.getBlendStateExt().getColorMaskBits() !=
                     mCurBlendStateExt.getColorMaskBits())
@@ -1000,7 +1005,7 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_BLEND_COLOR:
+            case gl::state::DIRTY_BIT_BLEND_COLOR:
                 if (state.getBlendColor() != mCurBlendColor)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_BLEND_STATE);
@@ -1008,66 +1013,66 @@ void StateManager11::syncState(const gl::Context *context,
                 break;
             // Depth and stencil redundant state changes are guarded in the
             // frontend so for related cases here just set the dirty bit.
-            case gl::State::DIRTY_BIT_DEPTH_MASK:
+            case gl::state::DIRTY_BIT_DEPTH_MASK:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_DEPTH_TEST_ENABLED:
+            case gl::state::DIRTY_BIT_DEPTH_TEST_ENABLED:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_DEPTH_FUNC:
+            case gl::state::DIRTY_BIT_DEPTH_FUNC:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_TEST_ENABLED:
+            case gl::state::DIRTY_BIT_STENCIL_TEST_ENABLED:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_FUNCS_FRONT:
+            case gl::state::DIRTY_BIT_STENCIL_FUNCS_FRONT:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_FUNCS_BACK:
+            case gl::state::DIRTY_BIT_STENCIL_FUNCS_BACK:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_WRITEMASK_FRONT:
+            case gl::state::DIRTY_BIT_STENCIL_WRITEMASK_FRONT:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_WRITEMASK_BACK:
+            case gl::state::DIRTY_BIT_STENCIL_WRITEMASK_BACK:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_OPS_FRONT:
+            case gl::state::DIRTY_BIT_STENCIL_OPS_FRONT:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
-            case gl::State::DIRTY_BIT_STENCIL_OPS_BACK:
+            case gl::state::DIRTY_BIT_STENCIL_OPS_BACK:
                 mInternalDirtyBits.set(DIRTY_BIT_DEPTH_STENCIL_STATE);
                 break;
 
-            case gl::State::DIRTY_BIT_CULL_FACE_ENABLED:
+            case gl::state::DIRTY_BIT_CULL_FACE_ENABLED:
                 if (state.getRasterizerState().cullFace != mCurRasterState.cullFace)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                     mInternalDirtyBits.set(DIRTY_BIT_PRIMITIVE_TOPOLOGY);
                 }
                 break;
-            case gl::State::DIRTY_BIT_CULL_FACE:
+            case gl::state::DIRTY_BIT_CULL_FACE:
                 if (state.getRasterizerState().cullMode != mCurRasterState.cullMode)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                     mInternalDirtyBits.set(DIRTY_BIT_PRIMITIVE_TOPOLOGY);
                 }
                 break;
-            case gl::State::DIRTY_BIT_FRONT_FACE:
+            case gl::state::DIRTY_BIT_FRONT_FACE:
                 if (state.getRasterizerState().frontFace != mCurRasterState.frontFace)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                     mInternalDirtyBits.set(DIRTY_BIT_PRIMITIVE_TOPOLOGY);
                 }
                 break;
-            case gl::State::DIRTY_BIT_POLYGON_OFFSET_FILL_ENABLED:
+            case gl::state::DIRTY_BIT_POLYGON_OFFSET_FILL_ENABLED:
                 if (state.getRasterizerState().polygonOffsetFill !=
                     mCurRasterState.polygonOffsetFill)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                 }
                 break;
-            case gl::State::DIRTY_BIT_POLYGON_OFFSET:
+            case gl::state::DIRTY_BIT_POLYGON_OFFSET:
             {
                 const gl::RasterizerState &rasterState = state.getRasterizerState();
                 if (rasterState.polygonOffsetFactor != mCurRasterState.polygonOffsetFactor ||
@@ -1078,7 +1083,7 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_RASTERIZER_DISCARD_ENABLED:
+            case gl::state::DIRTY_BIT_RASTERIZER_DISCARD_ENABLED:
                 if (state.getRasterizerState().rasterizerDiscard !=
                     mCurRasterState.rasterizerDiscard)
                 {
@@ -1088,13 +1093,13 @@ void StateManager11::syncState(const gl::Context *context,
                     invalidateShaders();
                 }
                 break;
-            case gl::State::DIRTY_BIT_SCISSOR:
+            case gl::state::DIRTY_BIT_SCISSOR:
                 if (state.getScissor() != mCurScissorRect)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_SCISSOR_STATE);
                 }
                 break;
-            case gl::State::DIRTY_BIT_SCISSOR_TEST_ENABLED:
+            case gl::state::DIRTY_BIT_SCISSOR_TEST_ENABLED:
                 if (state.isScissorTestEnabled() != mCurScissorEnabled)
                 {
                     mInternalDirtyBits.set(DIRTY_BIT_SCISSOR_STATE);
@@ -1102,24 +1107,25 @@ void StateManager11::syncState(const gl::Context *context,
                     mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                 }
                 break;
-            case gl::State::DIRTY_BIT_DEPTH_RANGE:
+            case gl::state::DIRTY_BIT_DEPTH_RANGE:
                 invalidateViewport(context);
                 break;
-            case gl::State::DIRTY_BIT_VIEWPORT:
+            case gl::state::DIRTY_BIT_VIEWPORT:
                 if (state.getViewport() != mCurViewport)
                 {
                     invalidateViewport(context);
                 }
                 break;
-            case gl::State::DIRTY_BIT_DRAW_FRAMEBUFFER_BINDING:
+            case gl::state::DIRTY_BIT_DRAW_FRAMEBUFFER_BINDING:
                 invalidateRenderTarget();
-                if (mIsMultiviewEnabled)
-                {
-                    handleMultiviewDrawFramebufferChange(context);
-                }
                 mFramebuffer11 = GetImplAs<Framebuffer11>(state.getDrawFramebuffer());
+                if (mShaderConstants.onMultisamplingChange(
+                        state.getDrawFramebuffer()->getSamples(context) != 0))
+                {
+                    invalidateDriverUniforms();
+                }
                 break;
-            case gl::State::DIRTY_BIT_VERTEX_ARRAY_BINDING:
+            case gl::state::DIRTY_BIT_VERTEX_ARRAY_BINDING:
                 invalidateVertexBuffer();
                 // Force invalidate the current value attributes, since the VertexArray11 keeps an
                 // internal cache of TranslatedAttributes, and they CurrentValue attributes are
@@ -1129,31 +1135,31 @@ void StateManager11::syncState(const gl::Context *context,
                 invalidateIndexBuffer();
                 mVertexArray11 = GetImplAs<VertexArray11>(state.getVertexArray());
                 break;
-            case gl::State::DIRTY_BIT_UNIFORM_BUFFER_BINDINGS:
+            case gl::state::DIRTY_BIT_UNIFORM_BUFFER_BINDINGS:
                 invalidateProgramUniformBuffers();
                 break;
-            case gl::State::DIRTY_BIT_ATOMIC_COUNTER_BUFFER_BINDING:
+            case gl::state::DIRTY_BIT_ATOMIC_COUNTER_BUFFER_BINDING:
                 invalidateProgramAtomicCounterBuffers();
                 break;
-            case gl::State::DIRTY_BIT_SHADER_STORAGE_BUFFER_BINDING:
+            case gl::state::DIRTY_BIT_SHADER_STORAGE_BUFFER_BINDING:
                 invalidateProgramShaderStorageBuffers();
                 break;
-            case gl::State::DIRTY_BIT_TEXTURE_BINDINGS:
+            case gl::state::DIRTY_BIT_TEXTURE_BINDINGS:
                 invalidateTexturesAndSamplers();
                 break;
-            case gl::State::DIRTY_BIT_SAMPLER_BINDINGS:
+            case gl::state::DIRTY_BIT_SAMPLER_BINDINGS:
                 invalidateTexturesAndSamplers();
                 break;
-            case gl::State::DIRTY_BIT_IMAGE_BINDINGS:
+            case gl::state::DIRTY_BIT_IMAGE_BINDINGS:
                 invalidateImageBindings();
                 break;
-            case gl::State::DIRTY_BIT_TRANSFORM_FEEDBACK_BINDING:
+            case gl::state::DIRTY_BIT_TRANSFORM_FEEDBACK_BINDING:
                 invalidateTransformFeedback();
                 break;
-            case gl::State::DIRTY_BIT_PROGRAM_BINDING:
+            case gl::state::DIRTY_BIT_PROGRAM_BINDING:
                 mProgramD3D = GetImplAs<ProgramD3D>(state.getProgram());
                 break;
-            case gl::State::DIRTY_BIT_PROGRAM_EXECUTABLE:
+            case gl::state::DIRTY_BIT_PROGRAM_EXECUTABLE:
             {
                 invalidateShaders();
                 invalidateTexturesAndSamplers();
@@ -1182,7 +1188,7 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_CURRENT_VALUES:
+            case gl::state::DIRTY_BIT_CURRENT_VALUES:
             {
                 for (auto attribIndex : state.getAndResetDirtyCurrentValues())
                 {
@@ -1190,27 +1196,41 @@ void StateManager11::syncState(const gl::Context *context,
                 }
                 break;
             }
-            case gl::State::DIRTY_BIT_PROVOKING_VERTEX:
+            case gl::state::DIRTY_BIT_PROVOKING_VERTEX:
                 invalidateShaders();
                 break;
-            case gl::State::DIRTY_BIT_EXTENDED:
+            case gl::state::DIRTY_BIT_EXTENDED:
             {
                 for (size_t extendedDirtyBit : extendedDirtyBits)
                 {
                     switch (extendedDirtyBit)
                     {
-                        case gl::State::EXTENDED_DIRTY_BIT_CLIP_CONTROL:
+                        case gl::state::EXTENDED_DIRTY_BIT_CLIP_CONTROL:
                             checkPresentPath(context);
                             break;
-                        case gl::State::EXTENDED_DIRTY_BIT_CLIP_DISTANCES:
+                        case gl::state::EXTENDED_DIRTY_BIT_CLIP_DISTANCES:
                             if (mShaderConstants.onClipDistancesEnabledChange(
                                     state.getEnabledClipDistances().bits()))
                             {
                                 mInternalDirtyBits.set(DIRTY_BIT_DRIVER_UNIFORMS);
                             }
                             break;
-                        case gl::State::EXTENDED_DIRTY_BIT_DEPTH_CLAMP_ENABLED:
+                        case gl::state::EXTENDED_DIRTY_BIT_DEPTH_CLAMP_ENABLED:
                             if (state.getRasterizerState().depthClamp != mCurRasterState.depthClamp)
+                            {
+                                mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
+                            }
+                            break;
+                        case gl::state::EXTENDED_DIRTY_BIT_POLYGON_MODE:
+                            if (state.getRasterizerState().polygonMode !=
+                                mCurRasterState.polygonMode)
+                            {
+                                mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
+                            }
+                            break;
+                        case gl::state::EXTENDED_DIRTY_BIT_POLYGON_OFFSET_LINE_ENABLED:
+                            if (state.getRasterizerState().polygonOffsetLine !=
+                                mCurRasterState.polygonOffsetLine)
                             {
                                 mInternalDirtyBits.set(DIRTY_BIT_RASTERIZER_STATE);
                             }
@@ -1225,21 +1245,6 @@ void StateManager11::syncState(const gl::Context *context,
     }
 
     // TODO(jmadill): Input layout and vertex buffer state.
-}
-
-void StateManager11::handleMultiviewDrawFramebufferChange(const gl::Context *context)
-{
-    const auto &glState                    = context->getState();
-    const gl::Framebuffer *drawFramebuffer = glState.getDrawFramebuffer();
-    ASSERT(drawFramebuffer != nullptr);
-
-    if (drawFramebuffer->isMultiview())
-    {
-        // Because the base view index is applied as an offset to the 2D texture array when the
-        // RTV is created, we just have to pass a boolean to select which code path is to be
-        // used.
-        mShaderConstants.setMultiviewWriteToViewportIndex(0.0f);
-    }
 }
 
 angle::Result StateManager11::syncBlendState(const gl::Context *context,
@@ -1723,6 +1728,8 @@ void StateManager11::setRenderTarget(ID3D11RenderTargetView *rtv, ID3D11DepthSte
     mRenderer->getDeviceContext()->OMSetRenderTargets(1, &rtv, dsv);
     mCurRTVs.clear();
     mCurRTVs.update(0, rtv);
+    mCurrentDSV.clear();
+    mCurrentDSV.update(0, dsv);
     mInternalDirtyBits.set(DIRTY_BIT_RENDER_TARGET);
 }
 
@@ -1746,6 +1753,8 @@ void StateManager11::setRenderTargets(ID3D11RenderTargetView **rtvs,
     {
         mCurRTVs.update(i, rtvs[i]);
     }
+    mCurrentDSV.clear();
+    mCurrentDSV.update(0, dsv);
     mInternalDirtyBits.set(DIRTY_BIT_RENDER_TARGET);
 }
 
@@ -1873,22 +1882,31 @@ void StateManager11::unsetConflictingUAVs(gl::PipelineType pipeline,
     }
 }
 
-void StateManager11::unsetConflictingRTVs(uintptr_t resource)
+template <typename CacheType>
+void StateManager11::unsetConflictingRTVs(uintptr_t resource, CacheType &viewCache)
 {
     ID3D11DeviceContext *deviceContext = mRenderer->getDeviceContext();
-    size_t count                       = std::min(mCurRTVs.size(), mCurRTVs.highestUsed());
+
+    size_t count = std::min(viewCache.size(), viewCache.highestUsed());
     for (size_t resourceIndex = 0; resourceIndex < count; ++resourceIndex)
     {
-        auto &record = mCurRTVs[resourceIndex];
+        auto &record = viewCache[resourceIndex];
 
         if (record.view && record.resource == resource)
         {
             deviceContext->OMSetRenderTargets(0, nullptr, nullptr);
             mCurRTVs.clear();
+            mCurrentDSV.clear();
             mInternalDirtyBits.set(DIRTY_BIT_RENDER_TARGET);
             return;
         }
     }
+}
+
+void StateManager11::unsetConflictingRTVs(uintptr_t resource)
+{
+    unsetConflictingRTVs(resource, mCurRTVs);
+    unsetConflictingRTVs(resource, mCurrentDSV);
 }
 
 void StateManager11::unsetConflictingAttachmentResources(
@@ -1942,6 +1960,7 @@ angle::Result StateManager11::ensureInitialized(const gl::Context *context)
         mCurShaderSamplerStates[shaderType].resize(maxShaderTextureImageUnits);
     }
     mCurRTVs.initialize(caps.maxColorAttachments);
+    mCurrentDSV.initialize(1);
     mCurComputeUAVs.initialize(caps.maxImageUnits);
 
     // Initialize cached NULL SRV block
@@ -2064,6 +2083,8 @@ angle::Result StateManager11::syncFramebuffer(const gl::Context *context)
     {
         mCurRTVs.update(i, framebufferRTVs[i]);
     }
+    mCurrentDSV.clear();
+    mCurrentDSV.update(0, framebufferDSV);
     return angle::Result::Continue;
 }
 

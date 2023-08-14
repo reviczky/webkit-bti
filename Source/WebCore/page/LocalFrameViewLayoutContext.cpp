@@ -52,6 +52,9 @@
 
 namespace WebCore {
 
+UpdateScrollInfoAfterLayoutTransaction::UpdateScrollInfoAfterLayoutTransaction() = default;
+UpdateScrollInfoAfterLayoutTransaction::~UpdateScrollInfoAfterLayoutTransaction() = default;
+
 void LocalFrameViewLayoutContext::layoutUsingFormattingContext()
 {
     if (!frame().settings().layoutFormattingContextEnabled())
@@ -164,6 +167,13 @@ LocalFrameViewLayoutContext::~LocalFrameViewLayoutContext()
 {
 }
 
+UpdateScrollInfoAfterLayoutTransaction& LocalFrameViewLayoutContext::updateScrollInfoAfterLayoutTransaction()
+{
+    if (!m_updateScrollInfoAfterLayoutTransaction)
+        m_updateScrollInfoAfterLayoutTransaction = makeUnique<UpdateScrollInfoAfterLayoutTransaction>();
+    return *m_updateScrollInfoAfterLayoutTransaction;
+}
+
 void LocalFrameViewLayoutContext::layout()
 {
     LOG_WITH_STREAM(Layout, stream << "LocalFrameView " << &view() << " LocalFrameViewLayoutContext::layout() with size " << view().layoutSize());
@@ -192,7 +202,7 @@ void LocalFrameViewLayoutContext::layout()
 void LocalFrameViewLayoutContext::performLayout()
 {
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!frame().document()->inRenderTreeUpdate());
-    RELEASE_ASSERT(LayoutDisallowedScope::isLayoutAllowed());
+    ASSERT(LayoutDisallowedScope::isLayoutAllowed());
     ASSERT(!view().isPainting());
     ASSERT(frame().view() == &view());
     ASSERT(frame().document());
@@ -204,7 +214,7 @@ void LocalFrameViewLayoutContext::performLayout()
     }
 
     LayoutScope layoutScope(*this);
-    TraceScope tracingScope(LayoutStart, LayoutEnd);
+    TraceScope tracingScope(PerformLayoutStart, PerformLayoutEnd);
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
     InspectorInstrumentation::willLayout(downcast<LocalFrame>(view().frame()));
     WeakPtr<RenderElement> layoutRoot;
@@ -214,7 +224,7 @@ void LocalFrameViewLayoutContext::performLayout()
 
 #if !LOG_DISABLED
     if (m_firstLayout && !frame().ownerElement())
-        LOG(Layout, "LocalFrameView %p elapsed time before first layout: %.3fs", this, document()->timeSinceDocumentCreation().value());
+        LOG_WITH_STREAM(Layout, stream << "LocalFrameView " << &view() << " elapsed time before first layout: " << document()->timeSinceDocumentCreation());
 #endif
 #if PLATFORM(IOS_FAMILY)
     if (view().updateFixedPositionLayoutRect() && subtreeLayoutRoot())
@@ -240,13 +250,16 @@ void LocalFrameViewLayoutContext::performLayout()
 
         layoutRoot = subtreeLayoutRoot() ? subtreeLayoutRoot() : renderView();
         m_needsFullRepaint = is<RenderView>(layoutRoot) && (m_firstLayout || renderView()->printing());
+
+        LOG_WITH_STREAM(Layout, stream << "LocalFrameView " << &view() << " layout " << m_layoutCount << " - subtree root " << subtreeLayoutRoot() << ", needsFullRepaint " << m_needsFullRepaint);
+
         view().willDoLayout(layoutRoot);
         m_firstLayout = false;
     }
     {
+        TraceScope tracingScope(RenderTreeLayoutStart, RenderTreeLayoutEnd);
         SetForScope layoutPhase(m_layoutPhase, LayoutPhase::InRenderTreeLayout);
         ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-        LayoutDisallowedScope layoutDisallowedScope(LayoutDisallowedScope::Reason::ReentrancyAvoidance);
         SubtreeLayoutStateMaintainer subtreeLayoutStateMaintainer(subtreeLayoutRoot());
         RenderView::RepaintRegionAccumulator repaintRegionAccumulator(renderView());
 #ifndef NDEBUG
@@ -259,6 +272,14 @@ void LocalFrameViewLayoutContext::performLayout()
         applyTextSizingIfNeeded(*layoutRoot.get());
 #endif
         clearSubtreeLayoutRoot();
+
+#if !LOG_DISABLED
+        auto layoutLogEnabled = [] {
+            return LogLayout.state == WTFLogChannelState::On;
+        };
+        if (layoutLogEnabled())
+            showRenderTree(renderView());
+#endif
     }
     {
         SetForScope layoutPhase(m_layoutPhase, LayoutPhase::InViewSizeAdjust);

@@ -93,7 +93,9 @@ std::optional<VideoCodecType> LibWebRTCCodecs::videoCodecTypeFromWebCodec(const 
     if (codec.startsWith("avc1."_s))
         return VideoCodecType::H264;
 
-    // FIXME: Expose H265 if available.
+    if (codec.startsWith("hev1."_s) || codec.startsWith("hvc1."_s))
+        return VideoCodecType::H265;
+
     return { };
 }
 
@@ -602,7 +604,7 @@ template<typename Frame> int32_t LibWebRTCCodecs::encodeFrameInternal(Encoder& e
         return WEBRTC_VIDEO_CODEC_ERROR;
 
     SharedVideoFrame sharedVideoFrame { mediaTime, false, rotation, WTFMove(*buffer) };
-    encoder.connection->send(Messages::LibWebRTCCodecsProxy::EncodeFrame { encoder.identifier, sharedVideoFrame, timestamp, duration, shouldEncodeAsKeyFrame }, 0);
+    encoder.connection->send(Messages::LibWebRTCCodecsProxy::EncodeFrame { encoder.identifier, WTFMove(sharedVideoFrame), timestamp, duration, shouldEncodeAsKeyFrame }, 0);
     return WEBRTC_VIDEO_CODEC_OK;
 }
 

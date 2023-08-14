@@ -31,7 +31,9 @@
 #include "WebFrame.h"
 #include "WebPage.h"
 #include "WebProcess.h"
+#include <WebCore/Cookie.h>
 #include <WebCore/CookieRequestHeaderFieldProxy.h>
+#include <WebCore/CookieStoreGetOptions.h>
 #include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/Document.h>
 #include <WebCore/FrameDestructionObserverInlines.h>
@@ -41,6 +43,9 @@
 #include <WebCore/Page.h>
 #include <WebCore/Settings.h>
 #include <WebCore/StorageSessionProvider.h>
+#include <optional>
+#include <wtf/HashSet.h>
+#include <wtf/Vector.h>
 
 namespace WebKit {
 
@@ -173,14 +178,26 @@ void WebCookieJar::setCookies(WebCore::Document& document, const URL& url, const
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::SetCookiesFromDOM(document.firstPartyForCookies(), sameSiteInfo, url, frameID, pageID, applyTrackingPreventionInNetworkProcess, cookieString, shouldRelaxThirdPartyCookieBlocking(webFrame)), 0);
 }
 
-void WebCookieJar::cookiesAdded(const String& host, const Vector<WebCore::Cookie>& cookies)
+void WebCookieJar::cookiesAdded(const String& host, Vector<WebCore::Cookie>&& cookies)
 {
-    m_cache.cookiesAdded(host, cookies);
+    auto it = m_changeListeners.find(host);
+    if (it == m_changeListeners.end())
+        return;
+
+    it->value.forEach([&](auto& listener) {
+        listener.cookiesAdded(host, cookies);
+    });
 }
 
-void WebCookieJar::cookiesDeleted(const String& host, const Vector<WebCore::Cookie>& cookies)
+void WebCookieJar::cookiesDeleted(const String& host, Vector<WebCore::Cookie>&& cookies)
 {
-    m_cache.cookiesDeleted(host, cookies);
+    auto it = m_changeListeners.find(host);
+    if (it == m_changeListeners.end())
+        return;
+
+    it->value.forEach([&](auto& listener) {
+        listener.cookiesDeleted(host, cookies);
+    });
 }
 
 void WebCookieJar::allCookiesDeleted()
@@ -258,5 +275,78 @@ void WebCookieJar::deleteCookie(const WebCore::Document& document, const URL& ur
 {
     WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::DeleteCookie(url, cookieName), WTFMove(completionHandler));
 }
+
+void WebCookieJar::getCookiesAsync(WebCore::Document& document, const URL& url, const WebCore::CookieStoreGetOptions& options, CompletionHandler<void(std::optional<Vector<WebCore::Cookie>>&&)>&& completionHandler) const
+{
+    auto* webFrame = document.frame() ? WebFrame::fromCoreFrame(*document.frame()) : nullptr;
+    if (!webFrame || !webFrame->page()) {
+        completionHandler({ });
+        return;
+    }
+
+    ApplyTrackingPrevention applyTrackingPreventionInNetworkProcess = ApplyTrackingPrevention::No;
+#if ENABLE(TRACKING_PREVENTION)
+    if (shouldBlockCookies(webFrame, document.firstPartyForCookies(), url, applyTrackingPreventionInNetworkProcess)) {
+        completionHandler({ });
+        return;
+    }
+#endif
+
+    auto sameSiteInfo = CookieJar::sameSiteInfo(document, IsForDOMCookieAccess::Yes);
+    auto includeSecureCookies = CookieJar::shouldIncludeSecureCookies(document, url);
+    auto frameID = webFrame->frameID();
+    auto pageID = webFrame->page()->identifier();
+
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::CookiesForDOMAsync(document.firstPartyForCookies(), sameSiteInfo, url, frameID, pageID, includeSecureCookies, applyTrackingPreventionInNetworkProcess, shouldRelaxThirdPartyCookieBlocking(webFrame), options), WTFMove(completionHandler));
+}
+
+void WebCookieJar::setCookieAsync(WebCore::Document& document, const URL& url, const WebCore::Cookie& cookie, CompletionHandler<void(bool)>&& completionHandler) const
+{
+    auto* webFrame = document.frame() ? WebFrame::fromCoreFrame(*document.frame()) : nullptr;
+    if (!webFrame || !webFrame->page()) {
+        completionHandler(false);
+        return;
+    }
+
+    ApplyTrackingPrevention applyTrackingPreventionInNetworkProcess = ApplyTrackingPrevention::No;
+#if ENABLE(TRACKING_PREVENTION)
+    if (shouldBlockCookies(webFrame, document.firstPartyForCookies(), url, applyTrackingPreventionInNetworkProcess)) {
+        completionHandler(false);
+        return;
+    }
+#endif
+
+    auto sameSiteInfo = CookieJar::sameSiteInfo(document, IsForDOMCookieAccess::Yes);
+    auto frameID = webFrame->frameID();
+    auto pageID = webFrame->page()->identifier();
+
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::SetCookieFromDOMAsync(document.firstPartyForCookies(), sameSiteInfo, url, frameID, pageID, applyTrackingPreventionInNetworkProcess, shouldRelaxThirdPartyCookieBlocking(webFrame), cookie), WTFMove(completionHandler));
+}
+
+#if HAVE(COOKIE_CHANGE_LISTENER_API)
+void WebCookieJar::addChangeListener(const String& host, const WebCore::CookieChangeListener& listener)
+{
+    auto& listenersForHost = m_changeListeners.add(host, WeakHashSet<CookieChangeListener> { }).iterator->value;
+    auto addResult = listenersForHost.add(listener);
+    if (listenersForHost.computeSize() > 1 || !addResult.isNewEntry)
+        return;
+
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::SubscribeToCookieChangeNotifications(host), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+}
+
+void WebCookieJar::removeChangeListener(const String& host, const WebCore::CookieChangeListener& listener)
+{
+    auto it = m_changeListeners.find(host);
+    if (it == m_changeListeners.end())
+        return;
+
+    it->value.remove(listener);
+    if (!it->value.isEmptyIgnoringNullReferences())
+        return;
+
+    m_changeListeners.remove(it);
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::UnsubscribeFromCookieChangeNotifications(host), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+}
+#endif
 
 } // namespace WebKit

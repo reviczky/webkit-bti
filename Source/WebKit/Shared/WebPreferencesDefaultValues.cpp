@@ -33,7 +33,7 @@
 #include <wtf/NumberOfCores.h>
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #if PLATFORM(IOS_FAMILY)
-#include "UserInterfaceIdiom.h"
+#import <pal/system/ios/UserInterfaceIdiom.h>
 #endif
 #endif
 
@@ -70,12 +70,12 @@ bool defaultShouldPrintBackgrounds()
 
 bool defaultAlternateFormControlDesignEnabled()
 {
-    return currentUserInterfaceIdiomIsReality();
+    return PAL::currentUserInterfaceIdiomIsVision();
 }
 
 bool defaultVideoFullscreenRequiresElementFullscreen()
 {
-    return currentUserInterfaceIdiomIsReality();
+    return PAL::currentUserInterfaceIdiomIsVision();
 }
 
 #endif
@@ -292,7 +292,7 @@ bool defaultPopoverAttributeEnabled()
     static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::PopoverAttributeEnabled);
     return newSDK;
 #else
-    return false;
+    return true;
 #endif
 }
 
@@ -312,6 +312,16 @@ bool defaultUseGPUProcessForDOMRenderingEnabled()
 #endif
 
     return false;
+}
+
+bool defaultSearchInputIncrementalAttributeAndSearchEventEnabled()
+{
+#if PLATFORM(COCOA)
+    static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::NoSearchInputIncrementalAttributeAndSearchEvent);
+    return !newSDK;
+#else
+    return false;
+#endif
 }
 
 } // namespace WebKit

@@ -491,6 +491,11 @@ bool RenderStyle::inheritedEqual(const RenderStyle& other) const
         && m_rareInheritedData == other.m_rareInheritedData;
 }
 
+bool RenderStyle::inheritedCustomPropertiesEqual(const RenderStyle& other) const
+{
+    return m_rareInheritedData->customProperties == other.m_rareInheritedData->customProperties;
+}
+
 bool RenderStyle::fastPathInheritedEqual(const RenderStyle& other) const
 {
     if (m_inheritedFlags.visibility != other.m_inheritedFlags.visibility)
@@ -907,6 +912,7 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.lineSnap != second.lineSnap
         || first.lineAlign != second.lineAlign
         || first.hangingPunctuation != second.hangingPunctuation
+        || first.effectiveSkippedContent != second.effectiveSkippedContent
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
         || first.useTouchOverflowScrolling != second.useTouchOverflowScrolling
 #endif
@@ -2395,24 +2401,6 @@ Color RenderStyle::colorResolvingCurrentColor(CSSPropertyID colorProperty, bool 
             return colorResolvingCurrentColor(CSSPropertyWebkitTextFillColor, visitedLink);
         }
 
-        auto borderStyle = [&] {
-            switch (colorProperty) {
-            case CSSPropertyBorderLeftColor:
-                return borderLeftStyle();
-            case CSSPropertyBorderRightColor:
-                return borderRightStyle();
-            case CSSPropertyBorderTopColor:
-                return borderTopStyle();
-            case CSSPropertyBorderBottomColor:
-                return borderBottomStyle();
-            default:
-                return BorderStyle::None;
-            }
-        }();
-
-        if (!visitedLink && (borderStyle == BorderStyle::Inset || borderStyle == BorderStyle::Outset || borderStyle == BorderStyle::Ridge || borderStyle == BorderStyle::Groove))
-            return { SRGBA<uint8_t> { 238, 238, 238 } };
-
         return visitedLink ? visitedLinkColor() : color();
     }
 
@@ -2424,17 +2412,20 @@ Color RenderStyle::colorResolvingCurrentColor(const StyleColor& color) const
     return color.resolveColor(this->color());
 }
 
-Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty) const
+Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty, OptionSet<PaintBehavior> paintBehavior) const
 {
     Color unvisitedColor = colorResolvingCurrentColor(colorProperty, false);
     if (insideLink() != InsideLink::InsideVisited)
+        return unvisitedColor;
+
+    if (paintBehavior.contains(PaintBehavior::DontShowVisitedLinks))
         return unvisitedColor;
 
 #if ENABLE(CSS_COMPOSITING)
     if (isInSubtreeWithBlendMode())
         return unvisitedColor;
 #endif
-    
+
     Color visitedColor = colorResolvingCurrentColor(colorProperty, true);
 
     // FIXME: Technically someone could explicitly specify the color transparent, but for now we'll just
@@ -2449,12 +2440,12 @@ Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty) const
     return visitedColor.colorWithAlpha(unvisitedColor.alphaAsFloat());
 }
 
-Color RenderStyle::visitedDependentColorWithColorFilter(CSSPropertyID colorProperty) const
+Color RenderStyle::visitedDependentColorWithColorFilter(CSSPropertyID colorProperty, OptionSet<PaintBehavior> paintBehavior) const
 {
     if (!hasAppleColorFilter())
-        return visitedDependentColor(colorProperty);
+        return visitedDependentColor(colorProperty, paintBehavior);
 
-    return colorByApplyingColorFilter(visitedDependentColor(colorProperty));
+    return colorByApplyingColorFilter(visitedDependentColor(colorProperty, paintBehavior));
 }
 
 Color RenderStyle::colorByApplyingColorFilter(const Color& color) const

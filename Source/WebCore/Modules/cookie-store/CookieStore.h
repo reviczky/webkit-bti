@@ -25,8 +25,8 @@
 
 #pragma once
 
+#include "ActiveDOMObject.h"
 #include "EventTarget.h"
-#include <optional>
 #include <wtf/Forward.h>
 #include <wtf/IsoMalloc.h>
 
@@ -35,31 +35,35 @@ namespace WebCore {
 struct CookieInit;
 struct CookieStoreDeleteOptions;
 struct CookieStoreGetOptions;
+class Document;
 class DeferredPromise;
 
-class CookieStore final : public RefCounted<CookieStore>, public EventTarget {
+class CookieStore final : public RefCounted<CookieStore>, public EventTarget, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(CookieStore);
 public:
-    static Ref<CookieStore> create();
+    static Ref<CookieStore> create(Document*);
     ~CookieStore();
 
-    void get(const String& name, Ref<DeferredPromise>&&);
+    void get(String&& name, Ref<DeferredPromise>&&);
     void get(CookieStoreGetOptions&&, Ref<DeferredPromise>&&);
 
-    void getAll(const String& name, Ref<DeferredPromise>&&);
+    void getAll(String&& name, Ref<DeferredPromise>&&);
     void getAll(CookieStoreGetOptions&&, Ref<DeferredPromise>&&);
 
-    void set(const String& name, const String& value, Ref<DeferredPromise>&&);
+    void set(String&& name, String&& value, Ref<DeferredPromise>&&);
     void set(CookieInit&&, Ref<DeferredPromise>&&);
 
-    void remove(const String& name, Ref<DeferredPromise>&&);
+    void remove(String&& name, Ref<DeferredPromise>&&);
     void remove(CookieStoreDeleteOptions&&, Ref<DeferredPromise>&&);
 
     using RefCounted::ref;
     using RefCounted::deref;
 
 private:
-    CookieStore();
+    explicit CookieStore(Document*);
+
+    // ActiveDOMObject
+    const char* activeDOMObjectName() const final;
 
     // EventTarget
     EventTargetInterface eventTargetInterface() const final;

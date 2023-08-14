@@ -593,14 +593,18 @@ bool RenderLayerCompositor::updateCompositingPolicy()
         m_compositingPolicy = page().compositingPolicyOverride().value();
         return m_compositingPolicy != currentPolicy;
     }
-    
+
+    const auto isCurrentlyUnderMemoryPressureOrWarning = [] {
+        return MemoryPressureHandler::singleton().isUnderMemoryPressure() || MemoryPressureHandler::singleton().isUnderMemoryWarning();
+    };
+
     static auto cachedMemoryPolicy = WTF::MemoryUsagePolicy::Unrestricted;
-    static MonotonicTime cachedMemoryPolicyTime;
-    static constexpr auto memoryPolicyCachingDuration = 2_s;
-    auto now = MonotonicTime::now();
-    if (now - cachedMemoryPolicyTime > memoryPolicyCachingDuration) {
+    bool nowUnderMemoryPressure = isCurrentlyUnderMemoryPressureOrWarning();
+    static bool cachedIsUnderMemoryPressureOrWarning = nowUnderMemoryPressure;
+
+    if (cachedIsUnderMemoryPressureOrWarning != nowUnderMemoryPressure) {
         cachedMemoryPolicy = MemoryPressureHandler::singleton().currentMemoryUsagePolicy();
-        cachedMemoryPolicyTime = now;
+        cachedIsUnderMemoryPressureOrWarning = nowUnderMemoryPressure;
     }
 
     m_compositingPolicy = cachedMemoryPolicy == WTF::MemoryUsagePolicy::Unrestricted ? CompositingPolicy::Normal : CompositingPolicy::Conservative;
@@ -1444,7 +1448,7 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
             if (auto* reflectionBacking = reflection->backing()) {
                 reflectionBacking->updateCompositedBounds();
                 reflectionBacking->updateGeometry(&layer);
-                reflectionBacking->updateAfterDescendants(layerNeedsUpdate);
+                reflectionBacking->updateAfterDescendants();
             }
         }
 
@@ -1537,7 +1541,7 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
         if (layer.hasCompositedScrollableOverflow())
             traversalState.overflowScrollLayers->append(&layer);
 
-        layerBacking->updateAfterDescendants(layerNeedsUpdate);
+        layerBacking->updateAfterDescendants();
     }
     
     layer.clearUpdateBackingOrHierarchyTraversalState();
@@ -2014,7 +2018,6 @@ bool RenderLayerCompositor::updateBacking(RenderLayer& layer, RequiresCompositin
     return layerChanged;
 }
 
-// Only used for reflection layers.
 bool RenderLayerCompositor::updateLayerCompositingState(RenderLayer& layer, const RenderLayer* compositingAncestor, RequiresCompositingData& queryData, BackingSharingState& backingSharingState)
 {
     bool layerChanged = updateBacking(layer, queryData, &backingSharingState);
@@ -3247,8 +3250,18 @@ bool RenderLayerCompositor::requiresCompositingForTransform(RenderLayerModelObje
     // but the renderer may be an inline that doesn't suppport them.
     if (!renderer.isTransformed())
         return false;
+
+    auto compositingPolicy = m_compositingPolicy;
+#if !USE(COMPOSITING_FOR_SMALL_CANVASES)
+    if (is<HTMLCanvasElement>(renderer.element())) {
+        auto* canvas = downcast<HTMLCanvasElement>(renderer.element());
+        auto canvasArea = canvas->size().area<RecordOverflow>();
+        if (!canvasArea.hasOverflowed() && canvasArea < canvasAreaThresholdRequiringCompositing)
+            compositingPolicy = CompositingPolicy::Conservative;
+    }
+#endif
     
-    switch (m_compositingPolicy) {
+    switch (compositingPolicy) {
     case CompositingPolicy::Normal:
         return styleHas3DTransformOperation(renderer.style());
     case CompositingPolicy::Conservative:
@@ -4060,7 +4073,6 @@ GraphicsLayer* RenderLayerCompositor::updateLayerForHeader(bool wantsLayer)
         m_layerForHeader = GraphicsLayer::create(graphicsLayerFactory(), *this);
         m_layerForHeader->setName(MAKE_STATIC_STRING_IMPL("header"));
         m_scrolledContentsLayer->addChildAbove(*m_layerForHeader, m_rootContentsLayer.get());
-        m_renderView.frameView().addPaintPendingMilestones(DidFirstFlushForHeaderLayer);
     }
 
     m_layerForHeader->setPosition(FloatPoint(0,

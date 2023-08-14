@@ -32,11 +32,7 @@
 #include "DownloadID.h"
 #include "DownloadManager.h"
 #include "NetworkContentRuleListManager.h"
-#include "NetworkProcessConnectionParameters.h"
-#include "NetworkResourceLoadIdentifier.h"
 #include "QuotaIncreaseRequestIdentifier.h"
-#include "RTCDataChannelRemoteManagerProxy.h"
-#include "SandboxExtension.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebResourceLoadStatisticsStore.h"
 #include "WebsiteData.h"
@@ -64,7 +60,7 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/WeakPtr.h>
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
 #include "WebSQLiteDatabaseTracker.h"
 #endif
 
@@ -110,6 +106,8 @@ class NetworkProximityManager;
 class NetworkResourceLoader;
 class NetworkStorageManager;
 class ProcessAssertion;
+class RTCDataChannelRemoteManagerProxy;
+class SandboxExtensionHandle;
 class WebPageNetworkParameters;
 enum class CallDownloadDidStart : bool;
 enum class LoadedWebArchive : bool;
@@ -119,6 +117,7 @@ enum class StorageAccessStatus : uint8_t;
 enum class WebsiteDataFetchOption : uint8_t;
 enum class WebsiteDataType : uint32_t;
 struct BackgroundFetchState;
+struct NetworkProcessConnectionParameters;
 struct NetworkProcessCreationParameters;
 struct WebPushMessage;
 struct WebsiteDataStoreParameters;
@@ -377,6 +376,8 @@ public:
 #if PLATFORM(COCOA)
     void appPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void(const AppPrivacyReportTestingData&)>&&);
     void clearAppPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void()>&&);
+
+    bool isParentProcessFullWebBrowserOrRunningTest() const { return m_isParentProcessFullWebBrowserOrRunningTest; }
 #endif
 
 #if ENABLE(WEB_RTC)
@@ -388,6 +389,7 @@ public:
 #endif
 
     bool ftpEnabled() const { return m_ftpEnabled; }
+    bool builtInNotificationsEnabled() const { return m_builtInNotificationsEnabled; }
 
 #if ENABLE(SERVICE_WORKER)
     void getPendingPushMessages(PAL::SessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&&);
@@ -455,7 +457,7 @@ private:
     // Message Handlers
     bool didReceiveSyncNetworkProcessMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
     void initializeNetworkProcess(NetworkProcessCreationParameters&&, CompletionHandler<void()>&&);
-    void createNetworkConnectionToWebProcess(WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters,  CompletionHandler<void(std::optional<IPC::Connection::Handle>&&, WebCore::HTTPCookieAcceptPolicy)>&&);
+    void createNetworkConnectionToWebProcess(WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters&&,  CompletionHandler<void(std::optional<IPC::Connection::Handle>&&, WebCore::HTTPCookieAcceptPolicy)>&&);
 
     void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, CompletionHandler<void(WebsiteData&&)>&&);
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
@@ -464,12 +466,11 @@ private:
     void clearDiskCache(WallTime modifiedSince, CompletionHandler<void()>&&);
 
     void downloadRequest(PAL::SessionID, DownloadID, const WebCore::ResourceRequest&, std::optional<NavigatingToAppBoundDomain>, const String& suggestedFilename);
-    void resumeDownload(PAL::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, SandboxExtension::Handle&&, CallDownloadDidStart);
+    void resumeDownload(PAL::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, SandboxExtensionHandle&&, CallDownloadDidStart);
     void cancelDownload(DownloadID, CompletionHandler<void(const IPC::DataReference&)>&&);
 #if PLATFORM(COCOA)
-    void publishDownloadProgress(DownloadID, const URL&, SandboxExtension::Handle&&);
+    void publishDownloadProgress(DownloadID, const URL&, SandboxExtensionHandle&&);
 #endif
-    void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
     void dataTaskWithRequest(WebPageProxyIdentifier, PAL::SessionID, WebCore::ResourceRequest&&, IPC::FormDataReference&&, CompletionHandler<void(DataTaskIdentifier)>&&);
     void cancelDataTask(DataTaskIdentifier, PAL::SessionID);
     void applicationDidEnterBackground();
@@ -489,7 +490,7 @@ private:
 
 #if HAVE(NW_PROXY_CONFIG)
     void clearProxyConfigData(PAL::SessionID);
-    void setProxyConfigData(PAL::SessionID, Vector<std::pair<Vector<uint8_t>, UUID>>&& proxyConfigurations);
+    void setProxyConfigData(PAL::SessionID, Vector<std::pair<Vector<uint8_t>, WTF::UUID>>&& proxyConfigurations);
 #endif
     
 #if USE(SOUP)
@@ -516,7 +517,7 @@ private:
     void registerURLSchemeAsNoAccess(const String&) const;
     void registerURLSchemeAsCORSEnabled(const String&) const;
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     void setIsHoldingLockedFiles(bool);
 #endif
     void stopRunLoopIfNecessary();
@@ -552,7 +553,7 @@ private:
     NetworkContentRuleListManager m_networkContentRuleListManager;
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
     RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif
@@ -573,10 +574,12 @@ private:
 
     bool m_privateClickMeasurementEnabled { true };
     bool m_ftpEnabled { false };
+    bool m_builtInNotificationsEnabled { false };
     bool m_isSuspended { false };
     bool m_didSyncCookiesForClose { false };
 #if PLATFORM(COCOA)
     int m_mediaStreamingActivitityToken { NOTIFY_TOKEN_INVALID };
+    bool m_isParentProcessFullWebBrowserOrRunningTest { false };
 #endif
 };
 

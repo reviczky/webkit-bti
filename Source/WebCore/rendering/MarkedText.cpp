@@ -91,7 +91,7 @@ Vector<MarkedText> MarkedText::subdivide(const Vector<MarkedText>& markedTexts, 
                 // The appended marked texts may not be in paint order. We will fix this up at the end of this function.
                 for (unsigned j = 0; j < i; ++j) {
                     if (!processedMarkedTexts.contains(offsets[j].markedText))
-                        result.append({ offsetSoFar, offsets[i].value, offsets[j].markedText->type, offsets[j].markedText->marker, offsets[j].markedText->highlightName });
+                        result.append({ offsetSoFar, offsets[i].value, offsets[j].markedText->type, offsets[j].markedText->marker, offsets[j].markedText->highlightName, offsets[j].markedText->priority });
                 }
             }
             offsetSoFar = offsets[i].value;
@@ -113,19 +113,48 @@ Vector<MarkedText> MarkedText::collectForHighlights(const RenderText& renderer, 
         auto& parentRenderer = *renderer.parent();
         auto& parentStyle = parentRenderer.style();
         if (auto highlightRegister = renderer.document().highlightRegisterIfExists()) {
-            for (auto& highlight : highlightRegister->map()) {
-                auto renderStyle = parentRenderer.getUncachedPseudoStyle({ PseudoId::Highlight, highlight.key }, &parentStyle);
+            for (auto& highlightName : highlightRegister->highlightNames()) {
+                auto renderStyle = parentRenderer.getUncachedPseudoStyle({ PseudoId::Highlight, highlightName }, &parentStyle);
                 if (!renderStyle)
                     continue;
                 if (renderStyle->textDecorationsInEffect().isEmpty() && phase == PaintPhase::Decoration)
                     continue;
-                for (auto& rangeData : highlight.value->rangesData()) {
+                for (auto& rangeData : highlightRegister->map().get(highlightName)->rangesData()) {
                     if (!highlightData.setRenderRange(rangeData))
+                        continue;
+                    if (auto* staticRange = dynamicDowncast<StaticRange>(rangeData->range()); staticRange
+                        && (!staticRange->computeValidity() || staticRange->collapsed()))
+                        continue;
+                    // FIXME: Potentially move this check elsewhere, to where we collect this range information.
+                    auto hasRenderer = [&] {
+                        IntersectingNodeRange nodes(makeSimpleRange(rangeData->range()));
+                        for (auto& iterator : nodes) {
+                            if (iterator.renderer())
+                                return true;
+                        }
+                        return false;
+                    }();
+                    if (!hasRenderer)
                         continue;
 
                     auto [highlightStart, highlightEnd] = highlightData.rangeForTextBox(renderer, selectableRange);
-                    if (highlightStart < highlightEnd)
-                        markedTexts.append({ highlightStart, highlightEnd, MarkedText::Type::Highlight, nullptr, highlight.key });
+
+                    if (highlightStart < highlightEnd) {
+                        int currentPriority = highlightRegister->map().get(highlightName)->priority();
+                        // If we can just append it to the end, do that instead.
+                        if (markedTexts.isEmpty() || markedTexts.last().priority <= currentPriority)
+                            markedTexts.append({ highlightStart, highlightEnd, MarkedText::Type::Highlight, nullptr, highlightName, currentPriority });
+                        else {
+                            // Gets the first place such that it > currentPriority.
+                            auto it = std::upper_bound(markedTexts.begin(), markedTexts.end(), currentPriority, [](const auto targetMarkedTextPriority, const auto& markedText) {
+                                return targetMarkedTextPriority > markedText.priority;
+                            });
+
+                            unsigned insertIndex = (it == markedTexts.end() ? 0 : std::distance(markedTexts.begin(), it) - 1);
+
+                            markedTexts.insert(insertIndex, { highlightStart, highlightEnd, MarkedText::Type::Highlight, nullptr, highlightName, currentPriority });
+                        }
+                    }
                 }
             }
         }

@@ -981,6 +981,7 @@ void HTMLInputElement::reset()
         updateValidity();
     }
 
+    setInteractedWithSinceLastFormSubmitEvent(false);
     setAutoFilled(false);
     setAutoFilledAndViewable(false);
     setAutoFilledAndObscured(false);
@@ -1270,7 +1271,8 @@ void HTMLInputElement::defaultEventHandler(Event& event)
     if (m_inputType->shouldSubmitImplicitly(event)) {
         if (isSearchField()) {
             addSearchResult();
-            onSearch();
+            if (document().settings().searchInputIncrementalAttributeAndSearchEventEnabled())
+                onSearch();
         }
         // Form submission finishes editing, just as loss of focus does.
         // If there was a change, send the event now.

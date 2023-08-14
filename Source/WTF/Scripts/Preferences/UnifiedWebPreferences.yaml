@@ -1788,6 +1788,20 @@ CookieStoreAPIEnabled:
     WebCore:
       default: false
 
+CookieStoreAPIExtendedAttributesEnabled:
+  type: bool
+  category: dom
+  status: testable
+  humanReadableName: "Cookie Store API Extended Attributes"
+  humanReadableDescription: "Enable Extended Attributes of the Cookie Store API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CoreMathMLEnabled:
   type: bool
   status: unstable
@@ -2748,6 +2762,20 @@ FullscreenRequirementForScreenOrientationLockingEnabled:
     WebCore:
       default: true
 
+FullscreenSceneAspectRatioLockingEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Fullscreen scene aspect ratio locking"
+  humanReadableDescription: "Enable scene aspect ratio locking in Fullscreen"
+  condition: PLATFORM(VISION)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 FullscreenSceneDimmingEnabled:
   type: bool
   status: internal
@@ -3175,9 +3203,11 @@ InlineMediaPlaybackRequiresPlaysInlineAttribute:
       "PLATFORM(IOS_FAMILY)": true
       default: false
 
-InlinePredictionsEnabled:
+InlinePredictionsInAllEditableElementsEnabled:
   type: bool
-  status: embedder
+  status: internal
+  humanReadableName: "Inline Text Predictions"
+  humanReadableDescription: "Enable Inline Text Predictions in all editable elements"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -3405,7 +3435,6 @@ InterruptVideoOnPageVisibilityChangeEnabled:
     WebCore:
       default: false
 
-# FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
 IntersectionObserverEnabled:
   type: bool
   status: mature
@@ -5677,6 +5706,20 @@ ScrollingPerformanceTestingEnabled:
     WebCore:
       default: false
 
+SearchInputIncrementalAttributeAndSearchEventEnabled:
+  type: bool
+  status: embedder
+  category: html
+  humanReadableName: "Search control incremental attribute and search event"
+  humanReadableDescription: "Enable search control incremental attribute and search event support"
+  defaultValue:
+    WebKitLegacy:
+      default: WebKit::defaultSearchInputIncrementalAttributeAndSearchEventEnabled()
+    WebKit:
+      default: WebKit::defaultSearchInputIncrementalAttributeAndSearchEventEnabled()
+    WebCore:
+      default: false
+
 SecureContextChecksEnabled:
   type: bool
   status: internal
@@ -5731,17 +5774,17 @@ SelectionFlippingEnabled:
 
 SendMouseEventsToDisabledFormControlsEnabled:
   type: bool
-  status: preview
+  status: stable
   category: html
   humanReadableName: "Send mouse events to disabled form controls"
   humanReadableDescription: "Send mouse events to disabled form controls"
   defaultValue:
     WebKit:
-      default: false
+      default: true
     WebKitLegacy:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 SerifFontFamily:
   type: String
@@ -7325,6 +7368,21 @@ WebCodecsEnabled:
       "USE(GSTREAMER)": true
       default: false
 
+WebCodecsHEVCEnabled:
+  type: bool
+  status: preview
+  category: media
+  humanReadableName: "WebCodecs HEVC codec"
+  humanReadableDescription: "Enable WebCodecs HEVC codec"
+  condition: ENABLE(WEB_CODECS)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 WebCryptoSafeCurvesEnabled:
   type: bool
   status: stable
@@ -7333,13 +7391,13 @@ WebCryptoSafeCurvesEnabled:
   humanReadableDescription: "Enable Web Crypto Safe Curves"
   defaultValue:
     WebKitLegacy:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebKit:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 WebGLDraftExtensionsEnabled:

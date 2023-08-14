@@ -694,7 +694,8 @@ void QueryBufferParameterBase(const Buffer *buffer, GLenum pname, ParamType *par
     }
 }
 
-GLint GetCommonVariableProperty(const sh::ShaderVariable &var, GLenum prop)
+template <typename T>
+GLint GetCommonVariableProperty(const T &var, GLenum prop)
 {
     switch (prop)
     {
@@ -3248,6 +3249,26 @@ bool GetQueryParameterInfo(const State &glState,
             *numParams = 1;
             return true;
         }
+        case GL_POLYGON_OFFSET_POINT_NV:
+        {
+            if (!extensions.polygonModeNV)
+            {
+                return false;
+            }
+            *type      = GL_BOOL;
+            *numParams = 1;
+            return true;
+        }
+        case GL_POLYGON_OFFSET_LINE_NV:  // = GL_POLYGON_OFFSET_LINE_ANGLE
+        {
+            if (!extensions.polygonModeAny())
+            {
+                return false;
+            }
+            *type      = GL_BOOL;
+            *numParams = 1;
+            return true;
+        }
         case GL_DEPTH_CLAMP_EXT:
         {
             if (!extensions.depthClampEXT)
@@ -3387,6 +3408,16 @@ bool GetQueryParameterInfo(const State &glState,
             *type      = GL_INT;
             *numParams = 1;
             return true;
+        case GL_POLYGON_MODE_NV:  // = GL_POLYGON_MODE_ANGLE
+        {
+            if (!extensions.polygonModeAny())
+            {
+                return false;
+            }
+            *type      = GL_INT;
+            *numParams = 1;
+            return true;
+        }
         case GL_PRIMITIVE_BOUNDING_BOX:
             if (!extensions.primitiveBoundingBoxAny())
             {

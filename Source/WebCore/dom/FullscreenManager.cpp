@@ -44,6 +44,7 @@
 #include "PseudoClassChangeInvalidation.h"
 #include "QualifiedName.h"
 #include "Quirks.h"
+#include "RenderBlock.h"
 #include "Settings.h"
 #include <wtf/LoggerHelper.h>
 
@@ -216,14 +217,6 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
             return;
         }
 
-        // The context object's node document fullscreen element stack is not empty and its top element
-        // is not an ancestor of the context object.
-        if (auto* currentFullscreenElement = fullscreenElement(); currentFullscreenElement && !currentFullscreenElement->contains(element.get())) {
-            ERROR_LOG(identifier, "task - fullscreen stack not empty; failing.");
-            failedPreflights(WTFMove(element), WTFMove(promise));
-            return;
-        }
-
         // A descendant browsing context's document has a non-empty fullscreen element stack.
         bool descendentHasNonEmptyStack = false;
         for (auto* descendant = frame() ? frame()->tree().traverseNext() : nullptr; descendant; descendant = descendant->tree().traverseNext()) {
@@ -297,6 +290,9 @@ void FullscreenManager::cancelFullscreen()
     m_pendingExitFullscreen = true;
 
     m_document.eventLoop().queueTask(TaskSource::MediaElement, [this, weakThis = WeakPtr { *this }, topDocument = WTFMove(topDocument), identifier = LOGIDENTIFIER] {
+#if RELEASE_LOG_DISABLED
+        UNUSED_PARAM(this);
+#endif
         if (!weakThis)
             return;
 
@@ -399,9 +395,13 @@ void FullscreenManager::exitFullscreen(RefPtr<DeferredPromise>&& promise)
         else {
             finishExitFullscreen(document(), ExitMode::NoResize);
 
-            INFO_LOG(identifier, "task - New fullscreen element.");
             m_pendingFullscreenElement = fullscreenElement();
-            page->chrome().client().enterFullScreenForElement(*m_pendingFullscreenElement);
+            if (m_pendingFullscreenElement)
+                page->chrome().client().enterFullScreenForElement(*m_pendingFullscreenElement);
+            else if (m_pendingPromise) {
+                m_pendingPromise->resolve();
+                m_pendingPromise = nullptr;
+            }
         }
     });
 }
@@ -460,6 +460,25 @@ bool FullscreenManager::isFullscreenEnabled() const
     return isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::Fullscreen, document());
 }
 
+static void markRendererDirtyAfterTopLayerChange(RenderElement* renderer, RenderBlock* containingBlockBeforeStyleResolution)
+{
+    if (!is<RenderBox>(renderer) || !renderer->parent() || !containingBlockBeforeStyleResolution)
+        return;
+    auto* newContainingBlock = renderer->containingBlock();
+    ASSERT(newContainingBlock);
+    if (containingBlockBeforeStyleResolution == newContainingBlock)
+        return;
+
+    // Let's carry out the same set of tasks we would normally do when containing block changes for out-of-flow content in RenderBox::styleWillChange.
+    ASSERT(renderer->isFixedPositioned());
+
+    RenderBlock::removePositionedObject(downcast<RenderBox>(*renderer));
+    // This is to make sure we insert the box to the correct containing block list during static position computation.
+    renderer->parent()->setChildNeedsLayout();
+    newContainingBlock->setChildNeedsLayout();
+    renderer->setNeedsLayout();
+}
+
 bool FullscreenManager::willEnterFullscreen(Element& element)
 {
     if (backForwardCacheState() != Document::NotInBackForwardCache) {
@@ -505,14 +524,19 @@ bool FullscreenManager::willEnterFullscreen(Element& element)
     for (auto ancestor : makeReversedRange(ancestorsInTreeOrder)) {
         ancestor->document().hideAllPopoversUntil(nullptr, FocusPreviousElement::No, FireEvents::No);
 
-        ancestor->setFullscreenFlag(true);
+        auto containingBlockBeforeStyleResolution = WeakPtr<RenderBlock> { };
+        if (auto* renderer = ancestor->renderer())
+            containingBlockBeforeStyleResolution = renderer->containingBlock();
 
+        ancestor->setFullscreenFlag(true);
         ancestor->document().resolveStyle(Document::ResolveStyleType::Rebuild);
 
         // Remove before adding, so we always add at the end of the top layer.
         if (ancestor->isInTopLayer())
             ancestor->removeFromTopLayer();
         ancestor->addToTopLayer();
+
+        markRendererDirtyAfterTopLayerChange(ancestor->renderer(), containingBlockBeforeStyleResolution.get());
     }
 
     for (auto ancestor : ancestorsInTreeOrder)

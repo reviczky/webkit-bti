@@ -103,15 +103,15 @@ private:
 
 void NameManglerVisitor::run()
 {
-    for (const auto& entrypoint : m_callGraph.entrypoints()) {
-        String originalName = entrypoint.function.name();
-        introduceVariable(entrypoint.function.name(), MangledName::Function);
+    auto& module = m_callGraph.ast();
+    for (auto& function : module.functions()) {
+        String originalName = function.name();
+        introduceVariable(function.name(), MangledName::Function);
         auto it = m_result.entryPoints.find(originalName);
-        RELEASE_ASSERT(it != m_result.entryPoints.end());
-        it->value.mangledName = entrypoint.function.name();
+        if (it != m_result.entryPoints.end())
+            it->value.mangledName = function.name();
     }
 
-    auto& module = m_callGraph.ast();
     for (auto& structure : module.structures())
         visit(structure);
 
@@ -226,8 +226,9 @@ void NameManglerVisitor::visit(AST::NamedTypeName& type)
 
 void NameManglerVisitor::introduceVariable(AST::Identifier& name, MangledName::Kind kind)
 {
-    const auto& mangledName = ContextProvider::introduceVariable(name, makeMangledName(name, kind));
-    m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName.toString()));
+    const auto* mangledName = ContextProvider::introduceVariable(name, makeMangledName(name, kind));
+    ASSERT(mangledName);
+    m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName->toString()));
 }
 
 MangledName NameManglerVisitor::makeMangledName(const String& name, MangledName::Kind kind)

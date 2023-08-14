@@ -99,6 +99,15 @@ void RenderAttachment::layout()
 
 LayoutUnit RenderAttachment::baselinePosition(FontBaseline, bool, LineDirectionMode, LinePositionMode) const
 {
+    if (auto* baselineElement = attachmentElement().wideLayoutImageElement()) {
+        if (auto* baselineElementRenderBox = baselineElement->renderBox()) {
+            // This is the bottom of the image assuming it is vertically centered.
+            return (height() + baselineElementRenderBox->height()) / 2;
+        }
+        // Fallback to the bottom of the attachment if there is no image.
+        return height();
+    }
+
     return theme().attachmentBaseline(*this);
 }
 

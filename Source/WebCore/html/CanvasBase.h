@@ -67,6 +67,8 @@ public:
 
     virtual void refCanvasBase() = 0;
     virtual void derefCanvasBase() = 0;
+    void ref() { refCanvasBase(); }
+    void deref() { derefCanvasBase(); }
 
     virtual bool isHTMLCanvasElement() const { return false; }
     virtual bool isOffscreenCanvas() const { return false; }
@@ -131,6 +133,7 @@ public:
     virtual void dispatchEvent(Event&) = 0;
 
     bool postProcessPixelBufferResults(Ref<PixelBuffer>&&) const;
+    void recordLastFillText(const String&);
 
 protected:
     explicit CanvasBase(IntSize, const std::optional<NoiseInjectionHashSalt>&);
@@ -146,6 +149,7 @@ protected:
     void resetGraphicsContextState() const;
 
     RefPtr<ImageBuffer> allocateImageBuffer(bool usesDisplayListDrawing, bool avoidBackendSizeCheckForTesting) const;
+    String lastFillText() const { return m_lastFillText; }
 
 private:
     bool shouldInjectNoiseBeforeReadback() const;
@@ -156,6 +160,8 @@ private:
     mutable RefPtr<ImageBuffer> m_imageBuffer;
     mutable size_t m_imageBufferCost { 0 };
     mutable std::unique_ptr<GraphicsContextStateSaver> m_contextStateSaver;
+
+    String m_lastFillText;
 
     CanvasNoiseInjection m_canvasNoiseInjection;
     Markable<NoiseInjectionHashSalt, IntegralMarkableTraits<NoiseInjectionHashSalt>> m_canvasNoiseHashSalt;

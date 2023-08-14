@@ -147,6 +147,7 @@ Resolver::Resolver(Document& document, ScopeType scopeType)
     : m_document(document)
     , m_scopeType(scopeType)
     , m_ruleSets(*this)
+    , m_matchedDeclarationsCache(*this)
     , m_matchAuthorAndUserStyles(settings().authorAndUserStylesEnabled())
 {
     initialize();
@@ -606,7 +607,7 @@ void Resolver::clearCachedDeclarationsAffectedByViewportUnits()
 void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResult)
 {
     unsigned cacheHash = MatchedDeclarationsCache::computeHash(matchResult);
-    auto includedProperties = PropertyCascade::IncludedProperties::All;
+    auto includedProperties = PropertyCascade::allProperties();
 
     auto& style = *state.style();
     auto& parentStyle = *state.parentStyle();
@@ -634,7 +635,10 @@ void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResu
             return;
         }
 
-        includedProperties = PropertyCascade::IncludedProperties::InheritedOnly;
+        includedProperties = { PropertyCascade::PropertyType::Inherited };
+
+        if (!parentStyle.inheritedCustomPropertiesEqual(*cacheEntry->parentRenderStyle))
+            includedProperties.add(PropertyCascade::PropertyType::VariableReference);
     }
 
     if (elementTypeHasAppearanceFromUAStyle(element)) {

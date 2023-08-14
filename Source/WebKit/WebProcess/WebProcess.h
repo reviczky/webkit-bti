@@ -88,6 +88,7 @@ class Object;
 
 namespace PAL {
 class SessionID;
+enum class UserInterfaceIdiom : uint8_t;
 }
 
 namespace WebCore {
@@ -157,7 +158,6 @@ struct WebsiteData;
 struct WebsiteDataStoreParameters;
 
 enum class RemoteWorkerType : uint8_t;
-enum class UserInterfaceIdiom : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
 #if PLATFORM(IOS_FAMILY)
@@ -416,6 +416,10 @@ public:
     void revokeLaunchServicesSandboxExtension();
 #endif
 
+#if PLATFORM(GTK)
+    const OptionSet<DMABufRendererBufferMode>& dmaBufRendererBufferMode() const { return m_dmaBufRendererBufferMode; }
+#endif
+
 private:
     WebProcess();
     ~WebProcess();
@@ -602,7 +606,7 @@ private:
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    void userInterfaceIdiomDidChange(UserInterfaceIdiom);
+    void userInterfaceIdiomDidChange(PAL::UserInterfaceIdiom);
 
     bool shouldFreezeOnSuspension() const;
     void updateFreezerStatus();
@@ -715,7 +719,7 @@ private:
 
     RefPtr<WebCore::ApplicationCacheStorage> m_applicationCacheStorage;
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
 #endif
 
@@ -739,8 +743,9 @@ private:
 
     WeakHashMap<WebCore::UserGestureToken, uint64_t> m_userGestureTokens;
 
-#if PLATFORM(GTK) && USE(EGL)
+#if PLATFORM(GTK)
     std::unique_ptr<WebCore::PlatformDisplay> m_displayForCompositing;
+    OptionSet<DMABufRendererBufferMode> m_dmaBufRendererBufferMode;
 #endif
 
     bool m_hasSuspendedPageProxy { false };
