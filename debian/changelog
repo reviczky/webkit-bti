@@ -6,6 +6,8 @@ webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
     - Set Build-Depends-Indep to jdupes when USE_PREBUILT_DOCS is set.
     - Use -O1 instead of -Os in sh4 (thanks, John Paul Adrian Glaubitz)
       (#1042519).
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 17:42:09 +0300
 
