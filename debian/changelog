@@ -4,6 +4,8 @@ webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
   * Refresh all patches and drop fix-jsc-timestamp.patch.
   * debian/rules:
     - Set Build-Depends-Indep to jdupes when USE_PREBUILT_DOCS is set.
+    - Use -O1 instead of -Os in sh4 (thanks, John Paul Adrian Glaubitz)
+      (#1042519).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 17:42:09 +0300
 
