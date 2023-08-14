@@ -73,6 +73,8 @@ class AccessibilityObject : public AXCoreObject, public CanMakeWeakPtr<Accessibi
 public:
     virtual ~AccessibilityObject();
 
+    ProcessID processID() const override;
+
     // After constructing an AccessibilityObject, it must be given a
     // unique ID, then added to AXObjectCache, and finally init() must
     // be called last.
@@ -139,7 +141,6 @@ public:
     // Table support.
     bool isTable() const override { return false; }
     bool isExposable() const override { return true; }
-    int tableLevel() const override { return 0; }
     bool supportsSelectedRows() const override { return false; }
     AccessibilityChildrenVector columns() override { return AccessibilityChildrenVector(); }
     AccessibilityChildrenVector rows() override { return AccessibilityChildrenVector(); }
@@ -242,7 +243,7 @@ public:
     bool hasSameStyle(const AXCoreObject&) const override { return false; }
     bool hasUnderline() const override { return false; }
     bool hasHighlighting() const override;
-    std::optional<CharacterRange> textInputMarkedRange() const final;
+    AXTextMarkerRange textInputMarkedTextMarkerRange() const final;
 
     bool supportsDatetimeAttribute() const override;
     String datetimeAttributeValue() const override;
@@ -815,8 +816,6 @@ private:
 
     // Special handling of click point for links.
     IntPoint linkClickPoint();
-
-    bool isNodeForComposition(const Editor&) const;
 
 protected: // FIXME: Make the data members private.
     AccessibilityChildrenVector m_children;

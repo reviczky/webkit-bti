@@ -68,19 +68,19 @@ IPC::StreamConnectionWorkQueue& remoteGraphicsContextGLStreamWorkQueue()
 }
 
 #if !PLATFORM(COCOA) && !USE(GRAPHICS_LAYER_WC) && !USE(GBM)
-Ref<RemoteGraphicsContextGL> RemoteGraphicsContextGL::create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, GraphicsContextGLAttributes&& attributes, GraphicsContextGLIdentifier graphicsContextGLIdentifier, RemoteRenderingBackend& renderingBackend, IPC::StreamServerConnection::Handle&& connectionHandle)
+Ref<RemoteGraphicsContextGL> RemoteGraphicsContextGL::create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, GraphicsContextGLAttributes&& attributes, GraphicsContextGLIdentifier graphicsContextGLIdentifier, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)
 {
     ASSERT_NOT_REACHED();
-    auto instance = adoptRef(*new RemoteGraphicsContextGL(gpuConnectionToWebProcess, graphicsContextGLIdentifier, renderingBackend, WTFMove(connectionHandle)));
+    auto instance = adoptRef(*new RemoteGraphicsContextGL(gpuConnectionToWebProcess, graphicsContextGLIdentifier, renderingBackend, WTFMove(streamConnection)));
     instance->initialize(WTFMove(attributes));
     return instance;
 }
 #endif
 
-RemoteGraphicsContextGL::RemoteGraphicsContextGL(GPUConnectionToWebProcess& gpuConnectionToWebProcess, GraphicsContextGLIdentifier graphicsContextGLIdentifier, RemoteRenderingBackend& renderingBackend, IPC::StreamServerConnection::Handle&& connectionHandle)
+RemoteGraphicsContextGL::RemoteGraphicsContextGL(GPUConnectionToWebProcess& gpuConnectionToWebProcess, GraphicsContextGLIdentifier graphicsContextGLIdentifier, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)
     : m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
     , m_workQueue(remoteGraphicsContextGLStreamWorkQueue())
-    , m_streamConnection(IPC::StreamServerConnection::create(WTFMove(connectionHandle)))
+    , m_streamConnection(WTFMove(streamConnection))
     , m_graphicsContextGLIdentifier(graphicsContextGLIdentifier)
     , m_renderingBackend(renderingBackend)
 #if ENABLE(VIDEO)
@@ -175,7 +175,7 @@ void RemoteGraphicsContextGL::dispatchContextChangedNotification()
 void RemoteGraphicsContextGL::createAndBindEGLImage(GCGLenum target, WebCore::GraphicsContextGL::EGLImageSource source, CompletionHandler<void(uint64_t handle, WebCore::IntSize size)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
-    auto attachment = m_context->createAndBindEGLImage(target, source);
+    auto attachment = m_context->createAndBindEGLImage(target, WTFMove(source));
     auto [handle, size] = attachment.value_or(std::make_tuple(nullptr, IntSize { }));
     completionHandler(static_cast<uint64_t>(reinterpret_cast<intptr_t>(handle)), size);
 }

@@ -33,6 +33,7 @@
 #include "HTMLImageElement.h"
 #include "HitTestResult.h"
 #include "ImageQualityController.h"
+#include "LayoutBoxGeometry.h"
 #include "LayoutInitialContainingBlock.h"
 #include "LayoutState.h"
 #include "LegacyRenderSVGRoot.h"
@@ -78,6 +79,7 @@ RenderView::RenderView(Document& document, RenderStyle&& style)
     : RenderBlockFlow(document, WTFMove(style))
     , m_frameView(*document.view())
     , m_initialContainingBlock(makeUniqueRef<Layout::InitialContainingBlock>(RenderStyle::clone(this->style())))
+    , m_layoutState(makeUniqueRef<Layout::LayoutState>(document, *m_initialContainingBlock, Layout::LayoutState::FormattingContextIntegrationType::Inline))
     , m_selection(*this)
     , m_lazyRepaintTimer(*this, &RenderView::lazyRepaintTimerFired)
 {
@@ -216,12 +218,12 @@ void RenderView::layout()
     if (!needsLayout())
         return;
 
-    ensureLayoutState().setViewportSize(frameView().size());
-
     LayoutStateMaintainer statePusher(*this, { }, false, valueOrDefault(m_pageLogicalSize).height(), m_pageLogicalHeightChanged);
 
     m_pageLogicalHeightChanged = false;
 
+    // FIXME: This should be called only when frame view (or the canvas we render onto) size changes.
+    updateInitialContainingBlockSize();
     RenderBlockFlow::layout();
 
 #ifndef NDEBUG
@@ -230,17 +232,15 @@ void RenderView::layout()
     clearNeedsLayout();
 }
 
-Layout::LayoutState& RenderView::ensureLayoutState()
-{
-    if (!m_layoutState)
-        m_layoutState = makeUnique<Layout::LayoutState>(document(), m_initialContainingBlock.get(), Layout::LayoutState::FormattingContextIntegrationType::Inline);
-    return *m_layoutState;
-}
-
 void RenderView::updateQuirksMode()
 {
-    if (m_layoutState)
-        m_layoutState->updateQuirksMode(document());
+    m_layoutState->updateQuirksMode(document());
+}
+
+void RenderView::updateInitialContainingBlockSize()
+{
+    // Initial containing block has no margin/padding/border.
+    m_layoutState->ensureGeometryForBox(m_initialContainingBlock).setContentBoxSize(frameView().size());
 }
 
 LayoutUnit RenderView::pageOrViewLogicalHeight() const
@@ -610,9 +610,10 @@ bool RenderView::isScrollableOrRubberbandableBox() const
     return frameView().isScrollable(defineScrollable);
 }
 
-void RenderView::absoluteRects(Vector<IntRect>& rects, const LayoutPoint& accumulatedOffset) const
+void RenderView::boundingRects(Vector<LayoutRect>& rects, const LayoutPoint& accumulatedOffset) const
 {
-    rects.append(snappedIntRect(accumulatedOffset, layer()->size()));
+    // FIXME: It's weird that this gets is size from the layer.
+    rects.append(LayoutRect { accumulatedOffset, layer()->size() });
 }
 
 void RenderView::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const

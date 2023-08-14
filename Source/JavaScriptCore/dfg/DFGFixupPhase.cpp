@@ -81,9 +81,10 @@ private:
         if (optimizeForX86() || optimizeForARM64() || optimizeForARMv7IDIVSupported()) {
             fixIntOrBooleanEdge(leftChild);
             fixIntOrBooleanEdge(rightChild);
-            // FIXME: We should attempt to remove checks.
-            if (bytecodeCanTruncateInteger(node->arithNodeFlags()))
-                node->setArithMode(Arith::CheckOverflow);
+            // We need to be careful about skipping overflow check because div / mod can generate non integer values
+            // from (Int32, Int32) inputs. For now, we always check non-zero divisor.
+            if (bytecodeCanTruncateInteger(node->arithNodeFlags()) && bytecodeCanIgnoreNaNAndInfinity(node->arithNodeFlags()) && bytecodeCanIgnoreNegativeZero(node->arithNodeFlags()))
+                node->setArithMode(Arith::Unchecked);
             else if (bytecodeCanIgnoreNegativeZero(node->arithNodeFlags()))
                 node->setArithMode(Arith::CheckOverflow);
             else
@@ -1009,6 +1010,9 @@ private:
             if (node->child1()->shouldSpeculateInt32()) {
                 fixEdge<Int32Use>(node->child1());
                 node->clearFlags(NodeMustGenerate);
+            } else if (node->child1()->shouldSpeculateNumber()) {
+                fixIntConvertingEdge(node->child1());
+                node->clearFlags(NodeMustGenerate);
             } else
                 fixEdge<UntypedUse>(node->child1());
             break;
@@ -1021,6 +1025,14 @@ private:
             blessArrayOperation(node->child1(), node->child2(), node->child1()); // Rewrite child1 with ResolveRope.
             fixEdge<KnownStringUse>(node->child1());
             fixEdge<Int32Use>(node->child2());
+            break;
+        }
+
+        case StringIndexOf: {
+            fixEdge<StringUse>(node->child1());
+            fixEdge<StringUse>(node->child2());
+            if (node->child3())
+                fixEdge<Int32Use>(node->child3());
             break;
         }
 
@@ -1518,6 +1530,13 @@ private:
                 if (node->numChildren() == 4)
                     fixEdge<Int32Use>(m_graph.varArgChild(node, 2));
             }
+            break;
+        }
+
+        case ArraySpliceExtract: {
+            fixEdge<ArrayUse>(node->child1());
+            fixEdge<Int32Use>(node->child2());
+            fixEdge<Int32Use>(node->child3());
             break;
         }
 
@@ -3518,16 +3537,23 @@ private:
 
         // At first, attempt to fold Boolean or Int32 to Int32.
         if (node->child1()->shouldSpeculateInt32OrBoolean()) {
-            if (isInt32Speculation(node->getHeapPrediction())) {
+            if ((node->op() == CallNumberConstructor && isInt32Speculation(node->getHeapPrediction())) || (!node->mayHaveDoubleResult() && !node->mayHaveBigIntResult())) {
                 fixIntOrBooleanEdge(node->child1());
                 node->convertToIdentity();
                 return;
             }
         }
 
+        if (node->child1()->shouldSpeculateInt52()) {
+            fixEdge<Int52RepUse>(node->child1());
+            node->convertToIdentity();
+            node->setResult(NodeResultInt52);
+            return;
+        }
+
         // If the prediction of the child is Number, we attempt to convert ToNumber to Identity.
         if (node->child1()->shouldSpeculateNumber()) {
-            if (isInt32Speculation(node->getHeapPrediction())) {
+            if ((node->op() == CallNumberConstructor && isInt32Speculation(node->getHeapPrediction())) || (!node->mayHaveDoubleResult() && !node->mayHaveBigIntResult())) {
                 // If the both predictions of this node and the child is Int32, we just convert ToNumber to Identity, that's simple.
                 if (node->child1()->shouldSpeculateInt32()) {
                     fixEdge<Int32Use>(node->child1());
@@ -3753,6 +3779,10 @@ private:
                     convertStringAddUse<Int32Use>(node, edge);
                     return;
                 }
+                if (edge->op() == ToPrimitive) {
+                    convertStringAddUse<KnownPrimitiveUse>(node, edge);
+                    return;
+                }
                 if (!Options::useConcurrentJIT())
                     ASSERT(m_graph.canOptimizeStringObjectAccess(node->origin.semantic));
                 if (edge->shouldSpeculateStringObject()) {
@@ -3763,10 +3793,6 @@ private:
                 if (edge->shouldSpeculateStringOrStringObject()) {
                     addCheckStructureForOriginalStringObjectUse(StringOrStringObjectUse, node->origin, edge.node());
                     convertStringAddUse<StringOrStringObjectUse>(node, edge);
-                    return;
-                }
-                if (edge->op() == ToPrimitive) {
-                    convertStringAddUse<KnownPrimitiveUse>(node, edge);
                     return;
                 }
                 RELEASE_ASSERT_NOT_REACHED();

@@ -30,6 +30,8 @@
 #include "DrawingAreaProxy.h"
 #include "FrameInfoData.h"
 #include "HandleMessage.h"
+#include "RemotePageDrawingAreaProxy.h"
+#include "RemotePageVisitedLinkStoreRegistration.h"
 #include "WebFrameProxy.h"
 #include "WebPageProxy.h"
 #include "WebPageProxyMessages.h"
@@ -38,13 +40,16 @@
 
 namespace WebKit {
 
-RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, const WebCore::RegistrableDomain& domain)
+RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, const WebCore::RegistrableDomain& domain, WebPageProxyMessageReceiverRegistration* registrationToTransfer)
     : m_webPageID(page.webPageID())
     , m_process(process)
     , m_page(page)
     , m_domain(domain)
 {
-    m_process->addMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_webPageID, *this);
+    if (registrationToTransfer)
+        m_messageReceiverRegistration.transferMessageReceivingFrom(*registrationToTransfer, *this);
+    else
+        m_messageReceiverRegistration.startReceivingMessages(m_process, m_webPageID, *this);
     page.addRemotePageProxy(domain, *this);
 }
 
@@ -58,35 +63,21 @@ void RemotePageProxy::injectPageIntoNewProcess()
 
     auto* drawingArea = page->drawingArea();
     RELEASE_ASSERT(drawingArea);
-    drawingArea->startReceivingMessages(m_process);
+
+    m_drawingArea = makeUnique<RemotePageDrawingAreaProxy>(*drawingArea, m_process);
+    m_visitedLinkStoreRegistration = makeUnique<RemotePageVisitedLinkStoreRegistration>(*page, m_process);
 
     auto parameters = page->creationParameters(m_process, *drawingArea);
     parameters.subframeProcessFrameTreeCreationParameters = page->frameTreeCreationParameters();
     parameters.isProcessSwap = true; // FIXME: This should be a parameter to creationParameters rather than doctoring up the parameters afterwards.
     parameters.topContentInset = 0;
     m_process->send(Messages::WebProcess::CreateWebPage(m_webPageID, parameters), 0);
-    m_process->addVisitedLinkStoreUser(page->visitedLinkStore(), page->identifier());
 }
 
 RemotePageProxy::~RemotePageProxy()
 {
-    m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_webPageID);
-
-    if (m_page) {
-        if (auto* drawingArea = m_page->drawingArea())
-            drawingArea->stopReceivingMessages(m_process);
+    if (m_page)
         m_page->removeRemotePageProxy(m_domain);
-    }
-}
-
-IPC::Connection* RemotePageProxy::messageSenderConnection() const
-{
-    return m_process->connection();
-}
-
-uint64_t RemotePageProxy::messageSenderDestinationID() const
-{
-    return m_webPageID.toUInt64();
 }
 
 void RemotePageProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -102,7 +93,7 @@ void RemotePageProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
         return;
 
     if (decoder.messageName() == Messages::WebPageProxy::DecidePolicyForResponse::name()) {
-        IPC::handleMessage<Messages::WebPageProxy::DecidePolicyForResponse>(connection, decoder, this, &RemotePageProxy::decidePolicyForResponse);
+        IPC::handleMessageAsync<Messages::WebPageProxy::DecidePolicyForResponse>(connection, decoder, this, &RemotePageProxy::decidePolicyForResponse);
         return;
     }
 
@@ -115,10 +106,11 @@ void RemotePageProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
         m_page->didReceiveMessage(connection, decoder);
 }
 
-void RemotePageProxy::decidePolicyForResponse(WebCore::FrameIdentifier frameID, FrameInfoData&& frameInfo, WebCore::PolicyCheckIdentifier identifier, uint64_t navigationID, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request, bool canShowMIMEType, const String& downloadAttribute, uint64_t listenerID)
+void RemotePageProxy::decidePolicyForResponse(FrameInfoData&& frameInfo, uint64_t navigationID, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request, bool canShowMIMEType, const String& downloadAttribute, CompletionHandler<void(PolicyDecision&&)>&& completionHandler)
 {
-    if (m_page)
-        m_page->decidePolicyForResponseShared(m_process.copyRef(), m_page->webPageID(), frameID, WTFMove(frameInfo), identifier, navigationID, response, request, canShowMIMEType, downloadAttribute, listenerID);
+    if (!m_page)
+        return completionHandler({ });
+    m_page->decidePolicyForResponseShared(m_process.copyRef(), m_page->webPageID(), WTFMove(frameInfo), navigationID, response, request, canShowMIMEType, downloadAttribute, WTFMove(completionHandler));
 }
 
 void RemotePageProxy::didCommitLoadForFrame(WebCore::FrameIdentifier frameID, FrameInfoData&& frameInfo, WebCore::ResourceRequest&& request, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType frameLoadType, const WebCore::CertificateInfo& certificateInfo, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent hasInsecureContent, WebCore::MouseEventPolicy mouseEventPolicy, const UserData& userData)

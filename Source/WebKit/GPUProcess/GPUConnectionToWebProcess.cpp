@@ -220,11 +220,14 @@ private:
     }
 #endif
 
-    void startProducingData(RealtimeMediaSource::Type type) final
+    void startProducingData(CaptureDevice::DeviceType type) final
     {
-        if (type != RealtimeMediaSource::Type::Audio)
-            return;
-        m_process.startCapturingAudio();
+        if (type == CaptureDevice::DeviceType::Microphone)
+            m_process.startCapturingAudio();
+#if PLATFORM(IOS)
+        else if (type == CaptureDevice::DeviceType::Camera)
+            m_process.overridePresentingApplicationPIDIfNeeded();
+#endif
     }
 
     const ProcessIdentity& resourceOwner() const final
@@ -593,8 +596,11 @@ RemoteImageDecoderAVFProxy& GPUConnectionToWebProcess::imageDecoderAVFProxy()
 
 void GPUConnectionToWebProcess::createRenderingBackend(RemoteRenderingBackendCreationParameters&& creationParameters, IPC::StreamServerConnection::Handle&& connectionHandle)
 {
-    auto addResult = m_remoteRenderingBackendMap.ensure(creationParameters.identifier, [&] {
-        return IPC::ScopedActiveMessageReceiveQueue { RemoteRenderingBackend::create(*this, WTFMove(creationParameters), WTFMove(connectionHandle)) };
+    auto streamConnection = IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle));
+    MESSAGE_CHECK(streamConnection);
+
+    auto addResult = m_remoteRenderingBackendMap.ensure(creationParameters.identifier, [&, streamConnection = WTFMove(streamConnection)] () mutable {
+        return IPC::ScopedActiveMessageReceiveQueue { RemoteRenderingBackend::create(*this, WTFMove(creationParameters), streamConnection.releaseNonNull()) };
     });
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 }
@@ -621,8 +627,11 @@ void GPUConnectionToWebProcess::createGraphicsContextGL(WebCore::GraphicsContext
         return;
     auto* renderingBackend = it->value.get();
 
-    auto addResult = m_remoteGraphicsContextGLMap.ensure(graphicsContextGLIdentifier, [&] {
-        return IPC::ScopedActiveMessageReceiveQueue { RemoteGraphicsContextGL::create(*this, WTFMove(attributes), graphicsContextGLIdentifier, *renderingBackend, WTFMove(connectionHandle)) };
+    auto streamConnection = IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle));
+    MESSAGE_CHECK(streamConnection);
+
+    auto addResult = m_remoteGraphicsContextGLMap.ensure(graphicsContextGLIdentifier, [&, streamConnection = WTFMove(streamConnection)] () mutable {
+        return IPC::ScopedActiveMessageReceiveQueue { RemoteGraphicsContextGL::create(*this, WTFMove(attributes), graphicsContextGLIdentifier, *renderingBackend, streamConnection.releaseNonNull()) };
     });
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 }
@@ -669,7 +678,10 @@ void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, Ren
         return;
     auto* renderingBackend = it->value.get();
 
-    auto addResult = m_remoteGPUMap.ensure(identifier, [&] {
+    auto streamConnection = IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle));
+    MESSAGE_CHECK(streamConnection);
+
+    auto addResult = m_remoteGPUMap.ensure(identifier, [&, streamConnection = WTFMove(streamConnection)] () mutable {
         return IPC::ScopedActiveMessageReceiveQueue { RemoteGPU::create(
 #if ENABLE(VIDEO) && PLATFORM(COCOA)
             [&] (std::variant<WebCore::MediaPlayerIdentifier, WebKit::RemoteVideoFrameReference> identifier, Function<void(RefPtr<WebCore::VideoFrame>)>&& callback) mutable {
@@ -685,7 +697,7 @@ void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, Ren
             [] () mutable {
             },
 #endif
-            identifier, *this, *renderingBackend, WTFMove(connectionHandle)) };
+            identifier, *this, *renderingBackend, streamConnection.releaseNonNull()) };
     });
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 }
@@ -747,6 +759,11 @@ RemoteMediaSessionHelperProxy& GPUConnectionToWebProcess::mediaSessionHelperProx
 void GPUConnectionToWebProcess::ensureMediaSessionHelper()
 {
     mediaSessionHelperProxy();
+}
+
+void GPUConnectionToWebProcess::overridePresentingApplicationPIDIfNeeded()
+{
+    mediaSessionHelperProxy().overridePresentingApplicationPIDIfNeeded();
 }
 #endif
 

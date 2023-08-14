@@ -206,6 +206,7 @@ struct PerfMonitorTriplet
     FN(textureDescriptorSetCacheMisses)            \
     FN(textureDescriptorSetCacheTotalSize)         \
     FN(shaderResourcesDescriptorSetCacheHits)      \
+    FN(deviceMemoryImageAllocationFallbacks)       \
     FN(mutableTexturesUploaded)                    \
     FN(shaderResourcesDescriptorSetCacheMisses)    \
     FN(shaderResourcesDescriptorSetCacheTotalSize) \
@@ -214,7 +215,8 @@ struct PerfMonitorTriplet
     FN(allocateNewBufferBlockCalls)                \
     FN(bufferSuballocationCalls)                   \
     FN(dynamicBufferAllocations)                   \
-    FN(framebufferCacheSize)
+    FN(framebufferCacheSize)                       \
+    FN(pendingSubmissionGarbageObjects)
 
 #define ANGLE_DECLARE_PERF_COUNTER(COUNTER) uint64_t COUNTER;
 
@@ -525,6 +527,13 @@ class MsanScopedDisableInterceptorChecks final : angle::NonCopyable
 #    define ANGLE_NO_SANITIZE_THREAD __attribute__((no_sanitize_thread))
 #else
 #    define ANGLE_NO_SANITIZE_THREAD
+#endif
+
+// Similar to the above, but for cfi-icall.
+#ifdef __clang__
+#    define ANGLE_NO_SANITIZE_CFI_ICALL __attribute__((no_sanitize("cfi-icall")))
+#else
+#    define ANGLE_NO_SANITIZE_CFI_ICALL
 #endif
 
 // The below inlining code lifted from V8.

@@ -40,6 +40,7 @@ class Color;
 class ContentData;
 class CounterContent;
 class CursorList;
+class Element;
 class FillLayer;
 class FilterOperations;
 class FloatPoint;
@@ -171,6 +172,7 @@ enum class Overflow : uint8_t;
 enum class OverflowAnchor : bool;
 enum class OverflowWrap : uint8_t;
 enum class OverscrollBehavior : uint8_t;
+enum class PaintBehavior : uint32_t;
 enum class PaintOrder : uint8_t;
 enum class PaintType : uint8_t;
 enum class PointerEvents : uint8_t;
@@ -241,6 +243,7 @@ struct MasonryAutoFlow;
 struct NamedGridAreaMap;
 struct NamedGridLinesMap;
 struct OrderedNamedGridLinesMap;
+
 struct ScrollSnapAlign;
 struct ScrollSnapType;
 struct ScrollbarGutter;
@@ -694,7 +697,7 @@ public:
 
     inline ContentVisibility contentVisibility() const;
 
-    inline bool effectiveSkipsContent() const;
+    inline bool effectiveSkippedContent() const;
 
     inline ContainIntrinsicSizeType containIntrinsicWidthType() const;
     inline ContainIntrinsicSizeType containIntrinsicHeightType() const;
@@ -702,6 +705,8 @@ public:
     inline ContainIntrinsicSizeType containIntrinsicLogicalHeightType() const;
     inline bool containIntrinsicWidthHasAuto() const;
     inline bool containIntrinsicHeightHasAuto() const;
+    inline bool containIntrinsicLogicalWidthHasAuto() const;
+    inline bool containIntrinsicLogicalHeightHasAuto() const;
     inline std::optional<Length> containIntrinsicWidth() const;
     inline std::optional<Length> containIntrinsicHeight() const;
     inline bool hasAutoLengthContainIntrinsicSize() const;
@@ -1041,6 +1046,7 @@ public:
 
     bool shouldPlaceVerticalScrollbarOnLeft() const;
 
+    inline bool usesStandardScrollbarStyle() const;
     inline bool usesLegacyScrollbarStyle() const;
 
 #if ENABLE(APPLE_PAY)
@@ -1266,7 +1272,7 @@ public:
 
     inline void setContentVisibility(ContentVisibility);
 
-    inline void setEffectiveSkipsContent(bool);
+    inline void setEffectiveSkippedContent(bool);
 
     inline void setListStyleType(ListStyleType);
     void setListStyleImage(RefPtr<StyleImage>&&);
@@ -1589,6 +1595,8 @@ public:
     inline SVGPaintType fillPaintType() const;
     inline StyleColor fillPaintColor() const;
     inline void setFillPaintColor(const StyleColor&);
+    inline void setHasExplicitlySetColor(bool);
+    inline bool hasExplicitlySetColor() const;
     inline float fillOpacity() const;
     inline void setFillOpacity(float);
 
@@ -1678,6 +1686,7 @@ public:
     const AtomString& hyphenString() const;
 
     bool inheritedEqual(const RenderStyle&) const;
+    bool inheritedCustomPropertiesEqual(const RenderStyle&) const;
     bool fastPathInheritedEqual(const RenderStyle&) const;
     bool nonFastPathInheritedEqual(const RenderStyle&) const;
 
@@ -1723,8 +1732,8 @@ public:
     // Resolves the currentColor keyword, but must not be used for the "color" property which has a different semantic.
     WEBCORE_EXPORT Color colorResolvingCurrentColor(const StyleColor&) const;
 
-    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID) const;
-    WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID) const;
+    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
+    WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
 
     WEBCORE_EXPORT Color colorByApplyingColorFilter(const Color&) const;
     WEBCORE_EXPORT Color colorWithColorFilter(const StyleColor&) const;
@@ -2195,6 +2204,8 @@ private:
         unsigned autosizeStatus : 5;
 #endif
         // 51 bits
+        unsigned hasExplicitlySetColor : 1;
+        // 52 bits
     };
 
     // This constructor is used to implement the replace operation.
@@ -2256,5 +2267,7 @@ constexpr BorderStyle collapsedBorderStyle(BorderStyle);
 inline bool pseudoElementRendererIsNeeded(const RenderStyle*);
 inline bool generatesBox(const RenderStyle&);
 inline bool isNonVisibleOverflow(Overflow);
+
+inline bool isSkippedContentRoot(const RenderStyle&, const Element*);
 
 } // namespace WebCore

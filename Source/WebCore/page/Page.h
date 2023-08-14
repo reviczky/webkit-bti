@@ -141,6 +141,7 @@ class MediaPlaybackTarget;
 class MediaRecorderProvider;
 class MediaSessionCoordinatorPrivate;
 class ModelPlayerProvider;
+class OpportunisticTaskDeferralScope;
 class PageConfiguration;
 class PageConsoleClient;
 class PageDebuggable;
@@ -181,6 +182,7 @@ class VisitedLinkStore;
 class WebGLStateTracker;
 class WheelEventDeltaFilter;
 class WheelEventTestMonitor;
+class WindowEventLoop;
 
 struct AXTreeData;
 struct ApplePayAMSUIRequest;
@@ -243,6 +245,7 @@ enum class RenderingUpdateStep : uint32_t {
     AccessibilityRegionUpdate       = 1 << 20,
 #endif
     RestoreScrollPositionAndViewState = 1 << 21,
+    UpdateContentRelevancy          = 1 << 22,
 };
 
 enum class LinkDecorationFilteringTrigger : uint8_t {
@@ -271,6 +274,7 @@ constexpr OptionSet<RenderingUpdateStep> updateRenderingSteps = {
 #endif
     RenderingUpdateStep::PrepareCanvasesForDisplay,
     RenderingUpdateStep::CaretAnimation,
+    RenderingUpdateStep::UpdateContentRelevancy,
 };
 
 constexpr auto allRenderingUpdateSteps = updateRenderingSteps | OptionSet<RenderingUpdateStep> {
@@ -619,7 +623,7 @@ public:
 #endif
 
 #if USE(SYSTEM_PREVIEW)
-    void handleSystemPreview(const URL&, const SystemPreviewInfo&);
+    void beginSystemPreview(const URL&, const SystemPreviewInfo&, CompletionHandler<void()>&&);
 #endif
 
 #if ENABLE(WEB_AUTHN)
@@ -987,6 +991,7 @@ public:
     void forEachMediaElement(const Function<void(HTMLMediaElement&)>&);
     static void forEachDocumentFromMainFrame(const LocalFrame&, const Function<void(Document&)>&);
     void forEachFrame(const Function<void(LocalFrame&)>&);
+    void forEachWindowEventLoop(const Function<void(WindowEventLoop&)>&);
 
     bool shouldDisableCorsForRequestTo(const URL&) const;
     const HashSet<String>& maskedURLSchemes() const { return m_maskedURLSchemes; }
@@ -1053,6 +1058,7 @@ public:
 
     const WeakHashSet<LocalFrame>& rootFrames() const { return m_rootFrames; }
     WEBCORE_EXPORT void addRootFrame(LocalFrame&);
+    WEBCORE_EXPORT void removeRootFrame(LocalFrame&);
 
     void performOpportunisticallyScheduledTasks(MonotonicTime deadline);
 

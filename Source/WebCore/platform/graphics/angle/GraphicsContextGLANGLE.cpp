@@ -3149,12 +3149,28 @@ void GraphicsContextGLANGLE::multiDrawElementsInstancedBaseVertexBaseInstanceANG
     checkGPUStatus();
 }
 
+void GraphicsContextGLANGLE::clipControlEXT(GCGLenum origin, GCGLenum depth)
+{
+    if (!makeContextCurrent())
+        return;
+
+    GL_ClipControlEXT(origin, depth);
+}
+
 void GraphicsContextGLANGLE::provokingVertexANGLE(GCGLenum provokeMode)
 {
     if (!makeContextCurrent())
         return;
 
     GL_ProvokingVertexANGLE(provokeMode);
+}
+
+void GraphicsContextGLANGLE::polygonModeANGLE(GCGLenum face, GCGLenum mode)
+{
+    if (!makeContextCurrent())
+        return;
+
+    GL_PolygonModeANGLE(face, mode);
 }
 
 void GraphicsContextGLANGLE::polygonOffsetClampEXT(GCGLfloat factor, GCGLfloat units, GCGLfloat clamp)
@@ -3175,11 +3191,6 @@ void GraphicsContextGLANGLE::simulateEventForTesting(SimulatedEventForTesting ev
         m_failNextStatusCheck = true;
         return;
     }
-}
-
-bool GraphicsContextGLANGLE::isGLES2Compliant() const
-{
-    return m_isForWebGL2;
 }
 
 void GraphicsContextGLANGLE::paintRenderingResultsToCanvas(ImageBuffer& imageBuffer)
@@ -3230,13 +3241,13 @@ void GraphicsContextGLANGLE::withDisplayBufferAsNativeImage(Function<void(Native
     func(*displayImage);
 }
 
-RefPtr<PixelBuffer> GraphicsContextGLANGLE::paintRenderingResultsToPixelBuffer()
+RefPtr<PixelBuffer> GraphicsContextGLANGLE::paintRenderingResultsToPixelBuffer(FlipY flipY)
 {
     // Reading premultiplied alpha would involve unpremultiplying, which is lossy.
     if (contextAttributes().premultipliedAlpha)
         return nullptr;
     auto results = readRenderingResultsForPainting();
-    if (results && !results->size().isEmpty()) {
+    if (flipY == FlipY::Yes && results && !results->size().isEmpty()) {
         ASSERT(results->format().pixelFormat == PixelFormat::RGBA8 || results->format().pixelFormat == PixelFormat::BGRA8);
         // FIXME: Make PixelBufferConversions support negative rowBytes and in-place conversions.
         const auto size = results->size();

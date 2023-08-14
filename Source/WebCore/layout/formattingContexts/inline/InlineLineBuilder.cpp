@@ -215,6 +215,9 @@ struct LineCandidate {
 
         void setHangingContentWidth(InlineLayoutUnit logicalWidth) { m_continuousContent.setHangingContentWidth(logicalWidth); }
 
+        void setAccumulatedClonedDecorationEnd(InlineLayoutUnit accumulatedWidth) { m_accumulatedClonedDecorationEnd = accumulatedWidth; }
+        InlineLayoutUnit accumulatedClonedDecorationEnd() const { return m_accumulatedClonedDecorationEnd; }
+
     private:
         // FIXME: Enable this when we stop feature-matching legacy line layout.
         bool m_ignoreTrailingLetterSpacing { true };
@@ -222,6 +225,7 @@ struct LineCandidate {
         InlineContentBreaker::ContinuousContent m_continuousContent;
         const InlineItem* m_trailingLineBreak { nullptr };
         const InlineItem* m_trailingWordBreakOpportunity { nullptr };
+        InlineLayoutUnit m_accumulatedClonedDecorationEnd { 0.f };
         bool m_hasTrailingSoftWrapOpportunity { false };
     };
 
@@ -271,6 +275,7 @@ inline void LineCandidate::InlineContent::reset()
     m_continuousContent.reset();
     m_trailingLineBreak = { };
     m_trailingWordBreakOpportunity = { };
+    m_accumulatedClonedDecorationEnd = { };
 }
 
 inline void LineCandidate::reset()
@@ -363,6 +368,7 @@ LineBuilder::LayoutResult LineBuilder::layoutInlineContent(const LineInput& line
         , { computedVisualOrder(m_line), inlineBaseDirection }
         , { isFirstFormattedLine() ? LayoutResult::IsFirstLast::FirstFormattedLine::WithinIFC : LayoutResult::IsFirstLast::FirstFormattedLine::No, isLastLine }
         , m_line.nonSpanningInlineLevelBoxCount()
+        , lineContent.range.isEmpty() ? std::make_optional(m_lineLogicalRect.top() + m_candidateInlineContentEnclosingHeight) : std::nullopt
     };
 }
 
@@ -378,6 +384,7 @@ void LineBuilder::initialize(const InlineRect& initialLineLogicalRect, const Use
     m_overflowingLogicalWidth = { };
     m_partialLeadingTextItem = { };
     m_initialLetterClearGap = { };
+    m_candidateInlineContentEnclosingHeight = { };
 
     auto createLineSpanningInlineBoxes = [&] {
         auto isRootLayoutBox = [&](auto& elementBox) {
@@ -696,6 +703,10 @@ void LineBuilder::candidateContentForLine(LineCandidate& lineCandidate, size_t c
 
     auto firstInlineTextItemIndex = std::optional<size_t> { };
     auto lastInlineTextItemIndex = std::optional<size_t> { };
+#if ENABLE(CSS_BOX_DECORATION_BREAK)
+    HashSet<const Box*> inlineBoxListWithClonedDecorationEnd;
+    auto accumulatedDecorationEndWidth = InlineLayoutUnit { 0.f };
+#endif
     for (auto index = currentInlineItemIndex; index < softWrapOpportunityIndex; ++index) {
         auto& inlineItem = m_inlineItems[index];
         auto& style = isFirstFormattedLine() ? inlineItem.firstLineStyle() : inlineItem.style();
@@ -718,6 +729,15 @@ void LineBuilder::candidateContentForLine(LineCandidate& lineCandidate, size_t c
         }
         if (inlineItem.isInlineBoxStart() || inlineItem.isInlineBoxEnd()) {
             auto logicalWidth = inlineItemWidth(inlineItem, currentLogicalRight);
+#if ENABLE(CSS_BOX_DECORATION_BREAK)
+            if (style.boxDecorationBreak() == BoxDecorationBreak::Clone) {
+                auto& layoutBox = inlineItem.layoutBox();
+                if (inlineItem.isInlineBoxStart())
+                    inlineBoxListWithClonedDecorationEnd.add(&layoutBox);
+                else if (inlineBoxListWithClonedDecorationEnd.contains(&layoutBox))
+                    accumulatedDecorationEndWidth += logicalWidth;
+            }
+#endif
             lineCandidate.inlineContent.appendInlineItem(inlineItem, style, logicalWidth);
             currentLogicalRight += logicalWidth;
             continue;
@@ -741,6 +761,7 @@ void LineBuilder::candidateContentForLine(LineCandidate& lineCandidate, size_t c
         }
         ASSERT_NOT_REACHED();
     }
+    lineCandidate.inlineContent.setAccumulatedClonedDecorationEnd(accumulatedDecorationEndWidth);
 
     auto setLeadingAndTrailingHangingPunctuation = [&] {
         auto hangingContentWidth = lineCandidate.inlineContent.continuousContent().hangingContentWidth();
@@ -883,26 +904,29 @@ static bool shouldDisableHyphenation(const RenderStyle& rootStyle, unsigned succ
     return successiveHyphenatedLineCount >= limitLines;
 }
 
-static inline InlineLayoutUnit availableWidth(const LineCandidate::InlineContent& candidateContent, const Line& line, InlineLayoutUnit availableWidthForContent)
+static inline InlineLayoutUnit availableWidth(const LineCandidate::InlineContent& candidateContent, const Line& line, InlineLayoutUnit lineWidth)
 {
 #if USE_FLOAT_AS_INLINE_LAYOUT_UNIT
     // 1. Preferred width computation sums up floats while line breaker subtracts them.
     // 2. Available space is inherently a LayoutUnit based value (coming from block/flex etc layout) and it is the result of a floored float.
     // These can all lead to epsilon-scale differences.
-    availableWidthForContent += LayoutUnit::epsilon();
+    lineWidth += LayoutUnit::epsilon();
 #endif
-    auto availableWidth = availableWidthForContent - line.contentLogicalRight();
+    auto availableWidth = lineWidth - line.contentLogicalRight();
     auto& inlineBoxListWithClonedDecorationEnd = line.inlineBoxListWithClonedDecorationEnd();
-    if (inlineBoxListWithClonedDecorationEnd.isEmpty())
-        return std::isnan(availableWidth) ? maxInlineLayoutUnit() : availableWidth;
     // We may try to commit a inline box end here which already takes up place implicitly through the cloned decoration.
     // Let's not account for its logical width twice.
+    if (inlineBoxListWithClonedDecorationEnd.isEmpty())
+        return std::isnan(availableWidth) ? maxInlineLayoutUnit() : (availableWidth + candidateContent.accumulatedClonedDecorationEnd());
     for (auto& run : candidateContent.continuousContent().runs()) {
         if (!run.inlineItem.isInlineBoxEnd())
             continue;
-        availableWidth += inlineBoxListWithClonedDecorationEnd.get(&run.inlineItem.layoutBox());
+        auto decorationEntry = inlineBoxListWithClonedDecorationEnd.find(&run.inlineItem.layoutBox());
+        if (decorationEntry == inlineBoxListWithClonedDecorationEnd.end())
+            continue;
+        availableWidth += decorationEntry->value;
     }
-    return std::isnan(availableWidth) ? maxInlineLayoutUnit() : availableWidth;
+    return std::isnan(availableWidth) ? maxInlineLayoutUnit() : (availableWidth + candidateContent.accumulatedClonedDecorationEnd());
 }
 
 static std::optional<InlineLayoutUnit> eligibleOverflowWidthAsLeading(const InlineContentBreaker::ContinuousContent::RunList& candidateRuns, const InlineContentBreaker::Result& lineBreakingResult, bool isFirstFormattedLine)
@@ -946,10 +970,10 @@ static std::optional<InlineLayoutUnit> eligibleOverflowWidthAsLeading(const Inli
     return { };
 }
 
-std::tuple<InlineRect, bool> LineBuilder::lineBoxForCandidateInlineContent(const LineCandidate& lineCandidate) const
+std::tuple<InlineRect, bool> LineBuilder::adjustedLineRectWithCandidateInlineContent(const LineCandidate& lineCandidate) const
 {
-    auto& inlineContent = lineCandidate.inlineContent;
     // Check if the candidate content would stretch the line and whether additional floats are getting in the way.
+    auto& inlineContent = lineCandidate.inlineContent;
     if (isInIntrinsicWidthMode())
         return { m_lineLogicalRect, false };
     auto maximumLineLogicalHeight = m_lineLogicalRect.height();
@@ -1152,8 +1176,10 @@ LineBuilder::Result LineBuilder::handleInlineContent(InlineContentBreaker& inlin
         inlineContentBreaker.setHyphenationDisabled();
 
     // While the floats are not considered to be on the line, they make the line contentful for line breaking.
-    auto [adjustedLineForCandidateContent, candidateContentIsConstrainedByFloat] = lineBoxForCandidateInlineContent(lineCandidate);
-    auto availableWidthForCandidateContent = availableWidth(inlineContent, m_line, adjustedLineForCandidateContent.width());
+    auto [lineRectAdjutedWithCandidateContent, candidateContentIsConstrainedByFloat] = adjustedLineRectWithCandidateInlineContent(lineCandidate);
+    // Note that adjusted line height never shrinks.
+    m_candidateInlineContentEnclosingHeight = lineRectAdjutedWithCandidateContent.height();
+    auto availableWidthForCandidateContent = availableWidth(inlineContent, m_line, lineRectAdjutedWithCandidateContent.width());
     auto lineIsConsideredContentful = m_line.hasContentOrListMarker() || m_lineIsConstrainedByFloat || candidateContentIsConstrainedByFloat;
     auto lineStatus = InlineContentBreaker::LineStatus {
         m_line.contentLogicalRight(),
@@ -1258,7 +1284,7 @@ LineBuilder::Result LineBuilder::handleInlineContent(InlineContentBreaker& inlin
     if (lineGainsNewContent) {
         // Sometimes in order to put this content on the line, we have to avoid additional float boxes (when the new content is taller than any previous content and we have vertically stacked floats on this line)
         // which means we need to adjust the line rect to accommodate such new constraints.
-        m_lineLogicalRect = adjustedLineForCandidateContent;
+        m_lineLogicalRect = lineRectAdjutedWithCandidateContent;
     }
     m_lineIsConstrainedByFloat = m_lineIsConstrainedByFloat || candidateContentIsConstrainedByFloat;
     return toLineBuilderResult(lineBreakingResult);

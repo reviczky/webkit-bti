@@ -577,6 +577,34 @@ SamplingProfiler& VM::ensureSamplingProfiler(Ref<Stopwatch>&& stopwatch)
     }
     return *m_samplingProfiler;
 }
+
+void VM::enableSamplingProfiler()
+{
+    SamplingProfiler* profiler = samplingProfiler();
+    if (!profiler)
+        profiler = &ensureSamplingProfiler(Stopwatch::create());
+    profiler->start();
+}
+
+void VM::disableSamplingProfiler()
+{
+    SamplingProfiler* profiler = samplingProfiler();
+    if (!profiler)
+        profiler = &ensureSamplingProfiler(Stopwatch::create());
+    {
+        Locker locker { profiler->getLock() };
+        profiler->pause();
+    }
+}
+
+RefPtr<JSON::Value> VM::takeSamplingProfilerSamplesAsJSON()
+{
+    SamplingProfiler* profiler = samplingProfiler();
+    if (!profiler)
+        return nullptr;
+    return profiler->stackTracesAsJSON();
+}
+
 #endif // ENABLE(SAMPLING_PROFILER)
 
 static StringImpl::StaticStringImpl terminationErrorString { "JavaScript execution terminated." };
@@ -1629,13 +1657,8 @@ void VM::removeDebugger(Debugger& debugger)
 
 void VM::performOpportunisticallyScheduledTasks(MonotonicTime deadline)
 {
-    bool hasPendingWork;
-    {
-        JSLockHolder locker { *this };
-        hasPendingWork = deferredWorkTimer->hasAnyPendingWork();
-    }
-
-    if (!hasPendingWork)
+    JSLockHolder locker { *this };
+    if (!deferredWorkTimer->hasAnyPendingWork())
         heap.sweeper().doWorkUntil(*this, deadline);
 }
 

@@ -179,7 +179,7 @@
 #include <WebCore/DisplayRefreshMonitorManager.h>
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
 #include "WebSQLiteDatabaseTracker.h"
 #endif
 
@@ -234,7 +234,7 @@
 #include <wtf/linux/RealTimeThreads.h>
 #endif
 
-#if ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
+#if ENABLE(CONTENT_FILTERING)
 #include "WebMockContentFilterManager.h"
 #endif
 
@@ -303,7 +303,7 @@ WebProcess::WebProcess()
 #if ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER)
     , m_nonVisibleProcessMemoryCleanupTimer(*this, &WebProcess::nonVisibleProcessMemoryCleanupTimerFired)
 #endif
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     , m_webSQLiteDatabaseTracker([this](bool isHoldingLockedFiles) { parentProcessConnection()->send(Messages::WebProcessProxy::SetIsHoldingLockedFiles(isHoldingLockedFiles), 0); })
 #endif
 {
@@ -353,7 +353,7 @@ WebProcess::WebProcess()
 
     Gigacage::forbidDisablingPrimitiveGigacage();
 
-#if ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
+#if ENABLE(CONTENT_FILTERING)
     WebMockContentFilterManager::singleton().startObservingSettings();
 #endif
 
@@ -447,7 +447,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
             if (m_pagesInWindows.isEmpty() && critical == Critical::No)
                 critical = Critical::Yes;
 
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
             // If this is a process we keep around for performance, kill it on memory pressure instead of trying to free up its memory.
             if (!m_isSuspending && (m_processType == ProcessType::CachedWebContent || m_processType == ProcessType::PrewarmedWebContent || areAllPagesSuspended())) {
                 if (m_processType == ProcessType::CachedWebContent)
@@ -1609,23 +1609,18 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
         platformMediaSessionManager->processWillSuspend();
 #endif
 
-#if !PLATFORM(MAC)
-    if (!m_suppressMemoryPressureHandler) {
-        MemoryPressureHandler::singleton().releaseMemory(Critical::Yes, Synchronous::Yes);
-        for (auto& page : m_pageMap.values())
-            page->releaseMemory(Critical::Yes);
-    }
-#endif
-
     freezeAllLayerTrees();
 
 #if PLATFORM(COCOA)
     destroyRenderingResources();
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     m_webSQLiteDatabaseTracker.setIsSuspended(true);
     SQLiteDatabase::setIsDatabaseOpeningForbidden(true);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
     IPC::AccessibilityProcessSuspendedNotification(true);
     updateFreezerStatus();
 #endif
@@ -1685,9 +1680,12 @@ void WebProcess::processDidResume()
     cancelMarkAllLayersVolatile();
     unfreezeAllLayerTrees();
     
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     m_webSQLiteDatabaseTracker.setIsSuspended(false);
     SQLiteDatabase::setIsDatabaseOpeningForbidden(false);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
     IPC::AccessibilityProcessSuspendedNotification(false);
 #endif
 

@@ -15,7 +15,7 @@
 #include "compiler/translator/InitializeDll.h"
 #include "compiler/translator/length_limits.h"
 #ifdef ANGLE_ENABLE_HLSL
-#    include "compiler/translator/TranslatorHLSL.h"
+#    include "compiler/translator/hlsl/TranslatorHLSL.h"
 #endif  // ANGLE_ENABLE_HLSL
 #include "angle_gl.h"
 #include "compiler/translator/VariablePacker.h"
@@ -990,38 +990,6 @@ uint32_t GetAdvancedBlendEquations(const ShHandle handle)
 // in GLSL (ESSL 3.00.6 section 3.8: All identifiers containing a double underscore are reserved for
 // use by the underlying implementation). u is short for user-defined.
 const char kUserDefinedNamePrefix[] = "_u";
-
-namespace vk
-{
-// Interface block name containing the aggregate default uniforms
-const char kDefaultUniformsNameVS[]  = "defaultUniformsVS";
-const char kDefaultUniformsNameTCS[] = "defaultUniformsTCS";
-const char kDefaultUniformsNameTES[] = "defaultUniformsTES";
-const char kDefaultUniformsNameGS[]  = "defaultUniformsGS";
-const char kDefaultUniformsNameFS[]  = "defaultUniformsFS";
-const char kDefaultUniformsNameCS[]  = "defaultUniformsCS";
-
-// Interface block and variable names containing driver uniforms
-const char kDriverUniformsBlockName[] = "ANGLEUniformBlock";
-const char kDriverUniformsVarName[]   = "ANGLEUniforms";
-
-// Interface block array name used for atomic counter emulation
-const char kAtomicCountersBlockName[] = "ANGLEAtomicCounters";
-
-const char kXfbEmulationGetOffsetsFunctionName[] = "ANGLEGetXfbOffsets";
-const char kXfbEmulationCaptureFunctionName[]    = "ANGLECaptureXfb";
-const char kXfbEmulationBufferBlockName[]        = "ANGLEXfbBuffer";
-const char kXfbEmulationBufferName[]             = "ANGLEXfb";
-const char kXfbEmulationBufferFieldName[]        = "xfbOut";
-
-const char kTransformPositionFunctionName[] = "ANGLETransformPosition";
-
-const char kXfbExtensionPositionOutName[] = "ANGLEXfbPosition";
-
-// EXT_shader_framebuffer_fetch / EXT_shader_framebuffer_fetch_non_coherent
-const char kInputAttachmentName[] = "ANGLEInputAttachment";
-
-}  // namespace vk
 
 const char *BlockLayoutTypeToString(BlockLayoutType type)
 {

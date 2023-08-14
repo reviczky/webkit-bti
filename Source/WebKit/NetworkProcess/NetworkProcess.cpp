@@ -45,6 +45,7 @@
 #include "NetworkLoad.h"
 #include "NetworkLoadScheduler.h"
 #include "NetworkOriginAccessPatterns.h"
+#include "NetworkProcessConnectionParameters.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessPlatformStrategies.h"
 #include "NetworkProcessProxyMessages.h"
@@ -54,6 +55,8 @@
 #include "NetworkStorageManager.h"
 #include "PreconnectTask.h"
 #include "PrivateClickMeasurementPersistentStore.h"
+#include "ProcessAssertion.h"
+#include "RTCDataChannelRemoteManagerProxy.h"
 #include "RemoteWorkerType.h"
 #include "ShouldGrandfatherStatistics.h"
 #include "StorageAccessStatus.h"
@@ -146,7 +149,7 @@ NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parame
 #if ENABLE(CONTENT_EXTENSIONS)
     , m_networkContentRuleListManager(*this)
 #endif
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     , m_webSQLiteDatabaseTracker([this](bool isHoldingLockedFiles) { setIsHoldingLockedFiles(isHoldingLockedFiles); })
 #endif
 {
@@ -331,6 +334,9 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     setPrivateClickMeasurementEnabled(parameters.enablePrivateClickMeasurement);
     m_ftpEnabled = parameters.ftpEnabled;
+#if ENABLE(BUILT_IN_NOTIFICATIONS)
+    m_builtInNotificationsEnabled = parameters.builtInNotificationsEnabled;
+#endif
 
     for (auto [processIdentifier, domain] : parameters.allowedFirstPartiesForCookies) {
         if (auto* connection = webProcessConnection(processIdentifier))
@@ -373,7 +379,7 @@ void NetworkProcess::initializeConnection(IPC::Connection* connection)
         supplement->initializeConnection(connection);
 }
 
-void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, NetworkProcessConnectionParameters parameters, CompletionHandler<void(std::optional<IPC::Connection::Handle>&&, HTTPCookieAcceptPolicy)>&& completionHandler)
+void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, NetworkProcessConnectionParameters&& parameters, CompletionHandler<void(std::optional<IPC::Connection::Handle>&&, HTTPCookieAcceptPolicy)>&& completionHandler)
 {
     auto connectionIdentifiers = IPC::Connection::createConnectionIdentifierPair();
     if (!connectionIdentifiers) {
@@ -381,7 +387,7 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
         return;
     }
 
-    auto newConnection = NetworkConnectionToWebProcess::create(*this, identifier, sessionID, parameters, connectionIdentifiers->server);
+    auto newConnection = NetworkConnectionToWebProcess::create(*this, identifier, sessionID, WTFMove(parameters), connectionIdentifiers->server);
     auto& connection = newConnection.get();
 
     ASSERT(!m_webProcessConnections.contains(identifier));
@@ -469,7 +475,7 @@ void NetworkProcess::addStorageSession(PAL::SessionID sessionID, const WebsiteDa
 
     auto identifierBase = makeString(uiProcessBundleIdentifier(), '.', sessionID.toUInt64());
     RetainPtr<CFURLStorageSessionRef> storageSession;
-    auto cfIdentifier = makeString(identifierBase, ".PrivateBrowsing."_s, UUID::createVersion4()).createCFString();
+    auto cfIdentifier = makeString(identifierBase, ".PrivateBrowsing."_s, WTF::UUID::createVersion4()).createCFString();
     if (sessionID.isEphemeral())
         storageSession = createPrivateStorageSession(cfIdentifier.get(), std::nullopt, WebCore::NetworkStorageSession::ShouldDisableCFURLCache::Yes);
     else if (sessionID != PAL::SessionID::defaultSessionID())
@@ -2107,11 +2113,6 @@ void NetworkProcess::publishDownloadProgress(DownloadID downloadID, const URL& u
 }
 #endif
 
-void NetworkProcess::continueWillSendRequest(DownloadID downloadID, WebCore::ResourceRequest&& request)
-{
-    downloadManager().continueWillSendRequest(downloadID, WTFMove(request));
-}
-
 void NetworkProcess::findPendingDownloadLocation(NetworkDataTask& networkDataTask, ResponseCompletionHandler&& completionHandler, const ResourceResponse& response)
 {
     uint64_t destinationID = networkDataTask.pendingDownloadID().toUInt64();
@@ -2969,6 +2970,28 @@ void NetworkProcess::countNonDefaultSessionSets(PAL::SessionID sessionID, Comple
 void NetworkProcess::requestBackgroundFetchPermission(PAL::SessionID sessionID, const ClientOrigin& origin, CompletionHandler<void(bool)>&& callback)
 {
     parentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::RequestBackgroundFetchPermission(sessionID, origin), WTFMove(callback));
+}
+#endif
+
+#if USE(RUNNINGBOARD)
+void NetworkProcess::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
+{
+#if PLATFORM(MAC)
+    // The sandbox doesn't allow the network process to talk to runningboardd on macOS.
+    UNUSED_PARAM(isHoldingLockedFiles);
+#else
+    if (!isHoldingLockedFiles) {
+        m_holdingLockedFileAssertion = nullptr;
+        return;
+    }
+
+    if (m_holdingLockedFileAssertion && m_holdingLockedFileAssertion->isValid())
+        return;
+
+    // We synchronously take a process assertion when beginning a SQLite transaction so that we don't get suspended
+    // while holding a locked file. We would get killed if suspended while holding locked files.
+    m_holdingLockedFileAssertion = ProcessAssertion::create(getCurrentProcessID(), "Network Process is holding locked files"_s, ProcessAssertionType::FinishTaskInterruptable, ProcessAssertion::Mode::Sync);
+#endif
 }
 #endif
 

@@ -109,6 +109,11 @@ AutoObjCPtr<id<MTLLibrary>> CreateShaderLibrary(
     bool enableFastMath,
     AutoObjCPtr<NSError *> *error);
 
+AutoObjCPtr<id<MTLLibrary>> CreateShaderLibrary(id<MTLDevice> metalDevice,
+                                                const char *source,
+                                                size_t sourceLen,
+                                                AutoObjCPtr<NSError *> *error);
+
 AutoObjCPtr<id<MTLLibrary>> CreateShaderLibraryFromBinary(id<MTLDevice> metalDevice,
                                                           const uint8_t *binarySource,
                                                           size_t binarySourceLen,
@@ -180,7 +185,7 @@ bool DeviceHasMaximumRenderTargetSize(id<MTLDevice> device);
 // has alpha channel.
 MTLClearColor EmulatedAlphaClearColor(MTLClearColor color, MTLColorWriteMask colorMask);
 
-NSUInteger ComputeTotalSizeUsedForMTLRenderPassDescriptor(const MTLRenderPassDescriptor *descriptor,
+NSUInteger ComputeTotalSizeUsedForMTLRenderPassDescriptor(const mtl::RenderPassDesc &descriptor,
                                                           const Context *context,
                                                           const mtl::ContextDevice &device);
 

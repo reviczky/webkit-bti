@@ -14,6 +14,7 @@
 #include "common/frame_capture_utils.h"
 #include "common/system_utils.h"
 #include "libANGLE/Context.h"
+#include "libANGLE/ShareGroup.h"
 #include "libANGLE/Thread.h"
 #include "libANGLE/angletypes.h"
 #include "libANGLE/entry_points_utils.h"
@@ -816,6 +817,7 @@ void CaptureEGLCallToFrameCapture(CaptureFuncT captureFunc,
     {
         return;
     }
+    std::lock_guard<egl::ContextMutex> lock(*context->getContextMutex());
 
     angle::FrameCaptureShared *frameCaptureShared =
         context->getShareGroup()->getFrameCaptureShared();

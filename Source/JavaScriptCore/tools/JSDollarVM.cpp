@@ -674,7 +674,7 @@ IGNORE_WARNINGS_END
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
     {
         DollarVMAssertScope assertScope;
-        return Structure::create(vm, globalObject, prototype, TypeInfo(DerivedArrayType, StructureFlags), info(), ArrayClass);
+        return Structure::create(vm, globalObject, prototype, TypeInfo(DerivedArrayType, StructureFlags), info(), NonArray);
     }
 
 protected:
@@ -2137,7 +2137,6 @@ static JSC_DECLARE_HOST_FUNCTION(functionCallWithStackSize);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateGlobalObject);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateProxy);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateRuntimeArray);
-static JSC_DECLARE_HOST_FUNCTION(functionCreateNullRopeString);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateImpureGetter);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateCustomGetterObject);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateDOMJITNodeObject);
@@ -2850,7 +2849,7 @@ JSC_DEFINE_HOST_FUNCTION(functionIsHavingABadTime, (JSGlobalObject* globalObject
 // options are not frozen. For the jsc shell, the --disableOptionsFreezingForTesting
 // argument needs to be passed in on the command line.
 
-#if ENABLE(ASSEMBLER)
+#if ENABLE(ASSEMBLER) && OS(DARWIN) && CPU(X86_64)
 static void callWithStackSizeProbeFunction(Probe::State* state)
 {
     JSGlobalObject* globalObject = bitwise_cast<JSGlobalObject*>(state->arg);
@@ -2867,7 +2866,7 @@ static void callWithStackSizeProbeFunction(Probe::State* state)
     MarkedArgumentBuffer args;
     call(globalObject, function, callData, jsUndefined(), args);
 }
-#endif // ENABLE(ASSEMBLER)
+#endif // ENABLE(ASSEMBLER) && OS(DARWIN) && CPU(X86_64)
 
 JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASAN, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
@@ -2898,7 +2897,6 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
     if (!arg1.isNumber())
         return throwVMError(globalObject, throwScope, "arg1 should be a number"_s);
 
-    JSFunction* function = jsCast<JSFunction*>(arg0);
     size_t desiredStackSize = arg1.asNumber();
 
     const StackBounds& bounds = Thread::current().stack();
@@ -2926,6 +2924,8 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
     helper.updateVMStackLimits();
 
 #if OS(DARWIN) && CPU(X86_64)
+    JSFunction* function = jsCast<JSFunction*>(arg0);
+
     __asm__ volatile (
         "subq %[sizeDiff], %%rsp" "\n"
         "pushq %%rax" "\n"
@@ -2942,11 +2942,6 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
         , [sizeDiff] "rm" (sizeDiff)
         : "memory"
     );
-#else
-    UNUSED_PARAM(function);
-#if !COMPILER(MSVC)
-    UNUSED_PARAM(callWithStackSizeProbeFunction);
-#endif
 #endif // OS(DARWIN) && CPU(X86_64)
 
     Options::maxPerThreadStackUsage() = originalMaxPerThreadStackUsage;
@@ -2994,14 +2989,6 @@ JSC_DEFINE_HOST_FUNCTION(functionCreateRuntimeArray, (JSGlobalObject* globalObje
     JSLockHolder lock(globalObject);
     RuntimeArray* array = RuntimeArray::create(globalObject, callFrame);
     return JSValue::encode(array);
-}
-
-JSC_DEFINE_HOST_FUNCTION(functionCreateNullRopeString, (JSGlobalObject* globalObject, CallFrame*))
-{
-    DollarVMAssertScope assertScope;
-    VM& vm = globalObject->vm();
-    JSLockHolder lock(vm);
-    return JSValue::encode(JSRopeString::createNullForTesting(vm));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionCreateImpureGetter, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -4143,7 +4130,6 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "createGlobalObject"_s, functionCreateGlobalObject, 0);
     addFunction(vm, "createGlobalProxy"_s, functionCreateProxy, 1);
     addFunction(vm, "createRuntimeArray"_s, functionCreateRuntimeArray, 0);
-    addFunction(vm, "createNullRopeString"_s, functionCreateNullRopeString, 0);
 
     addFunction(vm, "createImpureGetter"_s, functionCreateImpureGetter, 1);
     addFunction(vm, "createCustomGetterObject"_s, functionCreateCustomGetterObject, 0);

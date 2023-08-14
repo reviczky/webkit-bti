@@ -2900,6 +2900,11 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case ArraySpliceExtract: {
+        compileArraySpliceExtract(node);
+        break;
+    }
+
     case ArrayIndexOf: {
         compileArrayIndexOf(node);
         break;
@@ -3097,6 +3102,11 @@ void SpeculativeJIT::compile(Node* node)
     case CallStringConstructor:
     case StringValueOf: {
         compileToStringOrCallStringConstructorOrStringValueOf(node);
+        break;
+    }
+
+    case StringIndexOf: {
+        compileStringIndexOf(node);
         break;
     }
 

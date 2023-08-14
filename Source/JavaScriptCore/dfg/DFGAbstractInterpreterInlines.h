@@ -2293,10 +2293,15 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case StringCodePointAt:
         setNonCellTypeForNode(node, SpecInt32Only);
         break;
-        
+
+    case StringIndexOf:
+        setNonCellTypeForNode(node, SpecInt32Only);
+        break;
+
     case StringFromCharCode:
         switch (node->child1().useKind()) {
         case Int32Use:
+        case KnownInt32Use:
             break;
         case UntypedUse:
             clobberWorld();
@@ -2738,6 +2743,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         setForNode(node, structureSet);
         break;
     }
+
+    case ArraySpliceExtract:
+        clobberWorld();
+        makeBytecodeTopForNode(node);
+        break;
 
     case ArrayIndexOf: {
         setNonCellTypeForNode(node, SpecInt32Only);
@@ -4941,12 +4951,6 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         const AbstractValue& abstractValue = forNode(node->child1());
         unsigned bits = node->typeInfoOperand();
         ASSERT(bits);
-        if (bits == ImplementsDefaultHasInstance) {
-            if (abstractValue.m_type == SpecFunctionWithDefaultHasInstance) {
-                m_state.setShouldTryConstantFolding(true);
-                break;
-            }
-        }
 
         if (JSValue value = abstractValue.value()) {
             if (value.isCell()) {

@@ -84,6 +84,7 @@
 #include "RenderView.h"
 #include "RenderWidget.h"
 #include "RenderedPosition.h"
+#include "RuntimeApplicationChecks.h"
 #include "Settings.h"
 #include "TextCheckerClient.h"
 #include "TextCheckingHelper.h"
@@ -105,6 +106,11 @@ using namespace HTMLNames;
 AccessibilityObject::~AccessibilityObject()
 {
     ASSERT(isDetached());
+}
+
+inline ProcessID AccessibilityObject::processID() const
+{
+    return presentingApplicationPID();
 }
 
 void AccessibilityObject::detachRemoteParts(AccessibilityDetachmentType detachmentType)
@@ -405,39 +411,32 @@ std::optional<SimpleRange> AccessibilityObject::misspellingRange(const SimpleRan
     return std::nullopt;
 }
 
-bool AccessibilityObject::isNodeForComposition(const Editor& editor) const
-{
-    WeakPtr compositionNode = editor.compositionNode();
-    if (!compositionNode)
-        return false;
-
-    WeakPtr cache = axObjectCache();
-    if (!cache)
-        return false;
-
-    if (auto* compositionObject = cache->textCompositionObjectForNode(*compositionNode))
-        return compositionObject->objectID() == objectID();
-
-    return false;
-}
-
-std::optional<CharacterRange> AccessibilityObject::textInputMarkedRange() const
+AXTextMarkerRange AccessibilityObject::textInputMarkedTextMarkerRange() const
 {
     WeakPtr node = this->node();
     if (!node)
-        return std::nullopt;
+        return { };
 
     auto* frame = node->document().frame();
     if (!frame)
-        return std::nullopt;
+        return { };
+
+    auto* cache = axObjectCache();
+    if (!cache)
+        return { };
 
     auto& editor = frame->editor();
-    auto range = editor.compositionRange();
-    if (!range || !isNodeForComposition(editor))
-        return std::nullopt;
+    auto* object = cache->getOrCreate(editor.compositionNode());
+    if (!object)
+        return { };
 
-    auto scope = makeRangeSelectingNodeContents(*node);
-    return characterRange(scope, *range);
+    if (auto* observableObject = object->observableObject())
+        object = observableObject;
+
+    if (object->objectID() != objectID())
+        return { };
+
+    return { editor.compositionRange() };
 }
 
 unsigned AccessibilityObject::blockquoteLevel() const
@@ -626,8 +625,11 @@ void AccessibilityObject::insertChild(AXCoreObject* newChild, unsigned index, De
 
     auto* displayContentsParent = child->displayContentsParent();
     // To avoid double-inserting a child of a `display: contents` element, only insert if `this` is the rightful parent.
-    if (displayContentsParent && displayContentsParent != this)
+    if (displayContentsParent && displayContentsParent != this) {
+        // Make sure the display:contents parent object knows it has a child it needs to add.
+        displayContentsParent->setNeedsToUpdateChildren();
         return;
+    }
 
     auto thisAncestorFlags = computeAncestorFlags();
     child->initializeAncestorFlags(thisAncestorFlags);
@@ -1684,36 +1686,23 @@ Vector<RetainPtr<id>> AccessibilityObject::modelElementChildren()
 static RenderListItem* renderListItemContainerForNode(Node* node)
 {
     for (; node; node = node->parentNode()) {
-        RenderBoxModelObject* renderer = node->renderBoxModelObject();
-        if (is<RenderListItem>(renderer))
-            return downcast<RenderListItem>(renderer);
+        if (auto* listItem = dynamicDowncast<RenderListItem>(node->renderBoxModelObject()))
+            return listItem;
     }
     return nullptr;
 }
 
-static StringView listMarkerTextForNode(Node* node)
-{
-    RenderListItem* listItem = renderListItemContainerForNode(node);
-    if (!listItem)
-        return { };
-    
-    // If this is in a list item, we need to manually add the text for the list marker
-    // because a RenderListMarker does not have a Node equivalent and thus does not appear
-    // when iterating text.
-    return listItem->markerTextWithSuffix();
-}
-
-// Returns the text associated with a list marker if this node is contained within a list item.
+// Returns the text representing a list marker if node is contained within a list item.
 StringView AccessibilityObject::listMarkerTextForNodeAndPosition(Node* node, const VisiblePosition& visiblePositionStart)
 {
     auto* listItem = renderListItemContainerForNode(node);
     if (!listItem)
         return { };
+
     // Only include the list marker if the range includes the line start (where the marker would be), and is in the same line as the marker.
     if (!isStartOfLine(visiblePositionStart) || !inSameLine(visiblePositionStart, firstPositionInNode(&listItem->element())))
         return { };
-
-    return listMarkerTextForNode(node);
+    return listItem->markerTextWithSuffix();
 }
 
 String AccessibilityObject::stringForRange(const SimpleRange& range) const
@@ -1726,12 +1715,12 @@ String AccessibilityObject::stringForRange(const SimpleRange& range) const
     for (; !it.atEnd(); it.advance()) {
         // non-zero length means textual node, zero length means replaced node (AKA "attachments" in AX)
         if (it.text().length()) {
-            // Add a textual representation for list marker text.
+            // If this is in a list item, we need to add the text for the list marker
+            // because a RenderListMarker does not have a Node equivalent and thus does not appear
+            // when iterating text.
             // Don't add list marker text for new line character.
-            if (it.text().length() != 1 || !deprecatedIsSpaceOrNewline(it.text()[0])) {
-                // FIXME: Seems like the position should be based on it.range(), not range.
-                builder.append(listMarkerTextForNodeAndPosition(it.node(), VisiblePosition(makeDeprecatedLegacyPosition(range.start))));
-            }
+            if (it.text().length() != 1 || !deprecatedIsSpaceOrNewline(it.text()[0]))
+                builder.append(listMarkerTextForNodeAndPosition(it.node(), makeDeprecatedLegacyPosition(it.range().start)));
             it.appendTextToStringBuilder(builder);
         } else {
             if (replacedNodeNeedsCharacter(it.node()))

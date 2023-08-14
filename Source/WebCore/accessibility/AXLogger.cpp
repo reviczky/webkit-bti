@@ -204,6 +204,7 @@ void AXLogger::log(const String& collectionName, const AXObjectCache::DeferredCo
         [&size] (const WeakHashSet<Element, WeakPtrImplWithEventTargetData>& typedCollection) { size = typedCollection.computeSize(); },
         [&size] (const WeakHashSet<HTMLTableElement, WeakPtrImplWithEventTargetData>& typedCollection) { size = typedCollection.computeSize(); },
         [&size] (const WeakHashSet<AccessibilityTable>& typedCollection) { size = typedCollection.computeSize(); },
+        [&size] (const WeakListHashSet<Node, WeakPtrImplWithEventTargetData>& typedCollection) { size = typedCollection.computeSize(); },
         [] (auto&) {
             ASSERT_NOT_REACHED();
             return;
@@ -643,6 +644,12 @@ TextStream& operator<<(TextStream& stream, AXObjectCache::AXNotification notific
         break;
     case AXObjectCache::AXNotification::AXDraggingExitedDropZone:
         stream << "AXDraggingExitedDropZone";
+        break;
+    case AXObjectCache::AXNotification::AXTextCompositionBegan:
+        stream << "AXTextCompositionBegan";
+        break;
+    case AXObjectCache::AXNotification::AXTextCompositionEnded:
+        stream << "AXTextCompositionEnded";
         break;
     }
 

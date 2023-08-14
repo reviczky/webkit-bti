@@ -70,36 +70,47 @@ void RemoteDisplayListRecorderProxy::transformToColorSpace(const DestinationColo
 template<typename T>
 ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
 {
-    if (UNLIKELY(!(m_renderingBackend && m_imageBuffer)))
+    auto imageBuffer = m_imageBuffer.get();
+    if (UNLIKELY(!(m_renderingBackend && imageBuffer)))
         return;
 
-    m_imageBuffer->backingStoreWillChange();
+    imageBuffer->backingStoreWillChange();
     auto result = m_renderingBackend->streamConnection().send(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
+#if !RELEASE_LOG_DISABLED
     if (UNLIKELY(result != IPC::Error::NoError)) {
         auto& parameters = m_renderingBackend->parameters();
         RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
             parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result));
     }
+#else
+    UNUSED_VARIABLE(result);
+#endif
 }
 
 template<typename T>
 ALWAYS_INLINE void RemoteDisplayListRecorderProxy::sendSync(T&& message)
 {
-    if (UNLIKELY(!(m_renderingBackend && m_imageBuffer)))
+    auto imageBuffer = m_imageBuffer.get();
+    if (UNLIKELY(!(m_renderingBackend && imageBuffer)))
         return;
 
-    m_imageBuffer->backingStoreWillChange();
+    imageBuffer->backingStoreWillChange();
     auto result = m_renderingBackend->streamConnection().sendSync(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
+#if !RELEASE_LOG_DISABLED
     if (UNLIKELY(!result.succeeded())) {
         auto& parameters = m_renderingBackend->parameters();
         RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::sendSync - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
             parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result.error));
     }
+#else
+    UNUSED_VARIABLE(result);
+#endif
 }
 
 RenderingMode RemoteDisplayListRecorderProxy::renderingMode() const
 {
-    return m_imageBuffer ? m_imageBuffer->renderingMode() : RenderingMode::Unaccelerated;
+    auto imageBuffer = m_imageBuffer.get();
+    return imageBuffer ? imageBuffer->renderingMode() : RenderingMode::Unaccelerated;
 }
 
 void RemoteDisplayListRecorderProxy::recordSave()
@@ -400,7 +411,7 @@ void RemoteDisplayListRecorderProxy::recordPaintVideoFrame(VideoFrame& frame, co
     });
     if (!sharedVideoFrame)
         return;
-    send(Messages::RemoteDisplayListRecorder::PaintVideoFrame(*sharedVideoFrame, destination, shouldDiscardAlpha));
+    send(Messages::RemoteDisplayListRecorder::PaintVideoFrame(WTFMove(*sharedVideoFrame), destination, shouldDiscardAlpha));
 #endif
 }
 #endif

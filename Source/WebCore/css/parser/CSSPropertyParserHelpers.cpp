@@ -5902,6 +5902,84 @@ static RefPtr<CSSValue> consumeSteps(CSSParserTokenRange& range)
     return CSSStepsTimingFunctionValue::create(*stepsValue, stepPosition);
 }
 
+static RefPtr<CSSValue> consumeLinear(CSSParserTokenRange& range)
+{
+    ASSERT(range.peek().functionId() == CSSValueLinear);
+    auto rangeCopy = range;
+    auto args = consumeFunction(rangeCopy);
+
+    struct Step {
+        double output;
+        std::optional<double> input { std::nullopt };
+    };
+    Vector<Step> steps;
+    auto largestInput = -std::numeric_limits<double>::infinity();
+    bool lastPointIsExtraPoint = false;
+    while (true) {
+        auto output = consumeNumberRaw(args);
+        if (!output)
+            break;
+
+        steps.append({ output->value });
+        lastPointIsExtraPoint = false;
+
+        args.consumeWhitespace();
+        if (auto input = consumePercentRaw(args)) {
+            largestInput = std::max(input->value / 100.0, largestInput);
+            steps.last().input = largestInput;
+
+            args.consumeWhitespace();
+            if (auto extraPoint = consumePercentRaw(args)) {
+                largestInput = std::max(extraPoint->value / 100.0, largestInput);
+                steps.append({ steps.last().output, largestInput });
+                lastPointIsExtraPoint = true;
+            }
+        } else if (steps.size() == 1) {
+            largestInput = 0.0;
+            steps.last().input = largestInput;
+        }
+
+        if (!consumeCommaIncludingWhitespace(args))
+            break;
+    }
+
+    if (!args.atEnd() || steps.size() < 2 || (steps.size() == 2 && lastPointIsExtraPoint))
+        return nullptr;
+
+    if (!lastPointIsExtraPoint && !steps.last().input)
+        steps.last().input = std::max(1.0, largestInput);
+
+    Vector<LinearTimingFunction::Point> points;
+    points.reserveInitialCapacity(steps.size());
+
+    std::optional<size_t> missingInputRunStart;
+    for (size_t i = 0; i <= steps.size(); ++i) {
+        if (i < steps.size() && !steps[i].input) {
+            if (!missingInputRunStart)
+                missingInputRunStart = i;
+            continue;
+        }
+
+        if (missingInputRunStart) {
+            double inputLow = missingInputRunStart > 0 ? *steps[*missingInputRunStart - 1].input : 0.0;
+            double inputHigh = i < steps.size() ? *steps[i].input : std::max(1.0, largestInput);
+            double inputAverage = (inputLow + inputHigh) / (i - *missingInputRunStart + 1);
+            for (size_t j = *missingInputRunStart; j < i; ++j)
+                points.uncheckedAppend({ steps[j].output, inputAverage * (j - *missingInputRunStart + 1) });
+
+            missingInputRunStart = std::nullopt;
+        }
+
+        if (i < steps.size() && steps[i].input)
+            points.uncheckedAppend({ steps[i].output, *steps[i].input });
+    }
+    ASSERT(!missingInputRunStart);
+    ASSERT(points.size() == steps.size());
+
+    range = rangeCopy;
+    return CSSLinearTimingFunctionValue::create(WTFMove(points));
+}
+
 static RefPtr<CSSValue> consumeCubicBezier(CSSParserTokenRange& range)
 {
     ASSERT(range.peek().functionId() == CSSValueCubicBezier);
@@ -5996,13 +6074,23 @@ RefPtr<CSSValue> consumeTimingFunction(CSSParserTokenRange& range, const CSSPars
         break;
     }
 
-    CSSValueID function = range.peek().functionId();
-    if (function == CSSValueCubicBezier)
+    switch (range.peek().functionId()) {
+    case CSSValueLinear:
+        return consumeLinear(range);
+
+    case CSSValueCubicBezier:
         return consumeCubicBezier(range);
-    if (function == CSSValueSteps)
+
+    case CSSValueSteps:
         return consumeSteps(range);
-    if (context.springTimingFunctionEnabled && function == CSSValueSpring)
-        return consumeSpringFunction(range);
+
+    case CSSValueSpring:
+        return context.springTimingFunctionEnabled ? consumeSpringFunction(range) : nullptr;
+
+    default:
+        break;
+    }
+
     return nullptr;
 }
 
@@ -8239,12 +8327,29 @@ Vector<FontTechnology> consumeFontTech(CSSParserTokenRange& range, bool singleVa
         if (arg.type() != IdentToken)
             return { };
         auto technology = fromCSSValueID<FontTechnology>(arg.id());
-        if (technology != FontTechnology::Invalid && FontCustomPlatformData::supportsTechnology(technology))
-            technologies.append(technology);
+        if (technology == FontTechnology::Invalid)
+            return { };
+        technologies.append(technology);
     } while (consumeCommaIncludingWhitespace(args) && !singleValue);
     if (!args.atEnd())
         return { };
     return technologies;
+}
+
+static bool isFontFormatKeywordValid(CSSValueID id)
+{
+    switch (id) {
+    case CSSValueCollection:
+    case CSSValueEmbeddedOpentype:
+    case CSSValueOpentype:
+    case CSSValueSvg:
+    case CSSValueTruetype:
+    case CSSValueWoff:
+    case CSSValueWoff2:
+        return true;
+    default:
+        return false;
+    }
 }
 
 String consumeFontFormat(CSSParserTokenRange& range, bool rejectStringValues)
@@ -8255,12 +8360,11 @@ String consumeFontFormat(CSSParserTokenRange& range, bool rejectStringValues)
     auto& arg = args.consumeIncludingWhitespace();
     if (!args.atEnd())
         return nullString();
-    if (arg.type() != IdentToken && (rejectStringValues || arg.type() != StringToken))
-        return nullString();
-    auto format = arg.value().toString();
-    if (arg.type() == IdentToken && !FontCustomPlatformData::supportsFormat(format))
-        return nullString();
-    return format;
+    if (arg.type() == IdentToken && isFontFormatKeywordValid(arg.id()))
+        return arg.value().toString();
+    if (arg.type() == StringToken && !rejectStringValues)
+        return arg.value().toString();
+    return nullString();
 }
 
 // MARK: @font-palette-values

@@ -35,19 +35,25 @@
 #include "DiagnosticLoggingKeys.h"
 #include "Document.h"
 #include "EXTBlendMinMax.h"
+#include "EXTClipControl.h"
 #include "EXTColorBufferFloat.h"
 #include "EXTColorBufferHalfFloat.h"
+#include "EXTConservativeDepth.h"
+#include "EXTDepthClamp.h"
 #include "EXTDisjointTimerQuery.h"
 #include "EXTDisjointTimerQueryWebGL2.h"
 #include "EXTFloatBlend.h"
 #include "EXTFragDepth.h"
 #include "EXTPolygonOffsetClamp.h"
+#include "EXTRenderSnorm.h"
 #include "EXTShaderTextureLOD.h"
 #include "EXTTextureCompressionBPTC.h"
 #include "EXTTextureCompressionRGTC.h"
 #include "EXTTextureFilterAnisotropic.h"
+#include "EXTTextureMirrorClampToEdge.h"
 #include "EXTTextureNorm16.h"
 #include "EXTsRGB.h"
+#include "EventLoop.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
 #include "GraphicsContext.h"
@@ -70,11 +76,14 @@
 #include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
+#include "NVShaderNoperspectiveInterpolation.h"
 #include "NavigatorWebXR.h"
 #include "NotImplemented.h"
 #include "OESDrawBuffersIndexed.h"
 #include "OESElementIndexUint.h"
 #include "OESFBORenderMipmap.h"
+#include "OESSampleVariables.h"
+#include "OESShaderMultisampleInterpolation.h"
 #include "OESStandardDerivatives.h"
 #include "OESTextureFloat.h"
 #include "OESTextureFloatLinear.h"
@@ -109,13 +118,16 @@
 #include "WebGLLoseContext.h"
 #include "WebGLMultiDraw.h"
 #include "WebGLMultiDrawInstancedBaseVertexBaseInstance.h"
+#include "WebGLPolygonMode.h"
 #include "WebGLProgram.h"
 #include "WebGLProvokingVertex.h"
+#include "WebGLRenderSharedExponent.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLRenderingContext.h"
 #include "WebGLSampler.h"
 #include "WebGLShader.h"
 #include "WebGLShaderPrecisionFormat.h"
+#include "WebGLStencilTexturing.h"
 #include "WebGLTexture.h"
 #include "WebGLTransformFeedback.h"
 #include "WebGLUniformLocation.h"
@@ -622,26 +634,8 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
     return renderingContext;
 }
 
-WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, WebGLContextAttributes attributes)
-    : GPUBasedCanvasRenderingContext(canvas)
-    , m_restoreTimer(canvas.scriptExecutionContext(), *this, &WebGLRenderingContextBase::maybeRestoreContext)
-    , m_attributes(attributes)
-    , m_numGLErrorsToConsoleAllowed(maxGLErrorsAllowedToConsole)
-    , m_checkForContextLossHandlingTimer(*this, &WebGLRenderingContextBase::checkForContextLossHandling)
-#if ENABLE(WEBXR)
-    , m_isXRCompatible(attributes.xrCompatible)
-#endif
-{
-    m_restoreTimer.suspendIfNeeded();
-
-    registerWithWebGLStateTracker();
-    if (canvas.isHTMLCanvasElement())
-        m_checkForContextLossHandlingTimer.startOneShot(checkContextLossHandlingDelay);
-}
-
 WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, Ref<GraphicsContextGL>&& context, WebGLContextAttributes attributes)
     : GPUBasedCanvasRenderingContext(canvas)
-    , m_restoreTimer(canvas.scriptExecutionContext(), *this, &WebGLRenderingContextBase::maybeRestoreContext)
     , m_generatedImageCache(4)
     , m_attributes(attributes)
     , m_numGLErrorsToConsoleAllowed(maxGLErrorsAllowedToConsole)
@@ -652,19 +646,15 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, Ref<Gra
 {
     setGraphicsContextGL(WTFMove(context));
 
-    m_restoreTimer.suspendIfNeeded();
-
     m_contextGroup = WebGLContextGroup::create();
     m_contextGroup->addContext(*this);
 
-    m_context->getIntegerv(GraphicsContextGL::MAX_VIEWPORT_DIMS, m_maxViewportDims);
-
-    setupFlags();
-
     registerWithWebGLStateTracker();
-    if (canvas.isHTMLCanvasElement())
+    if (auto* canvas = htmlCanvas()) {
         m_checkForContextLossHandlingTimer.startOneShot(checkContextLossHandlingDelay);
-
+        if (Page* page = canvas->document().page())
+            m_synthesizedErrorsToConsole = page->settings().webGLErrorsToConsoleEnabled();
+    }
     addActivityStateChangeObserverIfNecessary();
 }
 
@@ -692,7 +682,7 @@ OffscreenCanvas* WebGLRenderingContextBase::offscreenCanvas()
 // and to discard temporary GL contexts (e.g. feature detection).
 void WebGLRenderingContextBase::checkForContextLossHandling()
 {
-    auto canvas = htmlCanvas();
+    auto* canvas = htmlCanvas();
     if (!canvas)
         return;
 
@@ -709,7 +699,7 @@ void WebGLRenderingContextBase::checkForContextLossHandling()
 
 void WebGLRenderingContextBase::registerWithWebGLStateTracker()
 {
-    auto canvas = htmlCanvas();
+    auto* canvas = htmlCanvas();
     if (!canvas)
         return;
 
@@ -788,6 +778,8 @@ void WebGLRenderingContextBase::initializeNewContext()
     m_maxCubeMapTextureSize = m_context->getInteger(GraphicsContextGL::MAX_CUBE_MAP_TEXTURE_SIZE);
     m_maxCubeMapTextureLevel = WebGLTexture::computeLevelCount(m_maxCubeMapTextureSize, m_maxCubeMapTextureSize);
     m_maxRenderbufferSize = m_context->getInteger(GraphicsContextGL::MAX_RENDERBUFFER_SIZE);
+    m_context->getIntegerv(GraphicsContextGL::MAX_VIEWPORT_DIMS, m_maxViewportDims);
+    m_isDepthStencilSupported = m_context->isExtensionEnabled("GL_OES_packed_depth_stencil"_s) || m_context->isExtensionEnabled("GL_ANGLE_depth_texture"_s);
 
     // These two values from EXT_draw_buffers are lazily queried.
     m_maxDrawBuffers = 0;
@@ -816,29 +808,6 @@ void WebGLRenderingContextBase::initializeNewContext()
     ADD_VALUES_TO_SET(m_supportedTexImageSourceTypes, supportedTypesES2);
 
     initializeVertexArrayObjects();
-}
-
-void WebGLRenderingContextBase::setupFlags()
-{
-    ASSERT(m_context);
-
-    auto canvas = htmlCanvas();
-    if (canvas) {
-        if (Page* page = canvas->document().page())
-            m_synthesizedErrorsToConsole = page->settings().webGLErrorsToConsoleEnabled();
-    }
-
-    // FIXME: With ANGLE as a backend this probably isn't needed any more. Unfortunately
-    // turning it off causes problems.
-    m_isGLES2Compliant = m_context->isGLES2Compliant();
-    if (m_isGLES2Compliant) {
-        m_isGLES2NPOTStrict = !m_context->isExtensionEnabled("GL_OES_texture_npot"_s);
-        m_isDepthStencilSupported = m_context->isExtensionEnabled("GL_OES_packed_depth_stencil"_s) || m_context->isExtensionEnabled("GL_ANGLE_depth_texture"_s);
-    } else {
-        m_isGLES2NPOTStrict = true;
-        m_isDepthStencilSupported = m_context->isExtensionEnabled("GL_EXT_packed_depth_stencil"_s) || m_context->isExtensionEnabled("GL_ANGLE_depth_texture"_s);
-    }
-    m_isRobustnessEXTSupported = m_context->isExtensionEnabled("GL_EXT_robustness"_s);
 }
 
 void WebGLRenderingContextBase::addCompressedTextureFormat(GCGLenum format)
@@ -1123,12 +1092,12 @@ void WebGLRenderingContextBase::paintRenderingResultsToCanvas()
     }
 }
 
-RefPtr<PixelBuffer> WebGLRenderingContextBase::paintRenderingResultsToPixelBuffer()
+RefPtr<PixelBuffer> WebGLRenderingContextBase::paintRenderingResultsToPixelBuffer(GraphicsContextGL::FlipY flipY)
 {
     if (isContextLost())
         return nullptr;
     clearIfComposited(CallerTypeOther);
-    return m_context->paintRenderingResultsToPixelBuffer();
+    return m_context->paintRenderingResultsToPixelBuffer(flipY);
 }
 
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
@@ -2133,10 +2102,10 @@ RefPtr<WebGLActiveInfo> WebGLRenderingContextBase::getActiveUniform(WebGLProgram
     if (!m_context->getActiveUniform(program.object(), index, info))
         return nullptr;
     // FIXME: Do we still need this for the ANGLE backend?
-    if (!isGLES2Compliant())
+    if (!isWebGL2()) {
         if (info.size > 1 && !info.name.endsWith("[0]"_s))
             info.name = makeString(info.name, "[0]"_s);
-
+    }
     LOG(WebGL, "Returning active uniform %d: %s", index, info.name.utf8().data());
 
     return WebGLActiveInfo::create(info.name, info.type, info.size);
@@ -2500,6 +2469,11 @@ WebGLAny WebGLRenderingContextBase::getParameter(GCGLenum pname)
             return getUnsignedIntParameter(GraphicsContextGL::MAX_TEXTURE_MAX_ANISOTROPY_EXT);
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_texture_filter_anisotropic not enabled");
         return nullptr;
+    case GraphicsContextGL::DEPTH_CLAMP_EXT: // EXT_depth_clamp
+        if (m_extDepthClamp)
+            return getBooleanParameter(GraphicsContextGL::DEPTH_CLAMP_EXT);
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_depth_clamp not enabled");
+        return nullptr;
     case GraphicsContextGL::TIMESTAMP_EXT: // EXT_disjoint_timer_query
     case GraphicsContextGL::GPU_DISJOINT_EXT:
         if (m_extDisjointTimerQuery || m_extDisjointTimerQueryWebGL2) {
@@ -2509,10 +2483,25 @@ WebGLAny WebGLRenderingContextBase::getParameter(GCGLenum pname)
         }
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_disjoint_timer_query or EXT_disjoint_timer_query_webgl2 not enabled");
         return nullptr;
+    case GraphicsContextGL::POLYGON_MODE_ANGLE: // WEBGL_polygon_mode
+    case GraphicsContextGL::POLYGON_OFFSET_LINE_ANGLE:
+        if (m_webglPolygonMode) {
+            if (pname == GraphicsContextGL::POLYGON_OFFSET_LINE_ANGLE)
+                return getBooleanParameter(pname);
+            return getUnsignedIntParameter(pname);
+        }
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, WEBGL_polygon_mode not enabled");
+        return nullptr;
     case GraphicsContextGL::POLYGON_OFFSET_CLAMP_EXT:
         if (m_extPolygonOffsetClamp)
             return getFloatParameter(GraphicsContextGL::POLYGON_OFFSET_CLAMP_EXT);
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_polygon_offset_clamp not enabled");
+        return nullptr;
+    case GraphicsContextGL::CLIP_ORIGIN_EXT: // EXT_clip_control
+    case GraphicsContextGL::CLIP_DEPTH_MODE_EXT:
+        if (m_extClipControl)
+            return getUnsignedIntParameter(pname);
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_clip_control not enabled");
         return nullptr;
     case GraphicsContextGL::MAX_COLOR_ATTACHMENTS_EXT: // EXT_draw_buffers BEGIN
         if (m_webglDrawBuffers || isWebGL2())
@@ -3053,23 +3042,31 @@ bool WebGLRenderingContextBase::extensionIsEnabled(const String& name)
 
     CHECK_EXTENSION(m_angleInstancedArrays, "ANGLE_instanced_arrays");
     CHECK_EXTENSION(m_extBlendMinMax, "EXT_blend_minmax");
+    CHECK_EXTENSION(m_extClipControl, "EXT_clip_control");
     CHECK_EXTENSION(m_extColorBufferFloat, "EXT_color_buffer_float");
     CHECK_EXTENSION(m_extColorBufferHalfFloat, "EXT_color_buffer_half_float");
+    CHECK_EXTENSION(m_extConservativeDepth, "EXT_conservative_depth");
+    CHECK_EXTENSION(m_extDepthClamp, "EXT_depth_clamp");
     CHECK_EXTENSION(m_extDisjointTimerQuery, "EXT_disjoint_timer_query");
     CHECK_EXTENSION(m_extDisjointTimerQueryWebGL2, "EXT_disjoint_timer_query_webgl2");
     CHECK_EXTENSION(m_extFloatBlend, "EXT_float_blend");
     CHECK_EXTENSION(m_extFragDepth, "EXT_frag_depth");
     CHECK_EXTENSION(m_extPolygonOffsetClamp, "EXT_polygon_offset_clamp");
+    CHECK_EXTENSION(m_extRenderSnorm, "EXT_render_snorm");
     CHECK_EXTENSION(m_extShaderTextureLOD, "EXT_shader_texture_lod");
     CHECK_EXTENSION(m_extTextureCompressionBPTC, "EXT_texture_compression_bptc");
     CHECK_EXTENSION(m_extTextureCompressionRGTC, "EXT_texture_compression_rgtc");
     CHECK_EXTENSION(m_extTextureFilterAnisotropic, "EXT_texture_filter_anisotropic");
+    CHECK_EXTENSION(m_extTextureMirrorClampToEdge, "EXT_texture_mirror_clamp_to_edge");
     CHECK_EXTENSION(m_extTextureNorm16, "EXT_texture_norm16");
     CHECK_EXTENSION(m_extsRGB, "EXT_sRGB");
     CHECK_EXTENSION(m_khrParallelShaderCompile, "KHR_parallel_shader_compile");
+    CHECK_EXTENSION(m_nvShaderNoperspectiveInterpolation, "NV_shader_noperspective_interpolation");
     CHECK_EXTENSION(m_oesDrawBuffersIndexed, "OES_draw_buffers_indexed");
     CHECK_EXTENSION(m_oesElementIndexUint, "OES_element_index_uint");
     CHECK_EXTENSION(m_oesFBORenderMipmap, "OES_fbo_render_mipmap");
+    CHECK_EXTENSION(m_oesSampleVariables, "OES_sample_variables");
+    CHECK_EXTENSION(m_oesShaderMultisampleInterpolation, "OES_shader_multisample_interpolation");
     CHECK_EXTENSION(m_oesStandardDerivatives, "OES_standard_derivatives");
     CHECK_EXTENSION(m_oesTextureFloat, "OES_texture_float");
     CHECK_EXTENSION(m_oesTextureFloatLinear, "OES_texture_float_linear");
@@ -3093,7 +3090,10 @@ bool WebGLRenderingContextBase::extensionIsEnabled(const String& name)
     CHECK_EXTENSION(m_webglLoseContext, "WEBGL_lose_context");
     CHECK_EXTENSION(m_webglMultiDraw, "WEBGL_multi_draw");
     CHECK_EXTENSION(m_webglMultiDrawInstancedBaseVertexBaseInstance, "WEBGL_multi_draw_instanced_base_vertex_base_instance");
+    CHECK_EXTENSION(m_webglPolygonMode, "WEBGL_polygon_mode");
     CHECK_EXTENSION(m_webglProvokingVertex, "WEBGL_provoking_vertex");
+    CHECK_EXTENSION(m_webglRenderSharedExponent, "WEBGL_render_shared_exponent");
+    CHECK_EXTENSION(m_webglStencilTexturing, "WEBGL_stencil_texturing");
     return false;
 }
 
@@ -3236,7 +3236,7 @@ bool WebGLRenderingContextBase::linkProgramWithoutInvalidatingAttribLocations(We
 void WebGLRenderingContextBase::makeXRCompatible(MakeXRCompatiblePromise&& promise)
 {
     // Returning an exception in these two checks is not part of the spec.
-    auto canvas = htmlCanvas();
+    auto* canvas = htmlCanvas();
     if (!canvas) {
         m_isXRCompatible = false;
         promise.reject(Exception { InvalidStateError });
@@ -3278,13 +3278,9 @@ void WebGLRenderingContextBase::makeXRCompatible(MakeXRCompatiblePromise&& promi
         // FIXME: add a way to verify that we're using a compatible graphics adapter.
         m_isXRCompatible = true;
 
-#if PLATFORM(COCOA) && !PLATFORM(IOS_FAMILY_SIMULATOR)
-        // FIXME: This is ugly. It's something needed at the GraphicsContextGL
-        // level, not WebGLRenderingContext. We should move this down to a
-        // virtual makeXRCompatible or something on GCGL.
-        enableSupportedExtension("GL_OES_EGL_image"_s);
-        enableSupportedExtension("GL_EXT_sRGB"_s);
-        enableSupportedExtension("GL_ANGLE_framebuffer_multisample"_s);
+#if PLATFORM(COCOA)
+        if (!m_context->enableRequiredWebXRExtensions())
+            return;
 #endif
 
         promise.resolve();
@@ -4646,6 +4642,13 @@ void WebGLRenderingContextBase::texParameter(GCGLenum target, GCGLenum pname, GC
         FALLTHROUGH;
     case GraphicsContextGL::TEXTURE_WRAP_S:
     case GraphicsContextGL::TEXTURE_WRAP_T:
+        if ((paramf == GraphicsContextGL::MIRROR_CLAMP_TO_EDGE_EXT) || (parami == GraphicsContextGL::MIRROR_CLAMP_TO_EDGE_EXT)) {
+            if (!m_extTextureMirrorClampToEdge) {
+                synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "texParameter", "invalid parameter, EXT_texture_mirror_clamp_to_edge not enabled");
+                return;
+            }
+            break;
+        }
         if ((isFloat && paramf != GraphicsContextGL::CLAMP_TO_EDGE && paramf != GraphicsContextGL::MIRRORED_REPEAT && paramf != GraphicsContextGL::REPEAT)
             || (!isFloat && parami != GraphicsContextGL::CLAMP_TO_EDGE && parami != GraphicsContextGL::MIRRORED_REPEAT && parami != GraphicsContextGL::REPEAT)) {
             synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "texParameter", "invalid parameter");
@@ -4666,6 +4669,12 @@ void WebGLRenderingContextBase::texParameter(GCGLenum target, GCGLenum pname, GC
     case GraphicsContextGL::TEXTURE_MIN_LOD:
         if (!isWebGL2()) {
             synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "texParameter", "invalid parameter name");
+            return;
+        }
+        break;
+    case GraphicsContextGL::DEPTH_STENCIL_TEXTURE_MODE_ANGLE: // WEBGL_stencil_texturing
+        if (!m_webglStencilTexturing) {
+            synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "texParameter", "invalid parameter, WEBGL_stencil_texturing not enabled");
             return;
         }
         break;
@@ -5075,8 +5084,7 @@ void WebGLRenderingContextBase::forceRestoreContext()
         return;
     }
 
-    if (!m_restoreTimer.isActive())
-        m_restoreTimer.startOneShot(0_s);
+    maybeRestoreContextSoon();
 }
 
 bool WebGLRenderingContextBase::isContextUnrecoverablyLost() const
@@ -5504,6 +5512,16 @@ bool WebGLRenderingContextBase::validateCapability(const char* functionName, GCG
     case GraphicsContextGL::SCISSOR_TEST:
     case GraphicsContextGL::STENCIL_TEST:
         return true;
+    case GraphicsContextGL::POLYGON_OFFSET_LINE_ANGLE:
+        if (m_webglPolygonMode)
+            return true;
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid capability, WEBGL_polygon_mode not enabled");
+        return false;
+    case GraphicsContextGL::DEPTH_CLAMP_EXT:
+        if (m_extDepthClamp)
+            return true;
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid capability, EXT_depth_clamp not enabled");
+        return false;
     default:
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid capability");
         return false;
@@ -5720,7 +5738,21 @@ void WebGLRenderingContextBase::scheduleTaskToDispatchContextLostEvent()
         canvasBase().dispatchEvent(event);
         m_contextLostState->restoreRequested = event->defaultPrevented();
         if (m_contextLostState->mode == RealLostContext && m_contextLostState->restoreRequested)
-            m_restoreTimer.startOneShot(0_s);
+            maybeRestoreContextSoon();
+    });
+}
+
+void WebGLRenderingContextBase::maybeRestoreContextSoon(Seconds timeout)
+{
+    auto scriptExecutionContext = canvasBase().scriptExecutionContext();
+    if (!scriptExecutionContext)
+        return;
+
+    m_restoreTimer = scriptExecutionContext->eventLoop().scheduleTask(timeout, TaskSource::WebGL, [weakThis = WeakPtr { *this }] {
+        if (CheckedPtr checkedThis = weakThis.get()) {
+            checkedThis->m_restoreTimer = nullptr;
+            checkedThis->maybeRestoreContext();
+        }
     });
 }
 
@@ -5746,7 +5778,7 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     RefPtr<GraphicsContextGL> context = graphicsClient->createGraphicsContextGL(m_attributes);
     if (!context) {
         if (m_contextLostState->mode == RealLostContext)
-            m_restoreTimer.startOneShot(secondsBetweenRestoreAttempts);
+            maybeRestoreContextSoon(secondsBetweenRestoreAttempts);
         else
             printToConsole(MessageLevel::Error, "WebGL: error restoring lost context."_s);
         return;
@@ -5755,7 +5787,6 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     setGraphicsContextGL(context.releaseNonNull());
     addActivityStateChangeObserverIfNecessary();
     m_contextLostState = std::nullopt;
-    setupFlags();
     initializeNewContext();
 
     if (!isContextLost()) {
@@ -5982,23 +6013,31 @@ void WebGLRenderingContextBase::loseExtensions(LostContextMode mode)
 
     LOSE_EXTENSION(m_angleInstancedArrays);
     LOSE_EXTENSION(m_extBlendMinMax);
+    LOSE_EXTENSION(m_extClipControl);
     LOSE_EXTENSION(m_extColorBufferFloat);
     LOSE_EXTENSION(m_extColorBufferHalfFloat);
+    LOSE_EXTENSION(m_extConservativeDepth);
+    LOSE_EXTENSION(m_extDepthClamp);
     LOSE_EXTENSION(m_extDisjointTimerQuery);
     LOSE_EXTENSION(m_extDisjointTimerQueryWebGL2);
     LOSE_EXTENSION(m_extFloatBlend);
     LOSE_EXTENSION(m_extFragDepth);
     LOSE_EXTENSION(m_extPolygonOffsetClamp);
+    LOSE_EXTENSION(m_extRenderSnorm);
     LOSE_EXTENSION(m_extShaderTextureLOD);
     LOSE_EXTENSION(m_extTextureCompressionBPTC);
     LOSE_EXTENSION(m_extTextureCompressionRGTC);
     LOSE_EXTENSION(m_extTextureFilterAnisotropic);
+    LOSE_EXTENSION(m_extTextureMirrorClampToEdge);
     LOSE_EXTENSION(m_extTextureNorm16);
     LOSE_EXTENSION(m_extsRGB);
     LOSE_EXTENSION(m_khrParallelShaderCompile);
+    LOSE_EXTENSION(m_nvShaderNoperspectiveInterpolation);
     LOSE_EXTENSION(m_oesDrawBuffersIndexed);
     LOSE_EXTENSION(m_oesElementIndexUint);
     LOSE_EXTENSION(m_oesFBORenderMipmap);
+    LOSE_EXTENSION(m_oesSampleVariables);
+    LOSE_EXTENSION(m_oesShaderMultisampleInterpolation);
     LOSE_EXTENSION(m_oesStandardDerivatives);
     LOSE_EXTENSION(m_oesTextureFloat);
     LOSE_EXTENSION(m_oesTextureFloatLinear);
@@ -6021,7 +6060,10 @@ void WebGLRenderingContextBase::loseExtensions(LostContextMode mode)
     LOSE_EXTENSION(m_webglLoseContext);
     LOSE_EXTENSION(m_webglMultiDraw);
     LOSE_EXTENSION(m_webglMultiDrawInstancedBaseVertexBaseInstance);
+    LOSE_EXTENSION(m_webglPolygonMode);
     LOSE_EXTENSION(m_webglProvokingVertex);
+    LOSE_EXTENSION(m_webglRenderSharedExponent);
+    LOSE_EXTENSION(m_webglStencilTexturing);
 }
 
 void WebGLRenderingContextBase::activityStateDidChange(OptionSet<ActivityState> oldActivityState, OptionSet<ActivityState> newActivityState)

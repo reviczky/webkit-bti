@@ -76,11 +76,11 @@ public:
     using InvalidConstraintsHandler = Function<void(const String& invalidConstraint)>;
     WEBCORE_EXPORT void validateRequestConstraints(ValidConstraintsHandler&&, InvalidConstraintsHandler&&, const MediaStreamRequest&, MediaDeviceHashSalts&&);
 
-    using NewMediaStreamHandler = Function<void(Expected<Ref<MediaStreamPrivate>, String>&&)>;
+    using NewMediaStreamHandler = Function<void(Expected<Ref<MediaStreamPrivate>, CaptureSourceError>&&)>;
     void createMediaStream(Ref<const Logger>&&, NewMediaStreamHandler&&, MediaDeviceHashSalts&&, CaptureDevice&& audioDevice, CaptureDevice&& videoDevice, const MediaStreamRequest&);
 
     WEBCORE_EXPORT void getMediaStreamDevices(CompletionHandler<void(Vector<CaptureDevice>&&)>&&);
-    WEBCORE_EXPORT RealtimeMediaSourceCapabilities getCapabilities(const CaptureDevice&);
+    WEBCORE_EXPORT std::optional<RealtimeMediaSourceCapabilities> getCapabilities(const CaptureDevice&);
 
     const RealtimeMediaSourceSupportedConstraints& supportedConstraints() { return m_supportedConstraints; }
 

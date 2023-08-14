@@ -24,8 +24,8 @@
 #include "libANGLE/renderer/gl/ShaderGL.h"
 #include "libANGLE/renderer/gl/StateManagerGL.h"
 #include "libANGLE/trace.h"
-#include "platform/FeaturesGL_autogen.h"
 #include "platform/PlatformMethods.h"
+#include "platform/autogen/FeaturesGL_autogen.h"
 
 namespace rx
 {
@@ -1057,15 +1057,6 @@ void ProgramGL::updateEnabledClipDistances(uint8_t enabledClipDistancesPacked) c
     ASSERT(mFunctions->programUniform1ui != nullptr);
     mFunctions->programUniform1ui(mProgramID, mClipDistanceEnabledUniformLocation,
                                   enabledClipDistancesPacked);
-}
-
-void ProgramGL::enableSideBySideRenderingPath() const
-{
-    ASSERT(mState.usesMultiview());
-    ASSERT(mMultiviewBaseViewLayerIndexUniformLocation != -1);
-
-    ASSERT(mFunctions->programUniform1i != nullptr);
-    mFunctions->programUniform1i(mProgramID, mMultiviewBaseViewLayerIndexUniformLocation, -1);
 }
 
 void ProgramGL::enableLayeredRenderingPath(int baseViewIndex) const

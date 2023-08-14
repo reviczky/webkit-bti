@@ -40,6 +40,7 @@
 #include <variant>
 #include <wtf/HashSet.h>
 #include <wtf/ObjectIdentifier.h>
+#include <wtf/ProcessID.h>
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 
@@ -822,6 +823,7 @@ public:
 
     void setObjectID(AXID axID) { m_id = axID; }
     AXID objectID() const { return m_id; }
+    virtual ProcessID processID() const = 0;
 
     // When the corresponding WebCore object that this accessible object
     // represents is deleted, it must be detached.
@@ -867,7 +869,7 @@ public:
     // Table support.
     virtual bool isTable() const = 0;
     virtual bool isExposable() const = 0;
-    virtual int tableLevel() const = 0;
+    unsigned tableLevel() const;
     virtual bool supportsSelectedRows() const = 0;
     virtual AccessibilityChildrenVector columns() = 0;
     virtual AccessibilityChildrenVector rows() = 0;
@@ -988,7 +990,7 @@ public:
     bool isStaticText() const { return roleValue() == AccessibilityRole::StaticText; }
     virtual bool hasUnderline() const = 0;
     virtual bool hasHighlighting() const = 0;
-    virtual std::optional<CharacterRange> textInputMarkedRange() const = 0;
+    virtual AXTextMarkerRange textInputMarkedTextMarkerRange() const = 0;
 
     virtual bool supportsDatetimeAttribute() const = 0;
     virtual String datetimeAttributeValue() const = 0;
@@ -1758,6 +1760,20 @@ inline bool AXCoreObject::hasPopup() const
     return false;
 }
 
+inline unsigned AXCoreObject::tableLevel() const
+{
+    if (!isTable())
+        return 0;
+
+    unsigned level = 0;
+    auto* current = exposedTableAncestor(true /* includeSelf */);
+    while (current) {
+        level++;
+        current = current->exposedTableAncestor(false);
+    }
+    return level;
+}
+
 inline String AXCoreObject::ariaLandmarkRoleDescription() const
 {
     switch (roleValue()) {
@@ -1935,8 +1951,10 @@ void enumerateDescendants(T& object, bool includeSelf, const F& lambda)
     if (includeSelf)
         lambda(object);
 
-    for (const auto& child : object.children())
-        enumerateDescendants(*child, true, lambda);
+    for (const auto& child : object.children()) {
+        if (child)
+            enumerateDescendants(*child, true, lambda);
+    }
 }
 
 template<typename U> inline void performFunctionOnMainThreadAndWait(U&& lambda)

@@ -26,7 +26,7 @@ set(TestWTF_SOURCES
     Utilities.cpp
 
     Tests/WTF/AtomString.cpp
-    Tests/WTF/Bitmap.cpp
+    Tests/WTF/BitSet.cpp
     Tests/WTF/BloomFilter.cpp
     Tests/WTF/BoxPtr.cpp
     Tests/WTF/BumpPointerAllocator.cpp
@@ -96,6 +96,7 @@ set(TestWTF_SOURCES
     Tests/WTF/ScopedLambda.cpp
     Tests/WTF/SentinelLinkedList.cpp
     Tests/WTF/SetForScope.cpp
+    Tests/WTF/Signals.cpp
     Tests/WTF/StackTraceTest.cpp
     Tests/WTF/StdLibExtrasTests.cpp
     Tests/WTF/StringBuilder.cpp

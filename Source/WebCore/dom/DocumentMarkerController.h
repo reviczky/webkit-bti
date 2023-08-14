@@ -59,7 +59,7 @@ public:
 
     void copyMarkers(Node& source, OffsetRange, Node& destination);
     bool hasMarkers() const;
-    bool hasMarkers(const SimpleRange&, OptionSet<DocumentMarker::MarkerType> = DocumentMarker::allMarkers());
+    WEBCORE_EXPORT bool hasMarkers(const SimpleRange&, OptionSet<DocumentMarker::MarkerType> = DocumentMarker::allMarkers());
 
     // When a marker partially overlaps with range, if removePartiallyOverlappingMarkers is true, we completely
     // remove the marker. If the argument is false, we will adjust the span of the marker so that it retains
@@ -78,6 +78,7 @@ public:
 
     WEBCORE_EXPORT Vector<RenderedDocumentMarker*> markersFor(Node&, OptionSet<DocumentMarker::MarkerType> = DocumentMarker::allMarkers());
     WEBCORE_EXPORT Vector<RenderedDocumentMarker*> markersInRange(const SimpleRange&, OptionSet<DocumentMarker::MarkerType>);
+    WEBCORE_EXPORT Vector<SimpleRange> rangesForMarkersInRange(const SimpleRange&, OptionSet<DocumentMarker::MarkerType>);
     void clearDescriptionOnMarkersIntersectingRange(const SimpleRange&, OptionSet<DocumentMarker::MarkerType>);
 
     WEBCORE_EXPORT void updateRectsForInvalidatedMarkersOfType(DocumentMarker::MarkerType);
@@ -101,7 +102,7 @@ private:
     };
     Vector<TextRange> collectTextRanges(const SimpleRange&);
 
-    void forEach(const SimpleRange&, OptionSet<DocumentMarker::MarkerType>, const Function<bool(RenderedDocumentMarker&)>);
+    void forEach(const SimpleRange&, OptionSet<DocumentMarker::MarkerType>, const Function<bool(Node&, RenderedDocumentMarker&)>);
     void forEachOfTypes(OptionSet<DocumentMarker::MarkerType>, const Function<bool(Node&, RenderedDocumentMarker&)>);
 
     using MarkerMap = HashMap<RefPtr<Node>, std::unique_ptr<Vector<RenderedDocumentMarker>>>;

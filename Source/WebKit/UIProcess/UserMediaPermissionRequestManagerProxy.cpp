@@ -40,6 +40,7 @@
 #include <WebCore/CaptureDeviceWithCapabilities.h>
 #include <WebCore/MediaConstraints.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
+#include <WebCore/PermissionName.h>
 #include <WebCore/PlatformMediaSessionManager.h>
 #include <WebCore/RealtimeMediaSource.h>
 #include <WebCore/SecurityOriginData.h>
@@ -188,23 +189,23 @@ static uint64_t toWebCore(UserMediaPermissionRequestProxy::UserMediaAccessDenial
 {
     switch (reason) {
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::NoConstraints:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::NoConstraints);
+        return static_cast<uint64_t>(MediaAccessDenialReason::NoConstraints);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::UserMediaDisabled:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::UserMediaDisabled);
+        return static_cast<uint64_t>(MediaAccessDenialReason::UserMediaDisabled);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::NoCaptureDevices:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::NoCaptureDevices);
+        return static_cast<uint64_t>(MediaAccessDenialReason::NoCaptureDevices);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::InvalidConstraint:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::InvalidConstraint);
+        return static_cast<uint64_t>(MediaAccessDenialReason::InvalidConstraint);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::HardwareError:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::HardwareError);
+        return static_cast<uint64_t>(MediaAccessDenialReason::HardwareError);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::PermissionDenied:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::PermissionDenied);
+        return static_cast<uint64_t>(MediaAccessDenialReason::PermissionDenied);
     case UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::OtherFailure:
-        return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::OtherFailure);
+        return static_cast<uint64_t>(MediaAccessDenialReason::OtherFailure);
     }
 
     ASSERT_NOT_REACHED();
-    return static_cast<uint64_t>(UserMediaRequest::MediaAccessDenialReason::OtherFailure);
+    return static_cast<uint64_t>(MediaAccessDenialReason::OtherFailure);
 }
 #endif
 
@@ -754,6 +755,16 @@ bool UserMediaPermissionRequestManagerProxy::shouldChangePromptToGrantForMicroph
     return searchForGrantedRequest({ }, origin.clientOrigin.securityOrigin().get(), origin.topOrigin.securityOrigin().get(), true, false);
 }
 
+void UserMediaPermissionRequestManagerProxy::clearUserMediaPermissionRequestHistory(WebCore::PermissionName permissionName)
+{
+    m_deniedRequests.removeAllMatching([permissionName](auto& request) {
+        return (request.isAudioDenied && permissionName == WebCore::PermissionName::Microphone) || (request.isVideoDenied && permissionName == WebCore::PermissionName::Camera);
+    });
+    m_grantedRequests.removeAllMatching([permissionName](auto& request) {
+        return (request->requiresAudioCapture() && permissionName == WebCore::PermissionName::Microphone) || (request->requiresVideoCapture() && permissionName == WebCore::PermissionName::Camera);
+    });
+}
+
 #if !PLATFORM(COCOA)
 void UserMediaPermissionRequestManagerProxy::requestSystemValidation(const WebPageProxy&, UserMediaPermissionRequestProxy&, CompletionHandler<void(bool)>&& callback)
 {
@@ -802,13 +813,25 @@ static inline bool haveMicrophoneDevice(const Vector<CaptureDeviceWithCapabiliti
 void UserMediaPermissionRequestManagerProxy::platformGetMediaStreamDevices(bool revealIdsAndLabels, CompletionHandler<void(Vector<CaptureDeviceWithCapabilities>&&)>&& completionHandler)
 {
     RealtimeMediaSourceCenter::singleton().getMediaStreamDevices([revealIdsAndLabels, completionHandler = WTFMove(completionHandler)](auto&& devices) mutable {
-        auto deviceWithCapabilities = map(devices, [revealIdsAndLabels](auto&& device) -> CaptureDeviceWithCapabilities {
-            RealtimeMediaSourceCapabilities capabilities;
-            if (revealIdsAndLabels)
-                capabilities = RealtimeMediaSourceCenter::singleton().getCapabilities(device);
-            return { WTFMove(device), WTFMove(capabilities) };
-        });
-        completionHandler(WTFMove(deviceWithCapabilities));
+        Vector<CaptureDeviceWithCapabilities> devicesWithCapabilities;
+
+        devicesWithCapabilities.reserveInitialCapacity(devices.size());
+        for (auto& device : devices) {
+            RealtimeMediaSourceCapabilities deviceCapabilities;
+
+            if (revealIdsAndLabels && device.isInputDevice()) {
+                auto capabilities = RealtimeMediaSourceCenter::singleton().getCapabilities(device);
+                if (!capabilities)
+                    continue;
+
+                if (revealIdsAndLabels)
+                    deviceCapabilities = WTFMove(*capabilities);
+            }
+
+            devicesWithCapabilities.uncheckedAppend({ WTFMove(device), WTFMove(deviceCapabilities) });
+        }
+
+        completionHandler(WTFMove(devicesWithCapabilities));
     });
 }
 #endif

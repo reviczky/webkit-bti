@@ -55,6 +55,7 @@ namespace JSC {
     macro(ArrayPushIntrinsic) \
     macro(ArrayPopIntrinsic) \
     macro(ArraySliceIntrinsic) \
+    macro(ArraySpliceIntrinsic) \
     macro(ArrayIndexOfIntrinsic) \
     macro(ArrayValuesIntrinsic) \
     macro(ArrayKeysIntrinsic) \
@@ -110,6 +111,7 @@ namespace JSC {
     macro(ReflectOwnKeysIntrinsic) \
     macro(StringConstructorIntrinsic) \
     macro(StringPrototypeCodePointAtIntrinsic) \
+    macro(StringPrototypeIndexOfIntrinsic) \
     macro(StringPrototypeLocaleCompareIntrinsic) \
     macro(StringPrototypeValueOfIntrinsic) \
     macro(StringPrototypeReplaceIntrinsic) \

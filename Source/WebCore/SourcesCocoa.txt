@@ -505,7 +505,6 @@ platform/image-decoders/jpegxl/JPEGXLImageDecoder.cpp
 platform/image-decoders/ScalableImageDecoder.cpp
 platform/image-decoders/ScalableImageDecoderFrame.cpp
 platform/ios/ColorIOS.mm
-platform/ios/Device.cpp
 platform/ios/DeviceMotionClientIOS.mm
 platform/ios/DeviceOrientationClientIOS.mm
 platform/ios/DragImageIOS.mm
@@ -525,7 +524,6 @@ platform/ios/PlatformScreenIOS.mm
 platform/ios/PlaybackSessionInterfaceAVKit.mm @no-unify
 platform/ios/PreviewConverterIOS.mm
 platform/ios/QuickLook.mm
-platform/ios/ScreenOrientationProviderIOS.mm
 platform/ios/ScrollAnimatorIOS.mm
 platform/ios/ScrollViewIOS.mm
 platform/ios/ScrollbarThemeIOS.mm
@@ -554,7 +552,6 @@ platform/ios/wak/WKView.mm
 platform/ios/wak/WebCoreThread.mm
 platform/ios/wak/WebCoreThreadRun.cpp
 platform/ios/wak/WebCoreThreadSystemInterface.cpp
-platform/mac/BlocklistUpdater.mm
 platform/mac/CursorMac.mm @no-unify
 platform/mac/DataDetectorHighlight.mm
 platform/mac/HIDDevice.cpp
@@ -571,7 +568,6 @@ platform/mac/PlatformEventFactoryMac.mm
 platform/mac/PlatformPasteboardMac.mm
 platform/mac/PlatformScreenMac.mm
 platform/mac/PlaybackSessionInterfaceMac.mm @no-unify
-platform/mac/PluginBlocklist.mm
 platform/mac/PowerObserverMac.cpp
 platform/mac/PublicSuffixMac.mm
 platform/mac/RevealUtilities.mm
@@ -597,7 +593,6 @@ platform/mac/WebCoreFullScreenWindow.mm
 platform/mac/WebCoreNSFontManagerExtras.mm
 platform/mac/WebCoreNSURLExtras.mm
 platform/mac/WebCoreObjCExtras.mm
-platform/mac/WebGLBlocklist.mm
 platform/mac/WebNSAttributedStringExtras.mm
 platform/mac/WebPlaybackControlsManager.mm
 platform/mac/WidgetMac.mm

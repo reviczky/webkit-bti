@@ -88,6 +88,7 @@
 #include "Page.h"
 #include "PagePasteboardContext.h"
 #include "Pasteboard.h"
+#include "Quirks.h"
 #include "Range.h"
 #include "RemoveFormatCommand.h"
 #include "RenderBlock.h"
@@ -234,6 +235,10 @@ TemporarySelectionChange::TemporarySelectionChange(Document& document, std::opti
 
     if (temporarySelection) {
         m_selectionToRestore = document.selection().selection();
+#if PLATFORM(IOS_FAMILY)
+        if (document.selection().isUpdateAppearanceEnabled())
+            document.selection().setNeedsSelectionUpdate();
+#endif
         setSelection(temporarySelection.value(), IsTemporarySelection::Yes);
     }
 }
@@ -1249,7 +1254,7 @@ void Editor::appliedEditing(CompositeEditCommand& command)
     if (command.isTopLevelCommand()) {
         updateEditorUINowIfScheduled();
 
-        m_alternativeTextController->respondToAppliedEditing(m_document, &command);
+        m_alternativeTextController->respondToAppliedEditing(&command);
 
         if (!command.preservesTypingStyle())
             m_document.selection().clearTypingStyle();
@@ -1340,7 +1345,7 @@ void Editor::clear()
     if (m_compositionNode) {
         m_compositionNode = nullptr;
         if (EditorClient* client = this->client())
-            client->discardedComposition(m_document.frame());
+            client->discardedComposition(m_document);
     }
     m_customCompositionUnderlines.clear();
     m_customCompositionHighlights.clear();
@@ -2119,7 +2124,7 @@ void Editor::confirmOrCancelCompositionAndNotifyClient()
 
     if (auto editorClient = client()) {
         editorClient->respondToChangedSelection(frame.get());
-        editorClient->discardedComposition(frame.get());
+        editorClient->discardedComposition(m_document);
     }
 }
 
@@ -2176,14 +2181,14 @@ void Editor::setComposition(const String& text, SetCompositionMode mode)
     else
         selectComposition();
 
-    auto* previousCompositionNode = compositionNode();
+    RefPtr previousCompositionNode = m_compositionNode;
     m_compositionNode = nullptr;
     m_customCompositionUnderlines.clear();
     m_customCompositionHighlights.clear();
     m_customCompositionAnnotations.clear();
 
     if (auto* cache = m_document.existingAXObjectCache(); cache && previousCompositionNode)
-        cache->onTextCompositionChange(*previousCompositionNode);
+        cache->onTextCompositionChange(*previousCompositionNode, AXObjectCache::CompositionState::Ended, false);
 
     if (m_document.selection().isNone())
         return;
@@ -2281,7 +2286,7 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
             target->dispatchEvent(CompositionEvent::create(eventNames().compositionendEvent, document().windowProxy(), text));
     }
 
-    auto* previousCompositionNode = compositionNode();
+    RefPtr previousCompositionNode = m_compositionNode;
     m_compositionNode = nullptr;
     m_customCompositionUnderlines.clear();
     m_customCompositionHighlights.clear();
@@ -2329,11 +2334,14 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
     }
 
     if (auto* cache = m_document.existingAXObjectCache()) {
-        auto* currentCompositionNode = compositionNode();
-        if (previousCompositionNode && previousCompositionNode != currentCompositionNode)
-            cache->onTextCompositionChange(*previousCompositionNode);
-        if (currentCompositionNode)
-            cache->onTextCompositionChange(*currentCompositionNode);
+        if (previousCompositionNode && previousCompositionNode != m_compositionNode) {
+            auto state = m_compositionNode ? AXObjectCache::CompositionState::InProgress : AXObjectCache::CompositionState::Ended;
+            cache->onTextCompositionChange(*previousCompositionNode, state, true);
+        }
+        if (m_compositionNode) {
+            auto state = previousCompositionNode ? AXObjectCache::CompositionState::InProgress : AXObjectCache::CompositionState::Started;
+            cache->onTextCompositionChange(*m_compositionNode, state, true);
+        }
     }
 
 #if PLATFORM(IOS_FAMILY)        
@@ -3473,12 +3481,18 @@ void Editor::changeSelectionAfterCommand(const VisibleSelection& newSelection, O
 
 String Editor::selectedText() const
 {
-    return selectedText({ TextIteratorBehavior::TraversesFlatTree, TextIteratorBehavior::IgnoresUserSelectNone });
+    auto options = OptionSet { TextIteratorBehavior::TraversesFlatTree };
+    if (!m_document.quirks().needsToCopyUserSelectNoneQuirk())
+        options.add(TextIteratorBehavior::IgnoresUserSelectNone);
+    return selectedText(options);
 }
 
 String Editor::selectedTextForDataTransfer() const
 {
-    return selectedText(OptionSet { TextIteratorBehavior::EmitsImageAltText, TextIteratorBehavior::TraversesFlatTree, TextIteratorBehavior::IgnoresUserSelectNone });
+    auto options = OptionSet { TextIteratorBehavior::EmitsImageAltText, TextIteratorBehavior::TraversesFlatTree };
+    if (!m_document.quirks().needsToCopyUserSelectNoneQuirk())
+        options.add(TextIteratorBehavior::IgnoresUserSelectNone);
+    return selectedText(options);
 }
 
 String Editor::selectedText(TextIteratorBehaviors behaviors) const

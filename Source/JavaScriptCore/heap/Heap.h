@@ -78,6 +78,7 @@ class JITStubRoutine;
 class JITStubRoutineSet;
 class JSCell;
 class JSImmutableButterfly;
+class JSRopeString;
 class JSString;
 class JSValue;
 class MachineThreads;
@@ -133,7 +134,7 @@ class Heap;
     v(propertyTableSpace, destructibleCellHeapCellType, PropertyTable) \
     v(regExpSpace, destructibleCellHeapCellType, RegExp) \
     v(regExpObjectSpace, cellHeapCellType, RegExpObject) \
-    v(ropeStringSpace, stringHeapCellType, JSRopeString) \
+    v(ropeStringSpace, ropeStringHeapCellType, JSRopeString) \
     v(scopedArgumentsSpace, cellHeapCellType, ScopedArguments) \
     v(sparseArrayValueMapSpace, destructibleCellHeapCellType, SparseArrayValueMap) \
     v(stringSpace, stringHeapCellType, JSString) \
@@ -387,6 +388,7 @@ public:
     // call both of these functions: Calling only one may trigger catastropic
     // memory growth.
     void reportExtraMemoryAllocated(size_t);
+    void reportExtraMemoryAllocated(GCDeferralContext*, size_t);
     JS_EXPORT_PRIVATE void reportExtraMemoryVisited(size_t);
 
 #if ENABLE(RESOURCE_USAGE)
@@ -611,7 +613,7 @@ private:
 
     Lock& lock() { return m_lock; }
 
-    JS_EXPORT_PRIVATE void reportExtraMemoryAllocatedSlowCase(size_t);
+    JS_EXPORT_PRIVATE void reportExtraMemoryAllocatedSlowCase(GCDeferralContext*, size_t);
     JS_EXPORT_PRIVATE void deprecatedReportExtraMemorySlowCase(size_t);
     
     bool shouldCollectInCollectorThread(const AbstractLocker&);
@@ -943,6 +945,7 @@ public:
     IsoHeapCellType moduleNamespaceObjectHeapCellType;
     IsoHeapCellType nativeStdFunctionHeapCellType;
     IsoInlinedHeapCellType<JSString> stringHeapCellType;
+    IsoInlinedHeapCellType<JSRopeString> ropeStringHeapCellType;
     IsoHeapCellType weakMapHeapCellType;
     IsoHeapCellType weakSetHeapCellType;
     JSDestructibleObjectHeapCellType destructibleObjectHeapCellType;

@@ -45,10 +45,10 @@
 #include "StorageAreaBase.h"
 #include "StorageAreaMapMessages.h"
 #include "StorageAreaRegistry.h"
-#include "StorageUtilities.h"
 #include "UnifiedOriginStorageLevel.h"
 #include "WebsiteDataType.h"
 #include <WebCore/SecurityOriginData.h>
+#include <WebCore/StorageUtilities.h>
 #include <WebCore/UniqueIDBDatabaseConnection.h>
 #include <WebCore/UniqueIDBDatabaseTransaction.h>
 #include <pal/crypto/CryptoDigest.h>
@@ -148,12 +148,12 @@ String NetworkStorageManager::persistedFilePath(const WebCore::ClientOrigin& ori
     return FileSystem::pathByAppendingComponent(directory, persistedFileName);
 }
 
-Ref<NetworkStorageManager> NetworkStorageManager::create(NetworkProcess& process, PAL::SessionID sessionID, Markable<UUID> identifier, IPC::Connection::UniqueID connection, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel level)
+Ref<NetworkStorageManager> NetworkStorageManager::create(NetworkProcess& process, PAL::SessionID sessionID, Markable<WTF::UUID> identifier, IPC::Connection::UniqueID connection, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel level)
 {
     return adoptRef(*new NetworkStorageManager(process, sessionID, identifier, connection, path, customLocalStoragePath, customIDBStoragePath, customCacheStoragePath, customServiceWorkerStoragePath, defaultOriginQuota, originQuotaRatio, totalQuotaRatio, standardVolumeCapacity, volumeCapacityOverride, level));
 }
 
-NetworkStorageManager::NetworkStorageManager(NetworkProcess& process, PAL::SessionID sessionID, Markable<UUID> identifier, IPC::Connection::UniqueID connection, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel level)
+NetworkStorageManager::NetworkStorageManager(NetworkProcess& process, PAL::SessionID sessionID, Markable<WTF::UUID> identifier, IPC::Connection::UniqueID connection, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, const String& customServiceWorkerStoragePath, uint64_t defaultOriginQuota, std::optional<double> originQuotaRatio, std::optional<double> totalQuotaRatio, std::optional<uint64_t> standardVolumeCapacity, std::optional<uint64_t> volumeCapacityOverride, UnifiedOriginStorageLevel level)
     : m_process(process)
     , m_sessionID(sessionID)
     , m_queueName(makeString("com.apple.WebKit.Storage.", sessionID.toUInt64(), ".", static_cast<uint64_t>(identifier->data() >> 64), static_cast<uint64_t>(identifier->data())))
@@ -347,7 +347,7 @@ void NetworkStorageManager::writeOriginToFileIfNecessary(const WebCore::ClientOr
         return;
 
     auto originFile = originFilePath(originDirectory);
-    bool didWrite = writeOriginToFile(originFile, origin);
+    bool didWrite = WebCore::StorageUtilities::writeOriginToFile(originFile, origin);
     auto timestamp = FileSystem::fileCreationTime(originFile);
     manager->setOriginFileCreationTimestamp(timestamp);
 #if PLATFORM(IOS_FAMILY)
@@ -929,7 +929,7 @@ HashSet<WebCore::ClientOrigin> NetworkStorageManager::getAllOrigins()
         allOrigins.add(origin);
 
     forEachOriginDirectory([&](auto directory) {
-        if (auto origin = readOriginFromFile(originFilePath(directory)))
+        if (auto origin = WebCore::StorageUtilities::readOriginFromFile(originFilePath(directory)))
             allOrigins.add(*origin);
     });
 

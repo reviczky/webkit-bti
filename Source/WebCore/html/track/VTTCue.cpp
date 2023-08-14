@@ -70,9 +70,6 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(VTTCue);
 WTF_MAKE_ISO_ALLOCATED_IMPL(VTTCueBox);
 
-// This constant should correspond with the percentage returned by CaptionUserPreferences::captionFontSizeScaleAndImportance.
-constexpr double DEFAULTCAPTIONFONTSIZEPERCENTAGE = 5;
-
 static const CSSValueID displayWritingModeMap[] = {
     CSSValueHorizontalTb, CSSValueVerticalRl, CSSValueVerticalLr
 };
@@ -172,7 +169,6 @@ void VTTCueBox::applyCSSProperties()
 
     // the 'position' property must be set to 'absolute'
     // the 'unicode-bidi' property must be set to 'plaintext'
-    // the 'writing-mode' property must be set to writing-mode
     // the overflow-wrap property must be set to break-word
     // the text-wrap property must be set to balance [CSS-TEXT-4]
     // The color property on the (root) list of WebVTT Node Objects must be set
@@ -186,6 +182,9 @@ void VTTCueBox::applyCSSProperties()
     //   Let left be x-position vw and top be y-position vh.
     // Use 'cqh' and 'cqw' rather than 'vh' and 'vw' here, as the video viewport
     // is not a true viewport, but it is a container, so they serve the same purpose.
+
+    // the 'writing-mode' property must be set to writing-mode
+    setInlineStyleProperty(CSSPropertyWritingMode, cue->getCSSWritingMode(), false);
 
     // the 'top' property must be set to top
     std::visit(WTF::makeVisitor([&] (double top) {

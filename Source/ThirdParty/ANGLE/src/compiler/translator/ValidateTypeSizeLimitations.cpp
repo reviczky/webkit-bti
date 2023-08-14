@@ -7,6 +7,7 @@
 #include "compiler/translator/ValidateTypeSizeLimitations.h"
 
 #include "angle_gl.h"
+#include "common/mathutil.h"
 #include "compiler/translator/Diagnostics.h"
 #include "compiler/translator/Symbol.h"
 #include "compiler/translator/SymbolTable.h"
@@ -23,10 +24,10 @@ namespace
 // Arbitrarily enforce that all types declared with a size in bytes of over 2 GB will cause
 // compilation failure.
 //
-// For local and global variables, the limit is much lower (1MB) as that much memory won't fit in
+// For local and global variables, the limit is much lower (16MB) as that much memory won't fit in
 // the GPU registers anyway.
 constexpr size_t kMaxVariableSizeInBytes        = static_cast<size_t>(2) * 1024 * 1024 * 1024;
-constexpr size_t kMaxPrivateVariableSizeInBytes = static_cast<size_t>(1) * 1024 * 1024;
+constexpr size_t kMaxPrivateVariableSizeInBytes = static_cast<size_t>(16) * 1024 * 1024;
 
 // Traverses intermediate tree to ensure that the shader does not
 // exceed certain implementation-defined limits on the sizes of types.
@@ -35,7 +36,9 @@ class ValidateTypeSizeLimitationsTraverser : public TIntermTraverser
 {
   public:
     ValidateTypeSizeLimitationsTraverser(TSymbolTable *symbolTable, TDiagnostics *diagnostics)
-        : TIntermTraverser(true, false, false, symbolTable), mDiagnostics(diagnostics)
+        : TIntermTraverser(true, false, false, symbolTable),
+          mDiagnostics(diagnostics),
+          mTotalPrivateVariablesSize(0)
     {
         ASSERT(diagnostics);
     }
@@ -93,16 +96,32 @@ class ValidateTypeSizeLimitationsTraverser : public TIntermTraverser
             const bool isPrivate = variableType.getQualifier() == EvqTemporary ||
                                    variableType.getQualifier() == EvqGlobal ||
                                    variableType.getQualifier() == EvqConst;
-            if (layoutEncoder.getCurrentOffset() > kMaxPrivateVariableSizeInBytes && isPrivate)
+            if (isPrivate)
             {
-                error(asSymbol->getLine(),
-                      "Size of declared private variable exceeds implementation-defined limit",
-                      asSymbol->getName());
-                return false;
+                if (layoutEncoder.getCurrentOffset() > kMaxPrivateVariableSizeInBytes)
+                {
+                    error(asSymbol->getLine(),
+                          "Size of declared private variable exceeds implementation-defined limit",
+                          asSymbol->getName());
+                    return false;
+                }
+                mTotalPrivateVariablesSize += layoutEncoder.getCurrentOffset();
             }
         }
 
         return true;
+    }
+
+    void validateTotalPrivateVariableSize()
+    {
+        if (mTotalPrivateVariablesSize.ValueOrDefault(std::numeric_limits<size_t>::max()) >
+            kMaxPrivateVariableSizeInBytes)
+        {
+            mDiagnostics->error(
+                TSourceLoc{},
+                "Total size of declared private variables exceeds implementation-defined limit",
+                "");
+        }
     }
 
   private:
@@ -213,6 +232,8 @@ class ValidateTypeSizeLimitationsTraverser : public TIntermTraverser
 
     TDiagnostics *mDiagnostics;
     std::vector<int> mLoopSymbolIds;
+
+    angle::base::CheckedNumeric<size_t> mTotalPrivateVariablesSize;
 };
 
 }  // namespace
@@ -223,6 +244,7 @@ bool ValidateTypeSizeLimitations(TIntermNode *root,
 {
     ValidateTypeSizeLimitationsTraverser validate(symbolTable, diagnostics);
     root->traverse(&validate);
+    validate.validateTotalPrivateVariableSize();
     return diagnostics->numErrors() == 0;
 }
 

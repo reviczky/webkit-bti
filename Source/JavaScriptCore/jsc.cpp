@@ -1408,11 +1408,11 @@ JSC_DEFINE_HOST_FUNCTION(functionAtob, (JSGlobalObject* globalObject, CallFrame*
     if (encodedString.isNull())
         return JSValue::encode(jsEmptyString(vm));
 
-    auto decodedData = base64Decode(encodedString, Base64DecodeMode::DefaultValidatePaddingAndIgnoreWhitespace);
-    if (!decodedData)
+    auto decodedString = base64DecodeToString(encodedString, Base64DecodeMode::DefaultValidatePaddingAndIgnoreWhitespace);
+    if (decodedString.isNull())
         return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Invalid character in argument for atob."_s)));
 
-    return JSValue::encode(jsString(vm, String(decodedData->data(), decodedData->size())));
+    return JSValue::encode(jsString(vm, decodedString));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionBtoa, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -2595,7 +2595,7 @@ JSC_DEFINE_HOST_FUNCTION(functionQuit, (JSGlobalObject* globalObject, CallFrame*
 
     jscExit(EXIT_SUCCESS);
 
-#if COMPILER(MSVC)
+#if COMPILER(MSVC) && !COMPILER(CLANG)
     // Without this, Visual Studio will complain that this method does not return a value.
     return JSValue::encode(jsUndefined());
 #endif
@@ -2976,8 +2976,9 @@ JSC_DEFINE_HOST_FUNCTION(functionSamplingProfilerStackTraces, (JSGlobalObject* g
     if (!vm.samplingProfiler())
         return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Sampling profiler was never started"_s)));
 
-    String jsonString = vm.samplingProfiler()->stackTracesAsJSON();
-    EncodedJSValue result = JSValue::encode(JSONParse(globalObject, jsonString));
+    auto json = vm.samplingProfiler()->stackTracesAsJSON();
+    auto jsonString = json->toJSONString();
+    EncodedJSValue result = JSValue::encode(JSONParse(globalObject, WTFMove(jsonString)));
     scope.releaseAssertNoException();
     return result;
 }
@@ -3076,7 +3077,9 @@ JSC_DEFINE_HOST_FUNCTION(functionDropAllLocks, (JSGlobalObject* globalObject, Ca
 #define EXCEPT(x)
 #endif
 
+#if OS(UNIX)
 static BinarySemaphore waitToExit;
+#endif
 
 int jscmain(int argc, char** argv);
 
@@ -4073,10 +4076,3 @@ int jscmain(int argc, char** argv)
 
     return result;
 }
-
-#if OS(WINDOWS)
-extern "C" __declspec(dllexport) int WINAPI dllLauncherEntryPoint(int argc, const char* argv[])
-{
-    return main(argc, const_cast<char**>(argv));
-}
-#endif

@@ -369,7 +369,7 @@
             "codegen-properties": {
                 "visited-link-color-support": true,
                 "color-property": true,
-                "custom": "Value",
+                "custom": "All",
                 "high-priority": true,
                 "fast-path-inherited": true,
                 "parser-grammar": "<color accept-quirky-colors-in-quirks-mode>"
@@ -3376,7 +3376,6 @@
             }
         },
         "dominant-baseline": {
-            "inherited": true,
             "values": [
                 "auto",
                 "use-script",
@@ -6117,7 +6116,7 @@
         },
         "will-change": {
             "codegen-properties": {
-                "custom": "Value",
+                "converter": "WillChange",
                 "parser-function": "consumeWillChange",
                 "parser-function-requires-context": true,
                 "parser-grammar-unused": "auto | [ scroll-position | contents | <custom-ident> ]#",
@@ -6371,7 +6370,8 @@
         },
         "contain": {
             "codegen-properties": {
-                "custom": "All",
+                "converter": "Contain",
+                "initial": "initialContainment",
                 "settings-flag": "cssContainmentEnabled",
                 "parser-function": "consumeContain",
                 "parser-grammar-unused": "none | strict | content | [ size || layout || paint ]",

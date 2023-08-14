@@ -143,7 +143,7 @@ enum class CheckBackForwardList : bool { No, Yes };
 class WebProcessProxy : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakPtr<WebPageProxy>>;
-    using UserInitiatedActionByAuthorizationTokenMap = HashMap<UUID, RefPtr<API::UserInitiatedAction>>;
+    using UserInitiatedActionByAuthorizationTokenMap = HashMap<WTF::UUID, RefPtr<API::UserInitiatedAction>>;
     typedef HashMap<WebCore::FrameIdentifier, WeakPtr<WebFrameProxy>> WebFrameProxyMap;
     typedef HashMap<uint64_t, RefPtr<API::UserInitiatedAction>> UserInitiatedActionMap;
 
@@ -240,11 +240,11 @@ public:
     void addWebUserContentControllerProxy(WebUserContentControllerProxy&);
     void didDestroyWebUserContentControllerProxy(WebUserContentControllerProxy&);
 
-    void recordUserGestureAuthorizationToken(UUID);
+    void recordUserGestureAuthorizationToken(WTF::UUID);
     RefPtr<API::UserInitiatedAction> userInitiatedActivity(uint64_t);
-    RefPtr<API::UserInitiatedAction> userInitiatedActivity(std::optional<UUID>, uint64_t);
+    RefPtr<API::UserInitiatedAction> userInitiatedActivity(std::optional<WTF::UUID>, uint64_t);
 
-    void consumeIfNotVerifiablyFromUIProcess(API::UserInitiatedAction&, std::optional<UUID>);
+    void consumeIfNotVerifiablyFromUIProcess(API::UserInitiatedAction&, std::optional<WTF::UUID>);
 
     bool isResponsive() const;
 
@@ -322,6 +322,9 @@ public:
     void didCommitProvisionalLoad() { m_hasCommittedAnyProvisionalLoads = true; }
     bool hasCommittedAnyProvisionalLoads() const { return m_hasCommittedAnyProvisionalLoads; }
 
+    void didCommitMeaningfulProvisionalLoad() { m_hasCommittedAnyMeaningfulProvisionalLoads = true; }
+    bool hasCommittedAnyMeaningfulProvisionalLoads() const { return m_hasCommittedAnyMeaningfulProvisionalLoads; }
+
 #if PLATFORM(WATCHOS)
     void startBackgroundActivityForFullscreenInput();
     void endBackgroundActivityForFullscreenInput();
@@ -365,6 +368,7 @@ public:
     void sendProcessDidResume(ResumeReason) final;
     void didChangeThrottleState(ProcessThrottleState) final;
     void prepareToDropLastAssertion(CompletionHandler<void()>&&) final;
+    void didDropLastAssertion() final;
     ASCIILiteral clientName() const final { return "WebProcess"_s; }
     String environmentIdentifier() const final;
 
@@ -427,10 +431,6 @@ public:
     bool hasNetworkExtensionSandboxAccess() const { return m_hasNetworkExtensionSandboxAccess; }
     void markHasNetworkExtensionSandboxAccess() { m_hasNetworkExtensionSandboxAccess = true; }
 #endif
-#if (PLATFORM(IOS) || PLATFORM(VISION)) && !ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
-    bool hasManagedSessionSandboxAccess() const { return m_hasManagedSessionSandboxAccess; }
-    void markHasManagedSessionSandboxAccess() { m_hasManagedSessionSandboxAccess = true; }
-#endif
 
 #if ENABLE(ROUTING_ARBITRATION)
     AudioSessionRoutingArbitratorProxy& audioSessionRoutingArbitrator() { return m_routingArbitrator.get(); }
@@ -489,11 +489,13 @@ public:
     const WeakHashSet<WebProcessProxy>* sharedWorkerClientProcesses() const;
 
     static void permissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
-    void sendPermissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
+    void processPermissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
 
     void addAllowedFirstPartyForCookies(const WebCore::RegistrableDomain&);
 
     Logger& logger();
+
+    void resetState();
 
 protected:
     WebProcessProxy(WebProcessPool&, WebsiteDataStore*, IsPrewarmed, WebCore::CrossOriginMode, LockdownMode);
@@ -541,8 +543,8 @@ private:
     void updateBackForwardItem(const BackForwardListItemState&);
     void didDestroyFrame(WebCore::FrameIdentifier, WebPageProxyIdentifier);
     void didDestroyUserGestureToken(uint64_t);
-    void postMessageToRemote(WebCore::ProcessIdentifier, WebCore::FrameIdentifier, std::optional<WebCore::SecurityOriginData>, const WebCore::MessageWithMessagePorts&);
-    void renderTreeAsText(WebCore::ProcessIdentifier, WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String)>&&);
+    void postMessageToRemote(WebCore::FrameIdentifier, std::optional<WebCore::SecurityOriginData>, const WebCore::MessageWithMessagePorts&);
+    void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String)>&&);
 
     bool canBeAddedToWebProcessCache() const;
     void shouldTerminate(CompletionHandler<void(bool)>&&);
@@ -705,14 +707,12 @@ private:
 #endif
 
     bool m_hasCommittedAnyProvisionalLoads { false };
+    bool m_hasCommittedAnyMeaningfulProvisionalLoads { false }; // True if the process has committed a provisional load to a URL that was not about:*.
     bool m_isPrewarmed;
     LockdownMode m_lockdownMode { LockdownMode::Disabled };
     WebCore::CrossOriginMode m_crossOriginMode { WebCore::CrossOriginMode::Shared };
 #if PLATFORM(COCOA)
     bool m_hasNetworkExtensionSandboxAccess { false };
-#endif
-#if (PLATFORM(IOS) || PLATFORM(VISION)) && !ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
-    bool m_hasManagedSessionSandboxAccess { false };
 #endif
 
 #if ENABLE(WEBCONTENT_CRASH_TESTING)

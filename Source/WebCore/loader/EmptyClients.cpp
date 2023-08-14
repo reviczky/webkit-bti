@@ -277,7 +277,7 @@ private:
     void respondToChangedContents() final { }
     void respondToChangedSelection(LocalFrame*) final { }
     void updateEditorStateAfterLayoutIfEditabilityChanged() final { }
-    void discardedComposition(LocalFrame*) final { }
+    void discardedComposition(const Document&) final { }
     void canceledComposition() final { }
     void didUpdateComposition() final { }
     void didEndEditing() final { }
@@ -602,6 +602,10 @@ void EmptyFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const Naviga
 }
 
 void EmptyFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const NavigationAction&, const ResourceRequest&, const ResourceResponse&, FormState*, PolicyDecisionMode, PolicyCheckIdentifier, FramePolicyFunction&&)
+{
+}
+
+void EmptyFrameLoaderClient::broadcastFrameRemovalToOtherProcesses()
 {
 }
 

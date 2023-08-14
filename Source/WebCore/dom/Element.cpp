@@ -39,6 +39,7 @@
 #include "ComposedTreeIterator.h"
 #include "ComputedStylePropertyMapReadOnly.h"
 #include "ContainerNodeAlgorithms.h"
+#include "ContentVisibilityDocumentState.h"
 #include "CustomElementReactionQueue.h"
 #include "CustomElementRegistry.h"
 #include "DOMRect.h"
@@ -440,7 +441,7 @@ static ShouldIgnoreMouseEvent dispatchPointerEventIfNeeded(Element& element, con
 #else
         UNUSED_PARAM(platformEvent);
 #endif
-        if (platformEvent.syntheticClickType() != NoTap)
+        if (platformEvent.syntheticClickType() != SyntheticClickType::NoTap)
             return ShouldIgnoreMouseEvent::No;
 
         if (auto pointerEvent = pointerCaptureController.pointerEventForMouseEvent(mouseEvent, platformEvent.pointerId(), platformEvent.pointerType())) {
@@ -768,8 +769,13 @@ Vector<String> Element::getAttributeNames() const
 
 bool Element::hasFocusableStyle() const
 {
-    if (renderer() && renderer()->isSkippedContent())
-        return false;
+    if (renderer() && renderer()->isSkippedContent()) {
+        auto* candidate = this;
+        while ((candidate = candidate->parentElementInComposedTree())) {
+            if (candidate->renderer() && candidate->renderStyle()->contentVisibility() == ContentVisibility::Hidden)
+                return false;
+        }
+    }
 
     auto isFocusableStyle = [](const RenderStyle* style) {
         return style && style->display() != DisplayType::None && style->display() != DisplayType::Contents
@@ -1066,6 +1072,8 @@ static std::optional<std::pair<RenderElement*, LayoutRect>> listBoxElementScroll
 
 void Element::scrollIntoView(std::optional<std::variant<bool, ScrollIntoViewOptions>>&& arg)
 {
+    document().contentVisibilityDocumentState().updateContentRelevancyStatusForScrollIfNeeded(*this);
+
     document().updateLayoutIgnorePendingStylesheets();
 
     RenderElement* renderer = nullptr;
@@ -1131,6 +1139,8 @@ void Element::scrollIntoView(bool alignToTop)
 
 void Element::scrollIntoViewIfNeeded(bool centerIfNeeded)
 {
+    document().contentVisibilityDocumentState().updateContentRelevancyStatusForScrollIfNeeded(*this);
+
     document().updateLayoutIgnorePendingStylesheets();
 
     if (!renderer())
@@ -1162,9 +1172,10 @@ void Element::scrollIntoViewIfNotVisible(bool centerIfNotVisible)
 void Element::scrollBy(const ScrollToOptions& options)
 {
     ScrollToOptions scrollToOptions = normalizeNonFiniteCoordinatesOrFallBackTo(options, 0, 0);
+    FloatSize originalDelta(scrollToOptions.left.value(), scrollToOptions.top.value());
     scrollToOptions.left.value() += scrollLeft();
     scrollToOptions.top.value() += scrollTop();
-    scrollTo(scrollToOptions, ScrollClamping::Clamped, ScrollSnapPointSelectionMethod::Directional);
+    scrollTo(scrollToOptions, ScrollClamping::Clamped, ScrollSnapPointSelectionMethod::Directional, originalDelta);
 }
 
 void Element::scrollBy(double x, double y)
@@ -1172,7 +1183,7 @@ void Element::scrollBy(double x, double y)
     scrollBy(ScrollToOptions(x, y));
 }
 
-void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, ScrollSnapPointSelectionMethod snapPointSelectionMethod)
+void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, ScrollSnapPointSelectionMethod snapPointSelectionMethod, std::optional<FloatSize> originalScrollDelta)
 {
     LOG_WITH_STREAM(Scrolling, stream << "Element " << *this << " scrollTo " << options.left << ", " << options.top);
 
@@ -1196,7 +1207,7 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
         if (!window)
             return;
 
-        window->scrollTo(options, clamping, snapPointSelectionMethod);
+        window->scrollTo(options, clamping, snapPointSelectionMethod, originalScrollDelta);
         return;
     }
 
@@ -1216,7 +1227,7 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
     );
 
     auto animated = useSmoothScrolling(scrollToOptions.behavior.value_or(ScrollBehavior::Auto), this) ? ScrollIsAnimated::Yes : ScrollIsAnimated::No;
-    auto scrollPositionChangeOptions = ScrollPositionChangeOptions::createProgrammaticWithOptions(clamping, animated, snapPointSelectionMethod);
+    auto scrollPositionChangeOptions = ScrollPositionChangeOptions::createProgrammaticWithOptions(clamping, animated, snapPointSelectionMethod, originalScrollDelta);
     renderer->setScrollPosition(scrollPosition, scrollPositionChangeOptions);
 }
 
@@ -3520,6 +3531,8 @@ void Element::focus(const FocusOptions& options)
         return;
     }
 
+    document->contentVisibilityDocumentState().updateContentRelevancyStatusForScrollIfNeeded(*this);
+
     RefPtr<Element> newTarget = this;
 
     // If we don't have renderer yet, isFocusable will compute it without style update.
@@ -3681,7 +3694,7 @@ bool Element::dispatchMouseForceWillBegin()
     if (!frame)
         return false;
 
-    PlatformMouseEvent platformMouseEvent { frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), NoButton, PlatformEvent::Type::NoType, 1, { }, WallTime::now(), ForceAtClick, NoTap };
+    PlatformMouseEvent platformMouseEvent { frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), NoButton, PlatformEvent::Type::NoType, 1, { }, WallTime::now(), ForceAtClick, SyntheticClickType::NoTap };
     auto mouseForceWillBeginEvent = MouseEvent::create(eventNames().webkitmouseforcewillbeginEvent, document().windowProxy(), platformMouseEvent, 0, nullptr);
     mouseForceWillBeginEvent->setTarget(Ref { *this });
     dispatchEvent(mouseForceWillBeginEvent);
@@ -3726,11 +3739,11 @@ String Element::outerHTML() const
 ExceptionOr<void> Element::setOuterHTML(const String& html)
 {
     // The specification allows setting outerHTML on an Element whose parent is a DocumentFragment and Gecko supports this.
-    // However, as of June 2021, Blink matches our behavior and throws a NoModificationAllowedError for non-Element parents.
+    // https://w3c.github.io/DOM-Parsing/#dom-element-outerhtml
     RefPtr parent = parentElement();
     if (UNLIKELY(!parent)) {
         if (!parentNode())
-            return Exception { NoModificationAllowedError, "Cannot set outerHTML on element because it doesn't have a parent"_s };
+            return { };
         return Exception { NoModificationAllowedError, "Cannot set outerHTML on element because its parent is not an Element"_s };
     }
 
@@ -3860,6 +3873,8 @@ void Element::addToTopLayer()
     document().addTopLayerElement(*this);
     setNodeFlag(NodeFlag::IsInTopLayer);
 
+    document().scheduleContentRelevancyUpdate(ContentRelevancyStatus::IsInTopLayer);
+
     // Invalidate inert state
     invalidateStyleInternal();
     if (document().documentElement())
@@ -3891,6 +3906,8 @@ void Element::removeFromTopLayer()
 
     document().removeTopLayerElement(*this);
     clearNodeFlag(NodeFlag::IsInTopLayer);
+
+    document().scheduleContentRelevancyUpdate(ContentRelevancyStatus::IsInTopLayer);
 
     // Invalidate inert state
     invalidateStyleInternal();
@@ -5361,6 +5378,30 @@ void Element::setHasDuplicateAttribute(bool hasDuplicateAttribute)
 bool Element::isPopoverShowing() const
 {
     return popoverData() && popoverData()->visibilityState() == PopoverVisibilityState::Showing;
+}
+
+// https://drafts.csswg.org/css-contain/#relevant-to-the-user
+bool Element::isRelevantToUser() const
+{
+    return hasRareData() && elementRareData()->contentRelevancyStatus();
+}
+
+OptionSet<ContentRelevancyStatus> Element::contentRelevancyStatus() const
+{
+    if (!hasRareData())
+        return { };
+    return elementRareData()->contentRelevancyStatus();
+}
+
+void Element::setContentRelevancyStatus(OptionSet<ContentRelevancyStatus> contentRelvancyStatus)
+{
+    ensureElementRareData().setContentRelevancyStatus(contentRelvancyStatus);
+}
+
+void Element::contentVisibilityViewportChange(bool)
+{
+    ASSERT(renderStyle() && renderStyle()->contentVisibility() == ContentVisibility::Auto);
+    document().scheduleContentRelevancyUpdate(ContentRelevancyStatus::OnScreen);
 }
 
 } // namespace WebCore

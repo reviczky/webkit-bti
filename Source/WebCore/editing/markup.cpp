@@ -70,6 +70,7 @@
 #include "Page.h"
 #include "PageConfiguration.h"
 #include "PasteboardItemInfo.h"
+#include "Quirks.h"
 #include "Range.h"
 #include "RenderBlock.h"
 #include "ScriptWrappableInlines.h"
@@ -193,6 +194,7 @@ std::unique_ptr<Page> createPageForSanitizingWebContent()
     page->settings().setHTMLParserScriptingFlagPolicy(HTMLParserScriptingFlagPolicy::Enabled);
     page->settings().setPluginsEnabled(false);
     page->settings().setAcceleratedCompositingEnabled(false);
+    page->settings().setLinkPreloadEnabled(false);
 
     auto* localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
     if (!localMainFrame)
@@ -438,7 +440,7 @@ inline StyledMarkupAccumulator::StyledMarkupAccumulator(const Position& start, c
     , m_annotate(annotate)
     , m_highestNodeToBeSerialized(highestNodeToBeSerialized)
     , m_useComposedTree(serializeComposedTree == SerializeComposedTree::Yes)
-    , m_ignoresUserSelectNone(ignoreUserSelectNone == IgnoreUserSelectNone::Yes)
+    , m_ignoresUserSelectNone(ignoreUserSelectNone == IgnoreUserSelectNone::Yes && !start.document()->quirks().needsToCopyUserSelectNoneQuirk())
     , m_needsPositionStyleConversion(needsPositionStyleConversion)
     , m_standardFontFamilySerializationMode(standardFontFamilySerializationMode)
     , m_shouldPreserveMSOList(msoListMode == MSOListMode::Preserve)

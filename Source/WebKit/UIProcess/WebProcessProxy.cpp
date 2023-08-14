@@ -1296,7 +1296,7 @@ bool WebProcessProxy::wasPreviouslyApprovedFileURL(const URL& url) const
     return m_previouslyApprovedFilePaths.contains(fileSystemPath);
 }
 
-void WebProcessProxy::recordUserGestureAuthorizationToken(UUID authorizationToken)
+void WebProcessProxy::recordUserGestureAuthorizationToken(WTF::UUID authorizationToken)
 {
     if (!UserInitiatedActionByAuthorizationTokenMap::isValidKey(authorizationToken) || !authorizationToken)
         return;
@@ -1317,7 +1317,7 @@ RefPtr<API::UserInitiatedAction> WebProcessProxy::userInitiatedActivity(uint64_t
     return result.iterator->value;
 }
 
-RefPtr<API::UserInitiatedAction> WebProcessProxy::userInitiatedActivity(std::optional<UUID> authorizationToken, uint64_t identifier)
+RefPtr<API::UserInitiatedAction> WebProcessProxy::userInitiatedActivity(std::optional<WTF::UUID> authorizationToken, uint64_t identifier)
 {
     if (!UserInitiatedActionMap::isValidKey(identifier) || !identifier)
         return nullptr;
@@ -1335,7 +1335,7 @@ RefPtr<API::UserInitiatedAction> WebProcessProxy::userInitiatedActivity(std::opt
     return userInitiatedActivity(identifier);
 }
 
-void WebProcessProxy::consumeIfNotVerifiablyFromUIProcess(API::UserInitiatedAction& action, std::optional<UUID> authToken)
+void WebProcessProxy::consumeIfNotVerifiablyFromUIProcess(API::UserInitiatedAction& action, std::optional<WTF::UUID> authToken)
 {
     if (authToken && m_userInitiatedActionByAuthorizationTokenMap.remove(*authToken))
         return;
@@ -1354,20 +1354,21 @@ void WebProcessProxy::didDestroyUserGestureToken(uint64_t identifier)
         m_userInitiatedActionByAuthorizationTokenMap.remove(*removed->authorizationToken());
 }
 
-void WebProcessProxy::postMessageToRemote(WebCore::ProcessIdentifier destinationProcessIdentifier, WebCore::FrameIdentifier identifier, std::optional<WebCore::SecurityOriginData> target, const WebCore::MessageWithMessagePorts& message)
+void WebProcessProxy::postMessageToRemote(WebCore::FrameIdentifier identifier, std::optional<WebCore::SecurityOriginData> target, const WebCore::MessageWithMessagePorts& message)
 {
-    auto webProcessProxy = processForIdentifier(destinationProcessIdentifier);
-    if (webProcessProxy)
-        webProcessProxy->send(Messages::WebProcess::RemotePostMessage(identifier, target, message), 0);
+    auto* destinationFrame = WebFrameProxy::webFrame(identifier);
+    if (!destinationFrame)
+        return;
+    destinationFrame->process().send(Messages::WebProcess::RemotePostMessage(identifier, target, message), 0);
 }
 
-void WebProcessProxy::renderTreeAsText(WebCore::ProcessIdentifier destinationProcessIdentifier, WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String)>&& completionHandler)
+void WebProcessProxy::renderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String)>&& completionHandler)
 {
-    auto webProcessProxy = processForIdentifier(destinationProcessIdentifier);
-    if (!webProcessProxy)
+    auto* frame = WebFrameProxy::webFrame(frameIdentifier);
+    if (!frame)
         return completionHandler({ });
 
-    auto sendResult = webProcessProxy->sendSync(Messages::WebProcess::RenderTreeAsText(frameIdentifier, baseIndent, behavior), 0);
+    auto sendResult = frame->process().sendSync(Messages::WebProcess::RenderTreeAsText(frameIdentifier, baseIndent, behavior), 0);
     if (!sendResult.succeeded())
         return completionHandler({ });
 
@@ -1377,6 +1378,15 @@ void WebProcessProxy::renderTreeAsText(WebCore::ProcessIdentifier destinationPro
 
 bool WebProcessProxy::canBeAddedToWebProcessCache() const
 {
+#if PLATFORM(IOS_FAMILY)
+    // Don't add the Web process to the cache if there are still assertions being held, preventing it from suspending.
+    // This is a fix for a regression in page load speed we see on http://www.youtube.com when adding it to the cache.
+    if (throttler().shouldBeRunnable()) {
+        WEBPROCESSPROXY_RELEASE_LOG(Process, "canBeAddedToWebProcessCache: Not adding to process cache because the process is runnable");
+        return false;
+    }
+#endif
+
     if (isRunningServiceWorkers()) {
         WEBPROCESSPROXY_RELEASE_LOG(Process, "canBeAddedToWebProcessCache: Not adding to process cache because the process is running workers");
         return false;
@@ -1726,6 +1736,12 @@ void WebProcessProxy::didChangeThrottleState(ProcessThrottleState type)
     }
 
     ASSERT(!m_backgroundToken || !m_foregroundToken);
+    m_backgroundResponsivenessTimer.updateState();
+}
+
+void WebProcessProxy::didDropLastAssertion()
+{
+    m_backgroundResponsivenessTimer.updateState();
 }
 
 void WebProcessProxy::prepareToDropLastAssertion(CompletionHandler<void()>&& completionHandler)
@@ -1736,13 +1752,10 @@ void WebProcessProxy::prepareToDropLastAssertion(CompletionHandler<void()>&& com
         // Cached WebProcess will anyway shutdown on memory pressure.
         return completionHandler();
     }
-    // On macOS, we don't slim down the process in the PrepareToSuspend IPC, we delay clearing the
+#endif
+    // We don't slim down the process in the PrepareToSuspend IPC, we delay clearing the
     // caches until we release the suspended assertion.
     sendWithAsyncReply(Messages::WebProcess::ReleaseMemory(), WTFMove(completionHandler), 0, { }, ShouldStartProcessThrottlerActivity::No);
-#else
-    // On iOS, we already slim down the process via the PrepareToSuspend IPC.
-    completionHandler();
-#endif
 }
 
 String WebProcessProxy::environmentIdentifier() const
@@ -2118,7 +2131,7 @@ void WebProcessProxy::createSpeechRecognitionServer(SpeechRecognitionServerIdent
 
 #if ENABLE(MEDIA_STREAM)
     auto createRealtimeMediaSource = [weakPage = WeakPtr { targetPage }]() {
-        return weakPage ? weakPage->createRealtimeMediaSourceForSpeechRecognition() : CaptureSourceOrError { "Page is invalid"_s };
+        return weakPage ? weakPage->createRealtimeMediaSourceForSpeechRecognition() : CaptureSourceOrError { { "Page is invalid"_s, WebCore::MediaAccessDenialReason::InvalidAccess } };
     };
     speechRecognitionServer = makeUnique<SpeechRecognitionServer>(*connection(), identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled), WTFMove(createRealtimeMediaSource));
 #else
@@ -2498,12 +2511,20 @@ void WebProcessProxy::permissionChanged(WebCore::PermissionName permissionName, 
 
     for (auto& webProcessPool : webProcessPools) {
         for (auto& webProcessProxy : webProcessPool->processes())
-            webProcessProxy->sendPermissionChanged(permissionName, topOrigin);
+            webProcessProxy->processPermissionChanged(permissionName, topOrigin);
     }
 }
 
-void WebProcessProxy::sendPermissionChanged(WebCore::PermissionName permissionName, const WebCore::SecurityOriginData& topOrigin)
+void WebProcessProxy::processPermissionChanged(WebCore::PermissionName permissionName, const WebCore::SecurityOriginData& topOrigin)
 {
+#if ENABLE(MEDIA_STREAM)
+    if (permissionName == WebCore::PermissionName::Camera || permissionName == WebCore::PermissionName::Microphone) {
+        for (auto& page : m_pageMap.values()) {
+            if (SecurityOriginData::fromURLWithoutStrictOpaqueness(URL { page->currentURL() }) == topOrigin)
+                page->clearUserMediaPermissionRequestHistory(permissionName);
+        }
+    }
+#endif
     send(Messages::WebPermissionController::permissionChanged(permissionName, topOrigin), 0);
 }
 
@@ -2520,6 +2541,12 @@ Logger& WebProcessProxy::logger()
         m_logger->setEnabled(this, alwaysOnLoggingAllowed);
     }
     return *m_logger;
+}
+
+void WebProcessProxy::resetState()
+{
+    m_hasCommittedAnyProvisionalLoads = false;
+    m_hasCommittedAnyMeaningfulProvisionalLoads = false;
 }
 
 TextStream& operator<<(TextStream& ts, const WebProcessProxy& process)
