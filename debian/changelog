@@ -1,6 +1,7 @@
 webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh all patches and drop fix-jsc-timestamp.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 17:42:09 +0300
 

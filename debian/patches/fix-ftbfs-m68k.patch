@@ -36,7 +36,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -46,6 +46,8 @@ struct SameSizeAsElementRareData : NodeR
+@@ -47,6 +47,8 @@ struct SameSizeAsElementRareData : NodeR
      ExplicitlySetAttrElementsMap explicitlySetAttrElementsMap;
  };
  
@@ -158,7 +158,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5559,3 +5564,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5584,3 +5589,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  

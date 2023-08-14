@@ -6,7 +6,7 @@ Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
 ===================================================================
 --- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/platform.h
 +++ webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
-@@ -102,7 +102,7 @@
+@@ -112,7 +112,7 @@
  #if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
  #    include <intrin.h>
  #    define ANGLE_USE_SSE
