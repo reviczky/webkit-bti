@@ -106,11 +106,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_cookie_manager_delete_cookies_for_domain@Base 2.5.3
  webkit_cookie_manager_get_accept_policy@Base 2.5.3
  webkit_cookie_manager_get_accept_policy_finish@Base 2.5.3
+ webkit_cookie_manager_get_all_cookies@Base 2.41.90
+ webkit_cookie_manager_get_all_cookies_finish@Base 2.41.90
  webkit_cookie_manager_get_cookies@Base 2.19.2
  webkit_cookie_manager_get_cookies_finish@Base 2.19.2
  (gtk3-only)webkit_cookie_manager_get_domains_with_cookies@Base 2.5.3
  (gtk3-only)webkit_cookie_manager_get_domains_with_cookies_finish@Base 2.5.3
  webkit_cookie_manager_get_type@Base 2.5.3
+ webkit_cookie_manager_replace_cookies@Base 2.41.90
+ webkit_cookie_manager_replace_cookies_finish@Base 2.41.90
  webkit_cookie_manager_set_accept_policy@Base 2.5.3
  webkit_cookie_manager_set_persistent_storage@Base 2.5.3
  webkit_cookie_persistent_storage_get_type@Base 2.5.3

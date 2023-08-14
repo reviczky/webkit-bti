@@ -8,6 +8,8 @@ webkit2gtk (2.41.90-1) UNRELEASED; urgency=medium
       (#1042519).
   * debian/copyright:
     - Update copyright information of all files.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Aug 2023 17:42:09 +0300
 
