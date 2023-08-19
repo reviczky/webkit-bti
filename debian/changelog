@@ -3,6 +3,8 @@ webkit2gtk (2.41.91-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/rules:
     - Use --max-parallel=2 in Debian mipsel builds again.
+    - Don't build jpegxl support on Ubuntu yet (it's still in universe)
+      (Jeremy Bicha).
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 19 Aug 2023 22:16:41 +0200
 
