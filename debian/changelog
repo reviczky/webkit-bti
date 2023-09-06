@@ -1,4 +1,4 @@
-webkit2gtk (2.41.91-2) UNRELEASED; urgency=medium
+webkit2gtk (2.41.91-2) experimental; urgency=medium
 
   * debian/patches/fix-ftbfs-riscv64.patch:
     - Fix FTBFS in riscv64.
@@ -6,7 +6,7 @@ webkit2gtk (2.41.91-2) UNRELEASED; urgency=medium
     - Add dependency on libgles2. This is no longer detected automatically
       because it's loaded at runtime by libepoxy (see #1050777).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 06 Sep 2023 14:32:55 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 06 Sep 2023 16:25:21 +0200
 
 webkit2gtk (2.41.91-1) experimental; urgency=medium
 
