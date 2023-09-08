@@ -1,9 +1,9 @@
-webkit2gtk (2.41.92-1) UNRELEASED; urgency=medium
+webkit2gtk (2.41.92-1) experimental; urgency=medium
 
   * New upstream development release.
   * Drop fix-ftbfs-riscv64.patch.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 08 Sep 2023 12:41:39 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 08 Sep 2023 14:31:38 +0200
 
 webkit2gtk (2.41.91-2) experimental; urgency=medium
 
