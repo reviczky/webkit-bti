@@ -69,12 +69,6 @@ DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage,
 #endif
 
     updatePreferences(parameters.store);
-
-    if (m_alwaysUseCompositing) {
-        enterAcceleratedCompositingMode(nullptr);
-        if (!parameters.isProcessSwap)
-            sendEnterAcceleratedCompositingModeIfNeeded();
-    }
 }
 
 DrawingAreaCoordinatedGraphics::~DrawingAreaCoordinatedGraphics() = default;
@@ -289,6 +283,16 @@ void DrawingAreaCoordinatedGraphics::didChangeViewportAttributes(ViewportAttribu
     else if (m_previousLayerTreeHost)
         m_previousLayerTreeHost->didChangeViewportAttributes(WTFMove(attrs));
 }
+
+bool DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingModeIfNeeded()
+{
+    ASSERT(!m_layerTreeHost);
+    if (!m_alwaysUseCompositing)
+        return false;
+
+    enterAcceleratedCompositingMode(nullptr);
+    return true;
+}
 #endif
 
 void DrawingAreaCoordinatedGraphics::setDeviceScaleFactor(float deviceScaleFactor)
@@ -427,9 +431,11 @@ void DrawingAreaCoordinatedGraphics::updateGeometry(const IntSize& size, Complet
             send(Messages::DrawingAreaProxy::UpdateAcceleratedCompositingMode(0, layerTreeContext));
     } else {
         UpdateInfo updateInfo;
-        updateInfo.viewSize = m_webPage.size();
-        updateInfo.deviceScaleFactor = m_webPage.corePage()->deviceScaleFactor();
-        display(updateInfo);
+        if (m_isPaintingSuspended) {
+            updateInfo.viewSize = m_webPage.size();
+            updateInfo.deviceScaleFactor = m_webPage.corePage()->deviceScaleFactor();
+        } else
+            display(updateInfo);
         if (!m_layerTreeHost)
             send(Messages::DrawingAreaProxy::Update(0, WTFMove(updateInfo)));
     }
@@ -826,6 +832,12 @@ void DrawingAreaCoordinatedGraphics::forceUpdate()
 
     m_dirtyRegion = m_webPage.bounds();
     display();
+}
+
+void DrawingAreaCoordinatedGraphics::didDiscardBackingStore()
+{
+    // Ensure the next update will cover the entire view, since the UI process discarded its backing store.
+    m_dirtyRegion = m_webPage.bounds();
 }
 
 } // namespace WebKit
