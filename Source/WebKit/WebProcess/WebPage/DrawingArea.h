@@ -163,6 +163,7 @@ public:
     virtual void updateGeometry(const WebCore::IntSize&, CompletionHandler<void()>&&) = 0;
     virtual void didChangeViewportAttributes(WebCore::ViewportAttributes&&) = 0;
     virtual void deviceOrPageScaleFactorChanged() = 0;
+    virtual bool enterAcceleratedCompositingModeIfNeeded() = 0;
 #endif
 
     virtual void adoptLayersFromDrawingArea(DrawingArea&) { }
@@ -207,6 +208,7 @@ private:
     virtual void targetRefreshRateDidChange(unsigned /*rate*/) { }
     virtual void setDeviceScaleFactor(float) { }
     virtual void forceUpdate() { }
+    virtual void didDiscardBackingStore() { }
 #endif
     virtual void displayDidRefresh() { }
 
