@@ -28,3 +28,18 @@ Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
          availableLocales.add(locale, Vector<String>()).iterator->value.append(filePath);
  
          String localeReplacingUnderscores = makeStringByReplacingAll(locale, '_', '-');
+Index: webkitgtk/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
+===================================================================
+--- webkitgtk.orig/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
++++ webkitgtk/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
+@@ -50,6 +50,10 @@
+ #include <glib.h>
+ #endif
+ 
++#if OS(HURD)
++#define PATH_MAX 4096
++#endif
++
+ namespace WTF {
+ 
+ namespace FileSystemImpl {
