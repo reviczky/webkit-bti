@@ -67,7 +67,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.40.5</p>
+        <p>Library Version: 2.41.92</p>
         
       </div>
       
@@ -192,7 +192,11 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="property" href="property.WebsiteDataManager.offline-application-cache-directory.html">offline-application-cache-directory</a>
   
+    <a class="property" href="property.WebsiteDataManager.origin-storage-ratio.html">origin-storage-ratio</a>
+  
     <a class="property" href="property.WebsiteDataManager.service-worker-registrations-directory.html">service-worker-registrations-directory</a>
+  
+    <a class="property" href="property.WebsiteDataManager.total-storage-ratio.html">total-storage-ratio</a>
   
     <a class="property" href="property.WebsiteDataManager.websql-directory.html">websql-directory</a>
   
@@ -754,6 +758,19 @@ parameters to configure data directories will be&nbsp;ignored.</p>
           <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
+        <div class="">
+          <h6><a href="property.WebsiteDataManager.origin-storage-ratio.html">WebKit2.WebsiteDataManager:origin-storage-ratio</a></h6>
+
+          <div class="docblock">
+            <p>The percentage of volume space that can be used for data storage for every domain.
+If the maximum storage is reached the storage request will fail with a QuotaExceededError exception.
+A value of 0.0 means that data storage is not allowed. A value of -1.0, which is the default,
+means WebKit will use the default quota (1&nbsp;GiB).</p>
+          </div>
+
+          <div class="docblock"><p>Available since: 2.42</p></div>
+        </div>
+      
         <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.service-worker-registrations-directory.html">WebKit2.WebsiteDataManager:service-worker-registrations-directory</a></h6>
 
@@ -762,6 +779,19 @@ parameters to configure data directories will be&nbsp;ignored.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40.</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="property.WebsiteDataManager.total-storage-ratio.html">WebKit2.WebsiteDataManager:total-storage-ratio</a></h6>
+
+          <div class="docblock">
+            <p>The percentage of volume space that can be used for data storage for all domains.
+If the maximum storage is reached the eviction will happen.
+A value of 0.0 means that data storage is not allowed. A value of -1.0, which is the default,
+means there&#8217;s no limit for the total&nbsp;storage.</p>
+          </div>
+
+          <div class="docblock"><p>Available since: 2.42</p></div>
         </div>
       
         <div class="deprecated">

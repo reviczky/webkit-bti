@@ -59,6 +59,7 @@ Pre-Depends: ${misc:Pre-Depends}
 Depends: @LIBJSC_PKG@ (= ${binary:Version}),
          gstreamer1.0-plugins-base,
          gstreamer1.0-plugins-good,
+         libgles2,
          ${bwrap:Depends},
          ${shlibs:Depends},
          ${gles:Depends},

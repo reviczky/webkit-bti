@@ -49,6 +49,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_back_forward_list_item_get_type@Base 2.5.3
  webkit_back_forward_list_item_get_uri@Base 2.5.3
  webkit_cache_model_get_type@Base 2.5.3
+ webkit_clipboard_permission_request_get_type@Base 2.41.4
  webkit_color_chooser_request_cancel@Base 2.8.1
  webkit_color_chooser_request_finish@Base 2.8.1
  webkit_color_chooser_request_get_element_rectangle@Base 2.8.1
@@ -105,11 +106,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_cookie_manager_delete_cookies_for_domain@Base 2.5.3
  webkit_cookie_manager_get_accept_policy@Base 2.5.3
  webkit_cookie_manager_get_accept_policy_finish@Base 2.5.3
+ webkit_cookie_manager_get_all_cookies@Base 2.41.90
+ webkit_cookie_manager_get_all_cookies_finish@Base 2.41.90
  webkit_cookie_manager_get_cookies@Base 2.19.2
  webkit_cookie_manager_get_cookies_finish@Base 2.19.2
  (gtk3-only)webkit_cookie_manager_get_domains_with_cookies@Base 2.5.3
  (gtk3-only)webkit_cookie_manager_get_domains_with_cookies_finish@Base 2.5.3
  webkit_cookie_manager_get_type@Base 2.5.3
+ webkit_cookie_manager_replace_cookies@Base 2.41.90
+ webkit_cookie_manager_replace_cookies_finish@Base 2.41.90
  webkit_cookie_manager_set_accept_policy@Base 2.5.3
  webkit_cookie_manager_set_persistent_storage@Base 2.5.3
  webkit_cookie_persistent_storage_get_type@Base 2.5.3
@@ -1467,6 +1472,21 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_favicon_database_get_favicon_finish@Base 2.5.3
  webkit_favicon_database_get_favicon_uri@Base 2.5.3
  webkit_favicon_database_get_type@Base 2.5.3
+ webkit_feature_get_category@Base 2.41.4
+ webkit_feature_get_default_value@Base 2.41.4
+ webkit_feature_get_details@Base 2.41.4
+ webkit_feature_get_identifier@Base 2.41.4
+ webkit_feature_get_name@Base 2.41.4
+ webkit_feature_get_status@Base 2.41.4
+ webkit_feature_get_type@Base 2.41.4
+ webkit_feature_list_get@Base 2.41.4
+ webkit_feature_list_get_length@Base 2.41.4
+ webkit_feature_list_get_type@Base 2.41.4
+ webkit_feature_list_ref@Base 2.41.4
+ webkit_feature_list_unref@Base 2.41.4
+ webkit_feature_ref@Base 2.41.4
+ webkit_feature_status_get_type@Base 2.41.4
+ webkit_feature_unref@Base 2.41.4
  webkit_file_chooser_request_cancel@Base 2.5.3
  webkit_file_chooser_request_get_mime_types@Base 2.5.3
  webkit_file_chooser_request_get_mime_types_filter@Base 2.5.3
@@ -1763,6 +1783,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_security_origin_unref@Base 2.15.3
  webkit_settings_font_size_to_pixels@Base 2.19.2
  webkit_settings_font_size_to_points@Base 2.19.2
+ webkit_settings_get_all_features@Base 2.41.4
  webkit_settings_get_allow_file_access_from_file_urls@Base 2.10.0
  webkit_settings_get_allow_modal_dialogs@Base 2.5.3
  webkit_settings_get_allow_top_navigation_to_data_urls@Base 2.27.90
@@ -1773,6 +1794,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_default_font_family@Base 2.5.3
  webkit_settings_get_default_font_size@Base 2.5.3
  webkit_settings_get_default_monospace_font_size@Base 2.5.3
+ webkit_settings_get_development_features@Base 2.41.4
  webkit_settings_get_disable_web_security@Base 2.39.4
  webkit_settings_get_draw_compositing_indicators@Base 2.5.3
  (gtk3-only)webkit_settings_get_enable_accelerated_2d_canvas@Base 2.5.3
@@ -1808,7 +1830,9 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_webrtc@Base 2.37.1
  webkit_settings_get_enable_write_console_messages_to_stdout@Base 2.5.3
  (gtk3-only)webkit_settings_get_enable_xss_auditor@Base 2.5.3
+ webkit_settings_get_experimental_features@Base 2.41.4
  webkit_settings_get_fantasy_font_family@Base 2.5.3
+ webkit_settings_get_feature_enabled@Base 2.41.4
  webkit_settings_get_hardware_acceleration_policy@Base 2.15.4
  webkit_settings_get_javascript_can_access_clipboard@Base 2.5.3
  webkit_settings_get_javascript_can_open_windows_automatically@Base 2.5.3
@@ -1873,6 +1897,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_write_console_messages_to_stdout@Base 2.5.3
  (gtk3-only)webkit_settings_set_enable_xss_auditor@Base 2.5.3
  webkit_settings_set_fantasy_font_family@Base 2.5.3
+ webkit_settings_set_feature_enabled@Base 2.41.4
  webkit_settings_set_hardware_acceleration_policy@Base 2.15.4
  webkit_settings_set_javascript_can_access_clipboard@Base 2.5.3
  webkit_settings_set_javascript_can_open_windows_automatically@Base 2.5.3

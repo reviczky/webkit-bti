@@ -131,9 +131,13 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 endif
 
-# Lower max parallel jobs on some of Ubuntu's builders
+# Lower max parallel jobs on some builders
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
 ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
+	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
+endif
+else ifeq ($(shell dpkg-vendor --is Debian && echo yes),yes)
+ifneq (,$(filter $(DEB_HOST_ARCH),mipsel))
 	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
 endif
 endif
@@ -146,6 +150,11 @@ endif
 # libavif & gst-plugins-bad1.0 are not in Ubuntu main
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_AVIF=OFF -DUSE_GSTREAMER_TRANSCODER=OFF
+endif
+
+# jpegxl is not in Ubuntu main
+ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_JPEGXL=OFF
 endif
 
 # gstreamer1.0-libav and gstreamer1.0-plugins-bad are not in Ubuntu "main"

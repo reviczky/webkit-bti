@@ -54,7 +54,9 @@
 
 #if PLATFORM(GTK)
 #include "GtkSettingsManager.h"
+#include "AcceleratedBackingStoreDMABuf.h"
 #endif
+
 
 namespace WebKit {
 
@@ -82,8 +84,16 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
     }
 #endif
 
+#if USE(GBM)
+    parameters.renderDeviceFile = WebCore::PlatformDisplay::sharedDisplay().drmRenderNodeFile();
+#endif
+
+#if PLATFORM(GTK)
+    parameters.dmaBufRendererBufferMode = AcceleratedBackingStoreDMABuf::rendererBufferMode();
+#endif
+
 #if PLATFORM(WAYLAND)
-    if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::Wayland) {
+    if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::Wayland && parameters.dmaBufRendererBufferMode.isEmpty()) {
         wpe_loader_init("libWPEBackend-fdo-1.0.so.1");
         if (AcceleratedBackingStoreWayland::checkRequirements()) {
             parameters.hostClientFileDescriptor = UnixFileDescriptor { wpe_renderer_host_create_client(), UnixFileDescriptor::Adopt };

@@ -67,7 +67,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.40.5</p>
+        <p>Library Version: 2.41.92</p>
         
       </div>
       
@@ -103,6 +103,10 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="method" href="method.CookieManager.get_accept_policy_finish.html">get_accept_policy_finish</a>
   
+    <a class="method" href="method.CookieManager.get_all_cookies.html">get_all_cookies</a>
+  
+    <a class="method" href="method.CookieManager.get_all_cookies_finish.html">get_all_cookies_finish</a>
+  
     <a class="method" href="method.CookieManager.get_cookies.html">get_cookies</a>
   
     <a class="method" href="method.CookieManager.get_cookies_finish.html">get_cookies_finish</a>
@@ -110,6 +114,10 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.CookieManager.get_domains_with_cookies.html">get_domains_with_cookies</a>
   
     <a class="method" href="method.CookieManager.get_domains_with_cookies_finish.html">get_domains_with_cookies_finish</a>
+  
+    <a class="method" href="method.CookieManager.replace_cookies.html">replace_cookies</a>
+  
+    <a class="method" href="method.CookieManager.replace_cookies_finish.html">replace_cookies_finish</a>
   
     <a class="method" href="method.CookieManager.set_accept_policy.html">set_accept_policy</a>
   
@@ -333,6 +341,22 @@ or to set the acceptance policy, with&nbsp;webkit_cookie_manager_get_accept_poli
         </div>
       
         <div class="">
+          <h6><a href="method.CookieManager.get_all_cookies.html">webkit_cookie_manager_get_all_cookies</a></h6>
+          <div class="docblock">
+            <p>Asynchronously get a list of <code>SoupCookie</code> from <code>cookie_manager</code>.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.42</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.CookieManager.get_all_cookies_finish.html">webkit_cookie_manager_get_all_cookies_finish</a></h6>
+          <div class="docblock">
+            <p>Finish an asynchronous operation started with&nbsp;webkit_cookie_manager_get_all_cookies().</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.42</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.CookieManager.get_cookies.html">webkit_cookie_manager_get_cookies</a></h6>
           <div class="docblock">
             <p>Asynchronously get a list of <code>SoupCookie</code> from <code>cookie_manager</code>.</p>
@@ -362,6 +386,22 @@ or to set the acceptance policy, with&nbsp;webkit_cookie_manager_get_accept_poli
             <p>Finish an asynchronous operation started with&nbsp;webkit_cookie_manager_get_domains_with_cookies().</p>
           </div>
           <div class="docblock"><p>Deprecated since: 2.16</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.CookieManager.replace_cookies.html">webkit_cookie_manager_replace_cookies</a></h6>
+          <div class="docblock">
+            <p>Asynchronously replace all cookies in <code>cookie_manager</code> with the given list of <code>cookies</code>.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.42</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.CookieManager.replace_cookies_finish.html">webkit_cookie_manager_replace_cookies_finish</a></h6>
+          <div class="docblock">
+            <p>Finish an asynchronous operation started with&nbsp;webkit_cookie_manager_replace_cookies().</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.42</p></div>
         </div>
       
         <div class="">
