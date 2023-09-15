@@ -1,4 +1,4 @@
-webkit2gtk (2.42.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.42.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Bring all changes from the 2.41 (experimental) branch.
@@ -24,7 +24,7 @@ webkit2gtk (2.42.0-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 15 Sep 2023 11:54:41 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 15 Sep 2023 14:49:49 +0200
 
 webkit2gtk (2.40.5-1) unstable; urgency=high
 
