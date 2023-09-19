@@ -207,3 +207,17 @@ Index: webkitgtk/Source/WebCore/dom/Node.cpp
  
  #if DUMP_NODE_STATISTICS
  static WeakHashSet<Node, WeakPtrImplWithEventTargetData>& liveNodeSet()
+Index: webkitgtk/Source/WebCore/dom/SlotAssignment.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/dom/SlotAssignment.cpp
++++ webkitgtk/Source/WebCore/dom/SlotAssignment.cpp
+@@ -45,7 +45,9 @@ struct SameSizeAsNamedSlotAssignment {
+ #endif
+ };
+ 
++#if !defined(__m68k__)
+ static_assert(sizeof(NamedSlotAssignment) == sizeof(SameSizeAsNamedSlotAssignment), "NamedSlotAssignment should remain small");
++#endif
+ 
+ static const AtomString& slotNameFromAttributeValue(const AtomString& value)
+ {
