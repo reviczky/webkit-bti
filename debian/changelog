@@ -5,6 +5,8 @@ wpewebkit (2.42.0-1) UNRELEASED; urgency=medium
   * debian/control.in:
     - Add build dependency on libjxl-dev, JPEGXL is now enabled by
       default.
+    - Remove the minimum versions of build dependencies in the cases where
+      they are very old.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 Sep 2023 14:54:11 +0200
 
