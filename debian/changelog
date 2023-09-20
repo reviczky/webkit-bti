@@ -8,6 +8,7 @@ wpewebkit (2.42.0-1) UNRELEASED; urgency=medium
     - Remove the minimum versions of build dependencies in the cases where
       they are very old.
     - Require CMake 3.16.
+  * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 Sep 2023 14:54:11 +0200
 
