@@ -1,6 +1,8 @@
 wpewebkit (2.42.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 28 Sep 2023 11:04:41 +0200
 
