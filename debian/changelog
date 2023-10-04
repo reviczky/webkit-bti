@@ -1,4 +1,4 @@
-webkit2gtk (2.42.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.42.1-2) unstable; urgency=medium
 
   * debian/patches/disable-dmabuf-nvidia.patch:
     - Disable the DMABuf renderer for NVIDIA proprietary drivers
