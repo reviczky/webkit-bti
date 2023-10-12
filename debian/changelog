@@ -1,3 +1,15 @@
+webkit2gtk (2.42.1-1~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+  * Disable JPEG XL to avoid adding new dependencies.
+    - debian/control.in: Remove build dependency on libjxl-dev.
+    - debian/rules: Build with -DUSE_JPEGXL=OFF.
+  * debian/patches/disable-dmabuf-nvidia.patch:
+    - Disable the DMABuf renderer for NVIDIA proprietary drivers
+      (See #1039720 and #1052055).
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 12 Oct 2023 13:09:49 +0200
+
 webkit2gtk (2.42.1-1) unstable; urgency=high
 
   * New upstream release.
