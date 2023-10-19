@@ -1,3 +1,11 @@
+webkit2gtk (2.42.1-1~deb11u2) bullseye-security; urgency=medium
+
+  * debian/patches/disable-dmabuf.patch:
+    - Disable the DMABuf renderer in all cases in bullseye
+      (Closes: #1054101).
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 20 Oct 2023 00:26:39 +0200
+
 webkit2gtk (2.42.1-1~deb11u1) bullseye-security; urgency=medium
 
   * Rebuild for bullseye-security.

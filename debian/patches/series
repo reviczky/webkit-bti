@@ -5,4 +5,4 @@ prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
-disable-dmabuf-nvidia.patch
+disable-dmabuf.patch
