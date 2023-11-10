@@ -7,7 +7,7 @@ Index: webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
 +++ webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
-@@ -36,11 +36,13 @@
+@@ -38,11 +38,13 @@
  #include <WebCore/GLContext.h>
  #include <WebCore/IntRect.h>
  #include <WebCore/PlatformDisplay.h>
@@ -21,7 +21,7 @@ Index: webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
  #include <gbm.h>
  static constexpr uint64_t s_dmabufInvalidModifier = uint64_t(WebCore::DMABufFormat::Modifier::Invalid);
  #else
-@@ -53,6 +55,29 @@ static constexpr uint64_t s_dmabufInvali
+@@ -55,6 +57,29 @@ static constexpr uint64_t s_dmabufInvali
  
  namespace WebKit {
  
@@ -51,7 +51,7 @@ Index: webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
  OptionSet<DMABufRendererBufferMode> AcceleratedBackingStoreDMABuf::rendererBufferMode()
  {
      static OptionSet<DMABufRendererBufferMode> mode;
-@@ -68,6 +93,9 @@ OptionSet<DMABufRendererBufferMode> Acce
+@@ -70,6 +95,9 @@ OptionSet<DMABufRendererBufferMode> Acce
              return;
          }
  
