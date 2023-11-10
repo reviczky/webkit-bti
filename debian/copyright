@@ -111,8 +111,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2015 Jordan Harband
            2015 Tobias Reiss <tobi+webkit@basecode.de>
            2015, 2018 Andy VanWagoner <andy@vanwagoner.family>
-           2015, 2018-2019 Janne Grunau
-           2015, 2018-2021 Martin Storsjo
            2015-2016 Sukolsak Sakshuwong <sukolsak@gmail.com>
            2015-2017 Canon Inc
            2015-2020, 2023 Devin Rousso <webkit@devinrousso.com>
@@ -127,23 +125,13 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
-           2018 Niklas Haas
+           2018 Google LLC
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
-           2018, 2020, 2022 Google LLC
-           2018-2022 Two Orioles, LLC
-           2018-2022 VideoLAN and dav1d authors
-           2019 B Krishnan Iyer
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
-           2019 James Almer <jamrial@gmail.com>
-           2019 Luca Barbato
-           2019 Michail Alvanos
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
-           2019-2021 Joe Drago
-           2020 Cloudinary
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
-           2020 Emmanuel Gil Peyrot
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 RDK Management
            2020 WikiMedia Foundation. All Rights Reserve
@@ -153,7 +141,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2022 Jarred Sumner
            2022 Leaning Technologies Inc
            2022 Leonardo Taccari <leot@NetBSD.org>
-           2022 Yuan Tong
            2023 ChangSeok Oh <changseok@webkit.org>
            2023 Colin Vidal <colin@cvidal.org>
 License: BSD-2-clause
@@ -182,8 +169,6 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/pdfjs/build/*
        Source/ThirdParty/pdfjs/web/*
        Source/WTF/wtf/*
-       Source/WebCore/PAL/ThirdParty/libavif/android_jni/gradlew
-       Source/WebCore/PAL/ThirdParty/libavif/tests/test_cmd.sh
        Tools/TestWebKitAPI/Tests/WTF/Int128.cpp
 Copyright: 2007-2021 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
@@ -195,7 +180,6 @@ Copyright: 2007-2021 The Khronos Group Inc
            2019, 2022 The ANGLE Project
            2020 The SwiftShader Authors
            2021 The Chromium Authors
-           2022 Google LLC
 License: Apache-2.0
 
 Files: Source/WTF/wtf/Markable.h
@@ -207,10 +191,6 @@ Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/RobinHoodHashTable.h
 Copyright: 2015-2022 Apple Inc
 License: BSD-2-clause or Expat
-
-Files: Source/WebCore/PAL/ThirdParty/libavif/ThirdParty/dav1d/tools/compat/getopt.c
-Copyright: 2002 Todd C. Miller <Todd.Miller@courtesan.com>
-License: BSD-2-clause or ISC
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
        Source/WTF/wtf/DateMath.cpp
@@ -1460,6 +1440,7 @@ Copyright: 1999-2000 Harri Porten <porten@kde.org>
            2006-2023 Apple Inc
            2009 Google Inc
            2010 Research In Motion Limited
+           2012 the V8 project authors
 License: GPL-2+ or LGPL-2.1+ or MPL-1.1
 
 Files: Source/bmalloc/bmalloc/valgrind.h
