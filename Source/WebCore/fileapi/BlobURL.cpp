@@ -80,8 +80,7 @@ bool BlobURL::isSecureBlobURL(const URL& url)
         if (auto* document = blobOwner(*origin))
             return document->isSecureContext();
     }
-
-    return false;
+    return SecurityOrigin::isSecure(getOriginURL(url));
 }
 
 URL BlobURL::createBlobURL(StringView originString)
