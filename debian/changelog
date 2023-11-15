@@ -1,6 +1,7 @@
 wpewebkit (2.42.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 15 Nov 2023 11:57:14 +0100
 
