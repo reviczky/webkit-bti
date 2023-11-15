@@ -1,5 +1,4 @@
 fix-ftbfs-sparc64.patch
-fix-ftbfs-m68k.patch
 fix-ftbfs-x32.patch
 prefer-pthread.patch
 dont-detect-sse2.patch

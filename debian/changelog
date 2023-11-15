@@ -2,6 +2,8 @@ wpewebkit (2.42.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Update copyright information of all files.
+  * debian/patches/fix-ftbfs-m68k.patch:
+    - Drop this patch, it hasn't worked in a long time.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 15 Nov 2023 11:57:14 +0100
 
