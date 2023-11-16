@@ -1,3 +1,13 @@
+webkit2gtk (2.42.2-1~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+    - Fixes CVE-2023-41983 and CVE-2023-42852.
+  * Disable JPEG XL to avoid adding new dependencies.
+    - debian/control.in: Remove build dependency on libjxl-dev.
+    - debian/rules: Build with -DUSE_JPEGXL=OFF.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 16 Nov 2023 12:15:08 +0100
+
 webkit2gtk (2.42.2-1) unstable; urgency=high
 
   * New upstream release.
