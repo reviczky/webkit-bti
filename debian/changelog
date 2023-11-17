@@ -8,6 +8,7 @@ webkit2gtk (2.43.1-1) UNRELEASED; urgency=medium
     - Remove fix-ftbfs-m68k.patch (this hasn't worked in a long time).
   * debian/rules:
     - GTK4 is now the default, pass -DUSE_GTK4=OFF to the GTK3 builds.
+    - Build with -DUSE_LIBBACKTRACE=OFF.
   * debian/copyright:
     - Update copyright information of all files.
   * debian/source/lintian-overrides:
