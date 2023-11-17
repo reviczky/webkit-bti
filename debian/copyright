@@ -88,7 +88,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2012-2013 Company 100 Inc
            2012-2013 Digia Plc
            2012-2013 Michael Pruett <michael@68k.org>
-           2012-2015 University of Washington
            2012-2016 Yann Collet
            2013 Adenilson Cavalcanti <cavalcantii@gmail.com>
            2013 Andrew Bortz
@@ -98,6 +97,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2013 The MathJax Consortium
            2013 Xidorn Quan <quanxunzhen@gmail.com>
            2013-2014 Cable Television Labs Inc
+           2013-2015 University of Washington
            2014 Antoine Quint
            2014 Dhi Aurrahman <diorahman@rockybars.com>
            2014 Gurpreet Kaur <k.gurpreet@samsung.com>
@@ -166,13 +166,12 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
        Source/ThirdParty/ANGLE/third_party/logdog/get.sh
        Source/ThirdParty/ANGLE/util/android/third_party/*
-       Source/ThirdParty/pdfjs/build/*
        Source/ThirdParty/pdfjs/web/*
        Source/WTF/wtf/*
        Tools/TestWebKitAPI/Tests/WTF/Int128.cpp
 Copyright: 2007-2021 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
-           2012, 2014, 2023 Mozilla Foundation
+           2014 Mozilla Foundation
            2015-2016 LunarG Inc
            2015-2016 Valve Corporation
            2015-2018 Google Inc
@@ -213,17 +212,21 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/bytecode/DirectEvalCodeCache.h
        Source/JavaScriptCore/bytecode/EvalCodeBlock.cpp
        Source/JavaScriptCore/bytecode/EvalCodeBlock.h
+       Source/JavaScriptCore/bytecode/EvalCodeBlockInlines.h
        Source/JavaScriptCore/bytecode/FunctionCodeBlock.cpp
        Source/JavaScriptCore/bytecode/FunctionCodeBlock.h
+       Source/JavaScriptCore/bytecode/FunctionCodeBlockInlines.h
        Source/JavaScriptCore/bytecode/GlobalCodeBlock.h
        Source/JavaScriptCore/bytecode/JumpTable.cpp
        Source/JavaScriptCore/bytecode/JumpTable.h
        Source/JavaScriptCore/bytecode/ModuleProgramCodeBlock.cpp
        Source/JavaScriptCore/bytecode/ModuleProgramCodeBlock.h
+       Source/JavaScriptCore/bytecode/ModuleProgramCodeBlockInlines.h
        Source/JavaScriptCore/bytecode/Opcode.cpp
        Source/JavaScriptCore/bytecode/Opcode.h
        Source/JavaScriptCore/bytecode/ProgramCodeBlock.cpp
        Source/JavaScriptCore/bytecode/ProgramCodeBlock.h
+       Source/JavaScriptCore/bytecode/ProgramCodeBlockInlines.h
        Source/JavaScriptCore/bytecode/SpeculatedType.cpp
        Source/JavaScriptCore/bytecode/SpeculatedType.h
        Source/JavaScriptCore/bytecode/ValueProfile.h
@@ -254,6 +257,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/interpreter/Register.h
        Source/JavaScriptCore/parser/SourceCode.h
        Source/JavaScriptCore/parser/SourceProvider.h
+       Source/JavaScriptCore/parser/SourceTaintedOrigin.h
        Source/JavaScriptCore/parser/UnlinkedSourceCode.h
        Source/JavaScriptCore/runtime/CallData.h
        Source/JavaScriptCore/runtime/ConstructData.h
@@ -264,8 +268,10 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/runtime/JSGlobalObject.cpp
        Source/JavaScriptCore/runtime/JSLexicalEnvironment.cpp
        Source/JavaScriptCore/runtime/JSLexicalEnvironment.h
+       Source/JavaScriptCore/runtime/JSLexicalEnvironmentInlines.h
        Source/JavaScriptCore/runtime/JSModuleEnvironment.cpp
        Source/JavaScriptCore/runtime/JSModuleEnvironment.h
+       Source/JavaScriptCore/runtime/JSModuleEnvironmentInlines.h
        Source/JavaScriptCore/runtime/JSSegmentedVariableObject.cpp
        Source/JavaScriptCore/runtime/JSSegmentedVariableObject.h
        Source/JavaScriptCore/runtime/JSSymbolTableObject.cpp
@@ -374,6 +380,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/Modules/webdatabase/SQLTransactionCallback.h
        Source/WebCore/Modules/webdatabase/SQLTransactionErrorCallback.h
        Source/WebCore/Scripts/extract-localizable-strings.pl
+       Source/WebCore/accessibility/AXCoreObject.cpp
        Source/WebCore/accessibility/AXImage.cpp
        Source/WebCore/accessibility/AXImage.h
        Source/WebCore/accessibility/AXLogger.cpp
@@ -507,7 +514,14 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/loader/SubframeLoader.h
        Source/WebCore/loader/SubresourceLoader.cpp
        Source/WebCore/loader/SubresourceLoader.h
-       Source/WebCore/loader/archive/*
+       Source/WebCore/loader/archive/Archive.cpp
+       Source/WebCore/loader/archive/Archive.h
+       Source/WebCore/loader/archive/ArchiveFactory.cpp
+       Source/WebCore/loader/archive/ArchiveFactory.h
+       Source/WebCore/loader/archive/ArchiveResource.cpp
+       Source/WebCore/loader/archive/ArchiveResource.h
+       Source/WebCore/loader/archive/ArchiveResourceCollection.cpp
+       Source/WebCore/loader/archive/ArchiveResourceCollection.h
        Source/WebCore/loader/soup/ResourceLoaderSoup.cpp
        Source/WebCore/page/BarProp.cpp
        Source/WebCore/page/BarProp.h
@@ -644,6 +658,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebInspectorUI/UserInterface/Views/ConsoleGroup.js
        Source/WebInspectorUI/UserInterface/Views/ConsoleMessageView.js
        Source/WebInspectorUI/UserInterface/Views/ConsoleSession.js
+       Source/WebInspectorUI/UserInterface/Views/ConsoleSourceMapMessageGroup.js
        Source/WebInspectorUI/UserInterface/Views/DOMTreeElement.js
        Source/WebInspectorUI/UserInterface/Views/DOMTreeOutline.js
        Source/WebInspectorUI/UserInterface/Views/DOMTreeUpdater.js
@@ -772,7 +787,7 @@ Files: Source/WebCore/Modules/mediastream/MediaDevices.cpp
        Source/WebCore/platform/mock/MockRealtimeAudioSource.h
        Source/WebCore/platform/mock/MockRealtimeVideoSource.h
 Copyright: 2009, 2011-2012, 2015-2016 Ericsson AB
-           2010, 2013-2022 Apple Inc
+           2010, 2013-2023 Apple Inc
            2011 Code Aurora Forum
            2012 Google Inc
            2013 Nokia
@@ -816,6 +831,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WTF/wtf/SaturatedArithmetic.h
        Source/WTF/wtf/SizeLimits.cpp
        Source/WTF/wtf/StreamBuffer.h
+       Source/WTF/wtf/TypeTraits.h
        Source/WTF/wtf/UUID.cpp
        Source/WTF/wtf/UUID.h
        Source/WTF/wtf/dtoa/*
@@ -1304,10 +1320,10 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/rendering/style/GridTrackSize.h
        Source/WebCore/rendering/style/StyleGridItemData.cpp
        Source/WebCore/rendering/style/StyleGridItemData.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGModelObject.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGModelObject.h
        Source/WebCore/rendering/svg/RenderSVGModelObject.cpp
        Source/WebCore/rendering/svg/RenderSVGModelObject.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGModelObject.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGModelObject.h
        Source/WebCore/testing/MemoryInfo.h
        Source/WebCore/workers/AbstractWorker.cpp
        Source/WebCore/workers/AbstractWorker.h
@@ -1337,6 +1353,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebKit/NetworkProcess/NetworkDataTaskBlob.cpp
        Source/WebKit/NetworkProcess/NetworkDataTaskBlob.h
        Source/WebKit/WebProcess/Network/WebSocketProvider.cpp
+       Tools/TestWebKitAPI/Tests/WTF/NativePromise.cpp
        Tools/TestWebKitAPI/Tests/WTF/SHA1.cpp
        Tools/TestWebKitAPI/Tests/WTF/SaturatedArithmeticOperations.cpp
        Tools/TestWebKitAPI/Tests/WTF/StringBuilder.cpp
@@ -1376,6 +1393,7 @@ Copyright: 2004-2023 Apple Inc
            2014 University of Washington
            2014-2019, 2023 The Chromium Authors
            2015 Roopesh Chander <roop@roopc.net>
+           2017-2021 Mozilla Corporation
            2018-2019 Google LLC
            2019 Microsoft Corporation
            2020-2021 Metrological Group B.V
@@ -1430,7 +1448,7 @@ Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2013 Dave St.Germain
            2013-2020 The Khronos Group Inc
            2015-2018 Baldur Karlsson
-           2018-2019 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
+           2018-2023 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
            2020-2022 Hans-Kristian Arntzen
 License: Expat
 
@@ -1482,8 +1500,16 @@ Copyright: 2008-2018 The Khronos Group Inc
 License: Expat
 
 Files: Source/WTF/wtf/text/Base64.cpp
+       Source/WebCore/crypto/algorithms/CryptoAlgorithmX25519.cpp
+       Source/WebCore/crypto/algorithms/CryptoAlgorithmX25519.h
        Source/WebCore/crypto/gcrypt/CryptoAlgorithmEd25519GCrypt.cpp
+       Source/WebCore/crypto/gcrypt/CryptoAlgorithmX25519GCrypt.cpp
        Source/WebCore/crypto/gcrypt/CryptoKeyOKPGCrypt.cpp
+       Source/WebCore/crypto/gcrypt/GCryptRFC7748.cpp
+       Source/WebCore/crypto/gcrypt/GCryptRFC7748.h
+       Source/WebCore/crypto/gcrypt/GCryptRFC8032.cpp
+       Source/WebCore/crypto/gcrypt/GCryptRFC8032.h
+       Source/WebCore/crypto/parameters/CryptoAlgorithmX25519Params.h
        Source/WebCore/rendering/AutoTableLayout.cpp
        Source/WebCore/rendering/AutoTableLayout.h
        Source/WebCore/rendering/FixedTableLayout.cpp
@@ -1492,9 +1518,10 @@ Files: Source/WTF/wtf/text/Base64.cpp
 Copyright: 2000-2001 Dawit Alemayehu <adawit@kde.org>
            2002 Dirk Mueller <mueller@kde.org>
            2002 Lars Knoll <knoll@kde.org>
-           2003-2021, 2023 Apple Inc
+           2003-2023 Apple Inc
            2006 Alexey Proskuryakov <ap@webkit.org>
            2010 Patrick Gansterer <paroga@paroga.com>
+           2015 Google Inc
            2023 Igalia S.L.
 License: LGPL-2
 
@@ -1545,15 +1572,19 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/ArgList.h
        Source/JavaScriptCore/runtime/ArrayConstructor.cpp
        Source/JavaScriptCore/runtime/ArrayConstructor.h
+       Source/JavaScriptCore/runtime/ArrayConstructorInlines.h
        Source/JavaScriptCore/runtime/ArrayConventions.h
        Source/JavaScriptCore/runtime/ArrayPrototype.cpp
        Source/JavaScriptCore/runtime/ArrayPrototype.h
        Source/JavaScriptCore/runtime/BooleanConstructor.cpp
        Source/JavaScriptCore/runtime/BooleanConstructor.h
+       Source/JavaScriptCore/runtime/BooleanConstructorInlines.h
        Source/JavaScriptCore/runtime/BooleanObject.cpp
        Source/JavaScriptCore/runtime/BooleanObject.h
+       Source/JavaScriptCore/runtime/BooleanObjectInlines.h
        Source/JavaScriptCore/runtime/BooleanPrototype.cpp
        Source/JavaScriptCore/runtime/BooleanPrototype.h
+       Source/JavaScriptCore/runtime/BooleanPrototypeInlines.h
        Source/JavaScriptCore/runtime/ClassInfo.h
        Source/JavaScriptCore/runtime/CommonIdentifiers.cpp
        Source/JavaScriptCore/runtime/CommonIdentifiers.h
@@ -1561,29 +1592,39 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/Completion.h
        Source/JavaScriptCore/runtime/DateConstructor.cpp
        Source/JavaScriptCore/runtime/DateConstructor.h
+       Source/JavaScriptCore/runtime/DateConstructorInlines.h
        Source/JavaScriptCore/runtime/DateInstance.cpp
        Source/JavaScriptCore/runtime/DateInstance.h
+       Source/JavaScriptCore/runtime/DateInstanceInlines.h
        Source/JavaScriptCore/runtime/DatePrototype.cpp
        Source/JavaScriptCore/runtime/DatePrototype.h
+       Source/JavaScriptCore/runtime/DatePrototypeInlines.h
        Source/JavaScriptCore/runtime/Error.cpp
        Source/JavaScriptCore/runtime/Error.h
        Source/JavaScriptCore/runtime/ErrorConstructor.cpp
        Source/JavaScriptCore/runtime/ErrorConstructor.h
+       Source/JavaScriptCore/runtime/ErrorConstructorInlines.h
        Source/JavaScriptCore/runtime/ErrorInstance.cpp
        Source/JavaScriptCore/runtime/ErrorInstance.h
+       Source/JavaScriptCore/runtime/ErrorInstanceInlines.h
        Source/JavaScriptCore/runtime/ErrorPrototype.cpp
        Source/JavaScriptCore/runtime/ErrorPrototype.h
+       Source/JavaScriptCore/runtime/ErrorPrototypeInlines.h
        Source/JavaScriptCore/runtime/FunctionConstructor.cpp
        Source/JavaScriptCore/runtime/FunctionConstructor.h
+       Source/JavaScriptCore/runtime/FunctionConstructorInlines.h
        Source/JavaScriptCore/runtime/FunctionPrototype.cpp
        Source/JavaScriptCore/runtime/FunctionPrototype.h
+       Source/JavaScriptCore/runtime/FunctionPrototypeInlines.h
        Source/JavaScriptCore/runtime/GetterSetter.cpp
        Source/JavaScriptCore/runtime/GetterSetter.h
+       Source/JavaScriptCore/runtime/GetterSetterInlines.h
        Source/JavaScriptCore/runtime/GlobalObjectMethodTable.h
        Source/JavaScriptCore/runtime/Identifier.cpp
        Source/JavaScriptCore/runtime/Identifier.h
        Source/JavaScriptCore/runtime/InternalFunction.cpp
        Source/JavaScriptCore/runtime/InternalFunction.h
+       Source/JavaScriptCore/runtime/InternalFunctionInlines.h
        Source/JavaScriptCore/runtime/JSArray.cpp
        Source/JavaScriptCore/runtime/JSArray.h
        Source/JavaScriptCore/runtime/JSArrayInlines.h
@@ -1610,16 +1651,21 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/Lookup.h
        Source/JavaScriptCore/runtime/MathObject.cpp
        Source/JavaScriptCore/runtime/MathObject.h
+       Source/JavaScriptCore/runtime/MathObjectInlines.h
        Source/JavaScriptCore/runtime/NativeErrorConstructor.cpp
        Source/JavaScriptCore/runtime/NativeErrorConstructor.h
+       Source/JavaScriptCore/runtime/NativeErrorConstructorInlines.h
        Source/JavaScriptCore/runtime/NativeErrorPrototype.cpp
        Source/JavaScriptCore/runtime/NativeErrorPrototype.h
+       Source/JavaScriptCore/runtime/NativeErrorPrototypeInlines.h
        Source/JavaScriptCore/runtime/NumberConstructor.cpp
        Source/JavaScriptCore/runtime/NumberConstructor.h
+       Source/JavaScriptCore/runtime/NumberConstructorInlines.h
        Source/JavaScriptCore/runtime/NumberObject.cpp
        Source/JavaScriptCore/runtime/NumberObject.h
        Source/JavaScriptCore/runtime/NumberPrototype.cpp
        Source/JavaScriptCore/runtime/NumberPrototype.h
+       Source/JavaScriptCore/runtime/NumberPrototypeInlines.h
        Source/JavaScriptCore/runtime/ObjectConstructor.cpp
        Source/JavaScriptCore/runtime/ObjectConstructor.h
        Source/JavaScriptCore/runtime/ObjectPrototype.cpp
@@ -1630,11 +1676,13 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/PropertySlot.cpp
        Source/JavaScriptCore/runtime/PropertySlot.h
        Source/JavaScriptCore/runtime/PropertyTable.h
+       Source/JavaScriptCore/runtime/PropertyTableInlines.h
        Source/JavaScriptCore/runtime/Protect.h
        Source/JavaScriptCore/runtime/RegExp.cpp
        Source/JavaScriptCore/runtime/RegExp.h
        Source/JavaScriptCore/runtime/RegExpConstructor.cpp
        Source/JavaScriptCore/runtime/RegExpConstructor.h
+       Source/JavaScriptCore/runtime/RegExpConstructorInlines.h
        Source/JavaScriptCore/runtime/RegExpInlines.h
        Source/JavaScriptCore/runtime/RegExpMatchesArray.h
        Source/JavaScriptCore/runtime/RegExpObject.cpp
@@ -1642,15 +1690,19 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/RegExpObjectInlines.h
        Source/JavaScriptCore/runtime/RegExpPrototype.cpp
        Source/JavaScriptCore/runtime/RegExpPrototype.h
+       Source/JavaScriptCore/runtime/RegExpPrototypeInlines.h
        Source/JavaScriptCore/runtime/StringConstructor.cpp
        Source/JavaScriptCore/runtime/StringConstructor.h
+       Source/JavaScriptCore/runtime/StringConstructorInlines.h
        Source/JavaScriptCore/runtime/StringObject.cpp
        Source/JavaScriptCore/runtime/StringObject.h
+       Source/JavaScriptCore/runtime/StringObjectInlines.h
        Source/JavaScriptCore/runtime/StringPrototype.cpp
        Source/JavaScriptCore/runtime/StringPrototype.h
        Source/JavaScriptCore/runtime/StringRecursionChecker.cpp
        Source/JavaScriptCore/runtime/StringRecursionChecker.h
        Source/JavaScriptCore/runtime/SymbolObject.h
+       Source/JavaScriptCore/runtime/SymbolObjectInlines.h
        Source/JavaScriptCore/runtime/TemporalNow.cpp
        Source/JavaScriptCore/runtime/TemporalNow.h
        Source/JavaScriptCore/runtime/TemporalObject.cpp
@@ -1714,9 +1766,11 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/text/NullTextBreakIterator.h
        Source/WTF/wtf/text/StringHash.h
        Source/WTF/wtf/text/StringHasher.h
+       Source/WTF/wtf/text/StringHasherInlines.h
        Source/WTF/wtf/text/StringImpl.cpp
        Source/WTF/wtf/text/StringImpl.h
        Source/WTF/wtf/text/StringOperators.h
+       Source/WTF/wtf/text/SuperFastHash.h
        Source/WTF/wtf/text/TextBreakIterator.cpp
        Source/WTF/wtf/text/TextBreakIterator.h
        Source/WTF/wtf/text/TextBreakIteratorInternalICU.h
@@ -1730,6 +1784,9 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/Modules/geolocation/NavigatorGeolocation.h
        Source/WebCore/Modules/mediastream/gstreamer/*
        Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
+       Source/WebCore/Modules/webcodecs/AacEncoderConfig.h
+       Source/WebCore/Modules/webcodecs/FlacEncoderConfig.h
+       Source/WebCore/Modules/webcodecs/OpusEncoderConfig.h
        Source/WebCore/Modules/websockets/WebSocketFrame.cpp
        Source/WebCore/PAL/config.h
        Source/WebCore/PAL/pal/system/gtk/SoundGtk.cpp
@@ -1978,6 +2035,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/dom/ScriptDisallowedScope.h
        Source/WebCore/dom/ScriptElement.cpp
        Source/WebCore/dom/ScriptElement.h
+       Source/WebCore/dom/ShouldNotFireMutationEventsScope.h
        Source/WebCore/dom/SimulatedClickOptions.h
        Source/WebCore/dom/SpaceSplitString.cpp
        Source/WebCore/dom/SpaceSplitString.h
@@ -2237,6 +2295,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/animation/AnimationList.cpp
        Source/WebCore/platform/animation/AnimationList.h
        Source/WebCore/platform/animation/TimingFunction.h
+       Source/WebCore/platform/audio/PlatformRawAudioData.cpp
+       Source/WebCore/platform/audio/PlatformRawAudioData.h
        Source/WebCore/platform/audio/glib/*
        Source/WebCore/platform/audio/gstreamer/*
        Source/WebCore/platform/gamepad/manette/GUniquePtrManette.h
@@ -2339,6 +2399,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/filters/software/FEComponentTransferSoftwareApplier.h
        Source/WebCore/platform/graphics/filters/software/FECompositeSoftwareApplier.cpp
        Source/WebCore/platform/graphics/filters/software/FECompositeSoftwareApplier.h
+       Source/WebCore/platform/graphics/filters/software/FECompositeSoftwareArithmeticApplier.cpp
+       Source/WebCore/platform/graphics/filters/software/FECompositeSoftwareArithmeticApplier.h
        Source/WebCore/platform/graphics/filters/software/FEConvolveMatrixSoftwareApplier.cpp
        Source/WebCore/platform/graphics/filters/software/FEConvolveMatrixSoftwareApplier.h
        Source/WebCore/platform/graphics/filters/software/FEDisplacementMapSoftwareApplier.cpp
@@ -2437,8 +2499,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/holepunch/*
        Source/WebCore/platform/graphics/nicosia/NicosiaAnimation.cpp
        Source/WebCore/platform/graphics/nicosia/NicosiaAnimation.h
-       Source/WebCore/platform/graphics/texmap/BitmapTextureGL.cpp
-       Source/WebCore/platform/graphics/texmap/BitmapTextureGL.h
+       Source/WebCore/platform/graphics/texmap/BitmapTexture.cpp
        Source/WebCore/platform/graphics/texmap/ClipStack.cpp
        Source/WebCore/platform/graphics/texmap/ClipStack.h
        Source/WebCore/platform/graphics/texmap/GraphicsLayerTextureMapper.cpp
@@ -2451,8 +2512,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/texmap/TextureMapperFPSCounter.h
        Source/WebCore/platform/graphics/texmap/TextureMapperGCGLPlatformLayer.cpp
        Source/WebCore/platform/graphics/texmap/TextureMapperGCGLPlatformLayer.h
-       Source/WebCore/platform/graphics/texmap/TextureMapperGL.cpp
-       Source/WebCore/platform/graphics/texmap/TextureMapperGL.h
        Source/WebCore/platform/graphics/texmap/TextureMapperLayer.cpp
        Source/WebCore/platform/graphics/texmap/TextureMapperLayer.h
        Source/WebCore/platform/graphics/texmap/TextureMapperPlatformLayer.h
@@ -2657,7 +2716,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderReplaced.h
        Source/WebCore/rendering/RenderSearchField.cpp
        Source/WebCore/rendering/RenderSearchField.h
-       Source/WebCore/rendering/RenderSelectionInfo.h
+       Source/WebCore/rendering/RenderSelectionGeometry.h
        Source/WebCore/rendering/RenderSlider.cpp
        Source/WebCore/rendering/RenderSlider.h
        Source/WebCore/rendering/RenderTable.cpp
@@ -2769,24 +2828,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/style/StyleTransformData.cpp
        Source/WebCore/rendering/style/StyleTransformData.h
        Source/WebCore/rendering/style/TextSizeAdjustment.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGContainer.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGContainer.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGForeignObject.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGForeignObject.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGHiddenContainer.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGHiddenContainer.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGImage.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGImage.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGPath.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGPath.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGRoot.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGRoot.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGShape.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGShape.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGTransformableContainer.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGTransformableContainer.h
-       Source/WebCore/rendering/svg/LegacyRenderSVGViewportContainer.cpp
-       Source/WebCore/rendering/svg/LegacyRenderSVGViewportContainer.h
        Source/WebCore/rendering/svg/RenderSVGBlock.cpp
        Source/WebCore/rendering/svg/RenderSVGBlock.h
        Source/WebCore/rendering/svg/RenderSVGContainer.cpp
@@ -2805,8 +2846,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/RenderSVGInlineText.h
        Source/WebCore/rendering/svg/RenderSVGPath.cpp
        Source/WebCore/rendering/svg/RenderSVGPath.h
-       Source/WebCore/rendering/svg/RenderSVGResource.cpp
-       Source/WebCore/rendering/svg/RenderSVGResource.h
        Source/WebCore/rendering/svg/RenderSVGResourceClipper.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceClipper.h
        Source/WebCore/rendering/svg/RenderSVGResourceContainer.cpp
@@ -2817,10 +2856,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceGradient.h
        Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.h
-       Source/WebCore/rendering/svg/RenderSVGResourceMarker.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceMarker.h
-       Source/WebCore/rendering/svg/RenderSVGResourceMasker.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceMasker.h
        Source/WebCore/rendering/svg/RenderSVGResourcePattern.cpp
        Source/WebCore/rendering/svg/RenderSVGResourcePattern.h
        Source/WebCore/rendering/svg/RenderSVGResourceRadialGradient.cpp
@@ -2887,6 +2922,34 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/SVGTextMetricsBuilder.h
        Source/WebCore/rendering/svg/SVGTextQuery.cpp
        Source/WebCore/rendering/svg/SVGTextQuery.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGContainer.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGContainer.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGForeignObject.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGForeignObject.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGHiddenContainer.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGHiddenContainer.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGImage.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGImage.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGPath.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGPath.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResource.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResource.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceClipper.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceClipper.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceContainer.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceContainer.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMarker.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMarker.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMasker.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMasker.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGRoot.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGRoot.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGShape.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGShape.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGTransformableContainer.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGTransformableContainer.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGViewportContainer.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGViewportContainer.h
        Source/WebCore/rendering/updating/RenderTreeBuilderFirstLetter.cpp
        Source/WebCore/rendering/updating/RenderTreeBuilderList.cpp
        Source/WebCore/rendering/updating/RenderTreeBuilderMultiColumn.cpp
@@ -3121,7 +3184,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/svg/SVGRect.h
        Source/WebCore/svg/SVGRectElement.cpp
        Source/WebCore/svg/SVGRectElement.h
-       Source/WebCore/svg/SVGRenderingIntent.h
        Source/WebCore/svg/SVGSVGElement.cpp
        Source/WebCore/svg/SVGSVGElement.h
        Source/WebCore/svg/SVGScriptElement.cpp
@@ -3181,7 +3243,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/testing/js/WebCoreTestSupportPrefix.h
        Source/WebCore/xml/DOMParser.cpp
        Source/WebCore/xml/DOMParser.h
-       Source/WebCore/xml/ParseFromStringOptions.h
        Source/WebCore/xml/XMLHttpRequest.cpp
        Source/WebCore/xml/XMLHttpRequest.h
        Source/WebCore/xml/XMLSerializer.cpp
@@ -3914,6 +3975,7 @@ Files: Source/WebCore/rendering/RenderLayerInlines.h
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestGeolocationManager.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestInputMethodContext.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestMultiprocess.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestNetworkProcessMemoryPressure.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestOptionMenu.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestUIClient.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFaviconDatabase.cpp
