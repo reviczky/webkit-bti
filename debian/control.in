@@ -6,7 +6,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Emilio Pozuelo Monfort <pochu@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
-Build-Depends: debhelper-compat (= 12),
+Build-Depends: debhelper-compat (= 13),
                ccache [!i386 !m68k],
                bubblewrap [!alpha !ia64 !m68k !sh4 !sparc64 !hurd-any !kfreebsd-any],
                xdg-dbus-proxy [!alpha !ia64 !m68k !sh4 !sparc64 !hurd-any !kfreebsd-any],

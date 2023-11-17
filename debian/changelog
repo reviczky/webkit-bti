@@ -6,9 +6,12 @@ webkit2gtk (2.43.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
     - Remove disable-dmabuf-nvidia.patch.
     - Remove fix-ftbfs-m68k.patch (this hasn't worked in a long time).
+  * debian/control.in:
+    - Set the debhelper compatibility level to 13.
   * debian/rules:
     - GTK4 is now the default, pass -DUSE_GTK4=OFF to the GTK3 builds.
     - Build with -DUSE_LIBBACKTRACE=OFF.
+    - Stop overriding dh_missing, no longer needed with dh compat 13.
   * debian/copyright:
     - Update copyright information of all files.
   * debian/source/lintian-overrides:
