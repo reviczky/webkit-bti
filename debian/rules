@@ -197,9 +197,6 @@ endif
 override_dh_shlibdeps:
 	dh_shlibdeps -XMiniBrowser
 
-override_dh_missing:
-	dh_missing --fail-missing
-
 override_dh_builddeb:
 	DEB_BUILD_OPTIONS="$(filter-out parallel=%,$(DEB_BUILD_OPTIONS))" \
 		dh_builddeb
