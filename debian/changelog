@@ -3,6 +3,9 @@ webkit2gtk (2.43.1-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/watch, debian/gbp.conf:
     - Update for 2.43.x packages in experimental.
+  * Refresh all patches.
+    - Remove disable-dmabuf-nvidia.patch.
+    - Remove fix-ftbfs-m68k.patch (this hasn't worked in a long time).
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 17 Nov 2023 10:51:08 +0100
 
