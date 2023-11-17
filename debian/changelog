@@ -15,6 +15,7 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
       (default since dpkg 1.22.6) causes a FTBFS when added to the latter
       (see #1066411).
     - Stop using -DENABLE_WEBGL=OFF on armel and powerpc.
+    - Build with -DUSE_LIBBACKTRACE=OFF.
   * debian/patches/fix-ftbfs-riscv64.patch:
     - Treat riscv64 as an unknown CPU to fix a FTBFS in JavaScriptCore
       (webkit bug #271371).
