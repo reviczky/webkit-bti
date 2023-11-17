@@ -47,9 +47,7 @@ ALWAYS_INLINE static void appendCodePoint(Vector<UChar>& destination, UChar32 co
         destination.append(static_cast<UChar>(codePoint));
         return;
     }
-    destination.reserveCapacity(destination.size() + 2);
-    destination.uncheckedAppend(U16_LEAD(codePoint));
-    destination.uncheckedAppend(U16_TRAIL(codePoint));
+    destination.appendList({ U16_LEAD(codePoint), U16_TRAIL(codePoint) });
 }
 
 enum URLCharacterClass {
@@ -731,7 +729,9 @@ std::optional<String> URLParser::maybeCanonicalizeScheme(StringView scheme)
         return std::nullopt;
     }
 
-    return scheme.convertToASCIILowercase();
+    return scheme.convertToASCIILowercase().removeCharacters([](auto character) {
+        return isTabOrNewline(character);
+    });
 }
 
 bool URLParser::isSpecialScheme(StringView schemeArg)
@@ -999,11 +999,10 @@ void URLParser::syntaxViolation(const CodePointIterator<CharacterType>& iterator
     ASSERT(m_asciiBuffer.isEmpty());
     size_t codeUnitsToCopy = iterator.codeUnitsSince(reinterpret_cast<const CharacterType*>(m_inputBegin));
     RELEASE_ASSERT(codeUnitsToCopy <= m_inputString.length());
-    m_asciiBuffer.reserveCapacity(m_inputString.length());
-    for (size_t i = 0; i < codeUnitsToCopy; ++i) {
-        ASSERT(isASCII(m_inputString[i]));
-        m_asciiBuffer.uncheckedAppend(m_inputString[i]);
-    }
+    if (m_inputString.is8Bit())
+        m_asciiBuffer.append(m_inputString.characters8(), codeUnitsToCopy);
+    else
+        m_asciiBuffer.append(m_inputString.characters16(), codeUnitsToCopy);
 }
 
 void URLParser::failure()
@@ -2478,16 +2477,16 @@ URLParser::LCharBuffer URLParser::percentDecode(const LChar* input, size_t lengt
     for (size_t i = 0; i < length; ++i) {
         uint8_t byte = input[i];
         if (byte != '%')
-            output.uncheckedAppend(byte);
+            output.append(byte);
         else if (length > 2 && i < length - 2) {
             if (isASCIIHexDigit(input[i + 1]) && isASCIIHexDigit(input[i + 2])) {
                 syntaxViolation(iteratorForSyntaxViolationPosition);
-                output.uncheckedAppend(toASCIIHexValue(input[i + 1], input[i + 2]));
+                output.append(toASCIIHexValue(input[i + 1], input[i + 2]));
                 i += 2;
             } else
-                output.uncheckedAppend(byte);
+                output.append(byte);
         } else
-            output.uncheckedAppend(byte);
+            output.append(byte);
     }
     return output;
 }
@@ -2500,15 +2499,15 @@ URLParser::LCharBuffer URLParser::percentDecode(const LChar* input, size_t lengt
     for (size_t i = 0; i < length; ++i) {
         uint8_t byte = input[i];
         if (byte != '%')
-            output.uncheckedAppend(byte);
+            output.append(byte);
         else if (length > 2 && i < length - 2) {
             if (isASCIIHexDigit(input[i + 1]) && isASCIIHexDigit(input[i + 2])) {
-                output.uncheckedAppend(toASCIIHexValue(input[i + 1], input[i + 2]));
+                output.append(toASCIIHexValue(input[i + 1], input[i + 2]));
                 i += 2;
             } else
-                output.uncheckedAppend(byte);
+                output.append(byte);
         } else
-            output.uncheckedAppend(byte);
+            output.append(byte);
     }
     return output;
 }
@@ -2540,20 +2539,18 @@ template<typename CharacterType> std::optional<URLParser::LCharBuffer> URLParser
         size_t length = domain.length();
         if (domain.is8Bit()) {
             const LChar* characters = domain.characters8();
-            ascii.reserveInitialCapacity(length);
-            for (size_t i = 0; i < length; ++i) {
+            ascii.appendUsingFunctor(length, [&](size_t i) {
                 if (UNLIKELY(isASCIIUpper(characters[i])))
                     syntaxViolation(iteratorForSyntaxViolationPosition);
-                ascii.uncheckedAppend(toASCIILower(characters[i]));
-            }
+                return toASCIILower(characters[i]);
+            });
         } else {
             const UChar* characters = domain.characters16();
-            ascii.reserveInitialCapacity(length);
-            for (size_t i = 0; i < length; ++i) {
+            ascii.appendUsingFunctor(length, [&](size_t i) {
                 if (UNLIKELY(isASCIIUpper(characters[i])))
                     syntaxViolation(iteratorForSyntaxViolationPosition);
-                ascii.uncheckedAppend(toASCIILower(characters[i]));
-            }
+                return toASCIILower(characters[i]);
+            });
         }
         return ascii;
     }

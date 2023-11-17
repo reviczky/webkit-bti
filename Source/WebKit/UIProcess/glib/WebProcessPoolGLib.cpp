@@ -53,16 +53,17 @@
 #endif
 
 #if PLATFORM(GTK)
-#include "GtkSettingsManager.h"
 #if USE(EGL)
 #include "AcceleratedBackingStoreDMABuf.h"
 #endif
+#include "GtkSettingsManager.h"
+#include "ScreenManager.h"
 #endif
 
 
 namespace WebKit {
 
-void WebProcessPool::platformInitialize()
+void WebProcessPool::platformInitialize(NeedsGlobalStaticInitialization)
 {
     m_alwaysUsesComplexTextCodePath = true;
 
@@ -149,6 +150,7 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
 
 #if PLATFORM(GTK)
     parameters.gtkSettings = GtkSettingsManager::singleton().settingsState();
+    parameters.screenProperties = ScreenManager::singleton().collectScreenProperties();
 #endif
 }
 

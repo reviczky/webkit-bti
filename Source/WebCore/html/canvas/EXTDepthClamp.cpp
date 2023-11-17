@@ -42,11 +42,6 @@ EXTDepthClamp::EXTDepthClamp(WebGLRenderingContextBase& context)
 
 EXTDepthClamp::~EXTDepthClamp() = default;
 
-WebGLExtension::ExtensionName EXTDepthClamp::getName() const
-{
-    return EXTDepthClampName;
-}
-
 bool EXTDepthClamp::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_EXT_depth_clamp"_s);

@@ -163,6 +163,8 @@ public:
     virtual bool useFormSemanticContext() const { return false; }
     virtual bool supportsLargeFormControls() const { return false; }
 
+    virtual bool searchFieldShouldAppearAsTextField(const RenderStyle&) const { return false; }
+
     // Text selection colors.
     Color activeSelectionBackgroundColor(OptionSet<StyleColorOptions>) const;
     Color inactiveSelectionBackgroundColor(OptionSet<StyleColorOptions>) const;
@@ -190,7 +192,6 @@ public:
 
     WEBCORE_EXPORT Color focusRingColor(OptionSet<StyleColorOptions>) const;
     virtual Color platformFocusRingColor(OptionSet<StyleColorOptions>) const { return Color::black; }
-    static void setCustomFocusRingColor(const Color&);
     static float platformFocusRingWidth() { return 3; }
     static float platformFocusRingOffset(float outlineWidth) { return std::max<float>(outlineWidth - platformFocusRingWidth(), 0); }
 #if ENABLE(TOUCH_EVENTS)
@@ -245,7 +246,7 @@ public:
     virtual String fileListDefaultLabel(bool multipleFilesAllowed) const;
     virtual String fileListNameForWidth(const FileList*, const FontCascade&, int width, bool multipleFilesAllowed) const;
 
-    enum FileUploadDecorations { SingleFile, MultipleFiles };
+    enum class FileUploadDecorations : bool { SingleFile, MultipleFiles };
     virtual void paintFileUploadIconDecorations(const RenderObject& /*inputRenderer*/, const RenderObject& /*buttonRenderer*/, const PaintInfo&, const IntRect&, Icon*, FileUploadDecorations) { }
     
 #if ENABLE(SERVICE_CONTROLS)
@@ -347,7 +348,6 @@ protected:
 
 #if ENABLE(APPLE_PAY)
     virtual void adjustApplePayButtonStyle(RenderStyle&, const Element*) const { }
-    virtual bool paintApplePayButton(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)

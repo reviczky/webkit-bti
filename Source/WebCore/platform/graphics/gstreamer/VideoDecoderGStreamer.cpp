@@ -22,9 +22,12 @@
 
 #if ENABLE(WEB_CODECS) && USE(GSTREAMER)
 
+#include "GStreamerCodecUtilities.h"
 #include "GStreamerCommon.h"
 #include "GStreamerElementHarness.h"
 #include "GStreamerRegistryScanner.h"
+#include "HEVCUtilities.h"
+#include "VP9Utilities.h"
 #include "VideoFrameGStreamer.h"
 #include <wtf/WorkQueue.h>
 
@@ -48,7 +51,14 @@ public:
     {
         return adoptRef(*new GStreamerInternalVideoDecoder(codecName, config, WTFMove(outputCallback), WTFMove(postTaskCallback), WTFMove(element)));
     }
-    ~GStreamerInternalVideoDecoder() = default;
+    ~GStreamerInternalVideoDecoder()
+    {
+        if (isConfigured()) {
+            GST_DEBUG_OBJECT(harnessedElement(), "Disposing video decoder");
+            return;
+        }
+        GST_DEBUG("Disposing un-configured video decoder");
+    }
 
     void postTask(Function<void()>&& task) { m_postTaskCallback(WTFMove(task)); }
     void decode(std::span<const uint8_t>, bool isKeyFrame, int64_t timestamp, std::optional<uint64_t> duration,  VideoDecoder::DecodeCallback&&);
@@ -71,7 +81,7 @@ private:
     GRefPtr<GstCaps> m_inputCaps;
 };
 
-bool GStreamerVideoDecoder::create(const String& codecName, const Config& config, CreateCallback&& callback, OutputCallback&& outputCallback, PostTaskCallback&& postTaskCallback)
+void GStreamerVideoDecoder::create(const String& codecName, const Config& config, CreateCallback&& callback, OutputCallback&& outputCallback, PostTaskCallback&& postTaskCallback)
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
@@ -81,15 +91,22 @@ bool GStreamerVideoDecoder::create(const String& codecName, const Config& config
     auto& scanner = GStreamerRegistryScanner::singleton();
     auto lookupResult = scanner.isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, codecName);
     if (!lookupResult) {
-        GST_WARNING("No decoder found for codec %s", codecName.ascii().data());
-        return false;
+        GST_WARNING("No decoder found for codec %s", codecName.utf8().data());
+        postTaskCallback([callback = WTFMove(callback), codecName]() mutable {
+            callback(makeUnexpected(makeString("No decoder found for codec "_s, codecName)));
+        });
+        return;
     }
 
     GRefPtr<GstElement> element = gst_element_factory_create(lookupResult.factory.get(), nullptr);
     auto decoder = makeUniqueRef<GStreamerVideoDecoder>(codecName, config, WTFMove(outputCallback), WTFMove(postTaskCallback), WTFMove(element));
-    if (!decoder->m_internalDecoder->isConfigured()) {
-        GST_WARNING("Internal video decoder failed to configure for codec %s", codecName.ascii().data());
-        return false;
+    auto internalDecoder = decoder->m_internalDecoder;
+    if (!internalDecoder->isConfigured()) {
+        GST_WARNING("Internal video decoder failed to configure for codec %s", codecName.utf8().data());
+        internalDecoder->postTask([callback = WTFMove(callback), codecName]() mutable {
+            callback(makeUnexpected(makeString("Internal video decoder failed to configure for codec "_s, codecName)));
+        });
+        return;
     }
 
     gstDecoderWorkQueue().dispatch([callback = WTFMove(callback), decoder = WTFMove(decoder)]() mutable {
@@ -99,8 +116,6 @@ bool GStreamerVideoDecoder::create(const String& codecName, const Config& config
             callback(UniqueRef<VideoDecoder> { WTFMove(decoder) });
         });
     });
-
-    return true;
 }
 
 GStreamerVideoDecoder::GStreamerVideoDecoder(const String& codecName, const Config& config, OutputCallback&& outputCallback, PostTaskCallback&& postTaskCallback, GRefPtr<GstElement>&& element)
@@ -110,7 +125,6 @@ GStreamerVideoDecoder::GStreamerVideoDecoder(const String& codecName, const Conf
 
 GStreamerVideoDecoder::~GStreamerVideoDecoder()
 {
-    GST_DEBUG_OBJECT(m_internalDecoder->harnessedElement(), "Disposing");
     close();
 }
 
@@ -203,6 +217,11 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
 
         if (m_isClosed)
             return;
+
+        static std::once_flag onceFlag;
+        std::call_once(onceFlag, [this] {
+            m_harness->dumpGraph("video-decoder");
+        });
 
         GST_TRACE_OBJECT(m_harness->element(), "Got frame with PTS: %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_PTS(outputBuffer.get())));
 

@@ -688,9 +688,19 @@ WI.TextEditor = class TextEditor extends WI.View
         return createCodeMirrorCubicBezierTimingFunctionTextMarkers(this._codeMirror, range);
     }
 
+    createLinearTimingFunctionMarkers(range)
+    {
+        return createCodeMirrorLinearTimingFunctionTextMarkers(this._codeMirror, range);
+    }
+
     createSpringTimingFunctionMarkers(range)
     {
         return createCodeMirrorSpringTimingFunctionTextMarkers(this._codeMirror, range);
+    }
+
+    createStepsTimingFunctionMarkers(range)
+    {
+        return createCodeMirrorStepsTimingFunctionTextMarkers(this._codeMirror, range);
     }
 
     editingControllerForMarker(editableMarker)
@@ -702,8 +712,12 @@ WI.TextEditor = class TextEditor extends WI.View
             return new WI.CodeMirrorGradientEditingController(this._codeMirror, editableMarker);
         case WI.TextMarker.Type.CubicBezierTimingFunction:
             return new WI.CodeMirrorCubicBezierTimingFunctionEditingController(this._codeMirror, editableMarker);
+        case WI.TextMarker.Type.LinearTimingFunction:
+            return new WI.CodeMirrorLinearTimingFunctionEditingController(this._codeMirror, editableMarker);
         case WI.TextMarker.Type.SpringTimingFunction:
             return new WI.CodeMirrorSpringTimingFunctionEditingController(this._codeMirror, editableMarker);
+        case WI.TextMarker.Type.StepsTimingFunction:
+            return new WI.CodeMirrorStepsTimingFunctionEditingController(this._codeMirror, editableMarker);
         default:
             return new WI.CodeMirrorEditingController(this._codeMirror, editableMarker);
         }

@@ -29,9 +29,6 @@
 
 #include "MessageReceiver.h"
 #include <WebCore/AsyncScrollingCoordinator.h>
-#include <WebCore/ScrollTypes.h>
-#include <WebCore/ScrollingConstraints.h>
-#include <WebCore/Timer.h>
 
 namespace IPC {
 class Decoder;
@@ -51,7 +48,7 @@ public:
         return adoptRef(*new RemoteScrollingCoordinator(page));
     }
 
-    void buildTransaction(RemoteScrollingCoordinatorTransaction&);
+    RemoteScrollingCoordinatorTransaction buildTransaction();
 
     void scrollingStateInUIProcessChanged(const RemoteScrollingUIState&);
 
@@ -94,8 +91,8 @@ private:
     void currentSnapPointIndicesChangedForNode(WebCore::ScrollingNodeID, std::optional<unsigned> horizontal, std::optional<unsigned> vertical);
 
     void receivedWheelEventWithPhases(WebCore::PlatformWheelEventPhase phase, WebCore::PlatformWheelEventPhase momentumPhase);
-    void startDeferringScrollingTestCompletionForNode(WebCore::ScrollingNodeID, WebCore::WheelEventTestMonitor::DeferReason);
-    void stopDeferringScrollingTestCompletionForNode(WebCore::ScrollingNodeID, WebCore::WheelEventTestMonitor::DeferReason);
+    void startDeferringScrollingTestCompletionForNode(WebCore::ScrollingNodeID, OptionSet<WebCore::WheelEventTestMonitor::DeferReason>);
+    void stopDeferringScrollingTestCompletionForNode(WebCore::ScrollingNodeID, OptionSet<WebCore::WheelEventTestMonitor::DeferReason>);
     void scrollingTreeNodeScrollbarVisibilityDidChange(WebCore::ScrollingNodeID, WebCore::ScrollbarOrientation, bool);
     void scrollingTreeNodeScrollbarMinimumThumbLengthDidChange(WebCore::ScrollingNodeID nodeID, WebCore::ScrollbarOrientation orientation, int minimumThumbLength);
 

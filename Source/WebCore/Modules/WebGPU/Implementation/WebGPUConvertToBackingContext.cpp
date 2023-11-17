@@ -34,7 +34,6 @@
 #include "WebGPUBufferBindingType.h"
 #include "WebGPUCompareFunction.h"
 #include "WebGPUCompilationMessageType.h"
-#include "WebGPUComputePassTimestampLocation.h"
 #include "WebGPUCullMode.h"
 #include "WebGPUErrorFilter.h"
 #include "WebGPUFeatureName.h"
@@ -45,7 +44,6 @@
 #include "WebGPUPowerPreference.h"
 #include "WebGPUPrimitiveTopology.h"
 #include "WebGPUQueryType.h"
-#include "WebGPURenderPassTimestampLocation.h"
 #include "WebGPUSamplerBindingType.h"
 #include "WebGPUStencilOperation.h"
 #include "WebGPUStorageTextureAccess.h"
@@ -164,16 +162,6 @@ WGPUCompilationMessageType ConvertToBackingContext::convertToBacking(Compilation
         return WGPUCompilationMessageType_Warning;
     case CompilationMessageType::Info:
         return WGPUCompilationMessageType_Info;
-    }
-}
-
-WGPUComputePassTimestampLocation ConvertToBackingContext::convertToBacking(ComputePassTimestampLocation computePassTimestampLocation)
-{
-    switch (computePassTimestampLocation) {
-    case ComputePassTimestampLocation::Beginning:
-        return WGPUComputePassTimestampLocation_Beginning;
-    case ComputePassTimestampLocation::End:
-        return WGPUComputePassTimestampLocation_End;
     }
 }
 
@@ -313,16 +301,6 @@ WGPUQueryType ConvertToBackingContext::convertToBacking(QueryType queryType)
     }
 }
 
-WGPURenderPassTimestampLocation ConvertToBackingContext::convertToBacking(RenderPassTimestampLocation renderPassTimestampLocation)
-{
-    switch (renderPassTimestampLocation) {
-    case RenderPassTimestampLocation::Beginning:
-        return WGPURenderPassTimestampLocation_Beginning;
-    case RenderPassTimestampLocation::End:
-        return WGPURenderPassTimestampLocation_End;
-    }
-}
-
 WGPUSamplerBindingType ConvertToBackingContext::convertToBacking(SamplerBindingType samplerBindingType)
 {
     switch (samplerBindingType) {
@@ -452,6 +430,8 @@ WGPUTextureFormat ConvertToBackingContext::convertToBacking(TextureFormat textur
         return WGPUTextureFormat_BGRA8UnormSrgb;
     case TextureFormat::Rgb9e5ufloat:
         return WGPUTextureFormat_RGB9E5Ufloat;
+    case TextureFormat::Rgb10a2uint:
+        return WGPUTextureFormat_RGB10A2Uint;
     case TextureFormat::Rgb10a2unorm:
         return WGPUTextureFormat_RGB10A2Unorm;
     case TextureFormat::Rg11b10ufloat:
@@ -690,6 +670,8 @@ WGPUVertexFormat ConvertToBackingContext::convertToBacking(VertexFormat vertexFo
         return WGPUVertexFormat_Sint32x3;
     case VertexFormat::Sint32x4:
         return WGPUVertexFormat_Sint32x4;
+    case VertexFormat::Unorm10_10_10_2:
+        return WGPUVertexFormat_Unorm10_10_10_2;
     }
 }
 

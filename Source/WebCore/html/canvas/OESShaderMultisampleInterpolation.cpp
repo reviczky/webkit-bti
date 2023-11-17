@@ -42,11 +42,6 @@ OESShaderMultisampleInterpolation::OESShaderMultisampleInterpolation(WebGLRender
 
 OESShaderMultisampleInterpolation::~OESShaderMultisampleInterpolation() = default;
 
-WebGLExtension::ExtensionName OESShaderMultisampleInterpolation::getName() const
-{
-    return OESShaderMultisampleInterpolationName;
-}
-
 bool OESShaderMultisampleInterpolation::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_OES_shader_multisample_interpolation"_s);

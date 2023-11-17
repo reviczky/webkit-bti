@@ -53,6 +53,11 @@ SecurityOrigin* SecurityContext::securityOrigin() const
     return &m_securityOriginPolicy->origin();
 }
 
+RefPtr<SecurityOrigin> SecurityContext::protectedSecurityOrigin() const
+{
+    return securityOrigin();
+}
+
 void SecurityContext::setContentSecurityPolicy(std::unique_ptr<ContentSecurityPolicy>&& contentSecurityPolicy)
 {
     m_contentSecurityPolicy = WTFMove(contentSecurityPolicy);
@@ -192,10 +197,15 @@ void SecurityContext::inheritPolicyContainerFrom(const PolicyContainer& policyCo
     if (!contentSecurityPolicy())
         setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { }, nullptr, nullptr));
 
-    contentSecurityPolicy()->inheritHeadersFrom(policyContainer.contentSecurityPolicyResponseHeaders);
+    checkedContentSecurityPolicy()->inheritHeadersFrom(policyContainer.contentSecurityPolicyResponseHeaders);
     setCrossOriginOpenerPolicy(policyContainer.crossOriginOpenerPolicy);
     setCrossOriginEmbedderPolicy(policyContainer.crossOriginEmbedderPolicy);
     setReferrerPolicy(policyContainer.referrerPolicy);
+}
+
+CheckedPtr<ContentSecurityPolicy> SecurityContext::checkedContentSecurityPolicy()
+{
+    return m_contentSecurityPolicy.get();
 }
 
 }

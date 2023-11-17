@@ -33,7 +33,7 @@
 
 namespace WebCore {
 
-int Theme::baselinePositionAdjustment(StyleAppearance) const
+int Theme::baselinePositionAdjustment(StyleAppearance, bool) const
 {
     return 0;
 }
@@ -78,17 +78,6 @@ void Theme::paint(StyleAppearance, ControlStates&, GraphicsContext&, const Float
 void Theme::inflateControlPaintRect(StyleAppearance, const ControlStates&, FloatRect&, float) const
 {
 }
-
-bool Theme::userPrefersReducedMotion() const
-{
-    return false;
-}
-
-bool Theme::userPrefersContrast() const
-{
-    return false;
-}
-
 
 LengthBox Theme::controlBorder(StyleAppearance appearance, const FontCascade&, const LengthBox& zoomedBox, float) const
 {

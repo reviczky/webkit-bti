@@ -26,6 +26,7 @@
 #include "TextBoxPainter.h"
 
 #include "CompositionHighlight.h"
+#include "DocumentInlines.h"
 #include "DocumentMarkerController.h"
 #include "Editor.h"
 #include "EventRegion.h"
@@ -136,7 +137,7 @@ void TextBoxPainter<TextBoxPath>::paint()
         if (m_useCustomUnderlines)
             paintCompositionUnderlines();
 
-        m_renderer.page().addRelevantRepaintedObject(const_cast<RenderText*>(&m_renderer), enclosingLayoutRect(m_paintRect));
+        m_renderer.page().addRelevantRepaintedObject(m_renderer, enclosingLayoutRect(m_paintRect));
     }
 
     if (shouldRotate)
@@ -556,6 +557,11 @@ template<typename TextBoxPath>
 void TextBoxPainter<TextBoxPath>::collectDecoratingBoxesForTextBox(DecoratingBoxList& decoratingBoxList, const InlineIterator::TextBoxIterator& textBox, FloatPoint textBoxLocation, const TextDecorationPainter::Styles& overrideDecorationStyle)
 {
     auto ancestorInlineBox = textBox->parentInlineBox();
+    if (!ancestorInlineBox) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
     // FIXME: Vertical writing mode needs some coordinate space transformation for parent inline boxes as we rotate the content with m_paintRect (see ::paint)
     if (ancestorInlineBox->isRootInlineBox() || !textBox->isHorizontal()) {
         decoratingBoxList.append({
@@ -593,6 +599,10 @@ void TextBoxPainter<TextBoxPath>::collectDecoratingBoxesForTextBox(DecoratingBox
     appendIfIsDecoratingBoxForBackground(ancestorInlineBox, UseOverriderDecorationStyle::Yes);
     while (!ancestorInlineBox->isRootInlineBox()) {
         ancestorInlineBox = ancestorInlineBox->parentInlineBox();
+        if (!ancestorInlineBox) {
+            ASSERT_NOT_REACHED();
+            break;
+        }
         appendIfIsDecoratingBoxForBackground(ancestorInlineBox, UseOverriderDecorationStyle::No);
     }
 }

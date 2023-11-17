@@ -22,6 +22,7 @@
 
 #if USE(EGL)
 messages -> AcceleratedSurfaceDMABuf NotRefCounted {
+    ReleaseBuffer(uint64_t id)
     FrameDone()
 }
 #endif

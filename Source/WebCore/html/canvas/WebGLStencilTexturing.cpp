@@ -42,11 +42,6 @@ WebGLStencilTexturing::WebGLStencilTexturing(WebGLRenderingContextBase& context)
 
 WebGLStencilTexturing::~WebGLStencilTexturing() = default;
 
-WebGLExtension::ExtensionName WebGLStencilTexturing::getName() const
-{
-    return WebGLStencilTexturingName;
-}
-
 bool WebGLStencilTexturing::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_ANGLE_stencil_texturing"_s);

@@ -26,16 +26,19 @@
 #pragma once
 
 #include "WebGLExtension.h"
+#include "WebGLRenderingContextBase.h"
+#include <wtf/IsoMalloc.h>
+#include <wtf/Noncopyable.h>
+#include <wtf/RefCounted.h>
 
 namespace WebCore {
 
-class WebGLRenderSharedExponent final : public WebGLExtension {
+class WebGLRenderSharedExponent final : public RefCounted<WebGLRenderSharedExponent>, public WebGLExtension<WebGLRenderingContextBase> {
     WTF_MAKE_ISO_ALLOCATED(WebGLRenderSharedExponent);
+    WTF_MAKE_NONCOPYABLE(WebGLRenderSharedExponent);
 public:
     explicit WebGLRenderSharedExponent(WebGLRenderingContextBase&);
-    virtual ~WebGLRenderSharedExponent();
-
-    ExtensionName getName() const override;
+    ~WebGLRenderSharedExponent();
 
     static bool supported(GraphicsContextGL&);
 };

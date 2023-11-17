@@ -1,72 +1,16 @@
 ================
-WebKitGTK 2.42.2
+WebKitGTK 2.43.1
 ================
 
-What's new in WebKitGTK 2.42.2?
+What's new in WebKitGTK 2.43.1?
 
-  - Bump Safari version in user agent header.
-  - Fix CSP regression that broke Unity WebGL applications.
-  - Fix the build with GBM disabled.
+  - Improve vblank synchronization when rendering.
+  - Improve DMA-BUF buffers handling for video frames.
+  - Use the buffer format preferred by the driver in DMA-BUF renderer.
+  - Do not block the compositing thread waiting for rendering threads.
+  - Improve performance when scaling images in a canvas.
   - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.42.1
-================
-
-What's new in WebKitGTK 2.42.1?
-
-  - Fix enable-html5-database setting to properly enable/disable IndexedDB API.
-  - Fix the build with GBM disabled.
-  - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.42.0
-================
-
-What's new in WebKitGTK 2.42.0?
-
-  - Temporary disable frame rate throttling to fix render updates stoping due to frame rate change.
   - Translation updates: Swedish.
-
-=================
-WebKitGTK 2.41.92
-=================
-
-What's new in WebKitGTK 2.41.92?
-
-  - Fix render updates after cross origin history navigation with GTK4.
-  - Fix flickering in non accelerated compositing mode.
-  - Fix pixelated accelerated blur filter.
-  - Fix web process launching when xdg-dbus-proxy is not installed.
-  - Pass GBM_BO_USE_RENDERING to gbm_bo_create.
-  - Fix several crashes and rendering issues.
-
-=================
-WebKitGTK 2.41.91
-=================
-
-What's new in WebKitGTK 2.41.91?
-
-  - Properly handle toplevel window state changes in GTK4.
-  - Do not keep processing frames while the view is unrealized when using DMA-BUF renderer.
-  - Fallback to first render node returned by DRM when failing to get using EGLDevice.
-  - Fix the build with libjxl < 0.7.0.
-  - Fix several crashes and rendering issues.
-  - Translation updates: Turkish.
-
-=================
-WebKitGTK 2.41.90
-=================
-
-What's new in WebKitGTK 2.41.90?
-
-  - Fix the popup menu always shown in github when logged in.
-  - Add API to replace and retrieve the entire cookie jar.
-  - Apply the device scale factor when changed after web view is created.
-  - Do not expose media devices that can't be used in enumerateDevices.
-  - Add support for P010 video format.
-  - Fix non-accelerated rendering that broke web inspector.
-  - Fix several crashes and rendering issues.
 
 ================
 WebKitGTK 2.41.6

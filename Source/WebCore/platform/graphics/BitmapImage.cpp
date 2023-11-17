@@ -216,7 +216,7 @@ bool BitmapImage::notSolidColor()
 }
 #endif // ASSERT_ENABLED
 
-static inline void drawNativeImage(NativeImage& image, GraphicsContext& context, const FloatRect& destRect, const FloatRect& srcRect, const IntSize& srcSize, const ImagePaintingOptions& options)
+static inline void drawNativeImage(NativeImage& image, GraphicsContext& context, const FloatRect& destRect, const FloatRect& srcRect, const IntSize& srcSize, ImagePaintingOptions options)
 {
     // Subsampling may have given us an image that is smaller than size().
     IntSize subsampledImageSize = image.size();
@@ -231,7 +231,7 @@ static inline void drawNativeImage(NativeImage& image, GraphicsContext& context,
     context.drawNativeImage(image, subsampledImageSize, destRect, adjustedSrcRect, options);
 }
 
-ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& destRect, const FloatRect& requestedSrcRect, const ImagePaintingOptions& options)
+ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& destRect, const FloatRect& requestedSrcRect, ImagePaintingOptions options)
 {
     if (destRect.isEmpty() || requestedSrcRect.isEmpty())
         return ImageDrawResult::DidNothing;
@@ -337,7 +337,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
     return result;
 }
 
-void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
 {
     if (tileRect.isEmpty())
         return;
@@ -367,13 +367,13 @@ void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, 
         setImageObserver(WTFMove(observer));
         buffer->convertToLuminanceMask();
 
-        m_cachedImage = ImageBuffer::sinkIntoImage(WTFMove(buffer), PreserveResolution::Yes);
+        m_cachedImage = ImageBuffer::sinkIntoNativeImage(WTFMove(buffer));
         if (!m_cachedImage)
             return;
     }
 
     ctxt.setDrawLuminanceMask(false);
-    m_cachedImage->drawPattern(ctxt, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
+    ctxt.drawPattern(Ref { *m_cachedImage }, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
 }
 
 bool BitmapImage::shouldAnimate() const

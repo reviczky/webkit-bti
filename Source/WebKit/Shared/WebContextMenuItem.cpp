@@ -31,6 +31,7 @@
 
 #include "APIArray.h"
 #include <WebCore/ContextMenuItem.h>
+#include <wtf/NeverDestroyed.h>
 
 namespace WebKit {
 
@@ -47,17 +48,19 @@ Ref<WebContextMenuItem> WebContextMenuItem::create(const String& title, bool ena
     submenu.reserveInitialCapacity(size);
     for (size_t i = 0; i < size; ++i) {
         if (auto* item = submenuItems->at<WebContextMenuItem>(i))
-            submenu.uncheckedAppend(item->data());
+            submenu.append(item->data());
     }
     submenu.shrinkToFit();
 
-    return adoptRef(*new WebContextMenuItem(WebContextMenuItemData(WebCore::ContextMenuItemTagNoAction, title, enabled, submenu))).leakRef();
+    bool checked = false;
+    unsigned indentationLevel = 0;
+    return adoptRef(*new WebContextMenuItem(WebContextMenuItemData(WebCore::SubmenuType, WebCore::ContextMenuItemTagNoAction, String { title }, enabled, checked, indentationLevel, WTFMove(submenu)))).leakRef();
 }
 
 WebContextMenuItem* WebContextMenuItem::separatorItem()
 {
-    static WebContextMenuItem* separatorItem = new WebContextMenuItem(WebContextMenuItemData(WebCore::SeparatorType, WebCore::ContextMenuItemTagNoAction, String(), true, false));
-    return separatorItem;
+    static NeverDestroyed<Ref<WebContextMenuItem>> separatorItem = adoptRef(*new WebContextMenuItem(WebContextMenuItemData(WebCore::SeparatorType, WebCore::ContextMenuItemTagNoAction, String(), true, false)));
+    return separatorItem->ptr();
 }
 
 Ref<API::Array> WebContextMenuItem::submenuItemsAsAPIArray() const

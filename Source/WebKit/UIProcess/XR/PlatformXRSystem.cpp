@@ -54,6 +54,14 @@ void PlatformXRSystem::invalidate()
         xrCoordinator()->endSessionIfExists(m_page);
 }
 
+void PlatformXRSystem::ensureImmersiveSessionActivity()
+{
+    if (m_immersiveSessionActivity && m_immersiveSessionActivity->isValid())
+        return;
+
+    m_immersiveSessionActivity = m_page.process().throttler().foregroundActivity("XR immersive session"_s).moveToUniquePtr();
+}
+
 void PlatformXRSystem::enumerateImmersiveXRDevices(CompletionHandler<void(Vector<XRDeviceInfo>&&)>&& completionHandler)
 {
     auto* xrCoordinator = PlatformXRSystem::xrCoordinator();
@@ -91,7 +99,7 @@ void PlatformXRSystem::initializeTrackingAndRendering(const WebCore::SecurityOri
     if (!xrCoordinator)
         return;
 
-    m_immersiveSessionActivity = m_page.process().throttler().foregroundActivity("XR immersive session"_s).moveToUniquePtr();
+    ensureImmersiveSessionActivity();
 
     WeakPtr weakThis { *this };
     xrCoordinator->startSession(m_page, weakThis, securityOriginData, mode, requestedFeatures);
@@ -118,23 +126,23 @@ void PlatformXRSystem::submitFrame()
 void PlatformXRSystem::sessionDidEnd(XRDeviceIdentifier deviceIdentifier)
 {
     ensureOnMainRunLoop([weakThis = WeakPtr { *this }, deviceIdentifier]() mutable {
-        auto strongThis = weakThis.get();
-        if (!strongThis)
+        auto protectedThis = weakThis.get();
+        if (!protectedThis)
             return;
 
-        strongThis->m_page.send(Messages::PlatformXRSystemProxy::SessionDidEnd(deviceIdentifier));
-        strongThis->m_immersiveSessionActivity = nullptr;
+        protectedThis->m_page.send(Messages::PlatformXRSystemProxy::SessionDidEnd(deviceIdentifier));
+        protectedThis->m_immersiveSessionActivity = nullptr;
     });
 }
 
 void PlatformXRSystem::sessionDidUpdateVisibilityState(XRDeviceIdentifier deviceIdentifier, PlatformXR::VisibilityState visibilityState)
 {
     ensureOnMainRunLoop([weakThis = WeakPtr { *this }, deviceIdentifier, visibilityState]() mutable {
-        auto strongThis = weakThis.get();
-        if (!strongThis)
+        auto protectedThis = weakThis.get();
+        if (!protectedThis)
             return;
 
-        strongThis->m_page.send(Messages::PlatformXRSystemProxy::SessionDidUpdateVisibilityState(deviceIdentifier, visibilityState));
+        protectedThis->m_page.send(Messages::PlatformXRSystemProxy::SessionDidUpdateVisibilityState(deviceIdentifier, visibilityState));
     });
 }
 

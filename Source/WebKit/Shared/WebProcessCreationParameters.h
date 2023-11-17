@@ -42,9 +42,12 @@
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
+#if PLATFORM(COCOA) || PLATFORM(GTK)
+#include <WebCore/ScreenProperties.h>
+#endif
+
 #if PLATFORM(COCOA)
 #include <WebCore/PlatformScreen.h>
-#include <WebCore/ScreenProperties.h>
 #include <wtf/MachSendRight.h>
 #endif
 
@@ -164,6 +167,9 @@ struct WebProcessCreationParameters {
 
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes;
+#endif
+
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     WebCore::ScreenProperties screenProperties;
 #endif
 
@@ -209,7 +215,6 @@ struct WebProcessCreationParameters {
 #if PLATFORM(COCOA)
     bool systemHasBattery { false };
     bool systemHasAC { false };
-    bool strictSecureDecodingForAllObjCEnabled { false };
 #endif
 
 #if PLATFORM(IOS_FAMILY)

@@ -42,11 +42,6 @@ EXTClipControl::EXTClipControl(WebGLRenderingContextBase& context)
 
 EXTClipControl::~EXTClipControl() = default;
 
-WebGLExtension::ExtensionName EXTClipControl::getName() const
-{
-    return EXTClipControlName;
-}
-
 bool EXTClipControl::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_EXT_clip_control"_s);
@@ -54,11 +49,10 @@ bool EXTClipControl::supported(GraphicsContextGL& context)
 
 void EXTClipControl::clipControlEXT(GCGLenum origin, GCGLenum depth)
 {
-    auto context = WebGLExtensionScopedContext(this);
-    if (context.isLost())
+    if (isContextLost())
         return;
-
-    context->graphicsContextGL()->clipControlEXT(origin, depth);
+    auto& context = this->context();
+    context.graphicsContextGL()->clipControlEXT(origin, depth);
 }
 
 } // namespace WebCore

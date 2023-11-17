@@ -29,7 +29,6 @@
 #include "BackgroundFetchLoad.h"
 #include "BackgroundFetchState.h"
 #include "BackgroundFetchStoreImpl.h"
-#include "CacheStorageEngine.h"
 #include "LoadedWebArchive.h"
 #include "Logging.h"
 #include "NetworkBroadcastChannelRegistry.h"
@@ -142,12 +141,12 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
     , m_allowsServerPreconnect(parameters.allowsServerPreconnect)
     , m_shouldRunServiceWorkersOnMainThreadForTesting(parameters.shouldRunServiceWorkersOnMainThreadForTesting)
     , m_overrideServiceWorkerRegistrationCountTestingValue(parameters.overrideServiceWorkerRegistrationCountTestingValue)
+#if ENABLE(SERVICE_WORKER)
+    , m_inspectionForServiceWorkersAllowed(parameters.inspectionForServiceWorkersAllowed)
+#endif
     , m_storageManager(createNetworkStorageManager(networkProcess, parameters))
 #if ENABLE(BUILT_IN_NOTIFICATIONS)
     , m_notificationManager(*this, parameters.webPushMachServiceName, WebPushD::WebPushDaemonConnectionConfiguration { parameters.webPushDaemonConnectionConfiguration })
-#endif
-#if !HAVE(NSURLSESSION_WEBSOCKET)
-    , m_shouldAcceptInsecureCertificatesForWebSockets(parameters.shouldAcceptInsecureCertificatesForWebSockets)
 #endif
 {
     if (!m_sessionID.isEphemeral()) {
@@ -223,7 +222,6 @@ void NetworkSession::invalidateAndCancel()
     if (m_resourceLoadStatistics)
         m_resourceLoadStatistics->invalidateAndCancel();
 #endif
-    m_cacheEngine = nullptr;
 #if ASSERT_ENABLED
     m_isInvalidated = true;
 #endif
@@ -676,7 +674,8 @@ SWServer& NetworkSession::ensureSWServer()
         // There should already be a registered path for this PAL::SessionID.
         // If there's not, then where did this PAL::SessionID come from?
         ASSERT(m_sessionID.isEphemeral() || !path.isEmpty());
-        m_swServer = makeUnique<SWServer>(*this, makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), m_sessionID, shouldRunServiceWorkersOnMainThreadForTesting(), m_networkProcess->parentProcessHasServiceWorkerEntitlement(), overrideServiceWorkerRegistrationCountTestingValue());
+        auto inspectable = m_inspectionForServiceWorkersAllowed ? ServiceWorkerIsInspectable::Yes : ServiceWorkerIsInspectable::No;
+        m_swServer = makeUnique<SWServer>(*this, makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), m_sessionID, shouldRunServiceWorkersOnMainThreadForTesting(), m_networkProcess->parentProcessHasServiceWorkerEntitlement(), overrideServiceWorkerRegistrationCountTestingValue(), inspectable);
     }
     return *m_swServer;
 }
@@ -699,17 +698,9 @@ WebSharedWorkerServer& NetworkSession::ensureSharedWorkerServer()
     return *m_sharedWorkerServer;
 }
 
-CacheStorage::Engine& NetworkSession::ensureCacheEngine()
+Ref<NetworkStorageManager> NetworkSession::protectedStorageManager()
 {
-    if (!m_cacheEngine)
-        m_cacheEngine = CacheStorage::Engine::create(*this, m_cacheStorageDirectory);
-
-    return *m_cacheEngine;
-}
-
-void NetworkSession::clearCacheEngine()
-{
-    m_cacheEngine = nullptr;
+    return m_storageManager.copyRef();
 }
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
@@ -815,6 +806,18 @@ void NetworkSession::clickBackgroundFetch(const String& identifier, CompletionHa
 {
     ensureBackgroundFetchStore().clickBackgroundFetch(identifier, WTFMove(callback));
 }
+
+void NetworkSession::setInspectionForServiceWorkersAllowed(bool inspectable)
+{
+    if (m_inspectionForServiceWorkersAllowed == inspectable)
+        return;
+
+    m_inspectionForServiceWorkersAllowed = inspectable;
+
+    if (m_swServer)
+        m_swServer->setInspectable(inspectable ? ServiceWorkerIsInspectable::Yes : ServiceWorkerIsInspectable::No);
+}
+
 #endif // ENABLE(SERVICE_WORKER)
 
 } // namespace WebKit

@@ -220,6 +220,16 @@ MacroAssemblerCodeRef<JITThunkPtrTag> wasmFunctionEntryThunkSIMD()
     return codeRef;
 }
 
+
+ALWAYS_INLINE void* untaggedPtr(void* ptr)
+{
+#if COMPILER(MSVC)
+        return CodePtr<CFunctionPtrTag>::fromTaggedPtr(ptr).untaggedPtr();
+#else
+        return CodePtr<CFunctionPtrTag>::fromTaggedPtr(ptr).template untaggedPtr();
+#endif
+}
+
 MacroAssemblerCodeRef<JITThunkPtrTag> inPlaceInterpreterEntryThunk()
 {
     static LazyNeverDestroyed<MacroAssemblerCodeRef<JITThunkPtrTag>> codeRef;
@@ -227,7 +237,42 @@ MacroAssemblerCodeRef<JITThunkPtrTag> inPlaceInterpreterEntryThunk()
     std::call_once(onceKey, [&] {
         JSInterfaceJIT jit;
         void* ptr = reinterpret_cast<void*>(ipint_entry);
-        void* untagged = CodePtr<CFunctionPtrTag>::fromTaggedPtr(ptr).template untaggedPtr();
+        void* untagged = untaggedPtr(ptr);
+        void* retagged = nullptr;
+#if ENABLE(JIT_CAGE)
+        if (Options::useJITCage())
+#else
+        if (false)
+#endif
+            retagged = tagCodePtr<OperationPtrTag>(untagged);
+        else
+            retagged = WTF::tagNativeCodePtrImpl<OperationPtrTag>(untagged);
+
+        assertIsTaggedWith<OperationPtrTag>(retagged);
+
+#if ENABLE(WEBASSEMBLY)
+        CCallHelpers::RegisterID scratch = Wasm::wasmCallingConvention().prologueScratchGPRs[0];
+#else
+        CCallHelpers::RegisterID scratch = JSInterfaceJIT::regT0;
+#endif
+        jit.tagReturnAddress();
+        jit.move(JSInterfaceJIT::TrustedImmPtr(retagged), scratch);
+        jit.farJump(scratch, OperationPtrTag);
+
+        LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::LLIntThunk);
+        codeRef.construct(FINALIZE_THUNK(patchBuffer, JITThunkPtrTag, "LLInt %s jump to prologue thunk", "function for wasm in place interpreter"));
+    });
+    return codeRef;
+}
+
+MacroAssemblerCodeRef<JITThunkPtrTag> inPlaceInterpreterEntryThunkSIMD()
+{
+    static LazyNeverDestroyed<MacroAssemblerCodeRef<JITThunkPtrTag>> codeRef;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        JSInterfaceJIT jit;
+        void* ptr = reinterpret_cast<void*>(ipint_entry_simd);
+        void* untagged = untaggedPtr(ptr);
         void* retagged = nullptr;
 #if ENABLE(JIT_CAGE)
         if (Options::useJITCage())

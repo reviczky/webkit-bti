@@ -3270,7 +3270,15 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case NewRegexp:
         setForNode(node, m_graph.globalObjectFor(node->origin.semantic)->regExpStructure());
         break;
-            
+
+    case NewMap:
+        setForNode(node, node->structure());
+        break;
+
+    case NewSet:
+        setForNode(node, node->structure());
+        break;
+
     case ToThis: {
         AbstractValue& source = forNode(node->child1());
         AbstractValue& destination = forNode(node);
@@ -4854,6 +4862,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case DirectCall:
     case DirectConstruct:
     case DirectTailCallInlinedCaller:
+    case CallCustomAccessorGetter:
+    case CallCustomAccessorSetter:
         clobberWorld();
         makeHeapTopForNode(node);
         break;
