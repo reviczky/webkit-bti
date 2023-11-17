@@ -42,11 +42,6 @@ WebGLRenderSharedExponent::WebGLRenderSharedExponent(WebGLRenderingContextBase& 
 
 WebGLRenderSharedExponent::~WebGLRenderSharedExponent() = default;
 
-WebGLExtension::ExtensionName WebGLRenderSharedExponent::getName() const
-{
-    return WebGLRenderSharedExponentName;
-}
-
 bool WebGLRenderSharedExponent::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_QCOM_render_shared_exponent"_s);

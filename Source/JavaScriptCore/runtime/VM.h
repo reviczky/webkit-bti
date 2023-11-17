@@ -354,6 +354,9 @@ public:
     WeakRandom& heapRandom() { return m_heapRandom; }
     Integrity::Random& integrityRandom() { return m_integrityRandom; }
 
+    template<typename Type, typename Functor>
+    Type& ensureSideData(void* key, const Functor&);
+
     bool hasTerminationRequest() const { return m_hasTerminationRequest; }
     void clearHasTerminationRequest()
     {
@@ -416,24 +419,35 @@ public:
         m_entryScopeServices.add(service);
     }
 
-    JS_EXPORT_PRIVATE void performOpportunisticallyScheduledTasks(MonotonicTime deadline);
-
-private:
-    VMIdentifier m_identifier;
-    RefPtr<JSLock> m_apiLock;
-    Ref<WTF::RunLoop> m_runLoop;
+    enum class SchedulerOptions : uint8_t {
+        HasImminentlyScheduledWork = 1 << 0,
+    };
+    JS_EXPORT_PRIVATE void performOpportunisticallyScheduledTasks(MonotonicTime deadline, OptionSet<SchedulerOptions>);
 
     // Keep super frequently accessed fields top in VM.
+    unsigned disallowVMEntryCount { 0 };
+private:
     void* m_softStackLimit { nullptr };
     Exception* m_exception { nullptr };
     Exception* m_terminationException { nullptr };
     Exception* m_lastException { nullptr };
+public:
+    // NOTE: When throwing an exception while rolling back the call frame, this may be equal to
+    // topEntryFrame.
+    // FIXME: This should be a void*, because it might not point to a CallFrame.
+    // https://bugs.webkit.org/show_bug.cgi?id=160441
+    CallFrame* topCallFrame { nullptr };
+    EntryFrame* topEntryFrame { nullptr };
+private:
+    OptionSet<EntryScopeService> m_entryScopeServices;
+
+    VMIdentifier m_identifier;
+    RefPtr<JSLock> m_apiLock;
+    Ref<WTF::RunLoop> m_runLoop;
 
     WeakRandom m_random;
     WeakRandom m_heapRandom;
     Integrity::Random m_integrityRandom;
-
-    OptionSet<EntryScopeService> m_entryScopeServices;
 
     bool hasEntryScopeServiceRequest(EntryScopeService service)
     {
@@ -494,13 +508,8 @@ public:
     ALWAYS_INLINE GCClient::IsoSubspace& unlinkedFunctionExecutableSpace() { return clientHeap.unlinkedFunctionExecutableSpace; }
 
     VMType vmType;
+    bool m_mightBeExecutingTaintedCode { false };
     ClientData* clientData { nullptr };
-    EntryFrame* topEntryFrame { nullptr };
-    // NOTE: When throwing an exception while rolling back the call frame, this may be equal to
-    // topEntryFrame.
-    // FIXME: This should be a void*, because it might not point to a CallFrame.
-    // https://bugs.webkit.org/show_bug.cgi?id=160441
-    CallFrame* topCallFrame { nullptr };
 #if ENABLE(WEBASSEMBLY)
     Wasm::Context wasmContext;
 #endif
@@ -579,6 +588,10 @@ public:
     StringSplitCache stringSplitCache;
     Vector<unsigned> stringSplitIndice;
     StringReplaceCache stringReplaceCache;
+
+    bool mightBeExecutingTaintedCode() const { return m_mightBeExecutingTaintedCode; }
+    bool* addressOfMightBeExecutingTaintedCode() { return &m_mightBeExecutingTaintedCode; }
+    void setMightBeExecutingTaintedCode(bool value = true) { m_mightBeExecutingTaintedCode = value; }
 
     AtomStringTable* atomStringTable() const { return m_atomStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry; }
@@ -768,6 +781,8 @@ public:
     void* targetMachinePCForThrow;
     void* targetMachinePCAfterCatch;
     JSOrWasmInstruction targetInterpreterPCForThrow;
+    uintptr_t targetInterpreterMetadataPCForThrow;
+    uint32_t targetTryDepthForThrow;
 
     unsigned varargsLength;
     uint32_t osrExitIndex;
@@ -800,7 +815,6 @@ public:
     void scanSideState(ConservativeRoots&) const;
 
     Interpreter interpreter;
-    unsigned disallowVMEntryCount { 0 };
     VMEntryScope* entryScope { nullptr };
 
     JSObject* stringRecursionCheckFirstObject { nullptr };
@@ -920,7 +934,12 @@ public:
     void queueMicrotask(QueuedTask&&);
     JS_EXPORT_PRIVATE void drainMicrotasks();
     void setOnEachMicrotaskTick(WTF::Function<void(VM&)>&& func) { m_onEachMicrotaskTick = WTFMove(func); }
-    void finalizeSynchronousJSExecution() { ASSERT(currentThreadIsHoldingAPILock()); m_currentWeakRefVersion++; }
+    void finalizeSynchronousJSExecution()
+    {
+        ASSERT(currentThreadIsHoldingAPILock());
+        m_currentWeakRefVersion++;
+        setMightBeExecutingTaintedCode(false);
+    }
     uintptr_t currentWeakRefVersion() const { return m_currentWeakRefVersion; }
 
     void setGlobalConstRedeclarationShouldThrow(bool globalConstRedeclarationThrow) { m_globalConstRedeclarationShouldThrow = globalConstRedeclarationThrow; }
@@ -1114,6 +1133,7 @@ private:
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
     uintptr_t m_currentWeakRefVersion { 0 };
 
+    bool m_hasSideData { false };
     bool m_hasTerminationRequest { false };
     bool m_executionForbidden { false };
     bool m_executionForbiddenOnTermination { false };

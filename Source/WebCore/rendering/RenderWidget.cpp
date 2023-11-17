@@ -94,8 +94,8 @@ static void moveWidgetToParentSoon(Widget& child, LocalFrameView* parent)
     WidgetHierarchyUpdatesSuspensionScope::scheduleWidgetToMove(child, parent);
 }
 
-RenderWidget::RenderWidget(HTMLFrameOwnerElement& element, RenderStyle&& style)
-    : RenderReplaced(element, WTFMove(style))
+RenderWidget::RenderWidget(Type type, HTMLFrameOwnerElement& element, RenderStyle&& style)
+    : RenderReplaced(type, element, WTFMove(style))
 {
     relaxAdoptionRequirement();
     setInline(false);
@@ -103,11 +103,6 @@ RenderWidget::RenderWidget(HTMLFrameOwnerElement& element, RenderStyle&& style)
 
 void RenderWidget::willBeDestroyed()
 {
-#if PLATFORM(IOS_FAMILY)
-    if (hasLayer())
-        layer()->willBeDestroyed();
-#endif
-
     if (AXObjectCache* cache = document().existingAXObjectCache()) {
         cache->childrenChanged(this->parent());
         cache->remove(this);
@@ -206,6 +201,8 @@ void RenderWidget::setWidget(RefPtr<Widget>&& widget)
                 m_widget->show();
                 repaint();
             }
+            if (auto* cache = document().existingAXObjectCache())
+                cache->onWidgetVisibilityChanged(this);
         }
         moveWidgetToParentSoon(*m_widget, &view().frameView());
     }
@@ -230,6 +227,9 @@ void RenderWidget::styleDidChange(StyleDifference diff, const RenderStyle* oldSt
             m_widget->hide();
         else
             m_widget->show();
+
+        if (auto* cache = document().existingAXObjectCache())
+            cache->onWidgetVisibilityChanged(this);
     }
 }
 
@@ -374,9 +374,8 @@ RenderWidget::ChildWidgetState RenderWidget::updateWidgetPosition()
     if (is<LocalFrameView>(*m_widget)) {
         LocalFrameView& frameView = downcast<LocalFrameView>(*m_widget);
         // Check the frame's page to make sure that the frame isn't in the process of being destroyed.
-        auto* localFrame = dynamicDowncast<LocalFrame>(frameView.frame());
+        Ref localFrame = frameView.frame();
         if ((widgetSizeChanged || frameView.needsLayout())
-            && localFrame
             && localFrame->page()
             && localFrame->document())
             frameView.layoutContext().layout();
@@ -416,10 +415,7 @@ bool RenderWidget::nodeAtPoint(const HitTestRequest& request, HitTestResult& res
         HitTestRequest newHitTestRequest(request.type() | HitTestRequest::Type::ChildFrameHitTest);
         HitTestResult childFrameResult(newHitTestLocation);
 
-        auto* localFrame = dynamicDowncast<LocalFrame>(childFrameView.frame());
-        if (!localFrame)
-            return false;
-        auto* document = localFrame->document();
+        auto* document = childFrameView.frame().document();
         if (!document)
             return false;
         bool isInsideChildFrame = document->hitTest(newHitTestRequest, newHitTestLocation, childFrameResult);
@@ -450,7 +446,7 @@ bool RenderWidget::requiresLayer() const
 bool RenderWidget::requiresAcceleratedCompositing() const
 {
     // If this is a renderer with a contentDocument and that document needs a layer, then we need a layer.
-    if (Document* contentDocument = frameOwnerElement().contentDocument()) {
+    if (auto* contentDocument = frameOwnerElement().contentDocument()) {
         if (RenderView* view = contentDocument->renderView())
             return view->usesCompositing();
     }

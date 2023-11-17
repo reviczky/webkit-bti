@@ -113,6 +113,7 @@ static void addIntrinsicMargins(RenderStyle& style)
 }
 #endif
 
+// https://www.w3.org/TR/css-display-3/#transformations
 static DisplayType equivalentBlockDisplay(const RenderStyle& style)
 {
     switch (auto display = style.display()) {
@@ -123,6 +124,7 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style)
     case DisplayType::Grid:
     case DisplayType::FlowRoot:
     case DisplayType::ListItem:
+    case DisplayType::RubyBlock:
         return display;
     case DisplayType::InlineTable:
         return DisplayType::Table;
@@ -132,6 +134,8 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style)
         return DisplayType::Flex;
     case DisplayType::InlineGrid:
         return DisplayType::Grid;
+    case DisplayType::Ruby:
+        return DisplayType::RubyBlock;
 
     case DisplayType::Inline:
     case DisplayType::InlineBlock:
@@ -143,7 +147,10 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style)
     case DisplayType::TableColumn:
     case DisplayType::TableCell:
     case DisplayType::TableCaption:
+    case DisplayType::RubyBase:
+    case DisplayType::RubyAnnotation:
         return DisplayType::Block;
+
     case DisplayType::Contents:
         ASSERT_NOT_REACHED();
         return DisplayType::Contents;
@@ -153,6 +160,57 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style)
     }
     ASSERT_NOT_REACHED();
     return DisplayType::Block;
+}
+
+// https://www.w3.org/TR/css-display-3/#transformations
+static DisplayType equivalentInlineDisplay(const RenderStyle& style)
+{
+    switch (auto display = style.display()) {
+    case DisplayType::Block:
+        return DisplayType::InlineBlock;
+    case DisplayType::Table:
+        return DisplayType::InlineTable;
+    case DisplayType::Box:
+        return DisplayType::InlineBox;
+    case DisplayType::Flex:
+        return DisplayType::InlineFlex;
+    case DisplayType::Grid:
+        return DisplayType::InlineGrid;
+    case DisplayType::RubyBlock:
+        return DisplayType::Ruby;
+
+    case DisplayType::Inline:
+    case DisplayType::InlineBlock:
+    case DisplayType::InlineTable:
+    case DisplayType::InlineBox:
+    case DisplayType::InlineFlex:
+    case DisplayType::InlineGrid:
+    case DisplayType::Ruby:
+    case DisplayType::RubyBase:
+    case DisplayType::RubyAnnotation:
+        return display;
+
+    case DisplayType::FlowRoot:
+    case DisplayType::ListItem:
+    case DisplayType::TableRowGroup:
+    case DisplayType::TableHeaderGroup:
+    case DisplayType::TableFooterGroup:
+    case DisplayType::TableRow:
+    case DisplayType::TableColumnGroup:
+    case DisplayType::TableColumn:
+    case DisplayType::TableCell:
+    case DisplayType::TableCaption:
+        return DisplayType::Inline;
+
+    case DisplayType::Contents:
+        ASSERT_NOT_REACHED();
+        return DisplayType::Contents;
+    case DisplayType::None:
+        ASSERT_NOT_REACHED();
+        return DisplayType::None;
+    }
+    ASSERT_NOT_REACHED();
+    return DisplayType::Inline;
 }
 
 static bool isOutermostSVGElement(const Element* element)
@@ -168,9 +226,9 @@ static bool shouldInheritTextDecorationsInEffect(const RenderStyle& style, const
     // Media elements have a special rendering where the media controls do not use a proper containing
     // block model which means we need to manually stop text-decorations to apply to text inside media controls.
     auto isAtMediaUAShadowBoundary = [&] {
+#if ENABLE(VIDEO)
         if (!element)
             return false;
-#if ENABLE(VIDEO)
         auto* parentNode = element->parentNode();
         return parentNode && parentNode->isUserAgentShadowRoot() && parentNode->parentOrShadowHostElement()->isMediaElement();
 #else
@@ -300,6 +358,17 @@ static bool isOverflowClipOrVisible(Overflow overflow)
     return overflow == Overflow::Clip || overflow == Overflow::Visible;
 }
 
+static bool shouldInlinifyForRuby(const RenderStyle& style, const RenderStyle& parentBoxStyle)
+{
+    auto parentDisplay = parentBoxStyle.display();
+    auto hasRubyParent = parentDisplay == DisplayType::Ruby
+        || parentDisplay == DisplayType::RubyBlock
+        || parentDisplay == DisplayType::RubyAnnotation
+        || parentDisplay == DisplayType::RubyBase;
+
+    return hasRubyParent && !style.hasOutOfFlowPosition() && !style.isFloating();
+}
+
 void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearanceStyle) const
 {
     if (style.display() == DisplayType::Contents)
@@ -358,10 +427,10 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             style.setWritingMode(m_parentStyle.writingMode());
 
         // FIXME: Since we don't support block-flow on flexible boxes yet, disallow setting
-        // of block-flow to anything other than WritingMode::TopToBottom.
+        // of block-flow to anything other than WritingMode::HorizontalTb.
         // https://bugs.webkit.org/show_bug.cgi?id=46418 - Flexible box support.
-        if (style.writingMode() != WritingMode::TopToBottom && (style.display() == DisplayType::Box || style.display() == DisplayType::InlineBox))
-            style.setWritingMode(WritingMode::TopToBottom);
+        if (style.writingMode() != WritingMode::HorizontalTb && (style.display() == DisplayType::Box || style.display() == DisplayType::InlineBox))
+            style.setWritingMode(WritingMode::HorizontalTb);
 
         // https://www.w3.org/TR/css-display/#transformations
         // "A parent with a grid or flex display value blockifies the box’s display type."
@@ -369,6 +438,10 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             style.setFloating(Float::None);
             style.setEffectiveDisplay(equivalentBlockDisplay(style));
         }
+
+        // https://www.w3.org/TR/css-ruby-1/#anon-gen-inlinize
+        if (shouldInlinifyForRuby(style, m_parentBoxStyle))
+            style.setEffectiveDisplay(equivalentInlineDisplay(style));
     }
 
     auto hasAutoZIndex = [](const RenderStyle& style, const RenderStyle& parentBoxStyle, const Element* element) {
@@ -403,7 +476,10 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
     // Same for the additional translation component present in RenderSVGTransformableContainer (that stems from <use> x/y
     // properties, that are transferred to the internal RenderSVGTransformableContainer), or for the viewBox-induced transformation
     // in RenderSVGViewportContainer. They all need to return true for 'hasTransformRelatedProperty'.
-    auto hasTransformRelatedProperty = [](const RenderStyle& style, const Element* element) {
+    auto hasTransformRelatedProperty = [](const RenderStyle& style, const Element* element, const RenderStyle& parentStyle) {
+        if (element && element->document().settings().css3DTransformBackfaceVisibilityInteroperabilityEnabled() && style.backfaceVisibility() == BackfaceVisibility::Hidden && parentStyle.preserves3D())
+            return true;
+
         if (style.hasTransformRelatedProperty())
             return true;
 
@@ -425,7 +501,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
     if (style.hasAutoUsedZIndex()) {
         if ((m_element && m_document.documentElement() == m_element)
             || style.hasOpacity()
-            || hasTransformRelatedProperty(style, m_element)
+            || hasTransformRelatedProperty(style, m_element, m_parentStyle)
             || style.hasMask()
             || style.clipPath()
             || style.boxReflect()
@@ -463,7 +539,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             // Make horizontal marquees not wrap.
             if (!isVertical) {
                 style.setWhiteSpaceCollapse(WhiteSpaceCollapse::Collapse);
-                style.setTextWrap(TextWrap::NoWrap);
+                style.setTextWrapMode(TextWrapMode::NoWrap);
                 style.setTextAlign(TextAlignMode::Start);
             }
             // Apparently this is the expected legacy behavior.
@@ -580,8 +656,8 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
     style.setEffectiveTouchActions(computeEffectiveTouchActions(style, m_parentStyle.effectiveTouchActions()));
 
     // Counterparts in Element::addToTopLayer/removeFromTopLayer & SharingResolver::canShareStyleWithElement need to match!
-    auto hasInertAttribute = [this] (const Element* element) -> bool {
-        return m_document.settings().inertAttributeEnabled() && is<HTMLElement>(element) && element->hasAttributeWithoutSynchronization(HTMLNames::inertAttr);
+    auto hasInertAttribute = [] (const Element* element) -> bool {
+        return is<HTMLElement>(element) && element->hasAttributeWithoutSynchronization(HTMLNames::inertAttr);
     };
     auto isInertSubtreeRoot = [this, hasInertAttribute] (const Element* element) -> bool {
         if (m_document.activeModalDialog() && element == m_document.documentElement())
@@ -620,9 +696,13 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             adjustForTextAutosizing(style, *m_element);
 #endif
     }
+    if (isSkippedContentRoot(style, m_element) && m_parentStyle.contentVisibility() != ContentVisibility::Hidden)
+        style.setSkippedContentReason(style.contentVisibility());
 
-    if (isSkippedContentRoot(style, m_element))
-        style.setEffectiveSkippedContent(true);
+    if (style.contentVisibility() == ContentVisibility::Auto) {
+        style.containIntrinsicWidthAddAuto();
+        style.containIntrinsicHeightAddAuto();
+    }
 
     adjustForSiteSpecificQuirks(style);
 }
@@ -706,10 +786,9 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
     // - the "filter" property applies to the element and it has a computed value other than none
     // - a property defined in another specification is applied and that property is defined to establish a stacking context in SVG
     //
-    // Some of the rules above were already enforced in StyleResolver::adjustRenderStyle() - for those cases assertions were added.
+    // Some of the rules above were already enforced in StyleResolver::adjust() - for those cases assertions were added.
     if (svgElement.document().settings().layerBasedSVGEngineEnabled() && style.hasAutoUsedZIndex()) {
-        // adjustRenderStyle() has already assigned a z-index of 0 if clip / filter is present or the element is the root element.
-        ASSERT(!style.hasClip());
+        // adjust() has already assigned a z-index of 0 if clip / filter is present or the element is the root element.
         ASSERT(!style.clipPath());
         ASSERT(!style.hasFilter());
 
@@ -817,8 +896,8 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
 
             auto& div = downcast<HTMLDivElement>(*m_element);
             if (div.hasClass() && div.classNames().contains(instreamNativeVideoDivClass)) {
-                auto* video = div.treeScope().getElementById(videoElementID);
-                if (is<HTMLVideoElement>(video) && downcast<HTMLVideoElement>(*video).isFullscreen())
+                RefPtr video = dynamicDowncast<HTMLVideoElement>(div.treeScope().getElementById(videoElementID));
+                if (video && video->isFullscreen())
                     style.setEffectiveDisplay(DisplayType::Block);
             }
         }

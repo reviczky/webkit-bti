@@ -77,11 +77,6 @@ void WebPageProxy::setInputMethodState(std::optional<InputMethodState>&& state)
     webkitWebViewBaseSetInputMethodState(WEBKIT_WEB_VIEW_BASE(viewWidget()), WTFMove(state));
 }
 
-bool WebPageProxy::makeGLContextCurrent()
-{
-    return webkitWebViewBaseMakeGLContextCurrent(WEBKIT_WEB_VIEW_BASE(viewWidget()));
-}
-
 void WebPageProxy::showEmojiPicker(const WebCore::IntRect& caretRect, CompletionHandler<void(String)>&& completionHandler)
 {
     webkitWebViewBaseShowEmojiChooser(WEBKIT_WEB_VIEW_BASE(viewWidget()), caretRect, WTFMove(completionHandler));
@@ -142,6 +137,16 @@ OptionSet<WebCore::PlatformEvent::Modifier> WebPageProxy::currentStateOfModifier
     if (capsLockActive)
         modifiers.add(WebCore::PlatformEvent::Modifier::CapsLockKey);
     return modifiers;
+}
+
+void WebPageProxy::callAfterNextPresentationUpdate(CompletionHandler<void()>&& callback)
+{
+    if (!hasRunningProcess() || !m_drawingArea) {
+        callback();
+        return;
+    }
+
+    webkitWebViewBaseCallAfterNextPresentationUpdate(WEBKIT_WEB_VIEW_BASE(viewWidget()), WTFMove(callback));
 }
 
 } // namespace WebKit

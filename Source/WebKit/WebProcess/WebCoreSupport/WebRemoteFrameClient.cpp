@@ -27,6 +27,7 @@
 #include "WebRemoteFrameClient.h"
 
 #include "MessageSenderInlines.h"
+#include "WebPage.h"
 #include "WebProcess.h"
 #include "WebProcessProxyMessages.h"
 #include <WebCore/FrameLoadRequest.h>
@@ -71,14 +72,15 @@ void WebRemoteFrameClient::postMessageToRemote(WebCore::FrameIdentifier identifi
 
 void WebRemoteFrameClient::changeLocation(WebCore::FrameLoadRequest&& request)
 {
-    // FIXME: FrameLoadRequest and NavigationAction can probably be refactored to share more.
+    // FIXME: FrameLoadRequest and NavigationAction can probably be refactored to share more. <rdar://116202911>
     WebCore::NavigationAction action(request.requester(), request.resourceRequest(), request.initiatedByMainFrame());
-    // FIXME: action.request and request are probably duplicate information.
-    // FIXME: PolicyCheckIdentifier should probably be pushed to another layer.
-    // FIXME: Get more parameters correct and add tests for each one.
+    // FIXME: action.request and request are probably duplicate information. <rdar://116203126>
+    // FIXME: PolicyCheckIdentifier should probably be pushed to another layer. <rdar://116203008>
+    // FIXME: Get more parameters correct and add tests for each one. <rdar://116203354>
     dispatchDecidePolicyForNavigationAction(action, action.resourceRequest(), WebCore::ResourceResponse(), nullptr, WebCore::PolicyDecisionMode::Asynchronous, WebCore::PolicyCheckIdentifier::generate(), [protectedFrame = Ref { m_frame }, request = WTFMove(request)] (WebCore::PolicyAction policyAction, WebCore::PolicyCheckIdentifier responseIdentifier) mutable {
-        // FIXME: Check responseIdentifier.
+        // FIXME: Check responseIdentifier. <rdar://116203008>
         // WebPage::loadRequest will make this load happen if needed.
+        // FIXME: What if PolicyAction::Ignore is sent. Is everything in the right state? We probably need to make sure the load event still happens on the parent frame. <rdar://116203453>
     });
 }
 
@@ -86,7 +88,7 @@ String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<WebCo
 {
     auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebProcessProxy::RenderTreeAsText(m_frame->frameID(), baseIndent, behavior), 0);
     if (!sendResult.succeeded())
-        return { };
+        return "Test Error - sending WebProcessProxy::RenderTreeAsText failed"_s;
     auto [result] = sendResult.takeReply();
     return result;
 }
@@ -94,6 +96,17 @@ String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<WebCo
 void WebRemoteFrameClient::broadcastFrameRemovalToOtherProcesses()
 {
     WebFrameLoaderClient::broadcastFrameRemovalToOtherProcesses();
+}
+
+void WebRemoteFrameClient::close()
+{
+    // FIXME: <rdar://117381050> Consider if this needs the same logic as WebChromeClient::closeWindow, or refactor to share code.
+    WebProcess::singleton().send(Messages::WebProcessProxy::CloseRemoteFrame(m_frame->frameID()), 0);
+}
+
+void WebRemoteFrameClient::focus()
+{
+    WebProcess::singleton().send(Messages::WebProcessProxy::FocusRemoteFrame(m_frame->frameID()), 0);
 }
 
 }

@@ -36,11 +36,15 @@
 #include "EventTarget.h"
 #include "ExceptionOr.h"
 #include "HTMLMediaElement.h"
+#include "MediaPromiseTypes.h"
 #include "MediaSourcePrivateClient.h"
 #include "URLRegistry.h"
+#include <optional>
 #include <wtf/LoggerHelper.h>
+#include <wtf/NativePromise.h>
 #include <wtf/RefCounted.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -87,7 +91,7 @@ public:
     bool attachToElement(HTMLMediaElement&);
     void detachFromElement(HTMLMediaElement&);
     void monitorSourceBuffers() override;
-    bool isSeeking() const { return m_pendingSeekTime.isValid(); }
+    bool isSeeking() const { return !!m_pendingSeekTarget; }
     Ref<TimeRanges> seekable();
     ExceptionOr<void> setLiveSeekableRange(double start, double end);
     ExceptionOr<void> clearLiveSeekableRange();
@@ -130,6 +134,7 @@ public:
 
 #if ENABLE(MANAGED_MEDIA_SOURCE)
     virtual bool isManaged() const { return false; }
+    virtual bool streaming() const { return false; }
     void memoryPressure();
 #endif
 
@@ -154,7 +159,8 @@ private:
     static bool isTypeSupported(ScriptExecutionContext&, const String& type, Vector<ContentType>&& contentTypesRequiringHardwareSupport);
 
     void setPrivateAndOpen(Ref<MediaSourcePrivate>&&) final;
-    void seekToTime(const MediaTime&) final;
+    Ref<MediaTimePromise> waitForTarget(const SeekTarget&) final;
+    Ref<MediaPromise> seekToTime(const MediaTime&) final;
 
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
@@ -182,7 +188,8 @@ private:
     PlatformTimeRanges m_liveSeekable;
     WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElement;
     MediaTime m_duration;
-    MediaTime m_pendingSeekTime;
+    std::optional<SeekTarget> m_pendingSeekTarget;
+    std::optional<MediaTimePromise::Producer> m_seekTargetPromise;
     ReadyState m_readyState { ReadyState::Closed };
     bool m_openDeferred { false };
     bool m_sourceopenPending { false };

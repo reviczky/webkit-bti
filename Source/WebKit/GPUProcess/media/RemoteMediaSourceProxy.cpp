@@ -52,10 +52,19 @@ RemoteMediaSourceProxy::RemoteMediaSourceProxy(GPUConnectionToWebProcess& connec
 
 RemoteMediaSourceProxy::~RemoteMediaSourceProxy()
 {
+    disconnect();
+}
+
+void RemoteMediaSourceProxy::disconnect()
+{
+    for (auto& sourceBuffer : m_sourceBuffers)
+        sourceBuffer->disconnect();
+
     if (!m_connectionToWebProcess)
         return;
 
     m_connectionToWebProcess->messageReceiverMap().removeMessageReceiver(Messages::RemoteMediaSourceProxy::messageReceiverName(), m_identifier.toUInt64());
+    m_connectionToWebProcess = nullptr;
 }
 
 void RemoteMediaSourceProxy::setPrivateAndOpen(Ref<MediaSourcePrivate>&& mediaSourcePrivate)
@@ -74,12 +83,24 @@ const PlatformTimeRanges& RemoteMediaSourceProxy::buffered() const
     return m_buffered;
 }
 
-void RemoteMediaSourceProxy::seekToTime(const MediaTime& time)
+Ref<MediaTimePromise> RemoteMediaSourceProxy::waitForTarget(const SeekTarget& target)
 {
     if (!m_connectionToWebProcess)
-        return;
+        return MediaTimePromise::createAndReject(PlatformMediaError::IPCError);
 
-    m_connectionToWebProcess->connection().send(Messages::MediaSourcePrivateRemote::SeekToTime(time), m_identifier);
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemote::ProxyWaitForTarget(target), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+        return result ? MediaTimePromise::createAndSettle(WTFMove(*result)) : MediaTimePromise::createAndReject(PlatformMediaError::IPCError);
+    });
+}
+
+Ref<MediaPromise> RemoteMediaSourceProxy::seekToTime(const MediaTime& time)
+{
+    if (!m_connectionToWebProcess)
+        return MediaPromise::createAndReject(PlatformMediaError::IPCError);
+
+    return m_connectionToWebProcess->connection().sendWithPromisedReply(Messages::MediaSourcePrivateRemote::ProxySeekToTime(time), m_identifier)->whenSettled(RunLoop::current(), [](auto&& result) {
+        return result ? MediaPromise::createAndSettle(WTFMove(*result)) : MediaPromise::createAndReject(PlatformMediaError::IPCError);
+    });
 }
 
 void RemoteMediaSourceProxy::monitorSourceBuffers()
@@ -154,24 +175,6 @@ void RemoteMediaSourceProxy::setReadyState(WebCore::MediaPlayerEnums::ReadyState
         m_private->setReadyState(readyState);
 }
 
-void RemoteMediaSourceProxy::setIsSeeking(bool isSeeking)
-{
-    if (m_private)
-        m_private->setIsSeeking(isSeeking);
-}
-
-void RemoteMediaSourceProxy::waitForSeekCompleted()
-{
-    if (m_private)
-        m_private->waitForSeekCompleted();
-}
-
-void RemoteMediaSourceProxy::seekCompleted()
-{
-    if (m_private)
-        m_private->seekCompleted();
-}
-
 void RemoteMediaSourceProxy::setTimeFudgeFactor(const MediaTime& fudgeFactor)
 {
     if (m_private)
@@ -183,7 +186,9 @@ void RemoteMediaSourceProxy::shutdown()
     if (!m_connectionToWebProcess)
         return;
 
-    m_connectionToWebProcess->connection().sendWithAsyncReply(Messages::MediaSourcePrivateRemote::MediaSourcePrivateShuttingDown(), [self = RefPtr { this }] { }, m_identifier);
+    m_connectionToWebProcess->connection().sendWithAsyncReply(Messages::MediaSourcePrivateRemote::MediaSourcePrivateShuttingDown(), [this, protectedThis = Ref { *this }, protectedConnection = Ref { *m_connectionToWebProcess }] {
+        disconnect();
+    }, m_identifier);
 }
 
 } // namespace WebKit

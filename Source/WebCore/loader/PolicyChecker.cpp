@@ -34,6 +34,7 @@
 #include "BlobRegistry.h"
 #include "ContentFilter.h"
 #include "ContentSecurityPolicy.h"
+#include "DocumentInlines.h"
 #include "DocumentLoader.h"
 #include "Event.h"
 #include "EventLoop.h"
@@ -73,8 +74,8 @@ static bool isAllowedByContentSecurityPolicy(const URL& url, const Element* owne
 
     ASSERT(ownerElement->document().contentSecurityPolicy());
     if (is<HTMLPlugInElement>(ownerElement))
-        return ownerElement->document().contentSecurityPolicy()->allowObjectFromSource(url, redirectResponseReceived);
-    return ownerElement->document().contentSecurityPolicy()->allowChildFrameFromSource(url, redirectResponseReceived);
+        return ownerElement->protectedDocument()->checkedContentSecurityPolicy()->allowObjectFromSource(url, redirectResponseReceived);
+    return ownerElement->protectedDocument()->checkedContentSecurityPolicy()->allowChildFrameFromSource(url, redirectResponseReceived);
 }
 
 static bool shouldExecuteJavaScriptURLSynchronously(const URL& url)
@@ -102,7 +103,9 @@ URLKeepingBlobAlive FrameLoader::PolicyChecker::extendBlobURLLifetimeIfNecessary
     if (mode != PolicyDecisionMode::Asynchronous || !request.url().protocolIsBlob())
         return { };
 
-    return { request.url(), document.topOrigin().data() };
+    bool haveTriggeringRequester = m_frame.loader().policyDocumentLoader() && !m_frame.loader().policyDocumentLoader()->triggeringAction().isEmpty() && m_frame.loader().policyDocumentLoader()->triggeringAction().requester();
+    auto& topOrigin = haveTriggeringRequester ? m_frame.loader().policyDocumentLoader()->triggeringAction().requester()->topOrigin->data() : document.topOrigin().data();
+    return { request.url(), topOrigin };
 }
 
 void FrameLoader::PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const ResourceResponse& redirectResponse, DocumentLoader* loader, RefPtr<FormState>&& formState, NavigationPolicyDecisionFunction&& function, PolicyDecisionMode policyDecisionMode)

@@ -42,11 +42,6 @@ EXTRenderSnorm::EXTRenderSnorm(WebGLRenderingContextBase& context)
 
 EXTRenderSnorm::~EXTRenderSnorm() = default;
 
-WebGLExtension::ExtensionName EXTRenderSnorm::getName() const
-{
-    return EXTRenderSnormName;
-}
-
 bool EXTRenderSnorm::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_EXT_render_snorm"_s);

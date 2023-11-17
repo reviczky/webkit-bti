@@ -92,6 +92,7 @@ enum class IsSyntheticClick : bool { No, Yes };
 enum class ResolveURLs : uint8_t { No, NoExcludingURLsForPrivacy, Yes, YesExcludingURLsForPrivacy };
 enum class SelectionRestorationMode : uint8_t;
 
+struct CheckVisibilityOptions;
 struct FullscreenOptions;
 struct GetAnimationsOptions;
 struct IntersectionObserverData;
@@ -106,11 +107,11 @@ using ElementName = NodeName;
 using ExplicitlySetAttrElementsMap = HashMap<QualifiedName, Vector<WeakPtr<Element, WeakPtrImplWithEventTargetData>>>;
 
 // https://drafts.csswg.org/css-contain/#relevant-to-the-user
-enum class ContentRelevancyStatus : uint8_t {
+enum class ContentRelevancy : uint8_t {
     OnScreen = 1 << 0,
     Focused = 1 << 1,
     IsInTopLayer = 1 << 2,
-    // FIXME: add Selected (see https://bugs.webkit.org/show_bug.cgi?id=258194).
+    Selected = 1 << 3,
 };
 
 namespace Style {
@@ -143,7 +144,7 @@ public:
     WEBCORE_EXPORT void setIntegralAttribute(const QualifiedName& attributeName, int value);
     WEBCORE_EXPORT unsigned getUnsignedIntegralAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setUnsignedIntegralAttribute(const QualifiedName& attributeName, unsigned value);
-    WEBCORE_EXPORT Element* getElementAttribute(const QualifiedName& attributeName) const;
+    WEBCORE_EXPORT RefPtr<Element> getElementAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setElementAttribute(const QualifiedName& attributeName, Element* value);
     WEBCORE_EXPORT std::optional<Vector<RefPtr<Element>>> getElementsArrayAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<RefPtr<Element>>>&& value);
@@ -198,6 +199,8 @@ public:
     inline unsigned findAttributeIndexByName(const QualifiedName&) const;
     inline unsigned findAttributeIndexByName(const AtomString&, bool shouldIgnoreAttributeCase) const;
 
+    bool checkVisibility(const CheckVisibilityOptions&);
+
     WEBCORE_EXPORT void scrollIntoView(std::optional<std::variant<bool, ScrollIntoViewOptions>>&& arg);
     WEBCORE_EXPORT void scrollIntoView(bool alignToTop = true);
     WEBCORE_EXPORT void scrollIntoViewIfNeeded(bool centerIfNeeded = true);
@@ -223,7 +226,7 @@ public:
 
     // FIXME: Replace uses of offsetParent in the platform with calls
     // to the render layer and merge bindingsOffsetParent and offsetParent.
-    WEBCORE_EXPORT Element* offsetParentForBindings();
+    WEBCORE_EXPORT RefPtr<Element> offsetParentForBindings();
 
     inline const Element* rootElement() const;
 
@@ -245,7 +248,7 @@ public:
     // This does not update layout, and uses absoluteBoundingBoxRect().
     WEBCORE_EXPORT IntRect boundingBoxInRootViewCoordinates() const;
 
-    WEBCORE_EXPORT std::optional<std::pair<RenderObject*, FloatRect>> boundingAbsoluteRectWithoutLayout() const;
+    WEBCORE_EXPORT std::optional<std::pair<CheckedPtr<RenderObject>, FloatRect>> boundingAbsoluteRectWithoutLayout() const;
 
     WEBCORE_EXPORT FloatRect boundingClientRect();
 
@@ -350,7 +353,7 @@ public:
     virtual bool rendererIsEverNeeded() { return true; }
 
     inline ShadowRoot* shadowRoot() const; // Defined in ElementRareData.h
-    ShadowRoot* shadowRootForBindings(JSC::JSGlobalObject&) const;
+    RefPtr<ShadowRoot> shadowRootForBindings(JSC::JSGlobalObject&) const;
 
     WEBCORE_EXPORT ExceptionOr<ShadowRoot&> attachShadow(const ShadowRootInit&);
     ExceptionOr<ShadowRoot&> attachDeclarativeShadow(ShadowRootMode, bool delegatesFocus);
@@ -368,6 +371,7 @@ public:
     CustomElementReactionQueue* reactionQueue() const;
 
     CustomElementDefaultARIA& customElementDefaultARIA();
+    CheckedRef<CustomElementDefaultARIA> checkedCustomElementDefaultARIA();
     CustomElementDefaultARIA* customElementDefaultARIAIfExists();
 
     // FIXME: This should not be virtual. Please do not add additional overrides of this function.
@@ -457,6 +461,7 @@ public:
     virtual bool attributeContainsURL(const Attribute& attribute) const { return isURLAttribute(attribute); }
     String resolveURLStringIfNeeded(const String& urlString, ResolveURLs = ResolveURLs::Yes, const URL& base = URL()) const;
     virtual String completeURLsInAttributeValue(const URL& base, const Attribute&, ResolveURLs = ResolveURLs::Yes) const;
+    virtual Attribute replaceURLsInAttributeValue(const Attribute&, const HashMap<String, String>&) const;
     virtual bool isHTMLContentAttribute(const Attribute&) const { return false; }
 
     WEBCORE_EXPORT URL getURLAttribute(const QualifiedName&) const;
@@ -563,13 +568,16 @@ public:
     bool hasKeyframeEffects(PseudoId) const;
 
     const AnimationCollection* animations(PseudoId) const;
-    bool hasCompletedTransitionForProperty(PseudoId, AnimatableProperty) const;
-    bool hasRunningTransitionForProperty(PseudoId, AnimatableProperty) const;
+    bool hasCompletedTransitionForProperty(PseudoId, const AnimatableCSSProperty&) const;
+    bool hasRunningTransitionForProperty(PseudoId, const AnimatableCSSProperty&) const;
     bool hasRunningTransitions(PseudoId) const;
     AnimationCollection& ensureAnimations(PseudoId);
 
-    AnimatablePropertyToTransitionMap& ensureCompletedTransitionsByProperty(PseudoId);
-    AnimatablePropertyToTransitionMap& ensureRunningTransitionsByProperty(PseudoId);
+    const AnimatableCSSPropertyToTransitionMap* completedTransitionsByProperty(PseudoId) const;
+    const AnimatableCSSPropertyToTransitionMap* runningTransitionsByProperty(PseudoId) const;
+
+    AnimatableCSSPropertyToTransitionMap& ensureCompletedTransitionsByProperty(PseudoId);
+    AnimatableCSSPropertyToTransitionMap& ensureRunningTransitionsByProperty(PseudoId);
     CSSAnimationCollection& animationsCreatedByMarkup(PseudoId);
     void setAnimationsCreatedByMarkup(PseudoId, CSSAnimationCollection&&);
 
@@ -617,7 +625,10 @@ public:
     IntPoint savedLayerScrollPosition() const;
     void setSavedLayerScrollPosition(const IntPoint&);
 
-    bool dispatchMouseEvent(const PlatformMouseEvent&, const AtomString& eventType, int clickCount = 0, Element* relatedTarget = nullptr, IsSyntheticClick isSyntethicClick = IsSyntheticClick::No);
+    enum class EventIsDefaultPrevented : bool { No, Yes };
+    enum class EventIsDispatched : bool { No, Yes };
+    using DispatchMouseEventResult = std::pair<EventIsDispatched, EventIsDefaultPrevented>;
+    DispatchMouseEventResult dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const AtomString& eventType, int clickCount = 0, Element* relatedTarget = nullptr, IsSyntheticClick = IsSyntheticClick::No);
     bool dispatchWheelEvent(const PlatformWheelEvent&, OptionSet<EventHandling>&, EventIsCancelable = EventIsCancelable::Yes);
     bool dispatchKeyEvent(const PlatformKeyboardEvent&);
     bool dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouseEventOptions = SendNoEvents, SimulatedClickVisualOptions = ShowPressedLook);
@@ -714,7 +725,7 @@ public:
     void setLastRememberedLogicalHeight(LayoutUnit);
     void clearLastRememberedLogicalHeight();
 
-    Element* findAnchorElementForLink(String& outAnchorName);
+    RefPtr<Element> findAnchorElementForLink(String& outAnchorName);
 
     ExceptionOr<Ref<WebAnimation>> animate(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&, std::optional<std::variant<double, KeyframeAnimationOptions>>&&);
     Vector<RefPtr<WebAnimation>> getAnimations(std::optional<GetAnimationsOptions>);
@@ -737,10 +748,8 @@ public:
 
     bool isRelevantToUser() const;
 
-    void contentVisibilityViewportChange(bool);
-
-    OptionSet<ContentRelevancyStatus> contentRelevancyStatus() const;
-    void setContentRelevancyStatus(OptionSet<ContentRelevancyStatus>);
+    std::optional<OptionSet<ContentRelevancy>> contentRelevancy() const;
+    void setContentRelevancy(OptionSet<ContentRelevancy>);
 
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
@@ -767,6 +776,8 @@ protected:
     void ensureFormAssociatedCustomElement();
 
     void updateLabel(TreeScope&, const AtomString& oldForAttributeValue, const AtomString& newForAttributeValue);
+
+    static AtomString makeTargetBlankIfHasDanglingMarkup(const AtomString& target);
 
 private:
     LocalFrame* documentFrameWithNonNullView() const;

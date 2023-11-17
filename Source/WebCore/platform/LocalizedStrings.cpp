@@ -815,12 +815,12 @@ String AXTextFieldActionVerb()
     return WEB_UI_STRING("activate", "Verb stating the action that will occur when a text field is selected, as used by accessibility");
 }
 
-String AXCheckedCheckBoxActionVerb()
+String AXCheckedCheckboxActionVerb()
 {
     return WEB_UI_STRING("uncheck", "Verb stating the action that will occur when a checked checkbox is clicked, as used by accessibility");
 }
 
-String AXUncheckedCheckBoxActionVerb()
+String AXUncheckedCheckboxActionVerb()
 {
     return WEB_UI_STRING("check", "Verb stating the action that will occur when an unchecked checkbox is clicked, as used by accessibility");
 }
@@ -948,6 +948,11 @@ String AXAutoFillLoadingLabel()
 String autoFillStrongPasswordLabel()
 {
     return WEB_UI_STRING("Strong Password", "Label for strong password.");
+}
+
+String AXProcessingPage()
+{
+    return WEB_UI_STRING("Processing page", "Title for the webarea while the accessibility tree is being built.");
 }
 
 String missingPluginText()
@@ -1147,7 +1152,7 @@ String validationMessageValueMissingText()
 
 String validationMessageValueMissingForCheckboxText()
 {
-    return WEB_UI_STRING("Select this checkbox", "Validation message for required checkboxes that have not be selected");
+    return WEB_UI_STRING("Select this checkbox", "Validation message for required checkboxes that have not been selected");
 }
 
 String validationMessageValueMissingForFileText()
@@ -1168,6 +1173,11 @@ String validationMessageValueMissingForRadioText()
 String validationMessageValueMissingForSelectText()
 {
     return WEB_UI_STRING("Select an item in the list", "Validation message for required menu list controls that have no selection");
+}
+
+String validationMessageValueMissingForSwitchText()
+{
+    return WEB_UI_STRING("Tap this switch", "Validation message for required switches that are not on");
 }
 
 String validationMessageTypeMismatchText()

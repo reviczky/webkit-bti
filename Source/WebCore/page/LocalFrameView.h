@@ -29,6 +29,7 @@
 #include "FrameView.h"
 #include "LayoutMilestone.h"
 #include "LayoutRect.h"
+#include "LocalFrame.h"
 #include "LocalFrameViewLayoutContext.h"
 #include "Pagination.h"
 #include "PaintPhase.h"
@@ -57,7 +58,6 @@ class FloatSize;
 class Frame;
 class GraphicsContext;
 class HTMLFrameOwnerElement;
-class LocalFrame;
 class Page;
 class RegionContext;
 class RenderBox;
@@ -109,8 +109,8 @@ public:
     Type viewType() const final { return Type::Local; }
     void writeRenderTreeAsText(TextStream&, OptionSet<RenderAsTextFlag>) override;
 
-    // FIXME: This should return Frame. If it were a RemoteFrame, we would have a RemoteFrameView.
-    WEBCORE_EXPORT Frame& frame() const;
+    WEBCORE_EXPORT LocalFrame& frame() const final;
+    Ref<LocalFrame> protectedFrame() const;
 
     WEBCORE_EXPORT RenderView* renderView() const;
 
@@ -132,6 +132,8 @@ public:
 
     const LocalFrameViewLayoutContext& layoutContext() const { return m_layoutContext; }
     LocalFrameViewLayoutContext& layoutContext() { return m_layoutContext; }
+    CheckedRef<const LocalFrameViewLayoutContext> checkedLayoutContext() const;
+    CheckedRef<LocalFrameViewLayoutContext> checkedLayoutContext();
 
     WEBCORE_EXPORT bool didFirstLayout() const;
 
@@ -242,8 +244,8 @@ public:
     struct OverrideViewportSize {
         std::optional<float> width;
         std::optional<float> height;
-    
-        bool operator==(const OverrideViewportSize& rhs) const { return rhs.width == width && rhs.height == height; }
+
+        friend bool operator==(const OverrideViewportSize&, const OverrideViewportSize&) = default;
     };
 
     WEBCORE_EXPORT void setOverrideSizeForCSSDefaultViewportUnits(OverrideViewportSize);
@@ -673,7 +675,7 @@ public:
     void didAddWidgetToRenderTree(Widget&);
     void willRemoveWidgetFromRenderTree(Widget&);
 
-    const HashSet<Widget*>& widgetsInRenderTree() const { return m_widgetsInRenderTree; }
+    const HashSet<CheckedPtr<Widget>>& widgetsInRenderTree() const { return m_widgetsInRenderTree; }
 
     void notifyAllFramesThatContentAreaWillPaint() const;
 
@@ -718,8 +720,6 @@ public:
 
     void renderLayerDidScroll(const RenderLayer&);
 
-    void scrollToPositionWithAnimation(const ScrollPosition&, const ScrollPositionChangeOptions& options = ScrollPositionChangeOptions::createProgrammatic());
-
     bool inUpdateEmbeddedObjects() const { return m_inUpdateEmbeddedObjects; }
 
     String debugDescription() const final;
@@ -732,8 +732,20 @@ public:
     OverscrollBehavior horizontalOverscrollBehavior() const final;
     OverscrollBehavior verticalOverscrollBehavior() const final;
 
+    Color scrollbarThumbColorStyle() const final;
+    Color scrollbarTrackColorStyle() const final;
     ScrollbarGutter scrollbarGutterStyle() const final;
     ScrollbarWidth scrollbarWidthStyle() const final;
+
+    void dequeueScrollableAreaForScrollAnchoringUpdate(ScrollableArea&);
+    void queueScrollableAreaForScrollAnchoringUpdate(ScrollableArea&);
+    void updateScrollAnchoringElementsForScrollableAreas();
+    void updateScrollAnchoringPositionForScrollableAreas();
+
+    void updateScrollAnchoringElement() final;
+    void updateScrollPositionForScrollAnchoringController() final;
+    void invalidateScrollAnchoringElement() final;
+    ScrollAnchoringController* scrollAnchoringController() { return m_scrollAnchoringController.get(); }
 
 private:
     explicit LocalFrameView(LocalFrame&);
@@ -747,6 +759,8 @@ private:
 
     bool isVerticalDocument() const final;
     bool isFlippedDocument() const final;
+
+    void incrementVisuallyNonEmptyCharacterCountSlowCase(const String&);
 
     void reset();
     void init();
@@ -864,7 +878,7 @@ private:
 
     void updateEmbeddedObjectsTimerFired();
     bool updateEmbeddedObjects();
-    void updateEmbeddedObject(RenderEmbeddedObject&);
+    void updateEmbeddedObject(const WeakPtr<RenderEmbeddedObject>&);
 
     void updateWidgetPositionsTimerFired();
 
@@ -932,8 +946,8 @@ private:
 
     std::unique_ptr<Display::View> m_displayView;
 
-    HashSet<Widget*> m_widgetsInRenderTree;
-    std::unique_ptr<ListHashSet<RenderEmbeddedObject*>> m_embeddedObjectsToUpdate;
+    HashSet<CheckedPtr<Widget>> m_widgetsInRenderTree;
+    std::unique_ptr<ListHashSet<CheckedPtr<RenderEmbeddedObject>>> m_embeddedObjectsToUpdate;
     std::unique_ptr<WeakHashSet<RenderElement>> m_slowRepaintObjects;
 
     RefPtr<ContainerNode> m_maintainScrollPositionAnchor;
@@ -1015,6 +1029,8 @@ private:
     ViewportRendererType m_viewportRendererType { ViewportRendererType::None };
     ScrollPinningBehavior m_scrollPinningBehavior { ScrollPinningBehavior::DoNotPin };
     SelectionRevealMode m_selectionRevealModeForFocusedElement { SelectionRevealMode::DoNotReveal };
+    ScrollableAreaSet m_scrollableAreasWithScrollAnchoringControllersNeedingUpdate;
+
     std::unique_ptr<ScrollAnchoringController> m_scrollAnchoringController;
 
     bool m_shouldUpdateWhileOffscreen { true };
@@ -1071,6 +1087,19 @@ inline void LocalFrameView::incrementVisuallyNonEmptyPixelCount(const IntSize& s
         m_visuallyNonEmptyPixelCount = std::numeric_limits<decltype(m_visuallyNonEmptyPixelCount)>::max();
     else
         m_visuallyNonEmptyPixelCount = area;
+}
+
+inline void LocalFrameView::incrementVisuallyNonEmptyCharacterCount(const String& inlineText)
+{
+    if (m_visuallyNonEmptyCharacterCount > visualCharacterThreshold && m_hasReachedSignificantRenderedTextThreshold)
+        return;
+
+    incrementVisuallyNonEmptyCharacterCountSlowCase(inlineText);
+}
+
+inline RefPtr<LocalFrameView> LocalFrame::protectedView() const
+{
+    return m_view;
 }
 
 WTF::TextStream& operator<<(WTF::TextStream&, const LocalFrameView&);

@@ -42,11 +42,6 @@ NVShaderNoperspectiveInterpolation::NVShaderNoperspectiveInterpolation(WebGLRend
 
 NVShaderNoperspectiveInterpolation::~NVShaderNoperspectiveInterpolation() = default;
 
-WebGLExtension::ExtensionName NVShaderNoperspectiveInterpolation::getName() const
-{
-    return NVShaderNoperspectiveInterpolationName;
-}
-
 bool NVShaderNoperspectiveInterpolation::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_NV_shader_noperspective_interpolation"_s);

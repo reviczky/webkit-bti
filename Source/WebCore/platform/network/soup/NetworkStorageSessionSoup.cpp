@@ -203,7 +203,7 @@ void NetworkStorageSession::getCredentialFromPersistentStorage(const ProtectionS
             size_t length;
             GRefPtr<SecretValue> secretValue = adoptGRef(secret_item_get_secret(secretItem.get()));
             const char* passwordData = secret_value_get(secretValue.get(), &length);
-            data->completionHandler(Credential(user, String::fromUTF8(passwordData, length), CredentialPersistencePermanent));
+            data->completionHandler(Credential(user, String::fromUTF8(passwordData, length), CredentialPersistence::Permanent));
         }, data.release());
 #else
     UNUSED_PARAM(protectionSpace);
@@ -334,6 +334,7 @@ void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameS
     UNUSED_PARAM(frameID);
     UNUSED_PARAM(pageID);
     UNUSED_PARAM(applyTrackingPrevention);
+    UNUSED_PARAM(relaxThirdPartyCookieBlocking);
 #endif
 
     auto origin = urlToSoupURI(url);
@@ -391,7 +392,7 @@ void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameS
     soup_cookies_free(existingCookies);
 }
 
-bool NetworkStorageSession::setCookieFromDOM(const URL&, const SameSiteInfo&, const URL&, std::optional<FrameIdentifier>, std::optional<PageIdentifier>, ApplyTrackingPrevention, ShouldRelaxThirdPartyCookieBlocking, Cookie&&) const
+bool NetworkStorageSession::setCookieFromDOM(const URL&, const SameSiteInfo&, const URL&, std::optional<FrameIdentifier>, std::optional<PageIdentifier>, ApplyTrackingPrevention, const Cookie&, ShouldRelaxThirdPartyCookieBlocking) const
 {
     // FIXME: Implement for the Cookie Store API.
     return false;
@@ -573,6 +574,7 @@ bool NetworkStorageSession::getRawCookies(const URL& firstParty, const SameSiteI
     UNUSED_PARAM(frameID);
     UNUSED_PARAM(pageID);
     UNUSED_PARAM(applyTrackingPrevention);
+    UNUSED_PARAM(relaxThirdPartyCookieBlocking);
 #endif
 
     auto uri = urlToSoupURI(url);
@@ -613,6 +615,7 @@ static std::pair<String, bool> cookiesForSession(const NetworkStorageSession& se
     UNUSED_PARAM(frameID);
     UNUSED_PARAM(pageID);
     UNUSED_PARAM(applyTrackingPrevention);
+    UNUSED_PARAM(relaxThirdPartyCookieBlocking);
 #endif
 
     auto uri = urlToSoupURI(url);

@@ -32,13 +32,14 @@ class SVGElement;
 class RenderSVGHiddenContainer : public RenderSVGContainer {
     WTF_MAKE_ISO_ALLOCATED(RenderSVGHiddenContainer);
 public:
-    RenderSVGHiddenContainer(SVGElement&, RenderStyle&&);
+    RenderSVGHiddenContainer(Type, SVGElement&, RenderStyle&&);
 
 protected:
     void layout() override;
 
+    void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
+
 private:
-    bool isSVGHiddenContainer() const final { return true; }
     ASCIILiteral renderName() const override { return "RenderSVGHiddenContainer"_s; }
 
     void paint(PaintInfo&, const LayoutPoint&) final { }
@@ -54,11 +55,10 @@ private:
     void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect&, OptionSet<RenderStyle::TransformOperationOption>) const final { }
     void updateFromStyle() final { }
     bool needsHasSVGTransformFlags() const final { return false; }
-    void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
 };
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderSVGHiddenContainer, isSVGHiddenContainer())
+SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderSVGHiddenContainer, isRenderSVGHiddenContainer())
 
 #endif // ENABLE(LAYER_BASED_SVG_ENGINE)

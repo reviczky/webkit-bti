@@ -109,8 +109,8 @@ void ServiceWorkerSoftUpdateLoader::loadWithCacheEntry(NetworkCache::Entry& entr
         return;
     }
 
-    if (entry.buffer())
-        didReceiveBuffer(*entry.buffer(), 0);
+    if (RefPtr buffer = entry.buffer())
+        didReceiveBuffer(*buffer, 0);
     didFinishLoading({ });
 }
 
@@ -130,9 +130,8 @@ void ServiceWorkerSoftUpdateLoader::loadFromNetwork(NetworkSession& session, Res
 #endif
 }
 
-void ServiceWorkerSoftUpdateLoader::willSendRedirectedRequest(ResourceRequest&&, ResourceRequest&&, ResourceResponse&&, CompletionHandler<void(WebCore::ResourceRequest&&)>&& completionHandler)
+void ServiceWorkerSoftUpdateLoader::willSendRedirectedRequest(ResourceRequest&&, ResourceRequest&&, ResourceResponse&&)
 {
-    completionHandler({ });
     fail(ResourceError { ResourceError::Type::Cancellation });
 }
 

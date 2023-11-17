@@ -282,24 +282,24 @@ void InspectorFrontendClientLocal::openURLExternally(const String& url)
     auto* localMainFrame = dynamicDowncast<LocalFrame>(m_inspectedPageController->inspectedPage().mainFrame());
     if (!localMainFrame)
         return;
-    LocalFrame& mainFrame = *localMainFrame;
+    Ref mainFrame = *localMainFrame;
 
-    UserGestureIndicator indicator { ProcessingUserGesture, mainFrame.document() };
+    UserGestureIndicator indicator { IsProcessingUserGesture::Yes, mainFrame->document() };
 
-    FrameLoadRequest frameLoadRequest { *mainFrame.document(), mainFrame.document()->securityOrigin(), { }, blankTargetFrameName(), InitiatedByMainFrame::Unknown };
+    FrameLoadRequest frameLoadRequest { *mainFrame->document(), mainFrame->document()->securityOrigin(), { }, blankTargetFrameName(), InitiatedByMainFrame::Unknown };
 
     bool created;
     WindowFeatures features;
-    auto frame = WebCore::createWindow(mainFrame, mainFrame, WTFMove(frameLoadRequest), features, created);
+    RefPtr frame = dynamicDowncast<LocalFrame>(WebCore::createWindow(mainFrame, mainFrame, WTFMove(frameLoadRequest), features, created));
     if (!frame)
         return;
 
-    frame->loader().setOpener(&mainFrame);
+    frame->loader().setOpener(mainFrame.ptr());
     frame->page()->setOpenedByDOM();
 
     // FIXME: Why do we compute the absolute URL with respect to |frame| instead of |mainFrame|?
     ResourceRequest resourceRequest { frame->document()->completeURL(url) };
-    FrameLoadRequest frameLoadRequest2 { *mainFrame.document(), mainFrame.document()->securityOrigin(), WTFMove(resourceRequest), selfTargetFrameName(), InitiatedByMainFrame::Unknown };
+    FrameLoadRequest frameLoadRequest2 { mainFrame->protectedDocument().releaseNonNull(), mainFrame->document()->securityOrigin(), WTFMove(resourceRequest), selfTargetFrameName(), InitiatedByMainFrame::Unknown };
     frame->loader().changeLocation(WTFMove(frameLoadRequest2));
 }
 
@@ -312,25 +312,23 @@ void InspectorFrontendClientLocal::moveWindowBy(float x, float y)
 
 void InspectorFrontendClientLocal::setAttachedWindow(DockSide dockSide)
 {
-    const char* side = "undocked";
-    switch (dockSide) {
-    case DockSide::Undocked:
-        side = "undocked";
-        break;
-    case DockSide::Right:
-        side = "right";
-        break;
-    case DockSide::Left:
-        side = "left";
-        break;
-    case DockSide::Bottom:
-        side = "bottom";
-        break;
-    }
+    ASCIILiteral side = [&] {
+        switch (dockSide) {
+        case DockSide::Right:
+            return "right"_s;
+        case DockSide::Left:
+            return "left"_s;
+        case DockSide::Bottom:
+            return "bottom"_s;
+        case DockSide::Undocked:
+            break;
+        }
+        return "undocked"_s;
+    }();
 
     m_dockSide = dockSide;
 
-    m_frontendAPIDispatcher->dispatchCommandWithResultAsync("setDockSide"_s, { JSON::Value::create(makeString(side)) });
+    m_frontendAPIDispatcher->dispatchCommandWithResultAsync("setDockSide"_s, { JSON::Value::create(String { side }) });
 }
 
 void InspectorFrontendClientLocal::restoreAttachedWindowHeight()

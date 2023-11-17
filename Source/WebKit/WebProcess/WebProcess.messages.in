@@ -108,7 +108,7 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
     MarkIsNoLongerPrewarmed()
     GetActivePagesOriginsForTesting() -> (Vector<String> activeOrigins)
 
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     SetScreenProperties(struct WebCore::ScreenProperties screenProperties)
 #endif
 #if PLATFORM(MAC)
@@ -185,10 +185,10 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
 #endif
 
 #if PLATFORM(COCOA)
-    DidWriteToPasteboardAsynchronously(String pasteboardName);
+    DidWriteToPasteboardAsynchronously(String pasteboardName) CanDispatchOutOfOrder
 #endif
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
     DisplayDidRefresh(uint32_t displayID, struct WebCore::DisplayUpdate update)
 #endif
 
@@ -221,4 +221,9 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
     RenderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior) -> (String renderTreeDump) Synchronous
     
     AddAllowedFirstPartyForCookies(WebCore::RegistrableDomain firstPartyDomain)
+
+#if ENABLE(NOTIFYD_BLOCKING_IN_WEBCONTENT)
+    PostNotification(String message)
+    PostObserverNotification(String message)
+#endif
 }

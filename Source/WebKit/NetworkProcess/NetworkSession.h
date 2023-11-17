@@ -44,6 +44,7 @@
 #include <WebCore/PrivateClickMeasurement.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SWServerDelegate.h>
+#include <WebCore/StoredCredentialsPolicy.h>
 #include <pal/SessionID.h>
 #include <wtf/HashSet.h>
 #include <wtf/Ref.h>
@@ -231,7 +232,7 @@ public:
     WebSharedWorkerServer& ensureSharedWorkerServer();
 
     NetworkStorageManager& storageManager() { return m_storageManager.get(); }
-    CacheStorage::Engine& ensureCacheEngine();
+    Ref<NetworkStorageManager> protectedStorageManager();
     void clearCacheEngine();
 
     NetworkLoadScheduler& networkLoadScheduler();
@@ -247,7 +248,7 @@ public:
 
     virtual void removeNetworkWebsiteData(std::optional<WallTime>, std::optional<HashSet<WebCore::RegistrableDomain>>&&, CompletionHandler<void()>&& completionHandler) { completionHandler(); }
 
-    virtual void dataTaskWithRequest(WebPageProxyIdentifier, WebCore::ResourceRequest&&, CompletionHandler<void(DataTaskIdentifier)>&&) { }
+    virtual void dataTaskWithRequest(WebPageProxyIdentifier, WebCore::ResourceRequest&&, const std::optional<WebCore::SecurityOriginData>& topOrigin, CompletionHandler<void(DataTaskIdentifier)>&&) { }
     virtual void cancelDataTask(DataTaskIdentifier) { }
     virtual void addWebPageNetworkParameters(WebPageProxyIdentifier, WebPageNetworkParameters&&) { }
     virtual void removeWebPageNetworkParameters(WebPageProxyIdentifier) { }
@@ -262,10 +263,6 @@ public:
 #if ENABLE(BUILT_IN_NOTIFICATIONS)
     NetworkNotificationManager& notificationManager() { return m_notificationManager; }
 #endif
-    
-#if !HAVE(NSURLSESSION_WEBSOCKET)
-    bool shouldAcceptInsecureCertificatesForWebSockets() const { return m_shouldAcceptInsecureCertificatesForWebSockets; }
-#endif
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
     std::optional<int64_t> bytesPerSecondLimit() const { return m_bytesPerSecondLimit; }
@@ -275,6 +272,10 @@ public:
 #if HAVE(NW_PROXY_CONFIG)
     virtual void clearProxyConfigData() { }
     virtual void setProxyConfigData(Vector<std::pair<Vector<uint8_t>, WTF::UUID>>&&) { };
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    void setInspectionForServiceWorkersAllowed(bool);
 #endif
                                     
 protected:
@@ -361,13 +362,12 @@ protected:
     std::optional<ServiceWorkerInfo> m_serviceWorkerInfo;
     std::unique_ptr<WebCore::SWServer> m_swServer;
     RefPtr<BackgroundFetchStoreImpl> m_backgroundFetchStore;
+    bool m_inspectionForServiceWorkersAllowed { true };
 #endif
     std::unique_ptr<WebSharedWorkerServer> m_sharedWorkerServer;
 
     Ref<NetworkStorageManager> m_storageManager;
     String m_cacheStorageDirectory;
-    RefPtr<CacheStorage::Engine> m_cacheEngine;
-    Vector<Function<void(CacheStorage::Engine&)>> m_cacheStorageParametersCallbacks;
 
 #if PLATFORM(COCOA)
     AppPrivacyReportTestingData m_appPrivacyReportTestingData;
@@ -377,9 +377,6 @@ protected:
 
 #if ENABLE(BUILT_IN_NOTIFICATIONS)
     NetworkNotificationManager m_notificationManager;
-#endif
-#if !HAVE(NSURLSESSION_WEBSOCKET)
-    bool m_shouldAcceptInsecureCertificatesForWebSockets { false };
 #endif
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
     std::optional<int64_t> m_bytesPerSecondLimit;

@@ -56,8 +56,11 @@ private:
     // DrawingAreaProxy
     void sizeDidChange() override;
     void deviceScaleFactorDidChange() override;
-    void waitForBackingStoreUpdateOnNextPaint() override;
     void setBackingStoreIsDiscardable(bool) override;
+
+#if HAVE(DISPLAY_LINK)
+    std::optional<WebCore::FramesPerSecond> displayNominalFramesPerSecond() override;
+#endif
 
 #if PLATFORM(GTK)
     void adjustTransientZoom(double scale, WebCore::FloatPoint origin) override;
@@ -69,7 +72,6 @@ private:
     void enterAcceleratedCompositingMode(uint64_t backingStoreStateID, const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode(uint64_t backingStoreStateID, UpdateInfo&&) override;
     void updateAcceleratedCompositingMode(uint64_t backingStoreStateID, const LayerTreeContext&) override;
-    void targetRefreshRateDidChange(unsigned) override;
 
     bool shouldSendWheelEventsToEventDispatcher() const override { return true; }
 
@@ -97,24 +99,14 @@ private:
         void start(CompletionHandler<void()>&&);
 
     private:
-        static int webViewDrawCallback(DrawingMonitor*);
-
         void stop();
-        void didDraw();
 
-        MonotonicTime m_startTime;
         CompletionHandler<void()> m_callback;
         RunLoop::Timer m_timer;
-#if PLATFORM(GTK)
-        WebPageProxy& m_webPage;
-#endif
     };
 
     // The current layer tree context.
     LayerTreeContext m_layerTreeContext;
-
-    // For a new Drawing Area don't draw anything until the WebProcess has sent over the first content.
-    bool m_hasReceivedFirstUpdate { false };
 
     // Whether we're waiting for a DidUpdateGeometry message from the web process.
     bool m_isWaitingForDidUpdateGeometry { false };

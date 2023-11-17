@@ -79,7 +79,7 @@ bool HTMLPlugInElement::willRespondToMouseClickEventsWithEditability(Editability
     if (isDisabledFormControl())
         return false;
     auto renderer = this->renderer();
-    return renderer && renderer->isWidget();
+    return renderer && renderer->isRenderWidget();
 }
 
 void HTMLPlugInElement::willDetachRenderers()
@@ -130,7 +130,7 @@ RenderWidget* HTMLPlugInElement::renderWidgetLoadingPlugin() const
         // Needs to load the plugin immediatedly because this function is called
         // when JavaScript code accesses the plugin.
         // FIXME: <rdar://16893708> Check if dispatching events here is safe.
-        document().updateLayoutIgnorePendingStylesheets(Document::RunPostLayoutTasks::Synchronously);
+        document().updateLayout({ LayoutOptions::IgnorePendingStylesheets, LayoutOptions::RunPostLayoutTasksSynchronously });
     }
     return renderWidget(); // This will return nullptr if the renderer is not a RenderWidget.
 }
@@ -261,8 +261,6 @@ void HTMLPlugInElement::didAddUserAgentShadowRoot(ShadowRoot& root)
     if (!m_pluginReplacement || !document().page() || displayState() != PreparingPluginReplacement)
         return;
     
-    root.setResetStyleInheritance(true);
-
     m_pluginReplacement->installReplacement(root);
 
     setDisplayState(DisplayingPluginReplacement);

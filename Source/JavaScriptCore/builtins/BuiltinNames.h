@@ -72,9 +72,7 @@ namespace JSC {
     macro(Map) \
     macro(throwTypeErrorFunction) \
     macro(typedArrayLength) \
-    macro(typedArrayClone) \
     macro(typedArrayContentType) \
-    macro(typedArraySort) \
     macro(typedArrayGetOriginalConstructor) \
     macro(BuiltinLog) \
     macro(BuiltinDescribe) \
@@ -118,20 +116,17 @@ namespace JSC {
     macro(syncIterator) \
     macro(nextMethod) \
     macro(asyncGeneratorQueueItemNext) \
-    macro(dateTimeFormat) \
     macro(this) \
     macro(importMapStatus) \
     macro(importInRealm) \
     macro(evalInRealm) \
     macro(moveFunctionToRealm) \
-    macro(thisTimeValue) \
     macro(newTargetLocal) \
     macro(derivedConstructor) \
     macro(isTypedArrayView) \
     macro(isSharedTypedArrayView) \
     macro(isResizableOrGrowableSharedTypedArrayView) \
     macro(isDetached) \
-    macro(typedArrayDefaultComparator) \
     macro(typedArrayFromFast) \
     macro(isBoundFunction) \
     macro(hasInstanceBoundFunction) \
@@ -200,6 +195,7 @@ namespace JSC {
     macro(sentinelString) \
     macro(createRemoteFunction) \
     macro(isRemoteFunction) \
+    macro(arrayFromFast) \
     macro(arraySort) \
     macro(jsonParse) \
     macro(jsonStringify) \

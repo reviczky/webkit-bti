@@ -187,16 +187,6 @@ bool WKPreferencesGetDatabasesEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->databasesEnabled();
 }
 
-void WKPreferencesSetFrameFlatteningEnabled(WKPreferencesRef preferencesRef, bool frameFlatteningEnabled)
-{
-    toImpl(preferencesRef)->setFrameFlatteningEnabled(frameFlatteningEnabled);
-}
-
-bool WKPreferencesGetFrameFlatteningEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->frameFlatteningEnabled();
-}
-
 void WKPreferencesSetPluginsEnabled(WKPreferencesRef preferencesRef, bool pluginsEnabled)
 {
     toImpl(preferencesRef)->setPluginsEnabled(pluginsEnabled);
@@ -1549,22 +1539,20 @@ bool WKPreferencesGetDownloadAttributeEnabled(WKPreferencesRef preferencesRef)
 
 void WKPreferencesSetIntersectionObserverEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
-    toImpl(preferencesRef)->setIntersectionObserverEnabled(flag);
 }
 
 bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->intersectionObserverEnabled();
+    return true;
 }
 
 void WKPreferencesSetMenuItemElementEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
-    return toImpl(preferencesRef)->setMenuItemElementEnabled(flag);
 }
 
 bool WKPreferencesGetMenuItemElementEnabled(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->menuItemElementEnabled();
+    return false;
 }
 
 void WKPreferencesSetPaintTimingEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1595,16 +1583,6 @@ WK_EXPORT void WKPreferencesSetIsAccessibilityIsolatedTreeEnabled(WKPreferencesR
 WK_EXPORT bool WKPreferencesGetIsAccessibilityIsolatedTreeEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->isAccessibilityIsolatedTreeEnabled();
-}
-
-void WKPreferencesSetFetchAPIKeepAliveEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setFetchAPIKeepAliveEnabled(flag);
-}
-
-bool WKPreferencesGetFetchAPIKeepAliveEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->fetchAPIKeepAliveEnabled();
 }
 
 void WKPreferencesSetAllowsPictureInPictureMediaPlayback(WKPreferencesRef preferencesRef, bool enabled)
@@ -1735,16 +1713,6 @@ bool WKPreferencesGetAllowMediaContentTypesRequiringHardwareSupportAsFallback(WK
 void WKPreferencesSetAllowMediaContentTypesRequiringHardwareSupportAsFallback(WKPreferencesRef preferencesRef, bool allow)
 {
     return toImpl(preferencesRef)->setAllowMediaContentTypesRequiringHardwareSupportAsFallback(allow);
-}
-
-void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setStorageAccessAPIEnabled(flag);
-}
-
-bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->storageAccessAPIEnabled();
 }
 
 void WKPreferencesSetSyntheticEditingCommandsEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1897,16 +1865,6 @@ bool WKPreferencesGetVP9DecoderEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->vp9DecoderEnabled();
 }
 
-void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setReferrerPolicyAttributeEnabled(flag);
-}
-
-bool WKPreferencesGetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->referrerPolicyAttributeEnabled();
-}
-
 bool WKPreferencesGetRemotePlaybackEnabled(WKPreferencesRef preferencesRef)
 {
     return WebKit::toImpl(preferencesRef)->remotePlaybackEnabled();
@@ -1945,6 +1903,15 @@ void WKPreferencesSetAVFoundationNSURLSessionEnabled(WKPreferencesRef, bool)
 }
 
 bool WKPreferencesGetAVFoundationNSURLSessionEnabled(WKPreferencesRef)
+{
+    return true;
+}
+
+void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+}
+
+bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
 {
     return true;
 }
@@ -2017,6 +1984,15 @@ void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef, bool)
 }
 
 bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef)
+{
+    return true;
+}
+
+void WKPreferencesSetFetchAPIKeepAliveEnabled(WKPreferencesRef preferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetFetchAPIKeepAliveEnabled(WKPreferencesRef)
 {
     return true;
 }
@@ -2109,4 +2085,13 @@ void WKPreferencesSetLoadsSiteIconsIgnoringImageLoadingPreference(WKPreferencesR
 bool WKPreferencesGetLoadsSiteIconsIgnoringImageLoadingPreference(WKPreferencesRef)
 {
     return false;
+}
+
+void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+}
+
+bool WKPreferencesGetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef)
+{
+    return true;
 }

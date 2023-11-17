@@ -1970,22 +1970,22 @@ void PrivateState::getIntegerv(GLenum pname, GLint *params) const
             break;
         case GL_BLEND_SRC_RGB:
             // non-indexed get returns the state of draw buffer zero
-            *params = mBlendStateExt.getSrcColorIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getSrcColorIndexed(0));
             break;
         case GL_BLEND_SRC_ALPHA:
-            *params = mBlendStateExt.getSrcAlphaIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getSrcAlphaIndexed(0));
             break;
         case GL_BLEND_DST_RGB:
-            *params = mBlendStateExt.getDstColorIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getDstColorIndexed(0));
             break;
         case GL_BLEND_DST_ALPHA:
-            *params = mBlendStateExt.getDstAlphaIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getDstAlphaIndexed(0));
             break;
         case GL_BLEND_EQUATION_RGB:
-            *params = mBlendStateExt.getEquationColorIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getEquationColorIndexed(0));
             break;
         case GL_BLEND_EQUATION_ALPHA:
-            *params = mBlendStateExt.getEquationAlphaIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getEquationAlphaIndexed(0));
             break;
         case GL_STENCIL_WRITEMASK:
             *params = CastMaskValue(mDepthStencil.stencilWritemask);
@@ -2049,10 +2049,10 @@ void PrivateState::getIntegerv(GLenum pname, GLint *params) const
             break;
         case GL_BLEND_SRC:
             // non-indexed get returns the state of draw buffer zero
-            *params = mBlendStateExt.getSrcColorIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getSrcColorIndexed(0));
             break;
         case GL_BLEND_DST:
-            *params = mBlendStateExt.getDstColorIndexed(0);
+            *params = ToGLenum(mBlendStateExt.getDstColorIndexed(0));
             break;
         case GL_PERSPECTIVE_CORRECTION_HINT:
         case GL_POINT_SMOOTH_HINT:
@@ -2110,27 +2110,27 @@ void PrivateState::getIntegeri_v(GLenum target, GLuint index, GLint *data) const
     {
         case GL_BLEND_SRC_RGB:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getSrcColorIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getSrcColorIndexed(index));
             break;
         case GL_BLEND_SRC_ALPHA:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getSrcAlphaIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getSrcAlphaIndexed(index));
             break;
         case GL_BLEND_DST_RGB:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getDstColorIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getDstColorIndexed(index));
             break;
         case GL_BLEND_DST_ALPHA:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getDstAlphaIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getDstAlphaIndexed(index));
             break;
         case GL_BLEND_EQUATION_RGB:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getEquationColorIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getEquationColorIndexed(index));
             break;
         case GL_BLEND_EQUATION_ALPHA:
             ASSERT(static_cast<size_t>(index) < mBlendStateExt.getDrawBufferCount());
-            *data = mBlendStateExt.getEquationAlphaIndexed(index);
+            *data = ToGLenum(mBlendStateExt.getEquationAlphaIndexed(index));
             break;
         case GL_SAMPLE_MASK_VALUE:
             ASSERT(static_cast<size_t>(index) < mSampleMaskValues.size());
@@ -2167,8 +2167,7 @@ State::State(const State *shareContextState,
              egl::ShareGroup *shareGroup,
              TextureManager *shareTextures,
              SemaphoreManager *shareSemaphores,
-             egl::ContextMutex *sharedContextMutex,
-             egl::SingleContextMutex *singleContextMutex,
+             egl::ContextMutex *contextMutex,
              const OverlayType *overlay,
              const EGLenum clientType,
              const Version &clientVersion,
@@ -2187,10 +2186,7 @@ State::State(const State *shareContextState,
       mHasProtectedContent(hasProtectedContent),
       mIsDebugContext(debug),
       mShareGroup(shareGroup),
-      mSharedContextMutex(sharedContextMutex),
-      mSingleContextMutex(singleContextMutex),
-      mContextMutex(singleContextMutex == nullptr ? sharedContextMutex : singleContextMutex),
-      mIsSharedContextMutexActive(singleContextMutex == nullptr),
+      mContextMutex(contextMutex),
       mBufferManager(AllocateOrGetSharedResourceManager(shareContextState, &State::mBufferManager)),
       mShaderProgramManager(
           AllocateOrGetSharedResourceManager(shareContextState, &State::mShaderProgramManager)),
@@ -2212,7 +2208,6 @@ State::State(const State *shareContextState,
       mReadFramebuffer(nullptr),
       mDrawFramebuffer(nullptr),
       mProgram(nullptr),
-      mExecutable(nullptr),
       mVertexArray(nullptr),
       mDisplayTextureShareGroup(shareTextures != nullptr),
       mMaxShaderCompilerThreads(std::numeric_limits<GLuint>::max()),
@@ -2301,8 +2296,8 @@ void State::initialize(Context *context)
         mActiveQueries[type].set(context, nullptr);
     }
 
-    mProgram    = nullptr;
-    mExecutable = nullptr;
+    mProgram = nullptr;
+    UninstallExecutable(context, &mExecutable);
 
     mReadFramebuffer = nullptr;
     mDrawFramebuffer = nullptr;
@@ -2345,13 +2340,13 @@ void State::reset(const Context *context)
         UpdateBufferBinding(context, &mBoundBuffers[type], nullptr, type);
     }
 
+    UninstallExecutable(context, &mExecutable);
     if (mProgram)
     {
         mProgram->release(context);
     }
     mProgram = nullptr;
     mProgramPipeline.set(context, nullptr);
-    mExecutable = nullptr;
 
     if (mTransformFeedback.get())
     {
@@ -2828,19 +2823,20 @@ angle::Result State::setProgram(const Context *context, Program *newProgram)
             mProgram->release(context);
         }
 
-        mProgram    = newProgram;
-        mExecutable = nullptr;
+        mProgram = newProgram;
 
         if (mProgram)
         {
-            mExecutable = &mProgram->getExecutable();
             newProgram->addRef();
-            ANGLE_TRY(onProgramExecutableChange(context, newProgram));
+            ANGLE_TRY(installProgramExecutable(context));
         }
-        else if (mProgramPipeline.get())
+        else if (mProgramPipeline.get() == nullptr)
         {
-            mExecutable = &mProgramPipeline->getExecutable();
-            ANGLE_TRY(onProgramPipelineExecutableChange(context));
+            UninstallExecutable(context, &mExecutable);
+        }
+        else if (mProgramPipeline->isLinked())
+        {
+            ANGLE_TRY(installProgramPipelineExecutableIfNotAlready(context));
         }
 
         // Note that rendering is undefined if glUseProgram(0) is called. But ANGLE will generate
@@ -2898,14 +2894,9 @@ angle::Result State::setProgramPipelineBinding(const Context *context, ProgramPi
     // current ProgramExecutable if there isn't currently a Program bound.
     if (!mProgram)
     {
-        if (mProgramPipeline.get())
+        if (mProgramPipeline.get() && mProgramPipeline->isLinked())
         {
-            mExecutable = &mProgramPipeline->getExecutable();
-            ANGLE_TRY(onProgramPipelineExecutableChange(context));
-        }
-        else
-        {
-            mExecutable = nullptr;
+            ANGLE_TRY(installProgramPipelineExecutableIfNotAlready(context));
         }
     }
 
@@ -2920,7 +2911,7 @@ void State::detachProgramPipeline(const Context *context, ProgramPipelineID pipe
     // current ProgramExecutable if there isn't currently a Program bound.
     if (!mProgram)
     {
-        mExecutable = nullptr;
+        UninstallExecutable(context, &mExecutable);
     }
 }
 
@@ -3785,77 +3776,56 @@ void State::setObjectDirty(GLenum target)
     }
 }
 
-angle::Result State::onProgramExecutableChange(const Context *context, Program *program)
+angle::Result State::installProgramExecutable(const Context *context)
 {
     // OpenGL Spec:
     // "If LinkProgram or ProgramBinary successfully re-links a program object
     //  that was already in use as a result of a previous call to UseProgram, then the
     //  generated executable code will be installed as part of the current rendering state."
-    ASSERT(program->isLinked());
-
-    // If this Program is currently active, we need to update the State's pointer to the current
-    // ProgramExecutable if we just changed it.
-    if (mProgram == program)
-    {
-        mExecutable = &program->getExecutable();
-    }
+    ASSERT(mProgram->isLinked());
 
     mDirtyBits.set(state::DIRTY_BIT_PROGRAM_EXECUTABLE);
 
-    if (program->hasAnyDirtyBit())
+    // The bound Program always overrides the ProgramPipeline, so install the executable regardless
+    // of whether a program pipeline is bound.
+    InstallExecutable(context, mProgram->getSharedExecutable(), &mExecutable);
+    return onExecutableChange(context);
+}
+
+angle::Result State::installProgramPipelineExecutable(const Context *context)
+{
+    ASSERT(mProgramPipeline->isLinked());
+
+    mDirtyBits.set(state::DIRTY_BIT_PROGRAM_EXECUTABLE);
+
+    // A bound Program always overrides the ProgramPipeline, so only update the current
+    // ProgramExecutable if there isn't currently a Program bound.
+    if (mProgram == nullptr)
     {
-        mDirtyObjects.set(state::DIRTY_OBJECT_PROGRAM);
-    }
-
-    // Set any bound textures.
-    const ProgramExecutable &executable        = program->getExecutable();
-    const ActiveTextureTypeArray &textureTypes = executable.getActiveSamplerTypes();
-    for (size_t textureIndex : executable.getActiveSamplersMask())
-    {
-        TextureType type = textureTypes[textureIndex];
-
-        // This can happen if there is a conflicting texture type.
-        if (type == TextureType::InvalidEnum)
-            continue;
-
-        Texture *texture = getTextureForActiveSampler(type, textureIndex);
-        updateTextureBinding(context, textureIndex, texture);
-    }
-
-    for (size_t imageUnitIndex : executable.getActiveImagesMask())
-    {
-        Texture *image = mImageUnits[imageUnitIndex].texture.get();
-        if (!image)
-            continue;
-
-        if (image->hasAnyDirtyBit())
-        {
-            ANGLE_TRY(image->syncState(context, Command::Other));
-        }
-
-        if (isRobustResourceInitEnabled() && image->initState() == InitState::MayNeedInit)
-        {
-            mDirtyObjects.set(state::DIRTY_OBJECT_IMAGES_INIT);
-        }
+        InstallExecutable(context, mProgramPipeline->getSharedExecutable(), &mExecutable);
+        return onExecutableChange(context);
     }
 
     return angle::Result::Continue;
 }
 
-angle::Result State::onProgramPipelineExecutableChange(const Context *context)
+angle::Result State::installProgramPipelineExecutableIfNotAlready(const Context *context)
 {
-    mDirtyBits.set(state::DIRTY_BIT_PROGRAM_EXECUTABLE);
-
-    if (!mProgramPipeline->isLinked())
+    // If a program pipeline is bound, then unbound and bound again, its executable will still be
+    // set, and there is no need to reinstall it.
+    if (mExecutable.get() == mProgramPipeline->getSharedExecutable().get())
     {
-        mDirtyObjects.set(state::DIRTY_OBJECT_PROGRAM_PIPELINE_OBJECT);
+        return onExecutableChange(context);
     }
+    return installProgramPipelineExecutable(context);
+}
 
+angle::Result State::onExecutableChange(const Context *context)
+{
     // Set any bound textures.
-    const ProgramExecutable &executable        = mProgramPipeline->getExecutable();
-    const ActiveTextureTypeArray &textureTypes = executable.getActiveSamplerTypes();
+    const ActiveTextureTypeArray &textureTypes = mExecutable->getActiveSamplerTypes();
 
-    for (size_t textureIndex : executable.getActiveSamplersMask())
+    for (size_t textureIndex : mExecutable->getActiveSamplersMask())
     {
         TextureType type = textureTypes[textureIndex];
 
@@ -3867,7 +3837,7 @@ angle::Result State::onProgramPipelineExecutableChange(const Context *context)
         updateTextureBinding(context, textureIndex, texture);
     }
 
-    for (size_t imageUnitIndex : executable.getActiveImagesMask())
+    for (size_t imageUnitIndex : mExecutable->getActiveImagesMask())
     {
         Texture *image = mImageUnits[imageUnitIndex].texture.get();
         if (!image)
@@ -3994,8 +3964,6 @@ void State::onUniformBufferStateChange(size_t uniformBufferIndex)
     {
         mProgramPipeline->onUniformBufferStateChange(uniformBufferIndex);
     }
-    // So that program object syncState will get triggered and process the program's dirty bits
-    setObjectDirty(GL_PROGRAM);
     // This could be represented by a different dirty bit. Using the same one keeps it simple.
     mDirtyBits.set(state::DIRTY_BIT_UNIFORM_BUFFER_BINDINGS);
 }

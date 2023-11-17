@@ -72,10 +72,6 @@
 #include <WebCore/PlatformSpeechSynthesizer.h>
 #endif
 
-#if HAVE(TOUCH_BAR)
-#include "TouchBarMenuData.h"
-#endif
-
 #if ENABLE(TOUCH_EVENTS)
 #include "NativeWebTouchEvent.h"
 #include <WebCore/EventTrackingRegions.h>
@@ -218,7 +214,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 
     HashMap<WebCore::RegistrableDomain, WeakPtr<RemotePageProxy>> domainToRemotePageProxyMap;
     RefPtr<RemotePageProxy> remotePageProxyInOpenerProcess;
-    HashSet<Ref<RemotePageProxy>> openedRemotePageProxies;
+    HashMap<WebPageProxyIdentifier, Ref<RemotePageProxy>> openedRemotePageProxies;
     WebPageProxyMessageReceiverRegistration messageReceiverRegistration;
 
     WeakHashSet<WebPageProxy> m_openedPages;
@@ -237,7 +233,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     ContextMenuContextData activeContextMenuContextData;
 #endif
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
     PAL::HysteresisActivity wheelEventActivityHysteresis;
 #endif
 
@@ -280,10 +276,6 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 
 #if ENABLE(SPEECH_SYNTHESIS)
     std::optional<SpeechSynthesisData> optionalSpeechSynthesisData;
-#endif
-
-#if HAVE(TOUCH_BAR)
-    TouchBarMenuData touchBarMenuData;
 #endif
 
 #if ENABLE(TOUCH_EVENTS)

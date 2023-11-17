@@ -38,7 +38,7 @@ namespace WebCore {
 GST_DEBUG_CATEGORY(webkit_media_recorder_debug);
 #define GST_CAT_DEFAULT webkit_media_recorder_debug
 
-RefPtr<MediaRecorderPrivateGStreamer> MediaRecorderPrivateGStreamer::create(MediaStreamPrivate& stream, const MediaRecorderPrivateOptions& options)
+std::unique_ptr<MediaRecorderPrivateGStreamer> MediaRecorderPrivateGStreamer::create(MediaStreamPrivate& stream, const MediaRecorderPrivateOptions& options)
 {
     ensureGStreamerInitialized();
     registerWebKitGStreamerElements();
@@ -51,7 +51,7 @@ RefPtr<MediaRecorderPrivateGStreamer> MediaRecorderPrivateGStreamer::create(Medi
     if (!recorder->preparePipeline())
         return nullptr;
 
-    return adoptRef(*new MediaRecorderPrivateGStreamer(recorder.releaseNonNull()));
+    return makeUnique<MediaRecorderPrivateGStreamer>(recorder.releaseNonNull());
 }
 
 MediaRecorderPrivateGStreamer::MediaRecorderPrivateGStreamer(Ref<MediaRecorderPrivateBackend>&& recorder)
@@ -153,8 +153,8 @@ void MediaRecorderPrivateBackend::stopRecording(CompletionHandler<void()>&& comp
     while (!isEOS) {
         LockHolder lock(m_eosLock);
         m_eosCondition.waitFor(m_eosLock, 200_ms, [weakThis = ThreadSafeWeakPtr { *this }]() -> bool {
-            if (auto strongThis = weakThis.get())
-                return strongThis->m_eos;
+            if (auto protectedThis = weakThis.get())
+                return protectedThis->m_eos;
             return true;
         });
         isEOS = m_eos;
@@ -164,8 +164,8 @@ void MediaRecorderPrivateBackend::stopRecording(CompletionHandler<void()>&& comp
 void MediaRecorderPrivateBackend::fetchData(MediaRecorderPrivate::FetchDataCallback&& completionHandler)
 {
     callOnMainThread([this, weakThis = ThreadSafeWeakPtr { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
-        auto strongThis = weakThis.get();
-        if (!strongThis) {
+        auto protectedThis = weakThis.get();
+        if (!protectedThis) {
             completionHandler(nullptr, mimeType(), 0);
             return;
         }

@@ -42,11 +42,6 @@ EXTConservativeDepth::EXTConservativeDepth(WebGLRenderingContextBase& context)
 
 EXTConservativeDepth::~EXTConservativeDepth() = default;
 
-WebGLExtension::ExtensionName EXTConservativeDepth::getName() const
-{
-    return EXTConservativeDepthName;
-}
-
 bool EXTConservativeDepth::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_EXT_conservative_depth"_s);

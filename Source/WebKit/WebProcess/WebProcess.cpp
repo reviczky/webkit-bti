@@ -29,11 +29,8 @@
 #include "APIFrameHandle.h"
 #include "APIPageHandle.h"
 #include "AudioMediaStreamTrackRendererInternalUnitManager.h"
-#include "AuthenticationManager.h"
 #include "AuxiliaryProcessMessages.h"
-#include "DrawingArea.h"
 #include "EventDispatcher.h"
-#include "GPUProcessConnectionParameters.h"
 #include "InjectedBundle.h"
 #include "LibWebRTCNetwork.h"
 #include "Logging.h"
@@ -41,8 +38,6 @@
 #include "NetworkProcessConnection.h"
 #include "NetworkProcessConnectionInfo.h"
 #include "NetworkSession.h"
-#include "NetworkSessionCreationParameters.h"
-#include "ProcessAssertion.h"
 #include "RemoteAudioHardwareListener.h"
 #include "RemoteAudioSession.h"
 #include "RemoteLegacyCDMFactory.h"
@@ -57,12 +52,12 @@
 #include "WebBadgeClient.h"
 #include "WebBroadcastChannelRegistry.h"
 #include "WebCacheStorageProvider.h"
+#include "WebChromeClient.h"
 #include "WebConnectionToUIProcess.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebFileSystemStorageConnection.h"
 #include "WebFrame.h"
-#include "WebFrameNetworkingContext.h"
 #include "WebGamepadProvider.h"
 #include "WebGeolocationManager.h"
 #include "WebIDBConnectionToServer.h"
@@ -77,11 +72,9 @@
 #include "WebPaymentCoordinator.h"
 #include "WebPermissionController.h"
 #include "WebPlatformStrategies.h"
-#include "WebPluginInfoProvider.h"
 #include "WebProcessCreationParameters.h"
 #include "WebProcessDataStoreParameters.h"
 #include "WebProcessMessages.h"
-#include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebResourceLoadObserver.h"
 #include "WebSWClientConnection.h"
@@ -175,7 +168,7 @@
 #include <WebCore/ImageDecoderCG.h>
 #endif
 
-#if PLATFORM(MAC)
+#if HAVE(DISPLAY_LINK)
 #include <WebCore/DisplayRefreshMonitorManager.h>
 #endif
 
@@ -183,16 +176,11 @@
 #include "WebSQLiteDatabaseTracker.h"
 #endif
 
-#if ENABLE(SEC_ITEM_SHIM)
-#include "SecItemShim.h"
-#endif
-
 #if ENABLE(NOTIFICATIONS)
 #include "WebNotificationManager.h"
 #endif
 
 #if ENABLE(GPU_PROCESS)
-#include "GPUConnectionToWebProcessMessages.h"
 #include "GPUProcessConnection.h"
 #endif
 
@@ -513,7 +501,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     SandboxExtension::consumePermanently(parameters.additionalSandboxExtensionHandles);
 
     if (!parameters.injectedBundlePath.isEmpty())
-        m_injectedBundle = InjectedBundle::create(parameters, transformHandlesToObjects(parameters.initializationUserData.object()).get());
+        m_injectedBundle = InjectedBundle::create(parameters, transformHandlesToObjects(parameters.initializationUserData.object()));
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
@@ -662,6 +650,8 @@ void WebProcess::setWebsiteDataStoreParameters(WebProcessDataStoreParameters&& p
     
 #endif
 
+    m_mediaKeysStorageDirectory = parameters.mediaKeyStorageDirectory;
+    m_mediaKeysStorageSalt = parameters.mediaKeysStorageSalt;
     for (auto& supplement : m_supplements.values())
         supplement->setWebsiteDataStore(parameters);
 
@@ -697,8 +687,7 @@ void WebProcess::setIsInProcessCache(bool isInProcessCache)
     }
 
     updateProcessName(IsInProcessInitialization::No);
-
-    IPC::AccessibilityProcessSuspendedNotification(isInProcessCache);
+    accessibilityRelayProcessSuspended(isInProcessCache);
 #else
     UNUSED_PARAM(isInProcessCache);
 #endif
@@ -852,14 +841,15 @@ void WebProcess::createWebPage(PageIdentifier pageID, WebPageCreationParameters&
     // It is necessary to check for page existence here since during a window.open() (or targeted
     // link) the WebPage gets created both in the synchronous handler and through the normal way. 
     auto result = m_pageMap.add(pageID, nullptr);
+    m_hasEverHadAnyWebPages = true;
     if (result.isNewEntry) {
         ASSERT(!result.iterator->value);
         auto page = WebPage::create(pageID, WTFMove(parameters));
-        result.iterator->value = page.ptr();
+        result.iterator->value = page.copyRef();
 
 #if ENABLE(GPU_PROCESS)
-        if (m_gpuProcessConnection)
-            page->gpuProcessConnectionDidBecomeAvailable(*m_gpuProcessConnection);
+        if (RefPtr gpuProcessConnection = m_gpuProcessConnection)
+            page->gpuProcessConnectionDidBecomeAvailable(*gpuProcessConnection);
 #endif
 
         // Balanced by an enableTermination in removeWebPage.
@@ -1124,16 +1114,16 @@ void WebProcess::setJavaScriptGarbageCollectorTimerEnabled(bool flag)
 
 void WebProcess::handleInjectedBundleMessage(const String& messageName, const UserData& messageBody)
 {
-    InjectedBundle* injectedBundle = WebProcess::singleton().injectedBundle();
+    RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
         return;
 
-    injectedBundle->didReceiveMessage(messageName, transformHandlesToObjects(messageBody.object()).get());
+    injectedBundle->didReceiveMessage(messageName, transformHandlesToObjects(messageBody.object()));
 }
 
 void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataReference& value)
 {
-    InjectedBundle* injectedBundle = WebProcess::singleton().injectedBundle();
+    RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
         return;
 
@@ -1142,7 +1132,7 @@ void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataRe
 
 void WebProcess::setInjectedBundleParameters(const IPC::DataReference& value)
 {
-    InjectedBundle* injectedBundle = WebProcess::singleton().injectedBundle();
+    RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
         return;
 
@@ -1198,7 +1188,7 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
 
     // If we've lost our connection to the network process (e.g. it crashed) try to re-establish it.
     if (!m_networkProcessConnection) {
-        auto connectionInfo = getNetworkProcessConnection(*parentProcessConnection());
+        auto connectionInfo = getNetworkProcessConnection(Ref { *parentProcessConnection() });
 
         m_networkProcessConnection = NetworkProcessConnection::create(IPC::Connection::Identifier { WTFMove(connectionInfo.connection) }, connectionInfo.cookieAcceptPolicy);
 #if HAVE(AUDIT_TOKEN)
@@ -1312,7 +1302,7 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
 WebFileSystemStorageConnection& WebProcess::fileSystemStorageConnection()
 {
     if (!m_fileSystemStorageConnection)
-        m_fileSystemStorageConnection = WebFileSystemStorageConnection::create(ensureNetworkProcessConnection().connection());
+        m_fileSystemStorageConnection = WebFileSystemStorageConnection::create(Ref { ensureNetworkProcessConnection().connection() });
 
     return *m_fileSystemStorageConnection;
 }
@@ -1330,13 +1320,13 @@ GPUProcessConnection& WebProcess::ensureGPUProcessConnection()
 
     // If we've lost our connection to the GPU process (e.g. it crashed) try to re-establish it.
     if (!m_gpuProcessConnection) {
-        m_gpuProcessConnection = GPUProcessConnection::create(*parentProcessConnection());
+        m_gpuProcessConnection = GPUProcessConnection::create(Ref { *parentProcessConnection() });
         if (!m_gpuProcessConnection)
             CRASH();
         for (auto& page : m_pageMap.values()) {
             // If page is null, then it is currently being constructed.
             if (page)
-                page->gpuProcessConnectionDidBecomeAvailable(*m_gpuProcessConnection);
+                page->gpuProcessConnectionDidBecomeAvailable(Ref { *m_gpuProcessConnection });
         }
     }
     return *m_gpuProcessConnection;
@@ -1348,6 +1338,11 @@ void WebProcess::gpuProcessConnectionClosed(GPUProcessConnection& connection)
     ASSERT_UNUSED(connection, m_gpuProcessConnection == &connection);
 
     m_gpuProcessConnection = nullptr;
+
+    for (auto& page : m_pageMap.values()) {
+        if (page)
+            page->gpuProcessConnectionWasDestroyed();
+    }
 
 #if ENABLE(MEDIA_STREAM) && PLATFORM(COCOA)
     if (m_audioMediaStreamTrackRendererInternalUnitManager)
@@ -1382,18 +1377,18 @@ void WebProcess::setEnhancedAccessibility(bool flag)
 
 void WebProcess::remotePostMessage(WebCore::FrameIdentifier identifier, std::optional<WebCore::SecurityOriginData> target, const WebCore::MessageWithMessagePorts& message)
 {
-    auto* webFrame = WebProcess::singleton().webFrame(identifier);
+    RefPtr webFrame = WebProcess::singleton().webFrame(identifier);
     if (!webFrame)
         return;
 
     if (!webFrame->coreLocalFrame())
         return;
 
-    auto* domWindow = webFrame->coreLocalFrame()->window();
+    RefPtr domWindow = webFrame->coreLocalFrame()->window();
     if (!domWindow)
         return;
 
-    auto* frame = domWindow->frame();
+    RefPtr frame = domWindow->frame();
     if (!frame)
         return;
 
@@ -1405,24 +1400,24 @@ void WebProcess::remotePostMessage(WebCore::FrameIdentifier identifier, std::opt
     domWindow->postMessageFromRemoteFrame(*globalObject, target, message);
 }
 
-void WebProcess::renderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String)>&& completionHandler)
+void WebProcess::renderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)
 {
-    auto* webFrame = WebProcess::singleton().webFrame(frameIdentifier);
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameIdentifier);
     if (!webFrame) {
         ASSERT_NOT_REACHED();
-        return completionHandler({ });
+        return completionHandler("Test Error - WebFrame missing in web process"_s);
     }
 
-    auto* coreLocalFrame = webFrame->coreLocalFrame();
+    RefPtr coreLocalFrame = webFrame->coreLocalFrame();
     if (!coreLocalFrame) {
         ASSERT_NOT_REACHED();
-        return completionHandler({ });
+        return completionHandler("Test Error - WebFrame missing LocalFrame in web process"_s);
     }
 
     auto* renderer = coreLocalFrame->contentRenderer();
     if (!renderer) {
         ASSERT_NOT_REACHED();
-        return completionHandler({ });
+        return completionHandler("Test Error - WebFrame missing RenderView in web process"_s);
     }
 
     auto ts = WebCore::createTextStream(*renderer);
@@ -1610,6 +1605,11 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
         platformMediaSessionManager->processWillSuspend();
 #endif
 
+#if !ENABLE(WEBPROCESS_CACHE)
+    if (!m_suppressMemoryPressureHandler)
+        releaseMemory([] { });
+#endif
+
     freezeAllLayerTrees();
 
 #if PLATFORM(COCOA)
@@ -1622,7 +1622,7 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    IPC::AccessibilityProcessSuspendedNotification(true);
+    accessibilityRelayProcessSuspended(true);
     updateFreezerStatus();
 #endif
 
@@ -1630,6 +1630,15 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
         WEBPROCESS_RELEASE_LOG(ProcessSuspension, "prepareToSuspend: Process is ready to suspend");
         completionHandler();
     });
+}
+
+void WebProcess::accessibilityRelayProcessSuspended(bool suspended)
+{
+    if (m_pageMap.isEmpty())
+        return;
+
+    // Take the first webpage. We only need to have the process on the other side relay this for the WebProcess.
+    AXRelayProcessSuspendedNotification(*m_pageMap.begin()->value, AXRelayProcessSuspendedNotification::AutomaticallySend::No).sendProcessSuspendMessage(suspended);
 }
 
 void WebProcess::markAllLayersVolatile(CompletionHandler<void()>&& completionHandler)
@@ -1687,7 +1696,7 @@ void WebProcess::processDidResume()
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    IPC::AccessibilityProcessSuspendedNotification(false);
+    accessibilityRelayProcessSuspended(false);
 #endif
 
 #if ENABLE(VIDEO)
@@ -2004,16 +2013,16 @@ void WebProcess::establishRemoteWorkerContextConnectionToNetworkProcess(RemoteWo
     // We are in the Remote Worker context process and the call below establishes our connection to the Network Process
     // by calling ensureNetworkProcessConnection. SWContextManager / SharedWorkerContextManager need to use the same underlying IPC::Connection as the
     // NetworkProcessConnection for synchronization purposes.
-    auto& ipcConnection = ensureNetworkProcessConnection().connection();
+    Ref ipcConnection = ensureNetworkProcessConnection().connection();
     switch (workerType) {
     case RemoteWorkerType::ServiceWorker:
 #if ENABLE(SERVICE_WORKER)
-        SWContextManager::singleton().setConnection(WebSWContextManagerConnection::create(ipcConnection, WTFMove(registrableDomain), serviceWorkerPageIdentifier, pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData)));
+        SWContextManager::singleton().setConnection(WebSWContextManagerConnection::create(WTFMove(ipcConnection), WTFMove(registrableDomain), serviceWorkerPageIdentifier, pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData)));
         SWContextManager::singleton().connection()->establishConnection(WTFMove(completionHandler));
 #endif
         break;
     case RemoteWorkerType::SharedWorker:
-        SharedWorkerContextManager::singleton().setConnection(makeUnique<WebSharedWorkerContextManagerConnection>(ipcConnection, WTFMove(registrableDomain), pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData)));
+        SharedWorkerContextManager::singleton().setConnection(makeUnique<WebSharedWorkerContextManagerConnection>(WTFMove(ipcConnection), WTFMove(registrableDomain), pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData)));
         SharedWorkerContextManager::singleton().connection()->establishConnection(WTFMove(completionHandler));
         break;
     }
@@ -2075,10 +2084,10 @@ void WebProcess::grantUserMediaDeviceSandboxExtensions(MediaDeviceSandboxExtensi
 static inline void checkDocumentsCaptureStateConsistency(const Vector<String>& extensionIDs)
 {
 #if ASSERT_ENABLED
-    bool isCapturingAudio = WTF::anyOf(Document::allDocumentsMap().values(), [](auto* document) {
+    bool isCapturingAudio = WTF::anyOf(Document::allDocumentsMap().values(), [](auto& document) {
         return document->mediaState() & MediaProducer::MicrophoneCaptureMask;
     });
-    bool isCapturingVideo = WTF::anyOf(Document::allDocumentsMap().values(), [](auto* document) {
+    bool isCapturingVideo = WTF::anyOf(Document::allDocumentsMap().values(), [](auto& document) {
         return document->mediaState() & MediaProducer::VideoCaptureMask;
     });
 
@@ -2144,7 +2153,7 @@ void WebProcess::setClientBadge(WebPageProxyIdentifier pageIdentifier, const Web
     parentProcessConnection()->send(Messages::WebProcessProxy::SetClientBadge(pageIdentifier, origin, badge), 0);
 }
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
 void WebProcess::displayDidRefresh(uint32_t displayID, const DisplayUpdate& displayUpdate)
 {
     ASSERT(RunLoop::isMain());
@@ -2302,7 +2311,7 @@ bool WebProcess::shouldUseRemoteRenderingForWebGL() const
 SpeechRecognitionRealtimeMediaSourceManager& WebProcess::ensureSpeechRecognitionRealtimeMediaSourceManager()
 {
     if (!m_speechRecognitionRealtimeMediaSourceManager)
-        m_speechRecognitionRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRealtimeMediaSourceManager>(*parentProcessConnection());
+        m_speechRecognitionRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRealtimeMediaSourceManager>(Ref { *parentProcessConnection() });
 
     return *m_speechRecognitionRealtimeMediaSourceManager;
 }
@@ -2355,6 +2364,23 @@ bool WebProcess::allowsFirstPartyForCookies(const URL& firstParty)
     return AuxiliaryProcess::allowsFirstPartyForCookies(firstParty, [&] {
         return AuxiliaryProcess::allowsFirstPartyForCookies(WebCore::RegistrableDomain { firstParty }, m_allowedFirstPartiesForCookies);
     });
+}
+
+WebTransportSession* WebProcess::webTransportSession(WebTransportSessionIdentifier identifier)
+{
+    return m_webTransportSessions.get(identifier).get();
+}
+
+void WebProcess::addWebTransportSession(WebTransportSessionIdentifier identifier, WebTransportSession& session)
+{
+    ASSERT(!m_webTransportSessions.contains(identifier));
+    m_webTransportSessions.set(identifier, session);
+}
+
+void WebProcess::removeWebTransportSession(WebTransportSessionIdentifier identifier)
+{
+    ASSERT(m_webTransportSessions.contains(identifier));
+    m_webTransportSessions.remove(identifier);
 }
 
 } // namespace WebKit

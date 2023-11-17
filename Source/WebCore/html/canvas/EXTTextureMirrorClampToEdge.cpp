@@ -42,11 +42,6 @@ EXTTextureMirrorClampToEdge::EXTTextureMirrorClampToEdge(WebGLRenderingContextBa
 
 EXTTextureMirrorClampToEdge::~EXTTextureMirrorClampToEdge() = default;
 
-WebGLExtension::ExtensionName EXTTextureMirrorClampToEdge::getName() const
-{
-    return EXTTextureMirrorClampToEdgeName;
-}
-
 bool EXTTextureMirrorClampToEdge::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_EXT_texture_mirror_clamp_to_edge"_s);

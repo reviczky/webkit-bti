@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 #if ENABLE(DFG_JIT)
 
 #include "ArrayPrototype.h"
+#include "CPUInlines.h"
 #include "CacheableIdentifierInlines.h"
 #include "DFGGraph.h"
 #include "DFGInsertionSet.h"
@@ -3079,6 +3080,8 @@ private:
         case NewAsyncGenerator:
         case NewInternalFieldObject:
         case NewRegexp:
+        case NewMap:
+        case NewSet:
         case IsTypedArrayView:
         case IsEmpty:
         case TypeOfIsUndefined:
@@ -3133,6 +3136,8 @@ private:
         case GetWebAssemblyInstanceExports:
         case NewBoundFunction:
         case MakeAtomString:
+        case CallCustomAccessorGetter:
+        case CallCustomAccessorSetter:
             break;
 #else // not ASSERT_ENABLED
         default:
@@ -4319,7 +4324,7 @@ private:
             ConcurrentJSLocker locker(profiledBlock->m_lock);
             ArrayProfile* arrayProfile = profiledBlock->getArrayProfile(locker, node->origin.semantic.bytecodeIndex());
             if (arrayProfile) {
-                arrayProfile->computeUpdatedPrediction(locker, profiledBlock);
+                arrayProfile->computeUpdatedPrediction(profiledBlock);
                 arrayMode = ArrayMode::fromObserved(locker, arrayProfile, Array::Read, false);
                 if (arrayMode.type() == Array::Unprofiled) {
                     // For normal array operations, it makes sense to treat Unprofiled

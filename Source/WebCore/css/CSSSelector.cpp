@@ -157,7 +157,7 @@ SelectorSpecificity simpleSelectorSpecificity(const CSSSelector& simpleSelector)
         case CSSSelector::PseudoClassType::NthLastChild:
         case CSSSelector::PseudoClassType::Host:
             return SelectorSpecificityIncrement::ClassB + maxSpecificity(simpleSelector.selectorList());
-        case CSSSelector::PseudoClassType::RelativeScope:
+        case CSSSelector::PseudoClassType::HasScope:
             return 0;
         default:
             return SelectorSpecificityIncrement::ClassB;
@@ -182,6 +182,8 @@ SelectorSpecificity simpleSelectorSpecificity(const CSSSelector& simpleSelector)
             return maxSpecificity(simpleSelector.selectorList());
         return SelectorSpecificityIncrement::ClassC;
     case CSSSelector::Match::Unknown:
+    case CSSSelector::Match::ForgivingUnknown:
+    case CSSSelector::Match::ForgivingUnknownNestContaining:
         return 0;
     }
     ASSERT_NOT_REACHED();
@@ -280,12 +282,16 @@ PseudoId CSSSelector::pseudoId(PseudoElementType type)
     return PseudoId::None;
 }
 
-CSSSelector::PseudoElementType CSSSelector::parsePseudoElementType(StringView name)
+CSSSelector::PseudoElementType CSSSelector::parsePseudoElementType(StringView name, CSSParserMode mode)
 {
     if (name.isNull())
         return PseudoElementUnknown;
 
     auto type = parsePseudoElementString(name);
+    if (mode != UASheetMode && type == PseudoElementWebKitCustom
+        && (equalLettersIgnoringASCIICase(name, "thumb"_s) || equalLettersIgnoringASCIICase(name, "track"_s)))
+        return PseudoElementUnknown;
+
     if (type == PseudoElementUnknown) {
         if (name.startsWith("-webkit-"_s) || name.startsWith("-apple-"_s))
             type = PseudoElementWebKitCustom;
@@ -398,11 +404,13 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
         if (cs->match() == Match::Id) {
             builder.append('#');
             serializeIdentifier(cs->serializingValue(), builder);
-        } else if (cs->match() == CSSSelector::Match::NestingParent) {
+        } else if (cs->match() == Match::NestingParent) {
             builder.append('&');
-        } else if (cs->match() == CSSSelector::Match::Class) {
+        } else if (cs->match() == Match::Class) {
             builder.append('.');
             serializeIdentifier(cs->serializingValue(), builder);
+        } else if (cs->match() == Match::ForgivingUnknown || cs->match() == Match::ForgivingUnknownNestContaining) {
+            builder.append(cs->value());
         } else if (cs->match() == Match::PseudoClass) {
             switch (cs->pseudoClassType()) {
 #if ENABLE(FULLSCREEN_API)
@@ -676,7 +684,7 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
             case CSSSelector::PseudoClassType::Scope:
                 builder.append(":scope");
                 break;
-            case CSSSelector::PseudoClassType::RelativeScope:
+            case CSSSelector::PseudoClassType::HasScope:
                 // Remove the space from the start to generate a relative selector string like in ":has(> foo)".
                 return makeString(separator.substring(1), rightSide);
             case CSSSelector::PseudoClassType::SingleButton:
@@ -727,6 +735,12 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
                 cs->selectorList()->buildSelectorsText(builder);
                 builder.append(')');
                 break;
+            case CSSSelector::PseudoElementHighlight: {
+                builder.append("::highlight(");
+                serializeIdentifier(cs->argumentList()->first().identifier, builder);
+                builder.append(')');
+                break;
+            }
             case CSSSelector::PseudoElementPart: {
                 builder.append("::part(");
                 bool isFirst = true;
@@ -1040,8 +1054,12 @@ void CSSSelector::replaceNestingParentByPseudoClassScope()
 bool CSSSelector::hasExplicitNestingParent() const
 {
     auto checkForExplicitParent = [] (const CSSSelector& selector) {
-        if (selector.match() == CSSSelector::Match::NestingParent)
+        if (selector.match() == Match::NestingParent)
             return true;
+
+        if (selector.match() == Match::ForgivingUnknownNestContaining)
+            return true;
+
         return false;
     };
 

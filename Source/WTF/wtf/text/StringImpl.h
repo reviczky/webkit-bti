@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2005-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2005-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@
 #include <wtf/text/ConversionMode.h>
 #include <wtf/text/StringBuffer.h>
 #include <wtf/text/StringCommon.h>
-#include <wtf/text/StringHasher.h>
+#include <wtf/text/StringHasherInlines.h>
 #include <wtf/text/UTF8ConversionError.h>
 #include <wtf/unicode/UTF8Conversion.h>
 
@@ -197,6 +197,8 @@ class StringImpl : private StringImplShape {
     template<typename> friend struct WTF::BufferFromStaticDataTranslator;
     template<typename> friend struct WTF::HashAndCharactersTranslator;
 
+    friend WTF_EXPORT_PRIVATE bool equal(const StringImpl&, const StringImpl&);
+
 public:
     enum BufferOwnership { BufferInternal, BufferOwned, BufferSubstring, BufferExternal };
 
@@ -305,6 +307,8 @@ public:
     bool is8Bit() const { return m_hashAndFlags & s_hashFlag8BitBuffer; }
     ALWAYS_INLINE const LChar* characters8() const { ASSERT(is8Bit()); return m_data8; }
     ALWAYS_INLINE const UChar* characters16() const { ASSERT(!is8Bit() || isEmpty()); return m_data16; }
+    ALWAYS_INLINE std::span<const LChar> span8() const { return { characters8(), length() }; }
+    ALWAYS_INLINE std::span<const UChar> span16() const { return { characters16(), length() }; }
 
     template<typename CharacterType> const CharacterType* characters() const;
 
@@ -1161,7 +1165,7 @@ inline void StringImpl::deref()
 
 inline UChar StringImpl::at(unsigned i) const
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(i < m_length);
+    RELEASE_ASSERT(i < m_length);
     return is8Bit() ? m_data8[i] : m_data16[i];
 }
 

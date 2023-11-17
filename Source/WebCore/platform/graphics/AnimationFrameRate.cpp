@@ -30,7 +30,7 @@
 
 namespace WebCore {
 
-static constexpr OptionSet<ThrottlingReason> halfSpeedThrottlingReasons { };
+static constexpr OptionSet<ThrottlingReason> halfSpeedThrottlingReasons { ThrottlingReason::LowPowerMode, ThrottlingReason::NonInteractedCrossOriginFrame, ThrottlingReason::VisuallyIdle };
 
 FramesPerSecond framesPerSecondNearestFullSpeed(FramesPerSecond nominalFramesPerSecond)
 {
@@ -114,7 +114,10 @@ TextStream& operator<<(TextStream& ts, const OptionSet<ThrottlingReason>& reason
             ts << "LowPowerMode";
             break;
         case ThrottlingReason::NonInteractedCrossOriginFrame:
-            ts << "NonInteractiveCrossOriginFrame";
+            ts << "NonInteractedCrossOriginFrame";
+            break;
+        case ThrottlingReason::ThermalMitigation:
+            ts << "ThermalMitigation";
             break;
         }
         didAppend = true;

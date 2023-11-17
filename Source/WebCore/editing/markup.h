@@ -25,11 +25,13 @@
 
 #pragma once
 
+#include "CSSStyleSheet.h"
 #include "Element.h"
 #include "ExceptionOr.h"
 #include "FloatSize.h"
 #include "FragmentScriptingPermission.h"
 #include "HTMLInterchange.h"
+#include "MarkupExclusionRule.h"
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
 #include <wtf/HashMap.h>
@@ -92,13 +94,14 @@ ExceptionOr<void> replaceChildrenWithFragment(ContainerNode&, Ref<DocumentFragme
 enum class ConvertBlocksToInlines : bool { No, Yes };
 enum class SerializeComposedTree : bool { No, Yes };
 enum class IgnoreUserSelectNone : bool { No, Yes };
-WEBCORE_EXPORT String serializePreservingVisualAppearance(const SimpleRange&, Vector<Node*>* = nullptr, AnnotateForInterchange = AnnotateForInterchange::No, ConvertBlocksToInlines = ConvertBlocksToInlines::No, ResolveURLs = ResolveURLs::No);
+WEBCORE_EXPORT String serializePreservingVisualAppearance(const SimpleRange&, Vector<Ref<Node>>* = nullptr, AnnotateForInterchange = AnnotateForInterchange::No, ConvertBlocksToInlines = ConvertBlocksToInlines::No, ResolveURLs = ResolveURLs::No);
 String serializePreservingVisualAppearance(const VisibleSelection&, ResolveURLs = ResolveURLs::No, SerializeComposedTree = SerializeComposedTree::No,
-    IgnoreUserSelectNone = IgnoreUserSelectNone::Yes, Vector<Node*>* = nullptr);
+    IgnoreUserSelectNone = IgnoreUserSelectNone::Yes, Vector<Ref<Node>>* = nullptr);
 
 enum class SerializedNodes : uint8_t { SubtreeIncludingNode, SubtreesOfChildren };
 enum class SerializationSyntax : uint8_t { HTML, XML };
-WEBCORE_EXPORT String serializeFragment(const Node&, SerializedNodes, Vector<Node*>* = nullptr, ResolveURLs = ResolveURLs::No, Vector<QualifiedName>* tagNamesToSkip = nullptr, std::optional<SerializationSyntax> = std::nullopt);
+enum class ShouldIncludeShadowDOM : bool { No, Yes };
+WEBCORE_EXPORT String serializeFragment(const Node&, SerializedNodes, Vector<Ref<Node>>* = nullptr, ResolveURLs = ResolveURLs::No, std::optional<SerializationSyntax> = std::nullopt, HashMap<String, String>&& replacementURLStrings = { }, HashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet = { }, ShouldIncludeShadowDOM = ShouldIncludeShadowDOM::No, const Vector<MarkupExclusionRule>& exclusionRules = { });
 
 String urlToMarkup(const URL&, const String& title);
 

@@ -42,11 +42,6 @@ OESSampleVariables::OESSampleVariables(WebGLRenderingContextBase& context)
 
 OESSampleVariables::~OESSampleVariables() = default;
 
-WebGLExtension::ExtensionName OESSampleVariables::getName() const
-{
-    return OESSampleVariablesName;
-}
-
 bool OESSampleVariables::supported(GraphicsContextGL& context)
 {
     return context.supportsExtension("GL_OES_sample_variables"_s);

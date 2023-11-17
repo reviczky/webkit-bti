@@ -58,7 +58,7 @@ const float emphasisMarkFontSizeMultiplier = 0.5f;
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(Font);
 
-Ref<Font> Font::create(const FontPlatformData& platformData, Origin origin, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, std::optional<RenderingResourceIdentifier> identifier)
+Ref<Font> Font::create(const FontPlatformData& platformData, Origin origin, IsInterstitial interstitial, Visibility visibility, IsOrientationFallback orientationFallback, std::optional<RenderingResourceIdentifier> identifier)
 {
     return adoptRef(*new Font(platformData, origin, interstitial, visibility, orientationFallback, identifier));
 }
@@ -74,7 +74,7 @@ Ref<Font> Font::create(Ref<SharedBuffer>&& fontFaceData, Font::Origin origin, fl
     return Font::create(WTFMove(platformData), origin);
 }
 
-Font::Font(const FontPlatformData& platformData, Origin origin, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, std::optional<RenderingResourceIdentifier> renderingResourceIdentifier)
+Font::Font(const FontPlatformData& platformData, Origin origin, IsInterstitial interstitial, Visibility visibility, IsOrientationFallback orientationFallback, std::optional<RenderingResourceIdentifier> renderingResourceIdentifier)
     : m_platformData(platformData)
     , m_attributes({ renderingResourceIdentifier, origin, interstitial, visibility, orientationFallback })
     , m_treatAsFixedPitch(false)
@@ -90,7 +90,7 @@ Font::Font(const FontPlatformData& platformData, Origin origin, Interstitial int
     platformGlyphInit();
     platformCharWidthInit();
 #if ENABLE(OPENTYPE_VERTICAL)
-    if (platformData.orientation() == FontOrientation::Vertical && orientationFallback == OrientationFallback::No) {
+    if (platformData.orientation() == FontOrientation::Vertical && orientationFallback == IsOrientationFallback::No) {
         m_verticalData = FontCache::forCurrentThread().verticalData(platformData);
         m_hasVerticalGlyphs = m_verticalData.get() && m_verticalData->hasVerticalMetrics();
     }
@@ -439,7 +439,7 @@ const Font& Font::verticalRightOrientationFont() const
     DerivedFonts& derivedFontData = ensureDerivedFontData();
     if (!derivedFontData.verticalRightOrientationFont) {
         auto verticalRightPlatformData = FontPlatformData::cloneWithOrientation(m_platformData, FontOrientation::Horizontal);
-        derivedFontData.verticalRightOrientationFont = create(verticalRightPlatformData, origin(), Interstitial::No, Visibility::Visible, OrientationFallback::Yes);
+        derivedFontData.verticalRightOrientationFont = create(verticalRightPlatformData, origin(), IsInterstitial::No, Visibility::Visible, IsOrientationFallback::Yes);
     }
     ASSERT(derivedFontData.verticalRightOrientationFont != this);
     return *derivedFontData.verticalRightOrientationFont;
@@ -449,7 +449,7 @@ const Font& Font::uprightOrientationFont() const
 {
     DerivedFonts& derivedFontData = ensureDerivedFontData();
     if (!derivedFontData.uprightOrientationFont)
-        derivedFontData.uprightOrientationFont = create(m_platformData, origin(), Interstitial::No, Visibility::Visible, OrientationFallback::Yes);
+        derivedFontData.uprightOrientationFont = create(m_platformData, origin(), IsInterstitial::No, Visibility::Visible, IsOrientationFallback::Yes);
     ASSERT(derivedFontData.uprightOrientationFont != this);
     return *derivedFontData.uprightOrientationFont;
 }
@@ -458,7 +458,7 @@ const Font& Font::invisibleFont() const
 {
     DerivedFonts& derivedFontData = ensureDerivedFontData();
     if (!derivedFontData.invisibleFont)
-        derivedFontData.invisibleFont = create(m_platformData, origin(), Interstitial::Yes, Visibility::Invisible);
+        derivedFontData.invisibleFont = create(m_platformData, origin(), IsInterstitial::Yes, Visibility::Invisible);
     ASSERT(derivedFontData.invisibleFont != this);
     return *derivedFontData.invisibleFont;
 }
@@ -498,7 +498,7 @@ const Font& Font::brokenIdeographFont() const
 {
     DerivedFonts& derivedFontData = ensureDerivedFontData();
     if (!derivedFontData.brokenIdeographFont) {
-        derivedFontData.brokenIdeographFont = create(m_platformData, origin(), Interstitial::No);
+        derivedFontData.brokenIdeographFont = create(m_platformData, origin(), IsInterstitial::No);
         derivedFontData.brokenIdeographFont->m_isBrokenIdeographFallback = true;
     }
     ASSERT(derivedFontData.brokenIdeographFont != this);
@@ -551,9 +551,9 @@ GlyphBufferAdvance Font::applyTransforms(GlyphBuffer&, unsigned, unsigned, bool,
 }
 #endif
 
-RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontDescription& description, ResolvedEmojiPolicy resolvedEmojiPolicy, IsForPlatformFont isForPlatformFont) const
+RefPtr<Font> Font::systemFallbackFontForCharacterCluster(StringView characterCluster, const FontDescription& description, ResolvedEmojiPolicy resolvedEmojiPolicy, IsForPlatformFont isForPlatformFont) const
 {
-    return SystemFallbackFontCache::forCurrentThread().systemFallbackFontForCharacter(this, character, description, resolvedEmojiPolicy, isForPlatformFont);
+    return SystemFallbackFontCache::forCurrentThread().systemFallbackFontForCharacterCluster(this, characterCluster, description, resolvedEmojiPolicy, isForPlatformFont);
 }
 
 #if !PLATFORM(COCOA) && !USE(FREETYPE)
@@ -592,9 +592,9 @@ bool Font::supportsCodePoint(UChar32 character) const
     return glyphForCharacter(character);
 }
 
-bool Font::canRenderCombiningCharacterSequence(const UChar* characters, size_t length) const
+bool Font::canRenderCombiningCharacterSequence(StringView stringView) const
 {
-    auto codePoints = StringView(characters, length).codePoints();
+    auto codePoints = stringView.codePoints();
     auto it = codePoints.begin();
     auto end = codePoints.end();
     while (it != end) {

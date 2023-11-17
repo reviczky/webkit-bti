@@ -43,8 +43,8 @@ WebValidationMessageClient::WebValidationMessageClient(WebPage& page)
 
 WebValidationMessageClient::~WebValidationMessageClient()
 {
-    if (m_currentAnchor)
-        hideValidationMessage(*m_currentAnchor);
+    if (RefPtr anchor = m_currentAnchor.get())
+        hideValidationMessage(*anchor);
 }
 
 void WebValidationMessageClient::documentDetached(Document& document)
@@ -60,7 +60,7 @@ void WebValidationMessageClient::showValidationMessage(const Element& anchor, co
     if (m_currentAnchor)
         hideValidationMessage(*m_currentAnchor);
 
-    m_currentAnchor = &anchor;
+    m_currentAnchor = anchor;
     m_currentAnchorRect = anchor.boundingBoxInRootViewCoordinates();
     Ref { *m_page }->send(Messages::WebPageProxy::ShowValidationMessage(m_currentAnchorRect, message));
 }

@@ -28,6 +28,7 @@
 
 #if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
 
+#include "GPUConnectionToWebProcessMessages.h"
 #include "GPUProcessConnection.h"
 #include "LayerHostingContext.h"
 #include "Logging.h"
@@ -95,7 +96,7 @@ void SampleBufferDisplayLayer::updateDisplayMode(bool hideDisplayLayer, bool hid
 
 void SampleBufferDisplayLayer::updateBoundsAndPosition(CGRect bounds, std::optional<WTF::MachSendRight>&& fence)
 {
-    m_connection->send(Messages::RemoteSampleBufferDisplayLayer::UpdateBoundsAndPosition { bounds, WTFMove(fence) }, m_identifier);
+    m_connection->send(Messages::GPUConnectionToWebProcess::UpdateSampleBufferDisplayLayerBoundsAndPosition { m_identifier, bounds, WTFMove(fence) }, m_identifier);
 }
 
 void SampleBufferDisplayLayer::flush()
@@ -135,7 +136,7 @@ void SampleBufferDisplayLayer::enqueueVideoFrame(VideoFrame& videoFrame)
 
     auto sharedVideoFrame = m_sharedVideoFrameWriter.write(videoFrame,
         [this](auto& semaphore) { m_connection->send(Messages::RemoteSampleBufferDisplayLayer::SetSharedVideoFrameSemaphore { semaphore }, m_identifier); },
-        [this](auto&& handle) { m_connection->send(Messages::RemoteSampleBufferDisplayLayer::SetSharedVideoFrameMemory { WTFMove(handle) }, m_identifier); }
+        [this](SharedMemory::Handle&& handle) { m_connection->send(Messages::RemoteSampleBufferDisplayLayer::SetSharedVideoFrameMemory { WTFMove(handle) }, m_identifier); }
     );
     if (!sharedVideoFrame)
         return;

@@ -110,6 +110,7 @@ void IPIntPlan::compileFunction(uint32_t functionIndex)
 
 void IPIntPlan::didCompleteCompilation()
 {
+#if ENABLE(JIT)
     unsigned functionCount = m_wasmInternalFunctions.size();
     if (!m_callees && functionCount) {
         // IPInt entrypoint thunks generation
@@ -125,13 +126,13 @@ void IPIntPlan::didCompleteCompilation()
             m_calleesVector[i] = IPIntCallee::create(*m_wasmInternalFunctions[i], functionIndexSpace, m_moduleInformation->nameSection->get(functionIndexSpace));
             ASSERT(!m_calleesVector[i]->entrypoint());
             entrypoints[i] = jit.label();
-            // if (m_moduleInformation->usesSIMD(i))
-            //     JIT_COMMENT(jit, "SIMD function entrypoint");
+            if (m_moduleInformation->usesSIMD(i))
+                JIT_COMMENT(jit, "SIMD function entrypoint");
             JIT_COMMENT(jit, "Entrypoint for function[", i, "]");
             CCallHelpers::Address calleeSlot(CCallHelpers::stackPointerRegister, CallFrameSlot::callee * static_cast<int>(sizeof(Register)) - prologueStackPointerDelta());
-            jit.storePtr(CCallHelpers::TrustedImmPtr(CalleeBits::boxWasm(m_calleesVector[i].ptr())), calleeSlot.withOffset(PayloadOffset));
+            jit.storePtr(CCallHelpers::TrustedImmPtr(CalleeBits::boxNativeCallee(m_calleesVector[i].ptr())), calleeSlot.withOffset(PayloadOffset));
 #if USE(JSVALUE_32_64)
-            jit.store32(CCallHelpers::TrustedImm32(JSValue::WasmTag), calleeSlot.withOffset(TagOffset));
+            jit.store32(CCallHelpers::TrustedImm32(JSValue::NativeCalleeTag), calleeSlot.withOffset(TagOffset));
 #endif
             jumps[i] = jit.jump();
         }
@@ -144,10 +145,10 @@ void IPIntPlan::didCompleteCompilation()
 
         for (unsigned i = 0; i < functionCount; ++i) {
             m_calleesVector[i]->setEntrypoint(linkBuffer.locationOf<WasmEntryPtrTag>(entrypoints[i]));
-        //     if (m_moduleInformation->usesSIMD(i))
-        //         linkBuffer.link<JITThunkPtrTag>(jumps[i], CodeLocationLabel<JITThunkPtrTag>(IPInt::wasmFunctionEntryThunkSIMD().code()));
-        //     else
-            linkBuffer.link<JITThunkPtrTag>(jumps[i], CodeLocationLabel<JITThunkPtrTag>(LLInt::inPlaceInterpreterEntryThunk().code()));
+            if (m_moduleInformation->usesSIMD(i))
+                linkBuffer.link<JITThunkPtrTag>(jumps[i], CodeLocationLabel<JITThunkPtrTag>(LLInt::inPlaceInterpreterEntryThunkSIMD().code()));
+            else
+                linkBuffer.link<JITThunkPtrTag>(jumps[i], CodeLocationLabel<JITThunkPtrTag>(LLInt::inPlaceInterpreterEntryThunk().code()));
         }
 
         m_entryThunks = FINALIZE_CODE(linkBuffer, JITCompilationPtrTag, "Wasm IPInt entry thunks");
@@ -155,9 +156,12 @@ void IPIntPlan::didCompleteCompilation()
         if (!m_moduleInformation->clobberingTailCalls().isEmpty())
             computeTransitiveTailCalls();
     }
+#endif
+
     if (m_compilerMode == CompilerMode::Validation)
         return;
 
+#if ENABLE(JIT)
     for (uint32_t functionIndex = 0; functionIndex < m_moduleInformation->functions.size(); functionIndex++) {
         const uint32_t functionIndexSpace = functionIndex + m_moduleInformation->importFunctionCount();
         if (m_exportedFunctionIndices.contains(functionIndex) || m_moduleInformation->hasReferencedFunction(functionIndexSpace)) {
@@ -185,6 +189,7 @@ void IPIntPlan::didCompleteCompilation()
             ASSERT_UNUSED(result, result.isNewEntry);
         }
     }
+#endif
 
     for (auto& unlinked : m_unlinkedWasmToWasmCalls) {
         for (auto& call : unlinked) {
