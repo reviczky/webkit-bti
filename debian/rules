@@ -52,7 +52,7 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 endif
 
 # https://bugs.webkit.org/show_bug.cgi?id=252670
-ifneq (,$(filter $(DEB_HOST_ARCH),armel mipsel m68k powerpc sh4))
+ifneq (,$(filter $(DEB_HOST_ARCH),armel powerpc sh4))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_WEBGL=OFF
 endif
 
@@ -69,13 +69,6 @@ endif
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
 ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
-endif
-
-# Lower memory requirements on architectures with only 2 GB address space
-ifneq (,$(filter $(DEB_HOST_ARCH),m68k mips mipsel))
-	CFLAGS := $(CFLAGS:-g1=-g0)
-	CFLAGS := $(CFLAGS:-O2=-Os)
-	CPPFLAGS += --param ggc-min-expand=10
 endif
 
 # See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=93876
@@ -135,10 +128,6 @@ endif
 # Lower max parallel jobs on some builders
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
 ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
-	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
-endif
-else ifeq ($(shell dpkg-vendor --is Debian && echo yes),yes)
-ifneq (,$(filter $(DEB_HOST_ARCH),mipsel))
 	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
 endif
 endif
