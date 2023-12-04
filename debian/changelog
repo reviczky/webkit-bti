@@ -1,4 +1,4 @@
-wpewebkit (2.42.3-1) UNRELEASED; urgency=medium
+wpewebkit (2.42.3-1) unstable; urgency=high
 
   * New upstream release.
   * Drop support for some arches that are unsupported or haven't worked in
@@ -8,7 +8,7 @@ wpewebkit (2.42.3-1) UNRELEASED; urgency=medium
   * debian/rules:
     - Stop overriding dh_missing, no longer needed with dh compat 13.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 04 Dec 2023 17:42:07 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 04 Dec 2023 19:55:50 +0100
 
 wpewebkit (2.42.2-1) unstable; urgency=high
 
