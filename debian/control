@@ -5,9 +5,9 @@ Priority: optional
 Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debian.org>
 Uploaders: Alberto Garcia <berto@igalia.com>
 Build-Depends: debhelper-compat (= 12),
-               bubblewrap [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
-               xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
-               libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
+               bubblewrap [!alpha !ia64 !riscv64 !sh4 !sparc64],
+               xdg-dbus-proxy [!alpha !ia64 !riscv64 !sh4 !sparc64],
+               libseccomp-dev [!alpha !ia64 !riscv64 !sh4 !sparc64],
                cmake (>= 3.16),
                gperf,
                libatk-bridge2.0-dev,

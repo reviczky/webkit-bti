@@ -1,6 +1,8 @@
 wpewebkit (2.42.3-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Drop support for some arches that are unsupported or haven't worked in
+    a long time: m68k, mips and mipsel.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 04 Dec 2023 17:42:07 +0100
 
