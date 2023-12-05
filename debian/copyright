@@ -188,7 +188,7 @@ License: BSD-2-clause or BSL-1.0
 
 Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/RobinHoodHashTable.h
-Copyright: 2015-2022 Apple Inc
+Copyright: 2015-2023 Apple Inc
 License: BSD-2-clause or Expat
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
@@ -1551,6 +1551,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/create_hash_table
        Source/JavaScriptCore/debugger/Debugger.cpp
        Source/JavaScriptCore/debugger/Debugger.h
+       Source/JavaScriptCore/fuzzilli/*
        Source/JavaScriptCore/heap/Heap.cpp
        Source/JavaScriptCore/heap/Heap.h
        Source/JavaScriptCore/heap/MachineStackMarker.cpp
@@ -2329,11 +2330,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/WidthIterator.cpp
        Source/WebCore/platform/graphics/WidthIterator.h
        Source/WebCore/platform/graphics/angle/PlatformDisplayANGLE.cpp
-       Source/WebCore/platform/graphics/cairo/BackingStoreBackendCairo.h
-       Source/WebCore/platform/graphics/cairo/BackingStoreBackendCairoImpl.cpp
-       Source/WebCore/platform/graphics/cairo/BackingStoreBackendCairoImpl.h
-       Source/WebCore/platform/graphics/cairo/BackingStoreBackendCairoX11.cpp
-       Source/WebCore/platform/graphics/cairo/BackingStoreBackendCairoX11.h
        Source/WebCore/platform/graphics/cairo/DrawErrorUnderline.h
        Source/WebCore/platform/graphics/cairo/IntRectCairo.cpp
        Source/WebCore/platform/graphics/cairo/PathCairo.cpp
@@ -2345,7 +2341,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/egl/GLContext.cpp
        Source/WebCore/platform/graphics/egl/GLContext.h
        Source/WebCore/platform/graphics/egl/GLContextLibWPE.cpp
-       Source/WebCore/platform/graphics/egl/GLContextX11.cpp
        Source/WebCore/platform/graphics/filters/DistantLightSource.h
        Source/WebCore/platform/graphics/filters/FEBlend.cpp
        Source/WebCore/platform/graphics/filters/FEBlend.h
@@ -2850,18 +2845,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceClipper.h
        Source/WebCore/rendering/svg/RenderSVGResourceContainer.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceContainer.h
-       Source/WebCore/rendering/svg/RenderSVGResourceFilter.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceFilter.h
-       Source/WebCore/rendering/svg/RenderSVGResourceGradient.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceGradient.h
-       Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.h
-       Source/WebCore/rendering/svg/RenderSVGResourcePattern.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourcePattern.h
-       Source/WebCore/rendering/svg/RenderSVGResourceRadialGradient.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceRadialGradient.h
-       Source/WebCore/rendering/svg/RenderSVGResourceSolidColor.cpp
-       Source/WebCore/rendering/svg/RenderSVGResourceSolidColor.h
+       Source/WebCore/rendering/svg/RenderSVGResourceMasker.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourceMasker.h
        Source/WebCore/rendering/svg/RenderSVGRoot.cpp
        Source/WebCore/rendering/svg/RenderSVGRoot.h
        Source/WebCore/rendering/svg/RenderSVGShape.cpp
@@ -2938,10 +2923,22 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceClipper.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceContainer.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceContainer.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceFilter.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceFilter.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceGradient.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceGradient.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceLinearGradient.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceLinearGradient.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMarker.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMarker.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMasker.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceMasker.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourcePattern.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourcePattern.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceRadialGradient.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceRadialGradient.h
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceSolidColor.cpp
+       Source/WebCore/rendering/svg/legacy/LegacyRenderSVGResourceSolidColor.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGRoot.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGRoot.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGShape.cpp
@@ -3900,12 +3897,12 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2011 Zan Dobersek <zandobersek@gmail.com>
            2011-2012 Renata Hodovan <reni@webkit.org>
            2011-2012 University of Szeged
-           2011-2013 Samsung Electronics
            2011-2014, 2018 Adobe Systems Inc
            2012 Digia Plc
            2012 Mathias Bynens <mathias@qiwi.be>
            2012-2013 Company 100 Inc
            2012-2013 Intel Corporation
+           2012-2013 Samsung Electronics
            2012-2013 basysKom GmbH
            2013 ChangSeok Oh <shivamidow@gmail.com>
            2013 Michael Pruett <michael@68k.org>

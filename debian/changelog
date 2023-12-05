@@ -6,6 +6,8 @@ webkit2gtk (2.43.2-1) UNRELEASED; urgency=medium
   * debian/control.in, debian/rules:
     - Remove build dependendency on libwpebackend-fdo, upstream no longer
       uses it.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 03 Dec 2023 00:57:09 +0100
 
