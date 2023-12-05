@@ -118,13 +118,6 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
 
-# Disable the WPE renderer if libwpebackend-fdo-1.0-dev is not available
-ifeq ($(shell pkg-config --exists wpebackend-fdo-1.0 && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=ON
-else
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
-endif
-
 # Lower max parallel jobs on some builders
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
 ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))

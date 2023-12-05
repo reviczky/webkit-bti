@@ -3,6 +3,9 @@ webkit2gtk (2.43.2-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * Drop support for some arches that are unsupported or haven't worked in
     a long time: ia64, m68k, kfreebsd, mips and mipsel.
+  * debian/control.in, debian/rules:
+    - Remove build dependendency on libwpebackend-fdo, upstream no longer
+      uses it.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 03 Dec 2023 00:57:09 +0100
 
