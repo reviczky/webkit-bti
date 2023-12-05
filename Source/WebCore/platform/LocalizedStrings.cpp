@@ -136,9 +136,9 @@ String localizedString(const char* key)
 }
 #endif
 
-#if ENABLE(CONTEXT_MENUS) && PLATFORM(COCOA)
+#if PLATFORM(COCOA)
 
-static String truncatedStringForMenuItem(const String& original)
+String truncatedStringForMenuItem(const String& original)
 {
     // Truncate the string if it's too long. This number is roughly the same as the one used by AppKit.
     unsigned maxNumberOfGraphemeClustersInLookupMenuItem = 24;
@@ -500,6 +500,13 @@ String contextMenuItemTagTranslate(const String& selectedString)
 {
     auto selectedCFString = truncatedStringForMenuItem(selectedString).createCFString();
     return WEB_UI_FORMAT_CFSTRING("Translate “%@”", "Translate context menu item with selected word", selectedCFString.get());
+}
+#endif
+
+#if ENABLE(UNIFIED_PDF)
+String contextMenuItemPDFOpenWithPreview()
+{
+    return WEB_UI_STRING("Open with Preview", "Open with Preview context menu item");
 }
 #endif
 

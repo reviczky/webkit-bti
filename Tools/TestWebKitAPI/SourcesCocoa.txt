@@ -291,8 +291,10 @@ Tests/WebKitCocoa/WKWebExtension.mm
 Tests/WebKitCocoa/WKWebExtensionAPIAction.mm
 Tests/WebKitCocoa/WKWebExtensionAPIAlarms.mm
 Tests/WebKitCocoa/WKWebExtensionAPICommands.mm
+Tests/WebKitCocoa/WKWebExtensionAPIDeclarativeNetRequest.mm
 Tests/WebKitCocoa/WKWebExtensionAPIEvent.mm
 Tests/WebKitCocoa/WKWebExtensionAPIExtension.mm
+Tests/WebKitCocoa/WKWebExtensionAPIMenus.mm
 Tests/WebKitCocoa/WKWebExtensionAPINamespace.mm
 Tests/WebKitCocoa/WKWebExtensionAPIPermissions.mm
 Tests/WebKitCocoa/WKWebExtensionAPIScripting.mm

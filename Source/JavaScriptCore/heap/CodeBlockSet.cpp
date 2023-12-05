@@ -27,6 +27,7 @@
 #include "CodeBlockSet.h"
 
 #include "CodeBlock.h"
+#include "HeapInlines.h"
 #include <wtf/CommaPrinter.h>
 
 namespace JSC {
@@ -48,9 +49,13 @@ bool CodeBlockSet::contains(const AbstractLocker&, void* candidateCodeBlock)
     return m_codeBlocks.contains(codeBlock);
 }
 
-void CodeBlockSet::clearCurrentlyExecuting()
+void CodeBlockSet::clearCurrentlyExecutingAndRemoveDeadCodeBlocks(VM& vm)
 {
+    ASSERT(vm.heap.isInPhase(CollectorPhase::End));
     m_currentlyExecuting.clear();
+    m_codeBlocks.removeIf([&](CodeBlock* codeBlock) {
+        return !vm.heap.isMarked(codeBlock);
+    });
 }
 
 bool CodeBlockSet::isCurrentlyExecuting(CodeBlock* codeBlock)

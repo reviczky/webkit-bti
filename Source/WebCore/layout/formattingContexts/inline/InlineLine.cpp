@@ -57,7 +57,6 @@ void Line::initialize(const Vector<InlineItem>& lineSpanningInlineBoxes, bool is
     resetTrailingContent();
     auto appendLineSpanningInlineBoxes = [&] {
         for (auto& inlineBoxStartItem : lineSpanningInlineBoxes) {
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
             if (inlineBoxStartItem.style().boxDecorationBreak() != BoxDecorationBreak::Clone)
                 m_runs.append({ inlineBoxStartItem, lastRunLogicalRight(), { } });
             else {
@@ -71,9 +70,6 @@ void Line::initialize(const Vector<InlineItem>& lineSpanningInlineBoxes, bool is
                 m_contentLogicalWidth = std::max(m_contentLogicalWidth, runLogicalLeft + marginBorderAndPaddingStart);
                 m_contentLogicalWidth += addBorderAndPaddingEndForInlineBoxDecorationClone(inlineBoxStartItem);
             }
-#else
-            m_runs.append({ inlineBoxStartItem, lastRunLogicalRight(), { } });
-#endif
         }
     };
     appendLineSpanningInlineBoxes();
@@ -681,7 +677,6 @@ void Line::appendOpaqueBox(const InlineItem& inlineItem, const RenderStyle& styl
 InlineLayoutUnit Line::addBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxStartItem)
 {
     ASSERT(inlineBoxStartItem.isInlineBoxStart());
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
     if (inlineBoxStartItem.style().boxDecorationBreak() != BoxDecorationBreak::Clone)
         return { };
     // https://drafts.csswg.org/css-break/#break-decoration
@@ -690,14 +685,11 @@ InlineLayoutUnit Line::addBorderAndPaddingEndForInlineBoxDecorationClone(const I
     m_inlineBoxListWithClonedDecorationEnd.add(&inlineBoxStartItem.layoutBox(), borderAndPaddingEnd);
     m_clonedEndDecorationWidthForInlineBoxRuns += borderAndPaddingEnd;
     return borderAndPaddingEnd;
-#endif
-    return { };
 }
 
 InlineLayoutUnit Line::removeBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxEndItem)
 {
     ASSERT(inlineBoxEndItem.isInlineBoxEnd());
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
     auto borderAndPaddingEnd = m_inlineBoxListWithClonedDecorationEnd.take(&inlineBoxEndItem.layoutBox());
     if (std::isinf(borderAndPaddingEnd))
         return { };
@@ -705,8 +697,6 @@ InlineLayoutUnit Line::removeBorderAndPaddingEndForInlineBoxDecorationClone(cons
     // it from the side structure where we keep track of the "not-yet placed but space taking" decorations.
     m_clonedEndDecorationWidthForInlineBoxRuns -= borderAndPaddingEnd;
     return borderAndPaddingEnd;
-#endif
-    return { };
 }
 
 void Line::addTrailingHyphen(InlineLayoutUnit hyphenLogicalWidth)
@@ -733,20 +723,32 @@ bool Line::lineHasVisuallyNonEmptyContent() const
 
 bool Line::restoreTrimmedTrailingWhitespace(InlineLayoutUnit trimmedTrailingWhitespaceWidth, RunList& runs)
 {
+    auto restore = [&](auto& trailingRun) {
+        ASSERT(trailingRun.isText());
+        auto& layoutBox = downcast<InlineTextBox>(trailingRun.layoutBox());
+        if (trailingRun.m_textContent->start + trailingRun.m_textContent->length == layoutBox.content().length()) {
+            ASSERT_NOT_REACHED();
+            return false;
+        }
+        trailingRun.m_logicalWidth += trimmedTrailingWhitespaceWidth;
+        // This must be collapsed whitespace.
+        trailingRun.m_textContent->length += 1;
+        return true;
+    };
+
     auto& lastRun = runs.last();
-    if (!lastRun.isText()) {
-        ASSERT_NOT_REACHED();
-        return false;
+    if (lastRun.isText())
+        return restore(lastRun);
+
+    auto isHardLineBreakWithTrailingTextRun = lastRun.isHardLineBreak() && runs.size() > 1 && runs[runs.size() - 2].isText();
+    if (isHardLineBreakWithTrailingTextRun) {
+        if (!restore(runs[runs.size() - 2]))
+            return false;
+        lastRun.moveHorizontally(trimmedTrailingWhitespaceWidth);
+        return true;
     }
-    auto& layoutBox = downcast<InlineTextBox>(lastRun.layoutBox());
-    if (lastRun.m_textContent->start + lastRun.m_textContent->length == layoutBox.content().length()) {
-        ASSERT_NOT_REACHED();
-        return false;
-    }
-    lastRun.m_logicalWidth += trimmedTrailingWhitespaceWidth;
-    // This must be collapsed whitespace.
-    lastRun.m_textContent->length += 1;
-    return true;
+    ASSERT_NOT_REACHED();
+    return false;
 }
 
 const InlineFormattingContext& Line::formattingContext() const
@@ -1016,6 +1018,8 @@ bool Line::Run::isContentfulOrHasDecoration(const Run& run, const InlineFormatti
     if (run.isInlineBox()) {
         if (run.logicalWidth())
             return true;
+        if (run.layoutBox().isRubyBase())
+            return true;
         // Even negative horizontal margin makes the line "contentful".
         auto& inlineBoxGeometry = formattingContext.geometryForBox(run.layoutBox());
         if (run.isInlineBoxStart())
@@ -1023,10 +1027,8 @@ bool Line::Run::isContentfulOrHasDecoration(const Run& run, const InlineFormatti
         if (run.isInlineBoxEnd())
             return inlineBoxGeometry.marginEnd() || inlineBoxGeometry.borderEnd() || inlineBoxGeometry.paddingEnd().value_or(0_lu);
         if (run.isLineSpanningInlineBoxStart()) {
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
             if (run.style().boxDecorationBreak() != BoxDecorationBreak::Clone)
                 return false;
-#endif // ENABLE(CSS_BOX_DECORATION_BREAK)
             return inlineBoxGeometry.borderStart() || inlineBoxGeometry.paddingStart().value_or(0_lu);
         }
     }

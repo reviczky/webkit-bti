@@ -126,12 +126,12 @@ static void fallbackFontsForRunWithIterator(WeakHashSet<const Font>& fallbackFon
     auto isSmallCaps = fontCascade.isSmallCaps();
     auto& primaryFont = fontCascade.primaryFont();
 
-    UChar32 currentCharacter = 0;
+    char32_t currentCharacter = 0;
     unsigned clusterLength = 0;
     while (textIterator.consume(currentCharacter, clusterLength)) {
 
         auto addFallbackFontForCharacterIfApplicable = [&](auto character) {
-            if (isSmallCaps && character != u_toupper(character))
+            if (isSmallCaps)
                 character = u_toupper(character);
 
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
@@ -184,12 +184,12 @@ static TextUtil::EnclosingAscentDescent enclosingGlyphBoundsForRunWithIterator(c
     auto isSmallCaps = fontCascade.isSmallCaps();
     auto& primaryFont = fontCascade.primaryFont();
 
-    UChar32 currentCharacter = 0;
+    char32_t currentCharacter = 0;
     unsigned clusterLength = 0;
     while (textIterator.consume(currentCharacter, clusterLength)) {
 
         auto computeTopAndBottomForCharacter = [&](auto character) {
-            if (isSmallCaps && character != u_toupper(character))
+            if (isSmallCaps)
                 character = u_toupper(character);
 
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
@@ -424,6 +424,18 @@ TextBreakIterator::ContentAnalysis TextUtil::contentAnalysis(WordBreak wordBreak
     return TextBreakIterator::ContentAnalysis::Mechanical;
 }
 
+bool TextUtil::isStrongDirectionalityCharacter(char32_t character)
+{
+    auto bidiCategory = u_charDirection(character);
+    return bidiCategory == U_RIGHT_TO_LEFT
+        || bidiCategory == U_RIGHT_TO_LEFT_ARABIC
+        || bidiCategory == U_RIGHT_TO_LEFT_EMBEDDING
+        || bidiCategory == U_RIGHT_TO_LEFT_OVERRIDE
+        || bidiCategory == U_LEFT_TO_RIGHT_EMBEDDING
+        || bidiCategory == U_LEFT_TO_RIGHT_OVERRIDE
+        || bidiCategory == U_POP_DIRECTIONAL_FORMAT;
+}
+
 bool TextUtil::containsStrongDirectionalityText(StringView text)
 {
     if (text.is8Bit())
@@ -431,18 +443,9 @@ bool TextUtil::containsStrongDirectionalityText(StringView text)
 
     auto length = text.length();
     for (size_t position = 0; position < length;) {
-        UChar32 character;
+        char32_t character;
         U16_NEXT(text.characters16(), position, length, character);
-
-        auto bidiCategory = u_charDirection(character);
-        bool hasBidiContent = bidiCategory == U_RIGHT_TO_LEFT
-            || bidiCategory == U_RIGHT_TO_LEFT_ARABIC
-            || bidiCategory == U_RIGHT_TO_LEFT_EMBEDDING
-            || bidiCategory == U_RIGHT_TO_LEFT_OVERRIDE
-            || bidiCategory == U_LEFT_TO_RIGHT_EMBEDDING
-            || bidiCategory == U_LEFT_TO_RIGHT_OVERRIDE
-            || bidiCategory == U_POP_DIRECTIONAL_FORMAT;
-        if (hasBidiContent)
+        if (isStrongDirectionalityCharacter(character))
             return true;
     }
 
@@ -457,7 +460,7 @@ size_t TextUtil::firstUserPerceivedCharacterLength(const InlineTextBox& inlineTe
     if (textContent.is8Bit())
         return 1;
     if (inlineTextBox.canUseSimpleFontCodePath()) {
-        UChar32 character;
+        char32_t character;
         size_t endOfCodePoint = startPosition;
         U16_NEXT(textContent.characters16(), endOfCodePoint, textContent.length(), character);
         ASSERT(endOfCodePoint > startPosition);
@@ -592,6 +595,15 @@ bool TextUtil::canUseSimplifiedTextMeasuring(StringView textContent, const Rende
     if (textContent.is8Bit())
         return canUseSimplifiedTextMeasuringForCharacters(textContent.span8(), fontCascade, primaryFont, whitespaceIsCollapsed);
     return canUseSimplifiedTextMeasuringForCharacters(textContent.span16(), fontCascade, primaryFont, whitespaceIsCollapsed);
+}
+
+bool TextUtil::hasPositionDependentContentWidth(StringView textContent)
+{
+    for (char32_t character : StringView(textContent).codePoints()) {
+        if (character == tabCharacter)
+            return true;
+    }
+    return false;
 }
 
 void TextUtil::computedExpansions(const Line::RunList& runs, WTF::Range<size_t> runRange, size_t hangingTrailingWhitespaceLength, ExpansionInfo& expansionInfo)

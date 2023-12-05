@@ -43,7 +43,10 @@ public:
 
     // Shader Module
     virtual void visit(ShaderModule&);
+
+    // Directive
     virtual void visit(AST::Directive&);
+    virtual void visit(AST::DiagnosticDirective&);
 
     // Attribute
     virtual void visit(AST::Attribute&);
@@ -72,6 +75,7 @@ public:
     virtual void visit(AST::CallExpression&);
     virtual void visit(AST::FieldAccessExpression&);
     virtual void visit(AST::Float32Literal&);
+    virtual void visit(AST::Float16Literal&);
     virtual void visit(AST::IdentifierExpression&);
     virtual void visit(AST::IdentityExpression&);
     virtual void visit(AST::IndexAccessExpression&);
@@ -116,6 +120,7 @@ public:
     virtual void visit(AST::VariableQualifier&);
 
     virtual void visit(AST::SwitchClause&);
+    virtual void visit(AST::Continuing&);
 
     bool hasError() const;
     Result<void> result();

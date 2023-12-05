@@ -343,6 +343,9 @@ private:
 
     // CharacterRange support.
     CharacterRange selectedTextRange() const final { return propertyValue<CharacterRange>(AXPropertyName::SelectedTextRange); }
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    Vector<AXTextRun> textRuns() final { return vectorAttributeValue<AXTextRun>(AXPropertyName::TextRuns); }
+#endif
     int insertionPointLineNumber() const final;
     CharacterRange doAXRangeForLine(unsigned) const final;
     String doAXStringForRange(const CharacterRange&) const final;
@@ -441,7 +444,7 @@ private:
     bool isNativeTextControl() const final;
     bool isListBoxOption() const final;
     bool isMockObject() const final;
-    bool isNonNativeTextControl() const final;
+    bool isNonNativeTextControl() const final { return boolAttributeValue(AXPropertyName::IsNonNativeTextControl); }
     bool isIndeterminate() const final { return boolAttributeValue(AXPropertyName::IsIndeterminate); }
     bool isLoaded() const final { return loadingProgress() >= 1; }
     bool isOnScreen() const final;

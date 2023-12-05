@@ -31,7 +31,6 @@
 #include "DocumentType.h"
 #include "Element.h"
 #include "FTPDirectoryDocument.h"
-#include "FragmentScriptingPermission.h"
 #include "FrameLoader.h"
 #include "HTMLDocument.h"
 #include "HTMLHeadElement.h"
@@ -46,6 +45,7 @@
 #include "MediaQueryParser.h"
 #include "PDFDocument.h"
 #include "Page.h"
+#include "ParserContentPolicy.h"
 #include "PluginData.h"
 #include "PluginDocument.h"
 #include "SVGDocument.h"
@@ -97,14 +97,14 @@ static inline Ref<XMLDocument> createXMLDocument(const String& namespaceURI, con
         document = XMLDocument::createXHTML(nullptr, settings, URL());
     else
         document = XMLDocument::create(nullptr, settings, URL());
-    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent, ParserContentPolicy::AllowPluginContent });
+    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent });
     return document.releaseNonNull();
 }
 
 ExceptionOr<Ref<XMLDocument>> DOMImplementation::createDocument(const AtomString& namespaceURI, const AtomString& qualifiedName, DocumentType* documentType)
 {
     Ref document = createXMLDocument(namespaceURI, m_document->protectedSettings());
-    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent, ParserContentPolicy::AllowPluginContent });
+    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent });
     document->setContextDocument(m_document->contextDocument());
     document->setSecurityOriginPolicy(m_document->securityOriginPolicy());
 
@@ -137,7 +137,7 @@ Ref<CSSStyleSheet> DOMImplementation::createCSSStyleSheet(const String&, const S
 Ref<HTMLDocument> DOMImplementation::createHTMLDocument(String&& title)
 {
     Ref document = HTMLDocument::create(nullptr, m_document->protectedSettings(), URL(), { });
-    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent, ParserContentPolicy::AllowPluginContent });
+    document->setParserContentPolicy({ ParserContentPolicy::AllowScriptingContent });
     document->open();
     document->write(nullptr, { "<!doctype html><html><head></head><body></body></html>"_s });
     if (!title.isNull()) {

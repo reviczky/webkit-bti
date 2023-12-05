@@ -67,9 +67,11 @@
 #include "RenderIterator.h"
 #include "RenderLayer.h"
 #include "RenderLayerCompositor.h"
+#include "RenderLayerInlines.h"
 #include "RenderLineBreak.h"
 #include "RenderListItem.h"
 #include "RenderMultiColumnSpannerPlaceholder.h"
+#include "RenderSVGResourceContainer.h"
 #include "RenderSVGViewportContainer.h"
 #include "RenderStyleSetters.h"
 #include "RenderTableCaption.h"
@@ -969,8 +971,13 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
 
     SVGRenderSupport::styleChanged(*this, oldStyle);
 
-    if (diff >= StyleDifference::Repaint)
+    if (diff >= StyleDifference::Repaint) {
         updateReferencedSVGResources();
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+        if (oldStyle && diff <= StyleDifference::RepaintLayer)
+            repaintClientsOfReferencedSVGResources();
+#endif
+    }
 
     if (!m_parent)
         return;
@@ -1230,25 +1237,6 @@ static bool mustRepaintFillLayers(const RenderElement& renderer, const FillLayer
     return false;
 }
 
-static bool mustRepaintBackgroundOrBorder(const RenderElement& renderer)
-{
-    if (renderer.hasMask() && mustRepaintFillLayers(renderer, renderer.style().maskLayers()))
-        return true;
-
-    // If we don't have a background/border/mask, then nothing to do.
-    if (!renderer.hasVisibleBoxDecorations())
-        return false;
-
-    if (mustRepaintFillLayers(renderer, renderer.style().backgroundLayers()))
-        return true;
-
-    // Our fill layers are ok. Let's check border.
-    if (renderer.style().hasBorder() && renderer.borderImageIsLoadedAndCanBeRendered())
-        return true;
-
-    return false;
-}
-
 bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* repaintContainer, RequiresFullRepaint requiresFullRepaint, const LayoutRect& oldClippedOverflowRect, const LayoutRect& oldOutlineAndBoxShadowBox, const LayoutRect* newClippedOverflowRectPtr, const LayoutRect* newOutlineAndBoxShadowBoxRectPtr)
 {
     if (view().printing())
@@ -1259,21 +1247,57 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
     LayoutRect newClippedOverflowRect = newClippedOverflowRectPtr ? *newClippedOverflowRectPtr : clippedOverflowRectForRepaint(repaintContainer);
     LayoutRect newOutlineAndBoxShadowBox;
 
-    bool fullRepaint = requiresFullRepaint == RequiresFullRepaint::Yes;
+    if (oldClippedOverflowRect.isEmpty() && newClippedOverflowRect.isEmpty())
+        return true;
 
-    if (!fullRepaint && oldClippedOverflowRect != newClippedOverflowRect && style().hasBorderRadius()) {
-        auto oldRadius = style().getRoundedBorderFor(oldClippedOverflowRect).radii();
-        auto newRadius = style().getRoundedBorderFor(newClippedOverflowRect).radii();
+    auto mustRepaintBackgroundOrBorderOnSizeChange = [&]() {
+        if (hasMask() && mustRepaintFillLayers(*this, style().maskLayers()))
+            return true;
 
-        fullRepaint = oldRadius != newRadius;
-    }
+        // If we don't have a background/border/mask, then nothing to do.
+        if (!hasVisibleBoxDecorations())
+            return false;
 
-    if (!fullRepaint) {
-        // This ASSERT fails due to animations. See https://bugs.webkit.org/show_bug.cgi?id=37048
-        // ASSERT(!newOutlineBoxRectPtr || *newOutlineBoxRectPtr == outlineBoundsForRepaint(repaintContainer));
+        if (mustRepaintFillLayers(*this, style().backgroundLayers()))
+            return true;
+
+        // Our fill layers are ok. Let's check border.
+        if (style().hasBorder() && borderImageIsLoadedAndCanBeRendered())
+            return true;
+
+        return false;
+    };
+
+    auto fullRepaint = [&]() {
+        if (requiresFullRepaint == RequiresFullRepaint::Yes)
+            return true;
+
+        if (oldClippedOverflowRect.isEmpty() || newClippedOverflowRect.isEmpty())
+            return true;
+
+        if (!oldClippedOverflowRect.intersects(newClippedOverflowRect))
+            return true;
+
+        bool clippedOverflowRectChanged = oldClippedOverflowRect != newClippedOverflowRect;
+
+        if (clippedOverflowRectChanged && style().hasBorderRadius()) {
+            auto oldRadii = style().getRoundedBorderFor(oldClippedOverflowRect).radii();
+            auto newRadii = style().getRoundedBorderFor(newClippedOverflowRect).radii();
+            if (oldRadii != newRadii)
+                return true;
+        }
+
         newOutlineAndBoxShadowBox = newOutlineAndBoxShadowBoxRectPtr ? *newOutlineAndBoxShadowBoxRectPtr : outlineBoundsForRepaint(repaintContainer);
-        fullRepaint = (newOutlineAndBoxShadowBox.location() != oldOutlineAndBoxShadowBox.location() || (mustRepaintBackgroundOrBorder(*this) && (newClippedOverflowRect != oldClippedOverflowRect || newOutlineAndBoxShadowBox != oldOutlineAndBoxShadowBox)));
-    }
+
+        // If our outline bounds rect moved, we have to repaint everything.
+        if (oldOutlineAndBoxShadowBox.location() != newOutlineAndBoxShadowBox.location())
+            return true;
+
+        if ((clippedOverflowRectChanged || oldOutlineAndBoxShadowBox.size() != newOutlineAndBoxShadowBox.size()) && mustRepaintBackgroundOrBorderOnSizeChange())
+            return true;
+
+        return false;
+    }();
 
     if (!repaintContainer)
         repaintContainer = &view();
@@ -1293,35 +1317,29 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
     if (newClippedOverflowRect == oldClippedOverflowRect && newOutlineAndBoxShadowBox == oldOutlineAndBoxShadowBox)
         return false;
 
-    if (newClippedOverflowRect.isEmpty() && !oldClippedOverflowRect.isEmpty())
-        repaintUsingContainer(repaintContainer, oldClippedOverflowRect);
-    else if (!newClippedOverflowRect.isEmpty() && oldClippedOverflowRect.isEmpty())
-        repaintUsingContainer(repaintContainer, newClippedOverflowRect);
-    else {
-        LayoutUnit deltaLeft = newClippedOverflowRect.x() - oldClippedOverflowRect.x();
-        if (deltaLeft > 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), oldClippedOverflowRect.y(), deltaLeft, oldClippedOverflowRect.height()));
-        else if (deltaLeft < 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), newClippedOverflowRect.y(), -deltaLeft, newClippedOverflowRect.height()));
+    LayoutUnit deltaLeft = newClippedOverflowRect.x() - oldClippedOverflowRect.x();
+    if (deltaLeft > 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), oldClippedOverflowRect.y(), deltaLeft, oldClippedOverflowRect.height()));
+    else if (deltaLeft < 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), newClippedOverflowRect.y(), -deltaLeft, newClippedOverflowRect.height()));
 
-        LayoutUnit deltaRight = newClippedOverflowRect.maxX() - oldClippedOverflowRect.maxX();
-        if (deltaRight > 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.maxX(), newClippedOverflowRect.y(), deltaRight, newClippedOverflowRect.height()));
-        else if (deltaRight < 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.maxX(), oldClippedOverflowRect.y(), -deltaRight, oldClippedOverflowRect.height()));
+    LayoutUnit deltaRight = newClippedOverflowRect.maxX() - oldClippedOverflowRect.maxX();
+    if (deltaRight > 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.maxX(), newClippedOverflowRect.y(), deltaRight, newClippedOverflowRect.height()));
+    else if (deltaRight < 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.maxX(), oldClippedOverflowRect.y(), -deltaRight, oldClippedOverflowRect.height()));
 
-        LayoutUnit deltaTop = newClippedOverflowRect.y() - oldClippedOverflowRect.y();
-        if (deltaTop > 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), oldClippedOverflowRect.y(), oldClippedOverflowRect.width(), deltaTop));
-        else if (deltaTop < 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), newClippedOverflowRect.y(), newClippedOverflowRect.width(), -deltaTop));
+    LayoutUnit deltaTop = newClippedOverflowRect.y() - oldClippedOverflowRect.y();
+    if (deltaTop > 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), oldClippedOverflowRect.y(), oldClippedOverflowRect.width(), deltaTop));
+    else if (deltaTop < 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), newClippedOverflowRect.y(), newClippedOverflowRect.width(), -deltaTop));
 
-        LayoutUnit deltaBottom = newClippedOverflowRect.maxY() - oldClippedOverflowRect.maxY();
-        if (deltaBottom > 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), oldClippedOverflowRect.maxY(), newClippedOverflowRect.width(), deltaBottom));
-        else if (deltaBottom < 0)
-            repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), newClippedOverflowRect.maxY(), oldClippedOverflowRect.width(), -deltaBottom));
-    }
+    LayoutUnit deltaBottom = newClippedOverflowRect.maxY() - oldClippedOverflowRect.maxY();
+    if (deltaBottom > 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(newClippedOverflowRect.x(), oldClippedOverflowRect.maxY(), newClippedOverflowRect.width(), deltaBottom));
+    else if (deltaBottom < 0)
+        repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), newClippedOverflowRect.maxY(), oldClippedOverflowRect.width(), -deltaBottom));
 
     if (newOutlineAndBoxShadowBox == oldOutlineAndBoxShadowBox)
         return false;
@@ -1479,6 +1497,10 @@ bool RenderElement::isVisibleInDocumentRect(const IntRect& documentRect) const
 
 bool RenderElement::isInsideEntirelyHiddenLayer() const
 {
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    if (isSVGLayerAwareRenderer() && document().settings().layerBasedSVGEngineEnabled() && enclosingLayer()->enclosingSVGHiddenOrResourceContainer())
+        return true;
+#endif
     return style().visibility() != Visibility::Visible && !enclosingLayer()->hasVisibleContent();
 }
 
@@ -1697,9 +1719,15 @@ Color RenderElement::selectionBackgroundColor() const
     if (frame().selection().shouldShowBlockCursor() && frame().selection().isCaret())
         return theme().transformSelectionBackgroundColor(style().visitedDependentColorWithColorFilter(CSSPropertyColor), styleColorOptions());
 
-    std::unique_ptr<RenderStyle> pseudoStyle = selectionPseudoStyle();
-    if (pseudoStyle && pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).isValid())
-        return theme().transformSelectionBackgroundColor(pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), styleColorOptions());
+    auto pseudoStyleCandidate = this;
+    if (pseudoStyleCandidate->isAnonymous())
+        pseudoStyleCandidate = pseudoStyleCandidate->firstNonAnonymousAncestor();
+
+    if (pseudoStyleCandidate) {
+        std::unique_ptr<RenderStyle> pseudoStyle = pseudoStyleCandidate->selectionPseudoStyle();
+        if (pseudoStyle && pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).isValid())
+            return theme().transformSelectionBackgroundColor(pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), styleColorOptions());
+    }
 
     if (frame().selection().isFocusedAndActive())
         return theme().activeSelectionBackgroundColor(styleColorOptions());
@@ -2092,6 +2120,29 @@ void RenderElement::updateReferencedSVGResources()
     else
         clearReferencedSVGResources();
 }
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+void RenderElement::repaintRendererOrClientsOfReferencedSVGResources() const
+{
+    auto* enclosingResourceContainer = lineageOfType<RenderSVGResourceContainer>(*this).first();
+    if (!enclosingResourceContainer) {
+        repaint();
+        return;
+    }
+
+    // This implicitly checks if LBSE is activated. If not, no 'RenderSVGResourceContainer' objects are present in the render tree.
+    enclosingResourceContainer->repaintAllClients();
+}
+
+void RenderElement::repaintClientsOfReferencedSVGResources() const
+{
+    if (!document().settings().layerBasedSVGEngineEnabled())
+        return;
+
+    if (auto* enclosingResourceContainer = lineageOfType<RenderSVGResourceContainer>(*this).first())
+        enclosingResourceContainer->repaintAllClients();
+}
+#endif
 
 #if ENABLE(TEXT_AUTOSIZING)
 static RenderObject::BlockContentHeightType includeNonFixedHeight(const RenderObject& renderer)

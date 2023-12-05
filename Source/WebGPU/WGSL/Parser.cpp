@@ -352,9 +352,31 @@ void Parser<Lexer>::consume()
 template<typename Lexer>
 Result<void> Parser<Lexer>::parseShader()
 {
-    // FIXME: parse directives here.
+    START_PARSE();
     disambiguateTemplates();
+    while (current().type != TokenType::EndOfFile) {
+        switch (current().type) {
+        case TokenType::KeywordEnable:
+            if (auto result = parseEnableDirective(); !result)
+                return makeUnexpected(result.error());
+            break;
+        case TokenType::KeywordRequires:
+            if (auto result = parseRequireDirective(); !result)
+                return makeUnexpected(result.error());
+            break;
+        case TokenType::KeywordDiagnostic: {
+            consume();
+            PARSE(diagnostic, Diagnostic);
+            auto& directive = MAKE_ARENA_NODE(DiagnosticDirective, WTFMove(diagnostic));
+            m_shaderModule.directives().append(directive);
+            break;
+        }
+        default:
+            goto declarations;
+        }
+    }
 
+    declarations:
     while (current().type != TokenType::EndOfFile) {
         if (current().type == TokenType::Semicolon) {
             consume();
@@ -366,6 +388,46 @@ Result<void> Parser<Lexer>::parseShader()
             return makeUnexpected(globalExpected.error());
     }
 
+    return { };
+}
+
+template<typename Lexer>
+Result<void> Parser<Lexer>::parseEnableDirective()
+{
+    START_PARSE();
+    CONSUME_TYPE(KeywordEnable);
+    do {
+        CONSUME_TYPE_NAMED(identifier, Identifier);
+        auto* extension = parseExtension(identifier.ident);
+        if (!extension)
+            FAIL("Expected 'f16'"_s);
+        m_shaderModule.enabledExtensions().add(*extension);
+
+        if (current().type != TokenType::Comma)
+            break;
+        CONSUME_TYPE(Comma);
+    } while (current().type != TokenType::Semicolon);
+    CONSUME_TYPE(Semicolon);
+    return { };
+}
+
+template<typename Lexer>
+Result<void> Parser<Lexer>::parseRequireDirective()
+{
+    START_PARSE();
+    CONSUME_TYPE(KeywordRequires);
+    do {
+        CONSUME_TYPE_NAMED(identifier, Identifier);
+        auto* languageFeature = parseLanguageFeature(identifier.ident);
+        if (!languageFeature)
+            FAIL("Expected 'readonly_and_readwrite_storage_textures'"_s);
+        m_shaderModule.requiredFeatures().add(*languageFeature);
+
+        if (current().type != TokenType::Comma)
+            break;
+        CONSUME_TYPE(Comma);
+    } while (current().type != TokenType::Semicolon);
+    CONSUME_TYPE(Semicolon);
     return { };
 }
 
@@ -663,24 +725,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
         RETURN_ARENA_NODE(ConstAttribute);
 
     if (ident.ident == "diagnostic"_s) {
-        CONSUME_TYPE(ParenLeft);
-        PARSE(severity, Identifier);
-        auto* severityControl = parseSeverityControl(severity);
-        if (!severityControl)
-            FAIL("Unknown severity control. Expected 'error', 'info', 'off' or 'warning'"_s);
-        CONSUME_TYPE(Comma);
-
-        PARSE(name, Identifier);
-        std::optional<AST::Identifier> suffix;
-        if (current().type == TokenType::Period) {
-            consume();
-            PARSE(suffix, Identifier);
-            suffix = WTFMove(suffix);
-        }
-        if (current().type == TokenType::Comma)
-            consume();
-        CONSUME_TYPE(ParenRight);
-        RETURN_ARENA_NODE(DiagnosticAttribute, *severityControl, AST::TriggeringRule { WTFMove(name), WTFMove(suffix) });
+        PARSE(diagnostic, Diagnostic);
+        RETURN_ARENA_NODE(DiagnosticAttribute, WTFMove(diagnostic));
     }
 
     // https://gpuweb.github.io/gpuweb/wgsl/#pipeline-stage-attributes
@@ -692,6 +738,30 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
         RETURN_ARENA_NODE(StageAttribute, ShaderStage::Fragment);
 
     FAIL("Unknown attribute. Supported attributes are 'align', 'binding', 'builtin', 'compute', 'const', 'diagnostic', 'fragment', 'group', 'id', 'interpolate', 'invariant', 'location', 'must_use', 'size', 'vertex', 'workgroup_size'."_s);
+}
+
+template<typename Lexer>
+Result<AST::Diagnostic> Parser<Lexer>::parseDiagnostic()
+{
+    START_PARSE();
+    CONSUME_TYPE(ParenLeft);
+    PARSE(severity, Identifier);
+    auto* severityControl = parseSeverityControl(severity);
+    if (!severityControl)
+        FAIL("Unknown severity control. Expected 'error', 'info', 'off' or 'warning'"_s);
+    CONSUME_TYPE(Comma);
+
+    PARSE(name, Identifier);
+    std::optional<AST::Identifier> suffix;
+    if (current().type == TokenType::Period) {
+        consume();
+        PARSE(suffix, Identifier);
+        suffix = WTFMove(suffix);
+    }
+    if (current().type == TokenType::Comma)
+        consume();
+    CONSUME_TYPE(ParenRight);
+    return AST::Diagnostic { *severityControl, AST::TriggeringRule { WTFMove(name), WTFMove(suffix) } };
 }
 
 template<typename Lexer>
@@ -1021,6 +1091,10 @@ Result<AST::Statement::Ref> Parser<Lexer>::parseStatement()
         // FIXME: Handle attributes attached to statement.
         return parseForStatement();
     }
+    case TokenType::KeywordLoop: {
+        // FIXME: Handle attributes attached to statement.
+        return parseLoopStatement();
+    }
     case TokenType::KeywordSwitch: {
         // FIXME: Handle attributes attached to statement.
         return parseSwitchStatement();
@@ -1166,6 +1240,63 @@ Result<AST::Statement::Ref> Parser<Lexer>::parseForStatement()
     PARSE(body, CompoundStatement);
 
     RETURN_ARENA_NODE(ForStatement, maybeInitializer, maybeTest, maybeUpdate, WTFMove(body));
+}
+
+template<typename Lexer>
+Result<AST::Statement::Ref> Parser<Lexer>::parseLoopStatement()
+{
+    START_PARSE();
+
+    CONSUME_TYPE(KeywordLoop);
+    PARSE(attributes, Attributes);
+
+    CONSUME_TYPE(BraceLeft);
+    AST::Statement::List bodyStatements;
+    std::optional<AST::Continuing> maybeContinuing;
+
+    while (current().type != TokenType::BraceRight) {
+        if (current().type != TokenType::KeywordContinuing) {
+            PARSE(statement, Statement);
+            bodyStatements.append(WTFMove(statement));
+            continue;
+        }
+
+
+        CONSUME_TYPE(KeywordContinuing);
+
+        AST::Statement::List continuingStatements;
+        AST::Expression* breakIf = nullptr;
+        PARSE(continuingAttributes, Attributes);
+
+        CONSUME_TYPE(BraceLeft);
+        while (current().type != TokenType::BraceRight) {
+            if (current().type != TokenType::KeywordBreak) {
+                PARSE(statement, Statement);
+                continuingStatements.append(statement);
+                continue;
+            }
+
+            CONSUME_TYPE(KeywordBreak);
+            if (current().type != TokenType::KeywordIf) {
+                CONSUME_TYPE(Semicolon);
+                continuingStatements.append(MAKE_ARENA_NODE(BreakStatement));
+                continue;
+            }
+
+            CONSUME_TYPE(KeywordIf);
+            PARSE(expression, Expression);
+            CONSUME_TYPE(Semicolon);
+
+            breakIf = &expression.get();
+            break;
+        }
+        CONSUME_TYPE(BraceRight);
+
+        maybeContinuing = { WTFMove(continuingStatements), WTFMove(continuingAttributes), breakIf };
+    }
+    CONSUME_TYPE(BraceRight);
+
+    RETURN_ARENA_NODE(LoopStatement, WTFMove(attributes), WTFMove(bodyStatements), WTFMove(maybeContinuing));
 }
 
 template<typename Lexer>
@@ -1549,6 +1680,10 @@ Result<AST::Expression::Ref> Parser<Lexer>::parsePrimaryExpression()
     case TokenType::FloatLiteral: {
         CONSUME_TYPE_NAMED(lit, FloatLiteral);
         RETURN_ARENA_NODE(Float32Literal, lit.literalValue);
+    }
+    case TokenType::HalfLiteral: {
+        CONSUME_TYPE_NAMED(lit, HalfLiteral);
+        RETURN_ARENA_NODE(Float16Literal, lit.literalValue);
     }
     // TODO: bitcast expression
 

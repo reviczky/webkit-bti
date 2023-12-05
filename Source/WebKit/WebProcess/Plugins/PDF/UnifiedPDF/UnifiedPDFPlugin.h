@@ -30,14 +30,30 @@
 #include "PDFDocumentLayout.h"
 #include "PDFPluginBase.h"
 #include <WebCore/GraphicsLayer.h>
+#include <wtf/OptionSet.h>
 
 namespace WebKit {
 
+struct PDFContextMenu;
 class WebFrame;
+class WebMouseEvent;
 
 class UnifiedPDFPlugin final : public PDFPluginBase, public WebCore::GraphicsLayerClient {
 public:
     static Ref<UnifiedPDFPlugin> create(WebCore::HTMLPlugInElement&);
+
+    enum class PDFElementType : uint16_t {
+        Page       = 1 << 0,
+        Text       = 1 << 1,
+        Annotation = 1 << 2,
+        Link       = 1 << 3,
+        Control    = 1 << 4,
+        TextField  = 1 << 5,
+        Icon       = 1 << 6,
+        Popup      = 1 << 7,
+        Image      = 1 << 8,
+    };
+    using PDFElementTypes = OptionSet<PDFElementType>;
 
 private:
     explicit UnifiedPDFPlugin(WebCore::HTMLPlugInElement&);
@@ -65,14 +81,24 @@ private:
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const override;
 
+    bool wantsWheelEvents() const override { return false; }
     bool handleMouseEvent(const WebMouseEvent&) override;
-    bool handleWheelEvent(const WebWheelEvent&) override;
+    bool handleWheelEvent(const WebWheelEvent&) override { return false; }
     bool handleMouseEnterEvent(const WebMouseEvent&) override;
     bool handleMouseLeaveEvent(const WebMouseEvent&) override;
     bool handleContextMenuEvent(const WebMouseEvent&) override;
     bool handleKeyboardEvent(const WebKeyboardEvent&) override;
     bool handleEditingCommand(StringView commandName) override;
     bool isEditingCommandEnabled(StringView commandName) override;
+
+    enum class ContextMenuItemTag : uint8_t {
+        OpenWithPreview
+    };
+
+#if PLATFORM(MAC)
+    PDFContextMenu createContextMenu(const WebCore::IntPoint& contextMenuPoint) const;
+    void performContextMenuAction(ContextMenuItemTag) const;
+#endif
 
     String getSelectionString() const override;
     bool existingSelectionContainsPoint(const WebCore::FloatPoint&) const override;
@@ -82,11 +108,11 @@ private:
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
     std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
 
-    RefPtr<ShareableBitmap> snapshot() override;
-
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
     id accessibilityObject() const override;
     id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const override;
+
+    void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) override;
 
     // GraphicsLayerClient
     void notifyFlushRequired(const GraphicsLayer*) override;
@@ -100,8 +126,13 @@ private:
 
     void didChangeSettings() override;
 
+    bool usesAsyncScrolling() const final { return true; }
+    WebCore::ScrollingNodeID scrollingNodeID() const final { return m_scrollingNodeID; }
+
     void invalidateScrollbarRect(WebCore::Scrollbar&, const WebCore::IntRect&) override;
     void invalidateScrollCornerRect(const WebCore::IntRect&) override;
+    void updateScrollingExtents();
+    ScrollingCoordinator* scrollingCoordinator();
 
     // HUD Actions.
 #if ENABLE(PDF_HUD)
@@ -113,11 +144,15 @@ private:
 
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(const String& name, GraphicsLayer::Type);
 
+    PDFElementTypes pdfElementTypesForPluginPoint(const WebCore::IntPoint&) const;
+
     PDFDocumentLayout m_documentLayout;
     RefPtr<WebCore::GraphicsLayer> m_rootLayer;
-    RefPtr<WebCore::GraphicsLayer> m_clippingLayer;
-    RefPtr<WebCore::GraphicsLayer> m_scrollingLayer;
+    RefPtr<WebCore::GraphicsLayer> m_scrollContainerLayer;
+    RefPtr<WebCore::GraphicsLayer> m_scrolledContentsLayer;
     RefPtr<WebCore::GraphicsLayer> m_contentsLayer;
+
+    WebCore::ScrollingNodeID m_scrollingNodeID { 0 };
 };
 
 } // namespace WebKit

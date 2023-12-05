@@ -40,7 +40,11 @@
 namespace WebCore {
 
     class IntSize;
-    
+
+#if PLATFORM(COCOA)
+    WEBCORE_EXPORT String truncatedStringForMenuItem(const String&);
+#endif
+
     String inputElementAltText();
     String resetButtonDefaultLabel();
     String searchableIndexIntroduction();
@@ -169,6 +173,9 @@ namespace WebCore {
     WEBCORE_EXPORT String contextMenuItemTagInspectElement();
 #if HAVE(TRANSLATION_UI_SERVICES)
     String contextMenuItemTagTranslate(const String& selectedString);
+#endif
+#if ENABLE(UNIFIED_PDF)
+    WEBCORE_EXPORT String contextMenuItemPDFOpenWithPreview();
 #endif
 #if ENABLE(PDFJS)
     String contextMenuItemPDFAutoSize();

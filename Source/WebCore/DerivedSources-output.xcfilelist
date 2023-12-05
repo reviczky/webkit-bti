@@ -639,6 +639,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCountQueuingStrategy.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCountQueuingStrategy.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialCreationOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialCreationOptions.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialMediationRequirement.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialMediationRequirement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialRequestOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialRequestOptions.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCredentialsContainer.cpp
@@ -847,6 +849,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+StorageAccess.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+StorageAccess.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+UndoMananger.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+UndoMananger.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+ViewTransition.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+ViewTransition.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+WebAnimations.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument+WebAnimations.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocument.cpp
@@ -1681,6 +1685,10 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIntersectionObserverCallback.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIntersectionObserverCallback.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIntersectionObserverEntry.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIntersectionObserverEntry.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSInvokeEvent.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSInvokeEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSInvokerElement.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSInvokerElement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIterationCompositeOperation.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIterationCompositeOperation.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSJsonWebKey.cpp
@@ -2990,6 +2998,10 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTimeline.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTimeline.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTimelineOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTimelineOptions.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTransition.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTransition.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTransitionUpdateCallback.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSViewTransitionUpdateCallback.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVisibilityState.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVisibilityState.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVisualViewport.cpp

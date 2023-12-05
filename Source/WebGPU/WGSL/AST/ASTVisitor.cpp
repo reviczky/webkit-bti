@@ -55,7 +55,20 @@ void Visitor::visit(ShaderModule& shaderModule)
         checkErrorAndVisit(function);
 }
 
-void Visitor::visit(AST::Directive&)
+// Directive
+
+void Visitor::visit(AST::Directive& directive)
+{
+    switch (directive.kind()) {
+    case AST::NodeKind::DiagnosticDirective:
+        checkErrorAndVisit(downcast<AST::DiagnosticDirective>(directive));
+        break;
+    default:
+        ASSERT_NOT_REACHED("Unhandled Directive");
+    }
+}
+
+void Visitor::visit(AST::DiagnosticDirective&)
 {
 }
 
@@ -206,6 +219,9 @@ void Visitor::visit(Expression& expression)
     case AST::NodeKind::Float32Literal:
         checkErrorAndVisit(downcast<AST::Float32Literal>(expression));
         break;
+    case AST::NodeKind::Float16Literal:
+        checkErrorAndVisit(downcast<AST::Float16Literal>(expression));
+        break;
     case AST::NodeKind::IdentifierExpression:
         checkErrorAndVisit(downcast<AST::IdentifierExpression>(expression));
         break;
@@ -274,6 +290,10 @@ void Visitor::visit(AST::FieldAccessExpression& fieldAccessExpression)
 }
 
 void Visitor::visit(AST::Float32Literal&)
+{
+}
+
+void Visitor::visit(AST::Float16Literal&)
 {
 }
 
@@ -457,8 +477,21 @@ void Visitor::visit(AST::IfStatement& ifStatement)
 
 void Visitor::visit(AST::LoopStatement& loopStatement)
 {
-    checkErrorAndVisit(loopStatement.body());
-    checkErrorAndVisit(loopStatement.continuingBody());
+    for (auto& attribute : loopStatement.attributes())
+        checkErrorAndVisit(attribute);
+    for (auto& statement : loopStatement.body())
+        checkErrorAndVisit(statement);
+    if (auto continuing = loopStatement.continuing())
+        checkErrorAndVisit(*continuing);
+}
+
+void Visitor::visit(AST::Continuing& continuing)
+{
+    for (auto& statement : continuing.body)
+        checkErrorAndVisit(statement);
+    for (auto& attribute : continuing.attributes)
+        checkErrorAndVisit(attribute);
+    maybeCheckErrorAndVisit(continuing.breakIf);
 }
 
 void Visitor::visit(AST::PhonyAssignmentStatement& phonyAssignmentStatement)

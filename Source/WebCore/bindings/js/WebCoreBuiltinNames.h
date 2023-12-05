@@ -272,6 +272,7 @@ namespace WebCore {
     macro(InputEvent) \
     macro(IntersectionObserver) \
     macro(IntersectionObserverEntry) \
+    macro(InvokeEvent) \
     macro(KeyframeEffect) \
     macro(Lock) \
     macro(LockManager) \
@@ -440,6 +441,7 @@ namespace WebCore {
     macro(VideoEncoder) \
     macro(VideoFrame) \
     macro(ViewTimeline) \
+    macro(ViewTransition) \
     macro(VisualViewport) \
     macro(WakeLock) \
     macro(WakeLockSentinel) \

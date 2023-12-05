@@ -866,7 +866,6 @@ bool MediaElementSession::requiresFullscreenForVideoPlayback() const
         return false;
 
     if (m_element.document().isMediaDocument()) {
-        ASSERT(is<HTMLVideoElement>(m_element));
         const HTMLVideoElement& videoElement = *downcast<const HTMLVideoElement>(&m_element);
         if (m_element.readyState() < HTMLVideoElement::HAVE_METADATA || !videoElement.hasEverHadVideo())
             return false;
@@ -1045,11 +1044,7 @@ static bool isElementRectMostlyInMainFrame(const HTMLMediaElement& element)
     if (!documentFrame)
         return false;
 
-    auto* localFrame = dynamicDowncast<LocalFrame>(documentFrame->mainFrame());
-    if (!localFrame)
-        return false;
-
-    auto mainFrameView = localFrame->view();
+    RefPtr mainFrameView = documentFrame->mainFrame().virtualView();
     if (!mainFrameView)
         return false;
 

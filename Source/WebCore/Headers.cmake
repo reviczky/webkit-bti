@@ -667,6 +667,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     animation/AcceleratedTimeline.h
     animation/AnimationFrameRatePreset.h
+    animation/AnimationTimeline.h
     animation/CSSPropertyBlendingClient.h
     animation/CustomAnimationOptions.h
     animation/CompositeOperation.h
@@ -680,6 +681,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     animation/KeyframeEffectOptions.h
     animation/KeyframeInterpolation.h
     animation/PlaybackDirection.h
+    animation/ScrollAxis.h
+    animation/ScrollTimeline.h
+    animation/ScrollTimelineOptions.h
+    animation/ViewTimeline.h
+    animation/ViewTimelineOptions.h
     animation/WebAnimationTypes.h
 
     bindings/IDLTypes.h
@@ -875,24 +881,19 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/parser/CSSParserToken.h
     css/parser/CSSParserTokenRange.h
     css/parser/CSSSelectorParser.h
+    css/parser/CSSSelectorParserContext.h
 
     css/query/GenericMediaQueryTypes.h
     css/query/MediaQuery.h
 
+    css/typedom/CSSKeywordValue.h
+    css/typedom/CSSNumericValue.h
+    css/typedom/CSSStyleValue.h
+
+    css/typedom/numeric/CSSNumericBaseType.h
+    css/typedom/numeric/CSSNumericType.h
+
     cssjit/CompiledSelector.h
-
-    display/DisplayTree.h
-    display/DisplayTreeBuilder.h
-    display/DisplayView.h
-
-    display/compositing/DisplayLayerController.h
-
-    display/css/DisplayBox.h
-    display/css/DisplayCSSPainter.h
-    display/css/DisplayContainerBox.h
-    display/css/DisplayImageBox.h
-    display/css/DisplayReplacedBox.h
-    display/css/DisplayStyle.h
 
     dom/AbortSignal.h
     dom/AbstractRange.h
@@ -972,11 +973,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/FocusOptions.h
     dom/FragmentDirectiveParser.h
     dom/FragmentDirectiveRangeFinder.h
-    dom/FragmentScriptingPermission.h
     dom/FullscreenManager.h
     dom/GCReachableRef.h
     dom/ImageOverlay.h
     dom/InlineStyleSheetOwner.h
+    dom/InvokeEvent.h
     dom/KeyboardEvent.h
     dom/LiveNodeList.h
     dom/LiveNodeListInlines.h
@@ -1001,6 +1002,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/NodeRenderStyle.h
     dom/NodeTraversal.h
     dom/OverflowEvent.h
+    dom/ParserContentPolicy.h
     dom/PointerEvent.h
     dom/PointerEventTypeNames.h
     dom/PopoverData.h
@@ -1052,6 +1054,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/UserGestureIndicator.h
     dom/UserTypingGestureIndicator.h
     dom/ValidityStateFlags.h
+    dom/ViewTransition.h
+    dom/ViewTransitionUpdateCallback.h
     dom/ViewportArguments.h
     dom/VisibilityChangeClient.h
     dom/VisibilityState.h
@@ -1262,7 +1266,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/canvas/WebGLAny.h
     html/canvas/WebGLContextAttributes.h
     html/canvas/WebGLExtensionAny.h
-    html/canvas/WebGLExtensionAnyInlines.h
 
     html/forms/FileIconLoader.h
 
@@ -2117,8 +2120,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/iso/ISOTrackEncryptionBox.h
     platform/graphics/iso/ISOVTTCue.h
 
-    platform/graphics/libwpe/PlatformDisplayLibWPE.h
-
     platform/graphics/opentype/OpenTypeMathData.h
     platform/graphics/opentype/OpenTypeVerticalData.h
 
@@ -2617,7 +2618,3 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     ${WebCore_DERIVED_SOURCES_DIR}/WebKitFontFamilyNames.h
     ${WebCore_DERIVED_SOURCES_DIR}/WritableStreamInternalsBuiltins.h
 )
-
-if (ENABLE_OPENCDM)
-    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS platform/encryptedmedia/CDMOpenCDMTypes.h)
-endif ()

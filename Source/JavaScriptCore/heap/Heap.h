@@ -327,6 +327,10 @@ public:
 
     JS_EXPORT_PRIVATE GCActivityCallback* fullActivityCallback();
     JS_EXPORT_PRIVATE GCActivityCallback* edenActivityCallback();
+
+    JS_EXPORT_PRIVATE void setFullActivityCallback(RefPtr<GCActivityCallback>&&);
+    JS_EXPORT_PRIVATE void setEdenActivityCallback(RefPtr<GCActivityCallback>&&);
+
     JS_EXPORT_PRIVATE void setGarbageCollectionTimerEnabled(bool);
     JS_EXPORT_PRIVATE void scheduleOpportunisticFullCollection();
 
@@ -567,6 +571,8 @@ public:
     {
         m_possiblyAccessedStringsFromConcurrentThreads.append(WTFMove(string));
     }
+
+    bool isInPhase(CollectorPhase phase) const { return m_currentPhase == phase; }
 
 private:
     friend class AllocatingScope;
@@ -831,7 +837,7 @@ private:
 
     Vector<String> m_possiblyAccessedStringsFromConcurrentThreads;
     
-    RefPtr<FullGCActivityCallback> m_fullActivityCallback;
+    RefPtr<GCActivityCallback> m_fullActivityCallback;
     RefPtr<GCActivityCallback> m_edenActivityCallback;
     Ref<IncrementalSweeper> m_sweeper;
     Ref<StopIfNecessaryTimer> m_stopIfNecessaryTimer;

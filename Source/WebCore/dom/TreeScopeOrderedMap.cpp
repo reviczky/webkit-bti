@@ -119,7 +119,7 @@ inline RefPtr<Element> TreeScopeOrderedMap::get(const AtomString& key, const Tre
 
     // We know there's at least one node that matches; iterate to find the first one.
     Ref rootNode = scope.rootNode();
-    for (Ref element : descendantsOfType<Element>(rootNode.get())) {
+    for (Ref<Element> element : descendantsOfType<Element>(rootNode.get())) {
         if (!element->isInTreeScope())
             continue;
         if (!keyMatches(key, element))
@@ -135,7 +135,6 @@ inline RefPtr<Element> TreeScopeOrderedMap::get(const AtomString& key, const Tre
     if (auto* currentScope = ContainerChildRemovalScope::currentScope()) {
         ASSERT(&scope.rootNode() == &currentScope->parentOfRemovedTree().rootNode());
         Ref removedTree = currentScope->removedChild();
-        ASSERT(is<ContainerNode>(removedTree));
         for (Ref element : descendantsOfType<Element>(downcast<ContainerNode>(removedTree.get()))) {
             if (!keyMatches(key, element))
                 continue;

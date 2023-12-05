@@ -88,9 +88,9 @@ void StringDumper::visit(ShaderModule& shaderModule)
         m_out.printf("\n\n");
 }
 
-void StringDumper::visit(Directive& directive)
+void StringDumper::visit(DiagnosticDirective&)
 {
-    m_out.print(m_indent, "enable ", directive.name(), ";");
+    // FIXME: we still don't do anything with diagnostics
 }
 
 // Attribute
@@ -246,6 +246,11 @@ void StringDumper::visit(CallExpression& expression)
 void StringDumper::visit(Float32Literal& literal)
 {
     m_out.print(literal.value(), "f");
+}
+
+void StringDumper::visit(Float16Literal& literal)
+{
+    m_out.print(String::number(literal.value()), "h");
 }
 
 void StringDumper::visit(IdentifierExpression& identifier)

@@ -1641,10 +1641,10 @@ Error Display::createSync(const gl::Context *currentContext,
         ANGLE_TRY(restoreLostDevice());
     }
 
-    angle::UniqueObjectPointer<egl::Sync, Display> syncPtr(
-        new Sync(mImplementation, id, type, attribs), this);
+    angle::UniqueObjectPointer<egl::Sync, Display> syncPtr(new Sync(mImplementation, id, type),
+                                                           this);
 
-    ANGLE_TRY(syncPtr->initialize(this, currentContext));
+    ANGLE_TRY(syncPtr->initialize(this, currentContext, attribs));
 
     Sync *sync = syncPtr.release();
 
@@ -2298,6 +2298,8 @@ void Display::initializeFrontendFeatures()
 
     // Togglable until work on the extension is complete - anglebug.com/7279.
     ANGLE_FEATURE_CONDITION(&mFrontendFeatures, emulatePixelLocalStorage, true);
+
+    ANGLE_FEATURE_CONDITION(&mFrontendFeatures, forceMinimumMaxVertexAttributes, false);
 
     mImplementation->initializeFrontendFeatures(&mFrontendFeatures);
 }

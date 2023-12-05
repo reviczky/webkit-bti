@@ -106,6 +106,7 @@
 #include "HTMLConstructionSite.h"
 #include "HTMLDialogElement.h"
 #include "HTMLDocument.h"
+#include "HTMLDocumentParserFastPath.h"
 #include "HTMLElementFactory.h"
 #include "HTMLFormControlElement.h"
 #include "HTMLFrameElement.h"
@@ -274,6 +275,8 @@
 #include "UserGestureIndicator.h"
 #include "ValidationMessage.h"
 #include "ValidationMessageClient.h"
+#include "ViewTransition.h"
+#include "ViewTransitionUpdateCallback.h"
 #include "ViolationReportType.h"
 #include "VisibilityChangeClient.h"
 #include "VisibilityState.h"
@@ -432,7 +435,7 @@ static void CallbackForContainIntrinsicSize(const Vector<Ref<ResizeObserverEntry
 
 // https://www.w3.org/TR/xml/#NT-NameStartChar
 // NameStartChar       ::=       ":" | [A-Z] | "_" | [a-z] | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
-static inline bool isValidNameStart(UChar32 c)
+static inline bool isValidNameStart(char32_t c)
 {
     return c == ':' || (c >= 'A' && c <= 'Z') || c == '_' || (c >= 'a' && c <= 'z') || (c >= 0x00C0 && c <= 0x00D6)
         || (c >= 0x00D8 && c <= 0x00F6) || (c >= 0x00F8 && c <= 0x02FF) || (c >= 0x0370 && c <= 0x037D) || (c >= 0x037F && c <= 0x1FFF)
@@ -442,7 +445,7 @@ static inline bool isValidNameStart(UChar32 c)
 
 // https://www.w3.org/TR/xml/#NT-NameChar
 // NameChar       ::=       NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
-static inline bool isValidNamePart(UChar32 c)
+static inline bool isValidNamePart(char32_t c)
 {
     return isValidNameStart(c) || c == '-' || c == '.' || (c >= '0' && c <= '9') || c == 0x00B7
         || (c >= 0x0300 && c <= 0x036F) || (c >= 0x203F && c <= 0x2040);
@@ -906,6 +909,33 @@ void Document::commonTeardown()
 #endif
 }
 
+void Document::parseMarkupUnsafe(const String& markup, OptionSet<ParserContentPolicy> parserContentPolicy)
+{
+    auto policy = OptionSet<ParserContentPolicy> { ParserContentPolicy::AllowScriptingContent } | parserContentPolicy;
+    setParserContentPolicy(policy);
+    bool usedFastPath = false;
+    if (this->contentType() == "text/html"_s) {
+        auto body = HTMLBodyElement::create(*this);
+        usedFastPath = tryFastParsingHTMLFragment(StringView { markup }.substring(markup.find(isNotASCIIWhitespace<UChar>)), *this, body, body, policy);
+        if (LIKELY(usedFastPath)) {
+            auto html = HTMLHtmlElement::create(*this);
+            auto head = HTMLHeadElement::create(*this);
+            html->appendChild(head);
+            html->appendChild(body);
+            appendChild(html);
+        }
+    }
+    if (!usedFastPath)
+        setContent(markup);
+}
+
+Ref<Document> Document::parseHTMLUnsafe(Document& context, const String& html)
+{
+    Ref document = HTMLDocument::create(nullptr, context.protectedSettings(), URL { });
+    document->parseMarkupUnsafe(html, { ParserContentPolicy::AllowDeclarativeShadowRoots });
+    return document;
+}
+
 Element* Document::elementForAccessKey(const String& key)
 {
     if (key.isEmpty())
@@ -1313,8 +1343,8 @@ Ref<Element> Document::createElement(const QualifiedName& name, bool createdByPa
 // https://html.spec.whatwg.org/#valid-custom-element-name
 
 struct UnicodeCodePointRange {
-    UChar32 minimum;
-    UChar32 maximum;
+    char32_t minimum;
+    char32_t maximum;
 };
 
 #if ASSERT_ENABLED
@@ -1328,19 +1358,19 @@ static inline bool operator<(const UnicodeCodePointRange& a, const UnicodeCodePo
 
 #endif // ASSERT_ENABLED
 
-static inline bool operator<(const UnicodeCodePointRange& a, UChar32 b)
+static inline bool operator<(const UnicodeCodePointRange& a, char32_t b)
 {
     ASSERT(a.minimum <= a.maximum);
     return a.maximum < b;
 }
 
-static inline bool operator<(UChar32 a, const UnicodeCodePointRange& b)
+static inline bool operator<(char32_t a, const UnicodeCodePointRange& b)
 {
     ASSERT(b.minimum <= b.maximum);
     return a < b.minimum;
 }
 
-static inline bool isPotentialCustomElementNameCharacter(UChar32 character)
+static inline bool isPotentialCustomElementNameCharacter(char32_t character)
 {
     static const UnicodeCodePointRange ranges[] = {
         { '-', '.' },
@@ -1696,6 +1726,12 @@ String Document::contentType() const
     return "application/xml"_s;
 }
 
+AtomString Document::encoding() const
+{
+    auto encoding = textEncoding().domName();
+    return encoding.isNull() ? nullAtom() : AtomString { encoding };
+}
+
 RefPtr<Range> Document::caretRangeFromPoint(int x, int y)
 {
     auto boundary = caretPositionFromPoint(LayoutPoint(x, y));
@@ -1995,9 +2031,7 @@ void Document::visibilityStateChanged()
         for (auto& callback : callbacks)
             callback();
     }
-#if ENABLE(SERVICE_WORKER)
     updateServiceWorkerClientData();
-#endif
 }
 
 VisibilityState Document::visibilityState() const
@@ -2129,7 +2163,7 @@ bool Document::hasPendingFullStyleRebuild() const
     return hasPendingStyleRecalc() && m_needsFullStyleRebuild;
 }
 
-void Document::updateRenderTree(std::unique_ptr<const Style::Update> styleUpdate)
+void Document::updateRenderTree(std::unique_ptr<Style::Update> styleUpdate)
 {
     ASSERT(!inRenderTreeUpdate());
 
@@ -2341,13 +2375,13 @@ bool Document::updateStyleIfNeeded()
     return true;
 }
 
-void Document::updateLayoutIgnorePendingStylesheets(OptionSet<LayoutOptions> layoutOptions, const Element* context)
+auto Document::updateLayoutIgnorePendingStylesheets(OptionSet<LayoutOptions> layoutOptions, const Element* context) -> UpdateLayoutResult
 {
     layoutOptions.add(LayoutOptions::IgnorePendingStylesheets);
-    updateLayout(layoutOptions, context);
+    return updateLayout(layoutOptions, context);
 }
 
-void Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Element* context)
+auto Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Element* context) -> UpdateLayoutResult
 {
     bool oldIgnore = m_ignorePendingStylesheets;
 
@@ -2367,17 +2401,22 @@ void Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Elemen
     if (frameView && frameView->layoutContext().isInRenderTreeLayout()) {
         // View layout should not be re-entrant.
         ASSERT_NOT_REACHED();
-        return;
+        return UpdateLayoutResult::NoChange;
     }
+
+    UpdateLayoutResult result = UpdateLayoutResult::NoChange;
 
     {
         RenderView::RepaintRegionAccumulator repaintRegionAccumulator(renderView());
         ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
-        if (RefPtr owner = ownerElement())
-            owner->protectedDocument()->updateLayout(layoutOptions, context);
+        if (!layoutOptions.contains(LayoutOptions::DoNotLayoutAncestorDocuments)) {
+            if (ownerElement() && ownerElement()->protectedDocument()->updateLayout(layoutOptions, context) == UpdateLayoutResult::ChangesDone)
+                result = UpdateLayoutResult::ChangesDone;
+        }
 
-        updateStyleIfNeeded();
+        if (updateStyleIfNeeded())
+            result = UpdateLayoutResult::ChangesDone;
 
         StackStats::LayoutCheckPoint layoutCheckPoint;
 
@@ -2391,7 +2430,11 @@ void Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Elemen
             if (frameView->layoutContext().isLayoutPending() || renderView()->needsLayout()) {
                 ContentVisibilityForceLayoutScope scope(*renderView(), context);
                 frameView->layoutContext().layout();
+                result = UpdateLayoutResult::ChangesDone;
             }
+
+            if (layoutOptions.contains(LayoutOptions::UpdateCompositingLayers) && frameView->updateCompositingLayersAfterLayoutIfNeeded())
+                result = UpdateLayoutResult::ChangesDone;
         }
     }
 
@@ -2404,6 +2447,7 @@ void Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Elemen
     }
 
     m_ignorePendingStylesheets = oldIgnore;
+    return result;
 }
 
 std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets(Element& element, const RenderStyle* parentStyle, PseudoId pseudoElementSpecifier)
@@ -2521,11 +2565,12 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
 
             // If a block contains floats and the child's height isn't specified, then
             // give up also, since our height could end up being influenced by the floats.
-            if (checkingLogicalHeight && !hasSpecifiedLogicalHeight && currentBox->isRenderBlockFlow()) {
-                CheckedRef currentBlockFlow = downcast<RenderBlockFlow>(*currentBox);
-                if (currentBlockFlow->containsFloats() && previousBox && !previousBox->isFloatingOrOutOfFlowPositioned()) {
-                    requireFullLayout = true;
-                    break;
+            if (checkingLogicalHeight && !hasSpecifiedLogicalHeight) {
+                if (CheckedPtr currentBlockFlow = dynamicDowncast<RenderBlockFlow>(*currentBox)) {
+                    if (currentBlockFlow->containsFloats() && previousBox && !previousBox->isFloatingOrOutOfFlowPositioned()) {
+                        requireFullLayout = true;
+                        break;
+                    }
                 }
             }
 
@@ -2791,10 +2836,8 @@ void Document::willBeRemovedFromFrame()
         rtcNetworkManager->unregisterMDNSNames();
 #endif
 
-#if ENABLE(SERVICE_WORKER)
     setActiveServiceWorker(nullptr);
     setServiceWorkerConnection(nullptr);
-#endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     clearTouchEventHandlersAndListeners();
@@ -3283,7 +3326,6 @@ std::unique_ptr<FontLoadRequest> Document::fontLoadRequest(const String& url, bo
 
 void Document::beginLoadingFontSoon(FontLoadRequest& request)
 {
-    ASSERT(is<CachedFontLoadRequest>(request));
     CachedResourceHandle font = downcast<CachedFontLoadRequest>(request).cachedFont();
     m_fontLoader->beginLoadingFontSoon(*font);
 }
@@ -3453,8 +3495,10 @@ void Document::implicitClose()
         updateStyleIfNeeded();
 
         // Always do a layout after loading if needed.
-        if (view() && renderView() && (!renderView()->firstChild() || renderView()->needsLayout()))
+        if (view() && renderView() && (!renderView()->firstChild() || renderView()->needsLayout())) {
             protectedView()->layoutContext().layout();
+            protectedView()->updateCompositingLayersAfterLayoutIfNeeded();
+        }
     }
 
     m_processingLoadEvent = false;
@@ -3520,7 +3564,7 @@ bool Document::isLayoutPending() const
 
 bool Document::supportsPaintTiming() const
 {
-    return DeprecatedGlobalSettings::paintTimingEnabled() && securityOrigin().isSameOriginDomain(topOrigin());
+    return securityOrigin().isSameOriginDomain(topOrigin());
 }
 
 // https://w3c.github.io/paint-timing/#ref-for-mark-paint-timing
@@ -4027,9 +4071,6 @@ void Document::willLoadFrameElement(const URL& frameURL)
 // Prevent cross-site top-level redirects from third-party iframes unless the user has ever interacted with the frame.
 bool Document::isNavigationBlockedByThirdPartyIFrameRedirectBlocking(LocalFrame& targetFrame, const URL& destinationURL)
 {
-    if (!settings().thirdPartyIframeRedirectBlockingEnabled())
-        return false;
-
     // Only prevent top frame navigations by subframes.
     if (m_frame == &targetFrame || &targetFrame != &m_frame->tree().top())
         return false;
@@ -5594,8 +5635,7 @@ void Document::enqueueOverflowEvent(Ref<Event>&& event)
     // FIXME: This event is totally unspecified.
     RefPtr target = event->target();
     RELEASE_ASSERT(target);
-    RELEASE_ASSERT(is<Node>(target));
-    eventLoop().queueTask(TaskSource::DOMManipulation, [protectedTarget = GCReachableRef<Node>(downcast<Node>(*target)), event = WTFMove(event)] {
+    eventLoop().queueTask(TaskSource::DOMManipulation, [protectedTarget = GCReachableRef<Node>(checkedDowncast<Node>(*target)), event = WTFMove(event)] {
         protectedTarget->dispatchEvent(event);
     });
 }
@@ -5796,7 +5836,6 @@ ExceptionOr<void> Document::setCookie(const String& value)
 
 String Document::referrer()
 {
-#if ENABLE(TRACKING_PREVENTION)
     if (!m_referrerOverride.isEmpty())
         return m_referrerOverride;
     if (DeprecatedGlobalSettings::trackingPreventionEnabled() && frame()) {
@@ -5810,7 +5849,6 @@ String Document::referrer()
             }
         }
     }
-#endif
     if (frame())
         return frame()->loader().referrer();
     return String();
@@ -5914,7 +5952,7 @@ static bool isValidNameNonASCII(const UChar* characters, unsigned length)
 {
     for (unsigned i = 0; i < length;) {
         bool first = !i;
-        UChar32 c;
+        char32_t c;
         U16_NEXT(characters, i, length, c); // Increments i.
         if (first ? !isValidNameStart(c) : !isValidNamePart(c))
             return false;
@@ -5993,7 +6031,7 @@ ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(cons
         return std::pair<AtomString, AtomString> { { }, { qualifiedName } };
 
     for (unsigned i = 0; i < length; ) {
-        UChar32 c;
+        char32_t c;
         U16_NEXT(qualifiedName, i, length, c);
         if (c == ':') {
             if (sawColon)
@@ -6183,10 +6221,8 @@ void Document::suspend(ReasonForSuspension reason)
         rtcNetworkManager->unregisterMDNSNames();
 #endif
 
-#if ENABLE(SERVICE_WORKER)
     if (settings().serviceWorkersEnabled() && reason == ReasonForSuspension::BackForwardCache)
         setServiceWorkerConnection(nullptr);
-#endif
 
     suspendScheduledTasks(reason);
 
@@ -6228,10 +6264,8 @@ void Document::resume(ReasonForSuspension reason)
 
     m_isSuspended = false;
 
-#if ENABLE(SERVICE_WORKER)
     if (settings().serviceWorkersEnabled() && reason == ReasonForSuspension::BackForwardCache)
         setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnection());
-#endif
 }
 
 void Document::registerForDocumentSuspensionCallbacks(Element& element)
@@ -6692,13 +6726,11 @@ void Document::finishedParsing()
     // Parser should have picked up all speculative preloads by now
     m_cachedResourceLoader->clearPreloads(CachedResourceLoader::ClearPreloadsMode::ClearSpeculativePreloads);
 
-#if ENABLE(SERVICE_WORKER)
     if (settings().serviceWorkersEnabled()) {
         // Stop queuing service worker client messages now that the DOMContentLoaded event has been fired.
         if (RefPtr serviceWorkerContainer = this->serviceWorkerContainer())
             serviceWorkerContainer->startMessages();
     }
-#endif
 
 #if ENABLE(APP_HIGHLIGHTS)
     if (auto* appHighlightStorage = appHighlightStorageIfExists())
@@ -8872,8 +8904,6 @@ void Document::updateMainArticleElementAfterLayout()
     m_mainArticleElement = tallestArticle.get();
 }
 
-#if ENABLE(TRACKING_PREVENTION)
-
 bool Document::hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain& domain)
 {
     return m_registrableDomainRequestedPageSpecificStorageAccessWithUserInteraction == domain;
@@ -8904,8 +8934,6 @@ void Document::downgradeReferrerToRegistrableDomain()
     else
         m_referrerOverride = makeString(referrerURL.protocol(), "://", domainString, '/');
 }
-
-#endif
 
 void Document::setConsoleMessageListener(RefPtr<StringCallback>&& listener)
 {
@@ -9273,7 +9301,6 @@ void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Ve
     });
 }
 
-#if ENABLE(SERVICE_WORKER)
 void Document::setServiceWorkerConnection(RefPtr<SWClientConnection>&& serviceWorkerConnection)
 {
     if (m_serviceWorkerConnection == serviceWorkerConnection || m_hasPreparedForDestruction || m_isSuspended)
@@ -9313,7 +9340,6 @@ void Document::navigateFromServiceWorker(const URL& url, CompletionHandler<void(
         });
     });
 }
-#endif
 
 const Style::CustomPropertyRegistry& Document::customPropertyRegistry() const
 {
@@ -9789,6 +9815,52 @@ void Document::updateContentRelevancyForScrollIfNeeded(const Element& scrollAnch
     if (!m_contentVisibilityDocumentState)
         return;
     return m_contentVisibilityDocumentState->updateContentRelevancyForScrollIfNeeded(scrollAnchor);
+}
+
+ViewTransition* Document::activeViewTransition() const
+{
+    return m_activeViewTransition.get();
+}
+
+void Document::setActiveViewTransition(RefPtr<ViewTransition>&& viewTransition)
+{
+    m_activeViewTransition = WTFMove(viewTransition);
+}
+
+bool Document::hasViewTransitionPseudoElementTree() const
+{
+    return m_hasViewTransitionPseudoElementTree;
+}
+
+void Document::setHasViewTransitionPseudoElementTree(bool value)
+{
+    m_hasViewTransitionPseudoElementTree = value;
+}
+
+Ref<ViewTransition> Document::startViewTransition(RefPtr<ViewTransitionUpdateCallback>&& updateCallback)
+{
+    Ref viewTransition = ViewTransition::create(*this, WTFMove(updateCallback));
+
+    if (RefPtr activeViewTransition = m_activeViewTransition)
+        activeViewTransition->skipViewTransition(Exception { ExceptionCode::AbortError, "Old view transition aborted by new view transition."_s });
+
+    setActiveViewTransition(WTFMove(viewTransition));
+    scheduleRenderingUpdate(RenderingUpdateStep::PerformPendingViewTransitions);
+    return *m_activeViewTransition;
+}
+
+void Document::performPendingViewTransitions()
+{
+    if (!m_activeViewTransition)
+        return;
+    Ref activeViewTransition = *m_activeViewTransition;
+    if (activeViewTransition->phase() == ViewTransitionPhase::PendingCapture)
+        activeViewTransition->setupViewTransition();
+    else if (activeViewTransition->phase() == ViewTransitionPhase::Animating)
+        activeViewTransition->handleTransitionFrame();
+
+    if (m_activeViewTransition)
+        scheduleRenderingUpdate(RenderingUpdateStep::PerformPendingViewTransitions);
 }
 
 String Document::mediaKeysStorageDirectory()

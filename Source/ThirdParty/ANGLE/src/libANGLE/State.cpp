@@ -454,6 +454,8 @@ void PrivateState::initialize(Context *context)
         SetComponentTypeMask(ComponentType::Float, i, &mCurrentValuesTypeMask);
     }
 
+    mAllAttribsMask = AttributesMask(angle::BitMask<uint32_t>(mCaps.maxVertexAttributes));
+
     mMultiSampling    = true;
     mSampleAlphaToOne = false;
 
@@ -3785,6 +3787,12 @@ angle::Result State::installProgramExecutable(const Context *context)
     ASSERT(mProgram->isLinked());
 
     mDirtyBits.set(state::DIRTY_BIT_PROGRAM_EXECUTABLE);
+
+    // Make sure the program is synced before draw, if needed
+    if (mProgram->needsSync())
+    {
+        mDirtyObjects.set(state::DIRTY_OBJECT_PROGRAM);
+    }
 
     // The bound Program always overrides the ProgramPipeline, so install the executable regardless
     // of whether a program pipeline is bound.
