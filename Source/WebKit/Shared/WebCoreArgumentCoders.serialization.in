@@ -245,14 +245,12 @@ enum class WebCore::PermissionState : uint8_t {
     Prompt
 };
 
-#if ENABLE(SERVICE_WORKER)
 header: <WebCore/PushPermissionState.h>
 enum class WebCore::PushPermissionState : uint8_t {
     Denied,
     Granted,
     Prompt
 };
-#endif // ENABLE(SERVICE_WORKER)
 
 header: <WebCore/Autofill.h>
 enum class WebCore::AutofillFieldName : uint8_t {
@@ -431,7 +429,7 @@ enum class WebCore::ScrollGranularity : uint8_t {
     WebCore::FetchOptions options;
     String referrer;
     WebCore::FetchHeadersGuard responseHeadersGuard;
-    WebCore::ResourceResponse::CrossThreadData response;
+    WebCore::ResourceResponseData response;
     std::variant<std::nullptr_t, Ref<WebCore::FormData>, Ref<WebCore::SharedBuffer>> responseBody;
     uint64_t responseBodySize;
 };
@@ -1381,7 +1379,6 @@ struct WebCore::PermissionDescriptor {
     WebCore::PermissionName name;
 }
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::PushSubscriptionData {
     WebCore::PushSubscriptionIdentifier identifier;
     String endpoint;
@@ -1390,7 +1387,6 @@ struct WebCore::PushSubscriptionData {
     Vector<uint8_t> clientECDHPublicKey;
     Vector<uint8_t> sharedAuthenticationSecret;
 };
-#endif
 
 [RefCounted] class WebCore::DeprecationReportBody {
     String id()
@@ -1636,12 +1632,10 @@ struct WebCore::VideoFrameMetadata {
 };
 #endif // ENABLE(VIDEO)
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::NavigationPreloadState {
     bool enabled;
     String headerValue;
 };
-#endif // ENABLE(SERVICE_WORKER)
 
 enum class WebCore::RenderingMode : bool
 
@@ -2712,9 +2706,11 @@ header: <WebCore/GraphicsContextGLAttributes.h>
 };
 
 header: <WebCore/GraphicsContextGLAttributes.h>
-[CustomHeader] enum class WebCore::GraphicsContextGLWebGLVersion : uint8_t {
-    WebGL1,
-    WebGL2
+[CustomHeader] enum class WebCore::GraphicsContextGLSimulatedCreationFailure : uint8_t {
+    None,
+    IPCBufferOOM,
+    CreationTimeout,
+    FailPlatformContextCreation
 };
 
 struct WebCore::GraphicsContextGLAttributes {
@@ -2724,12 +2720,9 @@ struct WebCore::GraphicsContextGLAttributes {
     bool antialias;
     bool premultipliedAlpha;
     bool preserveDrawingBuffer;
-    bool failIfMajorPerformanceCaveat;
     WebCore::GraphicsContextGLPowerPreference powerPreference;
     float devicePixelRatio;
-    WebCore::GraphicsContextGLPowerPreference initialPowerPreference;
-    WebCore::GraphicsContextGLWebGLVersion webGLVersion;
-    bool forceRequestForHighPerformanceGPU;
+    bool isWebGL2;
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     uint64_t windowGPUID;
 #endif
@@ -2739,8 +2732,7 @@ struct WebCore::GraphicsContextGLAttributes {
 #if ENABLE(WEBXR)
     bool xrCompatible;
 #endif
-    bool failPlatformContextCreationForTesting;
-    [NotSerialized] WebCore::GraphicsContextGLSimulatedCreationFailure failContextCreationForTesting;
+    WebCore::GraphicsContextGLSimulatedCreationFailure failContextCreationForTesting;
 };
 #endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
 
@@ -3023,38 +3015,15 @@ using WebCore::ResourceResponseBase::Type = WebCore::ResourceResponseBaseType;
 using WebCore::ResourceResponseBase::Tainting = WebCore::ResourceResponseBaseTainting;
 using WebCore::ResourceResponseBase::Source = WebCore::ResourceResponseBaseSource;
 
-[Nested] struct WebCore::ResourceResponseBase::ResponseData {
-    URL m_url;
-    AtomString m_mimeType;
-    long long m_expectedContentLength;
-    AtomString m_textEncodingName;
-    AtomString m_httpStatusText;
-    AtomString m_httpVersion;
-    WebCore::HTTPHeaderMap m_httpHeaderFields;
-    Box<WebCore::NetworkLoadMetrics> m_networkLoadMetrics;
-
-    short m_httpStatusCode;
-    std::optional<WebCore::CertificateInfo> m_certificateInfo;
-
-    WebCore::ResourceResponseBase::Source m_source;
-    WebCore::ResourceResponseBase::Type m_type;
-    WebCore::ResourceResponseBase::Tainting m_tainting;
-
-    bool m_isRedirected;
-    WebCore::UsedLegacyTLS m_usedLegacyTLS;
-    WebCore::WasPrivateRelayed m_wasPrivateRelayed;
-    bool m_isRangeRequested;
-}
-
 class WebCore::ResourceResponseBase {
-    std::optional<WebCore::ResourceResponseBase::ResponseData> getResponseData()
+    std::optional<WebCore::ResourceResponseData> getResponseData()
 }
 
 class WebCore::ResourceResponse : WebCore::ResourceResponseBase {
 }
 
 header: <WebCore/ResourceResponseBase.h>
-[CustomHeader] struct WebCore::ResourceResponseBaseCrossThreadData {
+[CustomHeader] struct WebCore::ResourceResponseData {
     URL url;
     String mimeType;
     long long expectedContentLength;
@@ -3073,8 +3042,6 @@ header: <WebCore/ResourceResponseBase.h>
     bool isRangeRequested;
     std::optional<WebCore::CertificateInfo> certificateInfo;
 };
-
-using WebCore::ResourceResponseBase::CrossThreadData = WebCore::ResourceResponseBaseCrossThreadData;
 
 enum class WebCore::ReferrerPolicy : uint8_t {
     EmptyString,
@@ -3298,6 +3265,14 @@ enum class WebCore::ApplePayButtonStyle : uint8_t {
     WebCore::IntRect trackBounds();
     Vector<double> tickRatios();
 }
+
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::SwitchThumbPart {
+    [Validator='progress >= 0.0f && progress <= 1.0f'] float progress();
+};
+
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::SwitchTrackPart {
+    [Validator='progress >= 0.0f && progress <= 1.0f'] float progress();
+};
 
 [RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::DistantLightSource {
     float azimuth();
@@ -3929,7 +3904,6 @@ header: <WebCore/TextManipulationController.h>
     WebCore::TextManipulationControllerManipulationFailure::Type type;
 };
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::BackgroundFetchInformation {
     WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier;
     String identifier;
@@ -3941,9 +3915,7 @@ struct WebCore::BackgroundFetchInformation {
     WebCore::BackgroundFetchFailureReason failureReason;
     bool recordsAvailable;
 };
-#endif
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::BackgroundFetchRequest {
     WebCore::ResourceRequest internalRequest;
     WebCore::FetchOptions options;
@@ -3952,9 +3924,7 @@ struct WebCore::BackgroundFetchRequest {
     String referrer;
     Markable<WebCore::ContentSecurityPolicyResponseHeaders, WebCore::ContentSecurityPolicyResponseHeaders::MarkableTraits> cspResponseHeaders;
 };
-#endif
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::BackgroundFetchRecordInformation {
     WebCore::BackgroundFetchRecordIdentifier identifier;
     WebCore::ResourceRequest internalRequest;
@@ -3963,25 +3933,19 @@ struct WebCore::BackgroundFetchRecordInformation {
     WebCore::HTTPHeaderMap httpHeaders;
     String referrer;
 };
-#endif
 
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::BackgroundFetchOptions {
     Vector<WebCore::ImageResource> icons;
     String title;
     uint64_t downloadTotal;
 };
-#endif
 
-
-#if ENABLE(SERVICE_WORKER)
 struct WebCore::ImageResource {
     String src;
     String sizes;
     String type;
     String label;
 };
-#endif // ENABLE(SERVICE_WORKER)
 
 using WebCore::SharedStringHash = uint32_t
 
@@ -4495,6 +4459,7 @@ header: <WebCore/InbandGenericCue.h>
     WebCore::Color m_foregroundColor;
     WebCore::Color m_backgroundColor;
     WebCore::Color m_highlightColor;
+    WebCore::GenericCueData::Alignment m_positionAlign;
     WebCore::GenericCueData::Alignment m_align;
     WebCore::GenericCueData::Status m_status;
 };
@@ -4657,8 +4622,6 @@ header: <WebCore/DragData.h>
     ShowCorrectionPanel,
 };
 
-#if ENABLE(SERVICE_WORKER)
-
 enum class WebCore::ServiceWorkerClientType : uint8_t {
     Window,
     Worker,
@@ -4757,8 +4720,6 @@ struct WebCore::ServiceWorkerJobData {
     [Validator='( type == WebCore::ServiceWorkerJobType::Register && registrationOptions->has_value()) || (type != WebCore::ServiceWorkerJobType::Register && !registrationOptions->has_value() )'] std::optional<WebCore::ServiceWorkerRegistrationOptions> registrationOptions;
 };
 
-#endif //ENABLE(SERVICE_WORKER)
-
 struct WebCore::EventInit {
     bool bubbles;
     bool cancelable;
@@ -4769,8 +4730,6 @@ struct WebCore::MessageWithMessagePorts {
     RefPtr<WebCore::SerializedScriptValue> message;
     Vector<WebCore::TransferredMessagePort> transferredPorts;
 };
-
-#if ENABLE(TRACKING_PREVENTION)
 
 enum class WebCore::StorageAccessWasGranted : bool
 
@@ -4788,8 +4747,6 @@ header: <WebCore/DocumentStorageAccess.h>
     WebCore::RegistrableDomain topFrameDomain;
     WebCore::RegistrableDomain subFrameDomain;
 };
-
-#endif // ENABLE(TRACKING_PREVENTION)
 
 class WebCore::Exception {
     WebCore::ExceptionCode code();
@@ -5404,9 +5361,7 @@ struct WebCore::WorkerOptions {
 };
 
 struct WebCore::WorkerInitializationData {
-#if ENABLE(SERVICE_WORKER)
     std::optional<WebCore::ServiceWorkerData> serviceWorkerData;
-#endif
     std::optional<WebCore::ScriptExecutionContextIdentifier> clientIdentifier;
     String userAgent;
 };
@@ -5426,8 +5381,6 @@ struct WebCore::SharedWorkerKey {
     URL url;
     String name;
 };
-
-#if ENABLE(SERVICE_WORKER)
 
 struct WebCore::ServiceWorkerRegistrationOptions {
     String scope;
@@ -5480,8 +5433,6 @@ struct WebCore::ServiceWorkerContextData {
     std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier;
     WebCore::NavigationPreloadState navigationPreloadState;
 };
-
-#endif
 
 #if HAVE(SCREEN_CAPTURE_KIT)
 header: <WebCore/DisplayCapturePromptType.h>
@@ -5722,9 +5673,7 @@ class WebCore::OffsetRotation {
     OffsetAnchor,
     OffsetRotate,
     Filter,
-#if ENABLE(FILTERS_LEVEL_2)
     BackdropFilter
-#endif
 };
 
 header: <WebCore/WebAnimationTypes.h>
@@ -5768,9 +5717,7 @@ struct WebCore::AcceleratedEffectValues {
     WebCore::LengthPoint offsetAnchor;
     WebCore::OffsetRotation offsetRotate;
     WebCore::FilterOperations filter;
-#if ENABLE(FILTERS_LEVEL_2)
     WebCore::FilterOperations backdropFilter;
-#endif
 }
 
 struct WebCore::AnimationEffectTiming {
@@ -6064,12 +6011,6 @@ header: <WebCore/PhotoSettings.h>
     std::optional<double> imageHeight;
     std::optional<double> imageWidth;
     std::optional<bool> redEyeReduction;
-};
-
-header: <WebCore/RealtimeMediaSource.h>
-[CustomHeader] struct WebCore::PhotoCapabilitiesOrError {
-    std::optional<WebCore::PhotoCapabilities> capabilities;
-    String errorMessage;
 };
 #endif
 
@@ -6731,13 +6672,14 @@ enum class WebCore::RepaintRectCalculation : bool;
 }
 
 #if ENABLE(WEB_AUTHN)
-header: <WebCore/CredentialRequestOptions.h>
+header: <WebCore/MediationRequirement.h>
 enum class WebCore::MediationRequirement : uint8_t {
     Silent,
     Optional,
     Required,
     Conditional,
 };
+#endif
 
 #if ENABLE(VIDEO)
 header: <WebCore/VTTCue.h>
@@ -6782,13 +6724,11 @@ enum class WebCore::ContextMenuContextType : uint8_t {
 };
 #endif
 
-#if ENABLE(TRACKING_PREVENTION)
 header: <WebCore/CrossSiteNavigationDataTransfer.h>
 [OptionSet] enum class WebCore::CrossSiteNavigationDataTransferFlag : uint8_t {
     DestinationLinkDecoration,
     ReferrerLinkDecoration
 };
-#endif
 
 header: <WebCore/ScrollingCoordinatorTypes.h>
 [Nested, OptionSet] enum class WebCore::SynchronousScrollingReason : uint8_t {
@@ -6824,3 +6764,42 @@ header: <WebCore/Font.h>
 [Nested] enum class WebCore::FontIsInterstitial : bool;
 [Nested] enum class WebCore::FontVisibility : bool;
 [Nested] enum class WebCore::FontIsOrientationFallback : bool;
+
+header: <WebCore/CaptionUserPreferences.h>
+enum class WebCore::CaptionUserPreferencesDisplayMode : uint8_t {
+    Automatic,
+    ForcedOnly,
+    AlwaysOn,
+    Manual,
+};
+
+header: <WebCore/InspectorClient.h>
+enum class WebCore::InspectorClientDeveloperPreference : uint8_t {
+    PrivateClickMeasurementDebugModeEnabled,
+    ITPDebugModeEnabled,
+    MockCaptureDevicesEnabled,
+};
+
+#if ENABLE(MEDIA_SOURCE)
+
+header: <WebCore/MediaSourcePrivate.h>
+enum class WebCore::MediaSourcePrivateAddStatus : uint8_t {
+    Ok,
+    NotSupported,
+    ReachedIdLimit
+};
+
+header: <WebCore/MediaSourcePrivate.h>
+enum class WebCore::MediaSourcePrivateEndOfStreamStatus : uint8_t {
+    NoError,
+    NetworkError,
+    DecodeError
+};
+
+header: <WebCore/SourceBufferPrivate.h>
+enum class WebCore::SourceBufferAppendMode : uint8_t {
+    Segments,
+    Sequence
+};
+
+#endif

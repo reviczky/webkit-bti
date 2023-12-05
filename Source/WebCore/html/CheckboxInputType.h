@@ -34,6 +34,8 @@
 
 namespace WebCore {
 
+enum class WasSetByJavaScript : bool;
+
 class CheckboxInputType final : public BaseCheckableInputType {
 public:
     static Ref<CheckboxInputType> create(HTMLInputElement& element)
@@ -42,6 +44,8 @@ public:
     }
 
     bool valueMissing(const String&) const final;
+    void performSwitchCheckedChangeAnimation(WasSetByJavaScript);
+    float switchCheckedChangeAnimationProgress() const;
 
 private:
     explicit CheckboxInputType(HTMLInputElement& element)
@@ -56,7 +60,12 @@ private:
     void willDispatchClick(InputElementClickState&) final;
     void didDispatchClick(Event&, const InputElementClickState&) final;
     bool matchesIndeterminatePseudoClass() const final;
-    bool shouldAppearIndeterminate() const final;
+    void disabledStateChanged() final;
+    void stopSwitchCheckedChangeAnimation();
+    void switchCheckedChangeAnimationTimerFired();
+
+    Seconds m_switchCheckedChangeAnimationStartTime { 0_s };
+    std::unique_ptr<Timer> m_switchCheckedChangeAnimationTimer;
 };
 
 } // namespace WebCore

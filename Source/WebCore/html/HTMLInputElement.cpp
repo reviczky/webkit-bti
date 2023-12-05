@@ -34,6 +34,7 @@
 #include "CSSGradientValue.h"
 #include "CSSPropertyNames.h"
 #include "CSSValuePool.h"
+#include "CheckboxInputType.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ColorInputType.h"
@@ -144,7 +145,7 @@ HTMLInputElement::~HTMLInputElement()
     if (m_inputType && isRadioButton())
         treeScope().radioButtonGroups().removeButton(*this);
 
-#if ENABLE(TOUCH_EVENTS)
+#if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
     if (m_hasTouchEventHandler)
         document().didRemoveEventTargetNode(*this);
 #endif
@@ -603,7 +604,7 @@ void HTMLInputElement::updateType(const AtomString& typeAttributeValue)
 inline void HTMLInputElement::runPostTypeUpdateTasks()
 {
     ASSERT(m_inputType);
-#if ENABLE(TOUCH_EVENTS)
+#if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
     bool hasTouchEventHandler = m_inputType->hasTouchEventHandler();
     if (hasTouchEventHandler != m_hasTouchEventHandler) {
         if (hasTouchEventHandler)
@@ -1029,7 +1030,7 @@ void HTMLInputElement::setDefaultCheckedState(bool isDefaultChecked)
     m_isDefaultChecked = isDefaultChecked;
 }
 
-void HTMLInputElement::setChecked(bool isChecked)
+void HTMLInputElement::setChecked(bool isChecked, WasSetByJavaScript wasCheckedByJavaScript)
 {
     m_dirtyCheckednessFlag = true;
     if (checked() == isChecked)
@@ -1043,8 +1044,11 @@ void HTMLInputElement::setChecked(bool isChecked)
 
     if (auto* buttons = radioButtonGroups())
         buttons->updateCheckedState(*this);
-    if (auto* renderer = this->renderer(); renderer && renderer->style().hasEffectiveAppearance())
+    if (auto* renderer = this->renderer(); renderer && renderer->style().hasEffectiveAppearance()) {
+        if (isSwitch())
+            downcast<CheckboxInputType>(*m_inputType).performSwitchCheckedChangeAnimation(wasCheckedByJavaScript);
         renderer->theme().stateChanged(*renderer, ControlStates::States::Checked);
+    }
     updateValidity();
 
     // Ideally we'd do this from the render tree (matching
@@ -1226,9 +1230,12 @@ void HTMLInputElement::willDispatchEvent(Event& event, InputElementClickState& s
     auto& eventNames = WebCore::eventNames();
     if (event.type() == eventNames.textInputEvent && m_inputType->shouldSubmitImplicitly(event))
         event.stopPropagation();
-    if (event.type() == eventNames.clickEvent && is<MouseEvent>(event) && downcast<MouseEvent>(event).button() == MouseButton::Left) {
-        m_inputType->willDispatchClick(state);
-        state.stateful = true;
+    if (event.type() == eventNames.clickEvent) {
+        auto* mouseEvent = dynamicDowncast<MouseEvent>(event);
+        if (mouseEvent && mouseEvent->button() == MouseButton::Left) {
+            m_inputType->willDispatchClick(state);
+            state.stateful = true;
+        }
     }
 }
 
@@ -1279,7 +1286,10 @@ void HTMLInputElement::defaultEventHandler(Event& event)
     // must dispatch a DOMActivate event - a click event will not do the job.
     if (event.type() == eventNames().DOMActivateEvent) {
         m_inputType->handleDOMActivateEvent(event);
-        handlePopoverTargetAction();
+        if (invokeTargetElement())
+            handleInvokeAction();
+        else
+            handlePopoverTargetAction();
         if (event.defaultHandled())
             return;
     }
@@ -1725,7 +1735,7 @@ void HTMLInputElement::didMoveToNewDocument(Document& oldDocument, Document& new
         newDocument.registerForDocumentSuspensionCallbacks(*this);
     }
 
-#if ENABLE(TOUCH_EVENTS)
+#if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
     if (m_hasTouchEventHandler) {
         oldDocument.didRemoveEventTargetNode(*this);
         newDocument.didAddTouchEventHandler(*this);
@@ -1960,7 +1970,7 @@ bool HTMLInputElement::isLabelable() const
     return m_inputType->isLabelable();
 }
 
-bool HTMLInputElement::shouldAppearChecked() const
+bool HTMLInputElement::matchesCheckedPseudoClass() const
 {
     return checked() && m_inputType->isCheckable();
 }
@@ -2015,19 +2025,7 @@ String HTMLInputElement::defaultToolTip() const
 
 bool HTMLInputElement::matchesIndeterminatePseudoClass() const
 {
-    // For input elements, matchesIndeterminatePseudoClass()
-    // is not equivalent to shouldAppearIndeterminate() because of radio button.
-    //
-    // A group of radio button without any checked button is indeterminate
-    // for the :indeterminate selector. On the other hand, RenderTheme
-    // currently only supports single element being indeterminate.
-    // Because of this, radio is indetermindate for CSS but not for render theme.
     return m_inputType->matchesIndeterminatePseudoClass();
-}
-
-bool HTMLInputElement::shouldAppearIndeterminate() const 
-{
-    return m_inputType->shouldAppearIndeterminate();
 }
 
 #if ENABLE(MEDIA_CAPTURE)
@@ -2306,6 +2304,12 @@ String HTMLInputElement::placeholder() const
 bool HTMLInputElement::dirAutoUsesValue() const
 {
     return m_inputType->dirAutoUsesValue();
+}
+
+float HTMLInputElement::switchCheckedChangeAnimationProgress() const
+{
+    ASSERT(isSwitch());
+    return downcast<CheckboxInputType>(*m_inputType).switchCheckedChangeAnimationProgress();
 }
 
 } // namespace

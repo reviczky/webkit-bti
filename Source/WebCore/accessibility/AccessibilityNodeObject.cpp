@@ -336,7 +336,11 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRole()
 
 bool AccessibilityNodeObject::matchesTextAreaRole() const
 {
-    return is<HTMLTextAreaElement>(node()) || hasContentEditableAttributeSet();
+#if !PLATFORM(COCOA)
+    if (hasContentEditableAttributeSet())
+        return true;
+#endif
+    return is<HTMLTextAreaElement>(node());
 }
 
 AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(TreatStyleFormatGroupAsInline treatStyleFormatGroupAsInline) const
@@ -421,7 +425,7 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
     if (node()->hasTagName(menuTag) || node()->hasTagName(olTag) || node()->hasTagName(ulTag))
         return AccessibilityRole::List;
     if (node()->hasTagName(fieldsetTag))
-        return AccessibilityRole::Group;
+        return AccessibilityRole::ApplicationGroup;
     if (node()->hasTagName(figureTag))
         return AccessibilityRole::Figure;
     if (node()->hasTagName(pTag))
@@ -430,7 +434,7 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
         return AccessibilityRole::Label;
     if (node()->hasTagName(dfnTag))
         return AccessibilityRole::Definition;
-    if (node()->hasTagName(divTag))
+    if (node()->hasTagName(divTag) && !isNonNativeTextControl())
         return AccessibilityRole::Generic;
     if (is<HTMLFormElement>(node()))
         return AccessibilityRole::Form;
@@ -463,7 +467,7 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
     if (node()->hasTagName(sectionTag))
         return hasAttribute(aria_labelAttr) || hasAttribute(aria_labelledbyAttr) ? AccessibilityRole::LandmarkRegion : AccessibilityRole::TextGroup;
     if (node()->hasTagName(addressTag))
-        return AccessibilityRole::Group;
+        return AccessibilityRole::ApplicationGroup;
     if (node()->hasTagName(blockquoteTag))
         return AccessibilityRole::Blockquote;
     if (node()->hasTagName(captionTag) || node()->hasTagName(figcaptionTag))
@@ -478,6 +482,11 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
         return AccessibilityRole::Details;
     if (auto* summaryElement = dynamicDowncast<HTMLSummaryElement>(node()); summaryElement && summaryElement->isActiveSummary())
         return AccessibilityRole::Summary;
+
+#if PLATFORM(COCOA)
+    if (isNonNativeTextControl())
+        return AccessibilityRole::Group;
+#endif
 
     // http://rawgit.com/w3c/aria/master/html-aam/html-aam.html
     // Output elements should be mapped to status role.
@@ -832,7 +841,7 @@ bool AccessibilityNodeObject::isChecked() const
 
     // First test for native checkedness semantics
     if (is<HTMLInputElement>(*node))
-        return downcast<HTMLInputElement>(*node).shouldAppearChecked();
+        return downcast<HTMLInputElement>(*node).matchesCheckedPseudoClass();
 
     // Else, if this is an ARIA checkbox or radio, respect the aria-checked attribute
     bool validRole = false;

@@ -28,6 +28,7 @@
 namespace WGSL::AST {
 
 class Directive;
+class DiagnosticDirective;
 
 class Attribute;
 class AlignAttribute;
@@ -54,6 +55,7 @@ class BoolLiteral;
 class CallExpression;
 class FieldAccessExpression;
 class Float32Literal;
+class Float16Literal;
 class IdentifierExpression;
 class IdentityExpression;
 class IndexAccessExpression;
@@ -99,6 +101,8 @@ class Variable;
 class VariableQualifier;
 
 struct SwitchClause;
+struct Diagnostic;
+struct Continuing;
 
 enum class BinaryOperation : uint8_t;
 enum class ParameterRole : uint8_t;

@@ -60,8 +60,10 @@
 #include "Text.h"
 #include "TextResourceDecoder.h"
 #include "TextTransform.h"
+#include "TextUtil.h"
 #include "VisiblePosition.h"
 #include "WidthIterator.h"
+#include <bitset>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/SortedArrayMap.h>
@@ -91,6 +93,8 @@ struct SameSizeAsRenderText : public RenderObject {
     void* pointers[2];
     String text;
     std::optional<bool> canUseSimplifiedTextMeasuring;
+    std::optional<bool> hasPositionDependentContentWidth;
+    std::optional<bool> m_hasStrongDirectionalityContent;
     uint32_t bitfields : 16;
 };
 
@@ -185,8 +189,11 @@ String capitalize(const String& string, UChar previousCharacter)
     int32_t startOfWord = ubrk_first(breakIterator);
     int32_t endOfWord;
     for (endOfWord = ubrk_next(breakIterator); endOfWord != UBRK_DONE; startOfWord = endOfWord, endOfWord = ubrk_next(breakIterator)) {
-        if (startOfWord) // Do not append the first character, since it's the previous character, not from this string.
-            result.appendCharacter(u_totitle(stringImpl[startOfWord - 1]));
+        // Do not append the first character, since it's the previous character, not from this string.
+        if (startOfWord) {
+            char32_t lastCharacter = u_totitle(stringImpl[startOfWord - 1]);
+            result.append(lastCharacter);
+        }
         for (int i = startOfWord + 1; i < endOfWord; i++)
             result.append(stringImpl[i - 1]);
     }
@@ -294,19 +301,48 @@ bool RenderText::computeUseBackslashAsYenSymbol() const
     return false;
 }
 
-static void initiateFontLoadingByAccessingGlyphDataIfApplicable(const String& textContent, const FontCascade& fontCascade)
+void RenderText::initiateFontLoadingByAccessingGlyphDataAndComputeCanUseSimplifiedTextMeasuring(const String& textContent)
 {
+    auto& style = this->style();
+    auto& fontCascade = style.fontCascade();
     // See webkit.org/b/252668
     auto fontVariant = AutoVariant;
+    m_canUseSimplifiedTextMeasuring = canUseSimpleFontCodePath();
 #if USE(FONT_VARIANT_VIA_FEATURES)
     if (fontCascade.fontDescription().variantCaps() == FontVariantCaps::Small) {
         // This matches the behavior of ComplexTextController::collectComplexTextRuns(): that function doesn't perform font fallback
         // on the capitalized characters when small caps is enabled, so we shouldn't here either.
         fontVariant = NormalVariant;
+        m_canUseSimplifiedTextMeasuring = false;
     }
 #endif
-    for (UChar32 character : StringView(textContent).codePoints())
-        fontCascade.glyphDataForCharacter(character, false, fontVariant);
+    auto whitespaceIsCollapsed = style.collapseWhiteSpace();
+    auto& primaryFont = fontCascade.primaryFont();
+    m_canUseSimplifiedTextMeasuring = *m_canUseSimplifiedTextMeasuring && !fontCascade.wordSpacing() && !fontCascade.letterSpacing() && !primaryFont.syntheticBoldOffset() && (&firstLineStyle() == &style || &fontCascade == &firstLineStyle().fontCascade());
+
+    if (*m_canUseSimplifiedTextMeasuring) {
+        // Additional check on the font codepath.
+        auto run = TextRun { textContent };
+        run.setCharacterScanForCodePath(false);
+        m_canUseSimplifiedTextMeasuring = fontCascade.codePath(run) == FontCascade::CodePath::Simple;
+    }
+
+    m_hasPositionDependentContentWidth = false;
+    m_hasStrongDirectionalityContent = false;
+    auto mayHaveStrongDirectionalityContent = !textContent.is8Bit();
+    // FIXME: Pre-warm glyph loading in FontCascade with the most common range.
+    std::bitset<256> hasSeen;
+    for (char32_t character : StringView(textContent).codePoints()) {
+        if (character < 256) {
+            if (hasSeen[character])
+                continue;
+            hasSeen.set(character);
+        }
+        auto glyphData = fontCascade.glyphDataForCharacter(character, false, fontVariant);
+        m_canUseSimplifiedTextMeasuring = *m_canUseSimplifiedTextMeasuring && WidthIterator::characterCanUseSimplifiedTextMeasuring(character, whitespaceIsCollapsed) && glyphData.isValid() && glyphData.font == &primaryFont;
+        m_hasPositionDependentContentWidth = *m_hasPositionDependentContentWidth || character == tabCharacter;
+        m_hasStrongDirectionalityContent = *m_hasStrongDirectionalityContent || (mayHaveStrongDirectionalityContent && Layout::TextUtil::isStrongDirectionalityCharacter(character));
+    }
 }
 
 void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
@@ -322,7 +358,7 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
 
     const RenderStyle& newStyle = style();
     if (!oldStyle)
-        initiateFontLoadingByAccessingGlyphDataIfApplicable(m_text, newStyle.fontCascade());
+        initiateFontLoadingByAccessingGlyphDataAndComputeCanUseSimplifiedTextMeasuring(m_text);
     if (oldStyle && oldStyle->fontCascade() != newStyle.fontCascade())
         m_canUseSimplifiedTextMeasuring = { };
 
@@ -938,6 +974,8 @@ RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& str
     if (!length || (stripFrontSpaces && text().containsOnly<isASCIIWhitespace>()))
         return widths;
 
+    widths.endZeroSpace = text()[length - 1] == zeroWidthSpace;
+
     widths.min = m_minWidth.value_or(-1);
     widths.max = m_maxWidth.value_or(-1);
 
@@ -1227,7 +1265,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, WeakHashSet<cons
         bool hasBreak = breakAll || isBreakable(lineBreakIteratorFactory, i, nextBreakable, breakNBSP, canUseLineBreakShortcut, keepAllWords, breakAnywhere);
         bool betweenWords = true;
         unsigned j = i;
-        while (c != '\n' && !isSpaceAccordingToStyle(c, style) && c != '\t' && (c != softHyphen || style.hyphens() == Hyphens::None)) {
+        while (c != '\n' && !isSpaceAccordingToStyle(c, style) && c != '\t' && c != zeroWidthSpace && (c != softHyphen || style.hyphens() == Hyphens::None)) {
             UChar previousCharacter = c;
             j++;
             if (j == length)
@@ -1446,7 +1484,7 @@ UChar RenderText::previousCharacter() const
 static String convertToFullSizeKana(const String& string)
 {
     // https://www.w3.org/TR/css-text-3/#small-kana
-    static constexpr std::pair<UChar, UChar> kanasMap[] = {
+    static constexpr std::pair<char32_t, UChar> kanasMap[] = {
         { 0x3041, 0x3042 },
         { 0x3043, 0x3044 },
         { 0x3045, 0x3046 },
@@ -1495,19 +1533,40 @@ static String convertToFullSizeKana(const String& string)
         { 0xFF6C, 0xFF94 },
         { 0xFF6D, 0xFF95 },
         { 0xFF6E, 0xFF96 },
-        { 0xFF6F, 0xFF82 }
+        { 0xFF6F, 0xFF82 },
+        { 0x1B132, 0x3053 },
+        { 0x1B150, 0x3090 },
+        { 0x1B151, 0x3091 },
+        { 0x1B152, 0x3092 },
+        { 0x1B155, 0x30B3 },
+        { 0x1B164, 0x30F0 },
+        { 0x1B165, 0x30F1 },
+        { 0x1B166, 0x30F2 },
+        { 0x1B167, 0x30F3 }
     };
-    static constexpr auto sortedMap = SortedArrayMap { kanasMap };
+
+    static constexpr SortedArrayMap sortedMap { kanasMap };
+
+    auto codePoints = StringView { string }.codePoints();
+
+    bool needsConversion = false;
+    for (auto character : codePoints) {
+        if (sortedMap.contains(character)) {
+            needsConversion = true;
+            break;
+        }
+    }
+    if (!needsConversion)
+        return string;
 
     StringBuilder result;
-    auto codeUnits = StringView { string }.codeUnits();
-    for (const auto character : codeUnits) {
+    for (auto character : codePoints) {
         if (auto found = sortedMap.tryGet(character))
             result.append(*found);
         else
             result.append(character);
     }
-    return result == string ? string : result.toString();
+    return result.toString();
 }
 
 String applyTextTransform(const RenderStyle& style, const String& text, UChar previousCharacter)
@@ -1580,6 +1639,8 @@ void RenderText::setRenderedText(const String& newText)
     m_containsOnlyASCII = text().containsOnlyASCII();
     m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
     m_canUseSimplifiedTextMeasuring = { };
+    m_hasPositionDependentContentWidth = { };
+    m_hasStrongDirectionalityContent = { };
 
     if (m_text != originalText) {
         originalTextMap().set(this, originalText);

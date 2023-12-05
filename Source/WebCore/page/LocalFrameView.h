@@ -26,6 +26,7 @@
 
 #include "AdjustViewSizeOrNot.h"
 #include "Color.h"
+#include "Document.h"
 #include "FrameView.h"
 #include "LayoutMilestone.h"
 #include "LayoutRect.h"
@@ -82,10 +83,6 @@ enum class NullGraphicsContextPaintInvalidationReasons : uint8_t;
 enum class StyleColorOptions : uint8_t;
 enum class TiledBackingScrollability : uint8_t;
 
-namespace Display {
-class View;
-}
-
 Pagination::Mode paginationModeForRenderStyle(const RenderStyle&);
 
 enum class LayoutViewportConstraint : bool { Unconstrained, ConstrainedToDocumentRect };
@@ -103,7 +100,7 @@ public:
     virtual ~LocalFrameView();
 
     HostWindow* hostWindow() const final;
-    
+
     WEBCORE_EXPORT void invalidateRect(const IntRect&) final;
     void setFrameRect(const IntRect&) final;
     Type viewType() const final { return Type::Local; }
@@ -113,9 +110,6 @@ public:
     Ref<LocalFrame> protectedFrame() const;
 
     WEBCORE_EXPORT RenderView* renderView() const;
-
-    Display::View* existingDisplayView() const;
-    Display::View& displayView();
 
     int mapFromLayoutToCSSUnits(LayoutUnit) const;
     LayoutUnit mapFromCSSToLayoutUnits(int) const;
@@ -168,6 +162,9 @@ public:
     bool updateCompositingLayersAfterStyleChange();
     void updateCompositingLayersAfterLayout();
 
+    // Returns true if a pending compositing layer update was done.
+    bool updateCompositingLayersAfterLayoutIfNeeded();
+
     // Called when changes to the GraphicsLayer hierarchy have to be synchronized with
     // content rendered via the normal painting path.
     void setNeedsOneShotDrawingSynchronization();
@@ -183,6 +180,8 @@ public:
 
     WEBCORE_EXPORT ScrollingNodeID scrollingNodeID() const override;
     WEBCORE_EXPORT ScrollableArea* scrollableAreaForScrollingNodeID(ScrollingNodeID) const;
+    void setPluginScrollableAreaForScrollingNodeID(ScrollingNodeID nodeID, ScrollableArea& area) { m_scrollingNodeIDToPluginScrollableAreaMap.add(nodeID, &area); }
+    void removePluginScrollableAreaForScrollingNodeID(ScrollingNodeID nodeID) { m_scrollingNodeIDToPluginScrollableAreaMap.remove(nodeID); }
     bool usesAsyncScrolling() const final;
 
     WEBCORE_EXPORT void enterCompositingMode();
@@ -446,8 +445,8 @@ public:
     WEBCORE_EXPORT Color documentBackgroundColor() const;
 
     static MonotonicTime currentPaintTimeStamp() { return sCurrentPaintTimeStamp; } // returns 0 if not painting
-    
-    WEBCORE_EXPORT void updateLayoutAndStyleIfNeededRecursive();
+
+    WEBCORE_EXPORT void updateLayoutAndStyleIfNeededRecursive(OptionSet<LayoutOptions> = { });
 
     void incrementVisuallyNonEmptyCharacterCount(const String&);
     void incrementVisuallyNonEmptyPixelCount(const IntSize&);
@@ -944,11 +943,11 @@ private:
     const Ref<LocalFrame> m_frame;
     LocalFrameViewLayoutContext m_layoutContext;
 
-    std::unique_ptr<Display::View> m_displayView;
-
     HashSet<CheckedPtr<Widget>> m_widgetsInRenderTree;
     std::unique_ptr<ListHashSet<CheckedPtr<RenderEmbeddedObject>>> m_embeddedObjectsToUpdate;
     std::unique_ptr<WeakHashSet<RenderElement>> m_slowRepaintObjects;
+
+    HashMap<ScrollingNodeID, WeakPtr<ScrollableArea>> m_scrollingNodeIDToPluginScrollableAreaMap;
 
     RefPtr<ContainerNode> m_maintainScrollPositionAnchor;
     RefPtr<ContainerNode> m_scheduledMaintainScrollPositionAnchor;
@@ -1075,6 +1074,7 @@ private:
     bool m_didRunAutosize { false };
     bool m_inUpdateEmbeddedObjects { false };
     bool m_scheduledToScrollToAnchor { false };
+    bool m_updateCompositingLayersIsPending { false };
 };
 
 inline void LocalFrameView::incrementVisuallyNonEmptyPixelCount(const IntSize& size)

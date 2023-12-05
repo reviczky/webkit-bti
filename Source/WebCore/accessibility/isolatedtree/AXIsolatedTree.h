@@ -148,6 +148,7 @@ enum class AXPropertyName : uint16_t {
     IsMathToken,
     IsMeter,
     IsMultiSelectable,
+    IsNonNativeTextControl,
     IsPlugin,
     IsPressed,
     IsRequired,
@@ -230,6 +231,9 @@ enum class AXPropertyName : uint16_t {
     SupportsSetSize,
     TextContent,
     TextInputMarkedTextMarkerRange,
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    TextRuns,
+#endif
     Title,
     TitleAttributeValue,
     TitleUIElement,
@@ -246,6 +250,9 @@ enum class AXPropertyName : uint16_t {
 using AXPropertyValueVariant = std::variant<std::nullptr_t, AXID, String, bool, int, unsigned, double, float, uint64_t, AccessibilityButtonState, Color, URL, LayoutRect, FloatPoint, FloatRect, IntPoint, IntRect, std::pair<unsigned, unsigned>, Vector<AccessibilityText>, Vector<AXID>, Vector<std::pair<AXID, AXID>>, Vector<String>, Path, OptionSet<AXAncestorFlag>, InsideLink, Vector<Vector<AXID>>, CharacterRange, std::pair<AXID, CharacterRange>
 #if PLATFORM(COCOA)
     , RetainPtr<NSAttributedString>
+#endif
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    , Vector<AXTextRun>
 #endif
 >;
 using AXPropertyMap = HashMap<AXPropertyName, AXPropertyValueVariant, IntHash<AXPropertyName>, WTF::StrongEnumHashTraits<AXPropertyName>>;
@@ -282,7 +289,7 @@ public:
     WEBCORE_EXPORT RefPtr<AXIsolatedObject> focusedNode();
 
     RefPtr<AXIsolatedObject> objectForID(const AXID) const;
-    Vector<RefPtr<AXCoreObject>> objectsForIDs(const Vector<AXID>&);
+    template<typename U> Vector<RefPtr<AXCoreObject>> objectsForIDs(const U&);
 
     void generateSubtree(AccessibilityObject&);
     void labelCreated(AccessibilityObject&);
@@ -313,7 +320,7 @@ public:
     void setFocusedNodeID(AXID);
 
     // Relationships between objects.
-    std::optional<Vector<AXID>> relatedObjectIDsFor(const AXIsolatedObject&, AXRelationType);
+    std::optional<ListHashSet<AXID>> relatedObjectIDsFor(const AXIsolatedObject&, AXRelationType);
     void relationsNeedUpdate(bool needUpdate) { m_relationsNeedUpdate = needUpdate; }
 
     // Called on AX thread from WebAccessibilityObjectWrapper methods.

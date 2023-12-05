@@ -288,7 +288,7 @@ public:
     virtual void forwardEvent(Event&);
 
 #if ENABLE(TOUCH_EVENTS)
-    virtual void handleTouchEvent(TouchEvent&);
+    virtual void handleTouchEvent(TouchEvent&) { }
 #endif
 
     // Helpers for event handlers.
@@ -307,8 +307,8 @@ public:
 
     virtual void elementDidBlur() { }
 
-#if ENABLE(TOUCH_EVENTS)
-    virtual bool hasTouchEventHandler() const;
+#if ENABLE(TOUCH_EVENTS) && !ENABLE(IOS_TOUCH_EVENTS)
+    virtual bool hasTouchEventHandler() const { return false; }
 #endif
 
     // Shadow tree handling.
@@ -359,7 +359,6 @@ public:
     virtual void updateAutoFillButton();
     virtual String defaultToolTip() const;
     virtual bool matchesIndeterminatePseudoClass() const;
-    virtual bool shouldAppearIndeterminate() const;
     virtual bool isPresentingAttachedView() const;
     virtual bool supportsSelectionAPI() const;
     virtual bool dirAutoUsesValue() const;

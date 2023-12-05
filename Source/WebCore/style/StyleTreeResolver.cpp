@@ -129,6 +129,9 @@ void TreeResolver::popScope()
 
 ResolvedStyle TreeResolver::styleForStyleable(const Styleable& styleable, ResolutionType resolutionType, const ResolutionContext& resolutionContext)
 {
+    if (resolutionType == ResolutionType::AnimationOnly && styleable.lastStyleChangeEventStyle() && !styleable.hasPropertiesOverridenAfterAnimation())
+        return { RenderStyle::clonePtr(*styleable.lastStyleChangeEventStyle()) };
+
     auto& element = styleable.element;
 
     if (element.hasCustomStyleResolveCallbacks()) {
@@ -229,6 +232,13 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     if (!element.rendererIsEverNeeded() && !element.hasDisplayContents())
         return { };
 
+    if (resolutionType == ResolutionType::RebuildUsingExisting) {
+        return {
+            ElementUpdate { RenderStyle::clonePtr(*existingStyle), Change::Renderer },
+            DescendantsToResolve::RebuildAllUsingExisting
+        };
+    }
+
     auto resolutionContext = makeResolutionContext();
 
     Styleable styleable { element, PseudoId::None };
@@ -296,6 +306,7 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     resolveAndAddPseudoElementStyle(PseudoId::Before);
     resolveAndAddPseudoElementStyle(PseudoId::After);
     resolveAndAddPseudoElementStyle(PseudoId::Backdrop);
+    resolveAndAddPseudoElementStyle(PseudoId::ViewTransition);
 
 #if ENABLE(TOUCH_ACTION_REGIONS)
     // FIXME: Track this exactly.
@@ -334,6 +345,8 @@ std::optional<ElementUpdate> TreeResolver::resolvePseudoElement(Element& element
     if (pseudoId == PseudoId::FirstLetter && !scope().resolver->usesFirstLetterRules())
         return { };
     if (pseudoId == PseudoId::Scrollbar && elementUpdate.style->overflowX() != Overflow::Scroll && elementUpdate.style->overflowY() != Overflow::Scroll)
+        return { };
+    if (pseudoId == PseudoId::ViewTransition && (!element.document().hasViewTransitionPseudoElementTree() || &element != element.document().documentElement()))
         return { };
 
     if (!elementUpdate.style->hasPseudoStyle(pseudoId))
@@ -595,6 +608,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
     auto applyAnimations = [&]() -> std::pair<std::unique_ptr<RenderStyle>, OptionSet<AnimationImpact>> {
         if (!styleable.hasKeyframeEffects()) {
             styleable.setLastStyleChangeEventStyle(nullptr);
+            styleable.setHasPropertiesOverridenAfterAnimation(false);
             return { WTFMove(resolvedStyle.style), OptionSet<AnimationImpact> { } };
         }
 
@@ -608,7 +622,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
 
         auto animationImpact = styleable.applyKeyframeEffects(*animatedStyle, animatedProperties, previousLastStyleChangeEventStyle.get(), resolutionContext);
 
-        if (*resolvedStyle.style == *animatedStyle && animationImpact.isEmpty())
+        if (*resolvedStyle.style == *animatedStyle && animationImpact.isEmpty() && previousLastStyleChangeEventStyle)
             return { WTFMove(resolvedStyle.style), animationImpact };
 
         if (resolvedStyle.matchResult) {
@@ -618,6 +632,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
             auto overriddenAnimatedProperties = applyCascadeAfterAnimation(*animatedStyle, animatedProperties, styleable.hasRunningTransitions(), *resolvedStyle.matchResult, element, resolutionContext);
             ASSERT(styleable.keyframeEffectStack());
             styleable.keyframeEffectStack()->cascadeDidOverrideProperties(overriddenAnimatedProperties, document);
+            styleable.setHasPropertiesOverridenAfterAnimation(!overriddenAnimatedProperties.isEmpty());
         }
 
         Adjuster adjuster(document, *resolutionContext.parentStyle, resolutionContext.parentBoxStyle, styleable.pseudoId == PseudoId::None ? &element : nullptr);
@@ -645,8 +660,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
 
     auto change = oldStyle ? determineChange(*oldStyle, *newStyle) : Change::Renderer;
 
-    auto validity = element.styleValidity();
-    if (validity >= Validity::SubtreeAndRenderersInvalid || parentChange == Change::Renderer)
+    if (element.hasInvalidRenderer() || parentChange == Change::Renderer)
         change = Change::Renderer;
 
     bool shouldRecompositeLayer = animationImpact.contains(AnimationImpact::RequiresRecomposite) || element.styleResolutionShouldRecompositeLayer();
@@ -727,25 +741,33 @@ void TreeResolver::popParentsToDepth(unsigned depth)
         popParent();
 }
 
-static bool shouldResolvePseudoElement(const PseudoElement* pseudoElement)
-{
-    if (!pseudoElement)
-        return false;
-    return pseudoElement->needsStyleRecalc();
-}
 
 auto TreeResolver::determineResolutionType(const Element& element, const RenderStyle* existingStyle, DescendantsToResolve parentDescendantsToResolve, Change parentChange) -> std::optional<ResolutionType>
 {
-    if (element.styleValidity() != Validity::Valid)
-        return ResolutionType::Full;
-    if (shouldResolvePseudoElement(element.beforePseudoElement()))
-        return ResolutionType::Full;
-    if (shouldResolvePseudoElement(element.afterPseudoElement()))
+    auto combinedValidity = [&] {
+        auto validity = element.styleValidity();
+        if (auto* pseudoElement = element.beforePseudoElement())
+            validity = std::max(validity, pseudoElement->styleValidity());
+        if (auto* pseudoElement = element.afterPseudoElement())
+            validity = std::max(validity, pseudoElement->styleValidity());
+        return validity;
+    }();
+
+    if (parentDescendantsToResolve == DescendantsToResolve::None) {
+        if (combinedValidity == Validity::AnimationInvalid)
+            return ResolutionType::AnimationOnly;
+        if (combinedValidity == Validity::Valid && element.hasInvalidRenderer())
+            return existingStyle ? ResolutionType::RebuildUsingExisting : ResolutionType::Full;
+    }
+
+    if (combinedValidity > Validity::Valid)
         return ResolutionType::Full;
 
     switch (parentDescendantsToResolve) {
     case DescendantsToResolve::None:
         return { };
+    case DescendantsToResolve::RebuildAllUsingExisting:
+        return existingStyle ? ResolutionType::RebuildUsingExisting : ResolutionType::Full;
     case DescendantsToResolve::Children:
         if (parentChange == Change::FastPathInherited) {
             if (existingStyle && !existingStyle->disallowsFastPathInheritance())
@@ -803,6 +825,7 @@ void TreeResolver::resetDescendantStyleRelations(Element& element, DescendantsTo
 {
     switch (descendantsToResolve) {
     case DescendantsToResolve::None:
+    case DescendantsToResolve::RebuildAllUsingExisting:
     case DescendantsToResolve::ChildrenWithExplicitInherit:
         break;
     case DescendantsToResolve::Children:
@@ -836,7 +859,7 @@ void TreeResolver::resolveComposedTree()
         if (is<Text>(node)) {
             auto& text = downcast<Text>(node);
             
-            if ((text.styleValidity() >= Validity::SubtreeAndRenderersInvalid && parent.change != Change::Renderer) || parent.style.display() == DisplayType::Contents) {
+            if ((text.hasInvalidRenderer() && parent.change != Change::Renderer) || parent.style.display() == DisplayType::Contents) {
                 TextUpdate textUpdate;
                 textUpdate.inheritedDisplayContentsStyle = createInheritedDisplayContentsStyleIfNeeded(parent.style, parentBoxStyle());
 

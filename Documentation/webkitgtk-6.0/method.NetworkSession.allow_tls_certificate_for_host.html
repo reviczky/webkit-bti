@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WebKit</a></h3>
         <p>API Version: 6.0</p>
         
-        <p>Library Version: 2.43.1</p>
+        <p>Library Version: 2.43.2</p>
         
       </div>
       
@@ -160,6 +160,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
 
       <div class="docblock">
         <p>Ignore further <span class="caps">TLS</span> errors on the <code>host</code> for the certificate present in <code>info</code>.</p>
+<p>If <code>host</code> is an IPv6 address, it should not be surrounded by brackets. This
+expectation matches&nbsp;g_uri_get_host().</p>
       </div>
 
       <div class="docblock">

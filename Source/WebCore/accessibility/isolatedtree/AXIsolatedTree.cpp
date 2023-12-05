@@ -222,7 +222,8 @@ RefPtr<AXIsolatedObject> AXIsolatedTree::objectForID(const AXID axID) const
     return axID.isValid() ? m_readerThreadNodeMap.get(axID) : nullptr;
 }
 
-Vector<RefPtr<AXCoreObject>> AXIsolatedTree::objectsForIDs(const Vector<AXID>& axIDs)
+template<typename U>
+Vector<RefPtr<AXCoreObject>> AXIsolatedTree::objectsForIDs(const U& axIDs)
 {
     AXTRACE("AXIsolatedTree::objectsForIDs"_s);
     ASSERT(!isMainThread());
@@ -568,6 +569,9 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const Vector<A
             break;
         case AXPropertyName::AXColumnIndex:
             propertyMap.set(AXPropertyName::AXColumnIndex, axObject.axColumnIndex());
+            break;
+        case AXPropertyName::IsNonNativeTextControl:
+            propertyMap.set(AXPropertyName::IsNonNativeTextControl, axObject.isNonNativeTextControl());
             break;
         case AXPropertyName::CanSetFocusAttribute:
             propertyMap.set(AXPropertyName::CanSetFocusAttribute, axObject.canSetFocusAttribute());
@@ -1074,7 +1078,7 @@ void AXIsolatedTree::removeSubtreeFromNodeMap(AXID objectID, AccessibilityObject
     }
 }
 
-std::optional<Vector<AXID>> AXIsolatedTree::relatedObjectIDsFor(const AXIsolatedObject& object, AXRelationType relationType)
+std::optional<ListHashSet<AXID>> AXIsolatedTree::relatedObjectIDsFor(const AXIsolatedObject& object, AXRelationType relationType)
 {
     ASSERT(!isMainThread());
 

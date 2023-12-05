@@ -85,6 +85,7 @@ public:
     void visit(AST::ReturnStatement&) override;
     void visit(AST::CompoundStatement&) override;
     void visit(AST::ForStatement&) override;
+    void visit(AST::LoopStatement&) override;
     void visit(AST::WhileStatement&) override;
     void visit(AST::SwitchStatement&) override;
 
@@ -101,6 +102,7 @@ public:
     void visit(AST::BoolLiteral&) override;
     void visit(AST::Signed32Literal&) override;
     void visit(AST::Float32Literal&) override;
+    void visit(AST::Float16Literal&) override;
     void visit(AST::Unsigned32Literal&) override;
     void visit(AST::AbstractIntegerLiteral&) override;
     void visit(AST::AbstractFloatLiteral&) override;
@@ -109,6 +111,8 @@ public:
     void visit(AST::ArrayTypeExpression&) override;
     void visit(AST::ElaboratedTypeExpression&) override;
     void visit(AST::ReferenceTypeExpression&) override;
+
+    void visit(AST::Continuing&) override;
 
 private:
     enum class VariableKind : uint8_t {
@@ -169,6 +173,7 @@ TypeChecker::TypeChecker(ShaderModule& shaderModule)
     introduceType(AST::Identifier::make("i32"_s), m_types.i32Type());
     introduceType(AST::Identifier::make("u32"_s), m_types.u32Type());
     introduceType(AST::Identifier::make("f32"_s), m_types.f32Type());
+    introduceType(AST::Identifier::make("f16"_s), m_types.f16Type());
     introduceType(AST::Identifier::make("sampler"_s), m_types.samplerType());
     introduceType(AST::Identifier::make("sampler_comparison"_s), m_types.samplerComparisonType());
     introduceType(AST::Identifier::make("texture_external"_s), m_types.textureExternalType());
@@ -687,6 +692,18 @@ void TypeChecker::visit(AST::ForStatement& statement)
     visit(statement.body());
 }
 
+void TypeChecker::visit(AST::LoopStatement& statement)
+{
+    ContextScope loopScope(this);
+    visitAttributes(statement.attributes());
+
+    for (auto& statement : statement.body())
+        AST::Visitor::visit(statement);
+
+    if (auto continuing = statement.continuing())
+        visit(*continuing);
+}
+
 void TypeChecker::visit(AST::WhileStatement& statement)
 {
     auto* testType = infer(statement.test());
@@ -1180,6 +1197,12 @@ void TypeChecker::visit(AST::Float32Literal& literal)
     literal.setConstantValue(literal.value());
 }
 
+void TypeChecker::visit(AST::Float16Literal& literal)
+{
+    inferred(m_types.f16Type());
+    literal.setConstantValue(literal.value());
+}
+
 void TypeChecker::visit(AST::Unsigned32Literal& literal)
 {
     inferred(m_types.u32Type());
@@ -1266,6 +1289,23 @@ void TypeChecker::visit(AST::ElaboratedTypeExpression& type)
 void TypeChecker::visit(AST::ReferenceTypeExpression&)
 {
     RELEASE_ASSERT_NOT_REACHED();
+}
+
+
+void TypeChecker::visit(AST::Continuing& continuing)
+{
+    ContextScope continuingScope(this);
+
+    visitAttributes(continuing.attributes);
+
+    for (auto& statement : continuing.body)
+        AST::Visitor::visit(statement);
+
+    if (auto* breakIf = continuing.breakIf) {
+        auto* type = infer(*breakIf);
+        if (!unify(m_types.boolType(), type))
+            typeError(breakIf->span(), "expected 'bool', found ", *type);
+    }
 }
 
 void TypeChecker::visitAttributes(AST::Attribute::List& attributes)
@@ -1539,6 +1579,36 @@ bool TypeChecker::convertValue(const SourceSpan& span, const Type* type, Constan
                         result = convertFloat<float>(static_cast<double>(*i32));
                     else if (auto* u32 = std::get_if<uint32_t>(&value))
                         result = convertFloat<float>(static_cast<double>(*u32));
+                    else if (auto* f16 = std::get_if<half>(&value))
+                        result = convertFloat<float>(*f16);
+                    else
+                        RELEASE_ASSERT_NOT_REACHED();
+                }
+
+                if (!result.has_value())
+                    return Failed;
+                value = { *result };
+                return Success;
+            }
+            case Types::Primitive::F16: {
+                std::optional<half> result;
+                if (auto* f16 = std::get_if<half>(&value))
+                    result = convertFloat<half>(*f16);
+                else if (auto* abstractFloat = std::get_if<double>(&value))
+                    result = convertFloat<half>(*abstractFloat);
+                else if (auto* abstractInt = std::get_if<int64_t>(&value))
+                    result = convertFloat<half>(static_cast<double>(*abstractInt));
+                else {
+                    RELEASE_ASSERT(explicitConversion);
+
+                    if (auto* boolean = std::get_if<bool>(&value))
+                        result = convertFloat<half>(static_cast<double>(*boolean));
+                    else if (auto* i32 = std::get_if<int32_t>(&value))
+                        result = convertFloat<half>(static_cast<double>(*i32));
+                    else if (auto* u32 = std::get_if<uint32_t>(&value))
+                        result = convertFloat<half>(static_cast<double>(*u32));
+                    else if (auto* f32 = std::get_if<float>(&value))
+                        result = convertFloat<half>(*f32);
                     else
                         RELEASE_ASSERT_NOT_REACHED();
                 }
@@ -1563,6 +1633,8 @@ bool TypeChecker::convertValue(const SourceSpan& span, const Type* type, Constan
                         result = static_cast<int32_t>(*boolean);
                     else if (auto* f32 = std::get_if<float>(&value))
                         result = convertInteger<int32_t>(static_cast<int64_t>(*f32));
+                    else if (auto* f16 = std::get_if<half>(&value))
+                        result = convertInteger<int32_t>(*f16);
                     else if (auto* abstractFloat = std::get_if<double>(&value))
                         result = convertInteger<int32_t>(static_cast<int64_t>(*abstractFloat));
                     else
@@ -1588,6 +1660,8 @@ bool TypeChecker::convertValue(const SourceSpan& span, const Type* type, Constan
                         result = static_cast<uint32_t>(*boolean);
                     else if (auto* f32 = std::get_if<float>(&value))
                         result = convertInteger<uint32_t>(static_cast<int64_t>(*f32));
+                    else if (auto* f16 = std::get_if<half>(&value))
+                        result = convertInteger<uint32_t>(*f16);
                     else if (auto* abstractFloat = std::get_if<double>(&value))
                         result = convertInteger<uint32_t>(static_cast<int64_t>(*abstractFloat));
                     else
@@ -1639,6 +1713,8 @@ bool TypeChecker::convertValue(const SourceSpan& span, const Type* type, Constan
                     result = static_cast<bool>(*abstractInt);
                 else if (auto* f32 = std::get_if<float>(&value))
                     result = static_cast<bool>(*f32);
+                    else if (auto* f16 = std::get_if<half>(&value))
+                        result = static_cast<bool>(*f16);
                 else if (auto* abstractFloat = std::get_if<double>(&value))
                     result = static_cast<bool>(*abstractFloat);
                 else

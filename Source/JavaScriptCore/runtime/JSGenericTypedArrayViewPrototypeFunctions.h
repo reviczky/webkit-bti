@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -766,8 +766,15 @@ static ALWAYS_INLINE EncodedJSValue genericTypedArrayViewProtoFuncSortImpl(VM& v
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (comparatorValue.isUndefined()) {
-        if (UNLIKELY(!thisObject->sort()))
-            return throwVMTypeError(globalObject, scope, typedArrayBufferHasBeenDetachedErrorMessage);
+        auto sortResult = thisObject->sort();
+        if (UNLIKELY(sortResult != ViewClass::SortResult::Success)) {
+            if (sortResult == ViewClass::SortResult::Failed)
+                return throwVMTypeError(globalObject, scope, typedArrayBufferHasBeenDetachedErrorMessage);
+
+            ASSERT(sortResult == ViewClass::SortResult::OutOfMemory);
+            throwOutOfMemoryError(globalObject, scope);
+            return { };
+        }
         return JSValue::encode(thisObject);
     }
 
@@ -781,8 +788,11 @@ static ALWAYS_INLINE EncodedJSValue genericTypedArrayViewProtoFuncSortImpl(VM& v
 
     Vector<typename ViewClass::ElementType, 16> src;
     Vector<typename ViewClass::ElementType, 16> dst;
-    src.resize(length);
-    dst.resize(length);
+    if (UNLIKELY(!src.tryGrow(length) || !dst.tryGrow(length))) {
+        throwOutOfMemoryError(globalObject, scope);
+        return { };
+    }
+
     WTF::copyElements(src.data(), originalArray, length);
 
     typename ViewClass::ElementType* result = nullptr;

@@ -581,7 +581,7 @@ void Internals::resetToConsistentState(Page& page)
     localMainFrame->loader().clearTestingOverrides();
     page.applicationCacheStorage().setDefaultOriginQuota(ApplicationCacheStorage::noQuota());
 #if ENABLE(VIDEO)
-    page.group().ensureCaptionPreferences().setCaptionDisplayMode(CaptionUserPreferences::ForcedOnly);
+    page.group().ensureCaptionPreferences().setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::ForcedOnly);
     page.group().ensureCaptionPreferences().setCaptionsStyleSheetOverride(emptyString());
     PlatformMediaSessionManager::sharedManager().resetHaveEverRegisteredAsNowPlayingApplicationForTesting();
     PlatformMediaSessionManager::sharedManager().resetRestrictions();
@@ -826,12 +826,12 @@ static String styleValidityToToString(Style::Validity validity)
     switch (validity) {
     case Style::Validity::Valid:
         return "NoStyleChange"_s;
+    case Style::Validity::AnimationInvalid:
+        return "AnimationInvalid"_s;
     case Style::Validity::ElementInvalid:
         return "InlineStyleChange"_s;
     case Style::Validity::SubtreeInvalid:
         return "FullStyleChange"_s;
-    case Style::Validity::SubtreeAndRenderersInvalid:
-        return "ReconstructRenderTree"_s;
     }
     ASSERT_NOT_REACHED();
     return emptyString();
@@ -4417,13 +4417,13 @@ ExceptionOr<void> Internals::setCaptionDisplayMode(const String& mode)
     auto& captionPreferences = document->page()->group().ensureCaptionPreferences();
 
     if (equalLettersIgnoringASCIICase(mode, "automatic"_s))
-        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::Automatic);
+        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::Automatic);
     else if (equalLettersIgnoringASCIICase(mode, "forcedonly"_s))
-        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::ForcedOnly);
+        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::ForcedOnly);
     else if (equalLettersIgnoringASCIICase(mode, "alwayson"_s))
-        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::AlwaysOn);
+        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::AlwaysOn);
     else if (equalLettersIgnoringASCIICase(mode, "manual"_s))
-        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::Manual);
+        captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::Manual);
     else
         return Exception { ExceptionCode::SyntaxError };
 #else
@@ -4530,21 +4530,21 @@ void Internals::initializeMockMediaSource()
 
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
-    buffer.bufferedSamplesForTrackId(trackId)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+    buffer.bufferedSamplesForTrackId(parseInteger<uint64_t>(trackId).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
         promise.resolve(WTFMove(*samples));
     });
 }
 
 void Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID, BufferedSamplesPromise&& promise)
 {
-    buffer.enqueuedSamplesForTrackID(trackID)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+    buffer.enqueuedSamplesForTrackID(parseInteger<uint64_t>(trackID).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
         promise.resolve(WTFMove(*samples));
     });
 }
 
 double Internals::minimumUpcomingPresentationTimeForTrackID(SourceBuffer& buffer, const AtomString& trackID)
 {
-    return buffer.minimumUpcomingPresentationTimeForTrackID(trackID).toDouble();
+    return buffer.minimumUpcomingPresentationTimeForTrackID(parseInteger<TrackID>(trackID).value_or(0)).toDouble();
 }
 
 void Internals::setShouldGenerateTimestamps(SourceBuffer& buffer, bool flag)
@@ -4554,7 +4554,7 @@ void Internals::setShouldGenerateTimestamps(SourceBuffer& buffer, bool flag)
 
 void Internals::setMaximumQueueDepthForTrackID(SourceBuffer& buffer, const AtomString& trackID, size_t maxQueueDepth)
 {
-    buffer.setMaximumQueueDepthForTrackID(trackID, maxQueueDepth);
+    buffer.setMaximumQueueDepthForTrackID(parseInteger<TrackID>(trackID).value_or(0), maxQueueDepth);
 }
 
 #endif
@@ -5761,22 +5761,17 @@ void Internals::simulateEventForWebGLContext(SimulatedWebGLContextEvent event, W
 
 Internals::RequestedGPU Internals::requestedGPU(WebGLRenderingContext& context)
 {
-    UNUSED_PARAM(context);
-    if (auto optionalAttributes = context.getContextAttributes()) {
-        auto attributes = *optionalAttributes;
-        if (attributes.forceRequestForHighPerformanceGPU)
-            return RequestedGPU::HighPerformance;
-        switch (attributes.powerPreference) {
-        case GraphicsContextGLPowerPreference::Default:
-            return RequestedGPU::Default;
-        case GraphicsContextGLPowerPreference::LowPower:
-            return RequestedGPU::LowPower;
-        case GraphicsContextGLPowerPreference::HighPerformance:
-            return RequestedGPU::HighPerformance;
-        }
+    switch (context.creationAttributes().powerPreference) {
+    case WebGLPowerPreference::Default:
+        return RequestedGPU::Default;
+    case WebGLPowerPreference::LowPower:
+        return RequestedGPU::LowPower;
+    case WebGLPowerPreference::HighPerformance:
+        return RequestedGPU::HighPerformance;
     }
-
+    ASSERT_NOT_REACHED();
     return RequestedGPU::Default;
+
 }
 #endif
 
@@ -6040,7 +6035,6 @@ bool Internals::audioSessionActive() const
 
 void Internals::storeRegistrationsOnDisk(DOMPromiseDeferred<void>&& promise)
 {
-#if ENABLE(SERVICE_WORKER)
     if (!contextDocument())
         return;
 
@@ -6048,9 +6042,6 @@ void Internals::storeRegistrationsOnDisk(DOMPromiseDeferred<void>&& promise)
     connection.storeRegistrationsOnDiskForTesting([promise = WTFMove(promise)]() mutable {
         promise.resolve();
     });
-#else
-    promise.resolve();
-#endif
 }
 
 void Internals::sendH2Ping(String url, DOMPromiseDeferred<IDLDouble>&& promise)
@@ -6149,7 +6140,6 @@ const String& Internals::responseNetworkLoadMetricsProtocol(const FetchResponse&
     return response.networkLoadMetrics().protocol;
 }
 
-#if ENABLE(SERVICE_WORKER)
 void Internals::hasServiceWorkerRegistration(const String& clientURL, HasRegistrationPromise&& promise)
 {
     if (!contextDocument())
@@ -6175,7 +6165,6 @@ void Internals::whenServiceWorkerIsTerminated(ServiceWorker& worker, DOMPromiseD
         promise.resolve();
     });
 }
-#endif
 
 #if ENABLE(APPLE_PAY)
 MockPaymentCoordinator& Internals::mockPaymentCoordinator(Document& document)
@@ -6462,6 +6451,23 @@ String Internals::createDoViCodecParametersString(const DoViParameterSet& parame
 std::optional<VPCodecConfigurationRecord> Internals::parseVPCodecParameters(StringView string)
 {
     return WebCore::parseVPCodecParameters(string);
+}
+
+std::optional<AV1CodecConfigurationRecord> Internals::parseAV1CodecParameters(const String& parameters)
+{
+    return WebCore::parseAV1CodecParameters(parameters);
+}
+
+String Internals::createAV1CodecParametersString(const AV1CodecConfigurationRecord& configuration)
+{
+    return WebCore::createAV1CodecParametersString(configuration);
+}
+
+bool Internals::validateAV1PerLevelConstraints(const String& parameters, const VideoConfiguration& configuration)
+{
+    if (auto record = WebCore::parseAV1CodecParameters(parameters))
+        return WebCore::validateAV1PerLevelConstraints(*record, configuration);
+    return false;
 }
 
 auto Internals::getCookies() const -> Vector<CookieData>
@@ -7110,7 +7116,6 @@ void Internals::retainTextIteratorForDocumentContent()
     m_textIterator = makeUnique<TextIterator>(range);
 }
 
-#if ENABLE(SERVICE_WORKER)
 RefPtr<PushSubscription> Internals::createPushSubscription(const String& endpoint, std::optional<EpochTimeStamp> expirationTime, const ArrayBuffer& serverVAPIDPublicKey, const ArrayBuffer& clientECDHPublicKey, const ArrayBuffer& auth)
 {
     auto myEndpoint = endpoint;
@@ -7120,7 +7125,6 @@ RefPtr<PushSubscription> Internals::createPushSubscription(const String& endpoin
 
     return PushSubscription::create(PushSubscriptionData { { }, WTFMove(myEndpoint), expirationTime, WTFMove(myServerVAPIDPublicKey), WTFMove(myClientECDHPublicKey), WTFMove(myAuth) });
 }
-#endif
 
 #if ENABLE(ARKIT_INLINE_PREVIEW_MAC)
 

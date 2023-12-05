@@ -91,7 +91,7 @@ KeyframeEffect::ParsedKeyframe::~ParsedKeyframe() = default;
 static inline void invalidateElement(const std::optional<const Styleable>& styleable)
 {
     if (styleable)
-        styleable->element.invalidateStyleInternal();
+        styleable->element.invalidateStyleForAnimation();
 }
 
 String KeyframeEffect::CSSPropertyIDToIDLAttributeName(CSSPropertyID property)
@@ -556,9 +556,7 @@ ExceptionOr<Ref<KeyframeEffect>> KeyframeEffect::create(JSGlobalObject& lexicalG
             };
 
             keyframeEffect->setComposite(keyframeEffectOptions.composite);
-
-            if (document.settings().webAnimationsIterationCompositeEnabled())
-                keyframeEffect->setIterationComposite(keyframeEffectOptions.iterationComposite);
+            keyframeEffect->setIterationComposite(keyframeEffectOptions.iterationComposite);
         }
         auto updateTimingResult = keyframeEffect->updateTiming(timing);
         if (updateTimingResult.hasException())
@@ -786,8 +784,14 @@ ExceptionOr<void> KeyframeEffect::setBindingsKeyframes(JSGlobalObject& lexicalGl
 ExceptionOr<void> KeyframeEffect::setKeyframes(JSGlobalObject& lexicalGlobalObject, Document& document, Strong<JSObject>&& keyframesInput)
 {
     auto processKeyframesResult = processKeyframes(lexicalGlobalObject, document, WTFMove(keyframesInput));
-    if (!processKeyframesResult.hasException() && animation())
+    if (!processKeyframesResult.hasException() && animation()) {
         animation()->effectTimingDidChange();
+
+        // Need a full style invalidation since the new keyframes may interact differently with the base style.
+        if (auto target = targetStyleable())
+            target->element.invalidateStyleInternal();
+    }
+
     return processKeyframesResult;
 }
 
@@ -2496,10 +2500,8 @@ void KeyframeEffect::computeHasReferenceFilter()
         auto animatesFilterProperty = [&]() {
             if (m_blendingKeyframes.containsProperty(CSSPropertyFilter))
                 return true;
-#if ENABLE(FILTERS_LEVEL_2)
             if (m_blendingKeyframes.containsProperty(CSSPropertyWebkitBackdropFilter) || m_blendingKeyframes.containsProperty(CSSPropertyBackdropFilter))
                 return true;
-#endif
             return false;
         }();
 
@@ -2509,10 +2511,8 @@ void KeyframeEffect::computeHasReferenceFilter()
         auto styleContainsFilter = [](const RenderStyle& style) {
             if (style.filter().hasReferenceFilter())
                 return true;
-#if ENABLE(FILTERS_LEVEL_2)
             if (style.backdropFilter().hasReferenceFilter())
                 return true;
-#endif
             return false;
         };
 
@@ -2629,11 +2629,9 @@ static bool acceleratedPropertyDidChange(AnimatableCSSProperty property, const R
         return previousStyle.offsetRotate() != currentStyle.offsetRotate();
     case CSSPropertyFilter:
         return previousStyle.filter() != currentStyle.filter();
-#if ENABLE(FILTERS_LEVEL_2)
     case CSSPropertyBackdropFilter:
     case CSSPropertyWebkitBackdropFilter:
         return previousStyle.backdropFilter() != currentStyle.backdropFilter();
-#endif
     default:
         ASSERT_NOT_REACHED();
         break;

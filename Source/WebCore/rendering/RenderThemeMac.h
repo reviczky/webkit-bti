@@ -28,7 +28,6 @@ OBJC_CLASS WebCoreRenderThemeNotificationObserver;
 
 namespace WebCore {
 
-class RenderProgress;
 class RenderStyle;
 
 struct AttachmentLayout;
@@ -75,16 +74,14 @@ public:
     int sliderTickOffsetFromTrackCenter() const final;
 #endif
 
-    LengthBox popupInternalPaddingBox(const RenderStyle&, const Settings&) const final;
+    LengthBox popupInternalPaddingBox(const RenderStyle&) const final;
     PopupMenuStyle::PopupMenuSize popupMenuSize(const RenderStyle&, IntRect&) const final;
 
     bool popsMenuByArrowKeys() const final { return true; }
 
     FloatSize meterSizeForBounds(const RenderMeter&, const FloatRect&) const final;
-    bool supportsMeter(StyleAppearance, const HTMLMeterElement&) const final;
+    bool supportsMeter(StyleAppearance) const final;
 
-    // Returns the repeat interval of the animation for the progress bar.
-    Seconds animationRepeatIntervalForProgressBar(const RenderProgress&) const final;
     IntRect progressBarRectForBounds(const RenderProgress&, const IntRect&) const final;
 
     // Controls color values returned from platformFocusRingColor(). systemColor() will be used when false.
@@ -93,6 +90,8 @@ public:
     NSView* documentViewFor(const RenderObject&) const;
 
     WEBCORE_EXPORT static RetainPtr<NSImage> iconForAttachment(const String& fileName, const String& attachmentType, const String& title);
+
+    Seconds switchCheckedChangeAnimationDuration() const final { return 300_ms; }
 
 private:
     RenderThemeMac();

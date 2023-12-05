@@ -37,7 +37,6 @@
 #include "RenderIterator.h"
 #include "RenderLayer.h"
 #include "RenderLayoutState.h"
-#include "RenderSVGResourceFilter.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
 #include "SVGElementTypeHelpers.h"
@@ -370,7 +369,8 @@ LayoutRect LegacyRenderSVGRoot::clippedOverflowRect(const RenderLayerModelObject
     if (m_hasBoxDecorations || hasRenderOverflow())
         repaintRect.unite(unionRect(localSelectionRect(false), visualOverflowRect()));
 
-    return RenderReplaced::computeRect(enclosingIntRect(repaintRect), repaintContainer, context);
+    auto rects = RepaintRects { LayoutRect(enclosingIntRect(repaintRect)) };
+    return RenderReplaced::computeRects(rects, repaintContainer, context).clippedOverflowRect;
 }
 
 std::optional<FloatRect> LegacyRenderSVGRoot::computeFloatVisibleRectInContainer(const FloatRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
@@ -395,9 +395,12 @@ std::optional<FloatRect> LegacyRenderSVGRoot::computeFloatVisibleRectInContainer
         adjustedRect.unite(decoratedRepaintRect);
     }
 
-    if (std::optional<LayoutRect> rectInContainer = RenderReplaced::computeVisibleRectInContainer(enclosingIntRect(adjustedRect), container, context))
-        return FloatRect(*rectInContainer);
-    return std::nullopt;
+    auto rects = RepaintRects { LayoutRect(enclosingIntRect(adjustedRect)) };
+    auto rectsInContainer = RenderReplaced::computeVisibleRectsInContainer(rects, container, context);
+    if (!rectsInContainer)
+        return std::nullopt;
+
+    return FloatRect(rectsInContainer->clippedOverflowRect);
 }
 
 // This method expects local CSS box coordinates.

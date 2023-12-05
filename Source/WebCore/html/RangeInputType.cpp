@@ -136,14 +136,18 @@ void RangeInputType::handleMouseDownEvent(MouseEvent& event)
     if (element()->isDisabledFormControl())
         return;
 
-    if (event.button() != MouseButton::Left || !is<Node>(event.target()))
+    if (event.button() != MouseButton::Left)
         return;
+
+    auto* targetNode = dynamicDowncast<Node>(event.target());
+    if (!targetNode)
+        return;
+
     ASSERT(element()->shadowRoot());
-    auto& targetNode = downcast<Node>(*event.target());
-    if (&targetNode != element() && !targetNode.isDescendantOf(element()->userAgentShadowRoot().get()))
+    if (targetNode != element() && !targetNode->isDescendantOf(element()->userAgentShadowRoot().get()))
         return;
     auto& thumb = typedSliderThumbElement();
-    if (&targetNode == &thumb)
+    if (targetNode == &thumb)
         return;
     thumb.dragFrom(event.absoluteLocation());
 }
@@ -156,7 +160,7 @@ void RangeInputType::handleTouchEvent(TouchEvent& event)
     if (!hasCreatedShadowSubtree())
         return;
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(IOS_TOUCH_EVENTS)
     typedSliderThumbElement().handleTouchEvent(event);
 #else
 
@@ -173,15 +177,8 @@ void RangeInputType::handleTouchEvent(TouchEvent& event)
         typedSliderThumbElement().setPositionFromPoint(touches->item(0)->absoluteLocation());
         event.setDefaultHandled();
     }
-#endif
+#endif // ENABLE(IOS_TOUCH_EVENTS)
 }
-
-#if !PLATFORM(IOS_FAMILY)
-bool RangeInputType::hasTouchEventHandler() const
-{
-    return true;
-}
-#endif
 #endif // ENABLE(TOUCH_EVENTS)
 
 void RangeInputType::disabledStateChanged()

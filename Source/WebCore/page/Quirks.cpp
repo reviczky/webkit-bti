@@ -62,6 +62,7 @@
 #include "UserContentTypes.h"
 #include "UserScript.h"
 #include "UserScriptTypes.h"
+#include <JavaScriptCore/JSLock.h>
 
 #if PLATFORM(COCOA)
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
@@ -222,7 +223,7 @@ bool Quirks::shouldTooltipPreventFromProceedingWithClick(const Element& element)
 // FIXME: Remove after the site is fixed, <rdar://problem/75792913>
 bool Quirks::shouldHideSearchFieldResultsButton() const
 {
-#if ENABLE(IOS_FORM_CONTROL_REFRESH)
+#if PLATFORM(IOS_FAMILY)
     if (!needsQuirks())
         return false;
 
@@ -502,7 +503,6 @@ bool Quirks::shouldDispatchedSimulatedMouseEventsAssumeDefaultPrevented(EventTar
 
 // maps.google.com https://bugs.webkit.org/show_bug.cgi?id=199904
 // desmos.com rdar://50925173
-// airtable.com rdar://51557377
 std::optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(EventTarget* target) const
 {
     if (!shouldDispatchSimulatedMouseEvents(target))
@@ -517,18 +517,6 @@ std::optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(Even
 
     if (isDomain("desmos.com"_s))
         return Event::IsCancelable::No;
-
-    if (isDomain("airtable.com"_s)) {
-        // We want to limit simulated mouse events to elements under <div id="paneContainer"> to allow for column re-ordering and multiple cell selection.
-        if (is<Node>(target)) {
-            RefPtr node = downcast<Node>(target);
-            if (RefPtr paneContainer = node->treeScope().getElementById(AtomString("paneContainer"_s))) {
-                if (paneContainer->contains(node.get()))
-                    return Event::IsCancelable::Yes;
-            }
-        }
-        return { };
-    }
 
     return Event::IsCancelable::Yes;
 }
@@ -933,7 +921,7 @@ bool Quirks::shouldBypassAsyncScriptDeferring() const
 }
 
 // smoothscroll JS library rdar://52712513
-bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, const AtomString& eventType, const EventListener& eventListener)
+bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, const AtomString& eventType)
 {
     auto eventTargetIsRoot = [](const EventTarget& eventTarget) {
         if (is<LocalDOMWindow>(eventTarget))
@@ -966,25 +954,6 @@ bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, cons
         return false;
     }
 
-    if (eventType == eventNames().mousewheelEvent) {
-        if (!is<JSEventListener>(eventListener))
-            return false;
-
-        // For SmoothScroll.js
-        // Matches Blink intervention in https://chromium.googlesource.com/chromium/src/+/b6b13c9cfe64d52a4168d9d8d1ad9bb8f0b46a2a%5E%21/
-        if (is<LocalDOMWindow>(eventTarget)) {
-            auto* document = downcast<LocalDOMWindow>(eventTarget).document();
-            if (!document || !document->quirks().needsQuirks())
-                return false;
-
-            auto& jsEventListener = downcast<JSEventListener>(eventListener);
-            if (jsEventListener.functionName() == "ssc_wheel"_s)
-                return true;
-        }
-
-        return false;
-    }
-
     return false;
 }
 
@@ -1001,6 +970,18 @@ bool Quirks::shouldEnableLegacyGetUserMediaQuirk() const
         m_shouldEnableLegacyGetUserMediaQuirk = host == "www.baidu.com"_s || host == "www.warbyparker.com"_s;
     }
     return m_shouldEnableLegacyGetUserMediaQuirk.value();
+}
+
+// zoom.us rdar://118185086
+bool Quirks::shouldDisableImageCaptureQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableImageCaptureQuirk)
+        m_shouldDisableImageCaptureQuirk = isDomain("zoom.us"_s);
+
+    return m_shouldDisableImageCaptureQuirk.value();
 }
 #endif
 
@@ -1046,7 +1027,6 @@ bool Quirks::shouldAvoidPastingImagesAsWebContent() const
 #endif
 }
 
-#if ENABLE(TRACKING_PREVENTION)
 // kinja.com and related sites rdar://60601895
 static bool isKinjaLoginAvatarElement(const Element& element)
 {
@@ -1148,7 +1128,6 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
     });
     return Quirks::StorageAccessResult::ShouldCancelEvent;
 }
-#endif
 
 // rdar://64549429
 Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, bool isParentProcessAFullWebBrowser, IsSyntheticClick isSyntheticClick) const
@@ -1156,7 +1135,6 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
     if (!DeprecatedGlobalSettings::trackingPreventionEnabled() || !isParentProcessAFullWebBrowser)
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
-#if ENABLE(TRACKING_PREVENTION)
     if (!needsQuirks())
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
@@ -1239,14 +1217,6 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
             });
         }
     }
-#else
-    UNUSED_PARAM(element);
-    UNUSED_PARAM(platformEvent);
-    UNUSED_PARAM(eventType);
-    UNUSED_PARAM(detail);
-    UNUSED_PARAM(relatedTarget);
-    UNUSED_PARAM(isSyntheticClick);
-#endif
     return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 }
 
@@ -1613,6 +1583,8 @@ bool Quirks::needsDisableDOMPasteAccessQuirk() const
         auto* globalObject = m_document->globalObject();
         if (!globalObject)
             return false;
+
+        JSC::JSLockHolder lock(globalObject->vm());
         auto tableauPrepProperty = JSC::Identifier::fromString(globalObject->vm(), "tableauPrep"_s);
         return globalObject->hasProperty(globalObject, tableauPrepProperty);
     }();

@@ -137,6 +137,12 @@ public:
     size_t decrementThreadsWaitingOnCallback() { return --m_threadsWaitingOnCallback; }
 #endif
 
+    WebCore::IntPoint convertFromPluginToPDFView(const WebCore::IntPoint&) const;
+    WebCore::IntPoint convertFromPDFViewToRootView(const WebCore::IntPoint&) const;
+    WebCore::IntRect convertFromPDFViewToRootView(const WebCore::IntRect&) const;
+    WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
+    WebCore::FloatRect convertFromPDFViewToScreen(const WebCore::FloatRect&) const;
+
 private:
     explicit PDFPlugin(WebCore::HTMLPlugInElement&);
     bool isLegacyPDFPlugin() const override { return true; }
@@ -176,6 +182,7 @@ private:
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const override;
 
+    bool wantsWheelEvents() const override { return true; }
     bool handleMouseEvent(const WebMouseEvent&) override;
     bool handleWheelEvent(const WebWheelEvent&) override;
     bool handleMouseEnterEvent(const WebMouseEvent&) override;
@@ -195,6 +202,7 @@ private:
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
     std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
 
+    bool shouldCreateTransientPaintingSnapshot() const override { return true; }
     RefPtr<ShareableBitmap> snapshot() override;
 
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
