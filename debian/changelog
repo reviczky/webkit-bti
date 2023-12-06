@@ -1,4 +1,4 @@
-webkit2gtk (2.43.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.43.2-1) experimental; urgency=medium
 
   * New upstream development release.
   * Drop support for some arches that are unsupported or haven't worked in
@@ -12,7 +12,7 @@ webkit2gtk (2.43.2-1) UNRELEASED; urgency=medium
     installed docs, upstream no longer uses the gtk-doc dir (see webkit
     bug #265133).
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 03 Dec 2023 00:57:09 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 06 Dec 2023 13:49:25 +0100
 
 webkit2gtk (2.43.1-1) experimental; urgency=medium
 
