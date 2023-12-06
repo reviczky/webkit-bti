@@ -8,6 +8,9 @@ webkit2gtk (2.43.2-1) UNRELEASED; urgency=medium
       uses it.
   * debian/copyright:
     - Update copyright information of all files.
+  * Use the documentation from the 6.0 API build and update path of
+    installed docs, upstream no longer uses the gtk-doc dir (see webkit
+    bug #265133).
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 03 Dec 2023 00:57:09 +0100
 

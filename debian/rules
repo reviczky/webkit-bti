@@ -292,10 +292,10 @@ override_dh_auto_configure:
 		$(ENABLE_WEBDRIVER_SOUP2) -DENABLE_DOCUMENTATION=OFF
 	$(SOUP3_BUILD) dh_auto_configure -Bbuild-soup3 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=OFF -DUSE_GTK4=OFF \
-		$(ENABLE_WEBDRIVER_SOUP3)
+		$(ENABLE_WEBDRIVER_SOUP3) -DENABLE_DOCUMENTATION=OFF
 	$(GTK4_BUILD) dh_auto_configure -Bbuild-gtk4 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) \
-		$(ENABLE_WEBDRIVER_GTK4) -DENABLE_DOCUMENTATION=OFF
+		$(ENABLE_WEBDRIVER_GTK4)
 
 override_dh_auto_build:
 	$(SOUP2_BUILD) CCACHE_BASEDIR=$(CURDIR)/build-soup2 \
@@ -323,13 +323,13 @@ override_dh_auto_clean: debian/control
 # Otherwise create a dummy doc directory in case the "nodoc" build option is set.
 override_dh_install-indep:
 ifeq ($(USE_PREBUILT_DOCS),YES)
-	mkdir -p debian/tmp/usr/share/gtk-doc/html
-	cp -r Documentation/webkit2gtk-4.1 debian/tmp/usr/share/gtk-doc/html/
-	cp -r Documentation/jsc-glib-4.1 debian/tmp/usr/share/gtk-doc/html/javascriptcoregtk-4.1
-	cp -r Documentation/webkit2gtk-web-extension-4.1 debian/tmp/usr/share/gtk-doc/html/
+	mkdir -p debian/tmp/usr/share/doc
+	cp -r Documentation/webkitgtk-6.0 debian/tmp/usr/share/doc/
+	cp -r Documentation/jsc-glib-6.0 debian/tmp/usr/share/doc/javascriptcoregtk-6.0
+	cp -r Documentation/webkitgtk-web-process-extension-6.0 debian/tmp/usr/share/doc/
 else
-	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1
-	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1/index.html
+	mkdir -p debian/tmp/usr/share/doc/webkitgtk-6.0
+	touch debian/tmp/usr/share/doc/webkitgtk-6.0/index.html
 endif
 	dh_install -i
 	jdupes -rl debian/libwebkit2gtk-4.0-doc/usr
