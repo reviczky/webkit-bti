@@ -1,0 +1,19 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Disable the DMABuf renderer by default in bullseye backports
+Bug-Debian: https://bugs.debian.org/1054101
+Forwarded: no
+Index: webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
++++ webkitgtk/Source/WebKit/UIProcess/gtk/AcceleratedBackingStoreDMABuf.cpp
+@@ -60,8 +60,8 @@ OptionSet<DMABufRendererBufferMode> Acce
+     static OptionSet<DMABufRendererBufferMode> mode;
+     static std::once_flag onceFlag;
+     std::call_once(onceFlag, [] {
+-        const char* disableDMABuf = getenv("WEBKIT_DISABLE_DMABUF_RENDERER");
+-        if (disableDMABuf && strcmp(disableDMABuf, "0"))
++        const char* forceDMABuf = getenv("WEBKIT_FORCE_DMABUF_RENDERER");
++        if (!forceDMABuf || !strcmp(forceDMABuf, "0"))
+             return;
+ 
+         const char* platformExtensions = eglQueryString(nullptr, EGL_EXTENSIONS);
