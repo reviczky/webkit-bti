@@ -147,7 +147,7 @@ void RemoteImageBuffer::filteredNativeImage(Ref<WebCore::Filter> filter, Complet
         auto context = bitmap->createGraphicsContext();
         if (!context)
             return;
-        context->drawNativeImage(*image, imageSize, WebCore::FloatRect { { }, imageSize }, WebCore::FloatRect { { }, imageSize });
+        context->drawNativeImage(*image, WebCore::FloatRect { { }, imageSize }, WebCore::FloatRect { { }, imageSize });
         handle = bitmap->createHandle();
     }();
     completionHandler(WTFMove(handle));
@@ -165,17 +165,10 @@ void RemoteImageBuffer::transformToColorSpace(const WebCore::DestinationColorSpa
     m_imageBuffer->transformToColorSpace(colorSpace);
 }
 
-void RemoteImageBuffer::setFlushSignal(IPC::Signal&& signal)
-{
-    m_flushSignal = WTFMove(signal);
-}
-
 void RemoteImageBuffer::flushContext()
 {
-    RELEASE_ASSERT(m_flushSignal);
     assertIsCurrent(workQueue());
     m_imageBuffer->flushDrawingContext();
-    m_flushSignal->signal();
 }
 
 void RemoteImageBuffer::flushContextSync(CompletionHandler<void()>&& completionHandler)
@@ -184,6 +177,15 @@ void RemoteImageBuffer::flushContextSync(CompletionHandler<void()>&& completionH
     m_imageBuffer->flushDrawingContext();
     completionHandler();
 }
+
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+void RemoteImageBuffer::dynamicContentScalingDisplayList(CompletionHandler<void(std::optional<WebCore::DynamicContentScalingDisplayList>&&)>&& completionHandler)
+{
+    assertIsCurrent(workQueue());
+    auto displayList = m_imageBuffer->dynamicContentScalingDisplayList();
+    completionHandler({ WTFMove(displayList) });
+}
+#endif
 
 IPC::StreamConnectionWorkQueue& RemoteImageBuffer::workQueue() const
 {

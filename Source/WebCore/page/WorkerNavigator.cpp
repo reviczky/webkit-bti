@@ -62,7 +62,9 @@ GPU* WorkerNavigator::gpu()
         auto scriptExecutionContext = this->scriptExecutionContext();
         if (scriptExecutionContext->isWorkerGlobalScope()) {
             WorkerGlobalScope& workerGlobalScope = downcast<WorkerGlobalScope>(*scriptExecutionContext);
-            RELEASE_ASSERT(workerGlobalScope.graphicsClient());
+            if (!workerGlobalScope.graphicsClient())
+                return nullptr;
+
             auto gpu = workerGlobalScope.graphicsClient()->createGPUForWebGPU();
             if (!gpu)
                 return nullptr;
@@ -105,7 +107,8 @@ void WorkerNavigator::setAppBadge(std::optional<unsigned long long> badge, Ref<D
         return;
     }
 
-    scope->thread().workerBadgeProxy().setAppBadge(badge);
+    if (auto* workerBadgeProxy = scope->thread().workerBadgeProxy())
+        workerBadgeProxy->setAppBadge(badge);
     promise->resolve();
 }
 

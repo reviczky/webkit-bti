@@ -30,6 +30,7 @@
 #include "CanvasObserver.h"
 #include "Color.h"
 #include "ContainerNode.h"
+#include "ContextDestructionObserverInlines.h"
 #include "DocumentEventTiming.h"
 #include "FontSelectorClient.h"
 #include "FrameDestructionObserver.h"
@@ -321,7 +322,7 @@ enum class NodeListInvalidationType : uint8_t {
     InvalidateOnHRefAttrChange,
     InvalidateOnAnyAttrChange,
 };
-const uint8_t numNodeListInvalidationTypes = static_cast<uint8_t>(NodeListInvalidationType::InvalidateOnAnyAttrChange) + 1;
+const auto numNodeListInvalidationTypes = enumToUnderlyingType(NodeListInvalidationType::InvalidateOnAnyAttrChange) + 1;
 
 enum class EventHandlerRemoval : bool { One, All };
 using EventTargetSet = HashCountedSet<Node*>;
@@ -618,7 +619,7 @@ public:
     virtual bool isFrameSet() const { return false; }
 
     static ptrdiff_t documentClassesMemoryOffset() { return OBJECT_OFFSETOF(Document, m_documentClasses); }
-    static uint32_t isHTMLDocumentClassFlag() { return static_cast<uint32_t>(DocumentClass::HTML); }
+    static auto isHTMLDocumentClassFlag() { return enumToUnderlyingType(DocumentClass::HTML); }
 
     bool isSrcdocDocument() const { return m_isSrcdocDocument; }
 
@@ -663,7 +664,7 @@ public:
     inline LocalFrameView* view() const; // Defined in LocalFrame.h.
     RefPtr<LocalFrameView> protectedView() const;
     inline Page* page() const; // Defined in Page.h.
-    inline CheckedPtr<Page> checkedPage() const; // Defined in Page.h.
+    inline RefPtr<Page> protectedPage() const; // Defined in Page.h.
     const Settings& settings() const { return m_settings.get(); }
     Ref<Settings> protectedSettings() const;
     EditingBehavior editingBehavior() const;
@@ -1171,7 +1172,7 @@ public:
     WEBCORE_EXPORT String designMode() const;
     WEBCORE_EXPORT void setDesignMode(const String&);
 
-    Document* parentDocument() const;
+    WEBCORE_EXPORT Document* parentDocument() const;
     RefPtr<Document> protectedParentDocument() const { return parentDocument(); }
     WEBCORE_EXPORT Document& topDocument() const;
     Ref<Document> protectedTopDocument() const { return topDocument(); }
@@ -1567,6 +1568,9 @@ public:
     inline bool isCapturing() const;
     WEBCORE_EXPORT void updateIsPlayingMedia();
     void pageMutedStateDidChange();
+
+    bool hasEverHadSelectionInsideTextFormControl() const { return m_hasEverHadSelectionInsideTextFormControl; }
+    void setHasEverHadSelectionInsideTextFormControl() { m_hasEverHadSelectionInsideTextFormControl = true; }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void addPlaybackTargetPickerClient(MediaPlaybackTargetClient&);
@@ -2048,7 +2052,7 @@ private:
     mutable String m_uniqueIdentifier;
 
     WeakHashSet<NodeIterator> m_nodeIterators;
-    HashSet<CheckedRef<Range>> m_ranges;
+    HashSet<SingleThreadWeakRef<Range>> m_ranges;
 
     UniqueRef<Style::Scope> m_styleScope;
     std::unique_ptr<ExtensionStyleSheets> m_extensionStyleSheets;
@@ -2078,7 +2082,7 @@ private:
 
     std::unique_ptr<Style::Update> m_pendingRenderTreeUpdate;
 
-    CheckedPtr<Element> m_cssTarget;
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> m_cssTarget;
 
     std::unique_ptr<LazyLoadImageObserver> m_lazyLoadImageObserver;
 
@@ -2136,8 +2140,8 @@ private:
     WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElementShowingTextTrack;
 #endif
 
-    CheckedPtr<Element> m_mainArticleElement;
-    HashSet<CheckedPtr<Element>> m_articleElements;
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> m_mainArticleElement;
+    HashSet<WeakRef<Element, WeakPtrImplWithEventTargetData>> m_articleElements;
 
     WeakHashSet<VisibilityChangeClient> m_visibilityStateCallbackClients;
 
@@ -2457,6 +2461,8 @@ private:
     bool m_mayHaveRenderedSVGRootElements { false };
 
     bool m_userHasInteractedWithMediaElement { false };
+
+    bool m_hasEverHadSelectionInsideTextFormControl { false };
 
     bool m_updateTitleTaskScheduled { false };
 

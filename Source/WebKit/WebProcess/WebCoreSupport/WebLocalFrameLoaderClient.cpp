@@ -90,6 +90,7 @@
 #include <WebCore/PluginDocument.h>
 #include <WebCore/PolicyChecker.h>
 #include <WebCore/ProgressTracker.h>
+#include <WebCore/Quirks.h>
 #include <WebCore/ResourceError.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/RuntimeApplicationChecks.h>
@@ -463,18 +464,20 @@ void WebLocalFrameLoaderClient::didSameDocumentNavigationForFrameViaJSHistoryAPI
         { }, /* modifiers */
         WebMouseEventButton::None,
         WebMouseEventSyntheticClickType::NoTap,
-        WebProcess::singleton().userGestureTokenIdentifier(UserGestureIndicator::currentUserGesture()),
+        WebProcess::singleton().userGestureTokenIdentifier(webPage->identifier(), UserGestureIndicator::currentUserGesture()),
         UserGestureIndicator::currentUserGesture() ? UserGestureIndicator::currentUserGesture()->authorizationToken() : std::nullopt,
         true, /* canHandleRequest */
         WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow,
         { }, /* downloadAttribute */
         { }, /* clickLocationInRootViewCoordinates */
         { }, /* redirectResponse */
+        false, /* isRequestFromClientOrUserInput */
         true, /* treatAsSameOriginNavigation */
         false, /* hasOpenedFrames */
         false, /* openedByDOMWithOpener */
         !!m_frame->coreLocalFrame()->loader().opener(), /* hasOpener */
         { }, /* requesterOrigin */
+        { }, /* requesterTopOrigin */
         std::nullopt, /* targetBackForwardItemIdentifier */
         std::nullopt, /* sourceBackForwardItemIdentifier */
         WebCore::LockHistory::No,
@@ -637,6 +640,12 @@ void WebLocalFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceErr
 
     // Notify the bundle client.
     webPage->injectedBundleLoaderClient().didFailProvisionalLoadWithErrorForFrame(*webPage, m_frame, error, userData);
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    // Notify the extensions controller.
+    if (RefPtr extensionControllerProxy = webPage->webExtensionControllerProxy())
+        extensionControllerProxy->didFailLoadForFrame(*webPage, m_frame, m_frame->coreLocalFrame()->loader().provisionalLoadErrorBeingHandledURL());
+#endif
 
     webPage->sandboxExtensionTracker().didFailProvisionalLoad(m_frame.ptr());
 
@@ -926,18 +935,20 @@ void WebLocalFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const Nav
         modifiersForNavigationAction(navigationAction),
         mouseButton(navigationAction),
         syntheticClickType(navigationAction),
-        WebProcess::singleton().userGestureTokenIdentifier(navigationAction.userGestureToken()),
+        WebProcess::singleton().userGestureTokenIdentifier(webPage->identifier(), navigationAction.userGestureToken()),
         navigationAction.userGestureToken() ? navigationAction.userGestureToken()->authorizationToken() : std::nullopt,
         webPage->canHandleRequest(request),
         navigationAction.shouldOpenExternalURLsPolicy(),
         navigationAction.downloadAttribute(),
         mouseEventData ? mouseEventData->locationInRootViewCoordinates : FloatPoint(),
         { }, /* redirectResponse */
+        false, /* isRequestFromClientOrUserInput */
         false, /* treatAsSameOriginNavigation */
         false, /* hasOpenedFrames */
         false, /* openedByDOMWithOpener */
         navigationAction.newFrameOpenerPolicy() == NewFrameOpenerPolicy::Allow, /* hasOpener */
         { }, /* requesterOrigin */
+        { }, /* requesterTopOrigin */
         std::nullopt, /* targetBackForwardItemIdentifier */
         std::nullopt, /* sourceBackForwardItemIdentifier */
         WebCore::LockHistory::No,
@@ -1325,6 +1336,28 @@ bool WebLocalFrameLoaderClient::representationExistsForURLScheme(StringView /*UR
 {
     notImplemented();
     return false;
+}
+
+void WebLocalFrameLoaderClient::loadStorageAccessQuirksIfNeeded()
+{
+    RefPtr webPage = m_frame->page();
+
+    if (!webPage || !m_frame->coreLocalFrame() || !m_frame->coreLocalFrame()->isMainFrame() || !m_frame->coreLocalFrame()->document())
+        return;
+
+    auto* document = m_frame->coreLocalFrame()->document();
+    RegistrableDomain domain { document->url() };
+    if (!WebProcess::singleton().haveStorageAccessQuirksForDomain(domain))
+        return;
+
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::StorageAccessQuirkForTopFrameDomain(WTFMove(domain)), [weakDocument = WeakPtr { *document }](Vector<RegistrableDomain>&& domains) {
+        if (!domains.size())
+            return;
+        if (!weakDocument)
+            return;
+        weakDocument->quirks().setSubFrameDomainsForStorageAccessQuirk(WTFMove(domains));
+    });
+
 }
 
 String WebLocalFrameLoaderClient::generatedMIMETypeForURLScheme(StringView /*URLScheme*/) const
@@ -1958,6 +1991,19 @@ void WebLocalFrameLoaderClient::dispatchLoadEventToOwnerElementInAnotherProcess(
         return;
     page->send(Messages::WebPageProxy::DispatchLoadEventToFrameOwnerElement(m_frame->frameID()));
 }
+
+#if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+
+void WebLocalFrameLoaderClient::didAccessWindowProxyPropertyViaOpener(WebCore::SecurityOriginData&& parentOrigin, WebCore::WindowProxyProperty property)
+{
+    RefPtr page = m_frame->page();
+    if (!page)
+        return;
+
+    page->send(Messages::WebPageProxy::DidAccessWindowProxyPropertyViaOpenerForFrame(m_frame->frameID(), WTFMove(parentOrigin), property));
+}
+
+#endif
 
 } // namespace WebKit
 

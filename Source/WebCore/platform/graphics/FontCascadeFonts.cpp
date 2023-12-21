@@ -136,6 +136,21 @@ void FontCascadeFonts::determinePitch(const FontCascadeDescription& description)
         m_pitch = VariablePitch;
 }
 
+void FontCascadeFonts::determineCanTakeFixedPitchFastContentMeasuring(const FontCascadeDescription& description)
+{
+#if PLATFORM(COCOA)
+    auto& primaryRanges = realizeFallbackRangesAt(description, 0);
+    unsigned numRanges = primaryRanges.size();
+    if (numRanges == 1)
+        m_canTakeFixedPitchFastContentMeasuring = triState(primaryRanges.fontForFirstRange().canTakeFixedPitchFastContentMeasuring());
+    else
+        m_canTakeFixedPitchFastContentMeasuring = TriState::False;
+#else
+    UNUSED_PARAM(description);
+    m_canTakeFixedPitchFastContentMeasuring = TriState::False;
+#endif
+}
+
 bool FontCascadeFonts::isLoadingCustomFonts() const
 {
     for (auto& fontRanges : m_realizedFallbackRanges) {
@@ -463,8 +478,12 @@ GlyphData FontCascadeFonts::glyphDataForVariant(char32_t character, const FontCa
         return loadingResult;
     // https://drafts.csswg.org/css-fonts-4/#char-handling-issues
     // "If a given character is a Private-Use Area Unicode codepoint, user agents must only match font families named in the font-family list that are not generic families. If none of the families named in the font-family list contain a glyph for that codepoint, user agents must display some form of missing glyph symbol for that character rather than attempting installed font fallback for that codepoint."
-    if (isPrivateUseAreaCharacter(character))
-        return GlyphData(0, FontCache::forCurrentThread().lastResortFallbackFont(description).ptr()); // 0 is the font's reserved .notdef glyph
+    if (isPrivateUseAreaCharacter(character)) {
+        auto font = FontCache::forCurrentThread().lastResortFallbackFont(description);
+        GlyphData glyphData(0, font.ptr());
+        m_systemFallbackFontSet.add(WTFMove(font));
+        return glyphData; // 0 is the font's reserved .notdef glyph
+    }
 
     return glyphDataForSystemFallback(character, description, variant, resolvedEmojiPolicy, fallbackVisibility == FallbackVisibility::Invisible);
 }

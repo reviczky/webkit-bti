@@ -74,6 +74,11 @@
 #include <WebCore/PlatformDisplay.h>
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+#include "ExtensionCapabilityGrant.h"
+#include "MediaCapability.h"
+#endif
+
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
 
 namespace WebKit {
@@ -497,6 +502,15 @@ void GPUProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
         ASSERT_NOT_REACHED();
         break;
     }
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    // FIXME: Any ExtensionCapabilityGranter can invalidate the GPUProcessProxy grants, so we pick the first one. In the future ExtensionCapabilityGranter should be made a singleton.
+    for (auto& processPool : WebProcessPool::allProcessPools()) {
+        processPool->extensionCapabilityGranter().invalidateGrants(moveToVector(std::exchange(extensionCapabilityGrants(), { }).values()));
+        break;
+    }
+
+#endif
 
     if (singleton() == this)
         singleton() = nullptr;

@@ -121,26 +121,13 @@ void SourceBufferPrivateGStreamer::removedFromMediaSource()
 {
     ASSERT(isMainThread());
 
-    for (auto& track : tracks())
+    for (auto& [_, track] : tracks())
         track->remove();
     m_hasBeenRemovedFromMediaSource = true;
 
     m_appendPipeline->stopParser();
 
     SourceBufferPrivate::removedFromMediaSource();
-}
-
-MediaPlayer::ReadyState SourceBufferPrivateGStreamer::readyState() const
-{
-    if (RefPtr mediaSource = m_mediaSource.get())
-        return mediaSource->readyState();
-    return MediaPlayer::ReadyState::HaveNothing;
-}
-
-void SourceBufferPrivateGStreamer::setReadyState(MediaPlayer::ReadyState state)
-{
-    if (RefPtr mediaSource = m_mediaSource.get())
-        mediaSource->setReadyState(state);
 }
 
 void SourceBufferPrivateGStreamer::flush(TrackID trackId)
@@ -154,7 +141,7 @@ void SourceBufferPrivateGStreamer::flush(TrackID trackId)
         return;
 
     ASSERT(m_tracks.contains(trackId));
-    MediaSourceTrackGStreamer* track = m_tracks.find(trackId)->second.get();
+    auto track = m_tracks[trackId];
     if (!downcast<MediaSourcePrivateGStreamer>(mediaSource)->hasAllTracks()) {
         GST_DEBUG_OBJECT(m_playerPrivate.pipeline(), "Source element has not emitted tracks yet, so we only need to clear the queue. trackId = '%s'", track->stringId().string().utf8().data());
         track->clearQueue();
@@ -179,7 +166,7 @@ void SourceBufferPrivateGStreamer::enqueueSample(Ref<MediaSample>&& sample, Trac
         GST_TIME_ARGS(WebCore::toGstClockTime(sample->duration())));
 
     ASSERT(m_tracks.contains(trackId));
-    MediaSourceTrackGStreamer* track = m_tracks.find(trackId)->second.get();
+    auto track = m_tracks[trackId];
     track->enqueueObject(adoptGRef(GST_MINI_OBJECT(gstSample.leakRef())));
 }
 
@@ -187,7 +174,7 @@ bool SourceBufferPrivateGStreamer::isReadyForMoreSamples(TrackID trackId)
 {
     ASSERT(isMainThread());
     ASSERT(m_tracks.contains(trackId));
-    MediaSourceTrackGStreamer* track = m_tracks.find(trackId)->second.get();
+    auto track = m_tracks[trackId];
     bool ret = track->isReadyForMoreSamples();
     GST_TRACE_OBJECT(m_playerPrivate.pipeline(), "isReadyForMoreSamples: %s", boolForPrinting(ret));
     return ret;
@@ -197,7 +184,7 @@ void SourceBufferPrivateGStreamer::notifyClientWhenReadyForMoreSamples(TrackID t
 {
     ASSERT(isMainThread());
     ASSERT(m_tracks.contains(trackId));
-    MediaSourceTrackGStreamer* track = m_tracks.find(trackId)->second.get();
+    auto track = m_tracks[trackId];
     track->notifyWhenReadyForMoreSamples([protectedThis = Ref { *this }, this, trackId]() mutable {
         RunLoop::main().dispatch([protectedThis = WTFMove(protectedThis), this, trackId]() {
             if (!m_hasBeenRemovedFromMediaSource)
@@ -210,12 +197,12 @@ void SourceBufferPrivateGStreamer::allSamplesInTrackEnqueued(TrackID trackId)
 {
     ASSERT(isMainThread());
     ASSERT(m_tracks.contains(trackId));
-    MediaSourceTrackGStreamer* track = m_tracks.find(trackId)->second.get();
+    auto track = m_tracks[trackId];
     GST_DEBUG_OBJECT(m_playerPrivate.pipeline(), "Enqueueing EOS for track '%s'", track->stringId().string().utf8().data());
     track->enqueueObject(adoptGRef(GST_MINI_OBJECT(gst_event_new_eos())));
 }
 
-bool SourceBufferPrivateGStreamer::precheckInitialisationSegment(const InitializationSegment& segment)
+bool SourceBufferPrivateGStreamer::precheckInitializationSegment(const InitializationSegment& segment)
 {
     for (auto& trackInfo : segment.videoTracks) {
         auto* videoTrackInfo = static_cast<VideoTrackPrivateGStreamer*>(trackInfo.track.get());
@@ -242,7 +229,7 @@ bool SourceBufferPrivateGStreamer::precheckInitialisationSegment(const Initializ
     return true;
 }
 
-void SourceBufferPrivateGStreamer::processInitialisationSegment(std::optional<InitializationSegment>&& segment)
+void SourceBufferPrivateGStreamer::processInitializationSegment(std::optional<InitializationSegment>&& segment)
 {
     if (RefPtr mediaSource = m_mediaSource.get(); mediaSource && segment)
         static_cast<MediaSourcePrivateGStreamer*>(mediaSource.get())->startPlaybackIfHasAllTracks();
@@ -326,7 +313,7 @@ size_t SourceBufferPrivateGStreamer::platformMaximumBufferSize() const
         bool hasText = false;
         size_t bufferSize = 0;
 
-        for (auto track : std::views::values(m_tracks)) {
+        for (auto& [_, track] : m_tracks) {
             switch (track->type()) {
             case TrackPrivateBaseGStreamer::Video:
                 hasVideo = true;

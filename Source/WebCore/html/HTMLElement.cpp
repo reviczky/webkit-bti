@@ -38,6 +38,7 @@
 #include "CustomElementReactionQueue.h"
 #include "DOMTokenList.h"
 #include "DocumentFragment.h"
+#include "Editor.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "ElementChildIteratorInlines.h"
 #include "ElementInternals.h"
@@ -414,7 +415,7 @@ void HTMLElement::attributeChanged(const QualifiedName& name, const AtomString& 
         return;
     case AttributeNames::inputmodeAttr:
         if (Ref document = this->document(); this == document->focusedElement()) {
-            if (CheckedPtr page = document->page())
+            if (RefPtr page = document->page())
                 page->chrome().client().focusedElementDidChangeInputMode(*this, canonicalInputMode());
         }
         return;
@@ -422,6 +423,19 @@ void HTMLElement::attributeChanged(const QualifiedName& name, const AtomString& 
         if (document().settings().popoverAttributeEnabled() && !document().quirks().shouldDisablePopoverAttributeQuirk())
             popoverAttributeChanged(newValue);
         return;
+    case AttributeNames::spellcheckAttr: {
+        if (!document().hasEverHadSelectionInsideTextFormControl())
+            return;
+
+        bool oldEffectiveAttributeValue = !equalLettersIgnoringASCIICase(oldValue, "false"_s);
+        bool newEffectiveAttributeValue = !equalLettersIgnoringASCIICase(newValue, "false"_s);
+
+        if (oldEffectiveAttributeValue == newEffectiveAttributeValue)
+            return;
+
+        effectiveSpellcheckAttributeChanged(newEffectiveAttributeValue);
+        return;
+    }
     default:
         break;
     }
@@ -712,6 +726,27 @@ bool HTMLElement::spellcheck() const
 void HTMLElement::setSpellcheck(bool enable)
 {
     setAttributeWithoutSynchronization(spellcheckAttr, enable ? trueAtom() : falseAtom());
+}
+
+void HTMLElement::effectiveSpellcheckAttributeChanged(bool newValue)
+{
+    for (auto it = descendantsOfType<HTMLElement>(*this).begin(); it;) {
+        Ref element = *it;
+
+        auto& value = element->attributeWithoutSynchronization(HTMLNames::spellcheckAttr);
+        if (!value.isNull()) {
+            it.traverseNextSkippingChildren();
+            continue;
+        }
+
+        if (element->isTextFormControlElement()) {
+            element->effectiveSpellcheckAttributeChanged(newValue);
+            it.traverseNextSkippingChildren();
+            continue;
+        }
+
+        it.traverseNext();
+    }
 }
 
 void HTMLElement::click()

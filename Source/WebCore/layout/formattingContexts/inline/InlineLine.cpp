@@ -49,8 +49,10 @@ void Line::initialize(const Vector<InlineItem>& lineSpanningInlineBoxes, bool is
     m_isFirstFormattedLine = isFirstFormattedLine;
     m_inlineBoxListWithClonedDecorationEnd.clear();
     m_clonedEndDecorationWidthForInlineBoxRuns = { };
+    m_rubyAlignContentRightOffset = { };
     m_nonSpanningInlineLevelBoxCount = 0;
     m_hasNonDefaultBidiLevelRun = false;
+    m_hasRubyContent = false;
     m_contentLogicalWidth = { };
     m_inlineBoxLogicalLeftStack.clear();
     m_runs.clear();
@@ -84,7 +86,7 @@ void Line::resetTrailingContent()
 
 Line::Result Line::close()
 {
-    auto contentLogicalRight = this->contentLogicalRight();
+    auto contentLogicalRight = this->contentLogicalRight() + m_rubyAlignContentRightOffset;
     return { WTFMove(m_runs)
         , contentLogicalWidth()
         , contentLogicalRight
@@ -93,89 +95,6 @@ Line::Result Line::close()
         , m_hasNonDefaultBidiLevelRun
         , m_nonSpanningInlineLevelBoxCount
     };
-}
-
-void Line::applyRunExpansion(InlineLayoutUnit horizontalAvailableSpace)
-{
-    if (m_runs.isEmpty())
-        return;
-    auto& rootBox = formattingContext().root();
-    ASSERT(rootBox.isRubyAnnotationBox() || rootBox.style().textAlign() == TextAlignMode::Justify || rootBox.style().textAlignLast() == TextAlignLast::Justify);
-    auto spaceToDistribute = horizontalAvailableSpace - contentLogicalWidth() + m_hangingContent.trailingWhitespaceWidth();
-    if (spaceToDistribute <= 0)
-        return;
-
-    auto expansion = ExpansionInfo { };
-    TextUtil::computedExpansions(m_runs, { 0, m_runs.size() }, m_hangingContent.trailingWhitespaceLength(), expansion);
-
-    if (rootBox.isRubyAnnotationBox()) {
-        // FIXME: This is a workaround until after we generate inline boxes for annotation content.
-        if (expansion.opportunityCount) {
-            // ruby-align: space-around
-            auto contentInset = spaceToDistribute / (expansion.opportunityCount + 1) / 2;
-            spaceToDistribute -= contentInset;
-            applyExpansionOnRange({ 0, m_runs.size() }, expansion, spaceToDistribute);
-            moveRunsBy(0, contentInset / 2);
-            return;
-        }
-        auto centerOffset = spaceToDistribute / 2;
-        moveRunsBy(0, centerOffset);
-        expandBy(m_runs.size() - 1, centerOffset);
-        return;
-    }
-    // Anything to distribute?
-    if (!expansion.opportunityCount)
-        return;
-    applyExpansionOnRange({ 0, m_runs.size() }, expansion, spaceToDistribute);
-}
-
-void Line::applyExpansionOnRange(WTF::Range<size_t> runRange, const ExpansionInfo& expansion, InlineLayoutUnit spaceToDistribute)
-{
-    ASSERT(spaceToDistribute > 0);
-    ASSERT(expansion.opportunityCount);
-    // Distribute the extra space.
-    auto expansionToDistribute = spaceToDistribute / expansion.opportunityCount;
-    auto accumulatedExpansion = InlineLayoutUnit { };
-    auto rangeSize = runRange.end() - runRange.begin();
-    if (runRange.end() > m_runs.size()) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
-    for (size_t index = 0; index < rangeSize; ++index) {
-        auto& run = m_runs[runRange.begin() + index];
-        // Expand and move runs by the accumulated expansion.
-        run.moveHorizontally(accumulatedExpansion);
-        auto computedExpansion = expansionToDistribute * expansion.opportunityList[index];
-        run.setExpansion({ expansion.behaviorList[index], computedExpansion });
-        run.shrinkHorizontally(-computedExpansion);
-        accumulatedExpansion += computedExpansion;
-    }
-    // Content grows as runs expand.
-    m_contentLogicalWidth += accumulatedExpansion;
-}
-
-void Line::moveRunsBy(size_t startRunIndex, InlineLayoutUnit offset)
-{
-    if (startRunIndex >= m_runs.size()) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
-    for (auto index = startRunIndex; index < m_runs.size(); ++index)
-        m_runs[index].moveHorizontally(offset);
-    m_contentLogicalWidth += offset;
-}
-
-void Line::expandBy(size_t runIndex, InlineLayoutUnit logicalWidth)
-{
-    if (runIndex >= m_runs.size()) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
-    m_runs[runIndex].shrinkHorizontally(-logicalWidth);
-    if (runIndex < m_runs.size() - 1)
-        moveRunsBy(runIndex + 1, logicalWidth);
-    else
-        m_contentLogicalWidth += logicalWidth;
 }
 
 InlineLayoutUnit Line::handleTrailingTrimmableContent(TrailingContentAction trailingTrimmableContentAction)
@@ -243,7 +162,7 @@ void Line::handleOverflowingNonBreakingSpace(TrailingContentAction trailingConte
     m_contentLogicalWidth -= removedOrCollapsedContentWidth;
 }
 
-const Box* Line::removeOverflowingOurOfFlowContent()
+const Box* Line::removeOverflowingOutOfFlowContent()
 {
     auto lastTrailingOpaqueItemIndex = std::optional<size_t> { };
     for (size_t index = m_runs.size(); index--;) {
@@ -395,6 +314,7 @@ void Line::appendInlineBoxStart(const InlineItem& inlineItem, const RenderStyle&
     if (mayPullNonInlineBoxContentToLogicalLeft)
         m_inlineBoxLogicalLeftStack.append(logicalLeft);
 
+    m_hasRubyContent = m_hasRubyContent || inlineItem.layoutBox().isRubyBase();
     m_runs.append({ inlineItem, style, logicalLeft, logicalWidth });
 }
 

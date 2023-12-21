@@ -158,12 +158,18 @@ void FunctionDefinitionWriter::write()
 {
     emitNecessaryHelpers();
 
-    for (auto& structure : m_callGraph.ast().structures())
-        visit(structure);
-    for (auto& structure : m_callGraph.ast().structures())
-        generatePackingHelpers(structure);
-    for (auto& variable : m_callGraph.ast().variables())
-        visitGlobal(variable);
+    for (auto& declaration : m_callGraph.ast().declarations()) {
+        if (is<AST::Structure>(declaration))
+            visit(downcast<AST::Structure>(declaration));
+        else if (is<AST::Variable>(declaration))
+            visitGlobal(downcast<AST::Variable>(declaration));
+    }
+
+    for (auto& declaration : m_callGraph.ast().declarations()) {
+        if (is<AST::Structure>(declaration))
+            generatePackingHelpers(downcast<AST::Structure>(declaration));
+    }
+
     for (auto& entryPoint : m_callGraph.entrypoints())
         visit(entryPoint.function);
 }
@@ -287,6 +293,28 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
             IndentationScope scope(m_indent);
             m_stringBuilder.append(m_indent, "__frexp_result<T, U> result;\n");
             m_stringBuilder.append(m_indent, "result.fract = frexp(value, result.exp);\n");
+            m_stringBuilder.append(m_indent, "return result;\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
+
+    if (m_callGraph.ast().usesModf()) {
+        m_stringBuilder.append(m_indent, "template<typename T, typename U>\n");
+        m_stringBuilder.append(m_indent, "struct __modf_result {\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "T fract;\n");
+            m_stringBuilder.append(m_indent, "U whole;\n");
+        }
+        m_stringBuilder.append(m_indent, "};\n\n");
+
+        m_stringBuilder.append(m_indent, "template<typename T>\n");
+        m_stringBuilder.append(m_indent, "__modf_result<T, T> __wgslModf(T value)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "__modf_result<T, T> result;\n");
+            m_stringBuilder.append(m_indent, "result.fract = modf(value, result.whole);\n");
             m_stringBuilder.append(m_indent, "return result;\n");
         }
         m_stringBuilder.append(m_indent, "}\n\n");
@@ -1646,6 +1674,7 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
             { "fwidthFine", "fwidth"_s },
             { "insertBits", "insert_bits"_s },
             { "inverseSqrt", "rsqrt"_s },
+            { "modf", "__wgslModf"_s },
             { "reverseBits", "reverse_bits"_s },
         };
         static constexpr SortedArrayMap mappedNames { directMappings };

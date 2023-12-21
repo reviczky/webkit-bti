@@ -265,7 +265,7 @@ protected:
 // GraphicsLayer is an abstraction for a rendering surface with backing store,
 // which may have associated transformation and animations.
 
-class GraphicsLayer : public RefCounted<GraphicsLayer>, public CanMakeCheckedPtr {
+class GraphicsLayer : public RefCounted<GraphicsLayer> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     enum class Type : uint8_t {
@@ -730,7 +730,7 @@ protected:
     WEBCORE_EXPORT virtual void getDebugBorderInfo(Color&, float& width) const;
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    std::unique_ptr<AcceleratedEffectStack> m_effectStack;
+    RefPtr<AcceleratedEffectStack> m_effectStack;
 #endif
 
     GraphicsLayerClient* m_client; // Always non-null.

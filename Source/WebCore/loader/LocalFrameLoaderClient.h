@@ -239,6 +239,8 @@ public:
 
     virtual bool shouldFallBack(const ResourceError&) const = 0;
 
+    virtual void loadStorageAccessQuirksIfNeeded() = 0;
+
     virtual bool canHandleRequest(const ResourceRequest&) const = 0;
     virtual bool canShowMIMEType(const String& MIMEType) const = 0;
     virtual bool canShowMIMETypeAsHTML(const String& MIMEType) const = 0;
@@ -371,6 +373,10 @@ public:
     virtual void broadcastMainFrameURLChangeToOtherProcesses(const URL&) = 0;
 
     virtual void dispatchLoadEventToOwnerElementInAnotherProcess() = 0;
+
+#if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+    virtual void didAccessWindowProxyPropertyViaOpener(SecurityOriginData&&, WindowProxyProperty) { }
+#endif
 };
 
 } // namespace WebCore

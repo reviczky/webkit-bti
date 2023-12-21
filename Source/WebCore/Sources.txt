@@ -419,6 +419,7 @@ Modules/webauthn/AuthenticatorAttestationResponse.cpp
 Modules/webauthn/AuthenticatorCoordinator.cpp
 Modules/webauthn/AuthenticatorResponse.cpp
 Modules/webauthn/PublicKeyCredential.cpp
+Modules/webauthn/PublicKeyCredentialClientCapabilities.cpp
 Modules/webauthn/WebAuthenticationUtils.cpp
 Modules/webauthn/apdu/ApduCommand.cpp
 Modules/webauthn/apdu/ApduResponse.cpp
@@ -560,6 +561,7 @@ animation/AnimationEffectTiming.cpp
 animation/AnimationEventBase.cpp
 animation/AnimationPlaybackEvent.cpp
 animation/AnimationTimeline.cpp
+animation/BlendingKeyframes.cpp
 animation/CSSAnimation.cpp
 animation/CSSAnimationEvent.cpp
 animation/CSSPropertyAnimation.cpp
@@ -876,6 +878,7 @@ css/CSSRegisteredCustomProperty.cpp
 css/CSSRule.cpp
 css/CSSRuleList.cpp
 css/CSSScopeRule.cpp
+css/CSSScrollValue.cpp
 css/CSSSegmentedFontFace.cpp
 css/CSSSelector.cpp
 css/CSSSelectorList.cpp
@@ -898,6 +901,7 @@ css/CSSValuePair.cpp
 css/CSSValuePool.cpp
 css/CSSVariableData.cpp
 css/CSSVariableReferenceValue.cpp
+css/CSSViewValue.cpp
 css/ComputedStyleExtractor.cpp
 css/ContainerQuery.cpp
 css/ContainerQueryParser.cpp
@@ -1052,6 +1056,7 @@ dom/CustomElementDefaultARIA.cpp
 dom/CustomElementReactionQueue.cpp
 dom/CustomElementRegistry.cpp
 dom/CustomEvent.cpp
+dom/CustomStateSet.cpp
 dom/DOMException.cpp
 dom/DOMImplementation.cpp
 dom/DOMPointReadOnly.cpp
@@ -1721,6 +1726,7 @@ layout/floats/FloatAvoider.cpp
 layout/floats/FloatingContext.cpp
 layout/floats/PlacedFloats.cpp
 layout/formattingContexts/inline/AbstractLineBuilder.cpp
+layout/formattingContexts/inline/InlineContentAligner.cpp
 layout/formattingContexts/inline/InlineContentBalancer.cpp
 layout/formattingContexts/inline/InlineContentBreaker.cpp
 layout/formattingContexts/inline/InlineFormattingContext.cpp
@@ -1908,6 +1914,7 @@ page/EventHandler.cpp
 page/EventSource.cpp
 page/FocusController.cpp
 page/Frame.cpp
+page/FrameView.cpp
 page/FrameDestructionObserver.cpp
 page/FrameSnapshotting.cpp
 page/FrameTree.cpp
@@ -2703,7 +2710,6 @@ rendering/style/GapLength.cpp
 rendering/style/GridPosition.cpp
 rendering/style/GridPositionsResolver.cpp
 rendering/style/GridTrackSize.cpp
-rendering/style/KeyframeList.cpp
 rendering/style/ListStyleType.cpp
 rendering/style/NinePieceImage.cpp
 rendering/style/OffsetRotation.cpp
@@ -3369,6 +3375,7 @@ JSCustomEffect.cpp
 JSCustomEffectCallback.cpp
 JSCustomElementRegistry.cpp
 JSCustomEvent.cpp
+JSCustomStateSet.cpp
 JSDOMApplicationCache.cpp
 JSDOMAudioSession.cpp
 JSDOMCSSCustomPropertyDescriptor.cpp
@@ -4004,6 +4011,7 @@ JSProcessingInstruction.cpp
 JSProgressEvent.cpp
 JSPromiseRejectionEvent.cpp
 JSPublicKeyCredential.cpp
+JSPublicKeyCredentialClientCapabilities.cpp
 JSPublicKeyCredentialCreationOptions.cpp
 JSPublicKeyCredentialDescriptor.cpp
 JSPublicKeyCredentialRequestOptions.cpp

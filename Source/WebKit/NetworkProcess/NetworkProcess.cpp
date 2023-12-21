@@ -365,6 +365,8 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     m_localhostAliasesForTesting = WTFMove(parameters.localhostAliasesForTesting);
 
+    updateStorageAccessPromptQuirks(WTFMove(parameters.storageAccessPromptQuirksData));
+
     RELEASE_LOG(Process, "%p - NetworkProcess::initializeNetworkProcess: Presenting processPID=%d", this, WebCore::presentingApplicationPID());
 }
 
@@ -1217,6 +1219,11 @@ void NetworkProcess::setTrackingPreventionEnabled(PAL::SessionID sessionID, bool
         session->setTrackingPreventionEnabled(enabled);
 }
 
+void NetworkProcess::updateStorageAccessPromptQuirks(Vector<WebCore::OrganizationStorageAccessPromptQuirk>&& organizationStorageAccessPromptQuirks)
+{
+    NetworkStorageSession::updateStorageAccessPromptQuirks(WTFMove(organizationStorageAccessPromptQuirks));
+}
+
 void NetworkProcess::setResourceLoadStatisticsLogTestingEvent(bool enabled)
 {
     forEachNetworkSession([enabled](auto& session) {
@@ -1301,6 +1308,21 @@ void NetworkProcess::resetCrossSiteLoadsWithLinkDecorationForTesting(PAL::Sessio
     if (auto* networkStorageSession = storageSession(sessionID))
         networkStorageSession->resetCrossSiteLoadsWithLinkDecorationForTesting();
     else
+        ASSERT_NOT_REACHED();
+    completionHandler();
+}
+
+void NetworkProcess::grantStorageAccessForTesting(PAL::SessionID sessionID, Vector<RegistrableDomain>&& subFrameDomains, RegistrableDomain&& topFrameDomain, CompletionHandler<void(void)>&& completionHandler)
+{
+    HashSet allowedDomains { "site1.example"_str, "site2.example"_str, "site3.example"_str, "site4.example"_str };
+    if (!allowedDomains.contains(topFrameDomain.string())) {
+        completionHandler();
+        return;
+    }
+    if (auto* networkStorageSession = storageSession(sessionID)) {
+        for (auto&& subFrameDomain : subFrameDomains)
+            networkStorageSession->grantCrossPageStorageAccess(WTFMove(topFrameDomain), WTFMove(subFrameDomain));
+    } else
         ASSERT_NOT_REACHED();
     completionHandler();
 }
@@ -2941,11 +2963,21 @@ void NetworkProcess::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
 #else
     if (!isHoldingLockedFiles) {
         m_holdingLockedFileAssertion = nullptr;
+#if USE(EXTENSIONKIT)
+        invalidateGrant();
+#endif
         return;
     }
 
     if (m_holdingLockedFileAssertion && m_holdingLockedFileAssertion->isValid())
         return;
+
+#if USE(EXTENSIONKIT)
+    if (hasAcquiredGrant())
+        return;
+    if (aqcuireLockedFileGrant())
+        return;
+#endif
 
     // We synchronously take a process assertion when beginning a SQLite transaction so that we don't get suspended
     // while holding a locked file. We would get killed if suspended while holding locked files.

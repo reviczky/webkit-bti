@@ -84,6 +84,8 @@ private:
 
     void adjustButtonStyle(RenderStyle&, const Element*) const override;
 
+    void adjustInnerSpinButtonStyle(RenderStyle&, const Element*) const final { }
+
     void adjustTextFieldStyle(RenderStyle&, const Element*) const final;
     void paintTextFieldDecorations(const RenderBox&, const PaintInfo&, const FloatRect&) override;
     void adjustTextAreaStyle(RenderStyle&, const Element*) const final;
@@ -99,6 +101,12 @@ private:
 
     void adjustSliderThumbSize(RenderStyle&, const Element*) const override;
 
+    void adjustSwitchStyle(RenderStyle&, const Element*) const override;
+    bool paintSwitchThumb(const RenderObject&, const PaintInfo&, const FloatRect&) override;
+    bool paintSwitchTrack(const RenderObject&, const PaintInfo&, const FloatRect&) override;
+    Seconds switchAnimationVisuallyOnDuration() const final { return 300_ms; }
+    Seconds switchAnimationPressedDuration() const final { return 300_ms; }
+
     bool paintProgressBar(const RenderObject&, const PaintInfo&, const IntRect&) override;
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -109,15 +117,15 @@ private:
     void adjustSearchFieldStyle(RenderStyle&, const Element*) const override;
     void paintSearchFieldDecorations(const RenderBox&, const PaintInfo&, const IntRect&) override;
 
-    Color checkboxRadioBorderColor(OptionSet<ControlStates::States>, OptionSet<StyleColorOptions>);
-    Color checkboxRadioBackgroundColor(bool useAlternateDesign, const RenderStyle&, OptionSet<ControlStates::States>, OptionSet<StyleColorOptions>);
-    RefPtr<Gradient> checkboxRadioBackgroundGradient(const FloatRect&, OptionSet<ControlStates::States>);
-    Color checkboxRadioIndicatorColor(OptionSet<ControlStates::States>, OptionSet<StyleColorOptions>);
+    Color checkboxRadioBorderColor(OptionSet<ControlStyle::State>, OptionSet<StyleColorOptions>);
+    Color checkboxRadioBackgroundColor(bool useAlternateDesign, const RenderStyle&, OptionSet<ControlStyle::State>, OptionSet<StyleColorOptions>);
+    RefPtr<Gradient> checkboxRadioBackgroundGradient(const FloatRect&, OptionSet<ControlStyle::State>);
+    Color checkboxRadioIndicatorColor(OptionSet<ControlStyle::State>, OptionSet<StyleColorOptions>);
 
     bool paintCheckbox(const RenderObject&, const PaintInfo&, const FloatRect&) override;
     bool paintRadio(const RenderObject&, const PaintInfo&, const FloatRect&) override;
 
-    void paintCheckboxRadioInnerShadow(const PaintInfo&, const FloatRoundedRect&, OptionSet<ControlStates::States>);
+    void paintCheckboxRadioInnerShadow(const PaintInfo&, const FloatRoundedRect&, OptionSet<ControlStyle::State>);
 
     bool supportsMeter(StyleAppearance) const final;
     bool paintMeter(const RenderObject&, const PaintInfo&, const IntRect&) final;
@@ -132,7 +140,6 @@ private:
     String colorInputStyleSheet() const final;
 
     void adjustColorWellStyle(RenderStyle&, const Element*) const final;
-    bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&) final;
     void paintColorWellDecorations(const RenderObject&, const PaintInfo&, const FloatRect&) final;
 #endif
 

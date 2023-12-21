@@ -134,7 +134,6 @@ protected:
     LayoutRect fragmentedFlowContentRectangle(const LayoutRect&, const LayoutRect& fragmentedFlowPortionRect, const LayoutPoint& fragmentLocation, const LayoutRect* fragmentedFlowPortionClipRect = 0) const;
 
 private:
-    bool isRenderFragmentContainer() const final { return true; }
     ASCIILiteral renderName() const override { return "RenderFragmentContainer"_s; }
 
     void insertedIntoTree(IsInternalMove) override;
@@ -145,7 +144,7 @@ private:
     LayoutPoint mapFragmentPointIntoFragmentedFlowCoordinates(const LayoutPoint&);
 
 protected:
-    WeakPtr<RenderFragmentedFlow> m_fragmentedFlow;
+    SingleThreadWeakPtr<RenderFragmentedFlow> m_fragmentedFlow;
 
 private:
     LayoutRect m_fragmentedFlowPortionRect;

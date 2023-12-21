@@ -399,7 +399,7 @@ static GraphicsContextGL::SurfaceBuffer toGCGLSurfaceBuffer(CanvasRenderingConte
     return buffer == CanvasRenderingContext::SurfaceBuffer::DrawingBuffer ? GraphicsContextGL::SurfaceBuffer::DrawingBuffer : GraphicsContextGL::SurfaceBuffer::DisplayBuffer;
 }
 
-static GraphicsContextGLAttributes resolveGraphicsContextGLAttributes(const WebGLContextAttributes& attributes, bool isWebGL2, ScriptExecutionContext& scriptExecutionContext, HTMLCanvasElement* canvasElement)
+static GraphicsContextGLAttributes resolveGraphicsContextGLAttributes(const WebGLContextAttributes& attributes, bool isWebGL2, ScriptExecutionContext& scriptExecutionContext)
 {
     UNUSED_PARAM(scriptExecutionContext);
     GraphicsContextGLAttributes glAttributes;
@@ -410,8 +410,6 @@ static GraphicsContextGLAttributes resolveGraphicsContextGLAttributes(const WebG
     glAttributes.premultipliedAlpha = attributes.premultipliedAlpha;
     glAttributes.preserveDrawingBuffer = attributes.preserveDrawingBuffer;
     glAttributes.powerPreference = attributes.powerPreference;
-    if (canvasElement)
-        glAttributes.devicePixelRatio = canvasElement->document().deviceScaleFactor();
     glAttributes.isWebGL2 = isWebGL2;
 #if PLATFORM(MAC)
     GraphicsClient* graphicsClient = scriptExecutionContext.graphicsClient();
@@ -447,7 +445,7 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
     const bool isWebGL2 = type == WebGLVersion::WebGL2;
     RefPtr<GraphicsContextGL> context;
     if (graphicsClient)
-        context = graphicsClient->createGraphicsContextGL(resolveGraphicsContextGLAttributes(attributes, isWebGL2, *scriptExecutionContext, canvasElement));
+        context = graphicsClient->createGraphicsContextGL(resolveGraphicsContextGLAttributes(attributes, isWebGL2, *scriptExecutionContext));
     if (!context) {
         if (canvasElement) {
             canvasElement->dispatchEvent(WebGLContextEvent::create(eventNames().webglcontextcreationerrorEvent,
@@ -4223,13 +4221,13 @@ RefPtr<Image> WebGLRenderingContextBase::videoFrameToImage(HTMLVideoElement& vid
             synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "video visible size is empty");
             return nullptr;
         }
-        FloatRect imageRect { { }, imageSize };
         imageBuffer = m_generatedImageCache.imageBuffer(imageSize, nativeImage->colorSpace(), CompositeOperator::Copy);
         if (!imageBuffer) {
             synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
             return nullptr;
         }
-        imageBuffer->context().drawNativeImage(*nativeImage, imageRect.size(), imageRect, imageRect, { CompositeOperator::Copy });
+        FloatRect imageRect { { }, imageSize };
+        imageBuffer->context().drawNativeImage(*nativeImage, imageRect, imageRect, { CompositeOperator::Copy });
     }
 #endif
     if (!imageBuffer) {
@@ -5339,9 +5337,9 @@ void WebGLRenderingContextBase::maybeRestoreContextSoon(Seconds timeout)
         return;
 
     m_restoreTimer = scriptExecutionContext->eventLoop().scheduleTask(timeout, TaskSource::WebGL, [weakThis = WeakPtr { *this }] {
-        if (CheckedPtr checkedThis = weakThis.get()) {
-            checkedThis->m_restoreTimer = nullptr;
-            checkedThis->maybeRestoreContext();
+        if (RefPtr protectedThis = weakThis.get()) {
+            protectedThis->m_restoreTimer = nullptr;
+            protectedThis->maybeRestoreContext();
         }
     });
 }
@@ -5365,7 +5363,7 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     if (!graphicsClient)
         return;
 
-    if (auto context = graphicsClient->createGraphicsContextGL(resolveGraphicsContextGLAttributes(m_creationAttributes, isWebGL2(), *scriptExecutionContext, htmlCanvas()))) {
+    if (auto context = graphicsClient->createGraphicsContextGL(resolveGraphicsContextGLAttributes(m_creationAttributes, isWebGL2(), *scriptExecutionContext))) {
         initializeNewContext(context.releaseNonNull());
         if (!m_context->isContextLost()) {
             // Context lost state is reset only here: context creation succeeded

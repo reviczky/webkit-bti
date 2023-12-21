@@ -153,9 +153,9 @@ static HashMap<const RenderText*, String>& originalTextMap()
     return map;
 }
 
-static HashMap<const RenderText*, WeakPtr<RenderInline>>& inlineWrapperForDisplayContentsMap()
+static HashMap<const RenderText*, SingleThreadWeakPtr<RenderInline>>& inlineWrapperForDisplayContentsMap()
 {
-    static NeverDestroyed<HashMap<const RenderText*, WeakPtr<RenderInline>>> map;
+    static NeverDestroyed<HashMap<const RenderText*, SingleThreadWeakPtr<RenderInline>>> map;
     return map;
 }
 
@@ -251,12 +251,11 @@ static unsigned offsetForPositionInRun(const InlineIterator::TextBox& textBox, f
 }
 
 inline RenderText::RenderText(Type type, Node& node, const String& text)
-    : RenderObject(type, node)
+    : RenderObject(type, node, TypeFlag::IsText, { })
     , m_text(text)
     , m_containsOnlyASCII(text.impl()->containsOnlyASCII())
 {
     ASSERT(!m_text.isNull());
-    setIsRenderText();
     m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
     ASSERT(isRenderText());
 }
@@ -1425,7 +1424,7 @@ Vector<std::pair<unsigned, unsigned>> RenderText::draggedContentRangesBetweenOff
     if (!textNode())
         return { };
 
-    auto markers = document().markers().markersFor(*textNode(), DocumentMarker::DraggedContent);
+    auto markers = document().markers().markersFor(*textNode(), DocumentMarker::Type::DraggedContent);
     if (markers.isEmpty())
         return { };
 
@@ -1871,6 +1870,11 @@ LayoutRect RenderText::clippedOverflowRect(const RenderLayerModelObject* repaint
     return rendererToRepaint->clippedOverflowRect(repaintContainer, context);
 }
 
+auto RenderText::rectsForRepaintingAfterLayout(const RenderLayerModelObject* repaintContainer, RepaintOutlineBounds) const -> RepaintRects
+{
+    return { clippedOverflowRect(repaintContainer, visibleRectContextForRepaint()) };
+}
+
 LayoutRect RenderText::collectSelectionGeometriesForLineBoxes(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent, Vector<FloatQuad>* quads)
 {
     ASSERT(!needsLayout());
@@ -2113,7 +2117,29 @@ std::optional<bool> RenderText::emphasisMarkExistsAndIsAbove(const RenderText& r
         || (!style.isHorizontalWritingMode() && (emphasisPosition & TextEmphasisPosition::Left)))
         return isAbove; // Ruby text is always over, so it cannot suppress emphasis marks under.
 
+    auto findRubyAnnotation = [&]() -> RenderBlockFlow* {
+        for (auto* baseCandidate = renderer.parent(); baseCandidate; baseCandidate = baseCandidate->parent()) {
+            if (!baseCandidate->isInline())
+                return nullptr;
+            if (baseCandidate->style().display() == DisplayType::RubyBase) {
+                auto* annotationCandidate = baseCandidate->nextSibling();
+                if (annotationCandidate && annotationCandidate->style().display() == DisplayType::RubyAnnotation)
+                    return dynamicDowncast<RenderBlockFlow>(annotationCandidate);
+                return nullptr;
+            }
+        }
+        return nullptr;
+    };
+
+    if (auto* annotation = findRubyAnnotation()) {
+        // The emphasis marks over are suppressed only if there is a ruby annotation box and it is not empty.
+        if (annotation->hasLines())
+            return { };
+        return isAbove;
+    }
+
     RenderBlock* containingBlock = renderer.containingBlock();
+
     if (!containingBlock || !containingBlock->isRenderRubyBase())
         return isAbove; // This text is not inside a ruby base, so it does not have ruby text over it.
 

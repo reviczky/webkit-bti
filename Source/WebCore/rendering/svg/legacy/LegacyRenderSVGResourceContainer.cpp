@@ -36,7 +36,7 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(LegacyRenderSVGResourceContainer);
 
 LegacyRenderSVGResourceContainer::LegacyRenderSVGResourceContainer(Type type, SVGElement& element, RenderStyle&& style)
-    : LegacyRenderSVGHiddenContainer(type, element, WTFMove(style))
+    : LegacyRenderSVGHiddenContainer(type, element, WTFMove(style), SVGModelObjectFlag::IsResourceContainer)
     , m_id(element.getIdAttribute())
 {
 }
@@ -94,11 +94,11 @@ void LegacyRenderSVGResourceContainer::markAllClientsForRepaint()
 
 void LegacyRenderSVGResourceContainer::markAllClientsForInvalidation(InvalidationMode mode)
 {
-    WeakHashSet<RenderObject> visitedRenderers;
+    SingleThreadWeakHashSet<RenderObject> visitedRenderers;
     markAllClientsForInvalidationIfNeeded(mode, &visitedRenderers);
 }
 
-void LegacyRenderSVGResourceContainer::markAllClientsForInvalidationIfNeeded(InvalidationMode mode, WeakHashSet<RenderObject>* visitedRenderers)
+void LegacyRenderSVGResourceContainer::markAllClientsForInvalidationIfNeeded(InvalidationMode mode, SingleThreadWeakHashSet<RenderObject>* visitedRenderers)
 {
     // FIXME: Style invalidation should either be a pre-layout task or this function
     // should never get called while in layout. See webkit.org/b/208903.
@@ -116,8 +116,8 @@ void LegacyRenderSVGResourceContainer::markAllClientsForInvalidationIfNeeded(Inv
         if (root != SVGRenderSupport::findTreeRootObject(client))
             continue;
 
-        if (is<LegacyRenderSVGResourceContainer>(client)) {
-            downcast<LegacyRenderSVGResourceContainer>(client).removeAllClientsFromCacheIfNeeded(markForInvalidation, visitedRenderers);
+        if (CheckedPtr container = dynamicDowncast<LegacyRenderSVGResourceContainer>(client)) {
+            container->removeAllClientsFromCacheIfNeeded(markForInvalidation, visitedRenderers);
             continue;
         }
 

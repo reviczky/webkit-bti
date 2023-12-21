@@ -82,6 +82,10 @@ OBJC_CLASS WKWebInspectorPreferenceObserver;
 #include "IPCTester.h"
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+#include "ExtensionCapabilityGranter.h"
+#endif
+
 namespace API {
 class AutomationClient;
 class DownloadClient;
@@ -107,9 +111,12 @@ class PowerSourceNotifier;
 namespace WebKit {
 
 class LockdownModeObserver;
-class UIGamepad;
 class PerActivityStateCPUUsageSampler;
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+class StorageAccessUserAgentStringQuirkObserver;
+#endif
 class SuspendedPageProxy;
+class UIGamepad;
 class WebAutomationSession;
 class WebBackForwardCache;
 class WebContextSupplement;
@@ -139,9 +146,11 @@ enum class ProcessSwapRequestedByClient : bool;
 class WebProcessPool final
     : public API::ObjectImpl<API::Object::Type::ProcessPool>
     , public IPC::MessageReceiver
-    , public CanMakeCheckedPtr
 #if PLATFORM(MAC)
     , private PAL::SystemSleepListener::Client
+#endif
+#if ENABLE(EXTENSION_CAPABILITIES)
+    , public ExtensionCapabilityGranter::Client
 #endif
 {
 public:
@@ -524,6 +533,12 @@ public:
     void hardwareConsoleStateChanged();
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+    ExtensionCapabilityGranter& extensionCapabilityGranter();
+    RefPtr<GPUProcessProxy> gpuProcessForCapabilityGranter(const ExtensionCapabilityGranter&) final;
+    RefPtr<WebProcessProxy> webProcessForCapabilityGranter(const ExtensionCapabilityGranter&, const String& environmentIdentifier) final;
+#endif
+
     bool operator==(const WebProcessPool& other) const { return (this == &other); }
 
 private:
@@ -534,6 +549,7 @@ private:
     void platformInvalidateContext();
 
     std::tuple<Ref<WebProcessProxy>, SuspendedPageProxy*, ASCIILiteral> processForNavigationInternal(WebPageProxy&, const API::Navigation&, Ref<WebProcessProxy>&& sourceProcess, const URL& sourceURL, ProcessSwapRequestedByClient, WebProcessProxy::LockdownMode, const FrameInfoData&, Ref<WebsiteDataStore>&&);
+    void prepareProcessForNavigation(Ref<WebProcessProxy>&&, WebPageProxy&, SuspendedPageProxy*, ASCIILiteral reason, const WebCore::RegistrableDomain&, const API::Navigation&, WebProcessProxy::LockdownMode, Ref<WebsiteDataStore>&&, CompletionHandler<void(Ref<WebProcessProxy>&&, SuspendedPageProxy*, ASCIILiteral)>&&, unsigned previousAttemptsCount = 0);
 
     RefPtr<WebProcessProxy> tryTakePrewarmedProcess(WebsiteDataStore&, WebProcessProxy::LockdownMode);
 
@@ -823,8 +839,16 @@ private:
     IPCTester m_ipcTester;
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+    std::unique_ptr<ExtensionCapabilityGranter> m_extensionCapabilityGranter;
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     bool m_processesShouldSuspend { false };
+#endif
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    RefPtr<StorageAccessUserAgentStringQuirkObserver> m_storageAccessUserAgentStringQuirksDataUpdateObserver;
+    RefPtr<StorageAccessPromptQuirkObserver> m_storageAccessPromptQuirksDataUpdateObserver;
 #endif
 };
 

@@ -55,14 +55,18 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderSVGModelObject);
 
-RenderSVGModelObject::RenderSVGModelObject(Type type, Document& document, RenderStyle&& style)
-    : RenderLayerModelObject(type, document, WTFMove(style), 0)
+RenderSVGModelObject::RenderSVGModelObject(Type type, Document& document, RenderStyle&& style, OptionSet<SVGModelObjectFlag> typeFlags)
+    : RenderLayerModelObject(type, document, WTFMove(style), { }, typeFlags)
 {
+    ASSERT(!isLegacyRenderSVGModelObject());
+    ASSERT(isRenderSVGModelObject());
 }
 
-RenderSVGModelObject::RenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style)
-    : RenderLayerModelObject(type, element, WTFMove(style), 0)
+RenderSVGModelObject::RenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style, OptionSet<SVGModelObjectFlag> typeFlags)
+    : RenderLayerModelObject(type, element, WTFMove(style), { }, typeFlags)
 {
+    ASSERT(!isLegacyRenderSVGModelObject());
+    ASSERT(isRenderSVGModelObject());
 }
 
 void RenderSVGModelObject::updateFromStyle()
@@ -77,13 +81,19 @@ LayoutRect RenderSVGModelObject::overflowClipRect(const LayoutPoint&, RenderFrag
     return LayoutRect();
 }
 
-LayoutRect RenderSVGModelObject::localRectForRepaint() const
+auto RenderSVGModelObject::localRectsForRepaint(RepaintOutlineBounds repaintOutlineBounds) const -> RepaintRects
 {
     if (isInsideEntirelyHiddenLayer())
         return { };
 
     ASSERT(!view().frameView().layoutContext().isPaintOffsetCacheEnabled());
-    return visualOverflowRectEquivalent();
+
+    auto visualOverflowRect = visualOverflowRectEquivalent();
+    auto rects = RepaintRects { visualOverflowRect };
+    if (repaintOutlineBounds == RepaintOutlineBounds::Yes)
+        rects.outlineBoundsRect = visualOverflowRect;
+
+    return rects;
 }
 
 auto RenderSVGModelObject::computeVisibleRectsInContainer(const RepaintRects& rects, const RenderLayerModelObject* container, VisibleRectContext context) const -> std::optional<RepaintRects>

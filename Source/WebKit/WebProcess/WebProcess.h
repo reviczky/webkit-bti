@@ -222,6 +222,8 @@ public:
     void setHasStylusDevice(bool);
 #endif
 
+    void updateStorageAccessUserAgentStringQuirks(HashMap<WebCore::RegistrableDomain, String>&&);
+
     WebFrame* webFrame(WebCore::FrameIdentifier) const;
     void addWebFrame(WebCore::FrameIdentifier, WebFrame*);
     void removeWebFrame(WebCore::FrameIdentifier, std::optional<WebPageProxyIdentifier>);
@@ -230,8 +232,8 @@ public:
     WebPageGroupProxy* webPageGroup(PageGroupIdentifier);
     WebPageGroupProxy* webPageGroup(const WebPageGroupData&);
 
-    uint64_t userGestureTokenIdentifier(RefPtr<WebCore::UserGestureToken>);
-    void userGestureTokenDestroyed(WebCore::UserGestureToken&);
+    uint64_t userGestureTokenIdentifier(std::optional<WebCore::PageIdentifier>, RefPtr<WebCore::UserGestureToken>);
+    void userGestureTokenDestroyed(WebCore::PageIdentifier, WebCore::UserGestureToken&);
     
     const TextCheckerState& textCheckerState() const { return m_textCheckerState; }
     void setTextCheckerState(const TextCheckerState&);
@@ -426,7 +428,7 @@ public:
     void addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&&);
     bool allowsFirstPartyForCookies(const URL&);
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     void revokeLaunchServicesSandboxExtension();
 #endif
 
@@ -436,6 +438,8 @@ public:
 
     String mediaKeysStorageDirectory() const { return m_mediaKeysStorageDirectory; }
     FileSystem::Salt mediaKeysStorageSalt() const { return m_mediaKeysStorageSalt; }
+
+    bool haveStorageAccessQuirksForDomain(const WebCore::RegistrableDomain&);
 
 private:
     WebProcess();
@@ -569,6 +573,8 @@ private:
     void setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain>&&);
     void setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubResourceDomain>&&, CompletionHandler<void()>&&);
     void sendResourceLoadStatisticsDataImmediately(CompletionHandler<void()>&&);
+
+    void updateDomainsWithStorageAccessQuirks(HashSet<WebCore::RegistrableDomain>&&);
 
 #if HAVE(DISPLAY_LINK)
     void displayDidRefresh(uint32_t displayID, const WebCore::DisplayUpdate&);
@@ -754,7 +760,8 @@ private:
 
     String m_uiProcessName;
     WebCore::RegistrableDomain m_registrableDomain;
-
+#endif
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     RefPtr<SandboxExtension> m_launchServicesExtension;
 #endif
 
@@ -824,6 +831,7 @@ private:
     FileSystem::Salt m_mediaKeysStorageSalt;
 
     HashMap<WebTransportSessionIdentifier, WeakPtr<WebTransportSession>> m_webTransportSessions;
+    HashSet<WebCore::RegistrableDomain> m_domainsWithStorageAccessQuirks;
 };
 
 } // namespace WebKit

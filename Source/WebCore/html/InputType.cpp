@@ -600,18 +600,6 @@ String InputType::validationMessage() const
     return emptyString();
 }
 
-void InputType::handleClickEvent(MouseEvent&)
-{
-}
-
-void InputType::handleMouseDownEvent(MouseEvent&)
-{
-}
-
-void InputType::handleDOMActivateEvent(Event&)
-{
-}
-
 bool InputType::allowsShowPickerAcrossFrames()
 {
     return false;
@@ -844,14 +832,6 @@ void InputType::setValue(const String& sanitizedValue, bool valueChanged, TextFi
 
     if (auto* cache = element()->document().existingAXObjectCache())
         cache->valueChanged(element());
-}
-
-void InputType::willDispatchClick(InputElementClickState&)
-{
-}
-
-void InputType::didDispatchClick(Event&, const InputElementClickState&)
-{
 }
 
 String InputType::localizeValue(const String& proposedValue) const
@@ -1212,5 +1192,19 @@ void InputType::createShadowSubtreeIfNeeded()
     m_hasCreatedShadowSubtree = true;
     createShadowSubtree();
 }
+
+#if ENABLE(TOUCH_EVENTS)
+bool InputType::hasTouchEventHandler() const
+{
+#if ENABLE(IOS_TOUCH_EVENTS)
+    if (isSwitch())
+        return true;
+#else
+    if (isRangeControl())
+        return true;
+#endif
+    return false;
+}
+#endif
 
 } // namespace WebCore

@@ -51,6 +51,7 @@ class Attribute;
 class AttributeIteratorAccessor;
 class CustomElementDefaultARIA;
 class CustomElementReactionQueue;
+class CustomStateSet;
 class DatasetDOMStringMap;
 class DOMRect;
 class DOMRectList;
@@ -306,7 +307,6 @@ public:
     Ref<Element> cloneElementWithoutChildren(Document&);
 
     void normalizeAttributes();
-    String nodeNamePreservingCase() const;
 
     WEBCORE_EXPORT void setBooleanAttribute(const QualifiedName& name, bool);
 
@@ -592,6 +592,9 @@ public:
     bool hasPendingKeyframesUpdate(PseudoId) const;
     // FIXME: do we need a counter style didChange here? (rdar://103018993).
 
+    bool isLink() const { return hasNodeFlag(NodeFlag::IsLink); }
+    void setIsLink(bool flag);
+
     bool isInTopLayer() const { return hasNodeFlag(NodeFlag::IsInTopLayer); }
     void addToTopLayer();
     void removeFromTopLayer();
@@ -625,8 +628,8 @@ public:
     inline bool hasName() const;
     inline const SpaceSplitString& classNames() const;
 
-    IntPoint savedLayerScrollPosition() const;
-    void setSavedLayerScrollPosition(const IntPoint&);
+    ScrollPosition savedLayerScrollPosition() const;
+    void setSavedLayerScrollPosition(const ScrollPosition&);
 
     enum class EventIsDefaultPrevented : bool { No, Yes };
     enum class EventIsDispatched : bool { No, Yes };
@@ -756,6 +759,9 @@ public:
     std::optional<OptionSet<ContentRelevancy>> contentRelevancy() const;
     void setContentRelevancy(OptionSet<ContentRelevancy>);
 
+    bool hasCustomState(const AtomString& state) const;
+    CustomStateSet& ensureCustomStateSet();
+
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
 
@@ -839,7 +845,7 @@ private:
     void addAttributeInternal(const QualifiedName&, const AtomString& value, InSynchronizationOfLazyAttribute);
     void removeAttributeInternal(unsigned index, InSynchronizationOfLazyAttribute);
 
-    void setSavedLayerScrollPositionSlow(const IntPoint&);
+    void setSavedLayerScrollPositionSlow(const ScrollPosition&);
     void clearBeforePseudoElementSlow();
     void clearAfterPseudoElementSlow();
 
@@ -860,7 +866,7 @@ private:
     inline void removeShadowRoot(); // Defined in ElementRareData.h.
     void removeShadowRootSlow(ShadowRoot&);
 
-    enum class ResolveComputedStyleMode : bool { Normal, RenderedOnly };
+    enum class ResolveComputedStyleMode : uint8_t { Normal, RenderedOnly, Editability };
     const RenderStyle* resolveComputedStyle(ResolveComputedStyleMode = ResolveComputedStyleMode::Normal);
     const RenderStyle& resolvePseudoElementStyle(PseudoId);
 
@@ -906,13 +912,16 @@ private:
     bool hasLanguageAttribute() const { return hasLangAttr() || hasXMLLangAttr(); }
     bool hasLangAttrKnownToMatchDocumentElement() const { return hasLanguageAttribute() && effectiveLangKnownToMatchDocumentElement(); }
 
+    bool hasEverHadSmoothScroll() const { return hasEventTargetFlag(EventTargetFlag::EverHadSmoothScroll); }
+    void setHasEverHadSmoothScroll(bool value) { return setEventTargetFlag(EventTargetFlag::EverHadSmoothScroll, value); }
+
     void parentOrShadowHostNode() const = delete; // Call parentNode() instead.
 
     QualifiedName m_tagName;
     RefPtr<ElementData> m_elementData;
 };
 
-inline void Element::setSavedLayerScrollPosition(const IntPoint& position)
+inline void Element::setSavedLayerScrollPosition(const ScrollPosition& position)
 {
     if (position.isZero() && !hasRareData())
         return;

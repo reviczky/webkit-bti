@@ -90,14 +90,15 @@ MediaSourcePrivateGStreamer::AddStatus MediaSourcePrivateGStreamer::addSourceBuf
 
     m_sourceBuffers.append(SourceBufferPrivateGStreamer::create(*this, contentType, m_playerPrivate));
     sourceBufferPrivate = m_sourceBuffers.last();
+    sourceBufferPrivate->setMediaSourceDuration(duration());
     return MediaSourcePrivateGStreamer::AddStatus::Ok;
 }
 
-void MediaSourcePrivateGStreamer::durationChanged(const MediaTime&)
+void MediaSourcePrivateGStreamer::durationChanged(const MediaTime& duration)
 {
     ASSERT(isMainThread());
 
-    MediaTime duration = this->duration();
+    MediaSourcePrivate::durationChanged(duration);
     GST_TRACE_OBJECT(m_playerPrivate.pipeline(), "Duration: %" GST_TIME_FORMAT, GST_TIME_ARGS(toGstClockTime(duration)));
     if (!duration.isValid() || duration.isNegativeInfinite())
         return;
@@ -128,12 +129,12 @@ void MediaSourcePrivateGStreamer::markEndOfStream(EndOfStreamStatus endOfStreamS
     MediaSourcePrivate::markEndOfStream(endOfStreamStatus);
 }
 
-MediaPlayer::ReadyState MediaSourcePrivateGStreamer::readyState() const
+MediaPlayer::ReadyState MediaSourcePrivateGStreamer::mediaPlayerReadyState() const
 {
     return m_playerPrivate.readyState();
 }
 
-void MediaSourcePrivateGStreamer::setReadyState(MediaPlayer::ReadyState state)
+void MediaSourcePrivateGStreamer::setMediaPlayerReadyState(MediaPlayer::ReadyState state)
 {
     m_playerPrivate.setReadyState(state);
 }
@@ -163,7 +164,8 @@ void MediaSourcePrivateGStreamer::startPlaybackIfHasAllTracks()
     Vector<RefPtr<MediaSourceTrackGStreamer>> tracks;
     for (auto& privateSourceBuffer : m_sourceBuffers) {
         auto sourceBuffer = downcast<SourceBufferPrivateGStreamer>(privateSourceBuffer);
-        tracks.appendRange(sourceBuffer->tracks().begin(), sourceBuffer->tracks().end());
+        for (auto& [_, track] : sourceBuffer->tracks())
+            tracks.append(track);
     }
     m_playerPrivate.startSource(tracks);
 }

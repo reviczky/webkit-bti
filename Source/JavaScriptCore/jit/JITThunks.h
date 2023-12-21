@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,9 +38,10 @@
 #include <tuple>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/Hasher.h>
 #include <wtf/PackedRefPtr.h>
 #include <wtf/RecursiveLockAdapter.h>
-#include <wtf/Hasher.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace JSC {
 namespace DOMJIT {
@@ -81,7 +82,7 @@ static constexpr unsigned numberOfCommonThunkIDs = 0 JSC_FOR_EACH_COMMON_THUNK(J
 #undef JSC_COUNT_COMMON_JIT_THUNK_ID
 
 class JITThunks final : private WeakHandleOwner {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(JITThunks);
 public:
     JITThunks();
     ~JITThunks() final;
@@ -121,7 +122,7 @@ private:
 
     struct WeakNativeExecutableHash {
         static inline unsigned hash(const Weak<NativeExecutable>&);
-        static inline unsigned hash(NativeExecutable*);
+        static inline unsigned hash(const NativeExecutable*);
         static unsigned hash(const HostFunctionKey& key)
         {
             return hash(std::get<0>(key), std::get<1>(key), std::get<2>(key), std::get<3>(key));
@@ -129,8 +130,8 @@ private:
 
         static inline bool equal(const Weak<NativeExecutable>&, const Weak<NativeExecutable>&);
         static inline bool equal(const Weak<NativeExecutable>&, const HostFunctionKey&);
-        static inline bool equal(const Weak<NativeExecutable>&, NativeExecutable*);
-        static inline bool equal(NativeExecutable&, NativeExecutable&);
+        static inline bool equal(const Weak<NativeExecutable>&, const NativeExecutable*);
+        static inline bool equal(const NativeExecutable&, const NativeExecutable&);
         static constexpr bool safeToCompareToEmptyOrDeleted = false;
 
     private:

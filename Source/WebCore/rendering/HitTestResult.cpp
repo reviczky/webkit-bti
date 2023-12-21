@@ -247,7 +247,7 @@ String HitTestResult::spellingToolTip(TextDirection& dir) const
     if (!m_innerNonSharedNode)
         return String();
     
-    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(m_hitTestLocation.point(), DocumentMarker::Grammar);
+    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(m_hitTestLocation.point(), DocumentMarker::Type::Grammar);
     if (!marker)
         return String();
 
@@ -263,7 +263,7 @@ String HitTestResult::replacedString() const
     if (!m_innerNonSharedNode)
         return String();
     
-    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(m_hitTestLocation.point(), DocumentMarker::Replacement);
+    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(m_hitTestLocation.point(), DocumentMarker::Type::Replacement);
     if (!marker)
         return String();
     
@@ -782,7 +782,7 @@ Vector<String> HitTestResult::dictationAlternatives() const
     if (!m_innerNonSharedNode)
         return Vector<String>();
 
-    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(pointInInnerNodeFrame(), DocumentMarker::DictationAlternatives);
+    WeakPtr marker = m_innerNonSharedNode->document().markers().markerContainingPoint(pointInInnerNodeFrame(), DocumentMarker::Type::DictationAlternatives);
     if (!marker)
         return Vector<String>();
 
@@ -791,21 +791,6 @@ Vector<String> HitTestResult::dictationAlternatives() const
         return Vector<String>();
 
     return frame->editor().dictationAlternativesForMarker(*marker);
-}
-
-Node* HitTestResult::targetNode() const
-{
-    Node* node = innerNode();
-    if (!node)
-        return nullptr;
-    if (node->isConnected())
-        return node;
-
-    Element* element = node->parentElement();
-    if (element && element->isConnected())
-        return element;
-
-    return node;
 }
 
 Element* HitTestResult::targetElement() const

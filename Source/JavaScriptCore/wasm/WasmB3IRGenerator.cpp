@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -74,6 +74,7 @@
 #include <limits>
 #include <wtf/FastMalloc.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if !ENABLE(WEBASSEMBLY)
 #error ENABLE(WEBASSEMBLY_OMGJIT) is enabled, but ENABLE(WEBASSEMBLY) is not.
@@ -108,7 +109,7 @@ static constexpr bool traceExecutionIncludesConstructionSite = false;
 #define TRACE_CF(...) do { if constexpr (WasmB3IRGeneratorInternal::traceExecution) { traceCF(__VA_ARGS__); } } while (0)
 
 class B3IRGenerator {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(B3IRGenerator);
 public:
     using ExpressionType = Variable*;
     using ResultList = Vector<ExpressionType, 8>;
@@ -636,7 +637,7 @@ public:
     PartialResult WARN_UNUSED_RETURN addStructNewDefault(uint32_t index, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN addStructGet(ExtGCOpType structGetKind, ExpressionType structReference, const StructType&, uint32_t fieldIndex, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN addStructSet(ExpressionType structReference, const StructType&, uint32_t fieldIndex, ExpressionType value);
-    PartialResult WARN_UNUSED_RETURN addRefTest(ExpressionType reference, bool allowNull, int32_t heapType, ExpressionType& result);
+    PartialResult WARN_UNUSED_RETURN addRefTest(ExpressionType reference, bool allowNull, int32_t heapType, bool shouldNegate, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN addRefCast(ExpressionType reference, bool allowNull, int32_t heapType, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN addAnyConvertExtern(ExpressionType reference, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN addExternConvertAny(ExpressionType reference, ExpressionType& result);
@@ -675,6 +676,7 @@ public:
     PartialResult WARN_UNUSED_RETURN addReturn(const ControlData&, const Stack& returnValues);
     PartialResult WARN_UNUSED_RETURN addBranch(ControlData&, ExpressionType condition, const Stack& returnValues);
     PartialResult WARN_UNUSED_RETURN addBranchNull(ControlType&, ExpressionType, const Stack&, bool, ExpressionType&);
+    PartialResult WARN_UNUSED_RETURN addBranchCast(ControlType&, ExpressionType, const Stack&, bool, int32_t, bool);
     PartialResult WARN_UNUSED_RETURN addSwitch(ExpressionType condition, const Vector<ControlData*>& targets, ControlData& defaultTargets, const Stack& expressionStack);
     PartialResult WARN_UNUSED_RETURN endBlock(ControlEntry&, Stack& expressionStack);
     PartialResult WARN_UNUSED_RETURN addEndToUnreachable(ControlEntry&, const Stack& = { });
@@ -783,7 +785,7 @@ private:
     ExpressionType WARN_UNUSED_RETURN pushArrayNew(uint32_t typeIndex, Value* initValue, ExpressionType size);
     using arraySegmentOperation = EncodedJSValue (&)(JSC::Wasm::Instance*, uint32_t, uint32_t, uint32_t, uint32_t);
     ExpressionType WARN_UNUSED_RETURN pushArrayNewFromSegment(arraySegmentOperation, uint32_t typeIndex, uint32_t segmentIndex, ExpressionType arraySize, ExpressionType offset, ExceptionType);
-    void emitRefTestOrCast(CastKind, ExpressionType, bool, int32_t, ExpressionType&);
+    void emitRefTestOrCast(CastKind, ExpressionType, bool, int32_t, bool, ExpressionType&);
     template <typename Generator>
     void emitCheckOrBranchForCast(CastKind, Value*, const Generator&, BasicBlock*);
     Value* emitLoadRTTFromFuncref(Value*);
@@ -967,6 +969,12 @@ private:
     Vector<std::unique_ptr<B3IRGenerator>> m_protectedInlineeGenerators;
     Vector<std::unique_ptr<FunctionParser<B3IRGenerator>>> m_protectedInlineeParsers;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(B3IRGenerator);
+
+using FunctionParserB3IRGenerator = FunctionParser<B3IRGenerator>;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL_TEMPLATE(FunctionParserB3IRGenerator);
 
 // Memory accesses in WebAssembly have unsigned 32-bit offsets, whereas they have signed 32-bit offsets in B3.
 int32_t B3IRGenerator::fixupPointerPlusOffset(Value*& ptr, uint32_t offset)
@@ -1154,10 +1162,7 @@ B3IRGenerator::B3IRGenerator(const ModuleInformation& info, OptimizingJITCallee&
                 AllowMacroScratchRegisterUsage allowScratch(jit);
                 GPRReg contextInstance = params[0].gpr();
                 GPRReg fp = params[1].gpr();
-                CCallHelpers::JumpList overflow = jit.checkWasmStackOverflow(contextInstance, CCallHelpers::TrustedImm32(checkSize), fp);
-                jit.addLinkTask([overflow] (LinkBuffer& linkBuffer) {
-                    linkBuffer.link(overflow, CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwStackOverflowFromWasmThunkGenerator).code()));
-                });
+                jit.checkWasmStackOverflow(contextInstance, CCallHelpers::TrustedImm32(checkSize), fp).linkThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwStackOverflowFromWasmThunkGenerator).code()), &jit);
             }
         });
     }
@@ -1230,11 +1235,7 @@ void B3IRGenerator::reloadMemoryRegistersFromInstance(const MemoryInformation& m
 void B3IRGenerator::emitExceptionCheck(CCallHelpers& jit, ExceptionType type)
 {
     jit.move(CCallHelpers::TrustedImm32(static_cast<uint32_t>(type)), GPRInfo::argumentGPR1);
-    auto jumpToExceptionStub = jit.jump();
-
-    jit.addLinkTask([jumpToExceptionStub] (LinkBuffer& linkBuffer) {
-        linkBuffer.link(jumpToExceptionStub, CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwExceptionFromWasmThunkGenerator).code()));
-    });
+    jit.jumpThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwExceptionFromWasmThunkGenerator).code()));
 }
 
 Value* B3IRGenerator::constant(B3::Type type, uint64_t bits, std::optional<Origin> maybeOrigin)
@@ -3318,19 +3319,19 @@ auto B3IRGenerator::addStructSet(ExpressionType structReference, const StructTyp
     return { };
 }
 
-auto B3IRGenerator::addRefTest(ExpressionType reference, bool allowNull, int32_t heapType, ExpressionType& result) -> PartialResult
+auto B3IRGenerator::addRefTest(ExpressionType reference, bool allowNull, int32_t heapType, bool shouldNegate, ExpressionType& result) -> PartialResult
 {
-    emitRefTestOrCast(CastKind::Test, reference, allowNull, heapType, result);
+    emitRefTestOrCast(CastKind::Test, reference, allowNull, heapType, shouldNegate, result);
     return { };
 }
 
 auto B3IRGenerator::addRefCast(ExpressionType reference, bool allowNull, int32_t heapType, ExpressionType& result) -> PartialResult
 {
-    emitRefTestOrCast(CastKind::Cast, reference, allowNull, heapType, result);
+    emitRefTestOrCast(CastKind::Cast, reference, allowNull, heapType, false, result);
     return { };
 }
 
-void B3IRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType reference, bool allowNull, int32_t heapType, ExpressionType& result)
+void B3IRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType reference, bool allowNull, int32_t heapType, bool shouldNegate, ExpressionType& result)
 {
     if (castKind == CastKind::Cast)
         result = push(get(reference));
@@ -3380,63 +3381,66 @@ void B3IRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referenc
         m_currentBlock = nonNullCase;
     }
 
-    switch (static_cast<TypeKind>(heapType)) {
-    case Wasm::TypeKind::Funcref:
-    case Wasm::TypeKind::Externref:
-    case Wasm::TypeKind::Anyref:
-        // Casts to these types cannot fail as they are the top types of their respective hierarchies, and static type-checking does not allow cross-hierarchy casts.
-        break;
-    case Wasm::TypeKind::Nullref:
-    case Wasm::TypeKind::Nullfuncref:
-    case Wasm::TypeKind::Nullexternref:
-        // Casts to any bottom type should always fail.
-        if (castKind == CastKind::Cast) {
-            B3::PatchpointValue* throwException = m_currentBlock->appendNew<B3::PatchpointValue>(m_proc, B3::Void, origin());
-            throwException->setGenerator(castFailure);
-        } else {
-            m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), falseBlock);
-            falseBlock->addPredecessor(m_currentBlock);
-            m_currentBlock = m_proc.addBlock();
+    if (typeIndexIsType(static_cast<Wasm::TypeIndex>(heapType))) {
+        switch (static_cast<TypeKind>(heapType)) {
+        case Wasm::TypeKind::Funcref:
+        case Wasm::TypeKind::Externref:
+        case Wasm::TypeKind::Anyref:
+            // Casts to these types cannot fail as they are the top types of their respective hierarchies, and static type-checking does not allow cross-hierarchy casts.
+            break;
+        case Wasm::TypeKind::Nullref:
+        case Wasm::TypeKind::Nullfuncref:
+        case Wasm::TypeKind::Nullexternref:
+            // Casts to any bottom type should always fail.
+            if (castKind == CastKind::Cast) {
+                B3::PatchpointValue* throwException = m_currentBlock->appendNew<B3::PatchpointValue>(m_proc, B3::Void, origin());
+                throwException->setGenerator(castFailure);
+            } else {
+                m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), falseBlock);
+                falseBlock->addPredecessor(m_currentBlock);
+                m_currentBlock = m_proc.addBlock();
+            }
+            break;
+        case Wasm::TypeKind::Eqref: {
+            auto nop = [] (CCallHelpers&, const B3::StackmapGenerationParams&) { };
+            BasicBlock* endBlock = castKind == CastKind::Cast ? continuation : trueBlock;
+            BasicBlock* checkObject = m_proc.addBlock();
+
+            // The eqref case chains together checks for i31, array, and struct with disjunctions so the control flow is more complicated, and requires some extra basic blocks to be created.
+            emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, Below, origin(), get(reference), constant(Int64, JSValue::NumberTag)), nop, checkObject);
+            Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
+            emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), nop, checkObject);
+            emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), untagged, constant(Int32, Wasm::minI31ref)), nop, checkObject);
+            m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), endBlock);
+            checkObject->addPredecessor(m_currentBlock);
+            endBlock->addPredecessor(m_currentBlock);
+
+            m_currentBlock = checkObject;
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, BitAnd, origin(), get(reference), constant(Int64, JSValue::NotCellMask)), castFailure, falseBlock);
+            Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), get(reference), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
+            break;
         }
-        break;
-    case Wasm::TypeKind::Eqref: {
-        auto nop = [] (CCallHelpers&, const B3::StackmapGenerationParams&) { };
-        BasicBlock* endBlock = castKind == CastKind::Cast ? continuation : trueBlock;
-        BasicBlock* checkObject = m_proc.addBlock();
-
-        // The eqref case chains together checks for i31, array, and struct with disjunctions so the control flow is more complicated, and requires some extra basic blocks to be created.
-        emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, Below, origin(), get(reference), constant(Int64, JSValue::NumberTag)), nop, checkObject);
-        Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
-        emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), nop, checkObject);
-        emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), untagged, constant(Int32, Wasm::minI31ref)), nop, checkObject);
-        m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), endBlock);
-        checkObject->addPredecessor(m_currentBlock);
-        endBlock->addPredecessor(m_currentBlock);
-
-        m_currentBlock = checkObject;
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, BitAnd, origin(), get(reference), constant(Int64, JSValue::NotCellMask)), castFailure, falseBlock);
-        Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), get(reference), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
-        break;
-    }
-    case Wasm::TypeKind::I31ref: {
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, Below, origin(), get(reference), constant(Int64, JSValue::NumberTag)), castFailure, falseBlock);
-        Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), castFailure, falseBlock);
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), untagged, constant(Int32, Wasm::minI31ref)), castFailure, falseBlock);
-        break;
-    }
-    case Wasm::TypeKind::Arrayref:
-    case Wasm::TypeKind::Structref: {
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, BitAnd, origin(), get(reference), constant(Int64, JSValue::NotCellMask)), castFailure, falseBlock);
-        Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), get(reference), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
-        emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
-        Value* rtt = emitLoadRTTFromObject(get(reference));
-        emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
-        break;
-    }
-    default: {
-        ASSERT(!Wasm::typeIndexIsType(static_cast<Wasm::TypeIndex>(heapType)));
+        case Wasm::TypeKind::I31ref: {
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, Below, origin(), get(reference), constant(Int64, JSValue::NumberTag)), castFailure, falseBlock);
+            Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), castFailure, falseBlock);
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), untagged, constant(Int32, Wasm::minI31ref)), castFailure, falseBlock);
+            break;
+        }
+        case Wasm::TypeKind::Arrayref:
+        case Wasm::TypeKind::Structref: {
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, BitAnd, origin(), get(reference), constant(Int64, JSValue::NotCellMask)), castFailure, falseBlock);
+            Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), get(reference), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
+            emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
+            Value* rtt = emitLoadRTTFromObject(get(reference));
+            emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
+            break;
+        }
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+    } else {
         Wasm::TypeDefinition& signature = m_info.typeSignatures[heapType];
         BasicBlock* slowPath = m_proc.addBlock();
 
@@ -3472,7 +3476,6 @@ void B3IRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referenc
             rtt, targetRTT);
         emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, Equal, origin(), isSubRTT, constant(Int32, 0)), castFailure, falseBlock);
     }
-    }
 
     if (castKind == CastKind::Cast) {
         m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
@@ -3482,12 +3485,12 @@ void B3IRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referenc
         m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), trueBlock);
         trueBlock->addPredecessor(m_currentBlock);
         m_currentBlock = trueBlock;
-        UpsilonValue* trueUpsilon = m_currentBlock->appendNew<UpsilonValue>(m_proc, origin(), constant(B3::Int32, 1));
+        UpsilonValue* trueUpsilon = m_currentBlock->appendNew<UpsilonValue>(m_proc, origin(), constant(B3::Int32, shouldNegate ? 0 : 1));
         m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
         continuation->addPredecessor(m_currentBlock);
 
         m_currentBlock = falseBlock;
-        UpsilonValue* falseUpsilon = m_currentBlock->appendNew<UpsilonValue>(m_proc, origin(), constant(B3::Int32, 0));
+        UpsilonValue* falseUpsilon = m_currentBlock->appendNew<UpsilonValue>(m_proc, origin(), constant(B3::Int32, shouldNegate ? 1 : 0));
         m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
         continuation->addPredecessor(m_currentBlock);
 
@@ -3878,15 +3881,10 @@ void B3IRGenerator::emitEntryTierUpCheck()
             unsigned numberOfStackBytesUsedForRegisterPreservation = ScratchRegisterAllocator::preserveRegistersToStackForCall(jit, registersToSpill, extraPaddingBytes);
 
             jit.move(MacroAssembler::TrustedImm32(m_functionIndex), GPRInfo::nonPreservedNonArgumentGPR0);
-            MacroAssembler::Call call = jit.nearCall();
+            jit.nearCallThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(triggerOMGEntryTierUpThunkGenerator(m_proc.usesSIMD())).code()));
 
             ScratchRegisterAllocator::restoreRegistersFromStackForCall(jit, registersToSpill, { }, numberOfStackBytesUsedForRegisterPreservation, extraPaddingBytes);
             jit.jump(tierUpResume);
-
-            bool isSIMD = m_proc.usesSIMD();
-            jit.addLinkTask([=] (LinkBuffer& linkBuffer) {
-                MacroAssembler::repatchNearCall(linkBuffer.locationOfNearCall<NoPtrTag>(call), CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(triggerOMGEntryTierUpThunkGenerator(isSIMD)).code()));
-            });
         });
     });
 }
@@ -4432,6 +4430,18 @@ auto B3IRGenerator::addBranchNull(ControlData& data, ExpressionType reference, c
 
     if (!shouldNegate)
         result = push(get(reference));
+
+    return { };
+}
+
+auto B3IRGenerator::addBranchCast(ControlData& data, ExpressionType reference, const Stack& returnValues, bool allowNull, int32_t heapType, bool shouldNegate) -> PartialResult
+{
+    ExpressionType condition;
+    emitRefTestOrCast(CastKind::Test, reference, allowNull, heapType, shouldNegate, condition);
+    // We should pop the condition here to keep stack size consistent.
+    --m_stackSize;
+
+    WASM_FAIL_IF_HELPER_FAILS(addBranch(data, condition, returnValues));
 
     return { };
 }

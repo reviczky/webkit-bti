@@ -30,12 +30,10 @@
 #include "GPUProcessConnection.h"
 #include "MessageReceiver.h"
 #include "RemoteSourceBufferIdentifier.h"
-#include "TrackPrivateRemoteIdentifier.h"
 #include <WebCore/ContentType.h>
 #include <WebCore/MediaSample.h>
 #include <WebCore/SourceBufferPrivate.h>
 #include <WebCore/SourceBufferPrivateClient.h>
-#include <wtf/HashMap.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
 #include <wtf/Ref.h>
@@ -80,8 +78,6 @@ private:
     void abort() final;
     void resetParserState() final;
     void removedFromMediaSource() final;
-    WebCore::MediaPlayer::ReadyState readyState() const final;
-    void setReadyState(WebCore::MediaPlayer::ReadyState) final;
     bool canSwitchToType(const WebCore::ContentType&) final;
     void setMediaSourceEnded(bool) final;
     void setMode(WebCore::SourceBufferAppendMode) final;
@@ -100,7 +96,6 @@ private:
     void setTimestampOffset(const MediaTime&) final;
     void setAppendWindowStart(const MediaTime&) final;
     void setAppendWindowEnd(const MediaTime&) final;
-    Vector<WebCore::PlatformTimeRanges> trackBuffersRanges() const final { return m_trackBufferRanges; };
 
     Ref<ComputeSeekPromise> computeSeekTime(const WebCore::SeekTarget&) final;
     void seekToTime(const MediaTime&) final;
@@ -118,23 +113,17 @@ private:
     void sourceBufferPrivateDidReceiveInitializationSegment(InitializationSegmentInfo&&, CompletionHandler<void(WebCore::MediaPromise::Result&&)>&&);
     void takeOwnershipOfMemory(WebKit::SharedMemory::Handle&&);
     void sourceBufferPrivateHighestPresentationTimestampChanged(const MediaTime&);
-    void sourceBufferPrivateBufferedChanged(WebCore::PlatformTimeRanges&&, CompletionHandler<void()>&&);
-    void sourceBufferPrivateTrackBuffersChanged(Vector<WebCore::PlatformTimeRanges>&&);
+    void sourceBufferPrivateBufferedChanged(Vector<WebCore::PlatformTimeRanges>&&, uint64_t, CompletionHandler<void()>&&);
     void sourceBufferPrivateDurationChanged(const MediaTime&, CompletionHandler<void()>&&);
     void sourceBufferPrivateDidParseSample(double sampleDuration);
     void sourceBufferPrivateDidDropSample();
     void sourceBufferPrivateDidReceiveRenderingError(int64_t errorCode);
-    void sourceBufferPrivateReportExtraMemoryCost(uint64_t extraMemory);
     MediaTime minimumUpcomingPresentationTimeForTrackID(TrackID) override;
     void setMaximumQueueDepthForTrackID(TrackID, uint64_t) override;
 
     ThreadSafeWeakPtr<GPUProcessConnection> m_gpuProcessConnection;
     RemoteSourceBufferIdentifier m_remoteSourceBufferIdentifier;
     WeakPtr<MediaPlayerPrivateRemote> m_mediaPlayerPrivate;
-
-    StdUnorderedMap<TrackID, TrackPrivateRemoteIdentifier> m_trackIdentifierMap;
-    StdUnorderedMap<TrackID, TrackPrivateRemoteIdentifier> m_prevTrackIdentifierMap;
-    Vector<WebCore::PlatformTimeRanges> m_trackBufferRanges;
 
     uint64_t m_totalTrackBufferSizeInBytes = { 0 };
 
@@ -155,5 +144,9 @@ private:
 };
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::SourceBufferPrivateRemote)
+static bool isType(const WebCore::SourceBufferPrivate& sourceBuffer) { return sourceBuffer.platformType() == WebCore::MediaPlatformType::Remote; }
+SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(GPU_PROCESS) && ENABLE(MEDIA_SOURCE)
