@@ -105,7 +105,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2014 Saam Barati. <saambarati1@gmail.com>
            2014-2015 Frederic Wang <fred.wang@free.fr>
            2014-2015 Saam Barati <saambarati1@gmail.com>
-           2014-2018 Yusuke Suzuki <utatane.tea@gmail.com>
+           2014-2023 Yusuke Suzuki <utatane.tea@gmail.com>
            2015 Dominic Szablewski <dominic@phoboslab.org>
            2015 Electronic Arts Inc
            2015 Jordan Harband
@@ -160,7 +160,6 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/ANGLE/include/GLES2/gl2platform.h
        Source/ThirdParty/ANGLE/include/GLES3/gl3platform.h
        Source/ThirdParty/ANGLE/src/android_system_settings/src/com/android/angle/*
-       Source/ThirdParty/ANGLE/src/common/vulkan/vk_google_filtering_precision.h
        Source/ThirdParty/ANGLE/src/libANGLE/*
        Source/ThirdParty/ANGLE/src/tests/deqp_support/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
@@ -177,7 +176,6 @@ Copyright: 2007-2021 The Khronos Group Inc
            2015-2018 Google Inc
            2017, 2020 The Abseil Authors
            2019, 2022 The ANGLE Project
-           2020 The SwiftShader Authors
            2021 The Chromium Authors
 License: Apache-2.0
 
@@ -445,6 +443,10 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/css/CSSAspectRatioValue.h
        Source/WebCore/css/CSSRayValue.cpp
        Source/WebCore/css/CSSRayValue.h
+       Source/WebCore/css/CSSScrollValue.cpp
+       Source/WebCore/css/CSSScrollValue.h
+       Source/WebCore/css/CSSViewValue.cpp
+       Source/WebCore/css/CSSViewValue.h
        Source/WebCore/dom/ClassCollection.cpp
        Source/WebCore/dom/ClassCollection.h
        Source/WebCore/dom/CurrentScriptIncrementer.h
@@ -1795,6 +1797,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/accessibility/AccessibilityProgressIndicator.cpp
        Source/WebCore/accessibility/AccessibilityProgressIndicator.h
        Source/WebCore/accessibility/atspi/*
+       Source/WebCore/animation/BlendingKeyframes.cpp
+       Source/WebCore/animation/BlendingKeyframes.h
        Source/WebCore/bindings/js/DOMWrapperWorld.cpp
        Source/WebCore/bindings/js/DOMWrapperWorld.h
        Source/WebCore/bindings/js/JSCanvasRenderingContext2DCustom.cpp
@@ -2771,8 +2775,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/style/CursorList.h
        Source/WebCore/rendering/style/FillLayer.cpp
        Source/WebCore/rendering/style/FillLayer.h
-       Source/WebCore/rendering/style/KeyframeList.cpp
-       Source/WebCore/rendering/style/KeyframeList.h
        Source/WebCore/rendering/style/NinePieceImage.cpp
        Source/WebCore/rendering/style/NinePieceImage.h
        Source/WebCore/rendering/style/OutlineValue.h

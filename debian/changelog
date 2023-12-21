@@ -3,6 +3,8 @@ webkit2gtk (2.43.3-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/patches/fix-ftbfs-riscv64.patch:
     - Fix FTBFS in riscv64 (#1058034).
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 12:20:33 +0100
 
