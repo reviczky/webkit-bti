@@ -1,3 +1,9 @@
+webkit2gtk (2.43.3-1) UNRELEASED; urgency=medium
+
+  * New upstream development release.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 12:20:33 +0100
+
 webkit2gtk (2.43.2-1) experimental; urgency=medium
 
   * New upstream development release.
