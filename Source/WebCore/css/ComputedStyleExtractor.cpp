@@ -46,12 +46,14 @@
 #include "CSSRectValue.h"
 #include "CSSReflectValue.h"
 #include "CSSRegisteredCustomProperty.h"
+#include "CSSScrollValue.h"
 #include "CSSShadowValue.h"
 #include "CSSTimingFunctionValue.h"
 #include "CSSTransformListValue.h"
 #include "CSSValueList.h"
 #include "CSSValuePair.h"
 #include "CSSValuePool.h"
+#include "CSSViewValue.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ContentData.h"
 #include "CursorList.h"
@@ -1432,6 +1434,11 @@ static Ref<CSSValue> fontVariantEastAsianPropertyValue(FontVariantEastAsianVaria
     return CSSValueList::createSpaceSeparated(WTFMove(valueList));
 }
 
+static Ref<CSSPrimitiveValue> valueForTransitionBehavior(bool allowsDiscreteTransitions)
+{
+    return CSSPrimitiveValue::create(allowsDiscreteTransitions ? CSSValueAllowDiscrete : CSSValueNormal);
+}
+
 static Ref<CSSPrimitiveValue> valueForAnimationDuration(double duration)
 {
     return CSSPrimitiveValue::create(duration, CSSUnitType::CSS_S);
@@ -1517,6 +1524,8 @@ static Ref<CSSValue> valueForAnimationTimeline(const Animation::Timeline& timeli
             return CSSPrimitiveValue::create(keyword == Animation::TimelineKeyword::None ? CSSValueNone : CSSValueAuto);
         }, [&] (const AtomString& customIdent) -> Ref<CSSValue> {
             return CSSPrimitiveValue::createCustomIdent(customIdent);
+        }, [&] (const Ref<ScrollTimeline>& scrollTimeline) -> Ref<CSSValue> {
+            return scrollTimeline->toCSSValue();
         }
     );
 }
@@ -1525,7 +1534,7 @@ static Ref<CSSValue> valueForAnimationTimingFunction(const TimingFunction& timin
 {
     switch (timingFunction.type()) {
     case TimingFunction::Type::CubicBezierFunction: {
-        auto& function = downcast<CubicBezierTimingFunction>(timingFunction);
+        auto& function = uncheckedDowncast<CubicBezierTimingFunction>(timingFunction);
         if (function.timingFunctionPreset() != CubicBezierTimingFunction::TimingFunctionPreset::Custom) {
             CSSValueID valueId = CSSValueInvalid;
             switch (function.timingFunctionPreset()) {
@@ -1549,15 +1558,15 @@ static Ref<CSSValue> valueForAnimationTimingFunction(const TimingFunction& timin
         return CSSCubicBezierTimingFunctionValue::create(function.x1(), function.y1(), function.x2(), function.y2());
     }
     case TimingFunction::Type::StepsFunction: {
-        auto& function = downcast<StepsTimingFunction>(timingFunction);
+        auto& function = uncheckedDowncast<StepsTimingFunction>(timingFunction);
         return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepPosition());
     }
     case TimingFunction::Type::SpringFunction: {
-        auto& function = downcast<SpringTimingFunction>(timingFunction);
+        auto& function = uncheckedDowncast<SpringTimingFunction>(timingFunction);
         return CSSSpringTimingFunctionValue::create(function.mass(), function.stiffness(), function.damping(), function.initialVelocity());
     }
     case TimingFunction::Type::LinearFunction: {
-        auto& function = downcast<LinearTimingFunction>(timingFunction);
+        auto& function = uncheckedDowncast<LinearTimingFunction>(timingFunction);
         if (function.points().isEmpty())
             return CSSPrimitiveValue::create(CSSValueLinear);
         return CSSLinearTimingFunctionValue::create(function.points());
@@ -1566,9 +1575,18 @@ static Ref<CSSValue> valueForAnimationTimingFunction(const TimingFunction& timin
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-void ComputedStyleExtractor::addValueForAnimationPropertyToList(CSSValueListBuilder& list, CSSPropertyID property, const Animation* animation)
+enum IsShorthand : bool { No, Yes };
+static void addValueForAnimationPropertyToList(CSSValueListBuilder& list, CSSPropertyID property, const Animation* animation, IsShorthand isShorthand = IsShorthand::No)
 {
-    if (property == CSSPropertyAnimationDuration || property == CSSPropertyTransitionDuration) {
+    if (property == CSSPropertyTransitionBehavior) {
+        if (animation) {
+            if (animation->isAllowsDiscreteTransitionsFilled())
+                return;
+            if (isShorthand == IsShorthand::Yes && animation->allowsDiscreteTransitions() == Animation::initialAllowsDiscreteTransitions())
+                return;
+        }
+        list.append(valueForTransitionBehavior(animation ? animation->allowsDiscreteTransitions() : Animation::initialAllowsDiscreteTransitions()));
+    } else if (property == CSSPropertyAnimationDuration || property == CSSPropertyTransitionDuration) {
         if (!animation || !animation->isDurationFilled())
             list.append(valueForAnimationDuration(animation ? animation->duration() : Animation::initialDuration()));
     } else if (property == CSSPropertyAnimationDelay || property == CSSPropertyTransitionDelay) {
@@ -1615,9 +1633,9 @@ static Ref<CSSValueList> valueListForAnimationOrTransitionProperty(CSSPropertyID
     CSSValueListBuilder list;
     if (animationList) {
         for (auto& animation : *animationList)
-            ComputedStyleExtractor::addValueForAnimationPropertyToList(list, property, animation.ptr());
+            addValueForAnimationPropertyToList(list, property, animation.ptr());
     } else
-        ComputedStyleExtractor::addValueForAnimationPropertyToList(list, property, nullptr);
+        addValueForAnimationPropertyToList(list, property, nullptr);
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
 
@@ -1627,7 +1645,7 @@ static Ref<CSSValueList> animationShorthandValue(CSSPropertyID property, const A
     auto addAnimation = [&](Ref<Animation> animation) {
         CSSValueListBuilder childList;
         for (auto longhand : shorthandForProperty(property))
-            ComputedStyleExtractor::addValueForAnimationPropertyToList(childList, longhand, animation.ptr());
+            addValueForAnimationPropertyToList(childList, longhand, animation.ptr(), IsShorthand::Yes);
         parentList.append(CSSValueList::createSpaceSeparated(WTFMove(childList)));
     };
     if (animationList && !animationList->isEmpty()) {
@@ -1713,10 +1731,10 @@ static Ref<CSSValue> valueForPathOperation(const RenderStyle& style, const PathO
 
     switch (operation->type()) {
     case PathOperation::Reference:
-        return CSSPrimitiveValue::createURI(downcast<ReferencePathOperation>(*operation).url());
+        return CSSPrimitiveValue::createURI(uncheckedDowncast<ReferencePathOperation>(*operation).url());
 
     case PathOperation::Shape: {
-        auto& shapeOperation = downcast<ShapePathOperation>(*operation);
+        auto& shapeOperation = uncheckedDowncast<ShapePathOperation>(*operation);
         if (shapeOperation.referenceBox() == CSSBoxType::BoxMissing)
             return CSSValueList::createSpaceSeparated(valueForBasicShape(style, shapeOperation.basicShape(), conversion));
         return CSSValueList::createSpaceSeparated(valueForBasicShape(style, shapeOperation.basicShape(), conversion),
@@ -1724,10 +1742,10 @@ static Ref<CSSValue> valueForPathOperation(const RenderStyle& style, const PathO
     }
 
     case PathOperation::Box:
-        return createConvertingToCSSValueID(downcast<BoxPathOperation>(*operation).referenceBox());
+        return createConvertingToCSSValueID(uncheckedDowncast<BoxPathOperation>(*operation).referenceBox());
 
     case PathOperation::Ray: {
-        auto& ray = downcast<RayPathOperation>(*operation);
+        auto& ray = uncheckedDowncast<RayPathOperation>(*operation);
         auto angle = CSSPrimitiveValue::create(ray.angle(), CSSUnitType::CSS_DEG);
         RefPtr<CSSValuePair> position = ray.position().x().isAuto() ? nullptr : RefPtr { CSSValuePair::createNoncoalescing(Ref { zoomAdjustedPixelValueForLength(ray.position().x(), style) }, Ref { zoomAdjustedPixelValueForLength(ray.position().y(), style) }) };
         return CSSRayValue::create(WTFMove(angle), valueIDForRaySize(ray.size()), ray.isContaining(), WTFMove(position), ray.referenceBox());
@@ -2673,7 +2691,7 @@ bool ComputedStyleExtractor::updateStyleIfNeededForProperty(Element& element, CS
     return true;
 }
 
-static inline const RenderStyle* computeRenderStyleForProperty(Element& element, PseudoId pseudoElementSpecifier, CSSPropertyID propertyID, std::unique_ptr<RenderStyle>& ownedStyle, WeakPtr<RenderElement> renderer)
+static inline const RenderStyle* computeRenderStyleForProperty(Element& element, PseudoId pseudoElementSpecifier, CSSPropertyID propertyID, std::unique_ptr<RenderStyle>& ownedStyle, SingleThreadWeakPtr<RenderElement> renderer)
 {
     if (!renderer)
         renderer = element.renderer();
@@ -4187,6 +4205,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return computedScale(renderer, style);
     case CSSPropertyRotate:
         return computedRotate(renderer, style);
+    case CSSPropertyTransitionBehavior:
     case CSSPropertyTransitionDelay:
     case CSSPropertyTransitionDuration:
     case CSSPropertyTransitionTimingFunction:

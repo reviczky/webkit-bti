@@ -112,12 +112,13 @@ private:
 
     LayoutUnit offsetLeft() const final;
     LayoutUnit offsetTop() const final;
-    LayoutUnit offsetWidth() const final { return linesBoundingBox().width(); }
-    LayoutUnit offsetHeight() const final { return linesBoundingBox().height(); }
+    LayoutUnit offsetWidth() const final;
+    LayoutUnit offsetHeight() const final;
     LayoutPoint firstInlineBoxTopLeft() const;
 
 protected:
     LayoutRect clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext) const override;
+    RepaintRects rectsForRepaintingAfterLayout(const RenderLayerModelObject* repaintContainer, RepaintOutlineBounds) const override;
     LayoutRect rectWithOutlineForRepaint(const RenderLayerModelObject* repaintContainer, LayoutUnit outlineWidth) const final;
 
     std::optional<RepaintRects> computeVisibleRectsInContainer(const RepaintRects&, const RenderLayerModelObject* container, VisibleRectContext) const final;

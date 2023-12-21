@@ -81,7 +81,6 @@ RenderView::RenderView(Document& document, RenderStyle&& style)
     , m_initialContainingBlock(makeUniqueRef<Layout::InitialContainingBlock>(RenderStyle::clone(this->style())))
     , m_layoutState(makeUniqueRef<Layout::LayoutState>(document, *m_initialContainingBlock))
     , m_selection(*this)
-    , m_lazyRepaintTimer(*this, &RenderView::lazyRepaintTimerFired)
 {
     // FIXME: We should find a way to enforce this at compile time.
     ASSERT(document.view());
@@ -121,35 +120,6 @@ void RenderView::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
 
     if (directionChanged)
         frameView().topContentDirectionDidChange();
-}
-
-void RenderView::scheduleLazyRepaint(RenderBox& renderer)
-{
-    if (renderer.renderBoxNeedsLazyRepaint())
-        return;
-    renderer.setRenderBoxNeedsLazyRepaint(true);
-    m_renderersNeedingLazyRepaint.add(renderer);
-    if (!m_lazyRepaintTimer.isActive())
-        m_lazyRepaintTimer.startOneShot(0_s);
-}
-
-void RenderView::unscheduleLazyRepaint(RenderBox& renderer)
-{
-    if (!renderer.renderBoxNeedsLazyRepaint())
-        return;
-    renderer.setRenderBoxNeedsLazyRepaint(false);
-    m_renderersNeedingLazyRepaint.remove(renderer);
-    if (m_renderersNeedingLazyRepaint.isEmptyIgnoringNullReferences())
-        m_lazyRepaintTimer.stop();
-}
-
-void RenderView::lazyRepaintTimerFired()
-{
-    for (auto& renderer : m_renderersNeedingLazyRepaint) {
-        renderer.repaint();
-        renderer.setRenderBoxNeedsLazyRepaint(false);
-    }
-    m_renderersNeedingLazyRepaint.clear();
 }
 
 RenderBox::LogicalExtentComputedValues RenderView::computeLogicalHeight(LayoutUnit logicalHeight, LayoutUnit) const
@@ -930,12 +900,12 @@ void RenderView::removeRendererWithPausedImageAnimations(RenderElement& renderer
 
 void RenderView::resumePausedImageAnimationsIfNeeded(const IntRect& visibleRect)
 {
-    Vector<std::pair<WeakPtr<RenderElement>, WeakPtr<CachedImage>>, 10> toRemove;
+    Vector<std::pair<SingleThreadWeakPtr<RenderElement>, WeakPtr<CachedImage>>, 10> toRemove;
     for (auto it : m_renderersWithPausedImageAnimation) {
         auto& renderer = it.key;
         for (auto& image : it.value) {
             if (renderer.repaintForPausedImageAnimationsIfNeeded(visibleRect, *image))
-                toRemove.append({ renderer, image });
+                toRemove.append({ WeakPtr { renderer }, image });
         }
     }
     for (auto& pair : toRemove)
@@ -1131,7 +1101,7 @@ void RenderView::addCounterNeedingUpdate(RenderCounter& renderer)
     m_countersNeedingUpdate.add(renderer);
 }
 
-WeakHashSet<RenderCounter> RenderView::takeCountersNeedingUpdate()
+SingleThreadWeakHashSet<RenderCounter> RenderView::takeCountersNeedingUpdate()
 {
     return std::exchange(m_countersNeedingUpdate, { });
 }

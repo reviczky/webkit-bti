@@ -280,21 +280,21 @@ constexpr auto allRenderingUpdateSteps = updateRenderingSteps | OptionSet<Render
 };
 
 
-class Page : public Supplementable<Page>, public CanMakeWeakPtr<Page>, public CanMakeCheckedPtr {
+class Page : public RefCounted<Page>, public Supplementable<Page>, public CanMakeSingleThreadWeakPtr<Page> {
     WTF_MAKE_NONCOPYABLE(Page);
     WTF_MAKE_FAST_ALLOCATED;
     friend class SettingsBase;
 
 public:
+    WEBCORE_EXPORT static Ref<Page> create(PageConfiguration&&);
+    WEBCORE_EXPORT ~Page();
+
     WEBCORE_EXPORT static void updateStyleForAllPagesAfterGlobalChangeInEnvironment();
     WEBCORE_EXPORT static void clearPreviousItemFromAllPages(HistoryItem*);
 
     WEBCORE_EXPORT void setupForRemoteWorker(const URL& scriptURL, const SecurityOriginData& topOrigin, const String& referrerPolicy);
 
     void updateStyleAfterChangeInEnvironment();
-
-    WEBCORE_EXPORT explicit Page(PageConfiguration&&);
-    WEBCORE_EXPORT ~Page();
 
     // Utility pages (e.g. SVG image pages) don't have an identifier currently.
     std::optional<PageIdentifier> identifier() const { return m_identifier; }
@@ -348,11 +348,6 @@ public:
     WEBCORE_EXPORT static unsigned nonUtilityPageCount();
 
     unsigned subframeCount() const;
-
-    void incrementNestedRunLoopCount();
-    void decrementNestedRunLoopCount();
-    bool insideNestedRunLoop() const { return m_nestedRunLoopCount > 0; }
-    WEBCORE_EXPORT void whenUnnested(Function<void()>&&);
 
     void setCurrentKeyboardScrollingAnimator(KeyboardScrollingAnimator*);
     KeyboardScrollingAnimator* currentKeyboardScrollingAnimator() const { return m_currentKeyboardScrollingAnimator.get(); }
@@ -1064,7 +1059,7 @@ public:
     void willBeginScrolling();
     void didFinishScrolling();
 
-    const HashSet<CheckedRef<LocalFrame>>& rootFrames() const { return m_rootFrames; }
+    const HashSet<WeakRef<LocalFrame>>& rootFrames() const { return m_rootFrames; }
     WEBCORE_EXPORT void addRootFrame(LocalFrame&);
     WEBCORE_EXPORT void removeRootFrame(LocalFrame&);
 
@@ -1081,6 +1076,8 @@ public:
     WEBCORE_EXPORT String sceneIdentifier() const;
 
 private:
+    explicit Page(PageConfiguration&&);
+
     struct Navigation {
         RegistrableDomain domain;
         FrameLoadType type;
@@ -1156,7 +1153,7 @@ private:
     UniqueRef<ProgressTracker> m_progress;
 
     UniqueRef<BackForwardController> m_backForwardController;
-    HashSet<CheckedRef<LocalFrame>> m_rootFrames;
+    HashSet<WeakRef<LocalFrame>> m_rootFrames;
     UniqueRef<EditorClient> m_editorClient;
     Ref<Frame> m_mainFrame;
     URL m_mainFrameURL;
@@ -1179,9 +1176,6 @@ private:
 
     PlatformDisplayID m_displayID { 0 };
     std::optional<FramesPerSecond> m_displayNominalFramesPerSecond;
-
-    int m_nestedRunLoopCount { 0 };
-    Function<void()> m_unnestCallback;
 
     String m_groupName;
     bool m_openedByDOM { false };
@@ -1264,7 +1258,7 @@ private:
     int m_footerHeight { 0 };
 
     std::unique_ptr<RenderingUpdateScheduler> m_renderingUpdateScheduler;
-    WeakHashSet<const RenderObject> m_relevantUnpaintedRenderObjects;
+    SingleThreadWeakHashSet<const RenderObject> m_relevantUnpaintedRenderObjects;
 
     Region m_topRelevantPaintedRegion;
     Region m_bottomRelevantPaintedRegion;
@@ -1472,7 +1466,7 @@ inline Page* Frame::page() const
     return m_page.get();
 }
 
-inline CheckedPtr<Page> Frame::checkedPage() const
+inline RefPtr<Page> Frame::protectedPage() const
 {
     return m_page.get();
 }
@@ -1482,7 +1476,7 @@ inline Page* Document::page() const
     return m_frame ? m_frame->page() : nullptr;
 }
 
-inline CheckedPtr<Page> Document::checkedPage() const
+inline RefPtr<Page> Document::protectedPage() const
 {
     return page();
 }

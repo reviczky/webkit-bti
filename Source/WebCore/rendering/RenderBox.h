@@ -111,6 +111,7 @@ public:
     inline LayoutSize borderBoxLogicalSize() const;
 
     WEBCORE_EXPORT RoundedRectRadii borderRadii() const;
+    RoundedRect borderRoundedRect() const;
     RoundedRect roundedBorderBoxRect() const;
 
     // The content area of the box (excludes padding - and intrinsic padding for table cells, etc... - and border).
@@ -130,7 +131,7 @@ public:
     inline LayoutRect computedCSSContentBoxRect() const;
 
     // Bounds of the outline box in absolute coords. Respects transforms
-    LayoutRect outlineBoundsForRepaint(const RenderLayerModelObject* /*repaintContainer*/, const RenderGeometryMap*) const final;
+    LayoutRect outlineBoundsForRepaint(const RenderLayerModelObject* /*repaintContainer*/, const RenderGeometryMap* = nullptr) const final;
     void addFocusRingRects(Vector<LayoutRect>&, const LayoutPoint& additionalOffset, const RenderLayerModelObject* paintContainer = nullptr) const override;
     
     FloatRect repaintRectInLocalCoordinates(RepaintRectCalculation = RepaintRectCalculation::Fast) const override { return borderBoxRect(); }
@@ -371,7 +372,7 @@ public:
     void setInlineBoxWrapper(LegacyInlineElementBox*);
     void deleteLineBoxWrapper();
 
-    LayoutRect localRectForRepaint() const override;
+    RepaintRects localRectsForRepaint(RepaintOutlineBounds) const override;
     std::optional<RepaintRects> computeVisibleRectsInContainer(const RepaintRects&, const RenderLayerModelObject* container, VisibleRectContext) const override;
     void repaintDuringLayoutIfMoved(const LayoutRect&);
     virtual void repaintOverhangingFloats(bool paintAllDescendants);
@@ -660,8 +661,8 @@ public:
     bool computeHasTransformRelatedProperty(const RenderStyle&) const;
 
 protected:
-    RenderBox(Type, Element&, RenderStyle&&, BaseTypeFlags);
-    RenderBox(Type, Document&, RenderStyle&&, BaseTypeFlags);
+    RenderBox(Type, Element&, RenderStyle&&, OptionSet<TypeFlag> = { }, TypeSpecificFlags = { });
+    RenderBox(Type, Document&, RenderStyle&&, OptionSet<TypeFlag> = { }, TypeSpecificFlags = { });
 
     void styleWillChange(StyleDifference, const RenderStyle& newStyle) override;
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
@@ -693,6 +694,8 @@ protected:
     std::optional<LayoutUnit> computeIntrinsicLogicalContentHeightUsing(Length logicalHeightLength, std::optional<LayoutUnit> intrinsicContentHeight, LayoutUnit borderAndPadding) const;
     
     virtual bool shouldComputeSizeAsReplaced() const { return isReplacedOrInlineBlock() && !isInlineBlockOrInlineTable(); }
+
+    LayoutRect localOutlineBoundsRepaintRect() const;
 
     void mapLocalToContainer(const RenderLayerModelObject* ancestorContainer, TransformState&, OptionSet<MapCoordinatesMode>, bool* wasFixed) const override;
     const RenderObject* pushMappingToContainer(const RenderLayerModelObject*, RenderGeometryMap&) const override;

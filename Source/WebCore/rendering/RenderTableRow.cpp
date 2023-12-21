@@ -48,7 +48,7 @@ using namespace HTMLNames;
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderTableRow);
 
 RenderTableRow::RenderTableRow(Element& element, RenderStyle&& style)
-    : RenderBox(Type::TableRow, element, WTFMove(style), 0)
+    : RenderBox(Type::TableRow, element, WTFMove(style))
     , m_rowIndex(unsetRowIndex)
 {
     setInline(false);
@@ -56,7 +56,7 @@ RenderTableRow::RenderTableRow(Element& element, RenderStyle&& style)
 }
 
 RenderTableRow::RenderTableRow(Document& document, RenderStyle&& style)
-    : RenderBox(Type::TableRow, document, WTFMove(style), 0)
+    : RenderBox(Type::TableRow, document, WTFMove(style))
     , m_rowIndex(unsetRowIndex)
 {
     setInline(false);
@@ -187,7 +187,15 @@ LayoutRect RenderTableRow::clippedOverflowRect(const RenderLayerModelObject* rep
     return result;
 }
 
-// Hit Testing
+auto RenderTableRow::rectsForRepaintingAfterLayout(const RenderLayerModelObject* repaintContainer, RepaintOutlineBounds repaintOutlineBounds) const -> RepaintRects
+{
+    auto rects = RepaintRects { clippedOverflowRect(repaintContainer, visibleRectContextForRepaint()) };
+    if (repaintOutlineBounds == RepaintOutlineBounds::Yes)
+        rects.outlineBoundsRect = outlineBoundsForRepaint(repaintContainer);
+
+    return rects;
+}
+
 bool RenderTableRow::nodeAtPoint(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction action)
 {
     // Table rows cannot ever be hit tested.  Effectively they do not exist.

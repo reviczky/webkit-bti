@@ -47,9 +47,12 @@ class SharedVideoFrameWriter;
 class RemoteDisplayListRecorderProxy : public WebCore::DisplayList::Recorder {
 public:
     RemoteDisplayListRecorderProxy(RemoteImageBufferProxy&, RemoteRenderingBackendProxy&, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&);
+    RemoteDisplayListRecorderProxy(RemoteRenderingBackendProxy& , WebCore::RenderingResourceIdentifier, const WebCore::DestinationColorSpace&, WebCore::RenderingMode, const WebCore::FloatRect&, const WebCore::AffineTransform&);
     ~RemoteDisplayListRecorderProxy() = default;
 
     void disconnect();
+
+    WebCore::RenderingResourceIdentifier identifier() const { return m_destinationBufferIdentifier; }
 
 private:
     template<typename T> void send(T&& message);
@@ -86,7 +89,7 @@ private:
     void recordDrawDecomposedGlyphs(const WebCore::Font&, const WebCore::DecomposedGlyphs&) final;
     void recordDrawDisplayListItems(const Vector<WebCore::DisplayList::Item>&, const WebCore::FloatPoint& destination);
     void recordDrawImageBuffer(WebCore::ImageBuffer&, const WebCore::FloatRect& destRect, const WebCore::FloatRect& srcRect, WebCore::ImagePaintingOptions) final;
-    void recordDrawNativeImage(WebCore::RenderingResourceIdentifier imageIdentifier, const WebCore::FloatSize& imageSize, const WebCore::FloatRect& destRect, const WebCore::FloatRect& srcRect, WebCore::ImagePaintingOptions) final;
+    void recordDrawNativeImage(WebCore::RenderingResourceIdentifier imageIdentifier, const WebCore::FloatRect& destRect, const WebCore::FloatRect& srcRect, WebCore::ImagePaintingOptions) final;
     void recordDrawSystemImage(WebCore::SystemImage&, const WebCore::FloatRect&);
     void recordDrawPattern(WebCore::RenderingResourceIdentifier, const WebCore::FloatRect& destRect, const WebCore::FloatRect& tileRect, const WebCore::AffineTransform&, const WebCore::FloatPoint& phase, const WebCore::FloatSize& spacing, WebCore::ImagePaintingOptions = { }) final;
     void recordBeginTransparencyLayer(float) final;
@@ -156,6 +159,7 @@ private:
     WebCore::RenderingResourceIdentifier m_destinationBufferIdentifier;
     ThreadSafeWeakPtr<RemoteImageBufferProxy> m_imageBuffer;
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
+    WebCore::RenderingMode m_renderingMode;
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
     std::unique_ptr<SharedVideoFrameWriter> m_sharedVideoFrameWriter;
 #endif

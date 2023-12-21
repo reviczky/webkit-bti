@@ -71,6 +71,10 @@
 typedef struct OpaqueCFHTTPCookieStorage*  CFHTTPCookieStorageRef;
 #endif
 
+#if USE(EXTENSIONKIT)
+OBJC_CLASS WKGrant;
+#endif
+
 namespace IPC {
 class FormDataReference;
 }
@@ -95,6 +99,7 @@ enum class StorageAccessWasGranted : bool;
 struct ClientOrigin;
 struct MessageWithMessagePorts;
 class SecurityOriginData;
+struct OrganizationStorageAccessPromptQuirk;
 struct SoupNetworkProxySettings;
 }
 
@@ -128,7 +133,7 @@ class Cache;
 enum class CacheOption : uint8_t;
 }
 
-class NetworkProcess : public AuxiliaryProcess, private DownloadManager::Client, public ThreadSafeRefCounted<NetworkProcess>, public CanMakeThreadSafeCheckedPtr
+class NetworkProcess : public AuxiliaryProcess, private DownloadManager::Client, public ThreadSafeRefCounted<NetworkProcess>
 {
     WTF_MAKE_NONCOPYABLE(NetworkProcess);
 public:
@@ -143,16 +148,6 @@ public:
     using NavigatedToDomain = WebCore::RegistrableDomain;
     using DomainInNeedOfStorageAccess = WebCore::RegistrableDomain;
     using OpenerDomain = WebCore::RegistrableDomain;
-
-    using CanMakeThreadSafeCheckedPtr::incrementPtrCount;
-    using CanMakeThreadSafeCheckedPtr::decrementPtrCount;
-#if CHECKED_POINTER_DEBUG
-    using CanMakeThreadSafeCheckedPtr::registerCheckedPtr;
-    using CanMakeThreadSafeCheckedPtr::copyCheckedPtr;
-    using CanMakeThreadSafeCheckedPtr::moveCheckedPtr;
-    using CanMakeThreadSafeCheckedPtr::unregisterCheckedPtr;
-#endif // CHECKED_POINTER_DEBUG
-
 
     NetworkProcess(AuxiliaryProcessInitializationParameters&&);
     ~NetworkProcess();
@@ -259,6 +254,7 @@ public:
     void setResourceLoadStatisticsTimeAdvanceForTesting(PAL::SessionID, Seconds, CompletionHandler<void()>&&);
     void setIsRunningResourceLoadStatisticsTest(PAL::SessionID, bool value, CompletionHandler<void()>&&);
     void setTrackingPreventionEnabled(PAL::SessionID, bool);
+    void updateStorageAccessPromptQuirks(Vector<WebCore::OrganizationStorageAccessPromptQuirk>&&);
     void setResourceLoadStatisticsLogTestingEvent(bool);
     void setResourceLoadStatisticsDebugMode(PAL::SessionID, bool debugMode, CompletionHandler<void()>&&d);
     void isResourceLoadStatisticsEphemeral(PAL::SessionID, CompletionHandler<void(bool)>&&) const;
@@ -274,6 +270,7 @@ public:
     void didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID, RegistrableDomain&& fromDomain, RegistrableDomain&& toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag>, WebPageProxyIdentifier, WebCore::PageIdentifier);
     void setCrossSiteLoadWithLinkDecorationForTesting(PAL::SessionID, RegistrableDomain&& fromDomain, RegistrableDomain&& toDomain, CompletionHandler<void()>&&);
     void resetCrossSiteLoadsWithLinkDecorationForTesting(PAL::SessionID, CompletionHandler<void()>&&);
+    void grantStorageAccessForTesting(PAL::SessionID, Vector<WebCore::RegistrableDomain>&& subFrameDomains, WebCore::RegistrableDomain&& topFrameDomain, CompletionHandler<void(void)>&&);
     void hasIsolatedSession(PAL::SessionID, const WebCore::RegistrableDomain&, CompletionHandler<void(bool)>&&) const;
     void closeITPDatabase(PAL::SessionID, CompletionHandler<void()>&&);
 #if ENABLE(APP_BOUND_DOMAINS)
@@ -523,6 +520,11 @@ private:
 
 #if USE(RUNNINGBOARD)
     void setIsHoldingLockedFiles(bool);
+#if USE(EXTENSIONKIT)
+    bool aqcuireLockedFileGrant();
+    void invalidateGrant();
+    bool hasAcquiredGrant() const;
+#endif
 #endif
     void stopRunLoopIfNecessary();
 
@@ -559,6 +561,9 @@ private:
 
 #if USE(RUNNINGBOARD)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
+#if USE(EXTENSIONKIT)
+    RetainPtr<WKGrant> m_holdingLockedFileGrant;
+#endif
     RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif
     

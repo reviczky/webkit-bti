@@ -51,7 +51,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(ShadowRoot);
 
 struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     uint8_t flagsAndModes[3];
-    CheckedPtr<Element> host;
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> host;
     void* styleSheetList;
     void* styleScope;
     void* slotAssignment;
@@ -73,6 +73,7 @@ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMo
     , m_slotAssignmentMode(assignmentMode)
     , m_styleScope(makeUnique<Style::Scope>(*this))
 {
+    setNodeFlag(NodeFlag::IsInShadowTree);
     if (m_mode == ShadowRootMode::UserAgent)
         setNodeFlag(NodeFlag::HasBeenInUserAgentShadowTree);
 }
@@ -85,6 +86,7 @@ ShadowRoot::ShadowRoot(Document& document, std::unique_ptr<SlotAssignment>&& slo
     , m_styleScope(makeUnique<Style::Scope>(*this))
     , m_slotAssignment(WTFMove(slotAssignment))
 {
+    setNodeFlag(NodeFlag::IsInShadowTree);
     setNodeFlag(NodeFlag::HasBeenInUserAgentShadowTree);
 }
 

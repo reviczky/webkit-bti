@@ -161,11 +161,12 @@ public:
     WEBCORE_EXPORT AXCoreObject* rootObject();
     // Returns the root object for a specific frame.
     WEBCORE_EXPORT AccessibilityObject* rootObjectForFrame(LocalFrame*);
-    
-    // For AX objects with elements that back them.
+
+    // Creation/retrieval of AX objects associated with a DOM or RenderTree object.
     AccessibilityObject* getOrCreate(RenderObject*);
     AccessibilityObject* getOrCreate(Widget*);
-    WEBCORE_EXPORT AccessibilityObject* getOrCreate(Node*);
+    enum class IsPartOfRelation : bool { No, Yes };
+    WEBCORE_EXPORT AccessibilityObject* getOrCreate(Node*, IsPartOfRelation = IsPartOfRelation::No);
 
     // used for objects without backing elements
     AccessibilityObject* create(AccessibilityRole);
@@ -510,6 +511,7 @@ private:
     void updateIsolatedTree(const Vector<std::pair<RefPtr<AccessibilityObject>, AXNotification>>&);
     void updateIsolatedTree(AccessibilityObject*, AXPropertyName) const;
     void updateIsolatedTree(AccessibilityObject&, AXPropertyName) const;
+    void startUpdateTreeSnapshotTimer();
 #endif
 
 protected:
@@ -593,6 +595,8 @@ private:
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     void selectedTextRangeTimerFired();
     Seconds platformSelectedTextRangeDebounceInterval() const;
+    void updateTreeSnapshotTimerFired();
+    void processQueuedIsolatedNodeUpdates();
 #endif
 
     void deferRowspanChange(AccessibilityObject*);
@@ -645,6 +649,7 @@ private:
     void relationsNeedUpdate(bool);
     HashMap<AXID, AXRelations> relations();
     const HashSet<AXID>& relationTargetIDs();
+    bool isDescendantOfRelatedNode(Node&);
 
     // Object creation.
     Ref<AccessibilityObject> createObjectFromRenderer(RenderObject*);
@@ -707,7 +712,7 @@ private:
     WeakListHashSet<Node, WeakPtrImplWithEventTargetData> m_deferredNodeAddedOrRemovedList;
     WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_deferredModalChangedList;
     WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_deferredMenuListChange;
-    WeakHashSet<ScrollView> m_deferredScrollbarUpdateChangeList;
+    SingleThreadWeakHashSet<ScrollView> m_deferredScrollbarUpdateChangeList;
     WeakHashMap<Element, String, WeakPtrImplWithEventTargetData> m_deferredTextFormControlValue;
     Vector<AttributeChange> m_deferredAttributeChange;
     std::optional<std::pair<WeakPtr<Node, WeakPtrImplWithEventTargetData>, WeakPtr<Node, WeakPtrImplWithEventTargetData>>> m_deferredFocusedNodeChange;
@@ -718,6 +723,8 @@ private:
     Ref<AXGeometryManager> m_geometryManager;
     DeferrableOneShotTimer m_selectedTextRangeTimer;
     AXID m_lastDebouncedTextRangeObject;
+
+    Timer m_updateTreeSnapshotTimer;
 #endif
     bool m_isSynchronizingSelection { false };
     bool m_performingDeferredCacheUpdate { false };
@@ -776,7 +783,7 @@ inline AccessibilityObject* AXObjectCache::get(Node*) { return nullptr; }
 inline AccessibilityObject* AXObjectCache::get(Widget*) { return nullptr; }
 inline AccessibilityObject* AXObjectCache::getOrCreate(RenderObject*) { return nullptr; }
 inline AccessibilityObject* AXObjectCache::create(AccessibilityRole) { return nullptr; }
-inline AccessibilityObject* AXObjectCache::getOrCreate(Node*) { return nullptr; }
+inline AccessibilityObject* AXObjectCache::getOrCreate(Node*, IsPartOfRelation) { return nullptr; }
 inline AccessibilityObject* AXObjectCache::getOrCreate(Widget*) { return nullptr; }
 inline AXCoreObject* AXObjectCache::rootObject() { return nullptr; }
 inline AccessibilityObject* AXObjectCache::rootObjectForFrame(LocalFrame*) { return nullptr; }

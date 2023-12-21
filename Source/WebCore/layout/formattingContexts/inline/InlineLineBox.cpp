@@ -26,6 +26,7 @@
 #include "config.h"
 #include "InlineLineBox.h"
 
+#include "InlineFormattingUtils.h"
 #include "InlineLevelBoxInlines.h"
 #include "LayoutBoxGeometry.h"
 #include "LayoutElementBox.h"
@@ -40,6 +41,7 @@ LineBox::LineBox(const Box& rootLayoutBox, InlineLayoutUnit contentLogicalLeft, 
 {
     m_nonRootInlineLevelBoxList.reserveInitialCapacity(nonSpanningInlineLevelBoxCount);
     m_nonRootInlineLevelBoxMap.reserveInitialCapacity(nonSpanningInlineLevelBoxCount);
+    m_rootInlineBox.setTextEmphasis(InlineFormattingUtils::textEmphasisForInlineBox(rootLayoutBox, downcast<ElementBox>(rootLayoutBox)));
 }
 
 void LineBox::addInlineLevelBox(InlineLevelBox&& inlineLevelBox)

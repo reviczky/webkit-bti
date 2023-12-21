@@ -181,6 +181,8 @@ private:
     WebCore::ResourceError httpNavigationWithHTTPSOnlyError(const WebCore::ResourceRequest&) const final;
     WebCore::ResourceError pluginWillHandleLoadError(const WebCore::ResourceResponse&) const final;
     
+    void loadStorageAccessQuirksIfNeeded() final;
+
     bool shouldFallBack(const WebCore::ResourceError&) const final;
     
     bool canHandleRequest(const WebCore::ResourceRequest&) const final;
@@ -274,6 +276,10 @@ private:
 
     void broadcastFrameRemovalToOtherProcesses() final;
     void broadcastMainFrameURLChangeToOtherProcesses(const URL&) final;
+
+#if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+    void didAccessWindowProxyPropertyViaOpener(WebCore::SecurityOriginData&&, WebCore::WindowProxyProperty) final;
+#endif
 
     ScopeExit<Function<void()>> m_frameInvalidator;
 

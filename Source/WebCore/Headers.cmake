@@ -573,6 +573,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/system-preview/ARKitBadgeSystemImage.h
 
+    Modules/web-locks/WebLock.h
     Modules/web-locks/WebLockIdentifier.h
     Modules/web-locks/WebLockManagerSnapshot.h
     Modules/web-locks/WebLockMode.h
@@ -915,6 +916,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/Comment.h
     dom/ContainerNode.h
     dom/ContextDestructionObserver.h
+    dom/ContextDestructionObserverInlines.h
     dom/CrossOriginMode.h
     dom/CustomElementReactionQueue.h
     dom/DOMException.h
@@ -1248,6 +1250,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/MediaDocument.h
     html/MediaElementSession.h
     html/MediaError.h
+    html/OffscreenCanvas.h
     html/PDFDocument.h
     html/PluginDocument.h
     html/StepRange.h
@@ -1637,7 +1640,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/ContentType.h
     platform/ContextMenu.h
     platform/ContextMenuItem.h
-    platform/ControlStates.h
     platform/Cookie.h
     platform/CountedUserActivity.h
     platform/Cursor.h
@@ -1931,6 +1933,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ImageBufferAllocator.h
     platform/graphics/ImageBufferBackend.h
     platform/graphics/ImageBufferBackendParameters.h
+    platform/graphics/ImageBufferPipe.h
     platform/graphics/ImageBufferPlatformBackend.h
     platform/graphics/ImageDecoder.h
     platform/graphics/ImageDecoderIdentifier.h
@@ -2032,6 +2035,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/VideoTrackPrivate.h
     platform/graphics/VideoTrackPrivateClient.h
     platform/graphics/WidthCache.h
+    platform/graphics/WidthIterator.h
     platform/graphics/WindRule.h
 
     platform/graphics/angle/ANGLEHeaders.h
@@ -2233,6 +2237,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/NetworkStateNotifier.h
     platform/network/NetworkStorageSession.h
     platform/network/NetworkingContext.h
+    platform/network/OrganizationStorageAccessPromptQuirk.h
     platform/network/ParsedContentRange.h
     platform/network/ParsedContentType.h
     platform/network/ParsedRequestRange.h

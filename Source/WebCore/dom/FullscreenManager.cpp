@@ -92,10 +92,11 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
     auto failedPreflights = [this, weakThis = WeakPtr { *this }](Ref<Element>&& element, RefPtr<DeferredPromise>&& promise) mutable {
         if (!weakThis)
             return;
+        Ref document { protectedDocument() };
         m_fullscreenErrorEventTargetQueue.append(WTFMove(element));
         if (promise)
             promise->reject(Exception { ExceptionCode::TypeError });
-        protectedDocument()->eventLoop().queueTask(TaskSource::MediaElement, [weakThis = WTFMove(weakThis)]() mutable {
+        document->eventLoop().queueTask(TaskSource::MediaElement, [weakThis = WTFMove(weakThis)]() mutable {
             if (weakThis)
                 weakThis->notifyAboutFullscreenChangeOrError();
         });
@@ -531,7 +532,7 @@ bool FullscreenManager::willEnterFullscreen(Element& element)
     for (auto ancestor : makeReversedRange(ancestorsInTreeOrder)) {
         ancestor->document().hideAllPopoversUntil(nullptr, FocusPreviousElement::No, FireEvents::No);
 
-        auto containingBlockBeforeStyleResolution = WeakPtr<RenderBlock> { };
+        auto containingBlockBeforeStyleResolution = SingleThreadWeakPtr<RenderBlock> { };
         if (auto* renderer = ancestor->renderer())
             containingBlockBeforeStyleResolution = renderer->containingBlock();
 

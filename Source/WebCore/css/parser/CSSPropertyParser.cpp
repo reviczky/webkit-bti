@@ -968,6 +968,7 @@ static constexpr InitialValue initialValueForLonghand(CSSPropertyID longhand)
     case CSSPropertyScrollSnapStop:
     case CSSPropertySpeakAs:
     case CSSPropertyTextBoxTrim:
+    case CSSPropertyTransitionBehavior:
     case CSSPropertyWordBreak:
     case CSSPropertyWordSpacing:
 #if ENABLE(VARIATION_FONTS)
@@ -1718,10 +1719,12 @@ static RefPtr<CSSValue> consumeAnimationValueForShorthand(CSSPropertyID property
     case CSSPropertyTransitionProperty:
         return consumeSingleTransitionPropertyOrNone(range);
     case CSSPropertyAnimationTimeline:
-        return consumeAnimationTimeline(range);
+        return consumeAnimationTimeline(range, context);
     case CSSPropertyAnimationTimingFunction:
     case CSSPropertyTransitionTimingFunction:
         return consumeTimingFunction(range, context);
+    case CSSPropertyTransitionBehavior:
+        return CSSPropertyParsing::consumeTransitionBehaviorValue(range);
     default:
         ASSERT_NOT_REACHED();
         return nullptr;

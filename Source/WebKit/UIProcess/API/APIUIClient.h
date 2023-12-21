@@ -64,6 +64,7 @@ enum class AutoplayEventFlags : uint8_t;
 enum class MediaProducerMediaState : uint32_t;
 struct FontAttributes;
 struct WindowFeatures;
+struct OrganizationStorageAccessPromptQuirk;
 using MediaProducerMediaStateFlags = OptionSet<MediaProducerMediaState>;
 }
 
@@ -156,7 +157,7 @@ public:
     virtual void decidePolicyForUserMediaPermissionRequest(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, SecurityOrigin&, SecurityOrigin&, WebKit::UserMediaPermissionRequestProxy&);
     virtual void checkUserMediaPermissionForOrigin(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, SecurityOrigin&, SecurityOrigin&, WebKit::UserMediaPermissionCheckProxy&);
     virtual void decidePolicyForNotificationPermissionRequest(WebKit::WebPageProxy&, SecurityOrigin&, CompletionHandler<void(bool allowed)>&& completionHandler) { completionHandler(false); }
-    virtual void requestStorageAccessConfirm(WebKit::WebPageProxy&, WebKit::WebFrameProxy*, const WebCore::RegistrableDomain& requestingDomain, const WebCore::RegistrableDomain& currentDomain, CompletionHandler<void(bool)>&& completionHandler) { completionHandler(true); }
+    virtual void requestStorageAccessConfirm(WebKit::WebPageProxy&, WebKit::WebFrameProxy*, const WebCore::RegistrableDomain& requestingDomain, const WebCore::RegistrableDomain& currentDomain, std::optional<WebCore::OrganizationStorageAccessPromptQuirk>&&, CompletionHandler<void(bool)>&& completionHandler) { completionHandler(true); }
     virtual void requestCookieConsent(CompletionHandler<void(WebCore::CookieConsentDecisionResult)>&& completionHandler) { completionHandler(WebCore::CookieConsentDecisionResult::NotSupported); }
 
     // Printing.
@@ -212,11 +213,6 @@ public:
 
 #if ENABLE(WEB_AUTHN)
     virtual void runWebAuthenticationPanel(WebKit::WebPageProxy&, WebAuthenticationPanel&, WebKit::WebFrameProxy&, WebKit::FrameInfoData&&, CompletionHandler<void(WebKit::WebAuthenticationPanelResult)>&& completionHandler) { completionHandler(WebKit::WebAuthenticationPanelResult::Unavailable); }
-
-    virtual void requestWebAuthenticationNoGesture(SecurityOrigin& origin, CompletionHandler<void(bool)>&& completionHandler)
-    {
-        completionHandler(true);
-    }
 
     virtual void requestWebAuthenticationConditonalMediationRegistration(WTF::String&&, CompletionHandler<void(bool)>&& completionHandler)
     {

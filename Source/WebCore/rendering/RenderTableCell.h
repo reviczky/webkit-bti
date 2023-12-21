@@ -129,7 +129,7 @@ public:
     bool isFirstOrLastCellInRow() const { return !table()->cellAfter(this) || !table()->cellBefore(this); }
 #endif
     
-    LayoutRect localRectForRepaint() const override;
+    RepaintRects localRectsForRepaint(RepaintOutlineBounds) const override;
 
     void invalidateHasEmptyCollapsedBorders();
     void setHasEmptyCollapsedBorder(CollapsedBorderSide, bool empty) const;
@@ -273,6 +273,9 @@ inline unsigned RenderTableCell::rowIndex() const
 
 inline bool RenderTableCell::isBaselineAligned() const
 {
+    if (auto alignContent = style().alignContent(); !alignContent.isNormal())
+        return alignContent.position() == ContentPosition::Baseline;
+
     VerticalAlign va = style().verticalAlign();
     return va == VerticalAlign::Baseline || va == VerticalAlign::TextBottom || va == VerticalAlign::TextTop || va == VerticalAlign::Super || va == VerticalAlign::Sub || va == VerticalAlign::Length;
 }

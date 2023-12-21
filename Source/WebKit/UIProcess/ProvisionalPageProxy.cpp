@@ -28,6 +28,7 @@
 
 #include "APINavigation.h"
 #include "APIWebsitePolicies.h"
+#include "BrowsingContextGroup.h"
 #include "DrawingAreaProxy.h"
 #include "FormDataReference.h"
 #include "GoToBackForwardItemParameters.h"
@@ -104,6 +105,8 @@ ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessPro
         ASSERT(&suspendedPage->process() == m_process.ptr());
         suspendedPage->unsuspend();
         m_mainFrame = &suspendedPage->mainFrame();
+        m_browsingContextGroup = &suspendedPage->browsingContextGroup();
+        m_remotePageProxyState = suspendedPage->takeRemotePageProxyState();
     }
 
     initializeWebPage(websitePolicies);
@@ -123,7 +126,7 @@ ProvisionalPageProxy::~ProvisionalPageProxy()
 
         auto dataStore = m_process->websiteDataStore();
         if (dataStore && dataStore!= &m_page->websiteDataStore())
-            m_process->processPool().pageEndUsingWebsiteDataStore(CheckedRef { m_page }, *dataStore);
+            m_process->processPool().pageEndUsingWebsiteDataStore(Ref { m_page.get() }, *dataStore);
 
         if (m_process->hasConnection())
             send(Messages::WebPage::Close());

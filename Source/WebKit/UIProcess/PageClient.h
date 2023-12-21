@@ -76,6 +76,7 @@ OBJC_CLASS NSTextAlternatives;
 OBJC_CLASS UIGestureRecognizer;
 OBJC_CLASS UIScrollEvent;
 OBJC_CLASS UIScrollView;
+OBJC_CLASS WKBaseScrollView;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
 #if USE(APPKIT)
@@ -430,6 +431,8 @@ public:
 
     virtual void takeFocus(WebCore::FocusDirection) { }
 
+    virtual void performSwitchHapticFeedback() { }
+
 #if USE(DICTATION_ALTERNATIVES)
     virtual WebCore::DictationContext addDictationAlternatives(NSTextAlternatives *) = 0;
     virtual void replaceDictationAlternatives(NSTextAlternatives *, WebCore::DictationContext) = 0;
@@ -486,6 +489,7 @@ public:
 
     virtual void elementDidFocus(const FocusedElementInformation&, bool userIsInteracting, bool blurPreviousNode, OptionSet<WebCore::ActivityState> activityStateChanges, API::Object* userData) = 0;
     virtual void updateInputContextAfterBlurringAndRefocusingElement() = 0;
+    virtual void updateFocusedElementInformation(const FocusedElementInformation&) = 0;
     virtual void elementDidBlur() = 0;
     virtual void focusedElementDidChangeInputMode(WebCore::InputMode) = 0;
     virtual void didUpdateEditorState() = 0;
@@ -517,7 +521,7 @@ public:
     virtual void handleAutocorrectionContext(const WebAutocorrectionContext&) = 0;
 
 #if HAVE(UISCROLLVIEW_ASYNCHRONOUS_SCROLL_EVENT_HANDLING)
-    virtual void handleAsynchronousCancelableScrollEvent(UIScrollView *, UIScrollEvent *, void (^completion)(BOOL handled)) = 0;
+    virtual void handleAsynchronousCancelableScrollEvent(WKBaseScrollView *, UIScrollEvent *, void (^completion)(BOOL handled)) = 0;
 #endif
 
     virtual WebCore::Color contentViewBackgroundColor() = 0;

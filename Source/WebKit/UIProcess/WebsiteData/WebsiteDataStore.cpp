@@ -88,6 +88,7 @@
 
 #if PLATFORM(COCOA)
 #include "DefaultWebBrowserChecks.h"
+#include "WebPrivacyHelpers.h"
 #endif
 
 #if ENABLE(WEB_AUTHN)
@@ -108,10 +109,10 @@ static HashMap<String, PAL::SessionID>& activeGeneralStorageDirectories()
     return directoryToSessionMap;
 }
 
-static HashMap<PAL::SessionID, CheckedRef<WebsiteDataStore>>& allDataStores()
+static HashMap<PAL::SessionID, WeakRef<WebsiteDataStore>>& allDataStores()
 {
     RELEASE_ASSERT(isUIThread());
-    static NeverDestroyed<HashMap<PAL::SessionID, CheckedRef<WebsiteDataStore>>> map;
+    static NeverDestroyed<HashMap<PAL::SessionID, WeakRef<WebsiteDataStore>>> map;
     return map;
 }
 
@@ -1276,6 +1277,34 @@ void WebsiteDataStore::setResourceLoadStatisticsTimeAdvanceForTesting(Seconds ti
     protectedNetworkProcess()->setResourceLoadStatisticsTimeAdvanceForTesting(m_sessionID, time, WTFMove(completionHandler));
 }
 
+void WebsiteDataStore::setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&& completionHandler)
+{
+    auto registrableTopFrameDomain = WebCore::RegistrableDomain::fromRawString(WTFMove(topFrameDomain));
+    auto registrableTopFrameDomainString = registrableTopFrameDomain.string();
+    Vector<WebCore::OrganizationStorageAccessPromptQuirk> quirk { {
+        WTFMove(registrableTopFrameDomainString)
+        , HashMap<WebCore::RegistrableDomain, Vector<WebCore::RegistrableDomain>> { {
+            KeyValuePair { WTFMove(registrableTopFrameDomain),
+                subFrameDomains.map([](auto& domain) { return WebCore::RegistrableDomain::fromRawString(String { domain }); })
+            },
+        } }
+    } };
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    StorageAccessPromptQuirkController::shared().setCachedQuirksForTesting(WTFMove(quirk));
+#else
+    protectedNetworkProcess()->send(Messages::NetworkProcess::UpdateStorageAccessPromptQuirks(WTFMove(quirk)), 0);
+#endif
+    completionHandler();
+}
+
+void WebsiteDataStore::grantStorageAccessForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&& completionHandler)
+{
+    protectedNetworkProcess()->sendWithAsyncReply(Messages::NetworkProcess::GrantStorageAccessForTesting(sessionID(), subFrameDomains.map([](const String& domain) {
+        return WebCore::RegistrableDomain::uncheckedCreateFromHost(domain);
+    }), WebCore::RegistrableDomain::uncheckedCreateFromHost((topFrameDomain))), WTFMove(completionHandler));
+}
+
 void WebsiteDataStore::setIsRunningResourceLoadStatisticsTest(bool value, CompletionHandler<void()>&& completionHandler)
 {
     useExplicitTrackingPreventionState();
@@ -1748,6 +1777,14 @@ void WebsiteDataStore::clearResourceLoadStatisticsInWebProcesses(CompletionHandl
     callback();
 }
 
+void WebsiteDataStore::setUserAgentStringQuirkForTesting(const String& domain, const String& userAgentString, CompletionHandler<void()>&& completionHandler)
+{
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    StorageAccessUserAgentStringQuirkController::shared().setCachedQuirksForTesting({ { WebCore::RegistrableDomain::uncheckedCreateFromHost(domain), userAgentString } });
+#endif
+    completionHandler();
+}
+
 bool WebsiteDataStore::isBlobRegistryPartitioningEnabled() const
 {
     return WTF::anyOf(m_processes, [] (const WebProcessProxy& process) {
@@ -1755,6 +1792,17 @@ bool WebsiteDataStore::isBlobRegistryPartitioningEnabled() const
             return page->preferences().blobRegistryTopOriginPartitioningEnabled();
         });
     });
+}
+
+void WebsiteDataStore::updateBlobRegistryPartitioningState()
+{
+    auto enabled = isBlobRegistryPartitioningEnabled();
+    if (m_isBlobRegistryPartitioningEnabled == enabled)
+        return;
+    if (RefPtr networkProcess = networkProcessIfExists()) {
+        m_isBlobRegistryPartitioningEnabled = enabled;
+        networkProcess->send(Messages::NetworkProcess::SetBlobRegistryTopOriginPartitioningEnabled(sessionID(), enabled), 0);
+    }
 }
 
 void WebsiteDataStore::dispatchOnQueue(Function<void()>&& function)

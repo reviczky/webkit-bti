@@ -29,6 +29,7 @@
 
 #include "BackgroundPainter.h"
 #include "BitmapImage.h"
+#include "BlendingKeyframes.h"
 #include "CanvasRenderingContext.h"
 #include "CSSPropertyNames.h"
 #include "CachedImage.h"
@@ -46,7 +47,6 @@
 #include "HTMLPlugInElement.h"
 #include "HTMLVideoElement.h"
 #include "InspectorInstrumentation.h"
-#include "KeyframeList.h"
 #include "LayerAncestorClippingStack.h"
 #include "LocalFrame.h"
 #include "LocalFrameView.h"
@@ -290,7 +290,7 @@ void RenderLayerBacking::willDestroyLayer(const GraphicsLayer* layer)
         compositor().layerTiledBackingUsageChanged(layer, false);
 }
 
-static void clearBackingSharingLayerProviders(WeakListHashSet<RenderLayer>& sharingLayers, const RenderLayer& providerLayer)
+static void clearBackingSharingLayerProviders(SingleThreadWeakListHashSet<RenderLayer>& sharingLayers, const RenderLayer& providerLayer)
 {
     for (auto& layer : sharingLayers) {
         if (layer.backingProviderLayer() == &providerLayer)
@@ -298,7 +298,7 @@ static void clearBackingSharingLayerProviders(WeakListHashSet<RenderLayer>& shar
     }
 }
 
-void RenderLayerBacking::setBackingSharingLayers(WeakListHashSet<RenderLayer>&& sharingLayers)
+void RenderLayerBacking::setBackingSharingLayers(SingleThreadWeakListHashSet<RenderLayer>&& sharingLayers)
 {
     bool sharingLayersChanged = m_backingSharingLayers.computeSize() != sharingLayers.computeSize();
     // For layers that used to share and no longer do, and are not composited, recompute repaint rects.
@@ -1925,7 +1925,7 @@ void RenderLayerBacking::updateEventRegion()
         EventRegion eventRegion;
         auto eventRegionContext = eventRegion.makeContext();
         if (visibleToHitTesting)
-            eventRegionContext.unite(enclosingIntRect(FloatRect({ }, graphicsLayer->size())), renderer(), renderer().style());
+            eventRegionContext.unite(FloatRoundedRect(FloatRect({ }, graphicsLayer->size())), renderer(), renderer().style());
 
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
         eventRegionContext.copyInteractionRegionsToEventRegion();
@@ -1941,8 +1941,8 @@ void RenderLayerBacking::updateEventRegion()
             eventRegion.ensureEditableRegion();
 #endif
         auto eventRegionContext = eventRegion.makeContext();
-        auto layerOffset = graphicsLayer.scrollOffset() - roundedIntSize(graphicsLayer.offsetFromRenderer());
-        auto layerBounds = enclosingIntRect(FloatRect(-layerOffset, graphicsLayer.size()));
+        auto layerOffset = graphicsLayer.scrollOffset() - graphicsLayer.offsetFromRenderer();
+        auto layerBounds = FloatRoundedRect(FloatRect(-layerOffset, graphicsLayer.size()));
 
         if (visibleToHitTesting) {
             if (&graphicsLayer == m_scrolledContentsLayer) {
@@ -1963,7 +1963,7 @@ void RenderLayerBacking::updateEventRegion()
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
         eventRegionContext.copyInteractionRegionsToEventRegion();
 #endif
-        eventRegion.translate(toIntSize(layerOffset));
+        eventRegion.translate(toIntSize(roundedIntPoint(layerOffset)));
         graphicsLayer.setEventRegion(WTFMove(eventRegion));
     };
 
@@ -3015,10 +3015,8 @@ static std::optional<bool> intersectsWithAncestor(const RenderLayer& child, cons
 {
     // If any layers between child and ancestor are transformed, then adjusting the offset is
     // insufficient to convert coordinates into ancestor's coordinate space.
-    for (auto* layer = &child; layer != &ancestor; layer = layer->parent()) {
-        if (!layer->canUseOffsetFromAncestor())
+    if (!child.canUseOffsetFromAncestor(ancestor))
             return std::nullopt;
-    }
 
     auto overlap = child.boundingBox(&ancestor, child.offsetFromAncestor(&ancestor), RenderLayer::UseFragmentBoxesExcludingCompositing);
     return overlap.intersects(ancestorCompositedBounds);
@@ -3749,7 +3747,7 @@ void RenderLayerBacking::paintDebugOverlays(const GraphicsLayer* graphicsLayer, 
             
             auto rect = region.rectInLayerCoordinates;
             Path path;
-            path.addRoundedRect(rect, { region.borderRadius, region.borderRadius });
+            path.addRoundedRect(rect, { region.cornerRadius, region.cornerRadius });
             context.strokePath(path);
         }
     }
@@ -3956,7 +3954,7 @@ void RenderLayerBacking::verifyNotPainting()
 }
 #endif
 
-bool RenderLayerBacking::startAnimation(double timeOffset, const Animation& animation, const KeyframeList& keyframes)
+bool RenderLayerBacking::startAnimation(double timeOffset, const Animation& animation, const BlendingKeyframes& keyframes)
 {
     bool shouldApplyAnimationsToTargetRenderer = renderer().isRenderBox() || renderer().isSVGLayerAwareRenderer();
 

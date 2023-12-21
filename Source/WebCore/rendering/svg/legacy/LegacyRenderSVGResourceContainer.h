@@ -36,8 +36,6 @@ public:
     void layout() override;
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
 
-    bool isLegacyRenderSVGResourceContainer() const final { return true; }
-
     static float computeTextPaintingScale(const RenderElement&);
     static AffineTransform transformOnNonScalingStroke(RenderObject*, const AffineTransform& resourceTransform);
 
@@ -61,7 +59,7 @@ protected:
     virtual bool selfNeedsClientInvalidation() const { return everHadLayout() && selfNeedsLayout(); }
 
     void markAllClientsForInvalidation(InvalidationMode);
-    void markAllClientsForInvalidationIfNeeded(InvalidationMode, WeakHashSet<RenderObject>* visitedRenderers);
+    void markAllClientsForInvalidationIfNeeded(InvalidationMode, SingleThreadWeakHashSet<RenderObject>* visitedRenderers);
     void markClientForInvalidation(RenderObject&, InvalidationMode);
 
 private:
@@ -73,8 +71,8 @@ private:
     void registerResource();
 
     AtomString m_id;
-    WeakHashSet<RenderElement> m_clients;
-    WeakHashSet<RenderLayer> m_clientLayers;
+    SingleThreadWeakHashSet<RenderElement> m_clients;
+    SingleThreadWeakHashSet<RenderLayer> m_clientLayers;
     bool m_registered { false };
     bool m_isInvalidating { false };
 };
@@ -96,10 +94,7 @@ Renderer* getRenderSVGResourceById(TreeScope& treeScope, const AtomString& id)
     // Using the LegacyRenderSVGResource type here avoids ambiguous casts for types that
     // descend from both RenderObject and LegacyRenderSVGResourceContainer.
     LegacyRenderSVGResource* container = getRenderSVGResourceContainerById(treeScope, id);
-    if (is<Renderer>(container))
-        return downcast<Renderer>(container);
-
-    return nullptr;
+    return dynamicDowncast<Renderer>(container);
 }
 
 } // namespace WebCore

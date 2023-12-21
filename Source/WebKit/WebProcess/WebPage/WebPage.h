@@ -56,6 +56,7 @@
 #include "WebsitePoliciesData.h"
 #include <JavaScriptCore/InspectorFrontendChannel.h>
 #include <WebCore/AppHighlight.h>
+#include <WebCore/ChromeClient.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DictationContext.h>
 #include <WebCore/DictionaryPopupInfo.h>
@@ -205,6 +206,7 @@ class GraphicsContext;
 class HTMLElement;
 class HTMLImageElement;
 class HTMLPlugInElement;
+class HTMLSelectElement;
 class HTMLVideoElement;
 class HandleUserInputEventResult;
 class IgnoreSelectionChangeForScope;
@@ -413,7 +415,7 @@ class PlatformXRSystemProxy;
 using SnapshotOptions = uint32_t;
 using WKEventModifiers = uint32_t;
 
-class WebPage : public API::ObjectImpl<API::Object::Type::BundlePage>, public IPC::MessageReceiver, public IPC::MessageSender, public CanMakeCheckedPtr {
+class WebPage : public API::ObjectImpl<API::Object::Type::BundlePage>, public IPC::MessageReceiver, public IPC::MessageSender {
 public:
     static Ref<WebPage> create(WebCore::PageIdentifier, WebPageCreationParameters&&);
 
@@ -753,6 +755,7 @@ public:
     void setUseFormSemanticContext(bool);
     void semanticContextDidChange(bool);
 
+    void didBeginMagnificationGesture();
     void didEndMagnificationGesture();
 #endif
 
@@ -813,6 +816,7 @@ public:
     void elementDidRefocus(WebCore::Element&, const WebCore::FocusOptions&);
     void elementDidBlur(WebCore::Element&);
     void focusedElementDidChangeInputMode(WebCore::Element&, WebCore::InputMode);
+    void focusedSelectElementDidChangeOptions(const WebCore::HTMLSelectElement&);
     void resetFocusedElementForFrame(WebFrame*);
     void updateInputContextAfterBlurringAndRefocusingElementIfNeeded(WebCore::Element&);
 
@@ -934,7 +938,7 @@ public:
     void setForceAlwaysUserScalable(bool);
 
     void updateSelectionWithDelta(int64_t locationDelta, int64_t lengthDelta, CompletionHandler<void()>&&);
-    void requestDocumentEditingContext(WebKit::DocumentEditingContextRequest, CompletionHandler<void(WebKit::DocumentEditingContext)>&&);
+    void requestDocumentEditingContext(WebKit::DocumentEditingContextRequest&&, CompletionHandler<void(WebKit::DocumentEditingContext&&)>&&);
     bool shouldAllowSingleClickToChangeSelection(WebCore::Node& targetNode, const WebCore::VisibleSelection& newSelection);
 #endif
 
@@ -1539,7 +1543,8 @@ public:
 
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags);
 
-    URL applyLinkDecorationFiltering(const URL&, WebCore::LinkDecorationFilteringTrigger);
+    std::pair<URL, WebCore::DidFilterLinkDecoration> applyLinkDecorationFilteringWithResult(const URL&, WebCore::LinkDecorationFilteringTrigger);
+    URL applyLinkDecorationFiltering(const URL& url, WebCore::LinkDecorationFilteringTrigger trigger) { return applyLinkDecorationFilteringWithResult(url, trigger).first; }
     URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&);
 
 #if ENABLE(IMAGE_ANALYSIS)
@@ -1668,6 +1673,11 @@ public:
     const Vector<DMABufRendererBufferFormat>& preferredBufferFormats() const { return m_preferredBufferFormats; }
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+    const String& mediaEnvironment() const { return m_mediaEnvironment; }
+    void setMediaEnvironment(const String&);
+#endif
+
 private:
     WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
 
@@ -1760,6 +1770,7 @@ private:
     void testProcessIncomingSyncMessagesWhenWaitingForSyncReply(CompletionHandler<void(bool)>&&);
 
     void updateDrawingAreaLayerTreeFreezeState();
+    void updateAfterDrawingAreaCreation(const WebPageCreationParameters&);
 
     enum class MarkLayersVolatileDontRetryReason : uint8_t { None, SuspendedUnderLock, TimedOut };
     void markLayersVolatileOrRetry(MarkLayersVolatileDontRetryReason);
@@ -2128,7 +2139,7 @@ private:
     void sendMessageToWebProcessExtensionWithReply(UserMessage&&, CompletionHandler<void(UserMessage&&)>&&);
 #endif
 
-#if PLATFORM(WPE) && USE(GBM)
+#if PLATFORM(WPE) && USE(GBM) && ENABLE(WPE_PLATFORM)
     void preferredBufferFormatsDidChange(Vector<DMABufRendererBufferFormat>&&);
 #endif
 
@@ -2151,17 +2162,24 @@ private:
     void remotePostMessage(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData>&& targetOrigin, const WebCore::MessageWithMessagePorts&);
     void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
 
+#if HAVE(SANDBOX_STATE_FLAGS)
+    static void setHasLaunchedWebContentProcess();
+#endif
+
     WebCore::PageIdentifier m_identifier;
 
-    std::unique_ptr<WebCore::Page> m_page;
+    RefPtr<WebCore::Page> m_page;
+
+    WebCore::IntSize m_viewSize;
+    LayerHostingMode m_layerHostingMode;
+    std::unique_ptr<DrawingArea> m_drawingArea;
+
     Ref<WebFrame> m_mainFrame;
 
     RefPtr<WebPageGroupProxy> m_pageGroup;
 
     String m_userAgent;
 
-    WebCore::IntSize m_viewSize;
-    std::unique_ptr<DrawingArea> m_drawingArea;
     DrawingAreaType m_drawingAreaType;
 
     HashMap<TextCheckerRequestID, RefPtr<WebCore::TextCheckingRequest>> m_pendingTextCheckingRequestMap;
@@ -2173,7 +2191,7 @@ private:
     WebCore::Color m_underlayColor;
 
 #if ENABLE(PDF_PLUGIN)
-    WeakHashSet<PluginView> m_pluginViews;
+    SingleThreadWeakHashSet<PluginView> m_pluginViews;
 #endif
 #if ENABLE(PDF_HUD)
     HashMap<PDFPluginIdentifier, WeakPtr<PDFPluginBase>> m_pdfPlugInsWithHUD;
@@ -2200,9 +2218,6 @@ private:
 #if ENABLE(APP_BOUND_DOMAINS)
     bool m_needsInAppBrowserPrivacyQuirks { false };
 #endif
-
-    // The layer hosting mode.
-    LayerHostingMode m_layerHostingMode;
 
 #if ENABLE(APP_HIGHLIGHTS)
     WebCore::CreateNewGroupForHighlight m_highlightIsNewGroup { WebCore::CreateNewGroupForHighlight::No };
@@ -2551,7 +2566,7 @@ private:
 #endif
 
     HashMap<String, RefPtr<WebURLSchemeHandlerProxy>> m_schemeToURLSchemeHandlerProxyMap;
-    HashMap<WebURLSchemeHandlerIdentifier, CheckedPtr<WebURLSchemeHandlerProxy>> m_identifierToURLSchemeHandlerProxyMap;
+    HashMap<WebURLSchemeHandlerIdentifier, WeakRef<WebURLSchemeHandlerProxy>> m_identifierToURLSchemeHandlerProxyMap;
 
     HashMap<uint64_t, Function<void(bool granted)>> m_storageAccessResponseCallbackMap;
 
@@ -2647,13 +2662,20 @@ private:
     Ref<WebHistoryItemClient> m_historyItemClient;
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
-    HashSet<String> m_linkDecorationFilteringData;
-    HashMap<WebCore::RegistrableDomain, HashSet<String>> m_domainScopedLinkDecorationFilteringData;
+    struct LinkDecorationFilteringConditionals {
+        HashSet<WebCore::RegistrableDomain> domains;
+        Vector<String> paths;
+    };
+    HashMap<String, LinkDecorationFilteringConditionals> m_linkDecorationFilteringData;
     HashMap<WebCore::RegistrableDomain, HashSet<String>> m_allowedQueryParametersForAdvancedPrivacyProtections;
 #endif
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
     WeakHashSet<WebCore::HTMLImageElement, WebCore::WeakPtrImplWithEventTargetData> m_elementsToExcludeFromRemoveBackground;
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    String m_mediaEnvironment;
 #endif
 
     mutable RefPtr<Logger> m_logger;
@@ -2670,7 +2692,7 @@ inline bool WebPage::shouldAvoidComputingPostLayoutDataForEditorState() const { 
 #endif
 
 #if !PLATFORM(COCOA)
-inline URL WebPage::applyLinkDecorationFiltering(const URL& url, WebCore::LinkDecorationFilteringTrigger) { return url; }
+inline std::pair<URL, WebCore::DidFilterLinkDecoration>  WebPage::applyLinkDecorationFilteringWithResult(const URL& url, WebCore::LinkDecorationFilteringTrigger) { return { url, WebCore::DidFilterLinkDecoration::No }; }
 inline URL WebPage::allowedQueryParametersForAdvancedPrivacyProtections(const URL& url) { return url; }
 #endif
 

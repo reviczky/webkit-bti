@@ -55,6 +55,15 @@ RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(RemoteImageBuffer
     , m_destinationBufferIdentifier(imageBuffer.renderingResourceIdentifier())
     , m_imageBuffer(imageBuffer)
     , m_renderingBackend(renderingBackend)
+    , m_renderingMode(imageBuffer.renderingMode())
+{
+}
+
+RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(RemoteRenderingBackendProxy& renderingBackend, RenderingResourceIdentifier renderingResourceIdentifier, const DestinationColorSpace& colorSpace, RenderingMode renderingMode, const FloatRect& initialClip, const AffineTransform& initialCTM)
+    : DisplayList::Recorder(IsDeferred::No, { }, initialClip, initialCTM, colorSpace, DrawGlyphsMode::DeconstructUsingDrawGlyphsCommands)
+    , m_destinationBufferIdentifier(renderingResourceIdentifier)
+    , m_renderingBackend(renderingBackend)
+    , m_renderingMode(renderingMode)
 {
 }
 
@@ -62,10 +71,11 @@ template<typename T>
 ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
 {
     auto imageBuffer = m_imageBuffer.get();
-    if (UNLIKELY(!(m_renderingBackend && imageBuffer)))
+    if (UNLIKELY(!m_renderingBackend))
         return;
 
-    imageBuffer->backingStoreWillChange();
+    if (imageBuffer)
+        imageBuffer->backingStoreWillChange();
     auto result = m_renderingBackend->streamConnection().send(std::forward<T>(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
 #if !RELEASE_LOG_DISABLED
     if (UNLIKELY(result != IPC::Error::NoError)) {
@@ -80,8 +90,7 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
 
 RenderingMode RemoteDisplayListRecorderProxy::renderingMode() const
 {
-    auto imageBuffer = m_imageBuffer.get();
-    return imageBuffer ? imageBuffer->renderingMode() : RenderingMode::Unaccelerated;
+    return m_renderingMode;
 }
 
 void RemoteDisplayListRecorderProxy::recordSave()
@@ -232,9 +241,9 @@ void RemoteDisplayListRecorderProxy::recordDrawImageBuffer(ImageBuffer& imageBuf
     send(Messages::RemoteDisplayListRecorder::DrawImageBuffer(imageBuffer.renderingResourceIdentifier(), destRect, srcRect, options));
 }
 
-void RemoteDisplayListRecorderProxy::recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
+void RemoteDisplayListRecorderProxy::recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
-    send(Messages::RemoteDisplayListRecorder::DrawNativeImage(imageIdentifier, imageSize, destRect, srcRect, options));
+    send(Messages::RemoteDisplayListRecorder::DrawNativeImage(imageIdentifier, destRect, srcRect, options));
 }
 
 void RemoteDisplayListRecorderProxy::recordDrawSystemImage(SystemImage& systemImage, const FloatRect& destinationRect)

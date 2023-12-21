@@ -41,6 +41,7 @@
 #include "WebPageInlines.h"
 #include "WebPreferencesKeys.h"
 #include "WebProcess.h"
+#include <RemoteImageBufferSetProxy.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/LocalFrame.h>
 #include <WebCore/LocalFrameView.h>
@@ -210,20 +211,6 @@ void DrawingAreaWC::triggerRenderingUpdate()
     m_updateRenderingTimer.startOneShot(0_s);
 }
 
-static void flushLayerImageBuffers(WCUpdateInfo& info)
-{
-    for (auto& layerInfo : info.changedLayers) {
-        if (layerInfo.changes & WCLayerChange::Background) {
-            for (auto& tileUpdate : layerInfo.tileUpdate) {
-                if (auto image = tileUpdate.backingStore.imageBuffer()) {
-                    if (auto flusher = image->createFlusher())
-                        flusher->flush();
-                }
-            }
-        }
-    }
-}
-
 bool DrawingAreaWC::isCompositingMode()
 {
     auto& mainWebFrame = m_webPage->mainWebFrame();
@@ -256,6 +243,9 @@ void DrawingAreaWC::updateRendering()
     webPage->didUpdateRendering();
 
     willStartRenderingUpdateDisplay();
+
+    if (!m_flusher)
+        m_flusher = webPage->ensureRemoteRenderingBackendProxy().createRemoteImageBufferSet();
 
     if (isCompositingMode())
         sendUpdateAC();
@@ -290,8 +280,11 @@ void DrawingAreaWC::sendUpdateAC()
         if (rootLayer.viewOverlayRootLayer)
             rootLayer.viewOverlayRootLayer->flushCompositingState(visibleRect);
 
-        m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = std::exchange(m_updateInfo, { }), willCallDisplayDidRefresh]() mutable {
-            flushLayerImageBuffers(updateInfo);
+        auto flusher = m_flusher->flushFrontBufferAsync();
+
+        m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = std::exchange(m_updateInfo, { }), flusher = WTFMove(flusher), willCallDisplayDidRefresh]() mutable {
+            if (flusher)
+                flusher->flush();
             RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), willCallDisplayDidRefresh]() mutable {
                 if (!weakThis)
                     return;
@@ -368,8 +361,10 @@ void DrawingAreaWC::sendUpdateNonAC()
         webPage->drawRect(image->context(), rect);
     image->flushDrawingContextAsync();
 
-    m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image)]() mutable {
-        if (auto flusher = image->createFlusher())
+    auto flusher = m_flusher->flushFrontBufferAsync();
+
+    m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image), flusher = WTFMove(flusher)]() mutable {
+        if (flusher)
             flusher->flush();
         RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image)]() mutable {
             if (!weakThis)

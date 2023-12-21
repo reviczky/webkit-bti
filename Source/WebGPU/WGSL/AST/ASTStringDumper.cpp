@@ -72,20 +72,10 @@ void StringDumper::visit(ShaderModule& shaderModule)
     if (!shaderModule.directives().isEmpty())
         m_out.print("\n\n");
 
-    for (auto& structure : shaderModule.structures())
-        visit(structure);
-    if (!shaderModule.structures().isEmpty())
-        m_out.printf("\n\n");
-
-    for (auto& variable : shaderModule.variables())
-        visit(variable);
-    if (!shaderModule.variables().isEmpty())
-        m_out.printf("\n\n");
-
-    for (auto& function : shaderModule.functions())
-        visit(function);
-    if (!shaderModule.functions().isEmpty())
-        m_out.printf("\n\n");
+    for (auto& declaration : shaderModule.declarations()) {
+        AST::Visitor::visit(declaration);
+        m_out.print("\n");
+    }
 }
 
 void StringDumper::visit(DiagnosticDirective&)
@@ -205,6 +195,14 @@ void StringDumper::visit(Variable& variable)
         m_out.print(" = ");
         visit(*variable.maybeInitializer());
     }
+    m_out.print(";");
+}
+
+void StringDumper::visit(TypeAlias& alias)
+{
+    m_out.print(m_indent);
+    m_out.print("alias ", alias.name(), " = ");
+    visit(alias.type());
     m_out.print(";");
 }
 

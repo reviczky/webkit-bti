@@ -53,6 +53,7 @@
 #include <wtf/UniqueRef.h>
 #include <wtf/WallTime.h>
 #include <wtf/WeakHashSet.h>
+#include <wtf/WeakRef.h>
 
 namespace WebCore {
 
@@ -71,6 +72,7 @@ class FormState;
 class FormSubmission;
 class FrameLoadRequest;
 class FrameNetworkingContext;
+class HistoryController;
 class HistoryItem;
 class LocalFrameLoaderClient;
 class NavigationAction;
@@ -114,7 +116,6 @@ public:
     class PolicyChecker;
     PolicyChecker& policyChecker() const { return *m_policyChecker; }
 
-    class HistoryController;
     HistoryController& history() const { return *m_history; }
     ResourceLoadNotifier& notifier() const { return m_notifier; }
 
@@ -341,6 +342,12 @@ public:
 
     void switchBrowsingContextsGroup();
 
+    bool errorOccurredInLoading() const { return m_errorOccurredInLoading; }
+
+    // HistoryController specific.
+    void loadItem(HistoryItem&, HistoryItem* fromItem, FrameLoadType, ShouldTreatAsContinuingLoad);
+    HistoryItem* requestedHistoryItem() const { return m_requestedHistoryItem.get(); }
+
 private:
     enum FormSubmissionCacheLoadPolicy {
         MayAttemptCacheOnlyLoadForFormSubmissionItem,
@@ -434,10 +441,6 @@ private:
     enum class LoadContinuingState : uint8_t { NotContinuing, ContinuingWithRequest, ContinuingWithHistoryItem };
     bool shouldTreatCurrentLoadAsContinuingLoad() const { return m_currentLoadContinuingState != LoadContinuingState::NotContinuing; }
 
-    // HistoryController specific.
-    void loadItem(HistoryItem&, HistoryItem* fromItem, FrameLoadType, ShouldTreatAsContinuingLoad);
-    HistoryItem* requestedHistoryItem() const { return m_requestedHistoryItem.get(); }
-
     // SubframeLoader specific.
     void loadURLIntoChildFrame(const URL&, const String& referer, LocalFrame*);
     void started();
@@ -446,7 +449,7 @@ private:
     void clearProvisionalLoadForPolicyCheck();
     bool hasOpenedFrames() const;
 
-    CheckedRef<LocalFrame> m_frame;
+    WeakRef<LocalFrame> m_frame;
     UniqueRef<LocalFrameLoaderClient> m_client;
 
     const std::unique_ptr<PolicyChecker> m_policyChecker;
@@ -524,6 +527,8 @@ private:
     bool m_inStopForBackForwardCache { false };
     bool m_isHTTPFallbackInProgress { false };
     bool m_shouldRestoreScrollPositionAndViewState { false };
+
+    bool m_errorOccurredInLoading { false };
 };
 
 // This function is called by createWindow() in JSDOMWindowBase.cpp, for example, for

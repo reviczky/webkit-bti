@@ -68,12 +68,14 @@ MediaSourcePrivate::AddStatus MockMediaSourcePrivate::addSourceBuffer(const Cont
 
     m_sourceBuffers.append(MockSourceBufferPrivate::create(*this));
     outPrivate = m_sourceBuffers.last();
+    outPrivate->setMediaSourceDuration(duration());
 
     return AddStatus::Ok;
 }
 
 void MockMediaSourcePrivate::durationChanged(const MediaTime& duration)
 {
+    MediaSourcePrivate::durationChanged(duration);
     m_player.updateDuration(duration);
 }
 
@@ -84,12 +86,12 @@ void MockMediaSourcePrivate::markEndOfStream(EndOfStreamStatus status)
     MediaSourcePrivate::markEndOfStream(status);
 }
 
-MediaPlayer::ReadyState MockMediaSourcePrivate::readyState() const
+MediaPlayer::ReadyState MockMediaSourcePrivate::mediaPlayerReadyState() const
 {
     return m_player.readyState();
 }
 
-void MockMediaSourcePrivate::setReadyState(MediaPlayer::ReadyState readyState)
+void MockMediaSourcePrivate::setMediaPlayerReadyState(MediaPlayer::ReadyState readyState)
 {
     m_player.setReadyState(readyState);
 }

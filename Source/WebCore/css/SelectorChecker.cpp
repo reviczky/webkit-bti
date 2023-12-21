@@ -274,7 +274,7 @@ SelectorChecker::MatchResult SelectorChecker::matchRecursively(CheckingContext& 
         return MatchResult::fails(Match::SelectorFailsLocally);
 
     if (context.selector->match() == CSSSelector::Match::PseudoElement) {
-        if (context.selector->isCustomPseudoElement()) {
+        if (context.selector->isWebKitCustomPseudoElement()) {
             // In functional pseudo class, custom pseudo elements are always disabled.
             // FIXME: We should accept custom pseudo elements inside :is()/:matches().
             if (context.inFunctionalPseudoClass)
@@ -283,7 +283,7 @@ SelectorChecker::MatchResult SelectorChecker::matchRecursively(CheckingContext& 
                 if (context.element->shadowPseudoId() != context.selector->value())
                     return MatchResult::fails(Match::SelectorFailsLocally);
 
-                if (context.selector->isWebKitCustomPseudoElement() && root->mode() != ShadowRootMode::UserAgent)
+                if (root->mode() != ShadowRootMode::UserAgent)
                     return MatchResult::fails(Match::SelectorFailsLocally);
             } else
                 return MatchResult::fails(Match::SelectorFailsLocally);
@@ -1072,6 +1072,8 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
             const Node* contextualReferenceNode = !checkingContext.scope ? element.document().documentElement() : checkingContext.scope;
             return &element == contextualReferenceNode;
         }
+        case CSSSelector::PseudoClassType::State:
+            return element.hasCustomState(selector.argument());
         case CSSSelector::PseudoClassType::HasScope: {
             bool matches = &element == checkingContext.hasScope || checkingContext.matchesAllHasScopes;
 

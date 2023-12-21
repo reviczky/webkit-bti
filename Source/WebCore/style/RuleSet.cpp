@@ -134,7 +134,8 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
     storeIdentifier(containerQueryIdentifier, m_containerQueryIdentifierForRulePosition);
     storeIdentifier(scopeRuleIdentifier, m_scopeRuleIdentifierForRulePosition);
 
-    m_features.collectFeatures(ruleData);
+    const auto& scopeRules = scopeRulesFor(ruleData);
+    m_features.collectFeatures(ruleData, scopeRules);
 
     unsigned classBucketSize = 0;
     const CSSSelector* idSelector = nullptr;
@@ -471,6 +472,9 @@ Vector<Ref<const StyleRuleScope>> RuleSet::scopeRulesFor(const RuleData& ruleDat
         queries.append(query.scopeRule);
         identifier = query.parent;
     };
+
+    // Order scopes from outermost to innermost.
+    queries.reverse();
 
     return queries;
 }

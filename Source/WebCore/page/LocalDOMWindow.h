@@ -27,7 +27,7 @@
 #pragma once
 
 #include "Base64Utilities.h"
-#include "ContextDestructionObserver.h"
+#include "ContextDestructionObserverInlines.h"
 #include "DOMWindow.h"
 #include "ExceptionOr.h"
 #include "ImageBitmap.h"
@@ -409,7 +409,7 @@ public:
     bool mayReuseForNavigation() const { return m_mayReuseForNavigation; }
 
     Page* page() const;
-    CheckedPtr<Page> checkedPage() const;
+    RefPtr<Page> protectedPage() const;
 
     WEBCORE_EXPORT static void forEachWindowInterestedInStorageEvents(const Function<void(LocalDOMWindow&)>&);
 

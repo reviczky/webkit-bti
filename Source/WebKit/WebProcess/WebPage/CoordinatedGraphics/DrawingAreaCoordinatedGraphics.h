@@ -66,7 +66,7 @@ private:
     bool enterAcceleratedCompositingModeIfNeeded() override;
 #endif
 
-#if PLATFORM(WPE) && USE(GBM)
+#if PLATFORM(WPE) && USE(GBM) && ENABLE(WPE_PLATFORM)
     void preferredBufferFormatsDidChange() override;
 #endif
 
@@ -77,10 +77,6 @@ private:
     WebCore::GraphicsLayerFactory* graphicsLayerFactory() override;
     void setRootCompositingLayer(WebCore::Frame&, WebCore::GraphicsLayer*) override;
     void triggerRenderingUpdate() override;
-
-#if HAVE(DISPLAY_LINK)
-    void didCompleteRenderingUpdateDisplay() override;
-#endif
 
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID) override;
 
@@ -96,7 +92,7 @@ private:
 
 #if PLATFORM(GTK)
     void adjustTransientZoom(double scale, WebCore::FloatPoint origin) override;
-    void commitTransientZoom(double scale, WebCore::FloatPoint origin) override;
+    void commitTransientZoom(double scale, WebCore::FloatPoint origin, CompletionHandler<void()>&&) override;
 #endif
 
     void exitAcceleratedCompositingModeSoon();

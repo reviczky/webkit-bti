@@ -43,6 +43,7 @@
 #include "ContentVisibilityDocumentState.h"
 #include "CustomElementReactionQueue.h"
 #include "CustomElementRegistry.h"
+#include "CustomStateSet.h"
 #include "DOMRect.h"
 #include "DOMRectList.h"
 #include "DOMTokenList.h"
@@ -274,7 +275,7 @@ inline ElementRareData& Element::ensureElementRareData()
 inline void Node::setTabIndexState(TabIndexState state)
 {
     auto bitfields = rareDataBitfields();
-    bitfields.tabIndexState = static_cast<uint16_t>(state);
+    bitfields.tabIndexState = enumToUnderlyingType(state);
     setRareDataBitfields(bitfields);
 }
 
@@ -430,7 +431,7 @@ static bool isCompatibilityMouseEvent(const MouseEvent& mouseEvent)
 enum class ShouldIgnoreMouseEvent : bool { No, Yes };
 static ShouldIgnoreMouseEvent dispatchPointerEventIfNeeded(Element& element, const MouseEvent& mouseEvent, const PlatformMouseEvent& platformEvent, bool& didNotSwallowEvent)
 {
-    if (CheckedPtr page = element.document().page()) {
+    if (RefPtr page = element.document().page()) {
         auto& pointerCaptureController = page->pointerCaptureController();
 #if ENABLE(TOUCH_EVENTS)
         if (platformEvent.pointerId() != mousePointerID && mouseEvent.type() != eventNames().clickEvent && pointerCaptureController.preventsCompatibilityMouseEventsForIdentifier(platformEvent.pointerId()))
@@ -864,7 +865,7 @@ void Element::setActive(bool value, Style::InvalidationScope invalidationScope)
         return;
 
     if (renderer->style().hasEffectiveAppearance())
-        renderer->theme().stateChanged(*renderer, ControlStates::States::Pressed);
+        renderer->theme().stateChanged(*renderer, ControlStyle::State::Pressed);
 }
 
 static bool shouldAlwaysHaveFocusVisibleWhenFocused(const Element& element)
@@ -939,7 +940,7 @@ void Element::setHovered(bool value, Style::InvalidationScope invalidationScope,
 
     if (auto* style = renderStyle(); style && style->hasEffectiveAppearance()) {
         CheckedPtr renderer = this->renderer();
-        renderer->theme().stateChanged(*renderer, ControlStates::States::Hovered);
+        renderer->theme().stateChanged(*renderer, ControlStyle::State::Hovered);
     }
 }
 
@@ -1190,7 +1191,7 @@ void Element::scrollBy(double x, double y)
 
 void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, ScrollSnapPointSelectionMethod snapPointSelectionMethod, std::optional<FloatSize> originalScrollDelta)
 {
-    LOG_WITH_STREAM(Scrolling, stream << "Element " << *this << " scrollTo " << options.left << ", " << options.top);
+    LOG_WITH_STREAM(Scrolling, stream << "Element " << *this << " scrollTo " << options.left << ", " << options.top << " behavior " << options.behavior);
 
     Ref document = this->document();
     if (!document->settings().CSSOMViewScrollingAPIEnabled()) {
@@ -1202,6 +1203,28 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
     
     if (RefPtr view = document->view())
         view->cancelScheduledScrolls();
+
+    // We can avoid triggering layout if this is a scrollTo(0,0) on a element that cannot be the scrollingElement,
+    // and was last scrolled to 0,0.
+    auto canShortCircuitScroll = [&]() {
+        if (!options.left || !options.top)
+            return false;
+
+        if (*options.left || *options.top)
+            return false;
+
+        // document().scrollingElement() requires up-to-date style, so bail if this element could be the scrollingElement().
+        if (document->documentElement() == this || document->body() == this)
+            return false;
+
+        if (hasEverHadSmoothScroll())
+            return false;
+
+        return savedLayerScrollPosition().isZero();
+    };
+
+    if (canShortCircuitScroll())
+        return;
 
     document->updateLayoutIgnorePendingStylesheets(LayoutOptions::UpdateCompositingLayers);
 
@@ -1233,6 +1256,9 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
     );
 
     auto animated = useSmoothScrolling(scrollToOptions.behavior.value_or(ScrollBehavior::Auto), this) ? ScrollIsAnimated::Yes : ScrollIsAnimated::No;
+    if (animated == ScrollIsAnimated::Yes)
+        setHasEverHadSmoothScroll(true);
+
     auto scrollPositionChangeOptions = ScrollPositionChangeOptions::createProgrammaticWithOptions(clamping, animated, snapPointSelectionMethod, originalScrollDelta);
     renderer->setScrollPosition(scrollPosition, scrollPositionChangeOptions);
 }
@@ -1561,6 +1587,8 @@ void Element::setScrollLeft(int newLeft)
 
     auto options = ScrollPositionChangeOptions::createProgrammatic();
     options.animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? ScrollIsAnimated::Yes : ScrollIsAnimated::No;
+    if (options.animated == ScrollIsAnimated::Yes)
+        setHasEverHadSmoothScroll(true);
 
     if (document->scrollingElement() == this) {
         if (RefPtr frame = documentFrameWithNonNullView()) {
@@ -1585,6 +1613,8 @@ void Element::setScrollTop(int newTop)
 
     auto options = ScrollPositionChangeOptions::createProgrammatic();
     options.animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? ScrollIsAnimated::Yes : ScrollIsAnimated::No;
+    if (options.animated == ScrollIsAnimated::Yes)
+        setHasEverHadSmoothScroll(true);
 
     if (document->scrollingElement() == this) {
         if (RefPtr frame = documentFrameWithNonNullView()) {
@@ -2341,6 +2371,18 @@ URL Element::absoluteLinkURL() const
     return document().completeURL(linkAttribute);
 }
 
+void Element::setIsLink(bool flag)
+{
+    if (isLink() == flag)
+        return;
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, {
+        { CSSSelector::PseudoClassType::AnyLink, flag },
+        { CSSSelector::PseudoClassType::AnyLinkDeprecated, flag },
+        { CSSSelector::PseudoClassType::Link, flag }
+    });
+    setNodeFlag(NodeFlag::IsLink, flag);
+}
+
 #if ENABLE(TOUCH_EVENTS)
 
 bool Element::allowsDoubleTapGesture() const
@@ -2643,11 +2685,6 @@ String Element::nodeName() const
     return m_tagName.toString();
 }
 
-String Element::nodeNamePreservingCase() const
-{
-    return m_tagName.toString();
-}
-
 ExceptionOr<void> Element::setPrefix(const AtomString& prefix)
 {
     auto result = checkSetPrefix(prefix);
@@ -2751,7 +2788,7 @@ bool Element::hasEffectiveLangState() const
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
-    if (CheckedPtr page = document().page()) {
+    if (RefPtr page = document().page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().elementWasRemoved(*this);
 #endif
@@ -2762,7 +2799,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
 #endif
     }
 
-    setSavedLayerScrollPosition(ScrollPosition());
+    setSavedLayerScrollPosition({ });
 
     if (oldParentOfRemovedTree.isInTreeScope()) {
         TreeScope* oldScope = &oldParentOfRemovedTree.treeScope();
@@ -2854,7 +2891,7 @@ void Element::addShadowRoot(Ref<ShadowRoot>&& newShadowRoot)
 
         ensureElementRareData().setShadowRoot(WTFMove(newShadowRoot));
 
-        shadowRoot->setHost(this);
+        shadowRoot->setHost(*this);
         shadowRoot->setParentTreeScope(treeScope());
 
         NodeVector postInsertionNotificationTargets;
@@ -3004,7 +3041,7 @@ inline void Node::setCustomElementState(CustomElementState state)
         state == CustomElementState::Custom || state == CustomElementState::Uncustomized
     );
     auto bitfields = rareDataBitfields();
-    bitfields.customElementState = static_cast<uint16_t>(state);
+    bitfields.customElementState = enumToUnderlyingType(state);
     setRareDataBitfields(bitfields);
 }
 
@@ -3559,7 +3596,7 @@ void Element::focus(const FocusOptions& options)
 
     Ref document { this->document() };
     if (document->focusedElement() == this) {
-        if (CheckedPtr page = document->page())
+        if (RefPtr page = document->page())
             page->chrome().client().elementDidRefocus(*this, options);
         return;
     }
@@ -3579,7 +3616,7 @@ void Element::focus(const FocusOptions& options)
     if (RefPtr root = shadowRootWithDelegatesFocus(*this)) {
         RefPtr currentlyFocusedElement = document->focusedElement();
         if (root->containsIncludingShadowDOM(currentlyFocusedElement.get())) {
-            if (CheckedPtr page = document->page())
+            if (RefPtr page = document->page())
                 page->chrome().client().elementDidRefocus(*currentlyFocusedElement, options);
             return;
         }
@@ -3590,7 +3627,7 @@ void Element::focus(const FocusOptions& options)
     } else if (!isProgramaticallyFocusable(*newTarget))
         return;
 
-    if (CheckedPtr page = document->page()) {
+    if (RefPtr page = document->page()) {
         Ref frame = *document->frame();
         if (!frame->hasHadUserInteraction() && !frame->isMainFrame() && !document->topOrigin().isSameOriginDomain(document->securityOrigin()))
             return;
@@ -3701,14 +3738,14 @@ void Element::dispatchFocusOutEventIfNeeded(RefPtr<Element>&& newFocusedElement)
 
 void Element::dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, const FocusOptions& options)
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         page->chrome().client().elementDidFocus(*this, options);
     dispatchEvent(FocusEvent::create(eventNames().focusEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(oldFocusedElement)));
 }
 
 void Element::dispatchBlurEvent(RefPtr<Element>&& newFocusedElement)
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         page->chrome().client().elementDidBlur(*this);
     dispatchEvent(FocusEvent::create(eventNames().blurEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(newFocusedElement)));
 }
@@ -4025,7 +4062,7 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
     // Traverse the ancestor chain to find the rootmost element that has invalid computed style.
     RefPtr rootmostInvalidElement = [&]() -> RefPtr<const Element> {
         // In ResolveComputedStyleMode::RenderedOnly case we check for display:none ancestors.
-        if (mode == ResolveComputedStyleMode::Normal && !document->hasPendingStyleRecalc() && existingComputedStyle())
+        if (mode != ResolveComputedStyleMode::RenderedOnly && !document->hasPendingStyleRecalc() && existingComputedStyle())
             return nullptr;
 
         if (document->hasPendingFullStyleRebuild())
@@ -4076,7 +4113,7 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
     // FIXME: This is not as efficient as it could be. For example if an ancestor has a non-inherited style change but
     // the styles are otherwise clean we would not need to re-resolve descendants.
     for (auto& element : makeReversedRange(elementsRequiringComputedStyle)) {
-        if (computedStyle && computedStyle->containerType() != ContainerType::Normal) {
+        if (computedStyle && computedStyle->containerType() != ContainerType::Normal && mode != ResolveComputedStyleMode::Editability) {
             // If we find a query container we need to bail out and do full style update to resolve it.
             if (document->updateStyleIfNeeded())
                 return this->computedStyle();
@@ -4154,7 +4191,7 @@ const RenderStyle* Element::computedStyleForEditability()
     if (!isConnected())
         return nullptr;
 
-    return resolveComputedStyle();
+    return resolveComputedStyle(ResolveComputedStyleMode::Editability);
 }
 
 bool Element::needsStyleInvalidation() const
@@ -4462,21 +4499,21 @@ void Element::setIFrameFullscreenFlag(bool flag)
 
 ExceptionOr<void> Element::setPointerCapture(int32_t pointerId)
 {
-    if (CheckedPtr page  =document().page())
+    if (RefPtr page = document().page())
         return page->pointerCaptureController().setPointerCapture(this, pointerId);
     return { };
 }
 
 ExceptionOr<void> Element::releasePointerCapture(int32_t pointerId)
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         return page->pointerCaptureController().releasePointerCapture(this, pointerId);
     return { };
 }
 
 bool Element::hasPointerCapture(int32_t pointerId)
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         return page->pointerCaptureController().hasPointerCapture(this, pointerId);
     return false;
 }
@@ -4485,7 +4522,7 @@ bool Element::hasPointerCapture(int32_t pointerId)
 
 void Element::requestPointerLock()
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         page->pointerLockController().requestPointerLock(this);
 }
 
@@ -4918,7 +4955,7 @@ IntPoint Element::savedLayerScrollPosition() const
     return hasRareData() ? elementRareData()->savedLayerScrollPosition() : IntPoint();
 }
 
-void Element::setSavedLayerScrollPositionSlow(const IntPoint& position)
+void Element::setSavedLayerScrollPositionSlow(const ScrollPosition& position)
 {
     ASSERT(!position.isZero() || hasRareData());
     ensureElementRareData().setSavedLayerScrollPosition(position);
@@ -5126,7 +5163,7 @@ void Element::createUniqueElementData()
     if (!m_elementData)
         m_elementData = UniqueElementData::create();
     else
-        m_elementData = downcast<ShareableElementData>(*m_elementData).makeUniqueCopy();
+        m_elementData = uncheckedDowncast<ShareableElementData>(*m_elementData).makeUniqueCopy();
 }
 
 bool Element::canContainRangeEndPoint() const
@@ -5529,6 +5566,27 @@ AtomString Element::makeTargetBlankIfHasDanglingMarkup(const AtomString& target)
     if ((target.contains('\n') || target.contains('\r') || target.contains('\t')) && target.contains('<'))
         return "_blank"_s;
     return target;
+}
+
+bool Element::hasCustomState(const AtomString& state) const
+{
+    if (!document().settings().customStateSetEnabled())
+        return false;
+
+    if (hasRareData()) {
+        RefPtr customStates = elementRareData()->customStateSet();
+        return customStates && customStates->has(state);
+    }
+
+    return false;
+}
+
+CustomStateSet& Element::ensureCustomStateSet()
+{
+    auto& rareData = const_cast<Element*>(this)->ensureElementRareData();
+    if (!rareData.customStateSet())
+        rareData.setCustomStateSet(CustomStateSet::create(*this));
+    return *rareData.customStateSet();
 }
 
 } // namespace WebCore

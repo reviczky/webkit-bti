@@ -46,14 +46,25 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(LegacyRenderSVGModelObject);
 
-LegacyRenderSVGModelObject::LegacyRenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style)
-    : RenderElement(type, element, WTFMove(style), 0)
+LegacyRenderSVGModelObject::LegacyRenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style, OptionSet<SVGModelObjectFlag> typeFlags)
+    : RenderElement(type, element, WTFMove(style), { }, typeFlags | SVGModelObjectFlag::IsLegacy)
 {
+    ASSERT(isLegacyRenderSVGModelObject());
+    ASSERT(!isRenderSVGModelObject());
 }
 
 LayoutRect LegacyRenderSVGModelObject::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext context) const
 {
     return SVGRenderSupport::clippedOverflowRectForRepaint(*this, repaintContainer, context);
+}
+
+auto LegacyRenderSVGModelObject::rectsForRepaintingAfterLayout(const RenderLayerModelObject* repaintContainer, RepaintOutlineBounds repaintOutlineBounds) const -> RepaintRects
+{
+    auto rects = RepaintRects { clippedOverflowRect(repaintContainer, visibleRectContextForRepaint()) };
+    if (repaintOutlineBounds == RepaintOutlineBounds::Yes)
+        rects.outlineBoundsRect = outlineBoundsForRepaint(repaintContainer);
+
+    return rects;
 }
 
 std::optional<FloatRect> LegacyRenderSVGModelObject::computeFloatVisibleRectInContainer(const FloatRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
@@ -142,12 +153,11 @@ static void getElementCTM(SVGElement* element, AffineTransform& transform)
     AffineTransform localTransform;
     Node* current = element;
 
-    while (current && current->isSVGElement()) {
-        SVGElement& currentElement = downcast<SVGElement>(*current);
-        localTransform = currentElement.renderer()->localToParentTransform();
+    while (auto* currentElement = dynamicDowncast<SVGElement>(current)) {
+        localTransform = currentElement->renderer()->localToParentTransform();
         transform = localTransform.multiply(transform);
         // For getCTM() computation, stop at the nearest viewport element
-        if (&currentElement == stopAtElement)
+        if (currentElement == stopAtElement)
             break;
 
         current = current->parentOrShadowHostNode();

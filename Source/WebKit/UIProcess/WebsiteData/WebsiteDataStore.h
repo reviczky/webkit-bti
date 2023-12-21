@@ -117,7 +117,7 @@ struct WebPushMessage;
 struct WebsiteDataRecord;
 struct WebsiteDataStoreParameters;
 
-class WebsiteDataStore : public API::ObjectImpl<API::Object::Type::WebsiteDataStore>, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>, public CanMakeCheckedPtr {
+class WebsiteDataStore : public API::ObjectImpl<API::Object::Type::WebsiteDataStore>, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore> {
 public:
     static Ref<WebsiteDataStore> defaultDataStore();
     static bool defaultDataStoreExists();
@@ -177,6 +177,7 @@ public:
     std::optional<double> originQuotaRatio() { return m_resolvedConfiguration->originQuotaRatio(); }
 
     bool isBlobRegistryPartitioningEnabled() const;
+    void updateBlobRegistryPartitioningState();
 
 #if PLATFORM(IOS_FAMILY)
     String resolvedCookieStorageDirectory();
@@ -187,6 +188,7 @@ public:
 #endif
 
     void clearResourceLoadStatisticsInWebProcesses(CompletionHandler<void()>&&);
+    void setUserAgentStringQuirkForTesting(const String& domain, const String& userAgentString, CompletionHandler<void()>&&);
 
     void fetchData(OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, Function<void(Vector<WebsiteDataRecord>)>&& completionHandler);
     void removeData(OptionSet<WebsiteDataType>, WallTime modifiedSince, Function<void()>&& completionHandler);
@@ -227,6 +229,8 @@ public:
     void insertExpiredStatisticForTesting(const URL&, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
     void setNotifyPagesWhenDataRecordsWereScanned(bool, CompletionHandler<void()>&&);
     void setResourceLoadStatisticsTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
+    void setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&&);
+    void grantStorageAccessForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&&);
     void setIsRunningResourceLoadStatisticsTest(bool, CompletionHandler<void()>&&);
     void setPruneEntriesDownTo(size_t, CompletionHandler<void()>&&);
     void setSubframeUnderTopFrameDomain(const URL& subframe, const URL& topFrame, CompletionHandler<void()>&&);
@@ -306,7 +310,7 @@ public:
     void dispatchOnQueue(Function<void()>&&);
 
 #if PLATFORM(COCOA)
-    static bool useNetworkLoader();
+    static std::optional<bool> useNetworkLoader();
 #endif
 
 #if USE(CURL)
@@ -603,6 +607,8 @@ private:
 
     bool m_inspectionForServiceWorkersAllowed { true };
     FileSystem::Salt m_mediaKeysStorageSalt;
+
+    bool m_isBlobRegistryPartitioningEnabled { false };
 };
 
 }

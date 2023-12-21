@@ -154,8 +154,7 @@ private:
     void invalidateScrollbarRect(WebCore::Scrollbar&, const WebCore::IntRect&) override;
     void invalidateScrollCornerRect(const WebCore::IntRect&) override;
     void updateScrollbars() override;
-    WebCore::IntPoint lastKnownMousePositionInView() const override { return m_lastMousePositionInPluginCoordinates; }
-    Ref<Scrollbar> createScrollbar(WebCore::ScrollbarOrientation) override;
+    Ref<WebCore::Scrollbar> createScrollbar(WebCore::ScrollbarOrientation) override;
     void destroyScrollbar(WebCore::ScrollbarOrientation) override;
 
     // PDFPluginBase
@@ -175,7 +174,9 @@ private:
     WebCore::FloatSize pdfDocumentSizeForPrinting() const override;
 
     void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
-    void contentsScaleFactorChanged(float) override;
+    void deviceScaleFactorChanged(float) override;
+
+    void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) override;
 
     WebCore::IntSize contentsSize() const override;
     unsigned firstPageHeight() const override;
@@ -217,7 +218,6 @@ private:
 
     bool supportsForms();
 
-    bool handlesPageScaleFactor() const;
     void updatePageAndDeviceScaleFactors();
 
     void createPasswordEntryForm();
@@ -243,7 +243,6 @@ private:
     RefPtr<WebCore::Element> m_annotationContainer;
 
     std::optional<WebMouseEvent> m_lastMouseEvent;
-    WebCore::IntPoint m_lastMousePositionInPluginCoordinates;
 
     String m_temporaryPDFUUID;
     String m_lastFoundString;

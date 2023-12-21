@@ -30,18 +30,17 @@ class SVGElement;
 class LegacyRenderSVGHiddenContainer : public LegacyRenderSVGContainer {
     WTF_MAKE_ISO_ALLOCATED(LegacyRenderSVGHiddenContainer);
 public:
-    LegacyRenderSVGHiddenContainer(Type, SVGElement&, RenderStyle&&);
+    LegacyRenderSVGHiddenContainer(Type, SVGElement&, RenderStyle&&, OptionSet<SVGModelObjectFlag> = { });
 
 protected:
     void layout() override;
 
 private:
-    bool isLegacyRenderSVGHiddenContainer() const final { return true; }
     ASCIILiteral renderName() const override { return "RenderSVGHiddenContainer"_s; }
 
     void paint(PaintInfo&, const LayoutPoint&) final;
 
-    LayoutRect clippedOverflowRect(const RenderLayerModelObject*, VisibleRectContext) const final { return LayoutRect(); }
+    LayoutRect clippedOverflowRect(const RenderLayerModelObject*, VisibleRectContext) const final { return { }; }
     void absoluteQuads(Vector<FloatQuad>&, bool* wasFixed) const final;
 
     bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction) final;

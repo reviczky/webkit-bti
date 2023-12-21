@@ -1229,6 +1229,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     case CSSSelector::PseudoClassType::Drag:
     case CSSSelector::PseudoClassType::Has:
     case CSSSelector::PseudoClassType::HasScope:
+    case CSSSelector::PseudoClassType::State:
         return FunctionType::CannotCompile;
 
     // Optimized pseudo selectors.
@@ -1256,10 +1257,6 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
         return FunctionType::SimpleSelectorChecker;
 
     case CSSSelector::PseudoClassType::Scope:
-        if (selectorContext != SelectorContext::QuerySelector) {
-            fragment.pseudoClasses.add(CSSSelector::PseudoClassType::Root);
-            return FunctionType::SimpleSelectorChecker;
-        }
         fragment.pseudoClasses.add(CSSSelector::PseudoClassType::Scope);
         return FunctionType::SelectorCheckerWithCheckingContext;
 
@@ -2285,7 +2282,7 @@ inline void SelectorCodeGenerator::generateEpilogue(StackAllocator& stackAllocat
 
 inline void SelectorCodeGenerator::generateReturn()
 {
-#if CPU(ARM64E)
+#if CPU(ARM64E) && !ENABLE(C_LOOP)
     if (JSC::Options::useJITCage()) {
         m_assembler.farJump(Assembler::TrustedImmPtr(retagCodePtr<void*, CFunctionPtrTag, JSC::OperationPtrTag>(&JSC::vmEntryToCSSJITAfter)), JSC::OperationPtrTag);
         return;
@@ -3889,7 +3886,7 @@ void SelectorCodeGenerator::generateElementIsLastChild(Assembler::JumpList& fail
         generateWalkToParentNode(parent);
         auto noParentCase = m_assembler.branchTestPtr(Assembler::Zero, parent);
 
-        failureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(parent, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildrenFinished())));
+        failureCases.append(m_assembler.branchTest32(Assembler::NonZero, Assembler::Address(parent, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildren())));
 
         noParentCase.link(&m_assembler);
         return;
@@ -3904,7 +3901,7 @@ void SelectorCodeGenerator::generateElementIsLastChild(Assembler::JumpList& fail
     m_assembler.move(Assembler::TrustedImm32(0), isLastChildRegister);
 
     {
-        Assembler::Jump notFinishedParsingChildren = m_assembler.branchTest32(Assembler::Zero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildrenFinished()));
+        Assembler::Jump notFinishedParsingChildren = m_assembler.branchTest32(Assembler::NonZero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildren()));
 
         Assembler::JumpList successCase = jumpIfNoNextAdjacentElement();
 
@@ -3949,7 +3946,7 @@ void SelectorCodeGenerator::generateElementIsOnlyChild(Assembler::JumpList& fail
         generateWalkToParentNode(parent);
         auto noParentCase = m_assembler.branchTestPtr(Assembler::Zero, parent);
 
-        failureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(parent, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildrenFinished())));
+        failureCases.append(m_assembler.branchTest32(Assembler::NonZero, Assembler::Address(parent, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildren())));
 
         noParentCase.link(&m_assembler);
         return;
@@ -3970,7 +3967,7 @@ void SelectorCodeGenerator::generateElementIsOnlyChild(Assembler::JumpList& fail
             localFailureCases.append(m_assembler.jump());
             successCase.link(&m_assembler);
         }
-        localFailureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildrenFinished())));
+        localFailureCases.append(m_assembler.branchTest32(Assembler::NonZero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagIsParsingChildren())));
         Assembler::JumpList successCase = jumpIfNoNextAdjacentElement();
 
         localFailureCases.link(&m_assembler);
@@ -4291,8 +4288,8 @@ void SelectorCodeGenerator::generateNthLastChildParentCheckAndRelationUpdate(Ass
     generateAddStyleRelationIfResolvingStyle(parentNode, relation);
     notElementCase.link(&m_assembler);
 
-    failureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()),
-        Assembler::TrustedImm32(Node::flagIsParsingChildrenFinished())));
+    failureCases.append(m_assembler.branchTest32(Assembler::NonZero, Assembler::Address(parentNode, Node::nodeFlagsMemoryOffset()),
+        Assembler::TrustedImm32(Node::flagIsParsingChildren())));
 
     noParentCase.link(&m_assembler);
 }
@@ -4446,8 +4443,6 @@ void SelectorCodeGenerator::generateElementIsRoot(Assembler::JumpList& failureCa
 
 void SelectorCodeGenerator::generateElementIsScopeRoot(Assembler::JumpList& failureCases)
 {
-    ASSERT(m_selectorContext == SelectorContext::QuerySelector);
-
     LocalRegister scope(m_registerAllocator);
     loadCheckingContext(scope);
     m_assembler.loadPtr(Assembler::Address(scope, OBJECT_OFFSETOF(SelectorChecker::CheckingContext, scope)), scope);

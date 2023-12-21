@@ -81,6 +81,7 @@
 #include "RenderText.h"
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
+#include "RenderTreeBuilderRuby.h"
 #include "RenderView.h"
 #include "ResolvedStyle.h"
 #include "SVGElementTypeHelpers.h"
@@ -107,22 +108,20 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderElement);
 
 struct SameSizeAsRenderElement : public RenderObject {
-    PackedPtr<RenderObject> firstChild;
+    SingleThreadPackedWeakPtr<RenderObject> firstChild;
     unsigned bitfields1 : 12;
-    PackedPtr<RenderObject> lastChild;
+    SingleThreadPackedWeakPtr<RenderObject> lastChild;
     unsigned bitfields2 : 13;
     RenderStyle style;
 };
 
 static_assert(sizeof(RenderElement) == sizeof(SameSizeAsRenderElement), "RenderElement should stay small");
 
-inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : RenderObject(type, elementOrDocument)
+inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument, RenderStyle&& style, OptionSet<TypeFlag> flags, TypeSpecificFlags typeSpecificFlags)
+    : RenderObject(type, elementOrDocument, flags, typeSpecificFlags)
     , m_firstChild(nullptr)
-    , m_baseTypeFlags(baseTypeFlags)
     , m_ancestorLineBoxDirty(false)
     , m_hasInitializedStyle(false)
-    , m_renderBoxNeedsLazyRepaint(false)
     , m_hasPausedImageAnimations(false)
     , m_hasCounterNodeMap(false)
     , m_hasContinuationChainNode(false)
@@ -142,13 +141,13 @@ inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument,
     ASSERT(RenderObject::isRenderElement());
 }
 
-RenderElement::RenderElement(Type type, Element& element, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : RenderElement(type, static_cast<ContainerNode&>(element), WTFMove(style), baseTypeFlags)
+RenderElement::RenderElement(Type type, Element& element, RenderStyle&& style, OptionSet<TypeFlag> baseTypeFlags, TypeSpecificFlags typeSpecificFlags)
+    : RenderElement(type, static_cast<ContainerNode&>(element), WTFMove(style), baseTypeFlags, typeSpecificFlags)
 {
 }
 
-RenderElement::RenderElement(Type type, Document& document, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : RenderElement(type, static_cast<ContainerNode&>(document), WTFMove(style), baseTypeFlags)
+RenderElement::RenderElement(Type type, Document& document, RenderStyle&& style, OptionSet<TypeFlag> baseTypeFlags, TypeSpecificFlags typeSpecificFlags)
+    : RenderElement(type, static_cast<ContainerNode&>(document), WTFMove(style), baseTypeFlags, typeSpecificFlags)
 {
 }
 
@@ -212,7 +211,7 @@ RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&
         return createRenderer<RenderGrid>(element, WTFMove(style));
     case DisplayType::Box:
     case DisplayType::InlineBox:
-        return createRenderer<RenderDeprecatedFlexibleBox>(RenderObject::Type::DeprecatedFlexibleBox, element, WTFMove(style));
+        return createRenderer<RenderDeprecatedFlexibleBox>(element, WTFMove(style));
     case DisplayType::RubyBase:
         return createRenderer<RenderInline>(RenderObject::Type::Inline, element, WTFMove(style));
     case DisplayType::RubyAnnotation:
@@ -782,7 +781,13 @@ void RenderElement::propagateStyleToAnonymousChildren(StylePropagationType propa
         if (is<RenderFragmentedFlow>(elementChild.get()))
             continue;
 
-        auto newStyle = RenderStyle::createAnonymousStyleWithDisplay(style(), elementChild->style().display());
+        auto newStyle = [&] {
+            auto display = elementChild->style().display();
+            if (display == DisplayType::RubyBase || display == DisplayType::Ruby)
+                return createAnonymousStyleForRuby(style(), display);
+            return RenderStyle::createAnonymousStyleWithDisplay(style(), display);
+        }();
+
         if (style().specifiesColumns()) {
             if (elementChild->style().specifiesColumns())
                 newStyle.inheritColumnPropertiesFrom(style());
@@ -1237,22 +1242,31 @@ static bool mustRepaintFillLayers(const RenderElement& renderer, const FillLayer
     return false;
 }
 
-bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* repaintContainer, RequiresFullRepaint requiresFullRepaint, const LayoutRect& oldClippedOverflowRect, const LayoutRect& oldOutlineAndBoxShadowBox, const LayoutRect* newClippedOverflowRectPtr, const LayoutRect* newOutlineAndBoxShadowBoxRectPtr)
+bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* repaintContainer, RequiresFullRepaint requiresFullRepaint, const RepaintRects& oldRects, const RepaintRects& newRects)
 {
     if (view().printing())
         return false; // Don't repaint if we're printing.
 
-    // This ASSERT fails due to animations. See https://bugs.webkit.org/show_bug.cgi?id=37048
-    // ASSERT(!newClippedOverflowRectPtr || *newClippedOverflowRectPtr == clippedOverflowRectForRepaint(repaintContainer));
-    LayoutRect newClippedOverflowRect = newClippedOverflowRectPtr ? *newClippedOverflowRectPtr : clippedOverflowRectForRepaint(repaintContainer);
-    LayoutRect newOutlineAndBoxShadowBox;
+    auto oldClippedOverflowRect = oldRects.clippedOverflowRect;
+    auto newClippedOverflowRect = newRects.clippedOverflowRect;
+    bool haveOutlinesBoundsRects = oldRects.outlineBoundsRect && newRects.outlineBoundsRect;
 
     if (oldClippedOverflowRect.isEmpty() && newClippedOverflowRect.isEmpty())
         return true;
 
-    auto mustRepaintBackgroundOrBorderOnSizeChange = [&]() {
+    auto mustRepaintBackgroundOrBorderOnSizeChange = [&](LayoutRect oldOutlineBounds, LayoutRect newOutlineBounds) {
         if (hasMask() && mustRepaintFillLayers(*this, style().maskLayers()))
             return true;
+
+        if (style().hasBorderRadius()) {
+            // If the border radius changed, repaints at style change time will take care of that.
+            // This code is attempting to detect whether border-radius constraining based on box size
+            // affects the radii, using the outlineBoundsRect as a proxy for the border box.
+            auto oldRadii = style().getRoundedBorderFor(oldOutlineBounds).radii();
+            auto newRadii = style().getRoundedBorderFor(newOutlineBounds).radii();
+            if (oldRadii != newRadii)
+                return true;
+        }
 
         // If we don't have a background/border/mask, then nothing to do.
         if (!hasVisibleBoxDecorations())
@@ -1278,22 +1292,16 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         if (!oldClippedOverflowRect.intersects(newClippedOverflowRect))
             return true;
 
-        bool clippedOverflowRectChanged = oldClippedOverflowRect != newClippedOverflowRect;
-
-        if (clippedOverflowRectChanged && style().hasBorderRadius()) {
-            auto oldRadii = style().getRoundedBorderFor(oldClippedOverflowRect).radii();
-            auto newRadii = style().getRoundedBorderFor(newClippedOverflowRect).radii();
-            if (oldRadii != newRadii)
-                return true;
-        }
-
-        newOutlineAndBoxShadowBox = newOutlineAndBoxShadowBoxRectPtr ? *newOutlineAndBoxShadowBoxRectPtr : outlineBoundsForRepaint(repaintContainer);
+        if (!haveOutlinesBoundsRects)
+            return false;
 
         // If our outline bounds rect moved, we have to repaint everything.
-        if (oldOutlineAndBoxShadowBox.location() != newOutlineAndBoxShadowBox.location())
+        if (oldRects.outlineBoundsRect->location() != newRects.outlineBoundsRect->location())
             return true;
 
-        if ((clippedOverflowRectChanged || oldOutlineAndBoxShadowBox.size() != newOutlineAndBoxShadowBox.size()) && mustRepaintBackgroundOrBorderOnSizeChange())
+        // If our outline bounds rect resized (as a proxy for a border box resize),
+        // we have to repaint if we paint content that scales with the size.
+        if (oldRects.outlineBoundsRect->size() != newRects.outlineBoundsRect->size() && mustRepaintBackgroundOrBorderOnSizeChange(*oldRects.outlineBoundsRect, *newRects.outlineBoundsRect))
             return true;
 
         return false;
@@ -1314,7 +1322,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         return true;
     }
 
-    if (newClippedOverflowRect == oldClippedOverflowRect && newOutlineAndBoxShadowBox == oldOutlineAndBoxShadowBox)
+    if (oldRects == newRects)
         return false;
 
     LayoutUnit deltaLeft = newClippedOverflowRect.x() - oldClippedOverflowRect.x();
@@ -1341,17 +1349,22 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
     else if (deltaBottom < 0)
         repaintUsingContainer(repaintContainer, LayoutRect(oldClippedOverflowRect.x(), newClippedOverflowRect.maxY(), oldClippedOverflowRect.width(), -deltaBottom));
 
-    if (newOutlineAndBoxShadowBox == oldOutlineAndBoxShadowBox)
+    if (!haveOutlinesBoundsRects || *oldRects.outlineBoundsRect == *newRects.outlineBoundsRect)
         return false;
 
-    // Let's figure out how much we need to repaint within the new bounds.
-    // e.g. when renderer shrinks vertically it's not sufficient to repaint the "shrunk area" (to clear old content, see above) we need to take care of the area within the new bounds to make sure
-    // decorations like border, outline etc get repainted as well (they are enclosed by old/new bounds).
+    auto oldOutlineBoundsRect = *oldRects.outlineBoundsRect;
+    auto newOutlineBoundsRect = *newRects.outlineBoundsRect;
+
+    // Repainting the delta of the old and new clipped overflow rects is not sufficient when the box has outlines border and shadows,
+    // because a size change has to repaint those areas affected by such decorations.
+    // It's not really correct to do math here with oldOutlineBoundsRect/newOutlineBoundsRect and local shadow/radius values, since
+    // oldOutlineBoundsRect/newOutlineBoundsRect are in the coordinate space of the repaint container, and have been mapped through ancestor transforms.
+
     const RenderStyle& outlineStyle = outlineStyleForRepaint();
     auto& style = this->style();
     auto outlineWidth = LayoutUnit { outlineStyle.outlineSize() };
     auto insetShadowExtent = style.boxShadowInsetExtent();
-    auto sizeDelta = LayoutSize { absoluteValue(newOutlineAndBoxShadowBox.width() - oldOutlineAndBoxShadowBox.width()), absoluteValue(newOutlineAndBoxShadowBox.height() - oldOutlineAndBoxShadowBox.height()) };
+    auto sizeDelta = LayoutSize { absoluteValue(newOutlineBoundsRect.width() - oldOutlineBoundsRect.width()), absoluteValue(newOutlineBoundsRect.height() - oldOutlineBoundsRect.height()) };
     if (sizeDelta.width()) {
         auto shadowLeft = LayoutUnit { };
         auto shadowRight = LayoutUnit { };
@@ -1385,12 +1398,12 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         };
         auto decorationRightExtent = insetExtent() + outsetExtent();
         // Both inset and outset "decorations" are within the "outline and box shadow" box.
-        auto decorationLeft = newOutlineAndBoxShadowBox.x() + std::min(newOutlineAndBoxShadowBox.width(), oldOutlineAndBoxShadowBox.width()) - decorationRightExtent;
+        auto decorationLeft = newOutlineBoundsRect.x() + std::min(newOutlineBoundsRect.width(), oldOutlineBoundsRect.width()) - decorationRightExtent;
         auto clippedBoundsRight = std::min(newClippedOverflowRect.maxX(), oldClippedOverflowRect.maxX());
         auto damageExtentWithinClippedOverflow = clippedBoundsRight - decorationLeft;
         if (damageExtentWithinClippedOverflow > 0) {
             damageExtentWithinClippedOverflow = std::min(sizeDelta.width() + decorationRightExtent, damageExtentWithinClippedOverflow);
-            auto damagedRect = LayoutRect { decorationLeft, newOutlineAndBoxShadowBox.y(), damageExtentWithinClippedOverflow, std::max(newOutlineAndBoxShadowBox.height(), oldOutlineAndBoxShadowBox.height()) };
+            auto damagedRect = LayoutRect { decorationLeft, newOutlineBoundsRect.y(), damageExtentWithinClippedOverflow, std::max(newOutlineBoundsRect.height(), oldOutlineBoundsRect.height()) };
             repaintUsingContainer(repaintContainer, damagedRect);
         }
     }
@@ -1427,12 +1440,12 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         };
         auto decorationBottomExtent = insetExtent() + outsetExtent();
         // Both inset and outset "decorations" are within the "outline and box shadow" box.
-        auto decorationTop = std::min(newOutlineAndBoxShadowBox.maxY(), oldOutlineAndBoxShadowBox.maxY()) - decorationBottomExtent;
+        auto decorationTop = std::min(newOutlineBoundsRect.maxY(), oldOutlineBoundsRect.maxY()) - decorationBottomExtent;
         auto clippedBoundsBottom = std::min(newClippedOverflowRect.maxY(), oldClippedOverflowRect.maxY());
         auto damageExtentWithinClippedOverflow = clippedBoundsBottom - decorationTop;
         if (damageExtentWithinClippedOverflow > 0) {
             damageExtentWithinClippedOverflow = std::min(sizeDelta.height() + decorationBottomExtent, damageExtentWithinClippedOverflow);
-            auto damagedRect = LayoutRect { newOutlineAndBoxShadowBox.x(), decorationTop, std::max(newOutlineAndBoxShadowBox.width(), oldOutlineAndBoxShadowBox.width()), damageExtentWithinClippedOverflow };
+            auto damagedRect = LayoutRect { newOutlineBoundsRect.x(), decorationTop, std::max(newOutlineBoundsRect.width(), oldOutlineBoundsRect.width()), damageExtentWithinClippedOverflow };
             repaintUsingContainer(repaintContainer, damagedRect);
         }
     }
@@ -1588,7 +1601,7 @@ void RenderElement::didRemoveCachedImageClient(CachedImage& cachedImage)
 
 void RenderElement::scheduleRenderingUpdateForImage(CachedImage&)
 {
-    if (CheckedPtr page = document().page())
+    if (RefPtr page = document().page())
         page->scheduleRenderingUpdate(RenderingUpdateStep::Images);
 }
 
@@ -1654,6 +1667,41 @@ std::unique_ptr<RenderStyle> RenderElement::getUncachedPseudoStyle(const Style::
     return WTFMove(resolvedStyle->style);
 }
 
+RenderElement* RenderElement::rendererForPseudoStyleAcrossShadowBoundary() const
+{
+    if (RefPtr root = element()->containingShadowRoot()) {
+        if (root->mode() == ShadowRootMode::UserAgent) {
+            RefPtr currentElement = element()->shadowHost();
+            // When an element has display: contents, this element doesn't have a renderer
+            // and its children will render as children of the parent element.
+            while (currentElement && currentElement->hasDisplayContents())
+                currentElement = currentElement->parentElement();
+            if (currentElement)
+                return currentElement->renderer();
+        }
+    }
+
+    return nullptr;
+}
+
+const RenderStyle* RenderElement::textSegmentPseudoStyle(PseudoId pseudoId) const
+{
+    if (isAnonymous())
+        return nullptr;
+
+    if (auto* pseudoStyle = getCachedPseudoStyle(pseudoId)) {
+        // We intentionally return the pseudo style here if it exists before ascending to the
+        // shadow host element. This allows us to apply pseudo styles in user agent shadow
+        // roots, instead of always deferring to the shadow host's selection pseudo style.
+        return pseudoStyle;
+    }
+
+    if (auto* renderer = rendererForPseudoStyleAcrossShadowBoundary())
+        return renderer->getCachedPseudoStyle(pseudoId);
+
+    return nullptr;
+}
+
 Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
 {
     // If the element is unselectable, or we are only painting the selection,
@@ -1662,7 +1710,7 @@ Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
         || (view().frameView().paintBehavior().containsAny({ PaintBehavior::SelectionOnly, PaintBehavior::SelectionAndBackgroundsOnly })))
         return Color();
 
-    if (std::unique_ptr<RenderStyle> pseudoStyle = selectionPseudoStyle()) {
+    if (auto pseudoStyle = selectionPseudoStyle()) {
         Color color = pseudoStyle->visitedDependentColorWithColorFilter(colorProperty);
         if (!color.isValid())
             color = pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyColor);
@@ -1686,17 +1734,8 @@ std::unique_ptr<RenderStyle> RenderElement::selectionPseudoStyle() const
         return selectionStyle;
     }
 
-    if (RefPtr root = element()->containingShadowRoot()) {
-        if (root->mode() == ShadowRootMode::UserAgent) {
-            RefPtr currentElement = element()->shadowHost();
-            // When an element has display: contents, this element doesn't have a renderer
-            // and its children will render as children of the parent element.
-            while (currentElement && currentElement->hasDisplayContents())
-                currentElement = currentElement->parentElement();
-            if (currentElement && currentElement->renderer())
-                return currentElement->renderer()->getUncachedPseudoStyle({ PseudoId::Selection });
-        }
-    }
+    if (auto* renderer = rendererForPseudoStyleAcrossShadowBoundary())
+        return renderer->getUncachedPseudoStyle({ PseudoId::Selection });
 
     return nullptr;
 }
@@ -1724,7 +1763,7 @@ Color RenderElement::selectionBackgroundColor() const
         pseudoStyleCandidate = pseudoStyleCandidate->firstNonAnonymousAncestor();
 
     if (pseudoStyleCandidate) {
-        std::unique_ptr<RenderStyle> pseudoStyle = pseudoStyleCandidate->selectionPseudoStyle();
+        auto pseudoStyle = pseudoStyleCandidate->selectionPseudoStyle();
         if (pseudoStyle && pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).isValid())
             return theme().transformSelectionBackgroundColor(pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), styleColorOptions());
     }
@@ -1732,6 +1771,16 @@ Color RenderElement::selectionBackgroundColor() const
     if (frame().selection().isFocusedAndActive())
         return theme().activeSelectionBackgroundColor(styleColorOptions());
     return theme().inactiveSelectionBackgroundColor(styleColorOptions());
+}
+
+const RenderStyle* RenderElement::spellingErrorPseudoStyle() const
+{
+    return textSegmentPseudoStyle(PseudoId::SpellingError);
+}
+
+const RenderStyle* RenderElement::grammarErrorPseudoStyle() const
+{
+    return textSegmentPseudoStyle(PseudoId::GrammarError);
 }
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
@@ -2010,7 +2059,7 @@ ImageOrientation RenderElement::imageOrientation() const
 
 void RenderElement::adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(const RenderStyle& oldStyle, const RenderStyle& newStyle)
 {
-    if (fragmentedFlowState() == NotInsideFragmentedFlow)
+    if (fragmentedFlowState() == FragmentedFlowState::NotInsideFlow)
         return;
 
     // Make sure we invalidate the containing block cache for flows when the contianing block context changes
@@ -2042,7 +2091,7 @@ void RenderElement::adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(con
 
 void RenderElement::removeFromRenderFragmentedFlow()
 {
-    ASSERT(fragmentedFlowState() != NotInsideFragmentedFlow);
+    ASSERT(fragmentedFlowState() != FragmentedFlowState::NotInsideFlow);
     // Sometimes we remove the element from the flow, but it's not destroyed at that time.
     // It's only until later when we actually destroy it and remove all the children from it.
     // Currently, that happens for firstLetter elements and list markers.
@@ -2063,7 +2112,7 @@ void RenderElement::removeFromRenderFragmentedFlowIncludingDescendants(bool shou
             continue;
         }
         if (shouldUpdateState)
-            child->setFragmentedFlowState(NotInsideFragmentedFlow);
+            child->setFragmentedFlowState(FragmentedFlowState::NotInsideFlow);
     }
 
     // We have to ask for our containing flow thread as it may be above the removed sub-tree.
@@ -2071,7 +2120,7 @@ void RenderElement::removeFromRenderFragmentedFlowIncludingDescendants(bool shou
     while (enclosingFragmentedFlow) {
         enclosingFragmentedFlow->removeFlowChildInfo(*this);
 
-        if (enclosingFragmentedFlow->fragmentedFlowState() == NotInsideFragmentedFlow)
+        if (enclosingFragmentedFlow->fragmentedFlowState() == FragmentedFlowState::NotInsideFlow)
             break;
         auto* parent = enclosingFragmentedFlow->parent();
         if (!parent)
@@ -2082,7 +2131,7 @@ void RenderElement::removeFromRenderFragmentedFlowIncludingDescendants(bool shou
         downcast<RenderBlock>(*this).setCachedEnclosingFragmentedFlowNeedsUpdate();
 
     if (shouldUpdateState)
-        setFragmentedFlowState(NotInsideFragmentedFlow);
+        setFragmentedFlowState(FragmentedFlowState::NotInsideFlow);
 }
 
 void RenderElement::resetEnclosingFragmentedFlowAndChildInfoIncludingDescendants(RenderFragmentedFlow* fragmentedFlow)
@@ -2114,7 +2163,7 @@ void RenderElement::clearReferencedSVGResources()
 // This needs to run when the entire render tree has been constructed, so can't be called from styleDidChange.
 void RenderElement::updateReferencedSVGResources()
 {
-    auto referencedElementIDs = ReferencedSVGResources::referencedSVGResourceIDs(style());
+    auto referencedElementIDs = ReferencedSVGResources::referencedSVGResourceIDs(style(), document());
     if (!referencedElementIDs.isEmpty())
         ensureReferencedSVGResources().updateReferencedResources(treeScopeForSVGReferences(), referencedElementIDs);
     else
@@ -2232,7 +2281,7 @@ std::unique_ptr<RenderStyle> RenderElement::animatedStyle()
     return result;
 }
 
-WeakPtr<RenderBlockFlow> RenderElement::backdropRenderer() const
+SingleThreadWeakPtr<RenderBlockFlow> RenderElement::backdropRenderer() const
 {
     return hasRareData() ? rareData().backdropRenderer : nullptr;
 }
@@ -2264,6 +2313,8 @@ bool RenderElement::createsNewFormattingContext() const
     // if the box is a block-container.
     // https://drafts.csswg.org/css-writing-modes/#block-flow
     if (isWritingModeRoot() && isBlockContainer())
+        return true;
+    if (isBlockContainer() && !style().alignContent().isNormal())
         return true;
     return isInlineBlockOrInlineTable() || isFlexItemIncludingDeprecated()
         || isRenderTableCell() || isRenderTableCaption() || isFieldset() || isDocumentElementRenderer() || isRenderFragmentedFlow() || isRenderSVGForeignObject()

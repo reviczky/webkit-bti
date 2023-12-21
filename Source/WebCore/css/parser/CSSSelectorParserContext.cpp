@@ -35,11 +35,13 @@ namespace WebCore {
 CSSSelectorParserContext::CSSSelectorParserContext(const CSSParserContext& context)
     : mode(context.mode)
     , cssNestingEnabled(context.cssNestingEnabled)
+    , customStateSetEnabled(context.customStateSetEnabled)
     , focusVisibleEnabled(context.focusVisibleEnabled)
     , grammarAndSpellingPseudoElementsEnabled(context.grammarAndSpellingPseudoElementsEnabled)
     , hasPseudoClassEnabled(context.hasPseudoClassEnabled)
     , highlightAPIEnabled(context.highlightAPIEnabled)
     , popoverAttributeEnabled(context.popoverAttributeEnabled)
+    , thumbAndTrackPseudoElementsEnabled(context.thumbAndTrackPseudoElementsEnabled)
     , viewTransitionsEnabled(context.propertySettings.viewTransitionsEnabled)
 {
 }
@@ -47,11 +49,13 @@ CSSSelectorParserContext::CSSSelectorParserContext(const CSSParserContext& conte
 CSSSelectorParserContext::CSSSelectorParserContext(const Document& document)
     : mode(document.inQuirksMode() ? HTMLQuirksMode : HTMLStandardMode)
     , cssNestingEnabled(document.settings().cssNestingEnabled())
+    , customStateSetEnabled(document.settings().customStateSetEnabled())
     , focusVisibleEnabled(document.settings().focusVisibleEnabled())
     , grammarAndSpellingPseudoElementsEnabled(document.settings().grammarAndSpellingPseudoElementsEnabled())
     , hasPseudoClassEnabled(document.settings().hasPseudoClassEnabled())
     , highlightAPIEnabled(document.settings().highlightAPIEnabled())
     , popoverAttributeEnabled(document.settings().popoverAttributeEnabled())
+    , thumbAndTrackPseudoElementsEnabled(document.settings().thumbAndTrackPseudoElementsEnabled())
     , viewTransitionsEnabled(document.settings().viewTransitionsEnabled())
 {
 }
@@ -61,11 +65,13 @@ void add(Hasher& hasher, const CSSSelectorParserContext& context)
     add(hasher,
         context.mode,
         context.cssNestingEnabled,
+        context.customStateSetEnabled,
         context.focusVisibleEnabled,
         context.grammarAndSpellingPseudoElementsEnabled,
         context.hasPseudoClassEnabled,
         context.highlightAPIEnabled,
         context.popoverAttributeEnabled,
+        context.thumbAndTrackPseudoElementsEnabled,
         context.viewTransitionsEnabled
     );
 }

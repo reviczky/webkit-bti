@@ -40,6 +40,7 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/SharedTask.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakRandom.h>
 
@@ -60,7 +61,7 @@ struct OSRExit;
 #define JIT_COMMENT(jit, ...) do { if (UNLIKELY(Options::needDisassemblySupport())) { (jit).comment(__VA_ARGS__); } else { (void) jit; } } while (0)
 
 class AbstractMacroAssemblerBase {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AbstractMacroAssemblerBase);
 public:
     enum StatusCondition {
         Success,
@@ -575,7 +576,7 @@ public:
         {
         }
 
-        bool isFlagSet(Flags flag)
+        bool isFlagSet(Flags flag) const
         {
             return m_flags & flag;
         }
@@ -583,6 +584,24 @@ public:
         static Call fromTailJump(Jump jump)
         {
             return Call(jump.m_label, Linkable);
+        }
+
+        template<PtrTag tag>
+        void linkThunk(CodeLocationLabel<tag> label, AbstractMacroAssemblerType* masm) const
+        {
+            ASSERT(isFlagSet(Near));
+            ASSERT(isFlagSet(Linkable));
+#if CPU(ARM64)
+            if (isFlagSet(Tail))
+                masm->m_assembler.linkJumpThunk(m_label, label.dataLocation(), ARM64Assembler::JumpNoCondition, ARM64Assembler::ConditionInvalid);
+            else
+                masm->m_assembler.linkNearCallThunk(m_label, label.dataLocation());
+#else
+            Call target = *this;
+            masm->addLinkTask([=](auto& linkBuffer) {
+                linkBuffer.link(target, label);
+            });
+#endif
         }
 
         AssemblerLabel m_label;
@@ -695,6 +714,24 @@ public:
 #endif
         }
 
+        template<PtrTag tag>
+        void linkThunk(CodeLocationLabel<tag> label, AbstractMacroAssemblerType* masm) const
+        {
+#if CPU(ARM64)
+            if ((m_type == ARM64Assembler::JumpCompareAndBranch) || (m_type == ARM64Assembler::JumpCompareAndBranchFixedSize))
+                masm->m_assembler.linkJumpThunk(m_label, label.dataLocation(), m_type, m_condition, m_is64Bit, m_compareRegister);
+            else if ((m_type == ARM64Assembler::JumpTestBit) || (m_type == ARM64Assembler::JumpTestBitFixedSize))
+                masm->m_assembler.linkJumpThunk(m_label, label.dataLocation(), m_type, m_condition, m_bitNumber, m_compareRegister);
+            else
+                masm->m_assembler.linkJumpThunk(m_label, label.dataLocation(), m_type, m_condition);
+#else
+            Jump target = *this;
+            masm->addLinkTask([=](auto& linkBuffer) {
+                linkBuffer.link(target, label);
+            });
+#endif
+        }
+
         bool isSet() const { return m_label.isSet(); }
 
     private:
@@ -722,6 +759,12 @@ public:
         }
 
         operator Jump&() { return m_jump; }
+
+        template<PtrTag tag>
+        void linkThunk(CodeLocationLabel<tag> label, AbstractMacroAssemblerType* masm) const
+        {
+            m_jump.linkThunk(label, masm);
+        }
 
         Jump m_jump;
     };
@@ -751,9 +794,15 @@ public:
         
         void linkTo(Label label, AbstractMacroAssemblerType* masm) const
         {
-            size_t size = m_jumps.size();
-            for (size_t i = 0; i < size; ++i)
-                m_jumps[i].linkTo(label, masm);
+            for (auto& jump : m_jumps)
+                jump.linkTo(label, masm);
+        }
+
+        template<PtrTag tag>
+        void linkThunk(CodeLocationLabel<tag> label, AbstractMacroAssemblerType* masm) const
+        {
+            for (auto& jump : m_jumps)
+                jump.linkThunk(label, masm);
         }
         
         void append(Jump jump)

@@ -32,7 +32,7 @@ class SVGElement;
 class RenderSVGHiddenContainer : public RenderSVGContainer {
     WTF_MAKE_ISO_ALLOCATED(RenderSVGHiddenContainer);
 public:
-    RenderSVGHiddenContainer(Type, SVGElement&, RenderStyle&&);
+    RenderSVGHiddenContainer(Type, SVGElement&, RenderStyle&&, OptionSet<SVGModelObjectFlag> = { });
 
 protected:
     void layout() override;
@@ -52,9 +52,9 @@ private:
     void addFocusRingRects(Vector<LayoutRect>&, const LayoutPoint&, const RenderLayerModelObject* = nullptr) const final { }
 
     bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation&, const LayoutPoint&, HitTestAction) final { return false; }
-    void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect&, OptionSet<RenderStyle::TransformOperationOption>) const final { }
-    void updateFromStyle() final { }
-    bool needsHasSVGTransformFlags() const final { return false; }
+    void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect&, OptionSet<RenderStyle::TransformOperationOption>) const override { }
+    void updateFromStyle() override { }
+    bool needsHasSVGTransformFlags() const override { return false; }
 };
 
 } // namespace WebCore

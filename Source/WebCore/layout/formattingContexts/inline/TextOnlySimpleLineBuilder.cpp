@@ -118,6 +118,7 @@ LineLayoutResult TextOnlySimpleLineBuilder::layoutInlineContent(const LineInput&
         , { isFirstFormattedLine() ? LineLayoutResult::IsFirstLast::FirstFormattedLine::WithinIFC : LineLayoutResult::IsFirstLast::FirstFormattedLine::No, isLastLine }
         , { }
         , { }
+        , { }
         , m_trimmedTrailingWhitespaceWidth
     };
 }
@@ -444,6 +445,8 @@ InlineLayoutUnit TextOnlySimpleLineBuilder::availableWidth() const
 bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(const ElementBox& rootBox, const InlineContentCache& inlineContentCache, const PlacedFloats* placedFloats)
 {
     if (placedFloats && !placedFloats->isEmpty())
+        return false;
+    if (inlineContentCache.inlineItems().isEmpty())
         return false;
     if (!inlineContentCache.inlineItems().isNonBidiTextAndForcedLineBreakOnlyContent())
         return false;

@@ -44,6 +44,7 @@
 #include <WebCore/RegistrableDomain.h>
 #include <memory>
 #include <wtf/Deque.h>
+#include <wtf/WeakHashMap.h>
 
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManagerProxy.h"
@@ -81,6 +82,7 @@ enum class StoredCredentialsPolicy : uint8_t;
 struct ClientOrigin;
 struct NotificationData;
 struct NotificationPayload;
+struct OrganizationStorageAccessPromptQuirk;
 }
 
 namespace WebKit {
@@ -89,8 +91,10 @@ class DownloadProxy;
 class DownloadProxyMap;
 class WebPageProxy;
 class WebUserContentControllerProxy;
+class StorageAccessPromptQuirkObserver;
 
 enum class BackgroundFetchChange : uint8_t;
+enum class LoadedWebArchive : bool;
 enum class ProcessTerminationReason : uint8_t;
 enum class RemoteWorkerType : uint8_t;
 enum class ShouldGrandfatherStatistics : bool;
@@ -131,6 +135,8 @@ public:
 
     Ref<DownloadProxy> createDownloadProxy(WebsiteDataStore&, Ref<API::DownloadClient>&&, const WebCore::ResourceRequest&, const FrameInfoData&, WebPageProxy* originatingPage);
     void dataTaskWithRequest(WebPageProxy&, PAL::SessionID, WebCore::ResourceRequest&&, const std::optional<WebCore::SecurityOriginData>& topOrigin, CompletionHandler<void(API::DataTask&)>&&);
+
+    void addAllowedFirstPartyForCookies(WebProcessProxy&, const WebCore::RegistrableDomain& firstPartyForCookies, LoadedWebArchive, CompletionHandler<void()>&&);
 
     void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, CompletionHandler<void(WebsiteData)>&&);
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&& completionHandler);
@@ -177,7 +183,7 @@ public:
     void setVeryPrevalentResource(PAL::SessionID, const RegistrableDomain&, CompletionHandler<void()>&&);
     void getResourceLoadStatisticsDataSummary(PAL::SessionID, CompletionHandler<void(Vector<ITPThirdPartyData>&&)>&&);
     void getAllStorageAccessEntries(PAL::SessionID, CompletionHandler<void(Vector<String> domains)>&&);
-    void requestStorageAccessConfirm(WebPageProxyIdentifier, WebCore::FrameIdentifier, const SubFrameDomain&, const TopFrameDomain&, CompletionHandler<void(bool)>&&);
+    void requestStorageAccessConfirm(WebPageProxyIdentifier, WebCore::FrameIdentifier, const SubFrameDomain&, const TopFrameDomain&, std::optional<WebCore::OrganizationStorageAccessPromptQuirk>&&, CompletionHandler<void(bool)>&&);
     void resetParametersToDefaultValues(PAL::SessionID, CompletionHandler<void()>&&);
     void scheduleClearInMemoryAndPersistent(PAL::SessionID, ShouldGrandfatherStatistics, CompletionHandler<void()>&&);
     void scheduleClearInMemoryAndPersistent(PAL::SessionID, std::optional<WallTime> modifiedSince, ShouldGrandfatherStatistics, CompletionHandler<void()>&&);
@@ -216,8 +222,6 @@ public:
 
     void setPrivateClickMeasurementDebugMode(PAL::SessionID, bool);
 
-    void setBlobRegistryTopOriginPartitioningEnabled(PAL::SessionID, bool);
-    
     void synthesizeAppIsBackground(bool background);
 
     void flushCookies(PAL::SessionID, CompletionHandler<void()>&&);
@@ -426,6 +430,10 @@ private:
     WeakHashSet<WebUserContentControllerProxy> m_webUserContentControllerProxies;
 #endif
 
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    RefPtr<StorageAccessPromptQuirkObserver> m_storageAccessPromptQuirksDataUpdateObserver;
+#endif
+
     struct UploadActivity {
         RefPtr<ProcessAssertion> uiAssertion;
         RefPtr<ProcessAssertion> networkAssertion;
@@ -447,6 +455,7 @@ private:
 #endif
 
     WeakHashSet<WebsiteDataStore> m_websiteDataStores;
+    WeakHashMap<WebProcessProxy, std::pair<LoadedWebArchive, HashSet<WebCore::RegistrableDomain>>> m_allowedFirstPartiesForCookies;
     HashMap<DataTaskIdentifier, Ref<API::DataTask>> m_dataTasks;
 #if PLATFORM(MAC)
     // On macOS, we prevent suspension of the NetworkProcess to avoid kills when holding

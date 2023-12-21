@@ -37,11 +37,13 @@ class Document;
 struct CSSSelectorParserContext {
     CSSParserMode mode { CSSParserMode::HTMLStandardMode };
     bool cssNestingEnabled { false };
+    bool customStateSetEnabled { false };
     bool focusVisibleEnabled { false };
     bool grammarAndSpellingPseudoElementsEnabled { false };
     bool hasPseudoClassEnabled { false };
     bool highlightAPIEnabled { false };
     bool popoverAttributeEnabled { false };
+    bool thumbAndTrackPseudoElementsEnabled { false };
     bool viewTransitionsEnabled { false };
 
     bool isHashTableDeletedValue { false };
