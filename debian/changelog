@@ -1,4 +1,4 @@
-webkit2gtk (2.43.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.43.3-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/fix-ftbfs-riscv64.patch:
