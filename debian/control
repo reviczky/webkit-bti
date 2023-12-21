@@ -514,4 +514,3 @@ Description: Web content engine library for GTK - GObject introspection data
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
-

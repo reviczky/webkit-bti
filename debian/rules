@@ -271,6 +271,7 @@ endif
 		    -e 's/@GTK_VERSION@/4/g' \
 		    -e 's/@SOUP_VERSION@/3/g' \
 		>> debian/control
+	sed -i '$${/^$$/d}' debian/control # Remove last empty line
 
 override_dh_gencontrol:
 	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
