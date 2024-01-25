@@ -3,6 +3,9 @@ webkit2gtk (2.43.3-2) UNRELEASED; urgency=medium
   * debian/rules:
     - Remove last empty line from debian/control.
     - Build with -DUSE_LIBDRM=OFF in the Hurd.
+  * debian/control:
+    - And missing ${gir:Depends} and ${gir:Provides} to the -dev and
+      gir1.2 packages.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 14:21:55 +0100
 
