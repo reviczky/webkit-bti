@@ -197,18 +197,14 @@ endif
 # (apart from the API version) so we generate the last two from the first.
 WEBKIT_DH_FILES = \
 	gir1.2-javascriptcoregtk-4.0.install \
-	gir1.2-javascriptcoregtk-4.0.lintian-overrides \
 	gir1.2-webkit2-4.0.install \
-	gir1.2-webkit2-4.0.lintian-overrides \
 	libjavascriptcoregtk-4.0-18.install \
 	libjavascriptcoregtk-4.0-dev.install \
-	libjavascriptcoregtk-4.0-dev.lintian-overrides \
 	libwebkit2gtk-4.0-37.docs \
 	libwebkit2gtk-4.0-37.install \
 	libwebkit2gtk-4.0-37.lintian-overrides \
 	libwebkit2gtk-4.0-37.symbols \
-	libwebkit2gtk-4.0-dev.install \
-	libwebkit2gtk-4.0-dev.lintian-overrides
+	libwebkit2gtk-4.0-dev.install
 
 # This converts debhelper file names and contents to the soup3 versions
 WEBKIT_DH_RENAME_SOUP3 = sed -e 's/4\.0-18/4.1-0/g' \

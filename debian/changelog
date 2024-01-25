@@ -6,6 +6,9 @@ webkit2gtk (2.43.3-2) UNRELEASED; urgency=medium
   * debian/control:
     - And missing ${gir:Depends} and ${gir:Provides} to the -dev and
       gir1.2 packages.
+  * Stop overriding the typelib-package-name-does-not-match and
+    gir-missing-typelib-dependency lintian warnings, they're not happening
+    since the aforementioned changes to debian/control.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 14:21:55 +0100
 
