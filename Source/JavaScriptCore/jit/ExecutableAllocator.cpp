@@ -86,7 +86,7 @@ extern "C" {
 
 #if USE(INLINE_JIT_PERMISSIONS_API)
 #include <wtf/darwin/WeakLinking.h>
-WTF_WEAK_LINK_FORCE_IMPORT(se_memory_inline_jit_restrict_with_witness_supported);
+WTF_WEAK_LINK_FORCE_IMPORT(be_memory_inline_jit_restrict_with_witness_supported);
 #endif
 
 namespace JSC {
@@ -416,19 +416,7 @@ static ALWAYS_INLINE JITReservation initializeJITPageReservation()
     if (reservation.pageReservation) {
         ASSERT(reservation.pageReservation.size() == reservation.size);
         reservation.base = reservation.pageReservation.base();
-
-        bool fastJITPermissionsIsSupported = false;
-#if OS(DARWIN) && CPU(ARM64)
-#if USE(INLINE_JIT_PERMISSIONS_API)
-        //FIXME: Check for the existence of `se_memory_inline_jit_restrict_with_witness_supported` once the fix for rdar://119669257 is in the SDK.
-        fastJITPermissionsIsSupported = !!se_memory_inline_jit_restrict_with_witness_supported();
-#elif USE(PTHREAD_JIT_PERMISSIONS_API)
-        fastJITPermissionsIsSupported = !!pthread_jit_write_protect_supported_np();
-#elif USE(APPLE_INTERNAL_SDK)
-        fastJITPermissionsIsSupported = !!os_thread_self_restrict_rwx_is_supported();
-#endif
-#endif
-        g_jscConfig.useFastJITPermissions = fastJITPermissionsIsSupported;
+        g_jscConfig.useFastJITPermissions = threadSelfRestrictSupported();
 
         if (g_jscConfig.useFastJITPermissions)
             threadSelfRestrictRWXToRX();
@@ -543,9 +531,36 @@ public:
     RefPtr<ExecutableMemoryHandle> allocate(size_t sizeInBytes)
     {
 #if ENABLE(LIBPAS_JIT_HEAP)
+        Vector<void*, 0> randomAllocations;
+        if (UNLIKELY(Options::useRandomizingExecutableIslandAllocation())) {
+            // Let's fragment the executable memory agressively
+            auto bytesAllocated = m_bytesAllocated.load(std::memory_order_relaxed);
+            uint64_t allocationRoom = (m_reservation.size() - bytesAllocated) * 1 / 100 / sizeInBytes;
+            if (!allocationRoom)
+                allocationRoom = 1;
+            int count = cryptographicallyRandomNumber<uint32_t>() % allocationRoom;
+
+            randomAllocations.resize(count);
+
+            for (int i = 0; i < count; ++i) {
+                void* result = jit_heap_try_allocate(sizeInBytes);
+                if (!result) {
+                    // We are running out of memory, so make sure this allocation will succeed.
+                    for (int j = 0; j < i; ++j)
+                        jit_heap_deallocate(randomAllocations[j]);
+                    randomAllocations.resize(0);
+                    break;
+                }
+                randomAllocations[i] = result;
+            }
+        }
         auto result = ExecutableMemoryHandle::createImpl(sizeInBytes);
         if (LIKELY(result))
             m_bytesAllocated.fetch_add(result->sizeInBytes(), std::memory_order_relaxed);
+        if (UNLIKELY(Options::useRandomizingExecutableIslandAllocation())) {
+            for (unsigned i = 0; i < randomAllocations.size(); ++i)
+                jit_heap_deallocate(randomAllocations[i]);
+        }
         return result;
 #elif ENABLE(JUMP_ISLANDS)
         Locker locker { getLock() };
@@ -768,9 +783,9 @@ private:
             auto emitJumpTo = [&] (void* target) {
                 RELEASE_ASSERT(Assembler::canEmitJump(bitwise_cast<void*>(jumpLocation), target));
                 if (useMemcpy)
-                    Assembler::fillNearTailCall<memcpyWrapper>(currentIsland, target);
+                    Assembler::fillNearTailCall<MachineCodeCopyMode::Memcpy>(currentIsland, target);
                 else
-                    Assembler::fillNearTailCall<performJITMemcpy>(currentIsland, target);
+                    Assembler::fillNearTailCall<MachineCodeCopyMode::JITMemcpy>(currentIsland, target);
             };
 
             if (Assembler::canEmitJump(bitwise_cast<void*>(jumpLocation), bitwise_cast<void*>(target))) {

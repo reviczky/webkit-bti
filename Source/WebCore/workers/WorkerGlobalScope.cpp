@@ -34,6 +34,7 @@
 #include "CommonVM.h"
 #include "ContentSecurityPolicy.h"
 #include "Crypto.h"
+#include "DocumentInlines.h"
 #include "FontCustomPlatformData.h"
 #include "FontFaceSet.h"
 #include "IDBConnectionProxy.h"
@@ -470,8 +471,6 @@ void WorkerGlobalScope::addMessage(MessageSource source, MessageLevel level, con
     InspectorInstrumentation::addMessageToConsole(*this, WTFMove(message));
 }
 
-#if ENABLE(WEB_CRYPTO)
-
 bool WorkerGlobalScope::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
 {
     Ref protectedThis { *this };
@@ -505,8 +504,6 @@ bool WorkerGlobalScope::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vecto
     semaphore.wait();
     return success;
 }
-
-#endif // ENABLE(WEB_CRYPTO)
 
 Crypto& WorkerGlobalScope::crypto()
 {

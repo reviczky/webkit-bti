@@ -150,7 +150,6 @@ public:
 #endif
     static void applyValueWebkitTextZoom(BuilderState&, CSSValue&);
     static void applyValueWritingMode(BuilderState&, CSSValue&);
-    static void applyValueAlt(BuilderState&, CSSValue&);
     static void applyValueFontSizeAdjust(BuilderState&, CSSValue&);
 
 #if ENABLE(DARK_MODE_CSS)
@@ -821,9 +820,9 @@ inline void BuilderCustom::applyValueWebkitTextSizeAdjust(BuilderState& builderS
 {
     auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
     if (primitiveValue.valueID() == CSSValueAuto)
-        builderState.style().setTextSizeAdjust(TextSizeAdjustment(AutoTextSizeAdjustment));
+        builderState.style().setTextSizeAdjust(TextSizeAdjustment::autoAdjust());
     else if (primitiveValue.valueID() == CSSValueNone)
-        builderState.style().setTextSizeAdjust(TextSizeAdjustment(NoTextSizeAdjustment));
+        builderState.style().setTextSizeAdjust(TextSizeAdjustment::none());
     else
         builderState.style().setTextSizeAdjust(TextSizeAdjustment(primitiveValue.floatValue()));
 
@@ -1435,8 +1434,26 @@ inline void BuilderCustom::applyValueContent(BuilderState& builderState, CSSValu
         return;
     }
 
+    bool hasAltTextContent = is<CSSValuePair>(value);
+    auto& visibleContentList = hasAltTextContent ? downcast<CSSValuePair>(value).first() : value;
+
+    auto processAttrContent = [&](const CSSPrimitiveValue& primitiveValue) -> AtomString {
+        // FIXME: Can a namespace be specified for an attr(foo)?
+        if (builderState.style().pseudoElementType() == PseudoId::None)
+            builderState.style().setHasAttrContent();
+        else
+            const_cast<RenderStyle&>(builderState.parentStyle()).setHasAttrContent();
+        QualifiedName attr(nullAtom(), primitiveValue.stringValue().impl(), nullAtom());
+        const AtomString& attributeValue = builderState.element() ? builderState.element()->getAttribute(attr) : nullAtom();
+
+        // Register the fact that the attribute value affects the style.
+        builderState.registerContentAttribute(attr.localName());
+
+        return attributeValue.isNull() ? emptyAtom() : attributeValue.impl();
+    };
+
     bool didSet = false;
-    for (auto& item : downcast<CSSValueList>(value)) {
+    for (auto& item : downcast<CSSValueList>(visibleContentList)) {
         if (item.isImage()) {
             builderState.style().setContent(builderState.createStyleImage(item), didSet);
             didSet = true;
@@ -1448,17 +1465,8 @@ inline void BuilderCustom::applyValueContent(BuilderState& builderState, CSSValu
             builderState.style().setContent(primitive->stringValue().impl(), didSet);
             didSet = true;
         } else if (primitive && primitive->isAttr()) {
-            // FIXME: Can a namespace be specified for an attr(foo)?
-            if (builderState.style().styleType() == PseudoId::None)
-                builderState.style().setHasAttrContent();
-            else
-                const_cast<RenderStyle&>(builderState.parentStyle()).setHasAttrContent();
-            QualifiedName attr(nullAtom(), primitive->stringValue().impl(), nullAtom());
-            const AtomString& value = builderState.element() ? builderState.element()->getAttribute(attr) : nullAtom();
-            builderState.style().setContent(value.isNull() ? emptyAtom() : value.impl(), didSet);
+            builderState.style().setContent(processAttrContent(*primitive), didSet);
             didSet = true;
-            // Register the fact that the attribute value affects the style.
-            builderState.registerContentAttribute(attr.localName());
         } else if (auto* counter = dynamicDowncast<CSSCounterValue>(item)) {
             ListStyleType listStyleType;
             if (counter->counterStyle())
@@ -1489,8 +1497,25 @@ inline void BuilderCustom::applyValueContent(BuilderState& builderState, CSSValu
             }
         }
     }
-    if (!didSet)
+
+    if (!didSet) {
         builderState.style().clearContent();
+        return;
+    }
+
+    if (!hasAltTextContent)
+        return;
+
+    auto& altTextContentList = downcast<CSSValuePair>(value).second();
+    StringBuilder altText;
+    for (auto& item : downcast<CSSValueList>(altTextContentList)) {
+        auto* primitive = dynamicDowncast<CSSPrimitiveValue>(item);
+        if (primitive && primitive->isString())
+            altText.append(primitive->stringValue());
+        else if (primitive && primitive->isAttr())
+            altText.append(processAttrContent(*primitive));
+    }
+    builderState.style().setContentAltText(altText.toString());
 }
 
 inline void BuilderCustom::applyInheritFontVariantLigatures(BuilderState& builderState)
@@ -1898,28 +1923,6 @@ inline void BuilderCustom::applyValueGridTemplateRows(BuilderState& builderState
         return;
 
     SET_TRACKS_DATA(trackList, builderState.style(), Row);
-}
-
-void BuilderCustom::applyValueAlt(BuilderState& builderState, CSSValue& value)
-{
-    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-    if (primitiveValue.isString())
-        builderState.style().setContentAltText(primitiveValue.stringValue());
-    else if (primitiveValue.isAttr()) {
-        // FIXME: Can a namespace be specified for an attr(foo)?
-        if (builderState.style().styleType() == PseudoId::None)
-            builderState.style().setUnique();
-        else
-            const_cast<RenderStyle&>(builderState.parentStyle()).setUnique();
-
-        QualifiedName attr(nullAtom(), AtomString { primitiveValue.stringValue() }, nullAtom());
-        const AtomString& value = builderState.element() ? builderState.element()->getAttribute(attr) : nullAtom();
-        builderState.style().setContentAltText(value.isNull() ? emptyAtom() : value);
-
-        // Register the fact that the attribute value affects the style.
-        builderState.registerContentAttribute(attr.localName());
-    } else
-        builderState.style().setContentAltText(emptyAtom());
 }
 
 inline void BuilderCustom::applyValueStrokeWidth(BuilderState& builderState, CSSValue& value)

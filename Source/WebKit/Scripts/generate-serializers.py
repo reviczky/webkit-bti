@@ -52,7 +52,7 @@ import sys
 # OptionalTupleBits - This member stores bits of whether each following member is serialized. Attribute must be immediately before members with OptionalTupleBit.
 # OptionalTupleBit - The name of the bit indicating whether this member is serialized.
 # SupportWKKeyedCoder - For webkit_secure_coding types, in addition to the preferred property list code path, support SupportWKKeyedCoder
-
+# Precondition - Used to fail early from a decoder, for example if a soft linked framework is not present to decode a member
 
 class Template(object):
     def __init__(self, template_type, namespace, name, enum_storage=None):
@@ -487,6 +487,14 @@ def alias_struct_or_class(alias):
     return match.groups()[0]
 
 
+def get_alias_namespace(alias):
+    match = re.search(r'[ ,()<>]+([A-Za-z0-9_]+)::[A-Za-z0-9_]+', alias)
+    if(match):
+        return match.groups()[0]
+    else:
+        return None
+
+
 def generate_forward_declarations(serialized_types, serialized_enums, additional_forward_declarations):
     result = []
     result.append('')
@@ -529,10 +537,7 @@ def generate_forward_declarations(serialized_types, serialized_enums, additional
         for type in serialized_types_by_namespace.get(namespace, []):
             if type.condition is not None:
                 result.append('#if ' + type.condition)
-            if type.alias is not None:
-                result.append('template<' + typenames(type.alias) + '> ' + alias_struct_or_class(type.alias) + ' ' + remove_template_parameters(type.alias) + ';')
-                result.append('using ' + type.name + ' = ' + remove_alias_struct_or_class(type.alias) + ';')
-            elif type.cf_type is None:
+            if type.cf_type is None and type.alias is None:
                 result.append(type.cpp_type_from_struct_or_class() + ' ' + type.cpp_struct_or_class_name() + ';')
             if type.condition is not None:
                 result.append('#endif')
@@ -547,6 +552,22 @@ def generate_forward_declarations(serialized_types, serialized_enums, additional
         result.append(declaration.declaration + ';')
         if declaration.condition is not None:
             result.append('#endif')
+    for namespace in sorted(all_namespaces, key=lambda x: (x is None, x)):
+        for type in serialized_types_by_namespace.get(namespace, []):
+            if type.alias is not None:
+                if type.condition is not None:
+                    result.append('#if ' + type.condition)
+                if namespace is not None:
+                    result.append('namespace ' + namespace + ' {')
+
+                if namespace is None or get_alias_namespace(type.alias) is None or get_alias_namespace(type.alias) == type.namespace:
+                    result.append('template<' + typenames(type.alias) + '> ' + alias_struct_or_class(type.alias) + ' ' + remove_template_parameters(type.alias) + ';')
+                result.append('using ' + type.name + ' = ' + remove_alias_struct_or_class(type.alias) + ';')
+
+                if namespace is not None:
+                    result.append('}')
+                if type.condition is not None:
+                    result.append('#endif')
     return result
 
 
@@ -746,6 +767,16 @@ def decode_type(type):
         if len(decodable_classes) == 1:
             match = re.search("RetainPtr<(.*)>", member.type)
             assert match
+            for attribute in member.attributes:
+                precondition = re.search(r'Precondition=\'(.*)\'', attribute)
+                if precondition:
+                    condition, = precondition.groups()
+                    result.append('    if (!(' + condition + '))')
+                    result.append('        return std::nullopt;')
+                    break
+                else:
+                    condition = re.search(r'Precondition', attribute)
+                    assert not condition
             result.append('    auto ' + sanitized_variable_name + ' = decoder.decodeWithAllowedClasses<' + match.groups()[0] + '>({ ' + decodable_classes[0] + ' });')
         elif member.is_subclass:
             result.append('    if (type == ' + type.subclass_enum_name() + "::" + member.name + ') {')
@@ -864,6 +895,8 @@ def generate_one_impl(type, template_argument):
     for encoder in type.encoders:
         if type.custom_encoder:
             continue
+        if type.members_are_subclasses:
+            result.append('IGNORE_WARNINGS_BEGIN("missing-noreturn")')
         if type.cf_type is not None:
             result.append('void ArgumentCoder<' + name_with_template + '>::encode(' + encoder + '& encoder, ' + name_with_template + ' instance)')
         elif type.rvalue:
@@ -877,6 +910,8 @@ def generate_one_impl(type, template_argument):
         if type.members_are_subclasses:
             result.append('    ASSERT_NOT_REACHED();')
         result.append('}')
+        if type.members_are_subclasses:
+            result.append('IGNORE_WARNINGS_END')
         result.append('')
     if type.cf_type is not None:
         result.append('std::optional<RetainPtr<' + name_with_template + '>> ArgumentCoder<RetainPtr<' + name_with_template + '>>::decode(Decoder& decoder)')
@@ -920,7 +955,6 @@ def generate_one_impl(type, template_argument):
 
 
 def generate_impl(serialized_types, serialized_enums, headers, generating_webkit_platform_impl):
-    serialized_types = resolve_inheritance(serialized_types)
     result = []
     result.append(_license_header)
     result.append('#include "config.h"')
@@ -1005,10 +1039,9 @@ def generate_impl(serialized_types, serialized_enums, headers, generating_webkit
             if member.condition is not None:
                 result.append('#endif')
         result.append('        return true;')
-        result.append('    default:')
-        result.append('        return false;')
         result.append('    }')
         result.append('IGNORE_WARNINGS_END')
+        result.append('    return false;')
         result.append('}')
         if type.condition is not None:
             result.append('#endif')
@@ -1095,7 +1128,13 @@ def generate_one_serialized_type_info(type):
         result.append('        } },')
         return result
 
+
     serialized_members = type.members_for_serialized_type_info()
+    parent_class = type.parent_class
+    while parent_class is not None:
+        serialized_members = parent_class.members_for_serialized_type_info() + serialized_members
+        parent_class = parent_class.parent_class
+
     optional_tuple_state = None
     for member in serialized_members:
         if member.condition is not None:
@@ -1351,14 +1390,14 @@ def parse_serialized_types(file):
         if match:
             cf_type, namespace, name = match.groups()
             continue
-        match = re.search(r'using (.*) = ([^;]*)', line)
-        if match:
-            using_statements.append(UsingStatement(match.groups()[0], match.groups()[1], type_condition))
-            continue
         match = re.search(r'additional_forward_declaration: (.*)', line)
         if match:
             declaration = match.groups()[0]
             additional_forward_declarations.append(ConditionalForwardDeclaration(declaration, type_condition))
+            continue
+        match = re.search(r'using (.*) = ([^;]*)', line)
+        if match:
+            using_statements.append(UsingStatement(match.groups()[0], match.groups()[1], type_condition))
             continue
         if underlying_type is not None:
             members.append(EnumMember(line.strip(' ,'), member_condition))
@@ -1446,7 +1485,6 @@ def generate_one_dictionary_member_validation(member):
 
 
 def generate_webkit_secure_coding_impl(serialized_types, headers):
-    serialized_types = resolve_inheritance(serialized_types)
     result = []
     result.append(_license_header)
     result.append('#include "config.h"')
@@ -1520,7 +1558,6 @@ def generate_webkit_secure_coding_impl(serialized_types, headers):
 
 
 def generate_webkit_secure_coding_header(serialized_types):
-    serialized_types = resolve_inheritance(serialized_types)
     result = []
     result.append(_license_header)
     result.append('#pragma once')
@@ -1584,7 +1621,7 @@ def main(argv):
     headers = []
     header_set = set()
     header_set.add(ConditionalHeader('"FormDataReference.h"', None))
-    additional_forward_declarations_set = set()
+    additional_forward_declarations_list = []
     file_extension = argv[1]
     skip = False
     directory = None
@@ -1608,11 +1645,13 @@ def main(argv):
             for header in new_headers:
                 header_set.add(header)
             for declaration in new_additional_forward_declarations:
-                additional_forward_declarations_set.add(declaration)
+                additional_forward_declarations_list.append(declaration)
     headers = sorted(header_set)
 
+    serialized_types = resolve_inheritance(serialized_types)
+
     with open('GeneratedSerializers.h', "w+") as output:
-        output.write(generate_header(serialized_types, serialized_enums, additional_forward_declarations_set))
+        output.write(generate_header(serialized_types, serialized_enums, additional_forward_declarations_list))
     with open('GeneratedSerializers.%s' % file_extension, "w+") as output:
         output.write(generate_impl(serialized_types, serialized_enums, headers, False))
     with open('WebKitPlatformGeneratedSerializers.%s' % file_extension, "w+") as output:

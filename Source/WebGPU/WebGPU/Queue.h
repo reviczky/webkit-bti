@@ -32,6 +32,7 @@
 #import <wtf/Ref.h>
 #import <wtf/ThreadSafeRefCounted.h>
 #import <wtf/Vector.h>
+#import <wtf/WeakPtr.h>
 
 struct WGPUQueueImpl {
 };
@@ -60,9 +61,9 @@ public:
 
     void onSubmittedWorkDone(CompletionHandler<void(WGPUQueueWorkDoneStatus)>&& callback);
     void submit(Vector<std::reference_wrapper<CommandBuffer>>&& commands);
-    void writeBuffer(const Buffer&, uint64_t bufferOffset, const void* data, size_t);
-    void writeBuffer(id<MTLBuffer>, uint64_t bufferOffset, const void* data, size_t);
-    void writeTexture(const WGPUImageCopyTexture& destination, const void* data, size_t dataSize, const WGPUTextureDataLayout&, const WGPUExtent3D& writeSize);
+    void writeBuffer(const Buffer&, uint64_t bufferOffset, void* data, size_t);
+    void writeBuffer(id<MTLBuffer>, uint64_t bufferOffset, void* data, size_t);
+    void writeTexture(const WGPUImageCopyTexture& destination, void* data, size_t dataSize, const WGPUTextureDataLayout&, const WGPUExtent3D& writeSize);
     void setLabel(String&&);
 
     void onSubmittedWorkScheduled(CompletionHandler<void()>&&);
@@ -70,23 +71,24 @@ public:
     bool isValid() const { return m_commandQueue; }
     void makeInvalid() { m_commandQueue = nil; }
 
-    id<MTLCommandQueue> commandQueue() const { return m_commandQueue; }
-
-    const Device& device() const { return m_device; }
+    const Device& device() const;
     void waitUntilIdle();
     void clearTexture(const WGPUImageCopyTexture&, NSUInteger);
+    id<MTLCommandBuffer> commandBufferWithDescriptor(MTLCommandBufferDescriptor*);
+    void commitMTLCommandBuffer(id<MTLCommandBuffer>);
+    void setEncoderForBuffer(id<MTLCommandBuffer>, id<MTLCommandEncoder>);
+    id<MTLCommandEncoder> encoderForBuffer(id<MTLCommandBuffer>) const;
 
 private:
     Queue(id<MTLCommandQueue>, Device&);
     Queue(Device&);
 
-    bool validateSubmit(const Vector<std::reference_wrapper<CommandBuffer>>&) const;
+    NSString* errorValidatingSubmit(const Vector<std::reference_wrapper<CommandBuffer>>&) const;
     bool validateWriteBuffer(const Buffer&, uint64_t bufferOffset, size_t) const;
 
     void ensureBlitCommandEncoder();
     void finalizeBlitCommandEncoder();
 
-    void commitMTLCommandBuffer(id<MTLCommandBuffer>);
     bool isIdle() const;
     bool isSchedulingIdle() const { return m_submittedCommandBufferCount == m_scheduledCommandBufferCount; }
 
@@ -96,7 +98,7 @@ private:
     id<MTLCommandQueue> m_commandQueue { nil };
     id<MTLCommandBuffer> m_commandBuffer { nil };
     id<MTLBlitCommandEncoder> m_blitCommandEncoder { nil };
-    Device& m_device; // The only kind of queues that exist right now are default queues, which are owned by Devices.
+    WeakPtr<Device> m_device; // The only kind of queues that exist right now are default queues, which are owned by Devices.
 
     uint64_t m_submittedCommandBufferCount { 0 };
     uint64_t m_completedCommandBufferCount { 0 };
@@ -105,7 +107,9 @@ private:
     HashMap<uint64_t, OnSubmittedWorkScheduledCallbacks, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_onSubmittedWorkScheduledCallbacks;
     using OnSubmittedWorkDoneCallbacks = Vector<WTF::Function<void(WGPUQueueWorkDoneStatus)>>;
     HashMap<uint64_t, OnSubmittedWorkDoneCallbacks, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_onSubmittedWorkDoneCallbacks;
-    NSMutableSet<id<MTLCommandBuffer>> *m_pendingCommandBuffers;
+    NSMutableSet<id<MTLCommandBuffer>> *m_pendingCommandBuffers { nil };
+    NSMutableOrderedSet<id<MTLCommandBuffer>> *m_createdNotCommittedBuffers { nil };
+    NSMapTable<id<MTLCommandBuffer>, id<MTLCommandEncoder>> *m_openCommandEncoders;
 };
 
 } // namespace WebGPU

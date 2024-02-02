@@ -43,11 +43,13 @@
 #include "RenderSVGModelObjectInlines.h"
 #include "RenderView.h"
 #include "SVGElementInlines.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGGraphicsElement.h"
 #include "SVGLocatable.h"
 #include "SVGNames.h"
 #include "SVGPathData.h"
 #include "SVGResourcesCache.h"
+#include "SVGUseElement.h"
 #include "TransformState.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -232,9 +234,8 @@ bool RenderSVGModelObject::checkIntersection(RenderElement* renderer, const Floa
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
-    SVGElement* svgElement = downcast<SVGElement>(renderer->element());
-    ASSERT(is<SVGGraphicsElement>(svgElement));
-    auto ctm = downcast<SVGGraphicsElement>(*svgElement).getCTM(SVGLocatable::DisallowStyleUpdate);
+    auto* svgElement = downcast<SVGGraphicsElement>(renderer->element());
+    auto ctm = svgElement->getCTM(SVGLocatable::DisallowStyleUpdate);
     // FIXME: [SVG] checkEnclosure implementation is inconsistent
     // https://bugs.webkit.org/show_bug.cgi?id=262709
     return intersectsAllowingEmpty(rect, ctm.mapRect(renderer->repaintRectInLocalCoordinates(RepaintRectCalculation::Accurate)));
@@ -246,9 +247,8 @@ bool RenderSVGModelObject::checkEnclosure(RenderElement* renderer, const FloatRe
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
-    SVGElement* svgElement = downcast<SVGElement>(renderer->element());
-    ASSERT(is<SVGGraphicsElement>(svgElement));
-    auto ctm = downcast<SVGGraphicsElement>(*svgElement).getCTM(SVGLocatable::DisallowStyleUpdate);
+    auto* svgElement = downcast<SVGGraphicsElement>(renderer->element());
+    auto ctm = svgElement->getCTM(SVGLocatable::DisallowStyleUpdate);
     // FIXME: [SVG] checkEnclosure implementation is inconsistent
     // https://bugs.webkit.org/show_bug.cgi?id=262709
     return rect.contains(ctm.mapRect(renderer->repaintRectInLocalCoordinates(RepaintRectCalculation::Accurate)));
@@ -286,6 +286,11 @@ Path RenderSVGModelObject::computeClipPath(AffineTransform& transform) const
 {
     if (layer()->isTransformed())
         transform.multiply(layer()->currentTransform(RenderStyle::individualTransformOperations()).toAffineTransform());
+
+    if (auto* useElement = dynamicDowncast<SVGUseElement>(element())) {
+        if (auto* clipChild = useElement->rendererClipChild())
+            transform.multiply(downcast<RenderLayerModelObject>(*clipChild).checkedLayer()->currentTransform(RenderStyle::individualTransformOperations()).toAffineTransform());
+    }
 
     return pathFromGraphicsElement(downcast<SVGGraphicsElement>(element()));
 }

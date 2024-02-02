@@ -59,17 +59,18 @@ public:
     static size_t calculateMemoryCost(const Parameters&);
 
     static std::unique_ptr<ImageBufferShareableBitmapBackend> create(const Parameters&, const WebCore::ImageBufferCreationContext&);
-    static std::unique_ptr<ImageBufferShareableBitmapBackend> create(const Parameters&, ImageBufferBackendHandle);
+    static std::unique_ptr<ImageBufferShareableBitmapBackend> create(const Parameters&, ShareableBitmap::Handle);
 
     ImageBufferShareableBitmapBackend(const Parameters&, Ref<ShareableBitmap>&&, std::unique_ptr<WebCore::GraphicsContext>&&);
 
     WebCore::GraphicsContext& context() final { return *m_context; }
 
-    std::optional<ImageBufferBackendHandle> createBackendHandle(SharedMemory::Protection = SharedMemory::Protection::ReadWrite) const final;
+    std::optional<ImageBufferBackendHandle> createBackendHandle(WebCore::SharedMemory::Protection = WebCore::SharedMemory::Protection::ReadWrite) const final;
     RefPtr<ShareableBitmap> bitmap() const final { return m_bitmap.ptr(); }
 #if USE(CAIRO)
     RefPtr<cairo_surface_t> createCairoSurface() final;
 #endif
+    void transferToNewContext(const WebCore::ImageBufferCreationContext&) final;
 
     RefPtr<WebCore::NativeImage> copyNativeImage() final;
     RefPtr<WebCore::NativeImage> createNativeImageReference() final;

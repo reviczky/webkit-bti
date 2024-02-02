@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WebKit</a></h3>
         <p>API Version: 6.0</p>
         
-        <p>Library Version: 2.43.3</p>
+        <p>Library Version: 2.43.4</p>
         
       </div>
       
@@ -101,7 +101,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
 
   <section>
     <div class="docblock">
-      <p></p>
+      <p><span class="emblem deprecated">deprecated: 2.44</span>&nbsp;</p>
     </div>
 
     <div class="declaration toggle-wrapper">
@@ -133,13 +133,14 @@ SPDX-License-Identifier: BSD, LGPL-2.1
       </h4>
 
       <div class="docblock">
-        <p>Obtain the title of the&nbsp;item.</p>
+        <p>Since 2.44, page titles are no longer stored in history. This function now returns an empty&nbsp;string.</p>
       </div>
 
       <div class="docblock">
         
         
-        
+        <div><p>Deprecated since: 2.44</p>
+          <p>Please do not use it in newly written&nbsp;code.</p></div>
         
         
         
@@ -161,8 +162,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <div class="returns">
           <div class="arg-description">
             <p><em>Type:</em>&nbsp;<code>const gchar*</code></p>
-            <p>The page title of <code>list_item</code> or <code>NULL</code>
-   when the title is&nbsp;empty.</p>
+            <p>An empty&nbsp;string.</p>
           </div>
           <div>
             <table>

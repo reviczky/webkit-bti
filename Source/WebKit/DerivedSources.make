@@ -28,6 +28,7 @@ VPATH = \
     $(WebKit2)/GPUProcess/media \
     $(WebKit2)/GPUProcess/media/ios \
     $(WebKit2)/GPUProcess/webrtc \
+    $(WebKit2)/ModelProcess \
     $(WebKit2)/NetworkProcess \
     $(WebKit2)/NetworkProcess/Cookies \
     $(WebKit2)/NetworkProcess/cache \
@@ -64,6 +65,7 @@ VPATH = \
     $(WebKit2)/WebProcess/MediaCache \
     $(WebKit2)/WebProcess/MediaSession \
     $(WebKit2)/WebProcess/MediaStream \
+    $(WebKit2)/WebProcess/Model \
     $(WebKit2)/WebProcess/Network \
     $(WebKit2)/WebProcess/Network/webrtc \
     $(WebKit2)/WebProcess/Notifications \
@@ -93,6 +95,7 @@ VPATH = \
     $(WebKit2)/UIProcess/Media \
     $(WebKit2)/UIProcess/Media/cocoa \
     $(WebKit2)/UIProcess/MediaStream \
+    $(WebKit2)/UIProcess/Model \
     $(WebKit2)/UIProcess/Network \
     $(WebKit2)/UIProcess/Network/CustomProtocols \
     $(WebKit2)/UIProcess/Notifications \
@@ -186,6 +189,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/Extensions/WebExtensionController \
 	UIProcess/Media/AudioSessionRoutingArbitratorProxy \
 	UIProcess/Media/RemoteMediaSessionCoordinatorProxy \
+	UIProcess/Model/ModelProcessProxy \
 	UIProcess/SpeechRecognitionRemoteRealtimeMediaSourceManager \
 	UIProcess/SpeechRecognitionServer \
 	UIProcess/XR/PlatformXRSystem \
@@ -194,6 +198,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Extensions/WebExtensionControllerProxy \
 	WebProcess/GPU/GPUProcessConnection \
 	WebProcess/GPU/graphics/RemoteImageBufferProxy \
+	WebProcess/GPU/graphics/RemoteImageBufferSetProxy \
 	WebProcess/GPU/graphics/RemoteRenderingBackendProxy \
 	WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy \
 	WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy \
@@ -220,6 +225,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Inspector/WebInspector \
 	WebProcess/Inspector/RemoteWebInspectorUI \
 	WebProcess/MediaSession/RemoteMediaSessionCoordinator \
+	WebProcess/Model/ModelProcessConnection \
 	WebProcess/Network/WebSocketChannel \
 	WebProcess/Network/NetworkProcessConnection \
 	WebProcess/Network/WebResourceLoader \
@@ -318,6 +324,8 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteMediaSourceProxy \
 	GPUProcess/media/RemoteRemoteCommandListenerProxy \
 	GPUProcess/media/RemoteSourceBufferProxy \
+	ModelProcess/ModelConnectionToWebProcess \
+	ModelProcess/ModelProcess \
 	webpushd/PushClientConnection \
 #
 
@@ -490,6 +498,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	GPUProcess/media/TextTrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/TrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/VideoTrackPrivateRemoteConfiguration.serialization.in \
+	ModelProcess/ModelProcessCreationParameters.serialization.in \
 	NetworkProcess/NetworkProcessCreationParameters.serialization.in \
 	NetworkProcess/NetworkResourceLoadParameters.serialization.in \
 	NetworkProcess/NetworkSessionCreationParameters.serialization.in \
@@ -499,11 +508,12 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementManagerInterface.serialization.in \
 	NetworkProcess/storage/FileSystemStorageError.serialization.in \
 	Platform/IPC/FormDataReference.serialization.in \
+	Platform/IPC/IPCEvent.serialization.in \
 	Platform/IPC/IPCSemaphore.serialization.in \
+	Platform/IPC/ObjectIdentifierReference.serialization.in \
 	Platform/IPC/SharedBufferReference.serialization.in \
 	Platform/IPC/SharedFileHandle.serialization.in \
 	Platform/IPC/StreamServerConnection.serialization.in \
-	Platform/SharedMemory.serialization.in \
 	Shared/AuxiliaryProcessCreationParameters.serialization.in \
 	Shared/API/APIArray.serialization.in \
 	Shared/API/APIData.serialization.in \
@@ -571,12 +581,14 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Extensions/WebExtensionContext.serialization.in \
 	Shared/Extensions/WebExtensionContextParameters.serialization.in \
 	Shared/Extensions/WebExtensionControllerParameters.serialization.in \
+	Shared/Extensions/WebExtensionCookieParameters.serialization.in \
 	Shared/Extensions/WebExtensionDynamicScripts.serialization.in \
 	Shared/Extensions/WebExtensionEventListenerType.serialization.in \
 	Shared/Extensions/WebExtensionFrameParameters.serialization.in \
 	Shared/Extensions/WebExtensionMatchedRuleParameters.serialization.in \
 	Shared/Extensions/WebExtensionMenuItem.serialization.in \
 	Shared/Extensions/WebExtensionMessageSenderParameters.serialization.in \
+	Shared/Extensions/WebExtensionStorage.serialization.in \
 	Shared/Extensions/WebExtensionTab.serialization.in \
 	Shared/Extensions/WebExtensionWindow.serialization.in \
 	Shared/FileSystemSyncAccessHandleInfo.serialization.in \
@@ -602,6 +614,8 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/LocalFrameCreationParameters.serialization.in \
 	Shared/MediaPlaybackState.serialization.in \
 	Shared/Model.serialization.in \
+	Shared/ModelProcessConnectionParameters.serialization.in \
+	Shared/MonotonicObjectIdentifier.serialization.in \
 	Shared/NavigationActionData.serialization.in \
 	Shared/NetworkProcessConnectionParameters.serialization.in \
 	Shared/Pasteboard.serialization.in \
@@ -627,6 +641,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/TextRecognitionUpdateResult.serialization.in \
 	Shared/URLSchemeTaskParameters.serialization.in \
 	Shared/UndoOrRedo.serialization.in \
+	Shared/UnifiedTextReplacement.serialization.in \
 	Shared/UserContentControllerParameters.serialization.in \
 	Shared/UserData.serialization.in \
 	Shared/UserInterfaceIdiom.serialization.in \
@@ -638,6 +653,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebBackForwardListCounts.serialization.in \
 	Shared/WebContextMenuItemData.serialization.in \
 	Shared/WebCoreArgumentCoders.serialization.in \
+	Shared/WebCoreFont.serialization.in \
 	Shared/WebEvent.serialization.in \
 	Shared/WebFindOptions.serialization.in \
 	Shared/WebFoundTextRange.serialization.in \
@@ -667,6 +683,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/cf/CFTypes.serialization.in \
 	Shared/cf/CoreIPCBoolean.serialization.in \
 	Shared/cf/CoreIPCNumber.serialization.in \
+	Shared/cf/CoreIPCSecCertificate.serialization.in \
 	Shared/mac/PDFContextMenuItem.serialization.in \
 	Shared/mac/SecItemRequestData.serialization.in \
 	Shared/mac/SecItemResponseData.serialization.in \
@@ -756,7 +773,9 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	WebProcess/GPU/media/RemoteVideoFrameProxyProperties.serialization.in \
 	WebProcess/GPU/webrtc/SharedVideoFrame.serialization.in \
 	WebProcess/MediaStream/MediaDeviceSandboxExtensions.serialization.in \
+	WebProcess/Model/ModelProcessConnectionInfo.serialization.in \
 	WebProcess/Network/NetworkProcessConnectionInfo.serialization.in \
+	WebProcess/UserContent/InjectUserScriptImmediately.serialization.in \
 	WebProcess/WebCoreSupport/WebSpeechSynthesisVoice.serialization.in \
 	WebProcess/WebPage/RemoteLayerTree/PlatformCAAnimationRemoteProperties.serialization.in \
 #
@@ -771,7 +790,7 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	MediaPlaybackTargetContext.serialization.in \
 	MediaProducer.serialization.in \
 	MDNSRegisterError.serialization.in \
-	PlatformCALayer.messages.in \
+	PlatformCALayer.serialization.in \
 	PlatformEvent.serialization.in \
 	PlatformMediaSession.serialization.in \
 	PlatformScreen.serialization.in \
@@ -818,10 +837,14 @@ EXTENSION_INTERFACES = \
     WebExtensionAPIPort \
     WebExtensionAPIRuntime \
     WebExtensionAPIScripting \
+    WebExtensionAPIStorage \
+    WebExtensionAPIStorageArea \
     WebExtensionAPITabs \
     WebExtensionAPITest \
     WebExtensionAPIWebNavigation \
     WebExtensionAPIWebNavigationEvent \
+    WebExtensionAPIWebRequest \
+    WebExtensionAPIWebRequestEvent \
     WebExtensionAPIWindows \
     WebExtensionAPIWindowsEvent \
 #
@@ -842,7 +865,6 @@ all : module.private.modulemap
 
 ifeq ($(USE_INTERNAL_SDK),YES)
 WEBKIT_ADDITIONS_SWIFT_FILES = \
-	WKApplicationUtilities.swift \
 #
 
 $(WEBKIT_ADDITIONS_SWIFT_FILES): %.swift : %.swift.in

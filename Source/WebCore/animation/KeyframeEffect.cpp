@@ -633,8 +633,8 @@ auto KeyframeEffect::getKeyframes() -> Vector<ComputedKeyframe>
 {
     // https://drafts.csswg.org/web-animations-1/#dom-keyframeeffectreadonly-getkeyframes
 
-    if (auto* declarativeAnimation = dynamicDowncast<DeclarativeAnimation>(animation()))
-        declarativeAnimation->flushPendingStyleChanges();
+    if (auto* styleOriginatedAnimation = dynamicDowncast<StyleOriginatedAnimation>(animation()))
+        styleOriginatedAnimation->flushPendingStyleChanges();
 
     Vector<ComputedKeyframe> computedKeyframes;
 
@@ -658,7 +658,8 @@ auto KeyframeEffect::getKeyframes() -> Vector<ComputedKeyframe>
     auto* lastStyleChangeEventStyle = targetStyleable()->lastStyleChangeEventStyle();
     auto& elementStyle = lastStyleChangeEventStyle ? *lastStyleChangeEventStyle : currentStyle();
 
-    ComputedStyleExtractor computedStyleExtractor { target, false, m_pseudoId };
+    auto pseudoElementIdentifier = m_pseudoId == PseudoId::None ? std::nullopt : std::optional(Style::PseudoElementIdentifier { m_pseudoId });
+    ComputedStyleExtractor computedStyleExtractor { target, false, pseudoElementIdentifier };
 
     BlendingKeyframes computedBlendingKeyframes(m_blendingKeyframes.animationName());
     computedBlendingKeyframes.copyKeyframes(m_blendingKeyframes);
@@ -1054,9 +1055,9 @@ std::optional<unsigned> KeyframeEffect::transformFunctionListPrefix() const
     return isTransformFunctionListsMatchPrefixRelevant() ? std::optional<unsigned>(m_transformFunctionListsMatchPrefix) : std::nullopt;
 }
 
-void KeyframeEffect::computeDeclarativeAnimationBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle, const Style::ResolutionContext& resolutionContext)
+void KeyframeEffect::computeStyleOriginatedAnimationBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle, const Style::ResolutionContext& resolutionContext)
 {
-    ASSERT(is<DeclarativeAnimation>(animation()));
+    ASSERT(is<StyleOriginatedAnimation>(animation()));
     if (is<CSSAnimation>(animation()))
         computeCSSAnimationBlendingKeyframes(newStyle, resolutionContext);
     else if (is<CSSTransition>(animation())) {
@@ -1072,13 +1073,15 @@ void KeyframeEffect::computeCSSAnimationBlendingKeyframes(const RenderStyle& una
     auto& backingAnimation = downcast<CSSAnimation>(*animation()).backingAnimation();
 
     BlendingKeyframes blendingKeyframes(AtomString { backingAnimation.name().name });
-    if (auto* styleScope = Style::Scope::forOrdinal(*m_target, backingAnimation.name().scopeOrdinal))
-        styleScope->resolver().keyframeStylesForAnimation(*m_target, unanimatedStyle, resolutionContext, blendingKeyframes);
+    if (m_target) {
+        if (auto* styleScope = Style::Scope::forOrdinal(*m_target, backingAnimation.name().scopeOrdinal))
+            styleScope->resolver().keyframeStylesForAnimation(*m_target, unanimatedStyle, resolutionContext, blendingKeyframes);
 
-    // Ensure resource loads for all the frames.
-    for (auto& keyframe : blendingKeyframes) {
-        if (auto* style = const_cast<RenderStyle*>(keyframe.style()))
-            Style::loadPendingResources(*style, *document(), m_target.get());
+        // Ensure resource loads for all the frames.
+        for (auto& keyframe : blendingKeyframes) {
+            if (auto* style = const_cast<RenderStyle*>(keyframe.style()))
+                Style::loadPendingResources(*style, *document(), m_target.get());
+        }
     }
 
     m_animationType = WebAnimationType::CSSAnimation;
@@ -1227,17 +1230,16 @@ const String KeyframeEffect::pseudoElement() const
 
 ExceptionOr<void> KeyframeEffect::setPseudoElement(const String& pseudoElement)
 {
-    // https://drafts.csswg.org/web-animations/#dom-keyframeeffect-pseudoelement
-    auto pseudoIdOrException = pseudoIdFromString(pseudoElement);
-    if (pseudoIdOrException.hasException())
-        return pseudoIdOrException.releaseException();
-    auto pseudoId = pseudoIdOrException.returnValue();
+    // https://drafts.csswg.org/web-animations-1/#dom-keyframeeffect-pseudoelement
+    auto pseudoId = pseudoIdFromString(pseudoElement);
+    if (!pseudoId)
+        return Exception { ExceptionCode::SyntaxError, "Parsing pseudo-element selector failed"_s };
 
-    if (pseudoId == m_pseudoId)
+    if (*pseudoId == m_pseudoId)
         return { };
 
     auto& previousTargetStyleable = targetStyleable();
-    m_pseudoId = pseudoId;
+    m_pseudoId = *pseudoId;
     didChangeTargetStyleable(previousTargetStyleable);
 
     return { };
@@ -1395,15 +1397,12 @@ void KeyframeEffect::computeSomeKeyframesUseStepsOrLinearTimingFunctionWithPoint
         if (defaultTimingFunctionIsSteps || defaultTimingFunctionIsLinearWithPoints) {
             for (auto& keyframe : m_blendingKeyframes) {
                 auto* timingFunction = keyframe.timingFunction();
-                if (!m_someKeyframesUseStepsTimingFunction) {
-                    if ((!timingFunction && defaultTimingFunctionIsSteps) || is<StepsTimingFunction>(timingFunction))
-                        m_someKeyframesUseStepsTimingFunction = true;
-                } else if (!m_someKeyframesUseLinearTimingFunctionWithPoints) {
-                    if ((!timingFunction && defaultTimingFunctionIsLinearWithPoints) || isLinearTimingFunctionWithPoints(timingFunction))
-                        m_someKeyframesUseStepsTimingFunction = true;
-                }
-                if (m_someKeyframesUseStepsTimingFunction && m_someKeyframesUseLinearTimingFunctionWithPoints)
-                    return;
+                if (defaultTimingFunctionIsSteps && !m_someKeyframesUseStepsTimingFunction)
+                    m_someKeyframesUseStepsTimingFunction = !timingFunction || is<StepsTimingFunction>(timingFunction);
+                else if (defaultTimingFunctionIsLinearWithPoints && !m_someKeyframesUseLinearTimingFunctionWithPoints)
+                    m_someKeyframesUseLinearTimingFunctionWithPoints = !timingFunction || isLinearTimingFunctionWithPoints(timingFunction);
+                if (defaultTimingFunctionIsSteps == m_someKeyframesUseStepsTimingFunction && defaultTimingFunctionIsLinearWithPoints == m_someKeyframesUseLinearTimingFunctionWithPoints)
+                    break;
             }
             return;
         }
@@ -1546,15 +1545,15 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
 
 const TimingFunction* KeyframeEffect::timingFunctionForBlendingKeyframe(const BlendingKeyframe& keyframe) const
 {
-    if (auto* declarativeAnimation = dynamicDowncast<DeclarativeAnimation>(animation())) {
+    if (auto* styleOriginatedAnimation = dynamicDowncast<StyleOriginatedAnimation>(animation())) {
         // If we're dealing with a CSS Animation, the timing function is specified either on the keyframe itself.
-        if (is<CSSAnimation>(declarativeAnimation)) {
+        if (is<CSSAnimation>(styleOriginatedAnimation)) {
             if (auto* timingFunction = keyframe.timingFunction())
                 return timingFunction;
         }
 
         // Failing that, or for a CSS Transition, the timing function is inherited from the backing Animation object.
-        return declarativeAnimation->backingAnimation().timingFunction();
+        return styleOriginatedAnimation->backingAnimation().timingFunction();
     }
 
     return keyframe.timingFunction();
@@ -2134,7 +2133,7 @@ bool KeyframeEffect::computeExtentOfTransformAnimation(LayoutRect& bounds) const
     for (const auto& keyframe : m_blendingKeyframes) {
         const auto* keyframeStyle = keyframe.style();
 
-        // FIXME: maybe for declarative animations we always say it's true for the first and last keyframe.
+        // FIXME: maybe for style-originated animations we always say it's true for the first and last keyframe.
         if (!keyframe.animatesProperty(CSSPropertyTransform)) {
             // If the first keyframe is missing transform style, use the current style.
             if (!keyframe.offset())
@@ -2340,8 +2339,8 @@ void KeyframeEffect::setComposite(CompositeOperation compositeOperation)
 
 CompositeOperation KeyframeEffect::bindingsComposite() const
 {
-    if (auto* declarativeAnimation = dynamicDowncast<DeclarativeAnimation>(animation()))
-        declarativeAnimation->flushPendingStyleChanges();
+    if (auto* styleOriginatedAnimation = dynamicDowncast<StyleOriginatedAnimation>(animation()))
+        styleOriginatedAnimation->flushPendingStyleChanges();
     return composite();
 }
 

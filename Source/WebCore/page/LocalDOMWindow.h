@@ -77,7 +77,6 @@ class Navigator;
 class Node;
 class NodeList;
 class Page;
-class PageConsoleClient;
 class Performance;
 class RequestAnimationFrameCallback;
 class RequestIdleCallback;
@@ -179,6 +178,8 @@ public:
     WEBCORE_EXPORT bool hasTransientActivation() const;
     bool hasStickyActivation() const;
     WEBCORE_EXPORT bool consumeTransientActivation();
+    WEBCORE_EXPORT bool hasHistoryActionActivation() const;
+    WEBCORE_EXPORT bool consumeHistoryActionUserActivation();
 
     DOMSelection* getSelection();
 
@@ -187,8 +188,6 @@ public:
     WEBCORE_EXPORT void focus(bool allowFocus = false);
     void focus(LocalDOMWindow& incumbentWindow);
     void blur();
-    WEBCORE_EXPORT void close();
-    void close(Document&);
     void print();
     void stop();
     bool isStopping() const { return m_isStopping; }
@@ -218,8 +217,6 @@ public:
     int scrollX() const;
     int scrollY() const;
 
-    bool closed() const;
-
     unsigned length() const;
 
     AtomString name() const;
@@ -228,10 +225,7 @@ public:
     String status() const;
     void setStatus(const String&);
 
-    WindowProxy* opener() const;
     void disownOpener();
-    WindowProxy* parent() const;
-    WindowProxy* top() const;
 
     String origin() const;
     SecurityOrigin* securityOrigin() const;
@@ -256,9 +250,6 @@ public:
 
     RefPtr<WebKitPoint> webkitConvertPointFromPageToNode(Node*, const WebKitPoint*) const;
     RefPtr<WebKitPoint> webkitConvertPointFromNodeToPage(Node*, const WebKitPoint*) const;
-
-    PageConsoleClient* console() const;
-    CheckedPtr<PageConsoleClient> checkedConsole() const;
 
     void printErrorMessage(const String&) const;
 
@@ -386,6 +377,7 @@ public:
 
     // Navigation API
     Navigation& navigation();
+    Ref<Navigation> protectedNavigation();
 
     // FIXME: When this LocalDOMWindow is no longer the active LocalDOMWindow (i.e.,
     // when its document is no longer the document that is displayed in its
@@ -422,6 +414,7 @@ private:
 
     bool isLocalDOMWindow() const final { return true; }
     bool isRemoteDOMWindow() const final { return false; }
+    void closePage() final;
     void eventListenersDidChange() final;
     void setLocation(LocalDOMWindow& activeWindow, const URL& completedURL, SetLocationLocking) final;
 
@@ -495,6 +488,7 @@ private:
     // been activated, while negative infinity indicates that a user activation-gated API has consumed the last user activation of W. The initial
     // value is positive infinity.
     MonotonicTime m_lastActivationTimestamp { MonotonicTime::infinity() };
+    MonotonicTime m_lastHistoryActionActivationTimestamp { MonotonicTime::infinity() };
 
     bool m_wasWrappedWithoutInitializedSecurityOrigin { false };
     bool m_mayReuseForNavigation { true };

@@ -49,11 +49,11 @@ const QualifiedName& pseudoElementTagName()
 }
 
 PseudoElement::PseudoElement(Element& host, PseudoId pseudoId)
-    : Element(pseudoElementTagName(), host.document(), CreatePseudoElement)
+    : Element(pseudoElementTagName(), host.document(), TypeFlag::HasCustomStyleResolveCallbacks)
     , m_hostElement(host)
     , m_pseudoId(pseudoId)
 {
-    setNodeFlag(NodeFlag::IsConnected);
+    setEventTargetFlag(EventTargetFlag::IsConnected);
     ASSERT(pseudoId == PseudoId::Before || pseudoId == PseudoId::After);
 }
 

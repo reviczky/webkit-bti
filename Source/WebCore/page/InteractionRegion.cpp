@@ -107,6 +107,7 @@ static bool shouldAllowAccessibilityRoleAsPointerCursorReplacement(const Element
     case AccessibilityRole::PopUpButton:
     case AccessibilityRole::RadioButton:
     case AccessibilityRole::Switch:
+    case AccessibilityRole::TextField:
     case AccessibilityRole::ToggleButton:
         return true;
     default:
@@ -119,7 +120,7 @@ bool elementMatchesHoverRules(Element& element)
     bool foundHoverRules = false;
     bool initialValue = element.isUserActionElement() && element.document().userActionElements().isHovered(element);
 
-    for (auto key : Style::makePseudoClassInvalidationKeys(CSSSelector::PseudoClassType::Hover, element)) {
+    for (auto key : Style::makePseudoClassInvalidationKeys(CSSSelector::PseudoClass::Hover, element)) {
         auto& ruleSets = element.styleResolver().ruleSets();
         auto* invalidationRuleSets = ruleSets.pseudoClassInvalidationRuleSets(key);
         if (!invalidationRuleSets)
