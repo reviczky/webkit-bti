@@ -1,4 +1,4 @@
-webkit2gtk (2.43.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.43.4-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/rules:
@@ -17,7 +17,7 @@ webkit2gtk (2.43.4-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 14:21:55 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 02 Feb 2024 17:48:13 +0100
 
 webkit2gtk (2.43.3-1) experimental; urgency=medium
 
