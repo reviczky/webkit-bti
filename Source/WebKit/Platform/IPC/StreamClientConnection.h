@@ -72,6 +72,7 @@ public:
     void setMaxBatchSize(unsigned);
 
     void open(Connection::Client&, SerialFunctionDispatcher& = RunLoop::current());
+    Error flushSentMessages(Timeout);
     void invalidate();
 
     template<typename T, typename U, typename V> Error send(T&& message, ObjectIdentifierGeneric<U, V> destinationID, Timeout);
@@ -250,12 +251,12 @@ std::optional<StreamClientConnection::SendSyncResult<T>> StreamClientConnection:
         if constexpr(T::isReplyStreamEncodable) {
             auto replySpan = m_buffer.tryAcquireAll(timeout);
             if (!replySpan)
-                return Connection::DecoderOrError { Error::FailedToAcquireReplyBufferSpan };
+                return makeUnexpected(Error::FailedToAcquireReplyBufferSpan);
 
-            auto decoder = std::unique_ptr<Decoder> { new Decoder(*replySpan, m_currentDestinationID) };
+            auto decoder = makeUniqueRef<Decoder>(*replySpan, m_currentDestinationID);
             if (decoder->messageName() != MessageName::ProcessOutOfStreamMessage) {
                 ASSERT(decoder->messageName() == MessageName::SyncMessageReply);
-                return Connection::DecoderOrError { WTFMove(decoder) };
+                return WTFMove(decoder);
             }
         } else
             m_buffer.resetClientOffset();
@@ -267,15 +268,15 @@ std::optional<StreamClientConnection::SendSyncResult<T>> StreamClientConnection:
     if (!decoderResult)
         return std::nullopt;
 
-    if (decoderResult->decoder) {
+    if (decoderResult->has_value()) {
         std::optional<typename T::ReplyArguments> replyArguments;
-        auto& decoder = decoderResult->decoder;
+        auto& decoder = decoderResult->value();
         *decoder >> replyArguments;
         if (replyArguments)
-            return { { WTFMove(decoder), WTFMove(replyArguments) } };
+            return { { WTFMove(*replyArguments) } };
         return { Error::FailedToDecodeReplyArguments };
-    } else
-        return { decoderResult->error };
+    }
+    return { decoderResult->error() };
 }
 
 inline Error StreamClientConnection::trySendDestinationIDIfNeeded(uint64_t destinationID, Timeout timeout)

@@ -91,6 +91,9 @@ GPUProcess/webrtc/RemoteMediaRecorderManager.cpp
 GPUProcess/webrtc/RemoteSampleBufferDisplayLayer.cpp
 GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager.cpp
 
+ModelProcess/ModelProcess.cpp
+ModelProcess/ModelConnectionToWebProcess.cpp
+
 NetworkProcess/BackgroundFetchLoad.cpp
 NetworkProcess/DatabaseUtilities.cpp
 NetworkProcess/EarlyHintsResourceLoader.cpp
@@ -172,7 +175,6 @@ NetworkProcess/storage/IDBStorageManager.cpp
 NetworkProcess/storage/IDBStorageRegistry.cpp
 NetworkProcess/storage/LocalStorageManager.cpp
 NetworkProcess/storage/MemoryStorageArea.cpp
-NetworkProcess/storage/NetworkQuotaManager.cpp
 NetworkProcess/storage/NetworkStorageManager.cpp
 NetworkProcess/storage/OriginQuotaManager.cpp
 NetworkProcess/storage/OriginStorageManager.cpp
@@ -381,6 +383,7 @@ UIProcess/DeviceIdHashSaltStorage.cpp
 UIProcess/DisplayLink.cpp
 UIProcess/DisplayLinkProcessProxyClient.cpp
 UIProcess/DrawingAreaProxy.cpp
+UIProcess/FindStringCallbackAggregator.cpp
 UIProcess/FrameLoadState.cpp
 UIProcess/GeolocationPermissionRequestManagerProxy.cpp
 UIProcess/GeolocationPermissionRequestProxy.cpp
@@ -560,6 +563,8 @@ UIProcess/Network/NetworkProcessProxy.cpp
 
 UIProcess/GPU/GPUProcessProxy.cpp
 
+UIProcess/Model/ModelProcessProxy.cpp
+
 UIProcess/Inspector/InspectorTargetProxy.cpp
 UIProcess/Inspector/RemoteWebInspectorUIProxy.cpp
 UIProcess/Inspector/WebInspectorUIProxy.cpp
@@ -654,7 +659,6 @@ WebProcess/InjectedBundle/API/c/WKBundleBackForwardListItem.cpp
 WebProcess/InjectedBundle/API/c/WKBundleDOMWindowExtension.cpp
 WebProcess/InjectedBundle/API/c/WKBundleFrame.cpp
 WebProcess/InjectedBundle/API/c/WKBundleHitTestResult.cpp
-WebProcess/InjectedBundle/API/c/WKBundleInspector.cpp
 WebProcess/InjectedBundle/API/c/WKBundleNavigationAction.cpp
 WebProcess/InjectedBundle/API/c/WKBundleNodeHandle.cpp
 WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
@@ -682,6 +686,8 @@ WebProcess/MediaStream/MediaDeviceSandboxExtensions.cpp
 WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
 
 WebProcess/Model/WebModelPlayerProvider.cpp
+
+WebProcess/Model/ModelProcessConnection.cpp
 
 WebProcess/GPU/GPUProcessConnection.cpp
 WebProcess/GPU/ShapeDetection/RemoteBarcodeDetectorProxy.cpp
@@ -718,6 +724,7 @@ WebProcess/GPU/graphics/RemoteGraphicsContextGLProxyFunctionsGenerated.cpp
 WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy.cpp
 WebProcess/GPU/graphics/RemoteDisplayListRecorderProxy.cpp
 WebProcess/GPU/graphics/RemoteImageBufferProxy.cpp
+WebProcess/GPU/graphics/RemoteNativeImageBackendProxy.cpp
 WebProcess/GPU/graphics/RemoteRenderingBackendProxy.cpp
 WebProcess/GPU/graphics/RemoteImageBufferSetProxy.cpp
 WebProcess/GPU/graphics/RemoteResourceCacheProxy.cpp
@@ -763,6 +770,7 @@ WebProcess/Network/WebTransportReceiveStreamSource.cpp
 WebProcess/Network/WebTransportSendStreamSink.cpp
 WebProcess/Network/WebTransportSession.cpp
 
+WebProcess/Network/webrtc/LibWebRTCDnsResolverFactory.cpp
 WebProcess/Network/webrtc/LibWebRTCNetwork.cpp
 WebProcess/Network/webrtc/LibWebRTCNetworkManager.cpp
 WebProcess/Network/webrtc/LibWebRTCProvider.cpp
@@ -839,13 +847,13 @@ WebProcess/WebPage/FindController.cpp
 WebProcess/WebPage/IPCTestingAPI.cpp
 WebProcess/WebPage/MomentumEventDispatcher.cpp
 WebProcess/WebPage/PageBanner.cpp
+WebProcess/WebPage/UnifiedTextReplacementController.cpp
 WebProcess/WebPage/VisitedLinkTableController.cpp
 WebProcess/WebPage/WebBackForwardListProxy.cpp
 WebProcess/WebPage/WebContextMenu.cpp
 WebProcess/WebPage/WebCookieCache.cpp
 WebProcess/WebPage/WebCookieJar.cpp
 WebProcess/WebPage/WebDisplayRefreshMonitor.cpp
-WebProcess/WebPage/WebDocumentLoader.cpp
 WebProcess/WebPage/WebFoundTextRangeController.cpp
 WebProcess/WebPage/WebFrame.cpp
 WebProcess/WebPage/WebHistoryItemClient.cpp

@@ -25,6 +25,7 @@
 #include "HTMLFrameElementBase.h"
 
 #include "Document.h"
+#include "DocumentInlines.h"
 #include "ElementInlines.h"
 #include "EventLoop.h"
 #include "FocusController.h"
@@ -49,7 +50,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLFrameElementBase);
 using namespace HTMLNames;
 
 HTMLFrameElementBase::HTMLFrameElementBase(const QualifiedName& tagName, Document& document)
-    : HTMLFrameOwnerElement(tagName, document, CreateHTMLFrameElementBase)
+    : HTMLFrameOwnerElement(tagName, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 

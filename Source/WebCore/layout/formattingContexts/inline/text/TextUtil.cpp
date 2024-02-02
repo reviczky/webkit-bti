@@ -87,7 +87,9 @@ InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontC
     if (extendedMeasuring)
         width -= (spaceWidth(fontCascade, useSimplifiedContentMeasuring) + fontCascade.wordSpacing());
 
-    return std::isnan(width) ? 0.0f : std::isinf(width) ? maxInlineLayoutUnit() : width;
+    if (UNLIKELY(std::isnan(width) || std::isinf(width)))
+        return std::isnan(width) ? 0.0f : maxInlineLayoutUnit();
+    return std::max(0.f, width);
 }
 
 InlineLayoutUnit TextUtil::width(const InlineTextItem& inlineTextItem, const FontCascade& fontCascade, InlineLayoutUnit contentLogicalLeft)
@@ -108,7 +110,9 @@ InlineLayoutUnit TextUtil::width(const InlineTextItem& inlineTextItem, const Fon
 
         if (singleWhiteSpace) {
             auto width = spaceWidth(fontCascade, useSimplifiedContentMeasuring);
-            return std::isnan(width) ? 0.0f : std::isinf(width) ? maxInlineLayoutUnit() : width;
+            if (UNLIKELY(std::isnan(width) || std::isinf(width)))
+                return std::isnan(width) ? 0.0f : maxInlineLayoutUnit();
+            return std::max(0.f, width);
         }
     }
     return width(inlineTextItem.inlineTextBox(), fontCascade, from, to, contentLogicalLeft, useTrailingWhitespaceMeasuringOptimization);
@@ -124,7 +128,7 @@ InlineLayoutUnit TextUtil::trailingWhitespaceWidth(const InlineTextBox& inlineTe
 }
 
 template <typename TextIterator>
-static void fallbackFontsForRunWithIterator(WeakHashSet<const Font>& fallbackFonts, const FontCascade& fontCascade, const TextRun& run, TextIterator& textIterator)
+static void fallbackFontsForRunWithIterator(SingleThreadWeakHashSet<const Font>& fallbackFonts, const FontCascade& fontCascade, const TextRun& run, TextIterator& textIterator)
 {
     auto isRTL = run.rtl();
     auto isSmallCaps = fontCascade.isSmallCaps();

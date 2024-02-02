@@ -416,44 +416,29 @@ ALWAYS_INLINE bool matchesFullscreenPseudoClass(const Element& element)
     return false;
 }
 
-ALWAYS_INLINE bool matchesWebkitFullScreenPseudoClass(const Element& element)
+ALWAYS_INLINE bool matchesAnimatingFullscreenTransitionPseudoClass(const Element& element)
 {
-    // While a Document is in the fullscreen state, and the document's current fullscreen
-    // element is an element in the document, the 'full-screen' pseudoclass applies to
-    // that element. Also, an <iframe>, <object> or <embed> element whose child browsing
-    // context's Document is in the fullscreen state has the 'full-screen' pseudoclass applied.
-    if (is<HTMLFrameElementBase>(element) && element.hasFullscreenFlag())
-        return true;
-    if (!element.document().fullscreenManager().isFullscreen())
+    CheckedPtr fullscreenManager = element.document().fullscreenManagerIfExists();
+    if (!fullscreenManager || &element != fullscreenManager->currentFullscreenElement())
         return false;
-    return &element == element.document().fullscreenManager().currentFullscreenElement();
+    return fullscreenManager->isAnimatingFullscreen();
 }
 
-ALWAYS_INLINE bool matchesFullScreenAnimatingFullScreenTransitionPseudoClass(const Element& element)
-{
-    if (&element != element.document().fullscreenManager().currentFullscreenElement())
-        return false;
-    return element.document().fullscreenManager().isAnimatingFullscreen();
-}
-
-ALWAYS_INLINE bool matchesFullScreenAncestorPseudoClass(const Element& element)
-{
-    auto* currentFullscreenElement = element.document().fullscreenManager().currentFullscreenElement();
-    return currentFullscreenElement && currentFullscreenElement->isDescendantOrShadowDescendantOf(element);
-}
-
-ALWAYS_INLINE bool matchesFullScreenDocumentPseudoClass(const Element& element)
+ALWAYS_INLINE bool matchesFullscreenDocumentPseudoClass(const Element& element)
 {
     // While a Document is in the fullscreen state, the 'full-screen-document' pseudoclass applies
     // to all elements of that Document.
-    return element.document().fullscreenManager().fullscreenElement();
+    CheckedPtr fullscreenManager = element.document().fullscreenManagerIfExists();
+    return fullscreenManager && fullscreenManager->fullscreenElement();
 }
 
-ALWAYS_INLINE bool matchesFullScreenControlsHiddenPseudoClass(const Element& element)
+ALWAYS_INLINE bool matchesInWindowFullScreenPseudoClass(const Element& element)
 {
     if (&element != element.document().fullscreenManager().currentFullscreenElement())
         return false;
-    return element.document().fullscreenManager().areFullscreenControlsHidden();
+
+    auto* mediaElement = dynamicDowncast<HTMLMediaElement>(element);
+    return mediaElement && mediaElement->fullscreenMode() == HTMLMediaElementEnums::VideoFullscreenModeInWindow;
 }
 
 #endif
@@ -541,7 +526,7 @@ ALWAYS_INLINE bool isFrameFocused(const Element& element)
 
 ALWAYS_INLINE bool matchesLegacyDirectFocusPseudoClass(const Element& element)
 {
-    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassType::Focus))
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClass::Focus))
         return true;
 
     return element.focused() && isFrameFocused(element);
@@ -555,7 +540,7 @@ ALWAYS_INLINE bool doesShadowTreeContainFocusedElement(const Element& element)
 
 ALWAYS_INLINE bool matchesFocusPseudoClass(const Element& element)
 {
-    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassType::Focus))
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClass::Focus))
         return true;
 
     return (element.focused() || doesShadowTreeContainFocusedElement(element)) && isFrameFocused(element);
@@ -566,7 +551,7 @@ ALWAYS_INLINE bool matchesFocusVisiblePseudoClass(const Element& element)
     if (!element.document().settings().focusVisibleEnabled())
         return matchesLegacyDirectFocusPseudoClass(element);
 
-    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassType::FocusVisible))
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClass::FocusVisible))
         return true;
 
     return element.hasFocusVisible() && isFrameFocused(element);
@@ -574,7 +559,7 @@ ALWAYS_INLINE bool matchesFocusVisiblePseudoClass(const Element& element)
 
 ALWAYS_INLINE bool matchesFocusWithinPseudoClass(const Element& element)
 {
-    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassType::FocusWithin))
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClass::FocusWithin))
         return true;
 
     return element.hasFocusWithin() && isFrameFocused(element);

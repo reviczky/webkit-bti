@@ -245,9 +245,14 @@ private:
     bool testProcessIncomingSyncMessagesWhenWaitingForSyncReply() final;
 
 #if PLATFORM(WIN)
-    void setLastSetCursorToCurrentCursor() final { }
     void AXStartFrameLoad() final { }
     void AXFinishFrameLoad() final { }
+#endif
+
+#if PLATFORM(PLAYSTATION)
+    void postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXObjectCache::AXNotification) final;
+    void postAccessibilityNodeTextChangeNotification(WebCore::AccessibilityObject*, WebCore::AXTextChange, unsigned, const String&) final;
+    void postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXObjectCache::AXLoadingEvent) final;
 #endif
 
     void animationDidFinishForElement(const WebCore::Element&) final;
@@ -322,7 +327,7 @@ private:
 
 #if ENABLE(FULLSCREEN_API)
     bool supportsFullScreenForElement(const WebCore::Element&, bool withKeyboard) final;
-    void enterFullScreenForElement(WebCore::Element&) final;
+    void enterFullScreenForElement(WebCore::Element&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard) final;
     void exitFullScreenForElement(WebCore::Element*) final;
 #endif
 
@@ -388,10 +393,8 @@ private:
 
     void setTextIndicator(const WebCore::TextIndicatorData&) const final;
 
-#if ENABLE(WEB_CRYPTO)
     bool wrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
     bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
-#endif
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
     void handleTelephoneNumberClick(const String& number, const WebCore::IntPoint&, const WebCore::IntRect&) final;

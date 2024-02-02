@@ -238,6 +238,7 @@ PluginView::PluginView(HTMLPlugInElement& element, const URL& mainResourceURL, c
     , m_shouldUseManualLoader(shouldUseManualLoader)
     , m_pendingResourceRequestTimer(RunLoop::main(), this, &PluginView::pendingResourceRequestTimerFired)
 {
+    m_plugin->startLoading();
     m_webPage->addPluginView(*this);
 }
 
@@ -332,7 +333,6 @@ void PluginView::didEndMagnificationGesture()
 
 void PluginView::setPageScaleFactor(double scaleFactor, std::optional<IntPoint> origin)
 {
-    m_pageScaleFactor = scaleFactor;
     m_webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
     m_webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
 
@@ -344,7 +344,7 @@ void PluginView::setPageScaleFactor(double scaleFactor, std::optional<IntPoint> 
 
 double PluginView::pageScaleFactor() const
 {
-    return m_pageScaleFactor;
+    return m_plugin->scaleFactor();
 }
 
 void PluginView::webPageDestroyed()
@@ -406,8 +406,13 @@ void PluginView::initializePlugin()
         if (auto* frameView = frame->view())
             frameView->setNeedsLayoutAfterViewConfigurationChange();
         if (frame->isMainFrame() && m_plugin->isFullFramePlugin())
-            WebFrame::fromCoreFrame(*frame)->page()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(true));
+            WebFrame::fromCoreFrame(*frame)->page()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(true, m_plugin->minScaleFactor(), m_plugin->maxScaleFactor()));
     }
+}
+
+Ref<PDFPluginBase> PluginView::protectedPlugin() const
+{
+    return m_plugin;
 }
 
 PluginLayerHostingStrategy PluginView::layerHostingStrategy() const
@@ -514,9 +519,7 @@ void PluginView::paint(GraphicsContext& context, const IntRect& dirtyRect, Widge
     }
 
     // FIXME: We should try to intersect the dirty rect with the plug-in's clip rect here.
-    IntRect paintRect = IntRect(IntPoint(), frameRect().size());
-
-    if (paintRect.isEmpty())
+    if (frameRect().isEmpty())
         return;
 
     if (m_transientPaintingSnapshot) {
@@ -534,7 +537,28 @@ void PluginView::paint(GraphicsContext& context, const IntRect& dirtyRect, Widge
         return;
     }
 
-    m_plugin->paint(context, dirtyRect);
+    bool isSnapshotting = [&]() {
+        auto* frameView = frame()->view();
+        if (!frameView)
+            return false;
+
+        return frameView->paintBehavior().contains(PaintBehavior::FlattenCompositingLayers);
+    }();
+
+    if (!isSnapshotting && m_plugin->layerHostingStrategy() == PluginLayerHostingStrategy::GraphicsLayer)
+        return;
+
+    // RenderWidget::paintContents() translated the context so the origin is aligned with frameRect().location().
+    // Shift it back to align with the plugin origin.
+    GraphicsContextStateSaver stateSaver(context);
+
+    auto widgetOrigin = frameRect().location();
+    context.translate(widgetOrigin);
+
+    auto paintRect = dirtyRect;
+    paintRect.moveBy(-widgetOrigin);
+
+    protectedPlugin()->paint(context, paintRect);
 }
 
 void PluginView::frameRectsChanged()
@@ -602,7 +626,7 @@ void PluginView::handleEvent(Event& event)
             frame->eventHandler().setCapturingMouseEventsElement(nullptr);
 
         didHandleEvent = m_plugin->handleMouseEvent(static_cast<const WebMouseEvent&>(*currentEvent));
-    } else if (eventNames().isWheelEventType(event.type()) && currentEvent->type() == WebEventType::Wheel)
+    } else if ((event.type() == eventNames().wheelEvent || event.type() == eventNames().mousewheelEvent) && currentEvent->type() == WebEventType::Wheel)
         didHandleEvent = m_plugin->handleWheelEvent(static_cast<const WebWheelEvent&>(*currentEvent));
     else if (event.type() == eventNames().mouseoverEvent && currentEvent->type() == WebEventType::MouseMove)
         didHandleEvent = m_plugin->handleMouseEnterEvent(static_cast<const WebMouseEvent&>(*currentEvent));
@@ -618,12 +642,12 @@ void PluginView::handleEvent(Event& event)
         event.setDefaultHandled();
 }
 
-bool PluginView::handleEditingCommand(const String& commandName, const String&)
+bool PluginView::handleEditingCommand(const String& commandName, const String& argument)
 {
     if (!m_isInitialized)
         return false;
 
-    return m_plugin->handleEditingCommand(commandName);
+    return m_plugin->handleEditingCommand(commandName, argument);
 }
     
 bool PluginView::isEditingCommandEnabled(const String& commandName)
@@ -840,6 +864,11 @@ void PluginView::redeliverManualStream()
         manualLoadDidFinishLoading();
 }
 
+CheckedPtr<RenderEmbeddedObject> PluginView::checkedRenderer() const
+{
+    return dynamicDowncast<RenderEmbeddedObject>(m_pluginElement->renderer());
+}
+
 void PluginView::invalidateRect(const IntRect& dirtyRect)
 {
     if (!parent() || !m_isInitialized)
@@ -850,13 +879,12 @@ void PluginView::invalidateRect(const IntRect& dirtyRect)
         return;
 #endif
 
-    auto* renderer = m_pluginElement->renderer();
-    if (!is<RenderEmbeddedObject>(renderer))
+    CheckedPtr renderer = checkedRenderer();
+    if (!renderer)
         return;
-    auto& object = downcast<RenderEmbeddedObject>(*renderer);
 
-    IntRect contentRect(dirtyRect);
-    contentRect.move(object.borderLeft() + object.paddingLeft(), object.borderTop() + object.paddingTop());
+    auto contentRect = dirtyRect;
+    contentRect.move(renderer->borderLeft() + renderer->paddingLeft(), renderer->borderTop() + renderer->paddingTop());
     renderer->repaintRectangle(contentRect);
 }
 

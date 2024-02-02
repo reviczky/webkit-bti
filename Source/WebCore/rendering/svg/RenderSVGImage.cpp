@@ -131,7 +131,7 @@ void RenderSVGImage::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         return;
 
     if (paintInfo.phase == PaintPhase::ClippingMask) {
-        paintSVGClippingMask(paintInfo);
+        paintSVGClippingMask(paintInfo, objectBoundingBox());
         return;
     }
 
@@ -173,14 +173,13 @@ ImageDrawResult RenderSVGImage::paintIntoRect(PaintInfo& paintInfo, const FloatR
     if (!image || image->isNull())
         return ImageDrawResult::DidNothing;
 
-    if (is<BitmapImage>(image))
-        downcast<BitmapImage>(*image).updateFromSettings(settings());
-
     ImagePaintingOptions options {
         CompositeOperator::SourceOver,
         DecodingMode::Synchronous,
         imageOrientation(),
-        InterpolationQuality::Default
+        InterpolationQuality::Default,
+        settings().imageSubsamplingEnabled() ? AllowImageSubsampling::Yes : AllowImageSubsampling::No,
+        settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No
     };
 
     auto drawResult = paintInfo.context().drawImage(*image, rect, sourceRect, options);

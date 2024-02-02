@@ -27,14 +27,39 @@
 
 #include "BufferIdentifierSet.h"
 #include "MarkSurfacesAsVolatileRequestIdentifier.h"
+#include "PrepareBackingStoreBuffersData.h"
 #include "RemoteDisplayListRecorderProxy.h"
 #include "RemoteImageBufferSetIdentifier.h"
+#include "RenderingUpdateID.h"
 
 #if ENABLE(GPU_PROCESS)
+
+namespace IPC {
+class Connection;
+class Decoder;
+}
 
 namespace WebKit {
 
 class RemoteImageBufferSetProxyFlushFence;
+struct BufferSetBackendHandle;
+
+// FIXME: We should have a generic 'ImageBufferSet' class that contains
+// the code that isn't specific to being remote, and this helper belongs
+// there.
+class ThreadSafeImageBufferSetFlusher {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_NONCOPYABLE(ThreadSafeImageBufferSetFlusher);
+public:
+    enum class FlushType {
+        BackendHandlesOnly,
+        BackendHandlesAndDrawing,
+    };
+
+    ThreadSafeImageBufferSetFlusher() = default;
+    virtual ~ThreadSafeImageBufferSetFlusher() = default;
+    virtual void flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
+};
 
 // A RemoteImageBufferSet is a set of three ImageBuffers (front, back,
 // secondary back) owned by the GPU process, for the purpose of drawing
@@ -60,12 +85,16 @@ public:
     void addRequestedVolatility(OptionSet<BufferInSetType> request);
     void setConfirmedVolatility(MarkSurfacesAsVolatileRequestIdentifier, OptionSet<BufferInSetType> types);
 
+#if PLATFORM(COCOA)
+    void didPrepareForDisplay(ImageBufferSetPrepareBufferForDisplayOutputData, RenderingUpdateID);
+#endif
+
     WebCore::GraphicsContext& context();
     bool hasContext() const { return !!m_displayListRecorder; }
 
     WebCore::RenderingResourceIdentifier displayListResourceIdentifier() const { return m_displayListIdentifier; }
 
-    std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> flushFrontBufferAsync();
+    std::unique_ptr<ThreadSafeImageBufferSetFlusher> flushFrontBufferAsync(ThreadSafeImageBufferSetFlusher::FlushType);
 
     void setConfiguration(WebCore::FloatSize, float, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, WebCore::RenderingMode, WebCore::RenderingPurpose);
     void willPrepareForDisplay();
@@ -76,6 +105,8 @@ public:
 #endif
 
     unsigned generation() const { return m_generation; }
+
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
 
 private:
     template<typename T> void send(T&& message);

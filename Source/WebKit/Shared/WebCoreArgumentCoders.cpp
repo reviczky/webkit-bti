@@ -118,7 +118,6 @@
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/Report.h>
 #include <WebCore/ReportBody.h>
-#include <WebCore/ResourceError.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/RotateTransformOperation.h>
@@ -291,10 +290,10 @@ std::optional<Ref<Font>> ArgumentCoder<Font>::decode(Decoder& decoder)
 
 void ArgumentCoder<WebCore::FontCustomPlatformData>::encode(Encoder& encoder, const WebCore::FontCustomPlatformData& customPlatformData)
 {
-    std::optional<WebKit::SharedMemory::Handle> handle;
+    std::optional<WebCore::SharedMemory::Handle> handle;
     {
-        auto sharedMemoryBuffer = WebKit::SharedMemory::copyBuffer(customPlatformData.creationData.fontFaceData);
-        handle = sharedMemoryBuffer->createHandle(WebKit::SharedMemory::Protection::ReadOnly);
+        auto sharedMemoryBuffer = WebCore::SharedMemory::copyBuffer(customPlatformData.creationData.fontFaceData);
+        handle = sharedMemoryBuffer->createHandle(WebCore::SharedMemory::Protection::ReadOnly);
     }
     encoder << customPlatformData.creationData.fontFaceData->size();
     encoder << WTFMove(handle);
@@ -309,14 +308,14 @@ std::optional<Ref<FontCustomPlatformData>> ArgumentCoder<FontCustomPlatformData>
     if (!bufferSize)
         return std::nullopt;
 
-    auto handle = decoder.decode<std::optional<WebKit::SharedMemory::Handle>>();
+    auto handle = decoder.decode<std::optional<WebCore::SharedMemory::Handle>>();
     if (UNLIKELY(!decoder.isValid()))
         return std::nullopt;
 
     if (!*handle)
         return std::nullopt;
 
-    auto sharedMemoryBuffer = WebKit::SharedMemory::map(WTFMove(**handle), WebKit::SharedMemory::Protection::ReadOnly);
+    auto sharedMemoryBuffer = WebCore::SharedMemory::map(WTFMove(**handle), WebCore::SharedMemory::Protection::ReadOnly);
     if (!sharedMemoryBuffer)
         return std::nullopt;
 
@@ -343,6 +342,8 @@ std::optional<Ref<FontCustomPlatformData>> ArgumentCoder<FontCustomPlatformData>
 
     return fontCustomPlatformData.releaseNonNull();
 }
+
+#if !USE(CORE_TEXT)
 
 void ArgumentCoder<WebCore::FontPlatformData::Attributes>::encode(Encoder& encoder, const WebCore::FontPlatformData::Attributes& data)
 {
@@ -396,66 +397,7 @@ std::optional<FontPlatformData::Attributes> ArgumentCoder<FontPlatformData::Attr
     return result;
 }
 
-void ArgumentCoder<ResourceError>::encode(Encoder& encoder, const ResourceError& resourceError)
-{
-    encoder << resourceError.type();
-    if (resourceError.type() == ResourceError::Type::Null)
-        return;
-    encodePlatformData(encoder, resourceError);
-    encoder << resourceError.isSanitized();
-}
-
-bool ArgumentCoder<ResourceError>::decode(Decoder& decoder, ResourceError& resourceError)
-{
-    ResourceError::Type type;
-    if (!decoder.decode(type))
-        return false;
-
-    if (type == ResourceError::Type::Null) {
-        resourceError = { };
-        return true;
-    }
-
-    if (!decodePlatformData(decoder, resourceError))
-        return false;
-
-    bool isSanitized;
-    if (!decoder.decode(isSanitized))
-        return false;
-
-    resourceError.setType(type);
-    if (isSanitized)
-        resourceError.setAsSanitized();
-
-    return true;
-}
-
-#if !USE(COORDINATED_GRAPHICS)
-void ArgumentCoder<FilterOperations>::encode(Encoder& encoder, const FilterOperations& filters)
-{
-    encoder << static_cast<uint64_t>(filters.size());
-
-    for (const auto& filter : filters.operations())
-        encoder << *filter;
-}
-
-bool ArgumentCoder<FilterOperations>::decode(Decoder& decoder, FilterOperations& filters)
-{
-    uint64_t filterCount;
-    if (!decoder.decode(filterCount))
-        return false;
-
-    for (uint64_t i = 0; i < filterCount; ++i) {
-        std::optional<Ref<FilterOperation>> filter;
-        decoder >> filter;
-        if (!filter)
-            return false;
-        filters.operations().append(WTFMove(*filter));
-    }
-
-    return true;
-}
-#endif // !USE(COORDINATED_GRAPHICS)
+#endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 void ArgumentCoder<MediaPlaybackTargetContext>::encode(Encoder& encoder, const MediaPlaybackTargetContext& target)
@@ -885,51 +827,5 @@ std::optional<Ref<ControlPart>> ArgumentCoder<ControlPart>::decode(Decoder& deco
     ASSERT_NOT_REACHED();
     return std::nullopt;
 }
-
-#if ENABLE(ENCRYPTED_MEDIA)
-void ArgumentCoder<WebCore::CDMInstanceSession::Message>::encode(Encoder& encoder, const WebCore::CDMInstanceSession::Message& message)
-{
-    encoder << message.first;
-    encoder << message.second;
-}
-
-std::optional<WebCore::CDMInstanceSession::Message>  ArgumentCoder<WebCore::CDMInstanceSession::Message>::decode(Decoder& decoder)
-{
-    WebCore::CDMInstanceSession::MessageType type;
-    if (!decoder.decode(type))
-        return std::nullopt;
-
-    auto buffer = decoder.decode<Ref<SharedBuffer>>();
-    if (UNLIKELY(!buffer))
-        return std::nullopt;
-
-    return std::make_optional<WebCore::CDMInstanceSession::Message>({ type, WTFMove(*buffer) });
-}
-#endif // ENABLE(ENCRYPTED_MEDIA)
-
-#if ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
-
-void ArgumentCoder<TextRecognitionDataDetector>::encode(Encoder& encoder, const TextRecognitionDataDetector& info)
-{
-    encodePlatformData(encoder, info);
-    encoder << info.normalizedQuads;
-}
-
-std::optional<TextRecognitionDataDetector> ArgumentCoder<TextRecognitionDataDetector>::decode(Decoder& decoder)
-{
-    TextRecognitionDataDetector result;
-    if (!decodePlatformData(decoder, result))
-        return std::nullopt;
-
-    std::optional<Vector<FloatQuad>> normalizedQuads;
-    decoder >> normalizedQuads;
-    if (!normalizedQuads)
-        return std::nullopt;
-
-    result.normalizedQuads = WTFMove(*normalizedQuads);
-    return WTFMove(result);
-}
-
-#endif // ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
 
 } // namespace IPC

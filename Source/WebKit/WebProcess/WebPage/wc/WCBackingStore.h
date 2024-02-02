@@ -28,7 +28,6 @@
 #if USE(GRAPHICS_LAYER_WC)
 
 #include "ImageBufferBackendHandle.h"
-#include "ImageBufferBackendHandleSharing.h"
 #include <WebCore/ImageBuffer.h>
 
 namespace WebKit {
@@ -41,32 +40,12 @@ public:
     void setImageBuffer(RefPtr<WebCore::ImageBuffer>&& image) { m_imageBuffer = WTFMove(image); }
     ShareableBitmap* bitmap() const { return m_bitmap.get(); }
 
-    template<class Encoder>
-    void encode(Encoder& encoder) const
-    {
-        std::optional<ImageBufferBackendHandle> handle;
-        if (m_imageBuffer) {
-            auto* sharing = m_imageBuffer->toBackendSharing();
-            if (is<ImageBufferBackendHandleSharing>(sharing))
-                handle = downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
-        }
-        encoder << WTFMove(handle);
-    }
-
-    template <class Decoder>
-    static WARN_UNUSED_RETURN bool decode(Decoder& decoder, WCBackingStore& result)
-    {
-        auto handle = decoder.template decode<std::optional<ImageBufferBackendHandle>>();
-        if (UNLIKELY(!decoder.isValid()))
-            return false;
-
-        if (*handle)
-            result.m_bitmap = ShareableBitmap::create(WTFMove(std::get<ShareableBitmap::Handle>(**handle)));
-
-        return true;
-    }
-
 private:
+    friend struct IPC::ArgumentCoder<WCBackingStore, void>;
+
+    WCBackingStore(std::optional<ImageBufferBackendHandle>&&);
+    std::optional<ImageBufferBackendHandle> handle() const;
+
     RefPtr<WebCore::ImageBuffer> m_imageBuffer;
     RefPtr<ShareableBitmap> m_bitmap;
 };

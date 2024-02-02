@@ -145,7 +145,7 @@ void GStreamerAudioEncoder::encode(RawFrame&& frame, EncodeCallback&& callback)
 
         String resultString;
         if (result)
-            encoder->harness()->processOutputBuffers();
+            encoder->harness()->processOutputSamples();
         else
             resultString = "Encoding failed"_s;
 
@@ -184,7 +184,10 @@ GStreamerInternalAudioEncoder::GStreamerInternalAudioEncoder(AudioEncoder::Descr
     , m_postTaskCallback(WTFMove(postTaskCallback))
     , m_encoder(WTFMove(encoderElement))
 {
-    GRefPtr<GstElement> harnessedElement = gst_bin_new(nullptr);
+    static Atomic<uint64_t> counter = 0;
+    auto binName = makeString("audio-encoder-"_s, GST_OBJECT_NAME(m_encoder.get()), '-', counter.exchangeAdd(1));
+
+    GRefPtr<GstElement> harnessedElement = gst_bin_new(binName.ascii().data());
     auto audioconvert = gst_element_factory_make("audioconvert", nullptr);
     auto audioresample = gst_element_factory_make("audioresample", nullptr);
     m_inputCapsFilter = gst_element_factory_make("capsfilter", nullptr);
@@ -244,15 +247,16 @@ GStreamerInternalAudioEncoder::GStreamerInternalAudioEncoder(AudioEncoder::Descr
         delete static_cast<ThreadSafeWeakPtr<GStreamerInternalAudioEncoder>*>(data);
     }, static_cast<GConnectFlags>(0));
 
-    m_harness = GStreamerElementHarness::create(WTFMove(harnessedElement), [weakThis = ThreadSafeWeakPtr { *this }, this](auto& stream, const GRefPtr<GstBuffer>& outputBuffer) {
+    m_harness = GStreamerElementHarness::create(WTFMove(harnessedElement), [weakThis = ThreadSafeWeakPtr { *this }, this](auto&, GRefPtr<GstSample>&& outputSample) {
         if (!weakThis.get())
             return;
         if (m_isClosed)
             return;
 
-        const auto& caps = stream.outputCaps();
-        auto structure = gst_caps_get_structure(caps.get(), 0);
-        if (gst_structure_has_name(structure, "audio/x-opus") && gst_buffer_get_size(outputBuffer.get()) < 2) {
+        auto caps = gst_sample_get_caps(outputSample.get());
+        auto outputBuffer = gst_sample_get_buffer(outputSample.get());
+        auto structure = gst_caps_get_structure(caps, 0);
+        if (gst_structure_has_name(structure, "audio/x-opus") && gst_buffer_get_size(outputBuffer) < 2) {
             GST_INFO_OBJECT(m_encoder.get(), "DTX opus packet detected, ignoring it");
             return;
         }
@@ -262,9 +266,9 @@ GStreamerInternalAudioEncoder::GStreamerInternalAudioEncoder(AudioEncoder::Descr
             m_harness->dumpGraph("audio-encoder");
         });
 
-        bool isKeyFrame = !GST_BUFFER_FLAG_IS_SET(outputBuffer.get(), GST_BUFFER_FLAG_DELTA_UNIT);
+        bool isKeyFrame = !GST_BUFFER_FLAG_IS_SET(outputBuffer, GST_BUFFER_FLAG_DELTA_UNIT);
         GST_TRACE_OBJECT(m_harness->element(), "Notifying encoded%s frame", isKeyFrame ? " key" : "");
-        GstMappedBuffer mappedBuffer(outputBuffer.get(), GST_MAP_READ);
+        GstMappedBuffer mappedBuffer(outputBuffer, GST_MAP_READ);
         AudioEncoder::EncodedFrame encodedFrame { mappedBuffer.createVector(), isKeyFrame, m_timestamp, m_duration };
         m_postTaskCallback([protectedThis = Ref { *this }, this, encodedFrame = WTFMove(encodedFrame)]() mutable {
             if (protectedThis->m_isClosed)
@@ -285,10 +289,6 @@ GStreamerInternalAudioEncoder::~GStreamerInternalAudioEncoder()
 
 String GStreamerInternalAudioEncoder::initialize(const String& codecName, const AudioEncoder::Config& config)
 {
-    static Atomic<uint64_t> counter = 0;
-    auto binName = makeString("audio-encoder-"_s, codecName, '-', counter.exchangeAdd(1));
-    gst_object_set_name(GST_OBJECT_CAST(m_harness->element()), binName.ascii().data());
-
     GST_DEBUG_OBJECT(m_harness->element(), "Initializing encoder for codec %s", codecName.ascii().data());
     if (codecName.startsWith("mp4a"_s)) {
         const char* streamFormat = config.isAacADTS.value_or(false) ? "adts" : "raw";

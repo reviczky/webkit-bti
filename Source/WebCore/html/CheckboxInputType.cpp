@@ -36,6 +36,7 @@
 #include "ChromeClient.h"
 #include "EventHandler.h"
 #include "EventNames.h"
+#include "HTMLDivElement.h"
 #include "HTMLInputElement.h"
 #include "InputTypeNames.h"
 #include "KeyboardEvent.h"
@@ -49,8 +50,7 @@
 #include "ScopedEventQueue.h"
 #include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
-#include "SwitchThumbElement.h"
-#include "SwitchTrackElement.h"
+#include "UserAgentParts.h"
 
 #if ENABLE(IOS_TOUCH_EVENTS)
 #include "TouchEvent.h"
@@ -85,8 +85,12 @@ void CheckboxInputType::createShadowSubtree()
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { *element()->userAgentShadowRoot() };
 
     Ref document = element()->document();
-    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, SwitchTrackElement::create(document));
-    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, SwitchThumbElement::create(document));
+    auto track = HTMLDivElement::create(document);
+    track->setUserAgentPart(UserAgentParts::track());
+    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, track);
+    auto thumb = HTMLDivElement::create(document);
+    thumb->setUserAgentPart(UserAgentParts::thumb());
+    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, thumb);
 }
 
 void CheckboxInputType::handleKeyupEvent(KeyboardEvent& event)
@@ -156,7 +160,7 @@ void CheckboxInputType::handleTouchEvent(TouchEvent& event)
             return;
         RefPtr<Touch> touch = targetTouches->item(0);
 
-        startSwitchPointerTracking(IntPoint(touch->pageX(), touch->pageY()), touch->identifier());
+        startSwitchPointerTracking({ touch->pageX(), touch->pageY() }, touch->identifier());
         performSwitchAnimation(SwitchAnimationType::Pressed);
         event.setDefaultHandled();
     } else if (eventType == eventNames.touchmoveEvent) {
@@ -171,8 +175,7 @@ void CheckboxInputType::handleTouchEvent(TouchEvent& event)
         if (!touch)
             return;
 
-        auto absoluteLocation = IntPoint(touch->pageX(), touch->pageY());
-        updateIsSwitchVisuallyOnFromAbsoluteLocation(absoluteLocation);
+        updateIsSwitchVisuallyOnFromAbsoluteLocation({ touch->pageX(), touch->pageY() });
         event.setDefaultHandled();
     } else if (eventType == eventNames.touchendEvent || eventType == eventNames.touchcancelEvent) {
         if (!m_switchPointerTrackingTouchIdentifier || !isSwitchPointerTracking())
@@ -335,9 +338,7 @@ void CheckboxInputType::performSwitchAnimation(SwitchAnimationType type)
 {
     ASSERT(isSwitch());
     ASSERT(element());
-    ASSERT(element()->renderer());
-
-    if (!element()->renderer()->style().hasEffectiveAppearance())
+    if (!element()->renderer() || !element()->renderer()->style().hasEffectiveAppearance())
         return;
 
     auto updateInterval = switchAnimationUpdateInterval(element());

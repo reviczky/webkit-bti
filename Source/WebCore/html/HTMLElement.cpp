@@ -37,7 +37,9 @@
 #include "CommonAtomStrings.h"
 #include "CustomElementReactionQueue.h"
 #include "DOMTokenList.h"
+#include "Document.h"
 #include "DocumentFragment.h"
+#include "DocumentInlines.h"
 #include "Editor.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "ElementChildIteratorInlines.h"
@@ -79,6 +81,7 @@
 #include "NodeTraversal.h"
 #include "PopoverData.h"
 #include "PseudoClassChangeInvalidation.h"
+#include "Quirks.h"
 #include "RenderElement.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
@@ -944,7 +947,7 @@ void HTMLElement::dirAttributeChanged(const AtomString& value)
 
 void HTMLElement::updateEffectiveDirectionality(std::optional<TextDirection> direction)
 {
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
     auto effectiveDirection = direction.value_or(TextDirection::LTR);
     setUsesEffectiveTextDirection(!!direction);
     if (direction)
@@ -963,7 +966,7 @@ void HTMLElement::updateEffectiveDirectionality(std::optional<TextDirection> dir
             continue;
         }
         updateEffectiveTextDirectionOfShadowRoot(element);
-        Style::PseudoClassChangeInvalidation styleInvalidation(element, CSSSelector::PseudoClassType::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
+        Style::PseudoClassChangeInvalidation styleInvalidation(element, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
         element->setUsesEffectiveTextDirection(!!direction);
         if (direction)
             element->setEffectiveTextDirection(effectiveDirection);
@@ -1438,7 +1441,7 @@ ExceptionOr<void> HTMLElement::showPopover(const HTMLFormControlElement* invoker
 
     popoverData()->setPreviouslyFocusedElement(nullptr);
 
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::PopoverOpen, true);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::PopoverOpen, true);
     popoverData()->setVisibilityState(PopoverVisibilityState::Showing);
 
     runPopoverFocusingSteps(*this);
@@ -1450,10 +1453,8 @@ ExceptionOr<void> HTMLElement::showPopover(const HTMLFormControlElement* invoker
 
     queuePopoverToggleEventTask(PopoverVisibilityState::Hidden, PopoverVisibilityState::Showing);
 
-#if ENABLE(ACCESSIBILITY)
     if (CheckedPtr cache = document->existingAXObjectCache())
         cache->onPopoverToggle(*this);
-#endif
 
     return { };
 }
@@ -1473,8 +1474,7 @@ ExceptionOr<void> HTMLElement::hidePopoverInternal(FocusPreviousElement focusPre
         fireEvents = FireEvents::No;
 
     if (popoverState() == PopoverState::Auto) {
-        // Unable to protect the document as it may have started destruction.
-        document().hideAllPopoversUntil(this, focusPreviousElement, fireEvents);
+        RefAllowingPartiallyDestroyed<Document> { document() }->hideAllPopoversUntil(this, focusPreviousElement, fireEvents);
 
         check = checkPopoverValidity(*this, PopoverVisibilityState::Showing);
         if (check.hasException())
@@ -1498,7 +1498,7 @@ ExceptionOr<void> HTMLElement::hidePopoverInternal(FocusPreviousElement focusPre
 
     removeFromTopLayer();
 
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::PopoverOpen, false);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::PopoverOpen, false);
     popoverData()->setVisibilityState(PopoverVisibilityState::Hidden);
 
     if (fireEvents == FireEvents::Yes)
@@ -1513,10 +1513,8 @@ ExceptionOr<void> HTMLElement::hidePopoverInternal(FocusPreviousElement focusPre
         popoverData()->setPreviouslyFocusedElement(nullptr);
     }
 
-#if ENABLE(ACCESSIBILITY)
     if (CheckedPtr cache = document().existingAXObjectCache())
         cache->onPopoverToggle(*this);
-#endif
 
     return { };
 }
@@ -1562,7 +1560,7 @@ void HTMLElement::popoverAttributeChanged(const AtomString& value)
     if (newPopoverState == oldPopoverState)
         return;
 
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassType::PopoverOpen, false);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::PopoverOpen, false);
 
     if (isPopoverShowing()) {
         hidePopoverInternal(FocusPreviousElement::Yes, FireEvents::Yes);

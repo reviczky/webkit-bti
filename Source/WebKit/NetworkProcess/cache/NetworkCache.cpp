@@ -36,6 +36,7 @@
 #include "WebsiteDataType.h"
 #include <WebCore/CacheValidation.h>
 #include <WebCore/HTTPHeaderNames.h>
+#include <WebCore/HTTPStatusCodes.h>
 #include <WebCore/LowPowerModeNotifier.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/RegistrableDomain.h>
@@ -490,7 +491,7 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
         LOG(NetworkCache, "(NetworkProcess) didn't store, storeDecision=%d", static_cast<int>(storeDecision));
         auto key = makeCacheKey(request);
 
-        auto isSuccessfulRevalidation = response.httpStatusCode() == 304;
+        auto isSuccessfulRevalidation = response.httpStatusCode() == httpStatus304NotModified;
         if (!isSuccessfulRevalidation) {
             // Make sure we don't keep a stale entry in the cache.
             remove(key);
@@ -704,26 +705,6 @@ void Cache::clear()
 String Cache::recordsPathIsolatedCopy() const
 {
     return m_storage->recordsPathIsolatedCopy();
-}
-
-void Cache::retrieveData(const DataKey& dataKey, Function<void(const uint8_t*, size_t)> completionHandler)
-{
-    Key key { dataKey, m_storage->salt() };
-    m_storage->retrieve(key, 4, [completionHandler = WTFMove(completionHandler)] (auto record, auto) mutable {
-        if (!record || !record->body.size()) {
-            completionHandler(nullptr, 0);
-            return true;
-        }
-        completionHandler(record->body.data(), record->body.size());
-        return true;
-    });
-}
-
-void Cache::storeData(const DataKey& dataKey, const uint8_t* data, size_t size)
-{
-    Key key { dataKey, m_storage->salt() };
-    Storage::Record record { key, WallTime::now(), { }, Data { data, size }, { } };
-    m_storage->store(record, { });
 }
 
 void Cache::fetchData(bool shouldComputeSize, CompletionHandler<void(Vector<WebsiteData::Entry>&&)>&& completionHandler)

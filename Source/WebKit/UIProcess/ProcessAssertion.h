@@ -35,6 +35,10 @@
 #include <unistd.h>
 #endif
 
+#if USE(EXTENSIONKIT)
+#include "AssertionCapability.h"
+#endif
+
 #if USE(RUNNINGBOARD)
 #include <wtf/RetainPtr.h>
 
@@ -44,7 +48,6 @@ OBJC_CLASS WKRBSAssertionDelegate;
 
 #if USE(EXTENSIONKIT)
 OBJC_CLASS _SEExtensionProcess;
-OBJC_CLASS _SECapabilities;
 OBJC_PROTOCOL(_SEGrant);
 #endif
 
@@ -113,9 +116,7 @@ private:
     Function<void()> m_prepareForInvalidationHandler;
     Function<void()> m_invalidationHandler;
 #if USE(EXTENSIONKIT)
-    ALLOW_DEPRECATED_DECLARATIONS_BEGIN
-    RetainPtr<_SECapabilities> m_capabilities;
-    ALLOW_DEPRECATED_DECLARATIONS_END
+    std::optional<AssertionCapability> m_capability;
     RetainPtr<_SEGrant> m_grant;
     RetainPtr<_SEExtensionProcess> m_process;
 #endif

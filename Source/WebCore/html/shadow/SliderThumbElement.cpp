@@ -50,10 +50,10 @@
 #include "RenderTheme.h"
 #include "ResolvedStyle.h"
 #include "ScriptDisallowedScope.h"
-#include "ShadowPseudoIds.h"
 #include "ShadowRoot.h"
 #include "StepRange.h"
 #include "StyleResolver.h"
+#include "UserAgentParts.h"
 #include <wtf/IsoMallocInlines.h>
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -185,12 +185,12 @@ Ref<SliderThumbElement> SliderThumbElement::create(Document& document)
 {
     auto element = adoptRef(*new SliderThumbElement(document));
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
-    element->setPseudo(ShadowPseudoIds::webkitSliderThumb());
+    element->setUserAgentPart(UserAgentParts::webkitSliderThumb());
     return element;
 }
 
 SliderThumbElement::SliderThumbElement(Document& document)
-    : HTMLDivElement(HTMLNames::divTag, document, CreateSliderThumbElement)
+    : HTMLDivElement(HTMLNames::divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -585,7 +585,7 @@ Ref<Element> SliderThumbElement::cloneElementWithoutAttributesAndChildren(Docume
 // --------------------------------
 
 inline SliderContainerElement::SliderContainerElement(Document& document)
-    : HTMLDivElement(HTMLNames::divTag, document, CreateSliderContainerElement)
+    : HTMLDivElement(HTMLNames::divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -593,7 +593,7 @@ Ref<SliderContainerElement> SliderContainerElement::create(Document& document)
 {
     auto element = adoptRef(*new SliderContainerElement(document));
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
-    element->setPseudo(ShadowPseudoIds::webkitSliderContainer());
+    element->setUserAgentPart(UserAgentParts::webkitSliderContainer());
     return element;
 }
 

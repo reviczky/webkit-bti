@@ -44,11 +44,10 @@ public:
     WEBCORE_EXPORT Element* getElementById(const AtomString&) const;
 
 protected:
-    DocumentFragment(Document&, ConstructionType = CreateContainer);
+    DocumentFragment(Document&, OptionSet<TypeFlag> = { });
     String nodeName() const final;
 
 private:
-    NodeType nodeType() const final;
     Ref<Node> cloneNodeInternal(Document&, CloningOperation) override;
     bool childTypeAllowed(NodeType) const override;
 };

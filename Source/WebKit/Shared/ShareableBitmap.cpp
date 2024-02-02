@@ -26,9 +26,9 @@
 #include "config.h"
 #include "ShareableBitmap.h"
 
-#include "SharedMemory.h"
 #include "WebCoreArgumentCoders.h"
 #include <WebCore/GraphicsContext.h>
+#include <WebCore/SharedMemory.h>
 #include <wtf/DebugHeap.h>
 
 namespace WebKit {
@@ -102,9 +102,14 @@ RefPtr<ShareableBitmap> ShareableBitmap::create(const ShareableBitmapConfigurati
 
 RefPtr<ShareableBitmap> ShareableBitmap::createFromImageDraw(NativeImage& image)
 {
+    return createFromImageDraw(image, image.colorSpace());
+}
+
+RefPtr<ShareableBitmap> ShareableBitmap::createFromImageDraw(NativeImage& image, const DestinationColorSpace& colorSpace)
+{
     auto imageSize = image.size();
 
-    auto bitmap = ShareableBitmap::create({ imageSize, image.colorSpace() });
+    auto bitmap = ShareableBitmap::create({ imageSize, colorSpace });
     if (!bitmap)
         return nullptr;
 

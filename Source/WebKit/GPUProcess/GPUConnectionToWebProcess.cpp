@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -343,6 +343,8 @@ uint64_t GPUConnectionToWebProcess::gObjectCountForTesting = 0;
 
 void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 {
+    assertIsMainThread();
+
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     m_routingArbitrator->processDidTerminate();
 #endif
@@ -387,6 +389,10 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     RemoteLegacyCDMFactoryProxy& legacyCdmFactoryProxy();
 #endif
+
+    if (m_remoteMediaResourceManager)
+        m_remoteMediaResourceManager->stopListeningForIPC();
+
     gpuProcess().connectionToWebProcessClosed(connection);
     gpuProcess().removeGPUConnectionToWebProcess(*this); // May destroy |this|.
 }
@@ -534,8 +540,12 @@ RemoteAudioDestinationManager& GPUConnectionToWebProcess::remoteAudioDestination
 #if ENABLE(VIDEO)
 RemoteMediaResourceManager& GPUConnectionToWebProcess::remoteMediaResourceManager()
 {
-    if (!m_remoteMediaResourceManager)
-        m_remoteMediaResourceManager = makeUnique<RemoteMediaResourceManager>();
+    assertIsMainThread();
+
+    if (!m_remoteMediaResourceManager) {
+        m_remoteMediaResourceManager = RemoteMediaResourceManager::create();
+        m_remoteMediaResourceManager->initializeConnection(&connection());
+    }
 
     return *m_remoteMediaResourceManager;
 }
@@ -1095,13 +1105,6 @@ void GPUConnectionToWebProcess::dispatchDisplayWasReconfigured()
 {
     for (auto& context : m_remoteGraphicsContextGLMap.values())
         context->displayWasReconfigured();
-}
-#endif
-
-#if ENABLE(VP9)
-void GPUConnectionToWebProcess::enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder)
-{
-    m_gpuProcess->enableVP9Decoders(shouldEnableVP8Decoder, shouldEnableVP9Decoder, shouldEnableVP9SWDecoder);
 }
 #endif
 
