@@ -8,7 +8,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2000 Lars Knoll <knoll@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
-           2003-2023 Apple Inc
+           2003-2024 Apple Inc
            2004-2007 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
@@ -46,8 +46,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2009 Joseph Pecoraro
            2009, 2011 Brent Fulgham <bfulgham@webkit.org>
            2009-2010 Alex Milowski <alex@milowski.com>
-           2009-2014 University of Szeged
-           2009-2023 Igalia S.L.
+           2009-2024 Igalia S.L.
            2010 Adam Barth
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Mozilla Corporation
@@ -56,11 +55,11 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2010 Sencha Inc
            2010 Torch Mobile (Beijing) Co
            2010 Zoltan Herczeg <zherczeg@webkit.org>
-           2010, 2012 MIPS Technologies Inc
            2010, 2012-2014 Patrick Gansterer <paroga@paroga.com>
            2010-2011 Zoltan Herczeg
            2010-2012 Research In Motion Limited
            2010-2013 Motorola Mobility
+           2010-2014 University of Szeged
            2011 Adam Barth <abarth@webkit.org>
            2011 Andreas Kling <kling@webkit.org>
            2011 Benjamin Poulain <benjamin@webkit.org>
@@ -121,7 +120,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2016-2018 Akamai Technologies Inc
            2016-2019 Oleksandr Skachkov <gskachkov@gmail.com>
            2016-2022 Metrological Group B.V
-           2016-2023 Sony Interactive Entertainment
+           2016-2024 Sony Interactive Entertainment
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
@@ -135,7 +134,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 RDK Management
            2020 WikiMedia Foundation. All Rights Reserve
-           2021 7-2022 Apple Inc
            2021 Purism SPC
            2021 Tyler Wilcock <twilco.o@protonmail.com>
            2022 Jarred Sumner
@@ -169,7 +167,7 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/WTF/wtf/*
        Tools/TestWebKitAPI/Tests/WTF/Int128.cpp
 Copyright: 2007-2021 The Khronos Group Inc
-           2010, 2014, 2018-2019 The Android Open Source Project
+           2010, 2014, 2018-2019, 2023 The Android Open Source Project
            2014 Mozilla Foundation
            2015-2016 LunarG Inc
            2015-2016 Valve Corporation
@@ -677,7 +675,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Tools/TestWebKitAPI/Tests/WTF/MetaAllocator.cpp
        Tools/TestWebKitAPI/Tests/WTF/RedBlackTree.cpp
        Tools/TestWebKitAPI/Tests/WTF/SafeStrerror.cpp
-Copyright: 2003, 2005-2023 Apple Inc
+Copyright: 2003, 2005-2024 Apple Inc
            2006 Alexey Proskuryakov
            2006 Alexey Proskuryakov <ap@webkit.org>
            2006 Michael Emmel mike.emmel@gmail.com
@@ -700,7 +698,7 @@ Copyright: 2003, 2005-2023 Apple Inc
            2009 Jian Li <jianli@chromium.org>
            2009 Joseph Pecoraro
            2009 Julien Chaffraix <jchaffraix@webkit.org>
-           2009-2015 Google Inc
+           2009-2021 Google Inc
            2011 Ericsson AB
            2011 Kris Jordan <krisjordan@gmail.com>
            2011-2012 Research In Motion Limited
@@ -1373,8 +1371,8 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WebCore/U2fCommandConstructorTest.cpp
        Tools/TestWebKitAPI/Tests/WebCore/WritingModeTests.cpp
        Tools/TestWebKitAPI/WTFTestUtilities.h
-Copyright: 2004-2023 Apple Inc
-           2005-2021 Google Inc
+Copyright: 2004-2024 Apple Inc
+           2005-2023 Google Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -1749,6 +1747,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/glib/GMutexLocker.h
        Source/WTF/wtf/glib/GRefPtr.cpp
        Source/WTF/wtf/glib/GRefPtr.h
+       Source/WTF/wtf/glib/GThreadSafeWeakPtr.h
        Source/WTF/wtf/glib/GTypedefs.h
        Source/WTF/wtf/glib/GUniquePtr.h
        Source/WTF/wtf/glib/GWeakPtr.h
@@ -1944,9 +1943,9 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/css/parser/CSSParser.cpp
        Source/WebCore/css/parser/CSSParser.h
        Source/WebCore/css/parser/CSSParserObserver.h
-       Source/WebCore/css/parser/CSSParserSelector.cpp
-       Source/WebCore/css/parser/CSSParserSelector.h
        Source/WebCore/css/parser/CSSPropertyParser.h
+       Source/WebCore/css/parser/MutableCSSSelector.cpp
+       Source/WebCore/css/parser/MutableCSSSelector.h
        Source/WebCore/css/quirks.css
        Source/WebCore/css/themeAdwaita.css
        Source/WebCore/dom/Attr.cpp
@@ -1990,8 +1989,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/dom/EventDispatcher.cpp
        Source/WebCore/dom/EventDispatcher.h
        Source/WebCore/dom/EventListener.h
-       Source/WebCore/dom/EventNames.cpp
-       Source/WebCore/dom/EventNames.h
        Source/WebCore/dom/EventPath.cpp
        Source/WebCore/dom/EventPath.h
        Source/WebCore/dom/ExceptionCode.h
@@ -2524,7 +2521,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedBackingStore.h
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.h
-       Source/WebCore/platform/graphics/texmap/coordinated/SurfaceUpdateInfo.h
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.h
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStoreClient.h
@@ -2747,7 +2743,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderTextInlines.h
        Source/WebCore/rendering/RenderTheme.cpp
        Source/WebCore/rendering/RenderTheme.h
-       Source/WebCore/rendering/RenderThemeMac.h
        Source/WebCore/rendering/RenderView.cpp
        Source/WebCore/rendering/RenderView.h
        Source/WebCore/rendering/RenderWidget.cpp
@@ -2847,8 +2842,21 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceClipper.h
        Source/WebCore/rendering/svg/RenderSVGResourceContainer.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceContainer.h
+       Source/WebCore/rendering/svg/RenderSVGResourceGradient.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourceGradient.h
+       Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourceLinearGradient.h
+       Source/WebCore/rendering/svg/RenderSVGResourceMarker.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourceMarker.h
+       Source/WebCore/rendering/svg/RenderSVGResourceMarkerInlines.h
        Source/WebCore/rendering/svg/RenderSVGResourceMasker.cpp
        Source/WebCore/rendering/svg/RenderSVGResourceMasker.h
+       Source/WebCore/rendering/svg/RenderSVGResourcePaintServer.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourcePaintServer.h
+       Source/WebCore/rendering/svg/RenderSVGResourcePattern.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourcePattern.h
+       Source/WebCore/rendering/svg/RenderSVGResourceRadialGradient.cpp
+       Source/WebCore/rendering/svg/RenderSVGResourceRadialGradient.h
        Source/WebCore/rendering/svg/RenderSVGRoot.cpp
        Source/WebCore/rendering/svg/RenderSVGRoot.h
        Source/WebCore/rendering/svg/RenderSVGShape.cpp
@@ -2873,6 +2881,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/SVGLayerTransformComputation.h
        Source/WebCore/rendering/svg/SVGLayerTransformUpdater.h
        Source/WebCore/rendering/svg/SVGMarkerData.h
+       Source/WebCore/rendering/svg/SVGPaintServerHandling.h
        Source/WebCore/rendering/svg/SVGPathData.cpp
        Source/WebCore/rendering/svg/SVGPathData.h
        Source/WebCore/rendering/svg/SVGRenderSupport.cpp
@@ -3816,7 +3825,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2000-2003 Dirk Mueller <mueller@kde.org>
            2001 Tobias Anton <anton@stud.fbi.fh-darmstadt.de>
            2002-2003 The Karbon Developers
-           2002-2023 Apple Inc
+           2002-2024 Apple Inc
            2003-2017 Inc
            2004 Zack Rusin <zack@kde.org>
            2004, 2015, 2017, 2022 Red Hat Inc
@@ -3873,7 +3882,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2023 Igalia S.L.
+           2009-2024 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -4017,7 +4026,7 @@ Files: Source/WebCore/platform/ScrollAlignment.cpp
        Source/WebCore/rendering/RenderMarquee.h
 Copyright: 1998 Netscape Communications Corporation
            2001-2006 mozilla.org
-           2003, 2006-2023 Apple Inc
+           2003-2024 Apple Inc
            2007-2009 Torch Mobile Inc
            2014 Google Inc
            2019 Adobe
@@ -4035,7 +4044,7 @@ License: MPL-2.0
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2023 Alberto Garcia <berto@igalia.com>
+           2014-2024 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0

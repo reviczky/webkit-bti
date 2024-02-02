@@ -12,6 +12,8 @@ webkit2gtk (2.43.4-1) UNRELEASED; urgency=medium
   * Stop overriding the typelib-package-name-does-not-match and
     gir-missing-typelib-dependency lintian warnings, they're not happening
     since the aforementioned changes to debian/control.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 21 Dec 2023 14:21:55 +0100
 
