@@ -5,6 +5,8 @@ webkit2gtk (2.42.5-1) UNRELEASED; urgency=medium
     - Update copyright information of all files.
   * debian/rules:
     - Remove last empty line from debian/control.
+  * debian/patches/fix-ftbfs-i386.patch:
+    - i386 build fix.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Feb 2024 11:55:25 +0100
 
