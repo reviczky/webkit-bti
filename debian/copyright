@@ -1690,6 +1690,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/glib/GMutexLocker.h
        Source/WTF/wtf/glib/GRefPtr.cpp
        Source/WTF/wtf/glib/GRefPtr.h
+       Source/WTF/wtf/glib/GThreadSafeWeakPtr.h
        Source/WTF/wtf/glib/GTypedefs.h
        Source/WTF/wtf/glib/GUniquePtr.h
        Source/WTF/wtf/glib/GWeakPtr.h
@@ -3467,7 +3468,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2023 Igalia S.L.
+           2009-2024 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -3624,7 +3625,7 @@ Copyright: 2010-2018 Apple Inc
 License: MPL-2.0
 
 Files: debian/*
-Copyright: 2019-2023 Alberto Garcia <berto@igalia.com>
+Copyright: 2019-2024 Alberto Garcia <berto@igalia.com>
 License: BSD-2-clause
 
 License: AFL-2.0
