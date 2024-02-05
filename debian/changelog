@@ -1,6 +1,8 @@
 webkit2gtk (2.42.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Feb 2024 11:55:25 +0100
 
