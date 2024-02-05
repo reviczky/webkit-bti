@@ -2,6 +2,8 @@ wpewebkit (2.42.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Update copyright information of all files.
+  * debian/patches/fix-ftbfs-i386.patch:
+    - i386 build fix.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Feb 2024 17:36:25 +0100
 
