@@ -1,3 +1,10 @@
+wpewebkit (2.42.5-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Rename libraries for 64-bit time_t transition.  Closes: #1063223
+
+ -- Steve Langasek <vorlon@debian.org>  Thu, 29 Feb 2024 09:23:10 +0000
+
 wpewebkit (2.42.5-1) unstable; urgency=high
 
   * New upstream release.

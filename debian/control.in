@@ -73,6 +73,9 @@ Description: Web content engine for embedded devices - development files
  This package contains the development files.
 
 Package: @LIBWPEWEBKIT_PKG@
+Provides: ${t64:Provides}
+Replaces: libwpewebkit-1.1-0
+Breaks: libwpewebkit-1.1-0 (<< ${source:Version})
 Architecture: linux-any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends},

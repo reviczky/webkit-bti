@@ -33,7 +33,7 @@ ifeq ($(USE_SOUP_VERSION),2)
 else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SOUP2=OFF -DENABLE_WPE_1_1_API=ON
 	WK_API_VERSION = 1.1
-	LIBWPEWEBKIT_PKG = libwpewebkit-1.1-0
+	LIBWPEWEBKIT_PKG = libwpewebkit-1.1-0t64
 	SOUPDEV_PKG = libsoup-3.0-dev
 endif
 
@@ -137,7 +137,7 @@ WEBKIT_DH_FILES = \
 	libwpewebkit-1.0-dev.install
 
 # This converts debhelper file names and contents to the soup3 versions
-WEBKIT_DH_RENAME = sed -e 's/1\.0-3/1.1-0/g' \
+WEBKIT_DH_RENAME = sed -e 's/1\.0-3/1.1-0t64/g' \
 		       -e 's/1\.0\.so\.3/1.1.so.0/g' \
 		       -e 's/1\.0/1.1/g'
 

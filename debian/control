@@ -4,7 +4,7 @@ Section: libs
 Priority: optional
 Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debian.org>
 Uploaders: Alberto Garcia <berto@igalia.com>
-Build-Depends: debhelper-compat (= 13),
+Build-Depends: dpkg-dev (>= 1.22.5), debhelper-compat (= 13),
                bubblewrap [!alpha !ia64 !riscv64 !sh4 !sparc64],
                xdg-dbus-proxy [!alpha !ia64 !riscv64 !sh4 !sparc64],
                libseccomp-dev [!alpha !ia64 !riscv64 !sh4 !sparc64],
@@ -51,7 +51,7 @@ Package: libwpewebkit-1.1-dev
 Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
-Depends: libwpewebkit-1.1-0 (= ${binary:Version}),
+Depends: libwpewebkit-1.1-0t64 (= ${binary:Version}),
          libglib2.0-dev,
          libsoup-3.0-dev,
          libwpe-1.0-dev,
@@ -73,7 +73,10 @@ Description: Web content engine for embedded devices - development files
  .
  This package contains the development files.
 
-Package: libwpewebkit-1.1-0
+Package: libwpewebkit-1.1-0t64
+Provides: ${t64:Provides}
+Replaces: libwpewebkit-1.1-0
+Breaks: libwpewebkit-1.1-0 (<< ${source:Version})
 Architecture: linux-any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends},
