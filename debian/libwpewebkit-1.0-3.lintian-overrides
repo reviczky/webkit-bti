@@ -1,3 +1,0 @@
-libwpewebkit-1.0-3: library-not-linked-against-libc [usr/lib/*/wpe-webkit-1.0/injected-bundle/libWPEInjectedBundle.so]
-libwpewebkit-1.0-3: library-not-linked-against-libc [usr/lib/*/wpe-webkit-1.0/libWPEWebInspectorResources.so]
-libwpewebkit-1.0-3: package-name-doesnt-match-sonames libwpewebkit-1.1-0

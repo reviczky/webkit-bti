@@ -1,0 +1,5 @@
+usr/lib/*/lib*.so.*
+usr/lib/*/wpe-webkit-2.0/*Process
+usr/lib/*/wpe-webkit-2.0/MiniBrowser
+usr/lib/*/wpe-webkit-2.0/injected-bundle
+usr/lib/*/wpe-webkit-2.0/libWPEWebInspectorResources.so

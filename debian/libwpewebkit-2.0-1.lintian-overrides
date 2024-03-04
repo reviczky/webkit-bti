@@ -1,0 +1,2 @@
+libwpewebkit-2.0-1: library-not-linked-against-libc [usr/lib/*/wpe-webkit-2.0/injected-bundle/libWPEInjectedBundle.so]
+libwpewebkit-2.0-1: library-not-linked-against-libc [usr/lib/*/wpe-webkit-2.0/libWPEWebInspectorResources.so]
