@@ -1,3 +1,11 @@
+wpewebkit (2.42.5-1.2) unstable; urgency=medium
+
+  * debian/patches/fix-angle-inline.patch:
+    - Make ANGLE_INLINE a normal inline to fix a FTBFS due to gcc
+      complaining about its use in recursive functions (Closes: #1066454).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 13 Mar 2024 19:25:24 +0100
+
 wpewebkit (2.42.5-1.1) unstable; urgency=medium
 
   * Non-maintainer upload.
