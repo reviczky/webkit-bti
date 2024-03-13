@@ -1,0 +1,23 @@
+From: Alberto Garcia <berto@igalia.com>
+Description: Make ANGLE_INLINE a normal inline
+ This fixes a FTBFS due to gcc complaining about its use
+ in recursive functions.
+Bug-Debian: https://bugs.debian.org/1066411
+Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/angleutils.h
+===================================================================
+--- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/angleutils.h
++++ webkitgtk/Source/ThirdParty/ANGLE/src/common/angleutils.h
+@@ -548,13 +548,7 @@ class MsanScopedDisableInterceptorChecks
+ #    define ANGLE_HAS___FORCEINLINE 0
+ #endif
+ 
+-#if defined(NDEBUG) && ANGLE_HAS_ATTRIBUTE_ALWAYS_INLINE
+-#    define ANGLE_INLINE inline __attribute__((always_inline))
+-#elif defined(NDEBUG) && ANGLE_HAS___FORCEINLINE
+-#    define ANGLE_INLINE __forceinline
+-#else
+ #    define ANGLE_INLINE inline
+-#endif
+ 
+ #if defined(__clang__) || (defined(__GNUC__) && defined(__has_attribute))
+ #    if __has_attribute(noinline)
