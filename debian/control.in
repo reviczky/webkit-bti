@@ -77,12 +77,15 @@ Description: JavaScript engine library from WebKitGTK - command-line interpreter
  .
  This package provides jsc, a command-line JavaScript interpreter.
 
-Package: libwebkit2gtk-4.0-doc
+Package: @LIBWEBKITGTKDOC_PKG@
 Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
+Conflicts: ${wkdoc:Conflicts}
+Breaks: ${wkdoc:Replaces}
+Replaces: ${wkdoc:Replaces}
 Suggests: devhelp
 Description: Web content engine library for GTK - documentation
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
@@ -94,8 +97,7 @@ Description: Web content engine library for GTK - documentation
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  .
- This package contains the documentation and is valid for versions 4.0,
- 4.1 and 6.0 of the API.
+ This package contains the documentation.
 
 Package: webkit2gtk-driver
 Architecture: any
