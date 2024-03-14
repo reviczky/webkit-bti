@@ -1,4 +1,4 @@
-webkit2gtk (2.42.5-2) UNRELEASED; urgency=medium
+webkit2gtk (2.42.5-2) unstable; urgency=medium
 
   * debian/rules:
     - Don't copy CFLAGS to CXXFLAGS: -Werror=implicit-function-declaration
