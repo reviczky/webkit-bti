@@ -301,7 +301,7 @@ override_dh_auto_configure:
 	$(SOUP3_BUILD) dh_auto_configure -Bbuild-soup3 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=OFF \
 		$(ENABLE_WEBDRIVER_SOUP3)
-	$(GTK4_BUILD) dh_auto_configure -Bbuild-gtk4 -- \
+	$(GTK4_BUILD) WK_USE_CCACHE=NO dh_auto_configure -Bbuild-gtk4 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_GTK4=ON \
 		$(ENABLE_WEBDRIVER_GTK4) -DENABLE_DOCUMENTATION=OFF
 
@@ -310,8 +310,7 @@ override_dh_auto_build:
 		dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
 	$(SOUP3_BUILD) CCACHE_BASEDIR=$(CURDIR)/build-soup3 \
 		dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
-	$(GTK4_BUILD)  CCACHE_BASEDIR=$(CURDIR)/build-gtk4 \
-		dh_auto_build -Bbuild-gtk4 $(EXTRA_BUILD_ARGUMENTS)
+	$(GTK4_BUILD) dh_auto_build -Bbuild-gtk4 $(EXTRA_BUILD_ARGUMENTS)
 
 override_dh_auto_install:
 	$(SOUP2_BUILD) dh_auto_install -Bbuild-soup2
