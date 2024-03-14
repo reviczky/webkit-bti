@@ -44,6 +44,7 @@ endif
 # The debug packages produced by webkit are huge and cause problems in
 # most buildds. Use -g1 in all architectures to make them smaller.
 CFLAGS := $(CFLAGS:-g=-g1)
+CXXFLAGS := $(CXXFLAGS:-g=-g1)
 
 # Don't build with -gsplit-dwarf (see #1016936)
 EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
@@ -79,6 +80,8 @@ endif
 ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4))
 	CFLAGS := $(CFLAGS:-g1=-g0)
 	CFLAGS := $(CFLAGS:-O2=-O1)
+	CXXFLAGS := $(CXXFLAGS:-g1=-g0)
+	CXXFLAGS := $(CXXFLAGS:-O2=-O1)
 	CPPFLAGS += --param ggc-min-expand=10
 endif
 
@@ -154,8 +157,6 @@ endif
 ifneq (,$(filter $(DEB_HOST_ARCH),arm64 armel armhf))
 	DH_GENCONTROL_ARGS += -Vgles:Depends="libgles2"
 endif
-
-CXXFLAGS=$(CFLAGS)
 
 # TODO: don't enable the substvars until we ship 2.44.0
 ifeq ($(USE_OLD_DOC_PKG),YES)

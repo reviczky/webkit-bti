@@ -9,6 +9,9 @@ webkit2gtk (2.43.4-2) UNRELEASED; urgency=medium
   * debian/rules:
     - Don't use ccache on the gtk4 build since it won't reuse any results
       from the gtk3 builds.
+    - Don't copy CFLAGS to CXXFLAGS: -Werror=implicit-function-declaration
+      (default since dpkg 1.22.6) causes a FTBFS when added to the latter
+      (see #1066411).
   * Prepare everything to rename libwebkit2gtk-4.0-doc to libwebkitgtk-doc
     but don't start the transition yet.
     - debian/control.in: add the necessary Conflicts / Breaks / Replaces.
