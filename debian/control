@@ -78,7 +78,7 @@ Description: JavaScript engine library from WebKitGTK - command-line interpreter
  .
  This package provides jsc, a command-line JavaScript interpreter.
 
-Package: libwebkit2gtk-4.0-doc
+Package: libwebkitgtk-doc
 Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
@@ -118,6 +118,15 @@ Description: WebKitGTK WebDriver support
  .
  This package provides the WebDriver service implementation for
  WebKitGTK.
+
+Package: libwebkit2gtk-4.0-doc
+Build-Profiles: <!nodoc>
+Section: doc
+Architecture: all
+Multi-Arch: foreign
+Depends: libwebkitgtk-doc, ${misc:Depends}
+Description: WebKitGTK documentation (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
 
 Package: libjavascriptcoregtk-4.0-18
 Section: libs

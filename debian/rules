@@ -18,8 +18,7 @@ ENABLE_GTK4=YES
 # Use only if gi-docgen is not available.
 USE_PREBUILT_DOCS=NO
 # Set to YES to build libwebkit2gtk-4.0-doc instead of libwebkitgtk-doc
-# TODO: we keep using the old package until we ship 2.44.0
-USE_OLD_DOC_PKG=YES
+USE_OLD_DOC_PKG=NO
 
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
@@ -158,13 +157,12 @@ ifneq (,$(filter $(DEB_HOST_ARCH),arm64 armel armhf))
 	DH_GENCONTROL_ARGS += -Vgles:Depends="libgles2"
 endif
 
-# TODO: don't enable the substvars until we ship 2.44.0
 ifeq ($(USE_OLD_DOC_PKG),YES)
 	LIBWEBKITGTKDOC_PKG=libwebkit2gtk-4.0-doc
-#	DH_GENCONTROL_ARGS += -Vwkdoc:Conflicts="libwebkitgtk-doc"
+	DH_GENCONTROL_ARGS += -Vwkdoc:Conflicts="libwebkitgtk-doc"
 else
 	LIBWEBKITGTKDOC_PKG=libwebkitgtk-doc
-#	DH_GENCONTROL_ARGS += -Vwkdoc:Replaces="libwebkit2gtk-4.0-doc (<< 2.44.0~)"
+	DH_GENCONTROL_ARGS += -Vwkdoc:Replaces="libwebkit2gtk-4.0-doc (<< 2.43.4-2~)"
 endif
 
 # Disable commands and binary packages of the builds that we don't want
