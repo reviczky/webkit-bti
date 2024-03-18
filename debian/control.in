@@ -61,19 +61,21 @@ Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git
 Homepage: https://webkitgtk.org/
 
-Package: libjavascriptcoregtk-4.0-bin
+Package: @LIBJSCBIN_PKG@
 Section: interpreters
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends},
+Depends: @LIBJSCBIN_DEP_PKG@ (= ${binary:Version}),
+         ${shlibs:Depends},
          ${misc:Depends}
+Conflicts: ${jscbin:Conflicts}
+Breaks: ${jscbin:Replaces}
+Replaces: ${jscbin:Replaces}
 Description: JavaScript engine library from WebKitGTK - command-line interpreter
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
- .
- This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package provides jsc, a command-line JavaScript interpreter.
 

@@ -20,6 +20,9 @@ USE_PREBUILT_DOCS=NO
 # Set to YES to build libwebkit2gtk-4.0-doc instead of libwebkitgtk-doc
 USE_OLD_DOC_PKG=NO
 
+# Set to YES to build libjavascriptcoregtk-4.0-bin instead of libjavascriptcoregtk-bin
+USE_OLD_JSCBIN_PKG=NO
+
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
@@ -165,6 +168,18 @@ else
 	DH_GENCONTROL_ARGS += -Vwkdoc:Replaces="libwebkit2gtk-4.0-doc (<< 2.43.4-2~)"
 endif
 
+ifeq ($(USE_OLD_JSCBIN_PKG),YES)
+	LIBJSCBIN_PKG=libjavascriptcoregtk-4.0-bin
+	LIBJSCBIN_DEP_PKG=libjavascriptcoregtk-4.0-18
+	JSCBIN_BUILD=webkit2gtk-4.0
+	DH_GENCONTROL_ARGS += -Vjscbin:Conflicts="libjavascriptcoregtk-bin"
+else
+	LIBJSCBIN_PKG=libjavascriptcoregtk-bin
+	LIBJSCBIN_DEP_PKG=libjavascriptcoregtk-4.1-0
+	JSCBIN_BUILD=webkit2gtk-4.1
+	DH_GENCONTROL_ARGS += -Vjscbin:Replaces="libjavascriptcoregtk-4.0-bin (<< 2.43.4-2~)"
+endif
+
 # Disable commands and binary packages of the builds that we don't want
 ifneq ($(ENABLE_SOUP2),YES)
 	SOUP2_BUILD = @:
@@ -258,6 +273,8 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 	cat debian/control.in | \
 		sed -e 's/@EXTRA_BUILD_DEPS@/$(SOUP2_BUILD_DEP)$(SOUP3_BUILD_DEP)$(GTK3_BUILD_DEP)$(GTK4_BUILD_DEP)/' \
 		    -e 's/@LIBWEBKITGTKDOC_PKG@/$(LIBWEBKITGTKDOC_PKG)/' \
+		    -e 's/@LIBJSCBIN_PKG@/$(LIBJSCBIN_PKG)/' \
+		    -e 's/@LIBJSCBIN_DEP_PKG@/$(LIBJSCBIN_DEP_PKG)/' \
 		    -e 's/@WEBDRIVER_DEP_PKG@/$(WEBDRIVER_DEP_PKG)/' \
 		>> debian/control
 ifeq ($(USE_PREBUILT_DOCS),YES)
@@ -265,6 +282,9 @@ ifeq ($(USE_PREBUILT_DOCS),YES)
 endif
 ifeq ($(USE_OLD_DOC_PKG),NO)
 	cat debian/control-doc.in >> debian/control
+endif
+ifeq ($(USE_OLD_JSCBIN_PKG),NO)
+	cat debian/control-jscbin.in >> debian/control
 endif
 	$(SOUP2_BUILD) cat debian/control-common.in | \
 		sed -e 's/@SOUPDEV_PKG@/libsoup2.4-dev/g' \
@@ -317,6 +337,10 @@ override_dh_auto_configure:
 			echo debian/$$dst >> debian/clean ; \
 		done ; \
 	fi
+	echo debian/jsc.1 > debian/$(LIBJSCBIN_PKG).manpages
+	echo 'usr/lib/$(DEB_HOST_MULTIARCH)/$(JSCBIN_BUILD)/jsc usr/bin/' > debian/$(LIBJSCBIN_PKG).install
+	echo debian/$(LIBJSCBIN_PKG).manpages >> debian/clean
+	echo debian/$(LIBJSCBIN_PKG).install >> debian/clean
 	$(SOUP2_BUILD) dh_auto_configure -Bbuild-soup2 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=ON -DUSE_GTK4=OFF \
 		$(ENABLE_WEBDRIVER_SOUP2) -DENABLE_DOCUMENTATION=OFF
