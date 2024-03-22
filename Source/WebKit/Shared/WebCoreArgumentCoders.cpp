@@ -26,8 +26,6 @@
 #include "config.h"
 #include "WebCoreArgumentCoders.h"
 
-#include "ShareableBitmap.h"
-#include "ShareableResource.h"
 #include "StreamConnectionEncoder.h"
 #include <JavaScriptCore/GenericTypedArrayViewInlines.h>
 #include <JavaScriptCore/JSGenericTypedArrayViewInlines.h>
@@ -46,7 +44,6 @@
 #include <WebCore/CacheStorageConnection.h>
 #include <WebCore/ColorWellPart.h>
 #include <WebCore/CompositionUnderline.h>
-#include <WebCore/ControlPart.h>
 #include <WebCore/Credential.h>
 #include <WebCore/Cursor.h>
 #include <WebCore/DOMCacheEngine.h>
@@ -135,6 +132,8 @@
 #include <WebCore/SerializedPlatformDataCueValue.h>
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/ShareData.h>
+#include <WebCore/ShareableBitmap.h>
+#include <WebCore/ShareableResource.h>
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/SkewTransformOperation.h>
 #include <WebCore/SliderThumbPart.h>
@@ -170,10 +169,6 @@
 #include <WebCore/SelectionGeometry.h>
 #endif // PLATFORM(IOS_FAMILY)
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-#include <WebCore/MediaPlaybackTargetContext.h>
-#endif
-
 #if ENABLE(MEDIA_STREAM)
 #include <WebCore/CaptureDevice.h>
 #include <WebCore/MediaConstraints.h>
@@ -197,75 +192,7 @@ namespace IPC {
 using namespace WebCore;
 using namespace WebKit;
 
-void ArgumentCoder<Credential>::encode(Encoder& encoder, const Credential& credential)
-{
-    if (credential.encodingRequiresPlatformData()) {
-        encoder << true;
-        encodePlatformData(encoder, credential);
-        return;
-    }
-
-    encoder << false;
-    encoder << credential.user() << credential.password();
-    encoder << credential.persistence();
-}
-
-bool ArgumentCoder<Credential>::decode(Decoder& decoder, Credential& credential)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return false;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, credential);
-
-    String user;
-    if (!decoder.decode(user))
-        return false;
-
-    String password;
-    if (!decoder.decode(password))
-        return false;
-
-    CredentialPersistence persistence;
-    if (!decoder.decode(persistence))
-        return false;
-    
-    credential = Credential(user, password, persistence);
-    return true;
-}
-
-void ArgumentCoder<Image>::encode(Encoder& encoder, const Image& image)
-{
-    RefPtr bitmap = ShareableBitmap::create({ IntSize(image.size()) });
-    auto graphicsContext = bitmap->createGraphicsContext();
-    encoder << !!graphicsContext;
-    if (!graphicsContext)
-        return;
-
-    graphicsContext->drawImage(const_cast<Image&>(image), IntPoint());
-    
-    encoder << bitmap;
-}
-
-std::optional<Ref<Image>> ArgumentCoder<Image>::decode(Decoder& decoder)
-{
-    std::optional<bool> didCreateGraphicsContext;
-    decoder >> didCreateGraphicsContext;
-    if (!didCreateGraphicsContext || !*didCreateGraphicsContext)
-        return std::nullopt;
-
-    std::optional<RefPtr<WebKit::ShareableBitmap>> bitmap;
-    decoder >> bitmap;
-    if (!bitmap)
-        return std::nullopt;
-    
-    RefPtr image = bitmap.value()->createImage();
-    if (!image)
-        return std::nullopt;
-    return image.releaseNonNull();
-}
-
+#if !USE(CORE_TEXT)
 void ArgumentCoder<WebCore::Font>::encode(Encoder& encoder, const WebCore::Font& font)
 {
     encoder << font.attributes();
@@ -343,8 +270,6 @@ std::optional<Ref<FontCustomPlatformData>> ArgumentCoder<FontCustomPlatformData>
     return fontCustomPlatformData.releaseNonNull();
 }
 
-#if !USE(CORE_TEXT)
-
 void ArgumentCoder<WebCore::FontPlatformData::Attributes>::encode(Encoder& encoder, const WebCore::FontPlatformData::Attributes& data)
 {
     encoder << data.m_orientation;
@@ -395,83 +320,6 @@ std::optional<FontPlatformData::Attributes> ArgumentCoder<FontPlatformData::Attr
         return std::nullopt;
 
     return result;
-}
-
-#endif
-
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-void ArgumentCoder<MediaPlaybackTargetContext>::encode(Encoder& encoder, const MediaPlaybackTargetContext& target)
-{
-    bool hasPlatformData = target.encodingRequiresPlatformData();
-    encoder << hasPlatformData;
-
-    MediaPlaybackTargetContext::Type contextType = target.type();
-    encoder << contextType;
-
-    if (target.encodingRequiresPlatformData()) {
-        encodePlatformData(encoder, target);
-        return;
-    }
-
-    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
-    encoder << target.deviceName();
-    encoder << target.mockState();
-}
-
-bool ArgumentCoder<MediaPlaybackTargetContext>::decode(Decoder& decoder, MediaPlaybackTargetContext& target)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return false;
-
-    MediaPlaybackTargetContext::Type contextType;
-    if (!decoder.decode(contextType))
-        return false;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, contextType, target);
-
-    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
-    String deviceName;
-    if (!decoder.decode(deviceName))
-        return false;
-
-    MediaPlaybackTargetContext::MockState mockState;
-    if (!decoder.decode(mockState))
-        return false;
-
-    target = MediaPlaybackTargetContext(deviceName, mockState);
-
-    return true;
-}
-#endif
-
-#if ENABLE(VIDEO)
-void ArgumentCoder<WebCore::SerializedPlatformDataCueValue>::encode(Encoder& encoder, const SerializedPlatformDataCueValue& value)
-{
-    bool hasPlatformData = value.encodingRequiresPlatformData();
-    encoder << hasPlatformData;
-
-    encoder << value.platformType();
-    if (hasPlatformData)
-        encodePlatformData(encoder, value);
-}
-
-std::optional<SerializedPlatformDataCueValue> ArgumentCoder<WebCore::SerializedPlatformDataCueValue>::decode(IPC::Decoder& decoder)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return std::nullopt;
-
-    WebCore::SerializedPlatformDataCueValue::PlatformType type;
-    if (!decoder.decode(type))
-        return std::nullopt;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, type);
-
-    return { SerializedPlatformDataCueValue() };
-
 }
 #endif
 
@@ -542,290 +390,6 @@ std::optional<Ref<WebCore::FragmentedSharedBuffer>> ArgumentCoder<WebCore::Fragm
         return std::nullopt;
 
     return SharedBuffer::create(static_cast<unsigned char*>(sharedMemoryBuffer->data()), bufferSize);
-}
-
-void ArgumentCoder<WebCore::SharedBuffer>::encode(Encoder& encoder, const WebCore::SharedBuffer& buffer)
-{
-    encoder << static_cast<const WebCore::FragmentedSharedBuffer&>(buffer);
-}
-
-std::optional<Ref<WebCore::SharedBuffer>> ArgumentCoder<WebCore::SharedBuffer>::decode(Decoder& decoder)
-{
-    if (auto buffer = decoder.decode<Ref<FragmentedSharedBuffer>>())
-        return (*buffer)->makeContiguous();
-    return std::nullopt;
-}
-
-#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
-static std::optional<ShareableResource::Handle> tryConvertToShareableResourceHandle(const ScriptBuffer& script)
-{
-    if (!script.containsSingleFileMappedSegment())
-        return std::nullopt;
-
-    auto& segment = script.buffer()->begin()->segment;
-    auto sharedMemory = SharedMemory::wrapMap(const_cast<uint8_t*>(segment->data()), segment->size(), SharedMemory::Protection::ReadOnly);
-    if (!sharedMemory)
-        return std::nullopt;
-
-    auto shareableResource = ShareableResource::create(sharedMemory.releaseNonNull(), 0, segment->size());
-    if (!shareableResource)
-        return std::nullopt;
-
-    return shareableResource->createHandle();
-}
-#endif
-
-void ArgumentCoder<WebCore::ScriptBuffer>::encode(Encoder& encoder, const WebCore::ScriptBuffer& script)
-{
-#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
-    auto handle = tryConvertToShareableResourceHandle(script);
-    bool isShareableResourceHandle = !!handle;
-    encoder << WTFMove(handle);
-    if (isShareableResourceHandle)
-        return;
-#endif
-    encoder << RefPtr { script.buffer() };
-}
-
-std::optional<WebCore::ScriptBuffer> ArgumentCoder<WebCore::ScriptBuffer>::decode(Decoder& decoder)
-{
-#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
-    auto handle = decoder.decode<std::optional<ShareableResource::Handle>>();
-    if (UNLIKELY(!decoder.isValid()))
-        return std::nullopt;
-
-    if (*handle) {
-        if (auto buffer = WTFMove(**handle).tryWrapInSharedBuffer())
-            return WebCore::ScriptBuffer { WTFMove(buffer) };
-        return std::nullopt;
-    }
-#endif
-
-    if (auto buffer = decoder.decode<RefPtr<FragmentedSharedBuffer>>())
-        return WebCore::ScriptBuffer { WTFMove(*buffer) };
-    return std::nullopt;
-}
-
-template<typename Encoder>
-void ArgumentCoder<ControlPart>::encode(Encoder& encoder, const ControlPart& part)
-{
-    encoder << part.type();
-
-    switch (part.type()) {
-    case WebCore::StyleAppearance::None:
-    case WebCore::StyleAppearance::Auto:
-        break;
-
-    case WebCore::StyleAppearance::Checkbox:
-    case WebCore::StyleAppearance::Radio:
-    case WebCore::StyleAppearance::PushButton:
-    case WebCore::StyleAppearance::SquareButton:
-    case WebCore::StyleAppearance::Button:
-    case WebCore::StyleAppearance::DefaultButton:
-    case WebCore::StyleAppearance::Listbox:
-    case WebCore::StyleAppearance::Menulist:
-    case WebCore::StyleAppearance::MenulistButton:
-        break;
-
-    case WebCore::StyleAppearance::Meter:
-        encoder << downcast<WebCore::MeterPart>(part);
-        break;
-
-    case WebCore::StyleAppearance::ProgressBar:
-        encoder << downcast<WebCore::ProgressBarPart>(part);
-        break;
-
-    case WebCore::StyleAppearance::SliderHorizontal:
-    case WebCore::StyleAppearance::SliderVertical:
-        encoder << downcast<WebCore::SliderTrackPart>(part);
-        break;
-
-    case WebCore::StyleAppearance::SearchField:
-        break;
-
-#if ENABLE(APPLE_PAY)
-    case WebCore::StyleAppearance::ApplePayButton:
-        encoder << downcast<WebCore::ApplePayButtonPart>(part);
-        break;
-#endif
-
-#if ENABLE(ATTACHMENT_ELEMENT)
-    case WebCore::StyleAppearance::Attachment:
-    case WebCore::StyleAppearance::BorderlessAttachment:
-#endif
-    case WebCore::StyleAppearance::TextArea:
-    case WebCore::StyleAppearance::TextField:
-    case WebCore::StyleAppearance::CapsLockIndicator:
-#if ENABLE(INPUT_TYPE_COLOR)
-    case WebCore::StyleAppearance::ColorWell:
-#endif
-#if ENABLE(SERVICE_CONTROLS)
-    case WebCore::StyleAppearance::ImageControlsButton:
-#endif
-    case WebCore::StyleAppearance::InnerSpinButton:
-#if ENABLE(DATALIST_ELEMENT)
-    case WebCore::StyleAppearance::ListButton:
-#endif
-    case WebCore::StyleAppearance::SearchFieldDecoration:
-    case WebCore::StyleAppearance::SearchFieldResultsDecoration:
-    case WebCore::StyleAppearance::SearchFieldResultsButton:
-    case WebCore::StyleAppearance::SearchFieldCancelButton:
-    case WebCore::StyleAppearance::SliderThumbHorizontal:
-    case WebCore::StyleAppearance::SliderThumbVertical:
-    case WebCore::StyleAppearance::Switch:
-        break;
-
-    case WebCore::StyleAppearance::SwitchThumb:
-        encoder << downcast<WebCore::SwitchThumbPart>(part);
-        break;
-
-    case WebCore::StyleAppearance::SwitchTrack:
-        encoder << downcast<WebCore::SwitchTrackPart>(part);
-        break;
-    }
-}
-
-template
-void ArgumentCoder<ControlPart>::encode<Encoder>(Encoder&, const ControlPart&);
-template
-void ArgumentCoder<ControlPart>::encode<StreamConnectionEncoder>(StreamConnectionEncoder&, const ControlPart&);
-
-std::optional<Ref<ControlPart>> ArgumentCoder<ControlPart>::decode(Decoder& decoder)
-{
-    std::optional<WebCore::StyleAppearance> type;
-    decoder >> type;
-    if (!type)
-        return std::nullopt;
-
-    switch (*type) {
-    case WebCore::StyleAppearance::None:
-    case WebCore::StyleAppearance::Auto:
-        break;
-
-    case WebCore::StyleAppearance::Checkbox:
-    case WebCore::StyleAppearance::Radio:
-        return WebCore::ToggleButtonPart::create(*type);
-
-    case WebCore::StyleAppearance::PushButton:
-    case WebCore::StyleAppearance::SquareButton:
-    case WebCore::StyleAppearance::Button:
-    case WebCore::StyleAppearance::DefaultButton:
-        return WebCore::ButtonPart::create(*type);
-
-    case WebCore::StyleAppearance::Menulist:
-        return WebCore::MenuListPart::create();
-
-    case WebCore::StyleAppearance::MenulistButton:
-        return WebCore::MenuListButtonPart::create();
-
-    case WebCore::StyleAppearance::Meter: {
-        std::optional<Ref<WebCore::MeterPart>> meterPart;
-        decoder >> meterPart;
-        if (meterPart)
-            return WTFMove(*meterPart);
-        break;
-    }
-
-    case WebCore::StyleAppearance::ProgressBar: {
-        std::optional<Ref<WebCore::ProgressBarPart>> progressBarPart;
-        decoder >> progressBarPart;
-        if (progressBarPart)
-            return WTFMove(*progressBarPart);
-        break;
-    }
-
-    case WebCore::StyleAppearance::SliderHorizontal:
-    case WebCore::StyleAppearance::SliderVertical: {
-        std::optional<Ref<WebCore::SliderTrackPart>> sliderTrackPart;
-        decoder >> sliderTrackPart;
-        if (sliderTrackPart)
-            return WTFMove(*sliderTrackPart);
-        break;
-    }
-
-    case WebCore::StyleAppearance::SearchField:
-        return WebCore::SearchFieldPart::create();
-
-#if ENABLE(APPLE_PAY)
-    case WebCore::StyleAppearance::ApplePayButton: {
-        std::optional<Ref<WebCore::ApplePayButtonPart>> applePayButtonPart;
-        decoder >> applePayButtonPart;
-        if (applePayButtonPart)
-            return WTFMove(*applePayButtonPart);
-        break;
-    }
-#endif
-
-#if ENABLE(ATTACHMENT_ELEMENT)
-    case WebCore::StyleAppearance::Attachment:
-    case WebCore::StyleAppearance::BorderlessAttachment:
-#endif
-        break;
-
-    case WebCore::StyleAppearance::Listbox:
-    case WebCore::StyleAppearance::TextArea:
-        return WebCore::TextAreaPart::create(*type);
-
-    case WebCore::StyleAppearance::TextField:
-        return WebCore::TextFieldPart::create();
-
-    case WebCore::StyleAppearance::CapsLockIndicator:
-        break;
-
-#if ENABLE(INPUT_TYPE_COLOR)
-    case WebCore::StyleAppearance::ColorWell:
-        return WebCore::ColorWellPart::create();
-#endif
-#if ENABLE(SERVICE_CONTROLS)
-    case WebCore::StyleAppearance::ImageControlsButton:
-        return WebCore::ImageControlsButtonPart::create();
-#endif
-
-    case WebCore::StyleAppearance::InnerSpinButton:
-        return WebCore::InnerSpinButtonPart::create();
-
-#if ENABLE(DATALIST_ELEMENT)
-    case WebCore::StyleAppearance::ListButton:
-        break;
-#endif
-
-    case WebCore::StyleAppearance::SearchFieldDecoration:
-        break;
-
-    case WebCore::StyleAppearance::SearchFieldResultsDecoration:
-    case WebCore::StyleAppearance::SearchFieldResultsButton:
-        return WebCore::SearchFieldResultsPart::create(*type);
-
-    case WebCore::StyleAppearance::SearchFieldCancelButton:
-        return WebCore::SearchFieldCancelButtonPart::create();
-
-    case WebCore::StyleAppearance::SliderThumbHorizontal:
-    case WebCore::StyleAppearance::SliderThumbVertical:
-        return WebCore::SliderThumbPart::create(*type);
-
-    case WebCore::StyleAppearance::Switch:
-        break;
-
-    case WebCore::StyleAppearance::SwitchThumb: {
-        std::optional<Ref<WebCore::SwitchThumbPart>> switchThumbPart;
-        decoder >> switchThumbPart;
-        if (switchThumbPart)
-            return WTFMove(*switchThumbPart);
-        break;
-    }
-
-    case WebCore::StyleAppearance::SwitchTrack: {
-        std::optional<Ref<WebCore::SwitchTrackPart>> switchTrackPart;
-        decoder >> switchTrackPart;
-        if (switchTrackPart)
-            return WTFMove(*switchTrackPart);
-        break;
-    }
-
-    }
-
-    ASSERT_NOT_REACHED();
-    return std::nullopt;
 }
 
 } // namespace IPC

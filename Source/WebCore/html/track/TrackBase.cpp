@@ -27,6 +27,7 @@
 #include "TrackBase.h"
 
 #include "ContextDestructionObserverInlines.h"
+#include "Document.h"
 #include "Logging.h"
 #include "TrackListBase.h"
 #include <wtf/Language.h>
@@ -71,6 +72,11 @@ TrackBase::TrackBase(ScriptExecutionContext* context, Type type, const std::opti
 
     m_logger = nullLogger().get();
 #endif
+}
+
+void TrackBase::didMoveToNewDocument(Document& newDocument)
+{
+    observeContext(&newDocument.contextDocument());
 }
 
 void TrackBase::setTrackList(TrackListBase& trackList)

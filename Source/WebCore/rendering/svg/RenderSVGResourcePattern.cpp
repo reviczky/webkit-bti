@@ -23,11 +23,12 @@
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "ElementChildIteratorInlines.h"
 #include "RenderLayer.h"
+#include "RenderSVGModelObjectInlines.h"
 #include "RenderSVGResourcePatternInlines.h"
 #include "RenderSVGShape.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGFitToViewBox.h"
 #include "SVGRenderStyle.h"
-#include "SVGRenderingContext.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -125,7 +126,7 @@ RefPtr<Pattern> RenderSVGResourcePattern::buildPattern(GraphicsContext& context,
 
     auto patternTransform = m_attributes->patternTransform();
     if (!patternTransform.isIdentity())
-        patternSpaceTransform.multiply(patternSpaceTransform);
+        patternSpaceTransform = patternTransform * patternSpaceTransform;
 
     // Build pattern.
     return Pattern::create({ copiedImage.releaseNonNull() }, { true, true, patternSpaceTransform });

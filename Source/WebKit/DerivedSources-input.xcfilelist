@@ -149,6 +149,7 @@ $(PROJECT_DIR)/NetworkProcess/webrtc/NetworkRTCMonitor.messages.in
 $(PROJECT_DIR)/NetworkProcess/webrtc/NetworkRTCProvider.messages.in
 $(PROJECT_DIR)/NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy.messages.in
 $(PROJECT_DIR)/NetworkProcess/webtransport/NetworkTransportSession.messages.in
+$(PROJECT_DIR)/Platform/IPC/ConnectionHandle.serialization.in
 $(PROJECT_DIR)/Platform/IPC/FormDataReference.serialization.in
 $(PROJECT_DIR)/Platform/IPC/IPCEvent.serialization.in
 $(PROJECT_DIR)/Platform/IPC/IPCSemaphore.serialization.in
@@ -232,6 +233,7 @@ $(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSCFObject.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSValue.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCPassKit.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCPersonNameComponents.serialization.in
+$(PROJECT_DIR)/Shared/Cocoa/CoreIPCPresentationIntent.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCSecureCoding.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCString.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCURL.serialization.in
@@ -301,6 +303,7 @@ $(PROJECT_DIR)/Shared/Pasteboard.serialization.in
 $(PROJECT_DIR)/Shared/PlatformPopupMenuData.serialization.in
 $(PROJECT_DIR)/Shared/PolicyDecision.serialization.in
 $(PROJECT_DIR)/Shared/PrintInfo.serialization.in
+$(PROJECT_DIR)/Shared/ProcessQualified.serialization.in
 $(PROJECT_DIR)/Shared/PushMessageForTesting.serialization.in
 $(PROJECT_DIR)/Shared/RTCNetwork.serialization.in
 $(PROJECT_DIR)/Shared/RTCPacketOptions.serialization.in
@@ -316,8 +319,6 @@ $(PROJECT_DIR)/Shared/SameDocumentNavigationType.serialization.in
 $(PROJECT_DIR)/Shared/SandboxExtension.serialization.in
 $(PROJECT_DIR)/Shared/ScrollingAccelerationCurve.serialization.in
 $(PROJECT_DIR)/Shared/SessionState.serialization.in
-$(PROJECT_DIR)/Shared/ShareableBitmap.serialization.in
-$(PROJECT_DIR)/Shared/ShareableResource.serialization.in
 $(PROJECT_DIR)/Shared/Shared/EditorState.serialization.in
 $(PROJECT_DIR)/Shared/SyntheticEditingCommandType.serialization.in
 $(PROJECT_DIR)/Shared/TextFlags.serialization.in
@@ -375,6 +376,7 @@ $(PROJECT_DIR)/Shared/WebGPU/WebGPUImageCopyExternalImage.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUImageCopyTexture.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUImageCopyTextureTagged.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUImageDataLayout.serialization.in
+$(PROJECT_DIR)/Shared/WebGPU/WebGPUInternalError.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUMultisampleState.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUObjectDescriptorBase.serialization.in
 $(PROJECT_DIR)/Shared/WebGPU/WebGPUOrigin2D.serialization.in
@@ -439,8 +441,14 @@ $(PROJECT_DIR)/Shared/XR/PlatformXR.serialization.in
 $(PROJECT_DIR)/Shared/XR/XRSystem.serialization.in
 $(PROJECT_DIR)/Shared/cf/CFTypes.serialization.in
 $(PROJECT_DIR)/Shared/cf/CoreIPCBoolean.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCCFArray.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCCFDictionary.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCCGColorSpace.serialization.in
 $(PROJECT_DIR)/Shared/cf/CoreIPCNumber.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCSecAccessControl.serialization.in
 $(PROJECT_DIR)/Shared/cf/CoreIPCSecCertificate.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCSecKeychainItem.serialization.in
+$(PROJECT_DIR)/Shared/cf/CoreIPCSecTrust.serialization.in
 $(PROJECT_DIR)/Shared/ios/DynamicViewportSizeUpdate.serialization.in
 $(PROJECT_DIR)/Shared/ios/GestureTypes.serialization.in
 $(PROJECT_DIR)/Shared/ios/InteractionInformationAtPosition.serialization.in
@@ -507,6 +515,13 @@ $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIAlarms.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPICommands.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPICookies.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDeclarativeNetRequest.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevTools.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsElementsPanel.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsExtensionPanel.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsExtensionSidebarPane.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsInspectedWindow.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsNetwork.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIDevToolsPanels.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIEvent.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIExtension.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPILocalization.idl
@@ -641,7 +656,6 @@ $(WEBCORE_PRIVATE_HEADERS_DIR)/LayoutMilestones.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/MDNSRegisterError.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/MediaPlaybackTargetContext.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/MediaProducer.serialization.in
-$(WEBCORE_PRIVATE_HEADERS_DIR)/PlatformCALayer.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/PlatformEvent.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/PlatformMediaSession.serialization.in
 $(WEBCORE_PRIVATE_HEADERS_DIR)/PlatformScreen.serialization.in

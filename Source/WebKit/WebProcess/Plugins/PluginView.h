@@ -43,12 +43,12 @@ namespace WebCore {
 class HTMLPlugInElement;
 class LocalFrame;
 class RenderEmbeddedObject;
+class ShareableBitmap;
 }
 
 namespace WebKit {
 
 class PDFPluginBase;
-class ShareableBitmap;
 class WebPage;
 
 struct WebHitTestResultData;
@@ -108,6 +108,8 @@ public:
     void invalidateRect(const WebCore::IntRect&) final;
 
     void didChangeSettings();
+
+    void windowActivityDidChange();
 
 private:
     PluginView(WebCore::HTMLPlugInElement&, const URL&, const String& contentType, bool shouldUseManualLoader, WebPage&);
@@ -188,7 +190,7 @@ private:
     WebCore::SharedBufferBuilder m_manualStreamData;
 
     // This snapshot is used to avoid side effects should the plugin run JS during painting.
-    RefPtr<ShareableBitmap> m_transientPaintingSnapshot;
+    RefPtr<WebCore::ShareableBitmap> m_transientPaintingSnapshot;
 };
 
 } // namespace WebKit

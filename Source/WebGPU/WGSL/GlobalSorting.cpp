@@ -26,10 +26,9 @@
 #include "config.h"
 #include "GlobalSorting.h"
 
-#include "ASTFunction.h"
 #include "ASTIdentifierExpression.h"
+#include "ASTScopedVisitorInlines.h"
 #include "ASTVariableStatement.h"
-#include "ASTVisitor.h"
 #include "ContextProviderInlines.h"
 #include "WGSLShaderModule.h"
 #include <wtf/DataLog.h>
@@ -132,12 +131,14 @@ public:
     FixedVector<Node>& nodes() { return m_nodes; }
     Node* addNode(unsigned index, AST::Declaration& astNode)
     {
-        if (m_nodeMap.find(astNode.name()) != m_nodeMap.end())
+        bool isConstAssert = is<AST::ConstAssert>(astNode);
+        if (!isConstAssert && m_nodeMap.find(astNode.name()) != m_nodeMap.end())
             return nullptr;
 
         m_nodes[index] = Node(index, astNode);
         auto* node = &m_nodes[index];
-        m_nodeMap.add(astNode.name(), node);
+        if (!isConstAssert)
+            m_nodeMap.add(astNode.name(), node);
         return node;
     }
     Node* getNode(const AST::Identifier& identifier)
@@ -151,7 +152,10 @@ public:
     EdgeSet& edges() { return m_edges; }
     void addEdge(Node& source, Node& target)
     {
-        dataLogLnIf(shouldLogGlobalSorting, "addEdge: source: ", source.astNode().name(), ", target: ", target.astNode().name());
+        if constexpr (shouldLogGlobalSorting) {
+            String sourceNodeName = is<AST::ConstAssert>(source.astNode()) ? "const_assert"_s : source.astNode().name().id();
+            dataLogLnIf(shouldLogGlobalSorting, "addEdge: source: ", sourceNodeName, ", target: ", target.astNode().name());
+        }
         auto result = m_edges.add(Edge(source, target));
         Edge& edge = *result.iterator;
         source.outgoingEdges().add(edge);
@@ -168,18 +172,17 @@ private:
 
 struct Empty { };
 
-class GraphBuilder : public AST::Visitor, public ContextProvider<Empty> {
+class GraphBuilder : public AST::ScopedVisitor<Empty> {
     static constexpr unsigned s_maxExpressionDepth = 512;
+
+    using Base = AST::ScopedVisitor<Empty>;
+    using Base::visit;
 
 public:
     static Result<void> visit(Graph&, Graph::Node&);
 
-    using AST::Visitor::visit;
-
-    void visit(AST::Function&) override;
+    void visit(AST::Parameter&) override;
     void visit(AST::VariableStatement&) override;
-    void visit(AST::CompoundStatement&) override;
-    void visit(AST::ForStatement&) override;
     void visit(AST::Expression&) override;
     void visit(AST::IdentifierExpression&) override;
 
@@ -207,37 +210,16 @@ GraphBuilder::GraphBuilder(Graph& graph, Graph::Node& node)
 {
 }
 
-void GraphBuilder::visit(AST::Function& function)
+void GraphBuilder::visit(AST::Parameter& parameter)
 {
-    ContextScope functionScope(this);
-
-    for (auto& parameter : function.parameters()) {
-        AST::Visitor::visit(parameter.typeName());
-        introduceVariable(parameter.name());
-    }
-
-    AST::Visitor::visit(function.body());
-
-    if (function.maybeReturnType())
-        AST::Visitor::visit(*function.maybeReturnType());
+    introduceVariable(parameter.name());
+    Base::visit(parameter.typeName());
 }
 
 void GraphBuilder::visit(AST::VariableStatement& variable)
 {
     introduceVariable(variable.variable().name());
-    AST::Visitor::visit(variable);
-}
-
-void GraphBuilder::visit(AST::CompoundStatement& statement)
-{
-    ContextScope blockScope(this);
-    AST::Visitor::visit(statement);
-}
-
-void GraphBuilder::visit(AST::ForStatement& statement)
-{
-    ContextScope forScope(this);
-    AST::Visitor::visit(statement);
+    Base::visit(variable);
 }
 
 void GraphBuilder::visit(AST::Expression& expression)
@@ -248,7 +230,7 @@ void GraphBuilder::visit(AST::Expression& expression)
         return;
     }
 
-    AST::Visitor::visit(expression);
+    Base::visit(expression);
 }
 
 void GraphBuilder::visit(AST::IdentifierExpression& identifier)
@@ -300,7 +282,10 @@ static std::optional<FailedCheck> reorder(AST::Declaration::List& list)
 
     std::function<void(Graph::Node&, unsigned)> processNode;
     processNode = [&](Graph::Node& node, unsigned currentIndex) {
-        dataLogLnIf(shouldLogGlobalSorting, "Process: ", node.astNode().name());
+        if constexpr (shouldLogGlobalSorting) {
+            String nodeName = is<AST::ConstAssert>(node.astNode()) ? "const_assert"_s : node.astNode().name().id();
+            dataLogLn("Process: ", nodeName);
+        }
         list.append(node.astNode());
         for (auto edge : node.incomingEdges()) {
             auto& source = edge.source();

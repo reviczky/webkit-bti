@@ -118,13 +118,18 @@ void WebFullScreenManager::videoControlsManagerDidChange()
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     ALWAYS_LOG(LOGIDENTIFIER);
 
-    auto* currentPlaybackControlsElement = m_page->playbackSessionManager().currentPlaybackControlsElement();
-    if (!m_element || !is<WebCore::HTMLVideoElement>(currentPlaybackControlsElement)) {
+    if (!m_element) {
         setPIPStandbyElement(nullptr);
         return;
     }
 
-    setPIPStandbyElement(downcast<WebCore::HTMLVideoElement>(currentPlaybackControlsElement));
+    RefPtr currentPlaybackControlsElement = dynamicDowncast<WebCore::HTMLVideoElement>(m_page->playbackSessionManager().currentPlaybackControlsElement());
+    if (!currentPlaybackControlsElement) {
+        setPIPStandbyElement(nullptr);
+        return;
+    }
+
+    setPIPStandbyElement(currentPlaybackControlsElement.get());
 #endif
 }
 
@@ -386,7 +391,7 @@ void WebFullScreenManager::didExitFullScreen()
     // Ensure the element (and all its parent fullscreen elements) that just exited fullscreen are still in view:
     while (!fullscreenElements.isEmpty()) {
         auto element = fullscreenElements.takeLast();
-        element->scrollIntoView();
+        element->scrollIntoViewIfNotVisible(true);
     }
 
     clearElement();

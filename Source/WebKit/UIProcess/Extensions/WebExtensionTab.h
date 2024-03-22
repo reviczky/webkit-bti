@@ -135,6 +135,10 @@ public:
 
     String title() const;
 
+    bool isOpen() const;
+    void didOpen() { ASSERT(!m_isOpen); m_isOpen = true; }
+    void didClose() { ASSERT(m_isOpen); m_isOpen = false; }
+
     bool isActive() const;
     bool isSelected() const;
     bool isPrivate() const;
@@ -184,6 +188,8 @@ public:
 
     void close(CompletionHandler<void(Error)>&&);
 
+    bool shouldGrantTabPermissionsOnUserGesture() const;
+
     WebProcessProxySet processes(WebExtensionEventListenerType, WebExtensionContentWorldType, MainWebViewOnly = MainWebViewOnly::Yes) const;
 
 #ifdef __OBJC__
@@ -199,6 +205,7 @@ private:
     RefPtr<WebExtensionMatchPattern> m_temporaryPermissionMatchPattern;
     OptionSet<ChangedProperties> m_changedProperties;
     bool m_activeUserGesture : 1 { false };
+    bool m_isOpen : 1 { false };
     mutable bool m_private : 1 { false };
     mutable bool m_cachedPrivate : 1 { false };
     bool m_respondsToWindow : 1 { false };
@@ -236,6 +243,7 @@ private:
     bool m_respondsToDeselect : 1 { false };
     bool m_respondsToDuplicate : 1 { false };
     bool m_respondsToClose : 1 { false };
+    bool m_respondsToShouldGrantTabPermissionsOnUserGesture : 1 { false };
 };
 
 } // namespace WebKit

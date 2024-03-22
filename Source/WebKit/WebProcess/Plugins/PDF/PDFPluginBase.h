@@ -31,6 +31,7 @@
 #include "FrameInfoData.h"
 #include "PDFPluginIdentifier.h"
 #include "PDFScriptEvaluator.h"
+#include "WebMouseEvent.h"
 #include <WebCore/AffineTransform.h>
 #include <WebCore/FindOptions.h>
 #include <WebCore/FloatRect.h>
@@ -56,6 +57,7 @@ class HTMLPlugInElement;
 class NetscapePlugInStreamLoaderClient;
 class ResourceResponse;
 class Scrollbar;
+class ShareableBitmap;
 class SharedBuffer;
 enum class PlatformCursorType : uint8_t;
 }
@@ -65,7 +67,6 @@ namespace WebKit {
 class PDFIncrementalLoader;
 class PDFPluginAnnotation;
 class PluginView;
-class ShareableBitmap;
 class WebFrame;
 class WebKeyboardEvent;
 class WebMouseEvent;
@@ -104,7 +105,7 @@ public:
     virtual bool isComposited() const { return false; }
 
     virtual bool shouldCreateTransientPaintingSnapshot() const { return false; }
-    virtual RefPtr<ShareableBitmap> snapshot() { return nullptr; }
+    virtual RefPtr<WebCore::ShareableBitmap> snapshot() { return nullptr; }
     virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) { }
 
     virtual CGFloat scaleFactor() const = 0;
@@ -118,7 +119,7 @@ public:
     RetainPtr<PDFDocument> pdfDocumentForPrinting() const { return m_pdfDocument; }
     WebCore::FloatSize pdfDocumentSizeForPrinting() const;
 
-    virtual void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
+    virtual bool geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
     virtual void visibilityDidChange(bool);
     virtual void deviceScaleFactorChanged(float) { }
 
@@ -192,9 +193,11 @@ public:
     virtual void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) = 0;
     void didMutatePDFDocument() { m_pdfDocumentWasMutated = true; }
 
-    virtual CGRect boundsForAnnotation(RetainPtr<PDFAnnotation>&) const = 0;
+    virtual CGRect pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>&) const = 0;
     virtual void focusNextAnnotation() = 0;
     virtual void focusPreviousAnnotation() = 0;
+
+    void navigateToURL(const URL&);
 
     virtual void attemptToUnlockPDF(const String& password) = 0;
 
@@ -205,6 +208,10 @@ public:
     void adoptBackgroundThreadDocument(RetainPtr<PDFDocument>&&);
     void maybeClearHighLatencyDataProviderFlag();
 #endif
+
+    void notifySelectionChanged();
+
+    virtual void windowActivityDidChange() { }
 
 private:
     bool documentFinishedLoading() const { return m_documentFinishedLoading; }
@@ -258,7 +265,7 @@ protected:
     WebCore::ScrollPosition minimumScrollPosition() const final;
     WebCore::ScrollPosition maximumScrollPosition() const final;
     WebCore::IntSize visibleSize() const final { return m_size; }
-    WebCore::IntPoint lastKnownMousePositionInView() const override { return m_lastMousePositionInPluginCoordinates; }
+    WebCore::IntPoint lastKnownMousePositionInView() const override;
 
     float deviceScaleFactor() const override;
     bool shouldSuspendScrollAnimations() const final { return false; } // If we return true, ScrollAnimatorMac will keep cycling a timer forever, waiting for a good time to animate.
@@ -314,7 +321,7 @@ protected:
     WebCore::AffineTransform m_rootViewToPluginTransform;
 
     WebCore::IntSize m_scrollOffset;
-    WebCore::IntPoint m_lastMousePositionInPluginCoordinates;
+    std::optional<WebMouseEvent> m_lastMouseEvent;
 
     RefPtr<WebCore::Scrollbar> m_horizontalScrollbar;
     RefPtr<WebCore::Scrollbar> m_verticalScrollbar;

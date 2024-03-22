@@ -40,18 +40,18 @@ class WebExtensionAPIStorageArea : public WebExtensionAPIObject, public JSWebExt
 
 public:
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(ASCIILiteral propertyName, WebPage*);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
 
-    void get(WebPage*, id items, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    void getBytesInUse(WebPage*, id keys, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    void set(WebPage*, NSDictionary *items, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    void remove(WebPage*, id keys, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    void clear(WebPage*, Ref<WebExtensionCallbackHandler>&&);
+    void get(WebPage&, id items, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void getBytesInUse(WebPage&, id keys, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void set(WebPage&, NSDictionary *items, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void remove(WebPage&, id keys, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void clear(WebPage&, Ref<WebExtensionCallbackHandler>&&);
 
     double quotaBytes();
 
     // Exposed only by storage.session.
-    void setAccessLevel(WebPage*, NSDictionary * , Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void setAccessLevel(WebPage&, NSDictionary *, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
 
     // Exposed only by storage.sync.
     double quotaBytesPerItem();

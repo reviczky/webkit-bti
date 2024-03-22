@@ -27,8 +27,14 @@
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 
+#include <WebCore/AcceleratedEffect.h>
 #include <WebCore/AcceleratedEffectStack.h>
+#include <WebCore/AcceleratedEffectValues.h>
 #include <WebCore/PlatformLayer.h>
+#include <wtf/RetainPtr.h>
+
+OBJC_CLASS CAPresentationModifierGroup;
+OBJC_CLASS CAPresentationModifier;
 
 namespace WebKit {
 
@@ -42,12 +48,19 @@ public:
     void applyEffectsFromScrollingThread(MonotonicTime now) const;
 #endif
 
+    void applyEffectsFromMainThread(PlatformLayer*, MonotonicTime now) const;
+
     void clear(PlatformLayer*);
 
 private:
     explicit RemoteAcceleratedEffectStack(Seconds);
 
+    WebCore::AcceleratedEffectValues computeValues(MonotonicTime now) const;
+
     Seconds m_acceleratedTimelineTimeOrigin;
+
+    RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
+    RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
 };
 
 } // namespace WebKit

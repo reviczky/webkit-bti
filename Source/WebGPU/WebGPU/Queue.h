@@ -42,6 +42,7 @@ namespace WebGPU {
 class Buffer;
 class CommandBuffer;
 class Device;
+class Texture;
 
 // https://gpuweb.github.io/gpuweb/#gpuqueue
 // A device owns its default queue, not the other way around.
@@ -94,11 +95,12 @@ private:
 
     // This can be called on a background thread.
     void scheduleWork(Instance::WorkItem&&);
+    NSString* errorValidatingWriteTexture(const WGPUImageCopyTexture&, const WGPUTextureDataLayout&, const WGPUExtent3D&, size_t, const Texture&) const;
 
     id<MTLCommandQueue> m_commandQueue { nil };
     id<MTLCommandBuffer> m_commandBuffer { nil };
     id<MTLBlitCommandEncoder> m_blitCommandEncoder { nil };
-    WeakPtr<Device> m_device; // The only kind of queues that exist right now are default queues, which are owned by Devices.
+    ThreadSafeWeakPtr<Device> m_device; // The only kind of queues that exist right now are default queues, which are owned by Devices.
 
     uint64_t m_submittedCommandBufferCount { 0 };
     uint64_t m_completedCommandBufferCount { 0 };

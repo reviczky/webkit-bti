@@ -32,6 +32,7 @@ import sys
 # AdditionalEncoder - generate serializers for StreamConnectionEncoder in addition to IPC::Encoder.
 # CreateUsing - use a custom function to call instead of the constructor or create.
 # CustomHeader - don't include a header based on the struct/class name. Only needed for non-enum types.
+# DisableMissingMemberCheck - do not check for attributes that are missed during serialization.
 # Alias - this type is not a struct or class, but a typedef.
 # Nested - this type is only serialized as a member of its parent, so work around the need for http://wg21.link/P0289 and don't forward declare it in the header.
 # RefCounted - deserializer returns a std::optional<Ref<T>> instead of a std::optional<T>.
@@ -96,6 +97,7 @@ class SerializedType(object):
         self.members_are_subclasses = False
         self.custom_encoder = False
         self.support_wkkeyedcoder = False
+        self.disableMissingMemberCheck = False
         if attributes is not None:
             for attribute in attributes.split(', '):
                 if '=' in attribute:
@@ -119,6 +121,8 @@ class SerializedType(object):
                         self.nested = True
                     elif attribute == 'RefCounted':
                         self.return_ref = True
+                    elif attribute == 'DisableMissingMemberCheck':
+                        self.disableMissingMemberCheck = True
                     elif attribute == 'RValue':
                         self.rvalue = True
                     elif attribute == 'WebKitPlatform':
@@ -167,6 +171,8 @@ class SerializedType(object):
         return 'isValidEnum'
 
     def can_assert_member_order_is_correct(self):
+        if self.disableMissingMemberCheck:
+            return False
         for member in self.members:
             if '()' in member.name:
                 return False
@@ -996,11 +1002,9 @@ def generate_impl(serialized_types, serialized_enums, headers, generating_webkit
     result.append('};')
     result.append('template<> struct VirtualTableAndRefCountOverhead<false, false> { };')
     result.append('')
-    # GCC is less generous with its interpretation of "Use of the offsetof macro with a
-    # type other than a standard-layout class is conditionally-supported".
-    result.append('#if COMPILER(GCC)')
+    # GCC and Clang>=18 are less generous with their interpretation of "Use of the offsetof macro
+    # with a type other than a standard-layout class is conditionally-supported".
     result.append('IGNORE_WARNINGS_BEGIN("invalid-offsetof")')
-    result.append('#endif')
     result.append('')
     result.append('namespace IPC {')
     result.append('')
@@ -1085,9 +1089,7 @@ def generate_impl(serialized_types, serialized_enums, headers, generating_webkit
     result.append('')
     result.append('} // namespace WTF')
     result.append('')
-    result.append('#if COMPILER(GCC)')
     result.append('IGNORE_WARNINGS_END')
-    result.append('#endif')
     result.append('')
     return '\n'.join(result)
 
@@ -1243,6 +1245,31 @@ def generate_serialized_type_info(serialized_types, serialized_enums, headers, u
     return '\n'.join(result)
 
 
+class ConditionStackEntry(object):
+    def __init__(self, expression):
+        self._base_expression = expression
+        self.should_negate = False
+
+    @property
+    def expression(self):
+        return self._base_expression if not self.should_negate else f'!({self._base_expression})'
+
+
+def generate_condition_expression(condition_stack):
+    if not condition_stack:
+        return None
+
+    full_condition_expression = condition_stack[0].expression
+    if len(condition_stack) == 1:
+        return full_condition_expression
+
+    for condition in condition_stack[1:]:
+        condition_expression = condition.expression
+        full_condition_expression = f'({full_condition_expression}) && ({condition_expression})'
+
+    return full_condition_expression
+
+
 def parse_serialized_types(file):
     serialized_types = []
     serialized_enums = []
@@ -1257,6 +1284,8 @@ def parse_serialized_types(file):
     dictionary_members = []
     type_condition = None
     member_condition = None
+    type_condition_stack = []
+    member_condition_stack = []
     struct_or_class = None
     cf_type = None
     underlying_type = None
@@ -1269,19 +1298,26 @@ def parse_serialized_types(file):
         if line.startswith('#'):
             if line == '#else':
                 if name is None:
-                    type_condition = '!' + type_condition
+                    if type_condition_stack:
+                        type_condition_stack[-1].should_negate = True
                 else:
-                    member_condition = '!' + member_condition
+                    if member_condition_stack:
+                        member_condition_stack[-1].should_negate = True
             elif line.startswith('#if '):
+                condition_expression = line[4:]
                 if name is None:
-                    type_condition = line[4:]
+                    type_condition_stack.append(ConditionStackEntry(expression=condition_expression))
                 else:
-                    member_condition = line[4:]
+                    member_condition_stack.append(ConditionStackEntry(expression=condition_expression))
             elif line.startswith('#endif'):
                 if name is None:
-                    type_condition = None
+                    if type_condition_stack:
+                        type_condition_stack.pop()
                 else:
-                    member_condition = None
+                    if member_condition_stack:
+                        member_condition_stack.pop()
+            type_condition = generate_condition_expression(type_condition_stack)
+            member_condition = generate_condition_expression(member_condition_stack)
             continue
         if line.startswith('}'):
             if underlying_type is not None:

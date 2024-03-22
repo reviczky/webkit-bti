@@ -507,6 +507,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	NetworkProcess/Classifier/StorageAccessStatus.serialization.in \
 	NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementManagerInterface.serialization.in \
 	NetworkProcess/storage/FileSystemStorageError.serialization.in \
+	Platform/IPC/ConnectionHandle.serialization.in \
 	Platform/IPC/FormDataReference.serialization.in \
 	Platform/IPC/IPCEvent.serialization.in \
 	Platform/IPC/IPCSemaphore.serialization.in \
@@ -557,6 +558,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/CoreIPCNSValue.serialization.in \
 	Shared/Cocoa/CoreIPCPassKit.serialization.in \
 	Shared/Cocoa/CoreIPCPersonNameComponents.serialization.in \
+	Shared/Cocoa/CoreIPCPresentationIntent.serialization.in \
 	Shared/Cocoa/CoreIPCSecureCoding.serialization.in \
 	Shared/Cocoa/CoreIPCString.serialization.in \
 	Shared/Cocoa/CoreIPCURL.serialization.in \
@@ -622,6 +624,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/PlatformPopupMenuData.serialization.in \
 	Shared/PolicyDecision.serialization.in \
 	Shared/PrintInfo.serialization.in \
+	Shared/ProcessQualified.serialization.in \
 	Shared/PushMessageForTesting.serialization.in \
 	Shared/RTCNetwork.serialization.in \
 	Shared/RTCPacketOptions.serialization.in \
@@ -633,8 +636,6 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/SandboxExtension.serialization.in \
 	Shared/ScrollingAccelerationCurve.serialization.in \
 	Shared/SessionState.serialization.in \
-	Shared/ShareableBitmap.serialization.in \
-	Shared/ShareableResource.serialization.in \
 	Shared/SyntheticEditingCommandType.serialization.in \
 	Shared/TextFlags.serialization.in \
 	Shared/TextRecognitionResult.serialization.in \
@@ -682,8 +683,14 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/RemoteLayerTree/RemoteScrollingUIState.serialization.in \
 	Shared/cf/CFTypes.serialization.in \
 	Shared/cf/CoreIPCBoolean.serialization.in \
+	Shared/cf/CoreIPCCFArray.serialization.in \
+	Shared/cf/CoreIPCCFDictionary.serialization.in \
+	Shared/cf/CoreIPCCGColorSpace.serialization.in \
 	Shared/cf/CoreIPCNumber.serialization.in \
+	Shared/cf/CoreIPCSecAccessControl.serialization.in \
 	Shared/cf/CoreIPCSecCertificate.serialization.in \
+	Shared/cf/CoreIPCSecKeychainItem.serialization.in \
+	Shared/cf/CoreIPCSecTrust.serialization.in \
 	Shared/mac/PDFContextMenuItem.serialization.in \
 	Shared/mac/SecItemRequestData.serialization.in \
 	Shared/mac/SecItemResponseData.serialization.in \
@@ -714,6 +721,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebGPU/WebGPUImageCopyTexture.serialization.in \
 	Shared/WebGPU/WebGPUImageCopyTextureTagged.serialization.in \
 	Shared/WebGPU/WebGPUImageDataLayout.serialization.in \
+	Shared/WebGPU/WebGPUInternalError.serialization.in \
 	Shared/WebGPU/WebGPUMultisampleState.serialization.in \
 	Shared/WebGPU/WebGPUOrigin2D.serialization.in \
 	Shared/WebGPU/WebGPUOutOfMemoryError.serialization.in \
@@ -790,7 +798,6 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	MediaPlaybackTargetContext.serialization.in \
 	MediaProducer.serialization.in \
 	MDNSRegisterError.serialization.in \
-	PlatformCALayer.serialization.in \
 	PlatformEvent.serialization.in \
 	PlatformMediaSession.serialization.in \
 	PlatformScreen.serialization.in \
@@ -827,6 +834,13 @@ EXTENSION_INTERFACES = \
     WebExtensionAPICommands \
     WebExtensionAPICookies \
     WebExtensionAPIDeclarativeNetRequest \
+    WebExtensionAPIDevTools \
+    WebExtensionAPIDevToolsElementsPanel \
+    WebExtensionAPIDevToolsExtensionPanel \
+    WebExtensionAPIDevToolsExtensionSidebarPane \
+    WebExtensionAPIDevToolsInspectedWindow \
+    WebExtensionAPIDevToolsNetwork \
+    WebExtensionAPIDevToolsPanels \
     WebExtensionAPIEvent \
     WebExtensionAPIExtension \
     WebExtensionAPILocalization \

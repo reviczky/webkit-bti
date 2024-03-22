@@ -788,6 +788,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     contentextensions/ContentExtensionParser.h
     contentextensions/ContentExtensionRule.h
     contentextensions/ContentExtensionStringSerialization.h
+    contentextensions/ContentExtensionStyleSheet.h
     contentextensions/ContentExtensionsBackend.h
     contentextensions/ContentExtensionsDebugging.h
     contentextensions/ContentRuleListResults.h
@@ -847,7 +848,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSValueList.h
     css/CSSVariableData.h
     css/CSSVariableReferenceValue.h
-    css/ContainerQuery.h
     css/Counter.h
     css/DeprecatedCSSOMCounter.h
     css/DeprecatedCSSOMPrimitiveValue.h
@@ -885,6 +885,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/parser/CSSSelectorParserContext.h
     css/parser/MutableCSSSelector.h
 
+    css/query/ContainerQuery.h
     css/query/GenericMediaQueryTypes.h
     css/query/MediaQuery.h
 
@@ -972,6 +973,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/ExceptionCode.h
     dom/ExceptionData.h
     dom/ExceptionOr.h
+    dom/ExtensionStyleSheets.h
     dom/FocusOptions.h
     dom/FragmentDirectiveParser.h
     dom/FragmentDirectiveRangeFinder.h
@@ -1315,7 +1317,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     layout/formattingContexts/FormattingContext.h
 
     layout/formattingContexts/flex/FlexFormattingConstraints.h
-    layout/formattingContexts/flex/FlexFormattingState.h
     layout/formattingContexts/flex/FlexLayout.h
     layout/formattingContexts/flex/LogicalFlexItem.h
 
@@ -1755,6 +1756,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/SearchPopupMenu.h
     platform/SerializedPlatformDataCue.h
     platform/SerializedPlatformDataCueValue.h
+    platform/ShareableResource.h
     platform/SharedBuffer.h
     platform/SharedBufferChunkReader.h
     platform/SharedMemory.h
@@ -2017,6 +2019,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RotationDirection.h
     platform/graphics/RoundedRect.h
     platform/graphics/ScreenDataOverrides.h
+    platform/graphics/ShareableBitmap.h
     platform/graphics/ShouldLocalizeAxisNames.h
     platform/graphics/SourceBrush.h
     platform/graphics/SourceBrushLogicalGradient.h
@@ -2168,6 +2171,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/DisplayCapturePromptType.h
     platform/mediastream/FillLightMode.h
     platform/mediastream/MDNSRegisterError.h
+    platform/mediastream/MediaConstraintType.h
     platform/mediastream/MediaConstraints.h
     platform/mediastream/MediaSettingsRange.h
     platform/mediastream/MediaStreamPrivate.h

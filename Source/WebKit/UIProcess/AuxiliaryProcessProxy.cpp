@@ -66,10 +66,6 @@ static Seconds adjustedTimeoutForThermalState(Seconds timeout)
 #endif
 }
 
-#if USE(EXTENSIONKIT)
-bool AuxiliaryProcessProxy::s_manageProcessesAsExtensions = false;
-#endif
-
 AuxiliaryProcessProxy::AuxiliaryProcessProxy(bool alwaysRunsAtBackgroundPriority, Seconds responsivenessTimeout)
     : m_responsivenessTimer(*this, adjustedTimeoutForThermalState(responsivenessTimeout))
     , m_alwaysRunsAtBackgroundPriority(alwaysRunsAtBackgroundPriority)
@@ -141,6 +137,11 @@ void AuxiliaryProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& lau
         varname = "GPU_PROCESS_CMD_PREFIX";
         break;
 #endif
+#if ENABLE(MODEL_PROCESS)
+    case ProcessLauncher::ProcessType::Model:
+        varname = "MODEL_PROCESS_CMD_PREFIX";
+        break;
+#endif
 #if ENABLE(BUBBLEWRAP_SANDBOX)
     case ProcessLauncher::ProcessType::DBusProxy:
         ASSERT_NOT_REACHED();
@@ -156,12 +157,6 @@ void AuxiliaryProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& lau
 
     platformGetLaunchOptions(launchOptions);
 }
-
-#if !PLATFORM(COCOA)
-void AuxiliaryProcessProxy::platformGetLaunchOptions(ProcessLauncher::LaunchOptions&)
-{
-}
-#endif
 
 void AuxiliaryProcessProxy::connect()
 {

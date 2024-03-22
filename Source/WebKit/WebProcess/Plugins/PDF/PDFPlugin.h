@@ -28,7 +28,6 @@
 #if ENABLE(LEGACY_PDFKIT_PLUGIN)
 
 #include "PDFPluginBase.h"
-#include "WebMouseEvent.h"
 #include <WebCore/NetscapePlugInStreamLoader.h>
 #include <wtf/HashMap.h>
 #include <wtf/Identified.h>
@@ -63,6 +62,7 @@ class FloatSize;
 class FragmentedSharedBuffer;
 class GraphicsContext;
 class HTMLPlugInElement;
+class ShareableBitmap;
 struct PluginInfo;
 }
 
@@ -71,7 +71,6 @@ namespace WebKit {
 class PDFPluginAnnotation;
 class PDFPluginPasswordField;
 class PluginView;
-class ShareableBitmap;
 class WebFrame;
 class WebKeyboardEvent;
 class WebWheelEvent;
@@ -91,8 +90,6 @@ public:
     void notifyContentScaleFactorChanged(CGFloat scaleFactor);
     void notifyDisplayModeChanged(int);
 
-    void notifySelectionChanged(PDFSelection *);
-
     // HUD Actions.
 #if ENABLE(PDF_HUD)
     void zoomIn() final;
@@ -106,7 +103,7 @@ public:
     void performWebSearch(NSString *);
     void performSpotlightSearch(NSString *);
 
-    CGRect boundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
+    CGRect pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
     void focusNextAnnotation() final;
     void focusPreviousAnnotation() final;
 
@@ -150,7 +147,7 @@ private:
 
     void installPDFDocument() override;
 
-    void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
+    bool geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
     void deviceScaleFactorChanged(float) override;
 
     void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) override;
@@ -181,7 +178,7 @@ private:
     std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
 
     bool shouldCreateTransientPaintingSnapshot() const override { return true; }
-    RefPtr<ShareableBitmap> snapshot() override;
+    RefPtr<WebCore::ShareableBitmap> snapshot() override;
 
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
     id accessibilityObject() const override;
@@ -204,8 +201,6 @@ private:
     RetainPtr<WKPDFPluginAccessibilityObject> m_accessibilityObject;
     
     RefPtr<PDFPluginPasswordField> m_passwordField;
-
-    std::optional<WebMouseEvent> m_lastMouseEvent;
 
     String m_temporaryPDFUUID;
     String m_lastFoundString;

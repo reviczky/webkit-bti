@@ -44,6 +44,7 @@
 #include "ContentExtensionRule.h"
 #include "ContentRuleListResults.h"
 #include "ContentSecurityPolicy.h"
+#include "CookieJar.h"
 #include "CrossOriginAccessControl.h"
 #include "CustomHeaderFields.h"
 #include "DateComponents.h"
@@ -459,6 +460,8 @@ bool CachedResourceLoader::checkInsecureContent(CachedResource::Type type, const
 #endif
     case CachedResource::Type::MediaResource:
     case CachedResource::Type::RawResource:
+    case CachedResource::Type::Beacon:
+    case CachedResource::Type::Ping:
     case CachedResource::Type::Icon:
     case CachedResource::Type::ImageResource:
     case CachedResource::Type::SVGFontResource:
@@ -471,8 +474,6 @@ bool CachedResourceLoader::checkInsecureContent(CachedResource::Type type, const
         break;
     }
     case CachedResource::Type::MainResource:
-    case CachedResource::Type::Beacon:
-    case CachedResource::Type::Ping:
     case CachedResource::Type::LinkPrefetch:
         // Prefetch cannot affect the current document.
 #if ENABLE(APPLICATION_MANIFEST)
@@ -1651,8 +1652,8 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::prel
     if (resource && (!m_preloads || !m_preloads->contains(*resource.value().get()))) {
         CachedResourceHandle resourceValue = resource.value();
         // Fonts need special treatment since just creating the resource doesn't trigger a load.
-        if (type == CachedResource::Type::FontResource)
-            downcast<CachedFont>(resourceValue.get())->beginLoadIfNeeded(*this);
+        if (CachedResourceHandle cachedFont = dynamicDowncast<CachedFont>(resourceValue.get()))
+            cachedFont->beginLoadIfNeeded(*this);
         resourceValue->increasePreloadCount();
 
         if (!m_preloads)
