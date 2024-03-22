@@ -60,6 +60,7 @@
 #include "WasmThunks.h"
 #include "WasmTypeDefinition.h"
 #include <bit>
+#include <cmath>
 #include <wtf/Assertions.h>
 #include <wtf/Compiler.h>
 #include <wtf/HashFunctions.h>
@@ -1717,8 +1718,10 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addF32Sub(Value lhs, Value rhs, Value& 
         ),
         BLOCK(
             if (rhs.isConst()) {
-                // Add a negative if rhs is a constant.
-                emitMoveConst(Value::fromF32(-rhs.asF32()), Location::fromFPR(wasmScratchFPR));
+                // If rhs is a constant, it will be expressed as a positive
+                // value and so needs to be negated unless it is NaN
+                auto floatVal = std::isnan(rhs.asF32()) ? rhs.asF32() : -rhs.asF32();
+                emitMoveConst(Value::fromF32(floatVal), Location::fromFPR(wasmScratchFPR));
                 m_jit.addFloat(lhsLocation.asFPR(), wasmScratchFPR, resultLocation.asFPR());
             } else {
                 emitMoveConst(lhs, Location::fromFPR(wasmScratchFPR));
@@ -1738,8 +1741,10 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addF64Sub(Value lhs, Value rhs, Value& 
         ),
         BLOCK(
             if (rhs.isConst()) {
-                // Add a negative if rhs is a constant.
-                emitMoveConst(Value::fromF64(-rhs.asF64()), Location::fromFPR(wasmScratchFPR));
+                // If rhs is a constant, it will be expressed as a positive
+                // value and so needs to be negated unless it is NaN
+                auto floatVal = std::isnan(rhs.asF64()) ? rhs.asF64() : -rhs.asF64();
+                emitMoveConst(Value::fromF64(floatVal), Location::fromFPR(wasmScratchFPR));
                 m_jit.addDouble(lhsLocation.asFPR(), wasmScratchFPR, resultLocation.asFPR());
             } else {
                 emitMoveConst(lhs, Location::fromFPR(wasmScratchFPR));
@@ -3115,8 +3120,7 @@ MacroAssembler::Label BBQJIT::addLoopOSREntrypoint()
     } else
         m_jit.storePairPtr(GPRInfo::wasmContextInstancePointer, wasmScratchGPR, GPRInfo::callFrameRegister, CCallHelpers::TrustedImm32(CallFrameSlot::codeBlock * sizeof(Register)));
 
-    int frameSize = m_frameSize + m_maxCalleeStackSize;
-    int roundedFrameSize = WTF::roundUpToMultipleOf(stackAlignmentBytes(), frameSize);
+    int roundedFrameSize = stackCheckSize();
 #if CPU(X86_64) || CPU(ARM64)
     m_jit.subPtr(GPRInfo::callFrameRegister, TrustedImm32(roundedFrameSize), MacroAssembler::stackPointerRegister);
 #else
@@ -3124,10 +3128,12 @@ MacroAssembler::Label BBQJIT::addLoopOSREntrypoint()
     m_jit.move(wasmScratchGPR, MacroAssembler::stackPointerRegister);
 #endif
 
+    // The loop_osr slow path should have already checked that we have enough space. We have already destroyed the llint stack, and unwind will see the BBQ catch
+    // since we already replaced callee. So, we just assert that this case doesn't happen to avoid reading a corrupted frame from the bbq catch handler.
     MacroAssembler::JumpList overflow;
     overflow.append(m_jit.branchPtr(CCallHelpers::Above, MacroAssembler::stackPointerRegister, GPRInfo::callFrameRegister));
     overflow.append(m_jit.branchPtr(CCallHelpers::Below, MacroAssembler::stackPointerRegister, CCallHelpers::Address(GPRInfo::wasmContextInstancePointer, Instance::offsetOfSoftStackLimit())));
-    overflow.linkThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(throwStackOverflowFromWasmThunkGenerator).code()), &m_jit);
+    overflow.linkThunk(CodeLocationLabel<JITThunkPtrTag>(Thunks::singleton().stub(crashDueToBBQStackOverflowGenerator).code()), &m_jit);
 
     // This operation shuffles around values on the stack, until everything is in the right place. Then,
     // it returns the address of the loop we're jumping to in wasmScratchGPR (so we don't interfere with
@@ -4638,6 +4644,7 @@ Expected<std::unique_ptr<InternalFunction>, String> parseAndCompileBBQ(Compilati
         result->bbqSharedLoopEntrypoint = irGenerator.addLoopOSREntrypoint();
 
     irGenerator.finalize();
+    callee.setStackCheckSize(irGenerator.stackCheckSize());
 
     result->exceptionHandlers = irGenerator.takeExceptionHandlers();
     compilationContext.catchEntrypoints = irGenerator.takeCatchEntrypoints();

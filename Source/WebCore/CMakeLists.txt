@@ -311,7 +311,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/credentialmanagement/CredentialMediationRequirement.idl
     Modules/credentialmanagement/CredentialRequestOptions.idl
     Modules/credentialmanagement/CredentialsContainer.idl
-    Modules/credentialmanagement/DigitalCredential.idl
+    Modules/credentialmanagement/DigitalIdentity.idl
     Modules/credentialmanagement/DigitalCredentialRequestOptions.idl
     Modules/credentialmanagement/IdentityCredentialProtocol.idl
     Modules/credentialmanagement/IdentityRequestProvider.idl
@@ -1924,6 +1924,18 @@ endif ()
 
 if (ENABLE_XSLT)
     list(APPEND WebCore_LIBRARIES LibXslt::LibXslt)
+endif ()
+
+if (UNIX)
+    check_function_exists(shm_open SHM_OPEN_EXISTS)
+    if (NOT SHM_OPEN_EXISTS)
+        set(CMAKE_REQUIRED_LIBRARIES rt)
+        check_function_exists(shm_open SHM_OPEN_REQUIRES_LIBRT)
+        if (SHM_OPEN_REQUIRES_LIBRT)
+            list(APPEND WebCore_PRIVATE_LIBRARIES rt)
+        endif ()
+        unset(CMAKE_REQUIRED_LIBRARIES)
+    endif ()
 endif ()
 
 # For platforms that want to use system-provided OpenGL (ES) / EGL headers,

@@ -261,7 +261,7 @@ void ImageBuffer::flushDrawingContext()
 
 bool ImageBuffer::flushDrawingContextAsync()
 {
-    // This function is only really useful for the Remote subclass, where the prefersPreparationForDisplay() == true.
+    // This function is only really useful for the Remote subclass.
     flushDrawingContext();
     return true;
 }
@@ -350,7 +350,7 @@ RefPtr<NativeImage> ImageBuffer::filteredNativeImage(Filter& filter, Function<vo
 
     if (filter.filterRenderingModes().contains(FilterRenderingMode::GraphicsContext)) {
         ASSERT(targetSwitcher);
-        targetSwitcher->endDrawSourceImage(context());
+        targetSwitcher->endDrawSourceImage(context(), colorSpace());
         return copyImageBufferToNativeImage(*this, CopyBackingStore, PreserveResolution::No);
     }
 

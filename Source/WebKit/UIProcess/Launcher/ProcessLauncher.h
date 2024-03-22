@@ -82,6 +82,9 @@ public:
 #if ENABLE(BUBBLEWRAP_SANDBOX)
         DBusProxy,
 #endif
+#if ENABLE(MODEL_PROCESS)
+        Model,
+#endif
     };
 
     struct LaunchOptions {
@@ -90,9 +93,6 @@ public:
         HashMap<String, String> extraInitializationData;
         bool nonValidInjectedCodeAllowed { false };
         bool shouldMakeProcessLaunchFailForTesting { false };
-#if USE(EXTENSIONKIT)
-        bool launchAsExtensions { false };
-#endif
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
         HashMap<CString, SandboxPermission> extraSandboxPaths;

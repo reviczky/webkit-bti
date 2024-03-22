@@ -136,6 +136,7 @@ enum class AccessibilityRole {
     Column,
     ColumnHeader,
     ComboBox,
+    DateTime,
     Definition,
     Deletion,
     DescriptionList,
@@ -303,6 +304,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "ColumnHeader"_s;
     case AccessibilityRole::ComboBox:
         return "ComboBox"_s;
+    case AccessibilityRole::DateTime:
+        return "DateTime"_s;
     case AccessibilityRole::Definition:
         return "Definition"_s;
     case AccessibilityRole::Deletion:
@@ -616,6 +619,7 @@ using AXEditingStyleValueVariant = std::variant<String, bool, int>;
 struct AccessibilitySearchCriteria {
     AXCoreObject* anchorObject { nullptr };
     AXCoreObject* startObject;
+    AXID stopAtID;
     AccessibilitySearchDirection searchDirection;
     Vector<AccessibilitySearchKey> searchKeys;
     String searchText;
@@ -914,6 +918,7 @@ public:
     bool isTabItem() const { return roleValue() == AccessibilityRole::Tab; }
     bool isRadioGroup() const { return roleValue() == AccessibilityRole::RadioGroup; }
     bool isComboBox() const { return roleValue() == AccessibilityRole::ComboBox; }
+    bool isDateTime() const { return roleValue() == AccessibilityRole::DateTime; }
     bool isTree() const { return roleValue() == AccessibilityRole::Tree; }
     bool isTreeGrid() const { return roleValue() == AccessibilityRole::TreeGrid; }
     bool isTreeItem() const { return roleValue() == AccessibilityRole::TreeItem; }
@@ -1377,7 +1382,6 @@ public:
 #if PLATFORM(IOS_FAMILY)
     virtual int accessibilitySecureFieldLength() = 0;
     virtual bool hasTouchEventListener() const = 0;
-    virtual bool isInputTypePopupButton() const = 0;
 #endif
 
     // allows for an AccessibilityObject to update its render tree or perform

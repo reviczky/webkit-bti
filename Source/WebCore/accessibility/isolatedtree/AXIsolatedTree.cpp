@@ -164,12 +164,6 @@ Ref<AXIsolatedTree> AXIsolatedTree::create(AXObjectCache& axObjectCache)
     const auto relations = axObjectCache.relations();
     tree->updateRelations(relations);
 
-    for (auto& relatedObjectID : relations.keys()) {
-        RefPtr axObject = axObjectCache.objectForID(relatedObjectID);
-        if (axObject && axObject->accessibilityIsIgnored())
-            tree->addUnconnectedNode(axObject.releaseNonNull());
-    }
-
     // Now that the tree is ready to take client requests, add it to the tree maps so that it can be found.
     storeTree(axObjectCache, tree);
     return tree;
@@ -189,7 +183,6 @@ void AXIsolatedTree::reportCreationProgress(AXObjectCache& cache, unsigned perce
 
     String percent = String::number(percentComplete) + "%"_s;
     String title = AXProcessingPage() + " "_s + percent;
-    cache.announce(percent);
     if (RefPtr axRoot = cache.get(cache.document().view())) {
         m_replacingTree->overrideNodeProperties(axRoot->objectID(), {
             { AXPropertyName::TitleAttributeValue, title },
@@ -231,6 +224,46 @@ RefPtr<AXIsolatedObject> AXIsolatedTree::objectForID(const AXID axID) const
     }
     return axID.isValid() ? m_readerThreadNodeMap.get(axID) : nullptr;
 }
+
+template<typename U>
+Vector<RefPtr<AXCoreObject>> AXIsolatedTree::objectsForIDs(const U& axIDs)
+{
+    ASSERT(!isMainThread());
+
+    Vector<RefPtr<AXCoreObject>> result;
+    result.reserveInitialCapacity(axIDs.size());
+    for (const auto& axID : axIDs) {
+        RefPtr object = objectForID(axID);
+        if (object) {
+            result.append(WTFMove(object));
+            continue;
+        }
+
+        // There is no isolated object for this AXID. This can happen if the corresponding live object is ignored.
+        // If there is a live object for this ID and it is an ignored target of a relationship, create an isolated object for it.
+        object = Accessibility::retrieveValueFromMainThread<RefPtr<AXIsolatedObject>>([&axID, this] () -> RefPtr<AXIsolatedObject> {
+            auto* cache = axObjectCache();
+            if (!cache || !cache->relationTargetIDs().contains(axID))
+                return nullptr;
+
+            RefPtr axObject = cache->objectForID(axID);
+            if (!axObject || !axObject->accessibilityIsIgnored())
+                return nullptr;
+
+            auto object = AXIsolatedObject::create(*axObject, const_cast<AXIsolatedTree*>(this));
+            ASSERT(axObject->wrapper());
+            object->attachPlatformWrapper(axObject->wrapper());
+            return object;
+        });
+        if (object) {
+            m_readerThreadNodeMap.add(axID, *object);
+            result.append(WTFMove(object));
+        }
+    }
+    result.shrinkToFit();
+    return result;
+}
+
 
 void AXIsolatedTree::generateSubtree(AccessibilityObject& axObject)
 {
@@ -299,11 +332,6 @@ void AXIsolatedTree::addUnconnectedNode(Ref<AccessibilityObject> axObject)
     AXTRACE("AXIsolatedTree::addUnconnectedNode"_s);
     ASSERT(isMainThread());
 
-    if (m_unconnectedNodes.contains(axObject->objectID())) {
-        AXLOG(makeString("AXIsolatedTree::addUnconnectedNode exiting because an isolated object for ", axObject->objectID().loggingString(), " already exists."));
-        return;
-    }
-
     if (axObject->isDetached() || !axObject->wrapper()) {
         AXLOG(makeString("AXIsolatedTree::addUnconnectedNode bailing because associated live object ID ", axObject->objectID().loggingString(), " had no wrapper or is detached. Object is:"));
         AXLOG(axObject.ptr());
@@ -320,7 +348,6 @@ void AXIsolatedTree::addUnconnectedNode(Ref<AccessibilityObject> axObject)
     // other entity is removed from the page.
     auto object = AXIsolatedObject::create(axObject, this);
     object->attachPlatformWrapper(axObject->wrapper());
-    m_unconnectedNodes.add(axObject->objectID());
 
     NodeChange nodeChange { object, nullptr };
     Locker locker { m_changeLogLock };
@@ -512,7 +539,7 @@ void AXIsolatedTree::updatePropertiesForSelfAndDescendants(AccessibilityObject& 
         propertySet.add(property);
 
     Accessibility::enumerateDescendants<AXCoreObject>(axObject, true, [&propertySet, this] (auto& descendant) {
-        queueNodeUpdate(descendant, { propertySet });
+        queueNodeUpdate(descendant.objectID(), { propertySet });
     });
 }
 
@@ -730,7 +757,7 @@ void AXIsolatedTree::updateDependentProperties(AccessibilityObject& axObject)
     bool updateTableAncestorColumns = is<AccessibilityTableRow>(axObject);
     for (RefPtr ancestor = axObject.parentObject(); ancestor; ancestor = ancestor->parentObject()) {
         if (ancestor->isTree()) {
-            queueNodeUpdate(*ancestor, { AXPropertyName::ARIATreeRows });
+            queueNodeUpdate(ancestor->objectID(), { AXPropertyName::ARIATreeRows });
             if (!updateTableAncestorColumns)
                 break;
         }
@@ -1038,12 +1065,12 @@ void AXIsolatedTree::removeNode(const AccessibilityObject& axObject)
     AXLOG(makeString("objectID ", axObject.objectID().loggingString()));
     ASSERT(isMainThread());
 
-    if (axObject.isLabel()) {
-        // Update the labeled objects since one of their labels was removed.
-        auto labeledObjects = axObject.labelForObjects();
-        for (auto& labeledObject : labeledObjects) {
+    auto labeledObjectIDs = axObjectCache() ? axObjectCache()->relatedObjectIDsFor(axObject, AXRelationType::LabelFor, AXObjectCache::UpdateRelations::No) : std::nullopt;
+    if (labeledObjectIDs) {
+        // Update the labeled objects since axObject is one of their labels and it is being removed.
+        for (AXID labeledObjectID : *labeledObjectIDs) {
             // The label/title of an isolated object is computed based on its AccessibilityText propperty, thus update it.
-            queueNodeUpdate(*labeledObject, { AXPropertyName::AccessibilityText });
+            queueNodeUpdate(labeledObjectID, { AXPropertyName::AccessibilityText });
         }
     }
 
@@ -1059,9 +1086,6 @@ void AXIsolatedTree::removeSubtreeFromNodeMap(AXID objectID, AccessibilityObject
     ASSERT(isMainThread());
 
     if (!objectID.isValid())
-        return;
-
-    if (m_unconnectedNodes.remove(objectID))
         return;
 
     if (!m_nodeMap.contains(objectID)) {
@@ -1248,26 +1272,26 @@ AXTreePtr findAXTree(Function<bool(AXTreePtr)>&& match)
 #endif
 }
 
-void AXIsolatedTree::queueNodeUpdate(AXCoreObject& object, const NodeUpdateOptions& options)
+void AXIsolatedTree::queueNodeUpdate(AXID objectID, const NodeUpdateOptions& options)
 {
     ASSERT(isMainThread());
 
     if (!options.shouldUpdateNode && options.properties.size()) {
         // If we're going to recompute all properties for the node (i.e., the node is in m_needsUpdateNode),
         // don't bother queueing any individual property updates.
-        if (m_needsUpdateNode.contains(object.objectID()))
+        if (m_needsUpdateNode.contains(objectID))
             return;
 
-        auto addResult = m_needsPropertyUpdates.add(object.objectID(), options.properties);
+        auto addResult = m_needsPropertyUpdates.add(objectID, options.properties);
         if (!addResult.isNewEntry)
             addResult.iterator->value.formUnion(options.properties);
     }
 
     if (options.shouldUpdateChildren)
-        m_needsUpdateChildren.add(object.objectID());
+        m_needsUpdateChildren.add(objectID);
 
     if (options.shouldUpdateNode)
-        m_needsUpdateNode.add(object.objectID());
+        m_needsUpdateNode.add(objectID);
 
     if (auto* cache = axObjectCache())
         cache->startUpdateTreeSnapshotTimer();

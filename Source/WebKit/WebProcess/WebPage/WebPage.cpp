@@ -74,7 +74,6 @@
 #include "RemoteWebInspectorUIMessages.h"
 #include "SessionState.h"
 #include "SessionStateConversion.h"
-#include "ShareableBitmap.h"
 #include "ShareableBitmapUtilities.h"
 #include "SharedBufferReference.h"
 #include "TextRecognitionUpdateResult.h"
@@ -260,6 +259,7 @@
 #include <WebCore/RemoteDOMWindow.h>
 #include <WebCore/RemoteFrame.h>
 #include <WebCore/RemoteFrameClient.h>
+#include <WebCore/RemoteFrameView.h>
 #include <WebCore/RemoteUserInputEventData.h>
 #include <WebCore/RenderImage.h>
 #include <WebCore/RenderLayer.h>
@@ -281,6 +281,7 @@
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShadowRoot.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/StaticRange.h>
 #include <WebCore/StyleProperties.h>
@@ -413,6 +414,10 @@
 
 #if PLATFORM(IOS) || PLATFORM(VISION)
 #include "WebPreferencesDefaultValuesIOS.h"
+#endif
+
+#if ENABLE(MODEL_PROCESS)
+#include "ModelProcessConnection.h"
 #endif
 
 #if USE(CG)
@@ -750,6 +755,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     m_page = Page::create(WTFMove(pageConfiguration));
 
     updateAfterDrawingAreaCreation(parameters);
+
+    if (parameters.displayID)
+        windowScreenDidChange(*parameters.displayID, parameters.nominalFramesPerSecond);
 
     WebStorageNamespaceProvider::incrementUseCount(sessionStorageNamespaceIdentifier());
 
@@ -1131,6 +1139,17 @@ void WebPage::gpuProcessConnectionWasDestroyed()
 
 #endif
 
+#if ENABLE(MODEL_PROCESS)
+void WebPage::modelProcessConnectionDidBecomeAvailable(ModelProcessConnection& modelProcessConnection)
+{
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    modelProcessConnection.createVisibilityPropagationContextForPage(*this);
+#else
+    UNUSED_PARAM(modelProcessConnection);
+#endif
+}
+#endif
+
 void WebPage::requestMediaPlaybackState(CompletionHandler<void(WebKit::MediaPlaybackState)>&& completionHandler)
 {
     if (!m_page->mediaPlaybackExists())
@@ -1293,6 +1312,11 @@ WebPage::~WebPage()
     if (auto* gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
         gpuProcessConnection->destroyVisibilityPropagationContextForPage(*this);
 #endif // ENABLE(GPU_PROCESS)
+
+#if ENABLE(MODEL_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
+    if (auto* modelProcessConnection = WebProcess::singleton().existingModelProcessConnection())
+        modelProcessConnection->destroyVisibilityPropagationContextForPage(*this);
+#endif // ENABLE(MODEL_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
     
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     if (m_playbackSessionManager)
@@ -1793,7 +1817,8 @@ void WebPage::close()
 #endif
 
     m_printContext = nullptr;
-    m_mainFrame->coreLocalFrame()->loader().detachFromParent();
+    if (RefPtr localFrame = m_mainFrame->coreLocalFrame())
+        localFrame->loader().detachFromParent();
 
 #if ENABLE(SCROLLING_THREAD)
     if (m_useAsyncScrolling)
@@ -2882,7 +2907,7 @@ void WebPage::setFooterBannerHeight(int height)
 }
 #endif
 
-void WebPage::takeSnapshot(IntRect snapshotRect, IntSize bitmapSize, uint32_t options, CompletionHandler<void(std::optional<WebKit::ShareableBitmap::Handle>&&)>&& completionHandler)
+void WebPage::takeSnapshot(IntRect snapshotRect, IntSize bitmapSize, uint32_t options, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& completionHandler)
 {
     std::optional<ShareableBitmap::Handle> handle;
     RefPtr coreFrame = m_mainFrame->coreLocalFrame();
@@ -3194,6 +3219,10 @@ void WebPage::updateDrawingAreaLayerTreeFreezeState()
 
 void WebPage::updateFrameSize(WebCore::FrameIdentifier frameID, WebCore::IntSize newSize)
 {
+    if (!m_page)
+        return;
+
+    ASSERT(m_page->settings().siteIsolationEnabled());
     RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
     if (!webFrame)
         return;
@@ -3207,6 +3236,8 @@ void WebPage::updateFrameSize(WebCore::FrameIdentifier frameID, WebCore::IntSize
         return;
 
     frameView->resize(newSize);
+    // FIXME: This should be removed after rdar://122429810 is fixed.
+    frameView->setExposedContentRect(frameView->frameRect());
 
     if (m_drawingArea) {
         m_drawingArea->setNeedsDisplay();
@@ -3918,6 +3949,14 @@ void WebPage::visibilityDidChange()
     }
 }
 
+void WebPage::windowActivityDidChange()
+{
+#if ENABLE(PDF_PLUGIN)
+    for (auto& pluginView : m_pluginViews)
+        pluginView.windowActivityDidChange();
+#endif
+}
+
 void WebPage::setActivityState(OptionSet<ActivityState> activityState, ActivityStateChangeID activityStateChangeID, CompletionHandler<void()>&& callback)
 {
     LOG_WITH_STREAM(ActivityState, stream << "WebPage " << identifier().toUInt64() << " setActivityState to " << activityState);
@@ -3942,6 +3981,9 @@ void WebPage::setActivityState(OptionSet<ActivityState> activityState, ActivityS
 
     if (changed & ActivityState::IsVisible)
         visibilityDidChange();
+
+    if (changed & ActivityState::WindowIsActive)
+        windowActivityDidChange();
 }
 
 void WebPage::setLayerHostingMode(LayerHostingMode layerHostingMode)
@@ -4400,7 +4442,7 @@ bool WebPage::isParentProcessAWebBrowser() const
     return false;
 }
 
-static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferencesStore& store)
+void WebPage::adjustSettingsForLockdownMode(Settings& settings, const WebPreferencesStore* store)
 {
     // Disable unstable Experimental settings, even if the user enabled them for local use.
     settings.disableUnstableFeaturesForModernWebKit();
@@ -4471,16 +4513,18 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
     settings.setWebLocksAPIEnabled(false);
     settings.setCacheAPIEnabled(false);
 
-    settings.setAllowedMediaContainerTypes(store.getStringValueForKey(WebPreferencesKey::mediaContainerTypesAllowedInLockdownModeKey()));
-    settings.setAllowedMediaCodecTypes(store.getStringValueForKey(WebPreferencesKey::mediaCodecTypesAllowedInLockdownModeKey()));
-    settings.setAllowedMediaVideoCodecIDs(store.getStringValueForKey(WebPreferencesKey::mediaVideoCodecIDsAllowedInLockdownModeKey()));
-    settings.setAllowedMediaAudioCodecIDs(store.getStringValueForKey(WebPreferencesKey::mediaAudioCodecIDsAllowedInLockdownModeKey()));
-    settings.setAllowedMediaCaptionFormatTypes(store.getStringValueForKey(WebPreferencesKey::mediaCaptionFormatTypesAllowedInLockdownModeKey()));
-
     // FIXME: This seems like an odd place to put logic for setting global state in CoreGraphics.
 #if HAVE(LOCKDOWN_MODE_PDF_ADDITIONS)
     CGEnterLockdownModeForPDF();
 #endif
+
+    if (store) {
+        settings.setAllowedMediaContainerTypes(store->getStringValueForKey(WebPreferencesKey::mediaContainerTypesAllowedInLockdownModeKey()));
+        settings.setAllowedMediaCodecTypes(store->getStringValueForKey(WebPreferencesKey::mediaCodecTypesAllowedInLockdownModeKey()));
+        settings.setAllowedMediaVideoCodecIDs(store->getStringValueForKey(WebPreferencesKey::mediaVideoCodecIDsAllowedInLockdownModeKey()));
+        settings.setAllowedMediaAudioCodecIDs(store->getStringValueForKey(WebPreferencesKey::mediaAudioCodecIDsAllowedInLockdownModeKey()));
+        settings.setAllowedMediaCaptionFormatTypes(store->getStringValueForKey(WebPreferencesKey::mediaCaptionFormatTypesAllowedInLockdownModeKey()));
+    }
 }
 
 void WebPage::updatePreferences(const WebPreferencesStore& store)
@@ -4580,7 +4624,11 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     WebProcess::singleton().parentProcessConnection()->setIgnoreInvalidMessageForTesting();
     if (auto* gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
         gpuProcessConnection->connection().setIgnoreInvalidMessageForTesting();
-#endif
+#if ENABLE(MODEL_PROCESS)
+    if (auto* modelProcessConnection = WebProcess::singleton().existingModelProcessConnection())
+        modelProcessConnection->connection().setIgnoreInvalidMessageForTesting();
+#endif // ENABLE(MODEL_PROCESS)
+#endif // ENABLE(IPC_TESTING_API)
 
 #if ENABLE(WEB_AUTHN) && (PLATFORM(IOS) || PLATFORM(VISION))
     if (isParentProcessAWebBrowser())
@@ -4610,7 +4658,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     // FIXME: This should be automated by adding a new field in WebPreferences*.yaml
     // that indicates override state for Lockdown mode. https://webkit.org/b/233100.
     if (WebProcess::singleton().isLockdownModeEnabled())
-        adjustSettingsForLockdownMode(settings, store);
+        adjustSettingsForLockdownMode(settings, &store);
 
 #if ENABLE(ARKIT_INLINE_PREVIEW)
     m_useARKitForModel = store.getBoolValueForKey(WebPreferencesKey::useARKitForModelKey());
@@ -4623,10 +4671,6 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
         settings.setShowMediaStatsContextMenuItemEnabled(true);
         settings.setTrackConfigurationEnabled(true);
     }
-
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebPageUpdatePreferencesAdditions.cpp>
-#endif
 
 #if ENABLE(PDF_PLUGIN)
     for (auto& pluginView : m_pluginViews)
@@ -5316,7 +5360,7 @@ void WebPage::setActiveOpenPanelResultListener(Ref<WebOpenPanelResultListener>&&
 
 void WebPage::setTextIndicator(const WebCore::TextIndicatorData& indicatorData)
 {
-    send(Messages::WebPageProxy::SetTextIndicator(indicatorData, static_cast<uint64_t>(WebCore::TextIndicatorLifetime::Temporary)));
+    send(Messages::WebPageProxy::SetTextIndicatorFromFrame(m_mainFrame->frameID(), indicatorData, static_cast<uint64_t>(WebCore::TextIndicatorLifetime::Temporary)));
 }
 
 bool WebPage::findStringFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
@@ -5416,9 +5460,9 @@ void WebPage::hideFindUI()
     findController().hideFindUI();
 }
 
-void WebPage::countStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount)
+void WebPage::countStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(uint32_t)>&& completionHandler)
 {
-    findController().countStringMatches(string, options, maxMatchCount);
+    findController().countStringMatches(string, options, maxMatchCount, WTFMove(completionHandler));
 }
 
 void WebPage::replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly, CompletionHandler<void(uint64_t)>&& completionHandler)
@@ -5529,9 +5573,9 @@ void WebPage::userMediaAccessWasGranted(UserMediaRequestIdentifier userMediaID, 
     m_userMediaPermissionRequestManager->userMediaAccessWasGranted(userMediaID, WTFMove(audioDevice), WTFMove(videoDevice), WTFMove(mediaDeviceIdentifierHashSalts), WTFMove(completionHandler));
 }
 
-void WebPage::userMediaAccessWasDenied(UserMediaRequestIdentifier userMediaID, uint64_t reason, String&& invalidConstraint)
+void WebPage::userMediaAccessWasDenied(UserMediaRequestIdentifier userMediaID, uint64_t reason, String&& message, WebCore::MediaConstraintType invalidConstraint)
 {
-    m_userMediaPermissionRequestManager->userMediaAccessWasDenied(userMediaID, static_cast<MediaAccessDenialReason>(reason), WTFMove(invalidConstraint));
+    m_userMediaPermissionRequestManager->userMediaAccessWasDenied(userMediaID, static_cast<MediaAccessDenialReason>(reason), WTFMove(message), invalidConstraint);
 }
 
 void WebPage::captureDevicesChanged()
@@ -6188,7 +6232,7 @@ void WebPage::drawToPDF(FrameIdentifier frameID, const std::optional<FloatRect>&
     completionHandler(SharedBuffer::create(pdfData.get()));
 }
 
-void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInfo, const IntRect& rect, const WebCore::IntSize& imageSize, CompletionHandler<void(std::optional<WebKit::ShareableBitmap::Handle>&&)>&& completionHandler)
+void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInfo, const IntRect& rect, const WebCore::IntSize& imageSize, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& completionHandler)
 {
     PrintContextAccessScope scope { *this };
     RefPtr frame = WebProcess::singleton().webFrame(frameID);
@@ -8328,6 +8372,11 @@ void WebPage::configureLoggingChannel(const String& channelName, WTFLogChannelSt
         gpuProcessConnection->configureLoggingChannel(channelName, state, level);
 #endif
 
+#if ENABLE(MODEL_PROCESS)
+    if (auto* modelProcessConnection = WebProcess::singleton().existingModelProcessConnection())
+        modelProcessConnection->configureLoggingChannel(channelName, state, level);
+#endif
+
     send(Messages::WebPageProxy::ConfigureLoggingChannel(channelName, state, level));
 }
 
@@ -9077,9 +9126,28 @@ void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseInde
     completionHandler(ts.release());
 }
 
-void WebPage::requestTextExtraction(CompletionHandler<void(TextExtraction::Item&&)>&& completion)
+void WebPage::requestTextExtraction(std::optional<FloatRect>&& collectionRectInRootView, CompletionHandler<void(TextExtraction::Item&&)>&& completion)
 {
-    completion(TextExtraction::extractItem(Ref { *corePage() }));
+    completion(TextExtraction::extractItem(WTFMove(collectionRectInRootView), Ref { *corePage() }));
+}
+
+void WebPage::remoteViewCoordinatesToRootView(FrameIdentifier frameID, FloatRect rect, CompletionHandler<void(FloatRect)>&& completionHandler)
+{
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
+    if (!webFrame)
+        return completionHandler(rect);
+
+    RefPtr coreRemoteFrame = webFrame->coreRemoteFrame();
+    if (!coreRemoteFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler(rect);
+    }
+
+    RefPtr view = coreRemoteFrame->view();
+    if (!view)
+        return completionHandler(rect);
+
+    completionHandler(view->contentsToRootView(rect));
 }
 
 } // namespace WebKit

@@ -42,6 +42,7 @@ struct WebKit::WebHitTestResultData {
     String linkLabel;
     String linkTitle;
     String linkSuggestedFilename;
+    String imageSuggestedFilename;
     bool isContentEditable;
     WebCore::IntRect elementBoundingBox;
     WebKit::WebHitTestResultData::IsScrollbar isScrollbar;
@@ -56,10 +57,11 @@ struct WebKit::WebHitTestResultData {
     String toolTipText;
     String imageText;
     std::optional<WebCore::SharedMemoryHandle> getImageSharedMemoryHandle();
-    RefPtr<WebKit::ShareableBitmap> imageBitmap;
+    RefPtr<WebCore::ShareableBitmap> imageBitmap;
     String sourceImageMIMEType;
     String linkLocalDataMIMEType;
     bool hasLocalDataForLinkURL;
+    bool hasEntireImage;
 
 #if PLATFORM(MAC)
     WebKit::WebHitTestResultPlatformData platformData;

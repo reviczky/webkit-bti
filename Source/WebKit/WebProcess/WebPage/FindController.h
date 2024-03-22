@@ -25,12 +25,12 @@
 
 #pragma once
 
-#include "ShareableBitmap.h"
 #include "WebFindOptions.h"
 #include <WebCore/FindOptions.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/PageOverlay.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/SimpleRange.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
@@ -70,7 +70,7 @@ public:
     void selectFindMatch(uint32_t matchIndex);
     void indicateFindMatch(uint32_t matchIndex);
     void hideFindUI();
-    void countStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount);
+    void countStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount, CompletionHandler<void(uint32_t)>&&);
     uint32_t replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly);
     
     void hideFindIndicator();

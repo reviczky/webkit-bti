@@ -889,6 +889,11 @@ Vector<FloatRect> LineLayout::collectInlineBoxRects(const RenderInline& renderIn
     return result;
 }
 
+bool LineLayout::contains(const RenderElement& renderer) const
+{
+    return m_boxTree.contains(renderer);
+}
+
 const RenderObject& LineLayout::rendererForLayoutBox(const Layout::Box& layoutBox) const
 {
     return m_boxTree.rendererForLayoutBox(layoutBox);
@@ -1019,8 +1024,9 @@ void LineLayout::shiftLinesBy(LayoutUnit blockShift)
     for (auto& object : m_boxTree.renderers()) {
         Layout::Box& layoutBox = *object->layoutBox();
         if (layoutBox.isOutOfFlowPositioned() && layoutBox.style().hasStaticBlockPosition(isHorizontalWritingMode)) {
-            CheckedRef renderer = downcast<RenderBox>(m_boxTree.rendererForLayoutBox(layoutBox));
-            ASSERT(renderer->layer());
+            CheckedRef renderer = downcast<RenderLayerModelObject>(m_boxTree.rendererForLayoutBox(layoutBox));
+            if (!renderer->layer())
+                continue;
             CheckedRef layer = *renderer->layer();
             layer->setStaticBlockPosition(layer->staticBlockPosition() + blockShift);
             renderer->setChildNeedsLayout(MarkOnlyThis);

@@ -112,7 +112,7 @@ Modules/cookie-store/CookieStore.cpp
 Modules/cookie-store/CookieStoreManager.cpp
 Modules/credentialmanagement/BasicCredential.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
-Modules/credentialmanagement/DigitalCredential.cpp
+Modules/credentialmanagement/DigitalIdentity.cpp
 Modules/credentialmanagement/NavigatorCredentials.cpp
 Modules/entriesapi/DOMFileSystem.cpp
 Modules/entriesapi/ErrorCallback.cpp
@@ -908,8 +908,6 @@ css/CSSVariableData.cpp
 css/CSSVariableReferenceValue.cpp
 css/CSSViewValue.cpp
 css/ComputedStyleExtractor.cpp
-css/ContainerQuery.cpp
-css/ContainerQueryParser.cpp
 css/DOMCSSNamespace.cpp
 css/DOMCSSPaintWorklet.cpp
 css/DOMCSSRegisterCustomProperty.cpp
@@ -979,7 +977,9 @@ css/parser/MediaQueryBlockWatcher.cpp
 css/parser/MutableCSSSelector.cpp
 css/parser/SizesAttributeParser.cpp
 css/parser/SizesCalcParser.cpp
+css/query/ContainerQuery.cpp
 css/query/ContainerQueryFeatures.cpp
+css/query/ContainerQueryParser.cpp
 css/query/GenericMediaQueryEvaluator.cpp
 css/query/GenericMediaQueryParser.cpp
 css/query/GenericMediaQuerySerialization.cpp
@@ -1729,9 +1729,8 @@ layout/formattingContexts/block/PrecomputedBlockMarginCollapse.cpp
 layout/formattingContexts/block/tablewrapper/TableWrapperBlockFormattingContext.cpp
 layout/formattingContexts/block/tablewrapper/TableWrapperBlockFormattingQuirks.cpp
 layout/formattingContexts/flex/FlexFormattingContext.cpp
-layout/formattingContexts/flex/FlexFormattingGeometry.cpp
 layout/formattingContexts/flex/FlexLayout.cpp
-layout/formattingContexts/flex/FlexFormattingState.cpp
+layout/formattingContexts/flex/FlexFormattingUtils.cpp
 layout/floats/FloatAvoider.cpp
 layout/floats/FloatingContext.cpp
 layout/floats/PlacedFloats.cpp
@@ -2141,6 +2140,7 @@ platform/ScrollbarTheme.cpp
 platform/ScrollbarThemeComposite.cpp
 platform/ScrollingMomentumCalculator.cpp
 platform/SerializedPlatformDataCue.cpp
+platform/ShareableResource.cpp
 platform/SharedBuffer.cpp
 platform/SharedBufferChunkReader.cpp
 platform/SharedMemory.cpp
@@ -2340,6 +2340,8 @@ platform/graphics/RenderingMode.cpp
 platform/graphics/RotationDirection.cpp
 platform/graphics/RoundedRect.cpp
 platform/graphics/ShadowBlur.cpp
+platform/graphics/ShareableBitmap.cpp
+platform/graphics/ShareableBitmapHandle.cpp
 platform/graphics/SourceBrush.cpp
 platform/graphics/SourceBufferPrivate.cpp
 platform/graphics/SourceImage.cpp
@@ -2457,6 +2459,7 @@ platform/mediastream/AudioMediaStreamTrackRenderer.cpp
 platform/mediastream/AudioTrackPrivateMediaStream.cpp
 platform/mediastream/CaptureDeviceManager.cpp
 platform/mediastream/MediaConstraints.cpp
+platform/mediastream/MediaConstraintType.cpp
 platform/mediastream/MediaEndpointConfiguration.cpp
 platform/mediastream/MediaStreamPrivate.cpp
 platform/mediastream/MediaStreamTrackDataHolder.cpp
@@ -2539,6 +2542,7 @@ platform/text/QuotedPrintable.cpp
 platform/text/SegmentedString.cpp
 platform/text/TextBoundaries.cpp
 platform/text/TextFlags.cpp
+platform/video-codecs/BitReader.cpp
 platform/xr/openxr/OpenXRInput.cpp
 platform/xr/openxr/OpenXRInputSource.cpp
 platform/xr/openxr/OpenXRInstance.cpp
@@ -3464,7 +3468,7 @@ JSDetectedText.cpp
 JSDeviceMotionEvent.cpp
 JSDeviceOrientationEvent.cpp
 JSDeviceOrientationOrMotionPermissionState.cpp
-JSDigitalCredential.cpp
+JSDigitalIdentity.cpp
 JSDigitalCredentialRequestOptions.cpp
 JSDistanceModelType.cpp
 JSDocument.cpp

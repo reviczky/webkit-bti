@@ -29,7 +29,6 @@
 #include "DrawingArea.h"
 #include "MessageSenderInlines.h"
 #include "PluginView.h"
-#include "ShareableBitmap.h"
 #include "WKPage.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
@@ -54,6 +53,7 @@
 #include <WebCore/PluginDocument.h>
 #include <WebCore/Range.h>
 #include <WebCore/RenderObject.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/SimpleRange.h>
 
 #if PLATFORM(COCOA)
@@ -81,7 +81,7 @@ PluginView* FindController::mainFramePlugIn()
 
 #endif
 
-void FindController::countStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount)
+void FindController::countStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount, CompletionHandler<void(uint32_t)>&& completionHandler)
 {
     if (maxMatchCount == std::numeric_limits<unsigned>::max())
         --maxMatchCount;
@@ -99,8 +99,8 @@ void FindController::countStringMatches(const String& string, OptionSet<FindOpti
 
     if (matchCount > maxMatchCount)
         matchCount = static_cast<unsigned>(kWKMoreThanMaximumMatchCount);
-    
-    m_webPage->send(Messages::WebPageProxy::DidCountStringMatches(string, matchCount));
+
+    completionHandler(matchCount);
 }
 
 uint32_t FindController::replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly)
@@ -443,7 +443,7 @@ bool FindController::updateFindIndicator(LocalFrame& selectedFrame, bool isShowi
 
     m_findIndicatorRect = enclosingIntRect(indicator->selectionRectInRootViewCoordinates());
 #if PLATFORM(COCOA)
-    m_webPage->send(Messages::WebPageProxy::SetTextIndicator(indicator->data(), static_cast<uint64_t>(isShowingOverlay ? WebCore::TextIndicatorLifetime::Permanent : WebCore::TextIndicatorLifetime::Temporary)));
+    m_webPage->send(Messages::WebPageProxy::SetTextIndicatorFromFrame(selectedFrame.frameID(), indicator->data(), static_cast<uint64_t>(isShowingOverlay ? WebCore::TextIndicatorLifetime::Permanent : WebCore::TextIndicatorLifetime::Temporary)));
 #endif
     m_isShowingFindIndicator = true;
 

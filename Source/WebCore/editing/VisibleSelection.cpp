@@ -29,7 +29,7 @@
 #include "Document.h"
 #include "DocumentInlines.h"
 #include "Editing.h"
-#include "Element.h"
+#include "ElementInlines.h"
 #include "HTMLInputElement.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -683,8 +683,8 @@ Node* VisibleSelection::nonBoundaryShadowTreeRootNode() const
 
 bool VisibleSelection::isInPasswordField() const
 {
-    RefPtr textControl = enclosingTextFormControl(start());
-    return is<HTMLInputElement>(textControl) && downcast<HTMLInputElement>(*textControl).isPasswordField();
+    RefPtr textControl = dynamicDowncast<HTMLInputElement>(enclosingTextFormControl(start()));
+    return textControl && textControl->isPasswordField();
 }
 
 bool VisibleSelection::isInAutoFilledAndViewableField() const

@@ -139,6 +139,10 @@
 #include <WebCore/SystemBattery.h>
 #endif
 
+#if ENABLE(AV1) && PLATFORM(COCOA)
+#include <WebCore/AV1UtilitiesCocoa.h>
+#endif
+
 #if ENABLE(VP9) && PLATFORM(COCOA)
 #include <WebCore/VP9UtilitiesCocoa.h>
 #endif
@@ -304,12 +308,14 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
         hasVP9HardwareDecoder = WebCore::vp9HardwareDecoderAvailable();
         gpuProcess.send(Messages::GPUProcessProxy::SetHasVP9HardwareDecoder(hasVP9HardwareDecoder));
     }
-    bool hasVP9ExtensionSupport;
-    if (parameters.hasVP9ExtensionSupport)
-        hasVP9ExtensionSupport = *parameters.hasVP9ExtensionSupport;
+#endif
+#if ENABLE(AV1)
+    bool hasAV1HardwareDecoder;
+    if (parameters.hasAV1HardwareDecoder)
+        hasAV1HardwareDecoder = *parameters.hasAV1HardwareDecoder;
     else {
-        hasVP9ExtensionSupport = WebCore::hasVP9ExtensionSupport();
-        gpuProcess.send(Messages::GPUProcessProxy::SetHasVP9ExtensionSupport(hasVP9ExtensionSupport));
+        hasAV1HardwareDecoder = WebCore::av1HardwareDecoderAvailable();
+        gpuProcess.send(Messages::GPUProcessProxy::SetHasAV1HardwareDecoder(hasAV1HardwareDecoder));
     }
 #endif
 
@@ -319,7 +325,9 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
 #endif
 #if ENABLE(VP9)
         hasVP9HardwareDecoder,
-        hasVP9ExtensionSupport
+#endif
+#if ENABLE(AV1)
+        hasAV1HardwareDecoder
 #endif
     };
     m_connection->send(Messages::GPUProcessConnection::DidInitialize(info), 0);
@@ -828,6 +836,16 @@ void GPUConnectionToWebProcess::releaseRemoteCommandListener(RemoteRemoteCommand
 
 void GPUConnectionToWebProcess::setMediaOverridesForTesting(MediaOverridesForTesting overrides)
 {
+    if (!allowTestOnlyIPC()) {
+        MESSAGE_CHECK(!overrides.systemHasAC && !overrides.systemHasBattery && !overrides.vp9HardwareDecoderDisabled && !overrides.vp9DecoderDisabled && !overrides.vp9ScreenSizeAndScale);
+#if PLATFORM(COCOA)
+#if ENABLE(VP9)
+        VP9TestingOverrides::singleton().resetOverridesToDefaultValues();
+#endif
+        SystemBatteryStatusTestingOverrides::singleton().resetOverridesToDefaultValues();
+#endif
+        return;
+    }
 #if ENABLE(VP9) && PLATFORM(COCOA)
     VP9TestingOverrides::singleton().setHardwareDecoderDisabled(WTFMove(overrides.vp9HardwareDecoderDisabled));
     VP9TestingOverrides::singleton().setVP9DecoderDisabled(WTFMove(overrides.vp9DecoderDisabled));

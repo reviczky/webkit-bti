@@ -1464,6 +1464,7 @@ struct WebCore::WebLockManagerSnapshot {
 [CustomHeader] struct WebCore::AuthenticatorAttestationResponseData {
     RefPtr<JSC::ArrayBuffer> rawId;
     std::optional<WebCore::AuthenticationExtensionsClientOutputs> extensionOutputs;
+    RefPtr<JSC::ArrayBuffer> clientDataJSON;
     RefPtr<JSC::ArrayBuffer> attestationObject;
     Vector<WebCore::AuthenticatorTransport> transports;
 };
@@ -1471,6 +1472,7 @@ struct WebCore::WebLockManagerSnapshot {
 [CustomHeader] struct WebCore::AuthenticatorAssertionResponseData {
     RefPtr<JSC::ArrayBuffer> rawId;
     std::optional<WebCore::AuthenticationExtensionsClientOutputs> extensionOutputs;
+    RefPtr<JSC::ArrayBuffer> clientDataJSON;
     RefPtr<JSC::ArrayBuffer> authenticatorData;
     RefPtr<JSC::ArrayBuffer> signature;
     RefPtr<JSC::ArrayBuffer> userHandle;
@@ -2233,12 +2235,13 @@ header: <WebCore/ScreenProperties.h>
     bool screenHasInvertedColors;
     bool screenSupportsHighDynamicRange;
 #if PLATFORM(MAC)
+    WebCore::FloatSize screenSize;
     bool screenIsMonochrome;
     uint32_t displayMask;
     WebCore::PlatformGPUID gpuID;
     WebCore::DynamicRangeMode preferredDynamicRangeMode;
 #endif
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
     WebCore::IntSize screenSize;
     double dpi;
 #endif
@@ -3269,6 +3272,96 @@ enum class WebCore::StyleAppearance : uint8_t {
     SwitchTrack
 };
 
+header: <WebCore/ControlPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::ControlPart subclasses {
+    WebCore::ButtonPart,
+    WebCore::InnerSpinButtonPart,
+    WebCore::MenuListButtonPart,
+    WebCore::MenuListPart,
+    WebCore::MeterPart,
+    WebCore::ProgressBarPart,
+    WebCore::SearchFieldPart,
+    WebCore::SearchFieldResultsPart,
+    WebCore::SearchFieldCancelButtonPart,
+    WebCore::SliderThumbPart,
+    WebCore::SliderTrackPart,
+    WebCore::SwitchThumbPart,
+    WebCore::SwitchTrackPart,
+    WebCore::TextAreaPart,
+    WebCore::TextFieldPart,
+    WebCore::ToggleButtonPart,
+#if ENABLE(APPLE_PAY)
+    WebCore::ApplePayButtonPart,
+#endif
+#if ENABLE(SERVICE_CONTROLS)
+    WebCore::ImageControlsButtonPart,
+#endif
+#if ENABLE(INPUT_TYPE_COLOR)
+    WebCore::ColorWellPart,
+#endif
+}
+
+header: <WebCore/ButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::ButtonPart {
+    WebCore::StyleAppearance type();
+}
+
+header: <WebCore/InnerSpinButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::InnerSpinButtonPart {
+}
+
+header: <WebCore/MenuListButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::MenuListButtonPart {
+}
+
+header: <WebCore/MenuListPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::MenuListPart {
+}
+
+header: <WebCore/SearchFieldPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::SearchFieldPart {
+}
+
+header: <WebCore/SliderThumbPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::SliderThumbPart {
+    WebCore::StyleAppearance type();
+}
+
+header: <WebCore/SearchFieldResultsPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::SearchFieldResultsPart {
+    WebCore::StyleAppearance type();
+}
+
+header: <WebCore/SearchFieldCancelButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::SearchFieldCancelButtonPart {
+}
+
+header: <WebCore/TextAreaPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::TextAreaPart {
+    WebCore::StyleAppearance type();
+}
+
+header: <WebCore/TextFieldPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::TextFieldPart {
+}
+
+header: <WebCore/ToggleButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::ToggleButtonPart {
+    WebCore::StyleAppearance type();
+}
+
+#if ENABLE(SERVICE_CONTROLS)
+header: <WebCore/ImageControlsButtonPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::ImageControlsButtonPart {
+}
+#endif
+
+#if ENABLE(INPUT_TYPE_COLOR)
+header: <WebCore/ColorWellPart.h>
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder, DisableMissingMemberCheck] class WebCore::ColorWellPart {
+}
+#endif
+
 #if ENABLE(APPLE_PAY)
 header: <WebCore/ApplePayButtonPart.h>
 enum class WebCore::ApplePayButtonType : uint8_t {
@@ -3693,6 +3786,13 @@ header: <WebCore/FontAttributes.h>
     Natural
 };
 
+#if USE(CORE_TEXT)
+[RefCounted] class WebCore::Font {
+    WebCore::FontInternalAttributes attributes();
+    WebCore::FontPlatformData platformData();
+}
+#endif
+
 [CustomHeader] struct WebCore::FontAttributes {
     RefPtr<WebCore::Font> font
     WebCore::Color backgroundColor
@@ -3845,6 +3945,7 @@ header: <WebCore/ScrollingStateNode.h>
     OverflowScrollingNode
     KeyboardScrollData
     OverlayScrollbarsEnabled
+    LayerHostingContextIdentifier
 };
 #endif
 
@@ -4930,7 +5031,6 @@ class WebCore::SecurityOriginData {
 #if ENABLE(MEDIA_STREAM)
 
 [Nested] enum class WebCore::MediaConstraint::DataType : uint8_t {
-    None,
     Integer,
     Double,
     Boolean,
@@ -4959,8 +5059,6 @@ enum class WebCore::MediaConstraintType : uint8_t {
 
 header: <WebCore/MediaConstraints.h>
 [CustomHeader] class WebCore::MediaConstraint {
-    String name();
-    WebCore::MediaConstraintType constraintType();
     WebCore::MediaConstraint::DataType dataType();
 };
 
@@ -5544,6 +5642,18 @@ struct WebCore::ServiceWorkerImportedScript {
     String mimeType;
 };
 
+#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
+[CreateUsing=fromIPCData] class WebCore::ScriptBuffer {
+    std::variant<WebCore::ShareableResourceHandle, RefPtr<WebCore::FragmentedSharedBuffer>> ipcData();
+};
+#endif
+
+#if !ENABLE(SHAREABLE_RESOURCE) || !PLATFORM(COCOA)
+[CreateUsing=fromIPCData] class WebCore::ScriptBuffer {
+    RefPtr<WebCore::FragmentedSharedBuffer> ipcData();
+};
+#endif
+
 header: <wtf/RobinHoodHashTable.h>
 struct WebCore::ServiceWorkerContextData {
     std::optional<WebCore::ServiceWorkerJobDataIdentifier> jobDataIdentifier;
@@ -5913,6 +6023,36 @@ class WebCore::ProtectionSpace {
 #endif
 };
 
+header: <WebCore/Credential.h>
+[Nested] struct WebCore::Credential::NonPlatformData {
+    String user;
+    String password;
+    WebCore::CredentialPersistence persistence;
+}
+
+#if PLATFORM(COCOA)
+[CreateUsing=fromIPCData] class WebCore::Credential {
+    std::variant<WebCore::Credential::NonPlatformData, RetainPtr<NSURLCredential>> ipcData();
+};
+#endif
+
+#if USE(SOUP)
+[Nested] struct WebCore::Credential::PlatformData {
+    GRefPtr<GTlsCertificate> certificate;
+    WebCore::CredentialPersistence persistence;
+};
+
+[CreateUsing=fromIPCData] class WebCore::Credential {
+    std::variant<WebCore::Credential::NonPlatformData, WebCore::Credential::PlatformData> ipcData();
+};
+#endif
+
+#if USE(CURL)
+class WebCore::Credential {
+    WebCore::Credential::NonPlatformData nonPlatformData();
+};
+#endif // USE(CURL)
+
 #if ENABLE(GPU_PROCESS)
 header: <WebCore/BarcodeDetectorOptionsInterface.h>
 [CustomHeader, AdditionalEncoder=StreamConnectionEncoder] struct WebCore::ShapeDetection::BarcodeDetectorOptions {
@@ -6022,7 +6162,14 @@ header: <WebCore/TextExtractionTypes.h>
 header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] enum class WebCore::TextExtraction::ContainerType : uint8_t {
     Root,
-    ViewportConstrained
+    ViewportConstrained,
+    Link,
+    List,
+    ListItem,
+    BlockQuote,
+    Article,
+    Section,
+    Nav
 };
 
 header: <WebCore/TextExtractionTypes.h>
@@ -6148,6 +6295,7 @@ header: <WebCore/RealtimeMediaSource.h>
 [CustomHeader] struct WebCore::CaptureSourceError {
     String errorMessage;
     WebCore::MediaAccessDenialReason denialReason;
+    WebCore::MediaConstraintType invalidConstraint;
 };
 
 header: <WebCore/FillLightMode.h>
@@ -7046,6 +7194,11 @@ headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmap.h> <WebCore/MessageP
     WebCore::SerializedScriptValue::Internals m_internals;
 };
 
+header: <WebCore/SharedBuffer.h>
+[RefCounted] class WebCore::SharedBuffer {
+    Ref<WebCore::FragmentedSharedBuffer> asFragmentedSharedBuffer();
+};
+
 #if !USE(COORDINATED_GRAPHICS)
 [RefCounted] class WebCore::FilterOperation subclasses {
     WebCore::BasicColorMatrixFilterOperation
@@ -7175,6 +7328,11 @@ enum class WebCore::WindowProxyProperty : uint8_t {
     PostMessage,
 };
 
+header: <WebCore/Image.h>
+[RefCounted] class WebCore::Image {
+    RefPtr<WebCore::ShareableBitmap> toShareableBitmap();
+};
+
 struct WebCore::Length {
     std::variant<WebCore::Length::AutoData, WebCore::Length::NormalData, WebCore::Length::RelativeData, WebCore::Length::PercentData, WebCore::Length::FixedData, WebCore::Length::IntrinsicData, WebCore::Length::MinIntrinsicData, WebCore::Length::MinContentData, WebCore::Length::MaxContentData, WebCore::Length::FillAvailableData, WebCore::Length::FitContentData, WebCore::Length::ContentData, WebCore::Length::UndefinedData> ipcData()
 }
@@ -7250,6 +7408,15 @@ struct WebCore::OrganizationStorageAccessPromptQuirk {
     String organizationName;
     HashMap<WebCore::RegistrableDomain, Vector<WebCore::RegistrableDomain>> domainPairings;
 };
+
+#if ENABLE(SHAREABLE_RESOURCE)
+header: <WebCore/ShareableResource.h>
+[CustomHeader, RValue] class WebCore::ShareableResourceHandle {
+    WebCore::SharedMemoryHandle m_handle;
+    unsigned m_offset;
+    [Validator='!(Checked<unsigned> { *m_offset } + *m_size).hasOverflowed() && (*m_offset + *m_size <= m_handle->size())'] unsigned m_size;
+}
+#endif
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
 [RValue] class WebCore::DynamicContentScalingDisplayList {
@@ -7417,6 +7584,36 @@ header: <WebCore/VideoTrackPrivate.h>
 };
 
 #endif
+
+header: <WebCore/ShareableBitmap.h>
+[CustomHeader] class WebCore::ShareableBitmapConfiguration {
+    [Validator='m_size->width() >= 0 && m_size->height() >= 0'] WebCore::IntSize m_size;
+    std::optional<WebCore::DestinationColorSpace> m_colorSpace;
+    bool m_isOpaque;
+    unsigned bytesPerPixel();
+    unsigned bytesPerRow();
+#if USE(CG)
+    CGBitmapInfo m_bitmapInfo;
+#endif
+}
+
+[CustomHeader, RValue] class WebCore::ShareableBitmapHandle {
+    WebCore::SharedMemoryHandle m_handle;
+    [Validator='!m_configuration->sizeInBytes().hasOverflowed() && m_handle->size() >= m_configuration->sizeInBytes()'] WebCore::ShareableBitmapConfiguration m_configuration;
+}
+
+[RefCounted, CreateUsing=createReadOnly] class WebCore::ShareableBitmap {
+    std::optional<WebCore::ShareableBitmapHandle> createReadOnlyHandle()
+}
+
+#if ENABLE(DATA_DETECTION)
+header: <WebCore/DataDetectorElementInfo.h>
+struct WebCore::DataDetectorElementInfo {
+    RetainPtr<DDScannerResult> result;
+    WebCore::IntRect elementBounds;
+};
+#endif
+
 header: <WebCore/FEComposite.h>
 enum class WebCore::CompositeOperationType : uint8_t {
     FECOMPOSITE_OPERATOR_UNKNOWN,
@@ -7542,4 +7739,18 @@ header: <WebCore/FilterFunction.h>
     FETurbulence,
     SourceAlpha,
     SourceGraphic
+};
+
+class WebCore::SerializedPlatformDataCueValue {
+    std::optional<WebCore::SerializedPlatformDataCueValue::Data> data()
+}
+
+[Nested] struct WebCore::SerializedPlatformDataCueValue::Data {
+#if PLATFORM(COCOA)
+    String type;
+    HashMap<String, String> otherAttributes;
+    String key;
+    RetainPtr<NSLocale> locale;
+    std::variant<std::nullptr_t, RetainPtr<NSString>, RetainPtr<NSDate>, RetainPtr<NSNumber>, RetainPtr<NSData>> value;
+#endif
 };

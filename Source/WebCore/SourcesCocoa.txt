@@ -311,6 +311,7 @@ platform/cocoa/PublicSuffixCocoa.mm
 platform/cocoa/RemoteCommandListenerCocoa.mm
 platform/cocoa/RuntimeApplicationChecksCocoa.mm
 platform/cocoa/SearchPopupMenuCocoa.mm
+platform/cocoa/SerializedPlatformDataCueValue.mm @no-unify
 platform/cocoa/SharedBufferCocoa.mm
 platform/cocoa/SharedMemoryCocoa.cpp
 platform/cocoa/SystemVersion.mm
@@ -416,6 +417,7 @@ platform/graphics/cg/NativeImageCG.cpp
 platform/graphics/cg/PDFDocumentImage.cpp
 platform/graphics/cg/PathCG.cpp
 platform/graphics/cg/PatternCG.cpp
+platform/graphics/cg/ShareableBitmapCG.mm @no-unify
 platform/graphics/cg/TransformationMatrixCG.cpp
 platform/graphics/cg/UTIRegistry.cpp
 platform/graphics/cocoa/AV1UtilitiesCocoa.mm @no-unify
@@ -540,6 +542,8 @@ platform/ios/PlatformEventFactoryIOS.mm @no-unify
 platform/ios/PlatformPasteboardIOS.mm
 platform/ios/PlatformScreenIOS.mm
 platform/ios/PlaybackSessionInterfaceAVKit.mm @no-unify
+platform/ios/PlaybackSessionInterfaceIOS.mm @no-unify
+platform/ios/PlaybackSessionInterfaceLMK.mm @no-unify
 platform/ios/PreviewConverterIOS.mm
 platform/ios/QuickLook.mm
 platform/ios/ScrollAnimatorIOS.mm
@@ -688,6 +692,8 @@ platform/text/cocoa/LocaleCocoa.mm
 platform/text/cocoa/LocalizedDateCache.mm
 platform/text/mac/TextBoundaries.mm
 platform/text/mac/TextCheckingMac.mm
+platform/video-codecs/cocoa/RTCVideoDecoderVTBAV1.mm
+platform/video-codecs/cocoa/WebRTCVideoDecoder.mm
 platform/xr/cocoa/PlatformXRCocoa.mm
 platform/xr/cocoa/PlatformXRPose.cpp
 platform/text/mac/CoreTextChineseCompositionEngine.cpp

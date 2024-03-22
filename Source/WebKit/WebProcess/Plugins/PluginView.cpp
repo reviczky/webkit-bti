@@ -29,7 +29,6 @@
 #if ENABLE(PDF_PLUGIN)
 
 #include "PDFPlugin.h"
-#include "ShareableBitmap.h"
 #include "UnifiedPDFPlugin.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
@@ -74,6 +73,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityPolicy.h>
 #include <WebCore/Settings.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <pal/text/TextEncoding.h>
 #include <wtf/CompletionHandler.h>
@@ -333,12 +333,11 @@ void PluginView::didEndMagnificationGesture()
 
 void PluginView::setPageScaleFactor(double scaleFactor, std::optional<IntPoint> origin)
 {
-    m_webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
-    m_webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
-
     if (!m_isInitialized)
         return;
 
+    m_webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
+    m_webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
     m_plugin->setPageScaleFactor(scaleFactor, origin);
 }
 
@@ -958,6 +957,11 @@ bool PluginView::isUsingUISideCompositing() const
 void PluginView::didChangeSettings()
 {
     m_plugin->didChangeSettings();
+}
+
+void PluginView::windowActivityDidChange()
+{
+    m_plugin->windowActivityDidChange();
 }
 
 } // namespace WebKit

@@ -193,7 +193,7 @@ UniqueRef<Layout::Box> BoxTree::createLayoutBox(RenderObject& renderer)
         auto isCombinedText = is<RenderCombineText>(textRenderer) && downcast<RenderCombineText>(textRenderer).isCombined();
         auto text = style.textSecurity() == TextSecurity::None
             ? (isCombinedText ? textRenderer.originalText() : textRenderer.text())
-            : RenderBlock::updateSecurityDiscCharacters(style, isCombinedText ? textRenderer.originalText() : textRenderer.text());
+            : RenderBlock::updateSecurityDiscCharacters(style, isCombinedText ? textRenderer.originalText() : String { textRenderer.text() });
 
         auto canUseSimpleFontCodePath = textRenderer.canUseSimpleFontCodePath();
         auto canUseSimplifiedTextMeasuring = textRenderer.canUseSimplifiedTextMeasuring();
@@ -295,7 +295,7 @@ void BoxTree::updateContent(const RenderText& textRenderer)
     auto& inlineTextBox = downcast<Layout::InlineTextBox>(layoutBoxForRenderer(textRenderer));
     auto& style = inlineTextBox.style();
     auto isCombinedText = is<RenderCombineText>(textRenderer) && downcast<RenderCombineText>(textRenderer).isCombined();
-    auto text = style.textSecurity() == TextSecurity::None ? (isCombinedText ? textRenderer.originalText() : textRenderer.text()) : RenderBlock::updateSecurityDiscCharacters(style, isCombinedText ? textRenderer.originalText() : textRenderer.text());
+    auto text = style.textSecurity() == TextSecurity::None ? (isCombinedText ? textRenderer.originalText() : String { textRenderer.text() }) : RenderBlock::updateSecurityDiscCharacters(style, isCombinedText ? textRenderer.originalText() : String { textRenderer.text() });
     auto contentCharacteristic = OptionSet<Layout::InlineTextBox::ContentCharacteristic> { };
     if (textRenderer.canUseSimpleFontCodePath())
         contentCharacteristic.add(Layout::InlineTextBox::ContentCharacteristic::CanUseSimpledFontCodepath);
@@ -379,6 +379,19 @@ RenderObject& BoxTree::rendererForLayoutBox(const Layout::Box& box)
             m_boxToRendererMap.add(*renderer->layoutBox(), renderer);
     }
     return *m_boxToRendererMap.get(&box);
+}
+
+bool BoxTree::contains(const RenderElement& rendererToFind) const
+{
+    if (!rendererToFind.layoutBox())
+        return false;
+    if (m_boxToRendererMap.contains(*rendererToFind.layoutBox()))
+        return true;
+    for (auto& renderer : m_renderers) {
+        if (renderer.get() == &rendererToFind)
+            return true;
+    }
+    return false;
 }
 
 const RenderObject& BoxTree::rendererForLayoutBox(const Layout::Box& box) const

@@ -239,20 +239,29 @@ Vector<FloatRect> DocumentMarkerController::renderedRectsForMarkers(DocumentMark
 
 static bool shouldInsertAsSeparateMarker(const DocumentMarker& marker)
 {
+    switch (marker.type()) {
 #if ENABLE(PLATFORM_DRIVEN_TEXT_CHECKING)
-    if (marker.type() == DocumentMarker::Type::PlatformTextChecking)
+    case DocumentMarker::Type::PlatformTextChecking:
         return true;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    if (marker.type() == DocumentMarker::Type::DictationPhraseWithAlternatives || marker.type() == DocumentMarker::Type::DictationResult)
+    case DocumentMarker::Type::DictationPhraseWithAlternatives:
+    case DocumentMarker::Type::DictationResult:
         return true;
 #endif
 
-    if (marker.type() == DocumentMarker::Type::DraggedContent)
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    case DocumentMarker::Type::UnifiedTextReplacement:
+        return true;
+#endif
+
+    case DocumentMarker::Type::DraggedContent:
         return is<RenderReplaced>(std::get<RefPtr<Node>>(marker.data())->renderer());
 
-    return false;
+    default:
+        return false;
+    }
 }
 
 // Markers are stored in order sorted by their start offset.
@@ -644,13 +653,19 @@ void DocumentMarkerController::shiftMarkers(Node& node, unsigned startOffset, in
         // FIXME: No obvious reason this should be iOS-specific. Remove the #if at some point.
         auto targetStartOffset = clampTo<unsigned>(static_cast<int>(marker.startOffset()) + delta);
         auto targetEndOffset = clampTo<unsigned>(static_cast<int>(marker.endOffset()) + delta);
-        if (targetStartOffset >= node.length() || targetEndOffset <= 0) {
-            list->remove(i);
-            continue;
-        }
 #endif
 
         if (marker.startOffset() >= startOffset) {
+            // There is no need to adjust or remove the marker if it's before the start of the
+            // text being removed.
+
+#if PLATFORM(IOS_FAMILY)
+            if (targetStartOffset >= node.length() || targetEndOffset <= 0) {
+                list->remove(i);
+                continue;
+            }
+#endif
+
             ASSERT((int)marker.startOffset() + delta >= 0);
             marker.shiftOffsets(delta);
             didShiftMarker = true;

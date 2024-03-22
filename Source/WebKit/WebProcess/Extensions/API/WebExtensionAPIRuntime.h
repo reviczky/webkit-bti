@@ -62,7 +62,7 @@ public:
     WebExtensionAPIRuntime& runtime() final { return *this; }
 
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(ASCIILiteral propertyName, WebPage*);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
 
     NSURL *getURL(NSString *resourcePath, NSString **outExceptionString);
     NSDictionary *getManifest();
@@ -79,11 +79,11 @@ public:
 
     JSValue *lastError();
 
-    void sendMessage(WebFrame*, NSString *extensionID, NSString *messageJSON, NSDictionary *options, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    RefPtr<WebExtensionAPIPort> connect(WebFrame*, JSContextRef, NSString *extensionID, NSDictionary *options, NSString **outExceptionString);
+    void sendMessage(WebFrame&, NSString *extensionID, NSString *messageJSON, NSDictionary *options, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    RefPtr<WebExtensionAPIPort> connect(WebFrame&, JSContextRef, NSString *extensionID, NSDictionary *options, NSString **outExceptionString);
 
-    void sendNativeMessage(WebFrame*, NSString *applicationID, NSString *messageJSON, Ref<WebExtensionCallbackHandler>&&);
-    RefPtr<WebExtensionAPIPort> connectNative(WebFrame*, JSContextRef, NSString *applicationID);
+    void sendNativeMessage(WebFrame&, NSString *applicationID, NSString *messageJSON, Ref<WebExtensionCallbackHandler>&&);
+    RefPtr<WebExtensionAPIPort> connectNative(WebFrame&, JSContextRef, NSString *applicationID);
 
     WebExtensionAPIEvent& onConnect();
     WebExtensionAPIEvent& onInstalled();

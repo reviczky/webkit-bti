@@ -377,6 +377,7 @@ set(WebKit_SERIALIZATION_IN_FILES
 
     NetworkProcess/storage/FileSystemStorageError.serialization.in
 
+    Platform/IPC/ConnectionHandle.serialization.in
     Platform/IPC/FormDataReference.serialization.in
     Platform/IPC/IPCEvent.serialization.in
     Platform/IPC/IPCSemaphore.serialization.in
@@ -424,6 +425,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/PlatformPopupMenuData.serialization.in
     Shared/PolicyDecision.serialization.in
     Shared/PrintInfo.serialization.in
+    Shared/ProcessQualified.serialization.in
     Shared/RTCNetwork.serialization.in
     Shared/RTCPacketOptions.serialization.in
     Shared/RemoteWorkerInitializationData.serialization.in
@@ -434,8 +436,6 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/SandboxExtension.serialization.in
     Shared/ScrollingAccelerationCurve.serialization.in
     Shared/SessionState.serialization.in
-    Shared/ShareableBitmap.serialization.in
-    Shared/ShareableResource.serialization.in
     Shared/SyntheticEditingCommandType.serialization.in
     Shared/TextFlags.serialization.in
     Shared/TextRecognitionResult.serialization.in
@@ -528,6 +528,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebGPU/WebGPUImageCopyTexture.serialization.in
     Shared/WebGPU/WebGPUImageCopyTextureTagged.serialization.in
     Shared/WebGPU/WebGPUImageDataLayout.serialization.in
+    Shared/WebGPU/WebGPUInternalError.serialization.in
     Shared/WebGPU/WebGPUMultisampleState.serialization.in
     Shared/WebGPU/WebGPUObjectDescriptorBase.serialization.in
     Shared/WebGPU/WebGPUOrigin2D.serialization.in
@@ -666,18 +667,6 @@ endif ()
 
 if (ATOMICS_REQUIRE_LIBATOMIC)
     list(APPEND WebKit_PRIVATE_LIBRARIES atomic)
-endif ()
-
-if (UNIX)
-    check_function_exists(shm_open SHM_OPEN_EXISTS)
-    if (NOT SHM_OPEN_EXISTS)
-        set(CMAKE_REQUIRED_LIBRARIES rt)
-        check_function_exists(shm_open SHM_OPEN_REQUIRES_LIBRT)
-        if (SHM_OPEN_REQUIRES_LIBRT)
-            list(APPEND WebKit_PRIVATE_LIBRARIES rt)
-        endif ()
-        unset(CMAKE_REQUIRED_LIBRARIES)
-    endif ()
 endif ()
 
 macro(ADD_WEBKIT_PREFIX_HEADER _target)

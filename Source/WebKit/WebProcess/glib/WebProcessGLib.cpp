@@ -33,6 +33,9 @@
 #include "WebProcessCreationParameters.h"
 #include "WebProcessExtensionManager.h"
 
+#include <WebCore/PlatformScreen.h>
+#include <WebCore/ScreenProperties.h>
+
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
@@ -195,7 +198,15 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 
 #if PLATFORM(GTK)
     GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
+#endif
+
+#if PLATFORM(GTK)
     WebCore::setScreenProperties(parameters.screenProperties);
+#endif
+
+#if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
+    if (!m_dmaBufRendererBufferMode.isEmpty())
+        WebCore::setScreenProperties(parameters.screenProperties);
 #endif
 }
 
@@ -248,10 +259,12 @@ void WebProcess::releaseSystemMallocMemory()
 #endif
 }
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
 void WebProcess::setScreenProperties(const WebCore::ScreenProperties& properties)
 {
+#if PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
     WebCore::setScreenProperties(properties);
+#endif
     for (auto& page : m_pageMap.values())
         page->screenPropertiesDidChange();
 }

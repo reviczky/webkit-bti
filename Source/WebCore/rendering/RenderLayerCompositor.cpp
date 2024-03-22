@@ -50,6 +50,7 @@
 #include "Page.h"
 #include "PageOverlayController.h"
 #include "PathOperation.h"
+#include "RemoteFrame.h"
 #include "RenderBoxInlines.h"
 #include "RenderElementInlines.h"
 #include "RenderEmbeddedObject.h"
@@ -65,6 +66,7 @@
 #include "RenderVideo.h"
 #include "RenderView.h"
 #include "RotateTransformOperation.h"
+#include "SVGGraphicsElement.h"
 #include "ScaleTransformOperation.h"
 #include "ScrollingConstraints.h"
 #include "Settings.h"
@@ -1619,7 +1621,7 @@ void RenderLayerCompositor::updateBackingSharingAfterDescendantTraversal(Backing
     layer.backing()->clearBackingSharingLayers();
     LOG_WITH_STREAM(Compositing, stream << TextStream::Repeat(depth * 2, ' ') << " - is composited; maybe ending existing backing sequence with candidates " << sharingState.backingProviderCandidates() << " stacking context " << sharingState.backingSharingStackingContext());
 
-    if (preDescendantProviderStartLayer && preDescendantProviderStartLayer != sharingState.firstProviderCandidateLayer())
+    if (preDescendantProviderStartLayer && preDescendantProviderStartLayer == sharingState.firstProviderCandidateLayer())
         sharingState.endBackingSharingSequence(layer);
 }
 
@@ -1954,6 +1956,36 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
         if (m_renderView.settings().css3DTransformInteroperabilityEnabled() && oldStyle && recompositeChangeRequiresChildrenGeometryUpdate(*oldStyle, newStyle))
             layer.setChildrenNeedCompositingGeometryUpdate();
     }
+}
+
+void RenderLayerCompositor::establishesTopLayerWillChangeForLayer(RenderLayer& layer)
+{
+    clearBackingProviderSequencesInStackingContextOfLayer(layer);
+}
+
+// This is a recursive walk similar to RenderLayer::collectLayers().
+static void clearBackingSharingWithinStackingContext(RenderLayer& stackingContextRoot, RenderLayer& curLayer)
+{
+    if (curLayer.establishesTopLayer())
+        return;
+
+    if (&curLayer != &stackingContextRoot && curLayer.isStackingContext())
+        return;
+
+    for (auto* child = curLayer.firstChild(); child; child = child->nextSibling()) {
+        if (child->isComposited())
+            child->backing()->clearBackingSharingLayers();
+
+        if (!curLayer.isReflectionLayer(*child))
+            clearBackingSharingWithinStackingContext(stackingContextRoot, *child);
+    }
+}
+
+void RenderLayerCompositor::clearBackingProviderSequencesInStackingContextOfLayer(RenderLayer& layer)
+{
+    // We can't rely on z-order lists to be up-to-date here. For fullscreen, we may already have done a style update which dirties them.
+    if (auto* stackingContextLayer = layer.stackingContext())
+        clearBackingSharingWithinStackingContext(*stackingContextLayer, *stackingContextLayer);
 }
 
 // FIXME: remove and never ask questions about reflection layers.
@@ -3883,6 +3915,10 @@ bool RenderLayerCompositor::isLayerForIFrameWithScrollCoordinatedContents(const 
     if (!renderWidget)
         return false;
 
+    auto* frame = renderWidget->frameOwnerElement().contentFrame();
+    if (frame && is<RemoteFrame>(frame))
+        return renderWidget->hasLayer() && renderWidget->layer()->isComposited();
+
     auto* contentDocument = renderWidget->frameOwnerElement().contentDocument();
     if (!contentDocument)
         return false;
@@ -5267,6 +5303,12 @@ ScrollingNodeID RenderLayerCompositor::updateScrollingNodeForFrameHostingRole(Re
     if (changes & ScrollingNodeChangeFlags::Layer)
         scrollingCoordinator->setNodeLayers(newNodeID, { layer.backing()->graphicsLayer() });
 
+    if (auto* renderWidget = dynamicDowncast<RenderWidget>(layer.renderer())) {
+        if (auto* frame = renderWidget->frameOwnerElement().contentFrame()) {
+            if (is<RemoteFrame>(frame))
+                scrollingCoordinator->setLayerHostingContextIdentifierForFrameHostingNode(newNodeID, dynamicDowncast<RemoteFrame>(frame)->layerHostingContextIdentifier());
+        }
+    }
     return newNodeID;
 }
 
@@ -5431,7 +5473,10 @@ ScrollableArea* RenderLayerCompositor::scrollableAreaForScrollingNodeID(Scrollin
     if (nodeID == m_renderView.frameView().scrollingNodeID())
         return &m_renderView.frameView();
 
-    return m_scrollingNodeToLayerMap.get(nodeID)->scrollableArea();
+    if (auto weakLayer = m_scrollingNodeToLayerMap.get(nodeID))
+        return weakLayer->scrollableArea();
+
+    return nullptr;
 }
 
 void RenderLayerCompositor::willRemoveScrollingLayerWithBacking(RenderLayer& layer, RenderLayerBacking& backing)

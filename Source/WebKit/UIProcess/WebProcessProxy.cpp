@@ -27,6 +27,7 @@
 #include "WebProcessProxy.h"
 
 #include "APIFrameHandle.h"
+#include "APIPageConfiguration.h"
 #include "APIPageHandle.h"
 #include "APIUIClient.h"
 #include "AuthenticatorManager.h"
@@ -35,6 +36,7 @@
 #include "GoToBackForwardItemParameters.h"
 #include "LoadParameters.h"
 #include "Logging.h"
+#include "ModelProcessConnectionParameters.h"
 #include "ModelProcessProxy.h"
 #include "NetworkProcessConnectionInfo.h"
 #include "NotificationManagerMessageHandlerMessages.h"
@@ -94,6 +96,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
+#include <wtf/Scope.h>
 #include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakListHashSet.h>
@@ -243,9 +246,9 @@ Ref<WebProcessProxy> WebProcessProxy::create(WebProcessPool& processPool, Websit
     return proxy;
 }
 
-Ref<WebProcessProxy> WebProcessProxy::createForRemoteWorkers(RemoteWorkerType workerType, WebProcessPool& processPool, RegistrableDomain&& registrableDomain, WebsiteDataStore& websiteDataStore)
+Ref<WebProcessProxy> WebProcessProxy::createForRemoteWorkers(RemoteWorkerType workerType, WebProcessPool& processPool, RegistrableDomain&& registrableDomain, WebsiteDataStore& websiteDataStore, LockdownMode lockdownMode)
 {
-    Ref proxy = adoptRef(*new WebProcessProxy(processPool, &websiteDataStore, IsPrewarmed::No, CrossOriginMode::Shared, LockdownMode::Disabled));
+    Ref proxy = adoptRef(*new WebProcessProxy(processPool, &websiteDataStore, IsPrewarmed::No, CrossOriginMode::Shared, lockdownMode));
     proxy->m_registrableDomain = WTFMove(registrableDomain);
     proxy->enableRemoteWorkers(workerType, processPool.userContentControllerIdentifierForRemoteWorkers());
     proxy->connect();
@@ -1054,10 +1057,39 @@ void WebProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
 #endif
 
 #if ENABLE(MODEL_PROCESS)
-void WebProcessProxy::createModelProcessConnection(IPC::Connection::Handle&&, WebKit::ModelProcessConnectionParameters&&)
+void WebProcessProxy::createModelProcessConnection(IPC::Connection::Handle&& connectionIdentifier, WebKit::ModelProcessConnectionParameters&& parameters)
 {
-}
+    bool anyPageHasModelProcessEnabled = false;
+    for (auto& page : m_pageMap.values())
+        anyPageHasModelProcessEnabled |= page->preferences().modelProcessEnabled();
+    MESSAGE_CHECK(anyPageHasModelProcessEnabled);
+
+#if ENABLE(IPC_TESTING_API)
+    parameters.ignoreInvalidMessageForTesting = ignoreInvalidMessageForTesting();
 #endif
+
+#if HAVE(AUDIT_TOKEN)
+    parameters.presentingApplicationAuditToken = m_processPool->configuration().presentingApplicationProcessToken();
+#endif
+
+    protectedProcessPool()->createModelProcessConnection(*this, WTFMove(connectionIdentifier), WTFMove(parameters));
+}
+
+void WebProcessProxy::modelProcessDidFinishLaunching()
+{
+    for (auto& page : m_pageMap.values())
+        page->modelProcessDidFinishLaunching();
+}
+
+void WebProcessProxy::modelProcessExited(ProcessTerminationReason reason)
+{
+    WEBPROCESSPROXY_RELEASE_LOG_ERROR(Process, "modelProcessExited: reason=%{public}s", processTerminationReasonToString(reason));
+
+    for (auto& page : m_pageMap.values())
+        page->modelProcessExited(reason);
+}
+
+#endif // ENABLE(MODEL_PROCESS)
 
 #if !PLATFORM(MAC)
 bool WebProcessProxy::shouldAllowNonValidInjectedCode() const
