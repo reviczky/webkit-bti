@@ -228,9 +228,7 @@ static void browserWindowCreateBackForwardMenu(BrowserWindow *window, GList *lis
     GList *listItem;
     for (listItem = list; listItem; listItem = g_list_next(listItem)) {
         WebKitBackForwardListItem *item = (WebKitBackForwardListItem *)listItem->data;
-        const char *title = webkit_back_forward_list_item_get_title(item);
-        if (!title || !*title)
-            title = webkit_back_forward_list_item_get_uri(item);
+        const char *title = webkit_back_forward_list_item_get_uri(item);
 
         char *displayTitle;
 #define MAX_TITLE 100
@@ -482,6 +480,20 @@ static GtkWidget *webViewCreate(WebKitWebView *webView, WebKitNavigationAction *
     return GTK_WIDGET(newWebView);
 }
 
+void browser_window_fullscreen(BrowserWindow *window)
+{
+    gtk_window_fullscreen(GTK_WINDOW(window));
+    gtk_widget_hide(window->toolbar);
+    window->fullScreenIsEnabled = TRUE;
+}
+
+static void browserWindowUnfullscreen(BrowserWindow *window)
+{
+    gtk_window_unfullscreen(GTK_WINDOW(window));
+    gtk_widget_show(window->toolbar);
+    window->fullScreenIsEnabled = FALSE;
+}
+
 static gboolean webViewEnterFullScreen(WebKitWebView *webView, BrowserWindow *window)
 {
     gtk_widget_hide(window->toolbar);
@@ -643,7 +655,7 @@ static void faviconChanged(WebKitWebView *webView, GParamSpec *paramSpec, Browse
 #if GTK_CHECK_VERSION(3, 98, 0)
     GdkTexture *favicon = webkit_web_view_get_favicon(webView);
     if (favicon)
-        g_object_ref(favicon);
+        favicon = g_object_ref(favicon);
 #else
     cairo_surface_t *surface = webkit_web_view_get_favicon(webView);
     GdkPixbuf *favicon = NULL;
@@ -867,15 +879,10 @@ static void loadHomePage(GSimpleAction *action, GVariant *parameter, gpointer us
 static void toggleFullScreen(GSimpleAction *action, GVariant *parameter, gpointer userData)
 {
     BrowserWindow *window = BROWSER_WINDOW(userData);
-    if (!window->fullScreenIsEnabled) {
-        gtk_window_fullscreen(GTK_WINDOW(window));
-        gtk_widget_hide(window->toolbar);
-        window->fullScreenIsEnabled = TRUE;
-    } else {
-        gtk_window_unfullscreen(GTK_WINDOW(window));
-        gtk_widget_show(window->toolbar);
-        window->fullScreenIsEnabled = FALSE;
-    }
+    if (window->fullScreenIsEnabled)
+        browserWindowUnfullscreen(window);
+    else
+        browser_window_fullscreen(window);
 }
 
 static void webKitPrintOperationFailedCallback(WebKitPrintOperation *printOperation, GError *error)

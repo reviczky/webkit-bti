@@ -60,6 +60,7 @@ public:
 
     using GraphicsContext::fillRect;
     void fillRect(const FloatRect&) final;
+    void fillRect(const FloatRect&, Gradient&, const AffineTransform&) final;
     void fillRect(const FloatRect&, const Color&) final;
     void fillRoundedRectImpl(const FloatRoundedRect&, const Color&) final;
     void fillRectWithRoundedHole(const FloatRect&, const FloatRoundedRect&, const Color&) final;
@@ -68,8 +69,8 @@ public:
     void strokePath(const Path&) final;
     void clearRect(const FloatRect&) final;
 
-    void drawNativeImageInternal(NativeImage&, const FloatSize&, const FloatRect&, const FloatRect&, const ImagePaintingOptions&) final;
-    void drawPattern(NativeImage&, const FloatRect& destRect, const FloatRect& srcRect, const AffineTransform&, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions&) final;
+    void drawNativeImageInternal(NativeImage&, const FloatRect&, const FloatRect&, ImagePaintingOptions) final;
+    void drawPattern(NativeImage&, const FloatRect& destRect, const FloatRect& srcRect, const AffineTransform&, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions) final;
 
     void drawRect(const FloatRect&, float) final;
     void drawLine(const FloatPoint&, const FloatPoint&) final;
@@ -80,8 +81,8 @@ public:
     void drawFocusRing(const Path&, float outlineWidth, const Color&) final;
     void drawFocusRing(const Vector<FloatRect>&, float outlineOffset, float outlineWidth, const Color&) final;
 
-    void save() final;
-    void restore() final;
+    void save(GraphicsContextState::Purpose = GraphicsContextState::Purpose::SaveRestore) final;
+    void restore(GraphicsContextState::Purpose = GraphicsContextState::Purpose::SaveRestore) final;
 
     void translate(float, float) final;
     void rotate(float) final;
@@ -108,6 +109,8 @@ public:
     Vector<float>& layers();
     void pushImageMask(cairo_surface_t*, const FloatRect&);
 
+    // Exposed as public because freestanding functions use this.
+    using GraphicsContext::nativeImageForDrawing;
 private:
     RefPtr<cairo_t> m_cr;
 

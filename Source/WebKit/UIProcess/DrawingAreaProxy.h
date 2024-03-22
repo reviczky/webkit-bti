@@ -29,13 +29,16 @@
 #include "Connection.h"
 #include "DrawingAreaInfo.h"
 #include "MessageReceiver.h"
+#include "MessageSender.h"
 #include <WebCore/FloatRect.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
+#include <WebCore/ProcessIdentifier.h>
 #include <stdint.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
 #include <wtf/TypeCasts.h>
+#include <wtf/WeakRef.h>
 
 #if PLATFORM(COCOA)
 namespace WTF {
@@ -52,6 +55,7 @@ using PlatformDisplayID = uint32_t;
 namespace WebKit {
 
 class LayerTreeContext;
+class RemotePageDrawingAreaProxy;
 class WebPageProxy;
 class WebProcessProxy;
 
@@ -59,7 +63,7 @@ class WebProcessProxy;
 struct UpdateInfo;
 #endif
 
-class DrawingAreaProxy : public IPC::MessageReceiver {
+class DrawingAreaProxy : public IPC::MessageReceiver, public IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(DrawingAreaProxy);
 
@@ -83,14 +87,8 @@ public:
     // FIXME: These should be pure virtual.
     virtual void setBackingStoreIsDiscardable(bool) { }
 
-    virtual void waitForBackingStoreUpdateOnNextPaint() { }
-
     const WebCore::IntSize& size() const { return m_size; }
     bool setSize(const WebCore::IntSize&, const WebCore::IntSize& scrollOffset = { });
-
-#if USE(COORDINATED_GRAPHICS) || USE(TEXTURE_MAPPER)
-    virtual void targetRefreshRateDidChange(unsigned) { }
-#endif
 
     virtual void minimumSizeForAutoLayoutDidChange() { }
     virtual void sizeToContentAutoSizeMaximumSizeDidChange() { }
@@ -127,19 +125,33 @@ public:
     virtual bool shouldCoalesceVisualEditorStateUpdates() const { return false; }
     virtual bool shouldSendWheelEventsToEventDispatcher() const { return false; }
 
-    WebPageProxy& page() const { return m_webPageProxy; }
+    WebPageProxy& page() const;
     virtual void viewWillStartLiveResize() { };
     virtual void viewWillEndLiveResize() { };
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
+    // IPC::MessageSender
+    bool sendMessage(UniqueRef<IPC::Encoder>&&, OptionSet<IPC::SendOption>) final;
+    bool sendMessageWithAsyncReply(UniqueRef<IPC::Encoder>&&, AsyncReplyHandler, OptionSet<IPC::SendOption>) final;
+    IPC::Connection* messageSenderConnection() const final;
+    uint64_t messageSenderDestinationID() const final;
+
+    virtual void addRemotePageDrawingAreaProxy(RemotePageDrawingAreaProxy&) { }
+    virtual void removeRemotePageDrawingAreaProxy(RemotePageDrawingAreaProxy&) { }
+
+    virtual void remotePageProcessCrashed(WebCore::ProcessIdentifier) { }
+
 protected:
-    DrawingAreaProxy(DrawingAreaType, WebPageProxy&);
+    DrawingAreaProxy(DrawingAreaType, WebPageProxy&, WebProcessProxy&);
+
+    Ref<WebPageProxy> protectedWebPageProxy() const;
 
     DrawingAreaType m_type;
     DrawingAreaIdentifier m_identifier;
-    WebPageProxy& m_webPageProxy;
+    WeakRef<WebPageProxy> m_webPageProxy;
+    Ref<WebProcessProxy> m_webProcessProxy;
 
     WebCore::IntSize m_size;
     WebCore::IntSize m_scrollOffset;

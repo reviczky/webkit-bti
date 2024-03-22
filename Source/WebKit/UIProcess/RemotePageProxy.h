@@ -26,16 +26,20 @@
 #pragma once
 
 #include "MessageReceiver.h"
+#include "NavigationActionData.h"
 #include "WebPageProxyMessageReceiverRegistration.h"
 #include "WebProcessProxy.h"
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/PageIdentifier.h>
+#include <WebCore/ProcessIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
+#include <wtf/WeakHashSet.h>
 
 namespace IPC {
 class Connection;
 class Decoder;
 class Encoder;
+template<typename> struct ConnectionSendSyncResult;
 }
 
 namespace WebCore {
@@ -50,6 +54,7 @@ class ResourceRequest;
 
 namespace WebKit {
 
+class NativeWebMouseEvent;
 class RemotePageDrawingAreaProxy;
 class RemotePageVisitedLinkStoreRegistration;
 class UserData;
@@ -59,6 +64,7 @@ class WebProcessProxy;
 
 struct FrameInfoData;
 struct FrameTreeCreationParameters;
+struct NavigationActionData;
 
 class RemotePageProxy : public RefCounted<RemotePageProxy>, public IPC::MessageReceiver {
     WTF_MAKE_FAST_ALLOCATED;
@@ -66,13 +72,23 @@ public:
     static Ref<RemotePageProxy> create(WebPageProxy& page, WebProcessProxy& process, const WebCore::RegistrableDomain& domain, WebPageProxyMessageReceiverRegistration* registrationToTransfer = nullptr) { return adoptRef(*new RemotePageProxy(page, process, domain, registrationToTransfer)); }
     ~RemotePageProxy();
 
+    WebPageProxy* page() const;
+    RefPtr<WebPageProxy> protectedPage() const;
+    void addFrame(WebFrameProxy&);
+    void removeFrame(WebFrameProxy&);
+
     template<typename M> void send(M&&);
+    template<typename M> IPC::ConnectionSendSyncResult<M> sendSync(M&& message);
     template<typename M, typename C> void sendWithAsyncReply(M&&, C&&);
     template<typename M, typename C> void sendWithAsyncReply(M&&, C&&, const ObjectIdentifierGenericBase&);
 
     void injectPageIntoNewProcess();
+    void processDidTerminate(WebCore::ProcessIdentifier);
+
+    WebPageProxyMessageReceiverRegistration& messageReceiverRegistration() { return m_messageReceiverRegistration; }
 
     WebProcessProxy& process() { return m_process.get(); }
+    Ref<WebProcessProxy> protectedProcess() const;
     WebCore::PageIdentifier pageID() const { return m_webPageID; }
     const WebCore::RegistrableDomain& domain() const { return m_domain; }
 
@@ -82,6 +98,11 @@ private:
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
     void decidePolicyForResponse(FrameInfoData&&, uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, CompletionHandler<void(PolicyDecision&&)>&&);
     void didCommitLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
+    void decidePolicyForNavigationActionAsync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void decidePolicyForNavigationActionSync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void didFailProvisionalLoadForFrame(FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& provisionalURL, const WebCore::ResourceError&, WebCore::WillContinueLoading, const UserData&, WebCore::WillInternallyHandleFailure);
+    void didChangeProvisionalURLForFrame(WebCore::FrameIdentifier, uint64_t, URL&&);
+    void handleMessage(const String& messageName, const UserData& messageBody);
 
     const WebCore::PageIdentifier m_webPageID;
     const Ref<WebProcessProxy> m_process;
@@ -90,11 +111,18 @@ private:
     std::unique_ptr<RemotePageDrawingAreaProxy> m_drawingArea;
     std::unique_ptr<RemotePageVisitedLinkStoreRegistration> m_visitedLinkStoreRegistration;
     WebPageProxyMessageReceiverRegistration m_messageReceiverRegistration;
+    WeakHashSet<WebFrameProxy> m_frames;
 };
 
 template<typename M> void RemotePageProxy::send(M&& message)
 {
     m_process->send(std::forward<M>(message), m_webPageID, { });
+}
+
+template<typename M>
+IPC::ConnectionSendSyncResult<M> RemotePageProxy::sendSync(M&& message)
+{
+    return m_process->sendSync(std::forward<M>(message), m_webPageID);
 }
 
 template<typename M, typename C> void RemotePageProxy::sendWithAsyncReply(M&& message, C&& completionHandler)

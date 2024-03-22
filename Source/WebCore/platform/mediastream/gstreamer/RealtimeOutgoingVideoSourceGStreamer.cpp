@@ -41,7 +41,7 @@ WEBKIT_DEFINE_ASYNC_DATA_STRUCT(RealtimeOutgoingVideoSourceHolder)
 
 
 RealtimeOutgoingVideoSourceGStreamer::RealtimeOutgoingVideoSourceGStreamer(const RefPtr<UniqueSSRCGenerator>& ssrcGenerator, const String& mediaStreamId, MediaStreamTrack& track)
-    : RealtimeOutgoingMediaSourceGStreamer(ssrcGenerator, mediaStreamId, track)
+    : RealtimeOutgoingMediaSourceGStreamer(RealtimeOutgoingMediaSourceGStreamer::Type::Video, ssrcGenerator, mediaStreamId, track)
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
@@ -87,7 +87,7 @@ void RealtimeOutgoingVideoSourceGStreamer::updateStats(GstBuffer*)
     if (m_encoder) {
         uint32_t bitrate;
         g_object_get(m_encoder.get(), "bitrate", &bitrate, nullptr);
-        gst_structure_set(m_stats.get(), "bitrate", G_TYPE_DOUBLE, static_cast<double>(bitrate * 1024), nullptr);
+        gst_structure_set(m_stats.get(), "bitrate", G_TYPE_DOUBLE, static_cast<double>(bitrate * 1000), nullptr);
     }
 
     gst_structure_set(m_stats.get(), "frames-sent", G_TYPE_UINT64, framesSent, "frames-encoded", G_TYPE_UINT64, framesSent, nullptr);
@@ -95,7 +95,13 @@ void RealtimeOutgoingVideoSourceGStreamer::updateStats(GstBuffer*)
 
 void RealtimeOutgoingVideoSourceGStreamer::teardown()
 {
+    RealtimeOutgoingMediaSourceGStreamer::teardown();
+    m_videoConvert.clear();
+    m_videoFlip.clear();
+    m_videoRate.clear();
+    m_frameRateCapsFilter.clear();
     stopUpdatingStats();
+    m_stats.reset();
 }
 
 bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>& caps)
@@ -161,13 +167,18 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
     if (gst_structure_get_int(structure, "payload", &payloadType))
         g_object_set(m_payloader.get(), "pt", payloadType, nullptr);
 
+    if (m_payloaderState) {
+        g_object_set(m_payloader.get(), "seqnum-offset", m_payloaderState->seqnum, nullptr);
+        m_payloaderState.reset();
+    }
+
     g_object_set(m_capsFilter.get(), "caps", caps.get(), nullptr);
 
     gst_bin_add(GST_BIN_CAST(m_bin.get()), m_payloader.get());
 
     auto encoderSinkPad = adoptGRef(gst_element_get_static_pad(m_encoder.get(), "sink"));
     if (!gst_pad_is_linked(encoderSinkPad.get())) {
-        if (!gst_element_link_many(m_outgoingSource.get(), m_inputSelector.get(), m_videoFlip.get(), nullptr)) {
+        if (!gst_element_link_many(m_outgoingSource.get(), m_inputSelector.get(), m_liveSync.get(), m_videoFlip.get(), nullptr)) {
             GST_ERROR_OBJECT(m_bin.get(), "Unable to link outgoing source to videoflip");
             return false;
         }
@@ -187,28 +198,6 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
     }
 
     return gst_element_link_many(m_encoder.get(), m_payloader.get(), m_postEncoderQueue.get(), nullptr);
-}
-
-void RealtimeOutgoingVideoSourceGStreamer::codecPreferencesChanged(const GRefPtr<GstCaps>& codecPreferences)
-{
-    gst_element_set_locked_state(m_bin.get(), TRUE);
-    if (m_payloader) {
-        gst_element_set_state(m_payloader.get(), GST_STATE_NULL);
-        gst_element_unlink_many(m_encoder.get(), m_payloader.get(), m_postEncoderQueue.get(), nullptr);
-        gst_bin_remove(GST_BIN_CAST(m_bin.get()), m_payloader.get());
-        m_payloader.clear();
-    }
-    if (!setPayloadType(codecPreferences)) {
-        gst_element_set_locked_state(m_bin.get(), FALSE);
-        GST_ERROR_OBJECT(m_bin.get(), "Unable to link encoder to webrtcbin");
-        return;
-    }
-
-    gst_element_set_locked_state(m_bin.get(), FALSE);
-    gst_bin_sync_children_states(GST_BIN_CAST(m_bin.get()));
-    gst_element_sync_state_with_parent(m_bin.get());
-    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(m_bin.get()), GST_DEBUG_GRAPH_SHOW_ALL, "outgoing-video-new-codec-prefs");
-    m_isStopped = false;
 }
 
 void RealtimeOutgoingVideoSourceGStreamer::connectFallbackSource()
@@ -348,7 +337,8 @@ void RealtimeOutgoingVideoSourceGStreamer::setParameters(GUniquePtr<GstStructure
     gst_structure_get(structure, "max-bitrate", G_TYPE_ULONG, &maxBitrate, nullptr);
 
     // maxBitrate is expessed in bits/s but the encoder property is in Kbit/s.
-    g_object_set(m_encoder.get(), "bitrate", static_cast<unsigned>(maxBitrate / 1024), nullptr);
+    if (maxBitrate >= 1000)
+        g_object_set(m_encoder.get(), "bitrate", static_cast<uint32_t>(maxBitrate / 1000), nullptr);
 }
 
 void RealtimeOutgoingVideoSourceGStreamer::fillEncodingParameters(const GUniquePtr<GstStructure>& encodingParameters)
@@ -368,11 +358,11 @@ void RealtimeOutgoingVideoSourceGStreamer::fillEncodingParameters(const GUniqueP
         gst_structure_set(encodingParameters.get(), "max-framerate", G_TYPE_DOUBLE, maxFrameRate, nullptr);
     }
 
-    unsigned long maxBitrate = 2048 * 1024;
+    unsigned long maxBitrate = 2048 * 1000;
     if (m_encoder) {
         uint32_t bitrate;
         g_object_get(m_encoder.get(), "bitrate", &bitrate, nullptr);
-        maxBitrate = bitrate * 1024;
+        maxBitrate = bitrate * 1000;
     }
 
     gst_structure_set(encodingParameters.get(), "max-bitrate", G_TYPE_ULONG, maxBitrate, nullptr);

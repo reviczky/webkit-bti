@@ -93,6 +93,9 @@ const GstMetaInfo* videoFrameMetadataGetInfo()
                 auto* frameMeta = VIDEO_FRAME_METADATA_CAST(meta);
                 auto [buf, copyMeta] = ensureVideoFrameMetadata(buffer);
                 copyMeta->priv->videoSampleMetadata = frameMeta->priv->videoSampleMetadata;
+
+                Locker frameMetaLocker { frameMeta->priv->lock };
+                Locker copyMetaLocker { copyMeta->priv->lock };
                 copyMeta->priv->processingTimes = frameMeta->priv->processingTimes;
                 return TRUE;
             });

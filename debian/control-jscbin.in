@@ -1,0 +1,7 @@
+Package: libjavascriptcoregtk-4.0-bin
+Section: oldlibs
+Architecture: all
+Depends: libjavascriptcoregtk-bin, ${misc:Depends}
+Description: WebKitGTK JavaScript command-line interpreter (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+

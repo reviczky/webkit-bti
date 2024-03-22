@@ -1,3 +1,41 @@
+webkit2gtk (2.42.5-3) UNRELEASED; urgency=medium
+
+  * Bring all changes from the 2.43 (experimental) branch.
+  * debian/gbp.conf:
+    - Update upstream branch name.
+  * debian/control.in:
+    - Add build dependency on libdrm-dev.
+    - Replace gobject-introspection with gobject-introspection-bin.
+    - Remove build dependendency on libwpebackend-fdo, upstream no longer
+      uses it.
+    - Remove build dependencies on libseccomp-dev, bwrap, xdg-dbus-proxy
+      and ccache on m68k (see #1061879).
+    - And missing ${gir:Depends} and ${gir:Provides} to the -dev and
+      gir1.2 packages.
+  * debian/rules:
+    - GTK4 is now the default, pass -DUSE_GTK4=OFF to the GTK3 builds.
+    - Build with -DUSE_LIBDRM=OFF in the Hurd.
+    - Build with -DUSE_LIBBACKTRACE=OFF.
+  * Use the documentation from the 6.0 API build and update path of
+    installed docs, upstream no longer uses the gtk-doc dir (see webkit
+    bug #265133).
+  * Rename libwebkit2gtk-4.0-doc to libwebkitgtk-doc and
+    libjavascriptcoregtk-4.0-bin to libjavascriptcoregtk-bin.
+    - debian/control.in: add the necessary Conflicts / Breaks / Replaces.
+    - debian/control-doc.in: control file for the transitional package.
+    - debian/control-jscbin.in: control file for the transitional package.
+    - Rename debian/libwebkit2gtk-4.0-doc.* -> libwebkitgtk-doc.*
+    - Remove debian/libjavascriptcoregtk-4.0-bin.*
+    - debian/rules: Add the USE_OLD_DOC_PKG and USE_OLD_JSCBIN_PKG
+      variables and the logic to decide which packages to build.
+  * Drop debian/patches/fix-ftbfs-i386.patch, this is no longer needed.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
+  * debian/copyright:
+    - Update copyright information of all files.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 22 Mar 2024 16:17:52 +0100
+
 webkit2gtk (2.42.5-2) unstable; urgency=medium
 
   * debian/rules:

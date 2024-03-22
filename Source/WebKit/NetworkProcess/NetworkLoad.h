@@ -40,7 +40,7 @@ class NetworkLoadClient;
 class NetworkLoadScheduler;
 class NetworkProcess;
 
-class NetworkLoad final : private NetworkDataTaskClient {
+class NetworkLoad final : public NetworkDataTaskClient {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     NetworkLoad(NetworkLoadClient&, NetworkLoadParameters&&, NetworkSession&);
@@ -95,6 +95,7 @@ private:
     RefPtr<NetworkDataTask> m_task;
     WeakPtr<NetworkLoadScheduler> m_scheduler;
 
+    // FIXME: Deduplicate this with NetworkDataTask's m_previousRequest.
     WebCore::ResourceRequest m_currentRequest; // Updated on redirects.
 };
 

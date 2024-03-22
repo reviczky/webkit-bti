@@ -64,7 +64,6 @@ set(WebKit_PUBLIC_FRAMEWORK_HEADERS
     UIProcess/API/C/WKLayoutMode.h
     UIProcess/API/C/WKMediaKeySystemPermissionCallback.h
     UIProcess/API/C/WKMessageListener.h
-    UIProcess/API/C/WKMockDisplay.h
     UIProcess/API/C/WKMockMediaDevice.h
     UIProcess/API/C/WKNativeEvent.h
     UIProcess/API/C/WKNavigationActionRef.h
@@ -129,7 +128,6 @@ set(WebKit_PUBLIC_FRAMEWORK_HEADERS
     WebProcess/InjectedBundle/API/c/WKBundleFramePrivate.h
     WebProcess/InjectedBundle/API/c/WKBundleHitTestResult.h
     WebProcess/InjectedBundle/API/c/WKBundleInitialize.h
-    WebProcess/InjectedBundle/API/c/WKBundleInspector.h
     WebProcess/InjectedBundle/API/c/WKBundleNavigationAction.h
     WebProcess/InjectedBundle/API/c/WKBundleNavigationActionPrivate.h
     WebProcess/InjectedBundle/API/c/WKBundleNodeHandle.h

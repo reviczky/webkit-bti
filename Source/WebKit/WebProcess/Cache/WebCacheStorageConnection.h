@@ -26,6 +26,8 @@
 #pragma once
 
 #include <WebCore/CacheStorageConnection.h>
+#include <WebCore/ClientOrigin.h>
+#include <wtf/HashCountedSet.h>
 #include <wtf/HashMap.h>
 
 namespace IPC {
@@ -53,7 +55,7 @@ private:
     IPC::Connection& connection();
 
     // WebCore::CacheStorageConnection
-    void open(const WebCore::ClientOrigin&, const String& cacheName, WebCore::DOMCacheEngine::CacheIdentifierCallback&&) final;
+    Ref<OpenPromise> open(const WebCore::ClientOrigin&, const String& cacheName) final;
     void remove(WebCore::DOMCacheIdentifier, WebCore::DOMCacheEngine::RemoveCacheIdentifierCallback&&) final;
     void retrieveCaches(const WebCore::ClientOrigin&, uint64_t updateCounter, WebCore::DOMCacheEngine::CacheInfosCallback&&) final;
 
@@ -63,13 +65,16 @@ private:
 
     void reference(WebCore::DOMCacheIdentifier) final;
     void dereference(WebCore::DOMCacheIdentifier) final;
+    void lockStorage(const WebCore::ClientOrigin&) final;
+    void unlockStorage(const WebCore::ClientOrigin&) final;
 
     void clearMemoryRepresentation(const WebCore::ClientOrigin&, WebCore::DOMCacheEngine::CompletionCallback&&) final;
     void engineRepresentation(CompletionHandler<void(const String&)>&&) final;
     void updateQuotaBasedOnSpaceUsage(const WebCore::ClientOrigin&) final;
 
     WebCacheStorageProvider& m_provider;
-    HashSet<WebCore::DOMCacheIdentifier> m_connectedIdentifiers;
+    HashCountedSet<WebCore::DOMCacheIdentifier> m_connectedIdentifierCounters;
+    HashCountedSet<WebCore::ClientOrigin> m_clientOriginLockRequestCounters;
 };
 
 }

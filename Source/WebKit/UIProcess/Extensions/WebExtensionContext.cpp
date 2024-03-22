@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2022-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,7 @@
 
 #include "WebExtensionContextParameters.h"
 #include "WebExtensionContextProxyMessages.h"
+#include "WebPageProxy.h"
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 
@@ -37,48 +38,90 @@ namespace WebKit {
 
 using namespace WebCore;
 
-static HashMap<WebExtensionContextIdentifier, WeakPtr<WebExtensionContext>>& webExtensionContexts()
+static HashMap<WebExtensionContextIdentifier, WeakRef<WebExtensionContext>>& webExtensionContexts()
 {
-    static NeverDestroyed<HashMap<WebExtensionContextIdentifier, WeakPtr<WebExtensionContext>>> contexts;
+    static NeverDestroyed<HashMap<WebExtensionContextIdentifier, WeakRef<WebExtensionContext>>> contexts;
     return contexts;
 }
 
 WebExtensionContext* WebExtensionContext::get(WebExtensionContextIdentifier identifier)
 {
-    return webExtensionContexts().get(identifier).get();
+    return webExtensionContexts().get(identifier);
 }
 
 WebExtensionContext::WebExtensionContext()
     : m_identifier(WebExtensionContextIdentifier::generate())
 {
-    ASSERT(!webExtensionContexts().contains(m_identifier));
-    webExtensionContexts().add(m_identifier, this);
+    ASSERT(!get(m_identifier));
+    webExtensionContexts().add(m_identifier, *this);
 }
 
 WebExtensionContextParameters WebExtensionContext::parameters() const
 {
-    return WebExtensionContextParameters {
+    return {
         identifier(),
         baseURL(),
         uniqueIdentifier(),
+        extension().serializeLocalization(),
         extension().serializeManifest(),
         extension().manifestVersion(),
-        inTestingMode()
+        inTestingMode(),
+        isSessionStorageAllowedInContentScripts(),
+        backgroundPageIdentifier(),
+        popupPageIdentifiers(),
+        tabPageIdentifiers()
     };
 }
 
-WeakHashSet<WebProcessProxy> WebExtensionContext::processes(WebExtensionEventListenerType type) const
+const WebExtensionContext::UserContentControllerProxySet& WebExtensionContext::userContentControllers() const
 {
-    WeakHashSet<WebProcessProxy> processes;
-    auto page = m_eventListenerPages.find(type);
-    if (page != m_eventListenerPages.end()) {
-        for (auto entry : page->value) {
-            auto& process = entry.key.process();
-            if (process.canSendMessage())
-                processes.add(process);
+    ASSERT(isLoaded());
+
+    if (hasAccessInPrivateBrowsing())
+        return extensionController()->allUserContentControllers();
+    return extensionController()->allNonPrivateUserContentControllers();
+}
+
+bool WebExtensionContext::pageListensForEvent(const WebPageProxy& page, WebExtensionEventListenerType type, WebExtensionContentWorldType contentWorldType) const
+{
+    if (!hasAccessInPrivateBrowsing() && page.sessionID().isEphemeral())
+        return false;
+
+    auto pagesEntry = m_eventListenerPages.find({ type, contentWorldType });
+    if (pagesEntry == m_eventListenerPages.end())
+        return false;
+
+    if (!pagesEntry->value.contains(page))
+        return false;
+
+    return page.process().canSendMessage();
+}
+
+WebExtensionContext::WebProcessProxySet WebExtensionContext::processes(WebExtensionEventListenerType type, WebExtensionContentWorldType contentWorldType) const
+{
+    return processes(EventListenerTypeSet { type }, contentWorldType);
+}
+
+WebExtensionContext::WebProcessProxySet WebExtensionContext::processes(EventListenerTypeSet typeSet, WebExtensionContentWorldType contentWorldType) const
+{
+    WebProcessProxySet result;
+
+    for (auto type : typeSet) {
+        auto pagesEntry = m_eventListenerPages.find({ type, contentWorldType });
+        if (pagesEntry == m_eventListenerPages.end())
+            continue;
+
+        for (auto entry : pagesEntry->value) {
+            if (!hasAccessInPrivateBrowsing() && entry.key.sessionID().isEphemeral())
+                continue;
+
+            Ref process = entry.key.process();
+            if (process->canSendMessage())
+                result.add(WTFMove(process));
         }
     }
-    return processes;
+
+    return result;
 }
 
 } // namespace WebKit

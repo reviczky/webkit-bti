@@ -26,13 +26,12 @@
 #include "config.h"
 #include "ServiceWorkerSoftUpdateLoader.h"
 
-#if ENABLE(SERVICE_WORKER)
-
 #include "Logging.h"
 #include "NetworkCache.h"
 #include "NetworkLoad.h"
 #include "NetworkSession.h"
 #include <WebCore/AdvancedPrivacyProtections.h>
+#include <WebCore/HTTPStatusCodes.h>
 #include <WebCore/ServiceWorkerJob.h>
 #include <WebCore/TextResourceDecoder.h>
 #include <WebCore/WorkerFetchResult.h>
@@ -109,8 +108,8 @@ void ServiceWorkerSoftUpdateLoader::loadWithCacheEntry(NetworkCache::Entry& entr
         return;
     }
 
-    if (entry.buffer())
-        didReceiveBuffer(*entry.buffer(), 0);
+    if (RefPtr buffer = entry.buffer())
+        didReceiveBuffer(*buffer, 0);
     didFinishLoading({ });
 }
 
@@ -132,14 +131,14 @@ void ServiceWorkerSoftUpdateLoader::loadFromNetwork(NetworkSession& session, Res
 
 void ServiceWorkerSoftUpdateLoader::willSendRedirectedRequest(ResourceRequest&&, ResourceRequest&&, ResourceResponse&&, CompletionHandler<void(WebCore::ResourceRequest&&)>&& completionHandler)
 {
-    completionHandler({ });
     fail(ResourceError { ResourceError::Type::Cancellation });
+    completionHandler({ }); // May deallocate this ServiceWorkerSoftUpdateLoader.
 }
 
 void ServiceWorkerSoftUpdateLoader::didReceiveResponse(ResourceResponse&& response, PrivateRelayed, ResponseCompletionHandler&& completionHandler)
 {
     m_certificateInfo = *response.certificateInfo();
-    if (response.httpStatusCode() == 304 && m_cacheEntry) {
+    if (response.httpStatusCode() == httpStatus304NotModified && m_cacheEntry) {
         loadWithCacheEntry(*m_cacheEntry);
         completionHandler(PolicyAction::Ignore);
         return;
@@ -205,10 +204,8 @@ void ServiceWorkerSoftUpdateLoader::didFailLoading(const ResourceError& error)
 void ServiceWorkerSoftUpdateLoader::didComplete()
 {
     m_networkLoad = nullptr;
-    if (m_session)
-        m_session->removeSoftUpdateLoader(this);
+    if (CheckedPtr session = m_session.get())
+        session->removeSoftUpdateLoader(this);
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)

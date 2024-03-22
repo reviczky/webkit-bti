@@ -247,8 +247,7 @@ void MemoryCache::forEachResource(const Function<void(CachedResource&)>& functio
     Vector<WeakPtr<CachedResource>> allResources;
     for (auto& lruList : m_allResources) {
         allResources.reserveCapacity(allResources.size() + lruList->computeSize());
-        for (auto& resource : *lruList)
-            allResources.uncheckedAppend(resource);
+        allResources.appendRange(lruList->begin(), lruList->end());
     }
     for (auto& resource : allResources) {
         if (CachedResourceHandle resourceHandle = resource.get())
@@ -479,7 +478,7 @@ auto MemoryCache::lruListFor(CachedResource& resource) -> LRUList&
 
     m_allResources.reserveCapacity(queueIndex + 1);
     while (m_allResources.size() <= queueIndex)
-        m_allResources.uncheckedAppend(makeUnique<LRUList>());
+        m_allResources.append(makeUnique<LRUList>());
     return *m_allResources[queueIndex];
 }
 
@@ -685,8 +684,8 @@ void MemoryCache::adjustSize(bool live, long long delta)
 
 void MemoryCache::removeRequestFromSessionCaches(ScriptExecutionContext& context, const ResourceRequest& request)
 {
-    if (is<WorkerGlobalScope>(context)) {
-        auto* workerLoaderProxy = downcast<WorkerGlobalScope>(context).thread().workerLoaderProxy();
+    if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context)) {
+        auto* workerLoaderProxy = globalScope->thread().workerLoaderProxy();
         if (!workerLoaderProxy)
             return;
         workerLoaderProxy->postTaskToLoader([request = request.isolatedCopy()] (ScriptExecutionContext& context) {

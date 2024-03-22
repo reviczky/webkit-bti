@@ -54,6 +54,7 @@ public:
     RefPtr<WebCore::VideoFrame> get(RemoteVideoFrameReadReference&&);
 
     void stopListeningForIPC(Ref<RemoteVideoFrameObjectHeap>&&) { close(); }
+    void lowMemoryHandler();
 
 private:
     explicit RemoteVideoFrameObjectHeap(Ref<IPC::Connection>&&);
@@ -69,17 +70,18 @@ private:
     void pixelBuffer(RemoteVideoFrameReadReference&&, CompletionHandler<void(RetainPtr<CVPixelBufferRef>)>&&);
     void convertFrameBuffer(SharedVideoFrame&&, CompletionHandler<void(WebCore::DestinationColorSpace)>&&);
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);
-    void setSharedVideoFrameMemory(SharedMemory::Handle&&);
-#endif
+    void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
 
-    void createPixelConformerIfNeeded();
+    UniqueRef<WebCore::PixelBufferConformerCV> createPixelConformer();
+#endif
 
     const Ref<IPC::Connection> m_connection;
     IPC::ThreadSafeObjectHeap<RemoteVideoFrameIdentifier, RefPtr<WebCore::VideoFrame>> m_heap;
 #if PLATFORM(COCOA)
     SharedVideoFrameWriter m_sharedVideoFrameWriter;
     SharedVideoFrameReader m_sharedVideoFrameReader;
-    std::unique_ptr<WebCore::PixelBufferConformerCV> m_pixelBufferConformer;
+    Lock m_pixelBufferConformerLock;
+    std::unique_ptr<WebCore::PixelBufferConformerCV> m_pixelBufferConformer WTF_GUARDED_BY_LOCK(m_pixelBufferConformerLock);
 #endif
     bool m_isClosed { false };
 };

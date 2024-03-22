@@ -30,8 +30,8 @@
 
 #include "DataReference.h"
 #include "IPCUtilities.h"
-#include "SharedMemory.h"
 #include "UnixMessage.h"
+#include <WebCore/SharedMemory.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <errno.h>
@@ -172,7 +172,7 @@ bool Connection::processMessage()
     }
 
     Vector<Attachment> attachments(attachmentCount);
-    RefPtr<WebKit::SharedMemory> oolMessageBody;
+    RefPtr<WebCore::SharedMemory> oolMessageBody;
 
     size_t fdIndex = 0;
     for (size_t i = 0; i < attachmentCount; ++i) {
@@ -188,11 +188,14 @@ bool Connection::processMessage()
             return false;
         }
 
-        WebKit::SharedMemory::Handle handle;
-        handle.m_size = messageInfo.bodySize();
-        handle.m_handle = UnixFileDescriptor { m_fileDescriptors[attachmentFileDescriptorCount - 1], UnixFileDescriptor::Adopt };
+        auto fd = UnixFileDescriptor { m_fileDescriptors[attachmentFileDescriptorCount - 1], UnixFileDescriptor::Adopt };
+        if (!fd) {
+            ASSERT_NOT_REACHED();
+            return false;
+        }
 
-        oolMessageBody = WebKit::SharedMemory::map(WTFMove(handle), WebKit::SharedMemory::Protection::ReadOnly);
+        auto handle = WebCore::SharedMemory::Handle { WTFMove(fd), messageInfo.bodySize() };
+        oolMessageBody = WebCore::SharedMemory::map(WTFMove(handle), WebCore::SharedMemory::Protection::ReadOnly);
         if (!oolMessageBody) {
             ASSERT_NOT_REACHED();
             return false;
@@ -205,12 +208,12 @@ bool Connection::processMessage()
     if (messageInfo.isBodyOutOfLine())
         messageBody = reinterpret_cast<uint8_t*>(oolMessageBody->data());
 
-    auto decoder = Decoder::create(messageBody, messageInfo.bodySize(), WTFMove(attachments));
+    auto decoder = Decoder::create({ messageBody, messageInfo.bodySize() }, WTFMove(attachments));
     ASSERT(decoder);
     if (!decoder)
         return false;
 
-    processIncomingMessage(WTFMove(decoder));
+    processIncomingMessage(makeUniqueRefFromNonNullUniquePtr(WTFMove(decoder)));
 
     if (m_readBuffer.size() > messageLength) {
         memmove(m_readBuffer.data(), m_readBuffer.data() + messageLength, m_readBuffer.size() - messageLength);
@@ -405,11 +408,11 @@ bool Connection::sendOutgoingMessage(UniqueRef<Encoder>&& encoder)
 
     size_t messageSizeWithBodyInline = sizeof(MessageInfo) + (outputMessage.attachments().size() * sizeof(AttachmentInfo)) + outputMessage.bodySize();
     if (messageSizeWithBodyInline > messageMaxSize && outputMessage.bodySize()) {
-        RefPtr<WebKit::SharedMemory> oolMessageBody = WebKit::SharedMemory::allocate(outputMessage.bodySize());
+        RefPtr<WebCore::SharedMemory> oolMessageBody = WebCore::SharedMemory::allocate(outputMessage.bodySize());
         if (!oolMessageBody)
             return false;
 
-        auto handle = oolMessageBody->createHandle(WebKit::SharedMemory::Protection::ReadOnly);
+        auto handle = oolMessageBody->createHandle(WebCore::SharedMemory::Protection::ReadOnly);
         if (!handle)
             return false;
 
@@ -561,14 +564,6 @@ SocketPair createPlatformConnection(unsigned options)
 
     SocketPair socketPair = { sockets[0], sockets[1] };
     return socketPair;
-}
-
-void Connection::willSendSyncMessage(OptionSet<SendSyncOption>)
-{
-}
-
-void Connection::didReceiveSyncReply(OptionSet<SendSyncOption>)
-{
 }
 
 std::optional<Connection::ConnectionIdentifierPair> Connection::createConnectionIdentifierPair()

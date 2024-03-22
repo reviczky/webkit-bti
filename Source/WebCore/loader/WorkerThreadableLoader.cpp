@@ -118,19 +118,19 @@ WorkerThreadableLoader::MainThreadBridge::MainThreadBridge(ThreadableLoaderClien
 {
     ASSERT(m_loaderProxy);
     auto* securityOrigin = globalScope.securityOrigin();
-    auto* contentSecurityPolicy = globalScope.contentSecurityPolicy();
+    CheckedPtr contentSecurityPolicy = globalScope.contentSecurityPolicy();
 
     ASSERT(securityOrigin);
     ASSERT(contentSecurityPolicy);
 
-    auto securityOriginCopy = securityOrigin->isolatedCopy();
+    Ref securityOriginCopy = securityOrigin->isolatedCopy();
     ReportingClient* reportingClient = nullptr;
     if (auto* client = m_loaderProxy ? m_loaderProxy->reportingClient() : nullptr)
         reportingClient = client;
     else if (auto* workerScope = dynamicDowncast<WorkerGlobalScope>(globalScope))
         reportingClient = workerScope;
     auto contentSecurityPolicyIsolatedCopy = makeUnique<ContentSecurityPolicy>(globalScope.url().isolatedCopy(), nullptr, reportingClient);
-    contentSecurityPolicyIsolatedCopy->copyStateFrom(contentSecurityPolicy, ContentSecurityPolicy::ShouldMakeIsolatedCopy::Yes);
+    contentSecurityPolicyIsolatedCopy->copyStateFrom(contentSecurityPolicy.get(), ContentSecurityPolicy::ShouldMakeIsolatedCopy::Yes);
     contentSecurityPolicyIsolatedCopy->copyUpgradeInsecureRequestStateFrom(*contentSecurityPolicy, ContentSecurityPolicy::ShouldMakeIsolatedCopy::Yes);
     auto crossOriginEmbedderPolicyCopy = globalScope.crossOriginEmbedderPolicy().isolatedCopy();
 
@@ -140,7 +140,6 @@ WorkerThreadableLoader::MainThreadBridge::MainThreadBridge(ThreadableLoaderClien
     ASSERT(optionsCopy->options.initiatorContext == InitiatorContext::Document);
     optionsCopy->options.initiatorContext = InitiatorContext::Worker;
 
-#if ENABLE(SERVICE_WORKER)
     if (optionsCopy->options.serviceWorkersMode == ServiceWorkersMode::All) {
         if (is<ServiceWorkerGlobalScope>(globalScope))
             optionsCopy->options.serviceWorkersMode = ServiceWorkersMode::None;
@@ -152,12 +151,11 @@ WorkerThreadableLoader::MainThreadBridge::MainThreadBridge(ThreadableLoaderClien
         else
             optionsCopy->options.serviceWorkersMode = ServiceWorkersMode::All;
     }
-#endif
     if (!optionsCopy->options.clientIdentifier)
         optionsCopy->options.clientIdentifier = globalScope.identifier().object();
 
-    if (is<WorkerGlobalScope>(globalScope))
-        InspectorInstrumentation::willSendRequest(downcast<WorkerGlobalScope>(globalScope), m_workerRequestIdentifier, request);
+    if (auto* workerGlobalScope = dynamicDowncast<WorkerGlobalScope>(globalScope))
+        InspectorInstrumentation::willSendRequest(*workerGlobalScope, m_workerRequestIdentifier, request);
 
     if (!m_loaderProxy)
         return;
@@ -254,8 +252,8 @@ void WorkerThreadableLoader::MainThreadBridge::didReceiveResponse(ResourceLoader
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
         auto response = ResourceResponse::fromCrossThreadData(WTFMove(responseData));
         protectedWorkerClientWrapper->didReceiveResponse(identifier, response);
-        if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didReceiveResourceResponse(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, response);
+        if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context))
+            InspectorInstrumentation::didReceiveResourceResponse(*globalScope, workerRequestIdentifier, response);
     }, m_taskMode);
 }
 
@@ -264,8 +262,8 @@ void WorkerThreadableLoader::MainThreadBridge::didReceiveData(const SharedBuffer
     ScriptExecutionContext::postTaskForModeToWorkerOrWorklet(m_contextIdentifier, [protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, buffer = Ref { data }] (ScriptExecutionContext& context) {
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
         protectedWorkerClientWrapper->didReceiveData(buffer);
-        if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didReceiveData(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, buffer);
+        if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context))
+            InspectorInstrumentation::didReceiveData(*globalScope, workerRequestIdentifier, buffer);
     }, m_taskMode);
 }
 
@@ -275,8 +273,8 @@ void WorkerThreadableLoader::MainThreadBridge::didFinishLoading(ResourceLoaderId
     ScriptExecutionContext::postTaskForModeToWorkerOrWorklet(m_contextIdentifier, [protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, metrics = metrics.isolatedCopy(), identifier] (ScriptExecutionContext& context) mutable {
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
         protectedWorkerClientWrapper->didFinishLoading(identifier, metrics);
-        if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didFinishLoading(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, metrics);
+        if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context))
+            InspectorInstrumentation::didFinishLoading(*globalScope, workerRequestIdentifier, metrics);
     }, m_taskMode);
 }
 
@@ -287,8 +285,8 @@ void WorkerThreadableLoader::MainThreadBridge::didFail(const ResourceError& erro
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
         ThreadableLoader::logError(context, error, protectedWorkerClientWrapper->initiator());
         protectedWorkerClientWrapper->didFail(error);
-        if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didFailLoading(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, error);
+        if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context))
+            InspectorInstrumentation::didFailLoading(*globalScope, workerRequestIdentifier, error);
     }, m_taskMode);
 }
 
@@ -300,8 +298,8 @@ void WorkerThreadableLoader::MainThreadBridge::didFinishTiming(const ResourceTim
         ASSERT(!resourceTiming.initiatorType().isEmpty());
 
         // No need to notify clients, just add the performance timing entry.
-        if (is<WorkerGlobalScope>(context))
-            downcast<WorkerGlobalScope>(context).performance().addResourceTiming(WTFMove(resourceTiming));
+        if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(context))
+            globalScope->performance().addResourceTiming(WTFMove(resourceTiming));
     }, m_taskMode);
 }
 

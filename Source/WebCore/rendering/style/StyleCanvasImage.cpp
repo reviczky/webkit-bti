@@ -49,7 +49,8 @@ StyleCanvasImage::~StyleCanvasImage()
 
 bool StyleCanvasImage::operator==(const StyleImage& other) const
 {
-    return is<StyleCanvasImage>(other) && equals(downcast<StyleCanvasImage>(other));
+    auto* otherCanvasImage = dynamicDowncast<StyleCanvasImage>(other);
+    return otherCanvasImage && equals(*otherCanvasImage);
 }
 
 bool StyleCanvasImage::equals(const StyleCanvasImage& other) const
@@ -71,7 +72,7 @@ void StyleCanvasImage::load(CachedResourceLoader&, const ResourceLoaderOptions&)
 {
 }
 
-RefPtr<Image> StyleCanvasImage::image(const RenderElement* renderer, const FloatSize&) const
+RefPtr<Image> StyleCanvasImage::image(const RenderElement* renderer, const FloatSize&, bool) const
 {
     if (!renderer)
         return &Image::nullImage();

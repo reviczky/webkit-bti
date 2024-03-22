@@ -67,7 +67,7 @@ class ShaderModule;
 class Texture;
 
 // https://gpuweb.github.io/gpuweb/#gpudevice
-class Device : public WGPUDeviceImpl, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device> {
+class Device : public WGPUDeviceImpl, public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device>, public CanMakeWeakPtr<Device> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     static Ref<Device> create(id<MTLDevice>, String&& deviceLabel, HardwareCapabilities&&, Adapter&);
@@ -79,10 +79,10 @@ public:
     ~Device();
 
     Ref<BindGroup> createBindGroup(const WGPUBindGroupDescriptor&);
-    Ref<BindGroupLayout> createBindGroupLayout(const WGPUBindGroupLayoutDescriptor&);
+    Ref<BindGroupLayout> createBindGroupLayout(const WGPUBindGroupLayoutDescriptor&, bool isGeneratedLayout = false);
     Ref<Buffer> createBuffer(const WGPUBufferDescriptor&);
     Ref<CommandEncoder> createCommandEncoder(const WGPUCommandEncoderDescriptor&);
-    Ref<ComputePipeline> createComputePipeline(const WGPUComputePipelineDescriptor&);
+    Ref<ComputePipeline> createComputePipeline(const WGPUComputePipelineDescriptor&, bool isAsync = false);
     void createComputePipelineAsync(const WGPUComputePipelineDescriptor&, CompletionHandler<void(WGPUCreatePipelineAsyncStatus, Ref<ComputePipeline>&&, String&& message)>&& callback);
     Ref<ExternalTexture> createExternalTexture(const WGPUExternalTextureDescriptor&);
     Ref<PipelineLayout> createPipelineLayout(const WGPUPipelineLayoutDescriptor&);
@@ -90,7 +90,7 @@ public:
     Ref<RenderBundleEncoder> createRenderBundleEncoder(const WGPURenderBundleEncoderDescriptor&);
     Ref<PipelineLayout> extracted(const Vector<Vector<WGPUBindGroupLayoutEntry>> &bindGroupEntries);
 
-    Ref<RenderPipeline> createRenderPipeline(const WGPURenderPipelineDescriptor&);
+    Ref<RenderPipeline> createRenderPipeline(const WGPURenderPipelineDescriptor&, bool isAsync = false);
     void createRenderPipelineAsync(const WGPURenderPipelineDescriptor&, CompletionHandler<void(WGPUCreatePipelineAsyncStatus, Ref<RenderPipeline>&&, String&& message)>&& callback);
     Ref<Sampler> createSampler(const WGPUSamplerDescriptor&);
     Ref<ShaderModule> createShaderModule(const WGPUShaderModuleDescriptor&);
@@ -100,9 +100,10 @@ public:
     size_t enumerateFeatures(WGPUFeatureName* features);
     bool getLimits(WGPUSupportedLimits&);
     Queue& getQueue();
-    bool hasFeature(WGPUFeatureName);
+    bool hasFeature(WGPUFeatureName) const;
     bool popErrorScope(CompletionHandler<void(WGPUErrorType, String&&)>&& callback);
     void pushErrorScope(WGPUErrorFilter);
+    void setDeviceLostCallback(Function<void(WGPUDeviceLostReason, String&&)>&&);
     void setUncapturedErrorCallback(Function<void(WGPUErrorType, String&&)>&&);
     void setLabel(String&&);
 
@@ -122,7 +123,14 @@ public:
     bool hasUnifiedMemory() const { return m_device.hasUnifiedMemory; }
 
     uint32_t maxBuffersPlusVertexBuffersForVertexStage() const;
+    uint32_t maxBuffersForFragmentStage() const;
+    uint32_t maxBuffersForComputeStage() const;
     uint32_t vertexBufferIndexForBindGroup(uint32_t groupIndex) const;
+
+    static bool isStencilOnlyFormat(MTLPixelFormat);
+    bool shouldStopCaptureAfterSubmit();
+    id<MTLBuffer> placeholderBuffer() const;
+    id<MTLTexture> placeholderTexture() const;
 
 private:
     Device(id<MTLDevice>, id<MTLCommandQueue> defaultQueue, HardwareCapabilities&&, Adapter&);
@@ -132,7 +140,7 @@ private:
     ErrorScope* currentErrorScope(WGPUErrorFilter);
     bool validatePopErrorScope() const;
     id<MTLBuffer> safeCreateBuffer(NSUInteger length, MTLStorageMode, MTLCPUCacheMode = MTLCPUCacheModeDefaultCache, MTLHazardTrackingMode = MTLHazardTrackingModeDefault) const;
-    bool validateCreateTexture(const WGPUTextureDescriptor&, const Vector<WGPUTextureFormat>& viewFormats);
+    NSString *errorValidatingTextureCreation(const WGPUTextureDescriptor&, const Vector<WGPUTextureFormat>& viewFormats);
     bool validateCreateIOSurfaceBackedTexture(const WGPUTextureDescriptor&, const Vector<WGPUTextureFormat>& viewFormats, IOSurfaceRef backing);
 
     bool validateRenderPipeline(const WGPURenderPipelineDescriptor&);
@@ -171,6 +179,9 @@ private:
     id<NSObject> m_deviceObserver { nil };
 
     HardwareCapabilities m_capabilities { };
+
+    id<MTLBuffer> m_placeholderBuffer { nil };
+    id<MTLTexture> m_placeholderTexture { nil };
 
     const Ref<Adapter> m_adapter;
 #if HAVE(COREVIDEO_METAL_SUPPORT)

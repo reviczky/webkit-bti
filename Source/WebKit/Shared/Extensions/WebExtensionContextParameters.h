@@ -28,7 +28,10 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #include "APIData.h"
+#include "WebExtensionContext.h"
 #include "WebExtensionContextIdentifier.h"
+#include "WebExtensionTabIdentifier.h"
+#include "WebExtensionWindowIdentifier.h"
 #include <wtf/URL.h>
 
 namespace WebKit {
@@ -38,9 +41,17 @@ struct WebExtensionContextParameters {
 
     URL baseURL;
     String uniqueIdentifier;
+
+    Ref<API::Data> localizationJSON;
     Ref<API::Data> manifestJSON;
-    double manifestVersion;
-    bool testingMode;
+
+    double manifestVersion { 0 };
+    bool testingMode { false };
+    bool isSessionStorageAllowedInContentScripts { false };
+
+    std::optional<WebCore::PageIdentifier> backgroundPageIdentifier;
+    Vector<WebExtensionContext::PageIdentifierTuple> popupPageIdentifiers;
+    Vector<WebExtensionContext::PageIdentifierTuple> tabPageIdentifiers;
 };
 
 } // namespace WebKit

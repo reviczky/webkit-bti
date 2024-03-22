@@ -65,7 +65,7 @@ enum SandboxFlag {
     SandboxAll                  = -1 // Mask with all bits set to 1.
 };
 
-typedef int SandboxFlags;
+using SandboxFlags = int;
 
 class SecurityContext {
 public:
@@ -74,6 +74,7 @@ public:
 
     SandboxFlags sandboxFlags() const { return m_sandboxFlags; }
     ContentSecurityPolicy* contentSecurityPolicy() { return m_contentSecurityPolicy.get(); }
+    CheckedPtr<ContentSecurityPolicy> checkedContentSecurityPolicy();
 
     bool isSecureTransitionTo(const URL&) const;
 
@@ -107,6 +108,7 @@ public:
     virtual void inheritPolicyContainerFrom(const PolicyContainer&);
 
     WEBCORE_EXPORT SecurityOrigin* securityOrigin() const;
+    WEBCORE_EXPORT RefPtr<SecurityOrigin> protectedSecurityOrigin() const;
 
     static SandboxFlags parseSandboxPolicy(StringView policy, String& invalidTokensErrorMessage);
     static bool isSupportedSandboxPolicy(StringView);

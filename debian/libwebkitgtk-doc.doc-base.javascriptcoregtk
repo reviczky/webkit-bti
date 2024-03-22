@@ -1,0 +1,9 @@
+Document: javascriptcoregtk
+Title: JavaScriptCore GLib Reference Manual
+Author: WebKitGTK development team
+Abstract: This is the reference manual of the JavaScriptCore GLib API
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/libwebkitgtk-doc/html/javascriptcoregtk-6.0/index.html
+Files: /usr/share/doc/libwebkitgtk-doc/html/javascriptcoregtk-6.0/*.html

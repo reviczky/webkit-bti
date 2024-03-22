@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(SERVICE_WORKER)
-
 #include "ClientOrigin.h"
 #include "ContentSecurityPolicyResponseHeaders.h"
 #include "CrossOriginEmbedderPolicy.h"
@@ -56,7 +54,7 @@ struct ServiceWorkerJobDataIdentifier;
 enum class WorkerThreadMode : bool;
 enum class WorkerType : bool;
 
-class SWServerWorker : public RefCounted<SWServerWorker> {
+class SWServerWorker : public RefCounted<SWServerWorker>, public CanMakeWeakPtr<SWServerWorker> {
 public:
     template <typename... Args> static Ref<SWServerWorker> create(Args&&... args)
     {
@@ -114,7 +112,7 @@ public:
     bool isSkipWaitingFlagSet() const { return m_isSkipWaitingFlagSet; }
 
     WEBCORE_EXPORT static SWServerWorker* existingWorkerForIdentifier(ServiceWorkerIdentifier);
-    static HashMap<ServiceWorkerIdentifier, SWServerWorker*>& allWorkers();
+    static HashMap<ServiceWorkerIdentifier, WeakRef<SWServerWorker>>& allWorkers();
 
     const ServiceWorkerData& data() const { return m_data; }
     ServiceWorkerContextData contextData() const;
@@ -164,6 +162,8 @@ private:
     void terminateIfPossible();
     bool shouldBeTerminated() const;
 
+    RefPtr<SWServer> protectedServer() const;
+
     WeakPtr<SWServer> m_server;
     ServiceWorkerRegistrationKey m_registrationKey;
     WeakPtr<SWServerRegistration> m_registration;
@@ -192,5 +192,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(SERVICE_WORKER)

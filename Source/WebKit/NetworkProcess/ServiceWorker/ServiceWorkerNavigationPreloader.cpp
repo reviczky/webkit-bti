@@ -26,14 +26,13 @@
 #include "config.h"
 #include "ServiceWorkerNavigationPreloader.h"
 
-#if ENABLE(SERVICE_WORKER)
-
 #include "DownloadManager.h"
 #include "Logging.h"
 #include "NetworkCache.h"
 #include "NetworkLoad.h"
 #include "NetworkSession.h"
 #include "PrivateRelayed.h"
+#include <WebCore/HTTPStatusCodes.h>
 #include <WebCore/NavigationPreloadState.h>
 
 namespace WebKit {
@@ -65,7 +64,8 @@ void ServiceWorkerNavigationPreloader::start()
     if (m_session->cache()) {
         NetworkCache::GlobalFrameID globalID { m_parameters.webPageProxyID, m_parameters.webPageID, m_parameters.webFrameID };
         m_session->cache()->retrieve(m_parameters.request, globalID, m_parameters.isNavigatingToAppBoundDomain, m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections, [this, weakThis = WeakPtr { *this }](auto&& entry, auto&&) mutable {
-            if (!weakThis || m_isCancelled)
+            CheckedPtr checkedThis = weakThis.get();
+            if (!checkedThis || m_isCancelled)
                 return;
 
             if (entry && !entry->needsValidation()) {
@@ -168,7 +168,7 @@ void ServiceWorkerNavigationPreloader::didReceiveResponse(ResourceResponse&& res
     if (response.isRedirection())
         response.setTainting(ResourceResponse::Tainting::Opaqueredirect);
 
-    if (response.httpStatusCode() == 304 && m_cacheEntry) {
+    if (response.httpStatusCode() == httpStatus304NotModified && m_cacheEntry) {
         auto cacheEntry = WTFMove(m_cacheEntry);
         loadWithCacheEntry(*cacheEntry);
         completionHandler(PolicyAction::Ignore);
@@ -256,5 +256,3 @@ bool ServiceWorkerNavigationPreloader::convertToDownload(DownloadManager& manage
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)

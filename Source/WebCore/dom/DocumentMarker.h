@@ -25,6 +25,7 @@
 #include <variant>
 #include <wtf/Forward.h>
 #include <wtf/OptionSet.h>
+#include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -35,9 +36,9 @@ namespace WebCore {
 
 // A range of a node within a document that is "marked", such as the range of a misspelled word.
 // It optionally includes a description that could be displayed in the user interface.
-class DocumentMarker {
+class DocumentMarker : public CanMakeWeakPtr<DocumentMarker> {
 public:
-    enum MarkerType {
+    enum class Type : uint32_t {
         Spelling = 1 << 0,
         Grammar = 1 << 1,
         TextMatch = 1 << 2,
@@ -81,9 +82,12 @@ public:
         // This marker maintains state for the platform text checker.
         PlatformTextChecking = 1 << 15,
 #endif
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+        UnifiedTextReplacement = 1 << 16,
+#endif
     };
 
-    static constexpr OptionSet<MarkerType> allMarkers();
+    static constexpr OptionSet<Type> allMarkers();
 
     struct DictationData {
         DictationContext context;
@@ -109,9 +113,9 @@ public:
 #endif
     >;
 
-    DocumentMarker(MarkerType, OffsetRange, Data&& = { });
+    DocumentMarker(Type, OffsetRange, Data&& = { });
 
-    MarkerType type() const { return m_type; }
+    Type type() const { return m_type; }
     unsigned startOffset() const { return m_range.start; }
     unsigned endOffset() const { return m_range.end; }
 
@@ -127,40 +131,43 @@ public:
     void shiftOffsets(int delta);
 
 private:
-    MarkerType m_type;
+    Type m_type;
     OffsetRange m_range;
     Data m_data;
 };
 
-constexpr auto DocumentMarker::allMarkers() -> OptionSet<MarkerType>
+constexpr auto DocumentMarker::allMarkers() -> OptionSet<Type>
 {
     return {
-        AcceptedCandidate,
-        Autocorrected,
-        CorrectionIndicator,
-        DeletedAutocorrection,
-        DictationAlternatives,
-        DraggedContent,
-        Grammar,
-        RejectedCorrection,
-        Replacement,
-        SpellCheckingExemption,
-        Spelling,
-        TextMatch,
+        Type::AcceptedCandidate,
+        Type::Autocorrected,
+        Type::CorrectionIndicator,
+        Type::DeletedAutocorrection,
+        Type::DictationAlternatives,
+        Type::DraggedContent,
+        Type::Grammar,
+        Type::RejectedCorrection,
+        Type::Replacement,
+        Type::SpellCheckingExemption,
+        Type::Spelling,
+        Type::TextMatch,
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
-        TelephoneNumber,
+        Type::TelephoneNumber,
 #endif
 #if PLATFORM(IOS_FAMILY)
-        DictationPhraseWithAlternatives,
-        DictationResult,
+        Type::DictationPhraseWithAlternatives,
+        Type::DictationResult,
 #endif
 #if ENABLE(PLATFORM_DRIVEN_TEXT_CHECKING)
-        PlatformTextChecking
+        Type::PlatformTextChecking,
+#endif
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+        Type::UnifiedTextReplacement,
 #endif
     };
 }
 
-inline DocumentMarker::DocumentMarker(MarkerType type, OffsetRange range, Data&& data)
+inline DocumentMarker::DocumentMarker(Type type, OffsetRange range, Data&& data)
     : m_type(type)
     , m_range(range)
     , m_data(WTFMove(data))

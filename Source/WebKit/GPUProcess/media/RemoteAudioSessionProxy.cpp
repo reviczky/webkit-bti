@@ -96,8 +96,11 @@ void RemoteAudioSessionProxy::tryToSetActive(bool active, SetActiveCompletion&& 
 {
     auto success = audioSessionManager().tryToSetActiveForProcess(*this, active);
     bool hasActiveChanged = success && m_active != active;
-    if (success)
+    if (success) {
         m_active = active;
+        if (m_active)
+            m_isInterrupted = false;
+    }
 
     completion(success);
 
@@ -143,6 +146,11 @@ void RemoteAudioSessionProxy::endInterruptionRemote(AudioSession::MayResume mayR
 RemoteAudioSessionProxyManager& RemoteAudioSessionProxy::audioSessionManager()
 {
     return m_gpuConnection.gpuProcess().audioSessionManager();
+}
+
+bool RemoteAudioSessionProxy::allowTestOnlyIPC()
+{
+    return m_gpuConnection.allowTestOnlyIPC();
 }
 
 IPC::Connection& RemoteAudioSessionProxy::connection()

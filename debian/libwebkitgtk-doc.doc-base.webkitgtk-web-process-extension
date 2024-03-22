@@ -1,0 +1,9 @@
+Document: webkitgtk-web-process-extension
+Title: WebKit web extension and DOM Reference Manual
+Author: WebKitGTK development team
+Abstract: This is the reference manual of the WebKit web extension and DOM library
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/libwebkitgtk-doc/html/webkitgtk-web-process-extension-6.0/index.html
+Files: /usr/share/doc/libwebkitgtk-doc/html/webkitgtk-web-process-extension-6.0/*.html

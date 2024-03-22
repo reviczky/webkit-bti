@@ -7,14 +7,15 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
 Build-Depends: debhelper-compat (= 13),
-               ccache [!i386],
-               bubblewrap [!alpha !sh4 !sparc64 !hurd-any],
-               xdg-dbus-proxy [!alpha !sh4 !sparc64 !hurd-any],
-               libseccomp-dev [!alpha !sh4 !sparc64 !hurd-any],
+               ccache [!i386 !m68k],
+               bubblewrap [!alpha !m68k !sh4 !sparc64 !hurd-any],
+               xdg-dbus-proxy [!alpha !m68k !sh4 !sparc64 !hurd-any],
+               libseccomp-dev [!alpha !m68k !sh4 !sparc64 !hurd-any],
                cmake (>= 3.16),
                libglib2.0-dev,
                libharfbuzz-dev,
                libcairo2-dev,
+               libdrm-dev [linux-any],
                libfontconfig-dev,
                libfreetype-dev,
                libicu-dev,
@@ -30,7 +31,6 @@ Build-Depends: debhelper-compat (= 13),
                libsystemd-dev [linux-any],
                libgudev-1.0-dev [linux-any],
                libwoff-dev,
-               libwpebackend-fdo-1.0-dev [linux-any],
                gperf,
                bison,
                flex,
@@ -48,7 +48,7 @@ Build-Depends: debhelper-compat (= 13),
                libgstreamer-plugins-bad1.0-dev (>= 1.20.0),
                libenchant-2-dev,
                libsecret-1-dev,
-               gobject-introspection,
+               gobject-introspection-bin,
                libgirepository1.0-dev,
                ninja-build,
                libegl-dev,
@@ -61,28 +61,33 @@ Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git
 Homepage: https://webkitgtk.org/
 
-Package: libjavascriptcoregtk-4.0-bin
+Package: @LIBJSCBIN_PKG@
 Section: interpreters
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends},
+Depends: @LIBJSCBIN_DEP_PKG@ (= ${binary:Version}),
+         ${shlibs:Depends},
          ${misc:Depends}
+Conflicts: ${jscbin:Conflicts}
+Breaks: ${jscbin:Replaces}
+Replaces: ${jscbin:Replaces}
 Description: JavaScript engine library from WebKitGTK - command-line interpreter
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 4.0).
- .
  This package provides jsc, a command-line JavaScript interpreter.
 
-Package: libwebkit2gtk-4.0-doc
+Package: @LIBWEBKITGTKDOC_PKG@
 Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
+Conflicts: ${wkdoc:Conflicts}
+Breaks: ${wkdoc:Replaces}
+Replaces: ${wkdoc:Replaces}
 Suggests: devhelp
 Description: Web content engine library for GTK - documentation
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
@@ -94,8 +99,7 @@ Description: Web content engine library for GTK - documentation
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  .
- This package contains the documentation and is valid for versions 4.0,
- 4.1 and 6.0 of the API.
+ This package contains the documentation.
 
 Package: webkit2gtk-driver
 Architecture: any

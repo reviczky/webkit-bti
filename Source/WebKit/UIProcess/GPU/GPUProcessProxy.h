@@ -30,7 +30,6 @@
 #include "AuxiliaryProcessProxy.h"
 #include "ProcessLauncher.h"
 #include "ProcessThrottler.h"
-#include "ProcessThrottlerClient.h"
 #include "ShareableBitmap.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/IntDegrees.h>
@@ -65,19 +64,19 @@ class WebsiteDataStore;
 
 struct GPUProcessConnectionParameters;
 struct GPUProcessCreationParameters;
+struct GPUProcessPreferencesForWebProcess;
 
-class GPUProcessProxy final : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
+class GPUProcessProxy final : public AuxiliaryProcessProxy {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(GPUProcessProxy);
     friend LazyNeverDestroyed<GPUProcessProxy>;
 public:
+    static void keepProcessAliveTemporarily();
     static Ref<GPUProcessProxy> getOrCreate();
     static GPUProcessProxy* singletonIfCreated();
     ~GPUProcessProxy();
 
     void createGPUProcessConnection(WebProcessProxy&, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&);
-    void updateWebGPUEnabled(WebProcessProxy&, bool webGPUEnabled);
-    void updateDOMRenderingEnabled(WebProcessProxy&, bool isDOMRenderingEnabled);
 
     ProcessThrottler& throttler() final { return m_throttler; }
     void updateProcessAssertion();
@@ -94,7 +93,7 @@ public:
     void setMockMediaDeviceIsEphemeral(const String&, bool);
     void resetMockMediaDevices();
     void setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool isMicrophoneInterrupted);
-    void triggerMockMicrophoneConfigurationChange();
+    void triggerMockCaptureConfigurationChange(bool forMicrophone, bool forDisplay);
     void updateSandboxAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture);
 #endif
 
@@ -121,7 +120,7 @@ public:
     void webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&&);
 
 #if ENABLE(VIDEO)
-    void requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier, WebCore::MediaPlayerIdentifier, CompletionHandler<void(ShareableBitmap::Handle&&)>&&);
+    void requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier, WebCore::MediaPlayerIdentifier, CompletionHandler<void(std::optional<ShareableBitmap::Handle>&&)>&&);
 #endif
 
 #if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)

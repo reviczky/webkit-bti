@@ -56,7 +56,6 @@ public:
 protected:
     void initialize();
 
-    constexpr static auto CreateTextTrackCueBox = CreateHTMLElement | NodeFlag::HasCustomStyleResolveCallbacks;
     TextTrackCueBox(Document&, TextTrackCue&);
     ~TextTrackCueBox() { }
 
@@ -107,7 +106,7 @@ public:
     bool isEqual(const TextTrackCue&, CueMatchRules) const;
 
     void willChange();
-    virtual void didChange();
+    virtual void didChange(bool = false);
 
     virtual RefPtr<TextTrackCueBox> getDisplayTree();
     virtual void removeDisplayTree();

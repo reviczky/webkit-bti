@@ -20,9 +20,10 @@ Section: libdevel
 Architecture: any
 Multi-Arch: same
 Depends: @LIBJSC_PKG@ (= ${binary:Version}),
-         gir1.2-javascriptcoregtk-@WK_API_VERSION@ (= ${binary:Version}),
          libglib2.0-dev,
+         ${gir:Depends},
          ${misc:Depends}
+Provides: ${gir:Provides}
 Description: JavaScript engine library from WebKitGTK - development files
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
@@ -37,9 +38,10 @@ Package: gir1.2-javascriptcoregtk-@WK_API_VERSION@
 Section: introspection
 Architecture: any
 Multi-Arch: same
-Depends: ${gir:Depends},
-         @LIBJSC_PKG@ (= ${binary:Version}),
+Depends: @LIBJSC_PKG@ (= ${binary:Version}),
+         ${gir:Depends},
          ${misc:Depends}
+Provides: ${gir:Provides}
 Description: JavaScript engine library from WebKitGTK - GObject introspection data
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
@@ -89,11 +91,12 @@ Section: libdevel
 Architecture: any
 Multi-Arch: same
 Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
-         gir1.2-@WEBKIT@-@WK_API_VERSION@ (= ${binary:Version}),
          libgtk-@GTK_VERSION@-dev,
          @SOUPDEV_PKG@,
          libjavascriptcoregtk-@WK_API_VERSION@-dev (= ${binary:Version}),
+         ${gir:Depends},
          ${misc:Depends}
+Provides: ${gir:Provides}
 Description: Web content engine library for GTK - development files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -112,10 +115,10 @@ Package: gir1.2-@WEBKIT@-@WK_API_VERSION@
 Section: introspection
 Architecture: any
 Multi-Arch: same
-Depends: gir1.2-javascriptcoregtk-@WK_API_VERSION@ (= ${binary:Version}),
-         @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
+Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
+Provides: ${gir:Provides}
 Description: Web content engine library for GTK - GObject introspection data
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in

@@ -28,13 +28,13 @@
 #if USE(EGL)
 
 #include "AcceleratedBackingStore.h"
-
+#include "DMABufRendererBufferFormat.h"
 #include "MessageReceiver.h"
 #include <WebCore/IntSize.h>
 #include <WebCore/RefPtrCairo.h>
 #include <gtk/gtk.h>
-#include <wtf/CompletionHandler.h>
 #include <wtf/OptionSet.h>
+#include <wtf/RefCounted.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/unix/UnixFileDescriptor.h>
 
@@ -64,6 +64,9 @@ class AcceleratedBackingStoreDMABuf final : public AcceleratedBackingStore, publ
 public:
     static OptionSet<DMABufRendererBufferMode> rendererBufferMode();
     static bool checkRequirements();
+#if USE(GBM)
+    static Vector<DMABufRendererBufferFormat> preferredBufferFormats();
+#endif
     static std::unique_ptr<AcceleratedBackingStoreDMABuf> create(WebPageProxy&);
     ~AcceleratedBackingStoreDMABuf();
 private:
@@ -72,133 +75,164 @@ private:
     // IPC::MessageReceiver.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
-    void configure(WTF::UnixFileDescriptor&&, WTF::UnixFileDescriptor&&, WTF::UnixFileDescriptor&&, const WebCore::IntSize&, uint32_t format, uint32_t offset, uint32_t stride, uint64_t modifier);
-    void configureSHM(ShareableBitmapHandle&&, ShareableBitmapHandle&&, ShareableBitmapHandle&&);
-    void frame();
-    void willDisplayFrame();
+    void didCreateBuffer(uint64_t id, const WebCore::IntSize&, uint32_t format, Vector<WTF::UnixFileDescriptor>&&, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier);
+    void didCreateBufferSHM(uint64_t id, ShareableBitmapHandle&&);
+    void didDestroyBuffer(uint64_t id);
+    void frame(uint64_t id);
     void frameDone();
     void ensureGLContext();
+    bool prepareForRendering();
 
 #if USE(GTK4)
     void snapshot(GtkSnapshot*) override;
 #else
     bool paint(cairo_t*, const WebCore::IntRect&) override;
 #endif
-    void realize() override;
     void unrealize() override;
-    bool makeContextCurrent() override;
     void update(const LayerTreeContext&) override;
 
-    class RenderSource {
-        WTF_MAKE_FAST_ALLOCATED;
+    class Buffer : public RefCounted<Buffer> {
     public:
-        virtual ~RenderSource() = default;
-        virtual void frame() = 0;
-        virtual void willDisplayFrame() = 0;
-        virtual bool prepareForRendering() = 0;
-#if USE(GTK4)
-        virtual void snapshot(GtkSnapshot*) const = 0;
-#else
-        virtual void paint(GtkWidget*, cairo_t*, const WebCore::IntRect&) const = 0;
-#endif
+        virtual ~Buffer() = default;
 
+        enum class Type {
+#if GTK_CHECK_VERSION(4, 13, 4)
+            DmaBuf,
+#endif
+            EglImage,
+#if USE(GBM)
+            Gbm,
+#endif
+            SharedMemory
+        };
+
+        virtual Type type() const = 0;
+        virtual void didUpdateContents() = 0;
+#if USE(GTK4)
+        virtual GdkTexture* texture() const { return nullptr; }
+#else
+        virtual unsigned textureID() const { return 0; }
+#endif
+        virtual cairo_surface_t* surface() const { return nullptr; }
+
+        uint64_t id() const { return m_id; }
         const WebCore::IntSize size() const { return m_size; }
+        float deviceScaleFactor() const { return m_deviceScaleFactor; }
+        float unscaledWidth() const { return static_cast<float>(m_size.width() / m_deviceScaleFactor); }
+        float unscaledHeight() const { return static_cast<float>(m_size.height() / m_deviceScaleFactor); }
 
     protected:
-        RenderSource(const WebCore::IntSize&, float deviceScaleFactor);
+        Buffer(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor);
 
+        uint64_t m_id { 0 };
         WebCore::IntSize m_size;
         float m_deviceScaleFactor { 1 };
     };
 
-    class Texture final : public RenderSource {
+#if GTK_CHECK_VERSION(4, 13, 4)
+    class BufferDMABuf final : public Buffer {
     public:
-        Texture(GdkGLContext*, const WTF::UnixFileDescriptor&, const WTF::UnixFileDescriptor&, const WTF::UnixFileDescriptor&, const WebCore::IntSize&, uint32_t format, uint32_t offset, uint32_t stride, uint64_t modifier, float deviceScaleFactor);
-        ~Texture();
-
-        unsigned texture() const { return m_textureID; }
+        static RefPtr<Buffer> create(uint64_t id, GdkDisplay*, const WebCore::IntSize&, float deviceScaleFactor, uint32_t format, Vector<WTF::UnixFileDescriptor>&&, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier);
+        ~BufferDMABuf() = default;
 
     private:
-        void frame() override;
-        void willDisplayFrame() override;
-        bool prepareForRendering() override;
-#if USE(GTK4)
-        void snapshot(GtkSnapshot*) const override;
-#else
-        void paint(GtkWidget*, cairo_t*, const WebCore::IntRect&) const override;
+        BufferDMABuf(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor, Vector<WTF::UnixFileDescriptor>&&, GRefPtr<GdkDmabufTextureBuilder>&&);
+
+        Buffer::Type type() const override { return Buffer::Type::DmaBuf; }
+        void didUpdateContents() override;
+        GdkTexture* texture() const override { return m_texture.get(); }
+
+        Vector<WTF::UnixFileDescriptor> m_fds;
+        GRefPtr<GdkDmabufTextureBuilder> m_builder;
+        GRefPtr<GdkTexture> m_texture;
+    };
 #endif
 
-        GRefPtr<GdkGLContext> m_context;
+    class BufferEGLImage final : public Buffer {
+    public:
+        static RefPtr<Buffer> create(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor, uint32_t format, Vector<WTF::UnixFileDescriptor>&&, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier);
+        ~BufferEGLImage();
+
+    private:
+        BufferEGLImage(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor, Vector<WTF::UnixFileDescriptor>&&, EGLImage);
+
+        Buffer::Type type() const override { return Buffer::Type::EglImage; }
+        void didUpdateContents() override;
+#if USE(GTK4)
+        GdkTexture* texture() const override { return m_texture.get(); }
+#else
+        unsigned textureID() const override { return m_textureID; }
+#endif
+
+        Vector<WTF::UnixFileDescriptor> m_fds;
+        EGLImage m_image { nullptr };
+#if USE(GTK4)
+        GRefPtr<GdkTexture> m_texture;
+#else
         unsigned m_textureID { 0 };
-        EGLImage m_backImage { nullptr };
-        EGLImage m_frontImage { nullptr };
-        EGLImage m_displayImage { nullptr };
-#if USE(GTK4)
-        GRefPtr<GdkTexture> m_texture[2];
-        uint16_t m_textureIndex : 1;
 #endif
     };
 
-    class Surface final : public RenderSource {
-    public:
 #if USE(GBM)
-        Surface(const WTF::UnixFileDescriptor&, const WTF::UnixFileDescriptor&, const WTF::UnixFileDescriptor&, const WebCore::IntSize&, uint32_t format, uint32_t offset, uint32_t stride, float deviceScaleFactor);
-#endif
-        Surface(RefPtr<ShareableBitmap>&, RefPtr<ShareableBitmap>&, RefPtr<ShareableBitmap>&, float deviceScaleFactor);
-        ~Surface();
-
-        cairo_surface_t* surface() const { return m_surface.get(); }
+    class BufferGBM final : public Buffer {
+    public:
+        static RefPtr<Buffer> create(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor, uint32_t format, WTF::UnixFileDescriptor&&, uint32_t stride);
+        ~BufferGBM();
 
     private:
-        void frame() override;
-        void willDisplayFrame() override;
-        bool prepareForRendering() override;
-#if USE(GTK4)
-        void snapshot(GtkSnapshot*) const override;
-#else
-        void paint(GtkWidget*, cairo_t*, const WebCore::IntRect&) const override;
-#endif
+        BufferGBM(uint64_t id, const WebCore::IntSize&, float deviceScaleFactor, WTF::UnixFileDescriptor&&, struct gbm_bo*);
 
-#if USE(GBM)
-        RefPtr<cairo_surface_t> map(struct gbm_bo*) const;
-#endif
-        RefPtr<cairo_surface_t> map(RefPtr<ShareableBitmap>&) const;
+        Buffer::Type type() const override { return Buffer::Type::Gbm; }
+        void didUpdateContents() override;
+        cairo_surface_t* surface() const override { return m_surface.get(); }
 
-#if USE(GBM)
-        struct gbm_bo* m_backBuffer { nullptr };
-        struct gbm_bo* m_frontBuffer { nullptr };
-        struct gbm_bo* m_displayBuffer { nullptr };
-#endif
-        RefPtr<ShareableBitmap> m_backBitmap;
-        RefPtr<ShareableBitmap> m_frontBitmap;
-        RefPtr<ShareableBitmap> m_displayBitmap;
+        WTF::UnixFileDescriptor m_fd;
+        struct gbm_bo* m_buffer { nullptr };
         RefPtr<cairo_surface_t> m_surface;
-        RefPtr<cairo_surface_t> m_backSurface;
-        RefPtr<cairo_surface_t> m_displaySurface;
+    };
+#endif
+
+    class BufferSHM final : public Buffer {
+    public:
+        static RefPtr<Buffer> create(uint64_t id, RefPtr<ShareableBitmap>&&, float deviceScaleFactor);
+        ~BufferSHM() = default;
+
+    private:
+        BufferSHM(uint64_t id, RefPtr<ShareableBitmap>&&, float deviceScaleFactor);
+
+        Buffer::Type type() const override { return Buffer::Type::SharedMemory; }
+        void didUpdateContents() override;
+        cairo_surface_t* surface() const override { return m_surface.get(); }
+
+        RefPtr<ShareableBitmap> m_bitmap;
+        RefPtr<cairo_surface_t> m_surface;
     };
 
-    std::unique_ptr<RenderSource> createSource();
+    class Renderer {
+    public:
+        Renderer() = default;
+        ~Renderer() = default;
+
+        void setBuffer(Buffer* buffer) { m_buffer = buffer; }
+        Buffer* buffer() const { return m_buffer.get(); }
+
+#if USE(GTK4)
+        void snapshot(GtkSnapshot*) const;
+#else
+        void paint(GtkWidget*, cairo_t*, const WebCore::IntRect&) const;
+#endif
+
+    private:
+        RefPtr<Buffer> m_buffer;
+    };
 
     GRefPtr<GdkGLContext> m_gdkGLContext;
     bool m_glContextInitialized { false };
-    bool m_isSoftwareRast { false };
-    struct {
-        uint64_t id { 0 };
-        WTF::UnixFileDescriptor backFD;
-        WTF::UnixFileDescriptor frontFD;
-        WTF::UnixFileDescriptor displayFD;
-        RefPtr<ShareableBitmap> backBitmap;
-        RefPtr<ShareableBitmap> frontBitmap;
-        RefPtr<ShareableBitmap> displayBitmap;
-        WebCore::IntSize size;
-        uint32_t format { 0 };
-        uint32_t offset { 0 };
-        uint32_t stride { 0 };
-        uint64_t modifier { 0 };
-    } m_surface;
-    std::unique_ptr<RenderSource> m_pendingSource;
-    std::unique_ptr<RenderSource> m_committedSource;
-    CompletionHandler<void()> m_frameCompletionHandler;
+    uint64_t m_surfaceID { 0 };
+    Renderer m_renderer;
+    RefPtr<Buffer> m_pendingBuffer;
+    RefPtr<Buffer> m_committedBuffer;
+    HashMap<uint64_t, RefPtr<Buffer>> m_buffers;
 };
 
 } // namespace WebKit

@@ -32,6 +32,7 @@
 #include <WebCore/WorkerFetchResult.h>
 #include <WebCore/WorkerInitializationData.h>
 #include <WebCore/WorkerOptions.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/WeakPtr.h>
 

@@ -79,7 +79,6 @@ angle_requestable_extensions = [
     "GL_CHROMIUM_color_buffer_float_rgba",
     "GL_CHROMIUM_lose_context",
     "GL_CHROMIUM_sync_query",
-    "GL_CHROMIUM_texture_filtering_hint",
 ]
 
 gles_requestable_extensions = [
@@ -341,6 +340,9 @@ supported_egl_extensions = [
     "EGL_CHROMIUM_sync_control",
     "EGL_EXT_create_context_robustness",
     "EGL_EXT_device_query",
+    "EGL_EXT_gl_colorspace_bt2020_hlg",
+    "EGL_EXT_gl_colorspace_bt2020_linear",
+    "EGL_EXT_gl_colorspace_bt2020_pq",
     "EGL_EXT_gl_colorspace_display_p3",
     "EGL_EXT_gl_colorspace_display_p3_linear",
     "EGL_EXT_gl_colorspace_display_p3_passthrough",

@@ -46,6 +46,7 @@
 #include "compiler/translator/tree_ops/RemoveDynamicIndexing.h"
 #include "compiler/translator/tree_ops/RemoveInvariantDeclaration.h"
 #include "compiler/translator/tree_ops/RemoveUnreferencedVariables.h"
+#include "compiler/translator/tree_ops/RescopeGlobalVariables.h"
 #include "compiler/translator/tree_ops/RewritePixelLocalStorage.h"
 #include "compiler/translator/tree_ops/SeparateDeclarations.h"
 #include "compiler/translator/tree_ops/SimplifyLoopConditions.h"
@@ -375,6 +376,7 @@ TCompiler::TCompiler(sh::GLenum type, ShShaderSpec spec, ShShaderOutput output)
       mHasAnyPreciseType(false),
       mAdvancedBlendEquations(0),
       mHasPixelLocalStorageUniforms(false),
+      mUsesDerivatives(false),
       mCompileOptions{}
 {}
 
@@ -593,6 +595,8 @@ void TCompiler::setASTMetadata(const TParseContext &parseContext)
 
     mHasAnyPreciseType = parseContext.hasAnyPreciseType();
 
+    mUsesDerivatives = parseContext.usesDerivatives();
+
     if (mShaderType == GL_FRAGMENT_SHADER)
     {
         mAdvancedBlendEquations       = parseContext.getAdvancedBlendEquations();
@@ -770,11 +774,6 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
         return false;
     }
 
-    if (shouldLimitTypeSizes() && !ValidateTypeSizeLimitations(root, &mSymbolTable, &mDiagnostics))
-    {
-        return false;
-    }
-
     if (!ValidateFragColorAndFragData(mShaderType, mShaderVersion, mSymbolTable, &mDiagnostics))
     {
         return false;
@@ -816,7 +815,7 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     bool highPrecisionSupported        = isHighPrecisionSupported();
     bool enableNonConstantInitializers = IsExtensionEnabled(
         mExtensionBehavior, TExtension::EXT_shader_non_constant_global_initializers);
-    // forceDeferGlobalInitializers is needed for MSL
+    // forceDeferNonConstGlobalInitializers is needed for MSL
     // to convert a non-const global. For example:
     //
     //    int someGlobal = 123;
@@ -827,12 +826,12 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     //    void main() {
     //        someGlobal = 123;
     //
-    // This is because MSL doesn't allow statically initialized globals.
-    bool forceDeferGlobalInitializers = getOutputType() == SH_MSL_METAL_OUTPUT;
+    // This is because MSL doesn't allow statically initialized non-const globals.
+    bool forceDeferNonConstGlobalInitializers = getOutputType() == SH_MSL_METAL_OUTPUT;
 
     if (enableNonConstantInitializers &&
         !DeferGlobalInitializers(this, root, initializeLocalsAndGlobals, canUseLoopsToInitialize,
-                                 highPrecisionSupported, forceDeferGlobalInitializers,
+                                 highPrecisionSupported, forceDeferNonConstGlobalInitializers,
                                  &mSymbolTable))
     {
         return false;
@@ -885,8 +884,8 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     }
 
     if (mShaderVersion >= 300 && mShaderType == GL_FRAGMENT_SHADER &&
-        !ValidateOutputs(root, getExtensionBehavior(), mResources.MaxDrawBuffers,
-                         hasPixelLocalStorageUniforms(), &mDiagnostics))
+        !ValidateOutputs(root, getExtensionBehavior(), mResources, hasPixelLocalStorageUniforms(),
+                         IsWebGLBasedSpec(mShaderSpec), &mDiagnostics))
     {
         return false;
     }
@@ -993,7 +992,8 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
         mResources.MaxDrawBuffers > 1 &&
         IsExtensionEnabled(mExtensionBehavior, TExtension::EXT_draw_buffers))
     {
-        if (!EmulateGLFragColorBroadcast(this, root, mResources.MaxDrawBuffers, &mOutputVariables,
+        if (!EmulateGLFragColorBroadcast(this, root, mResources.MaxDrawBuffers,
+                                         mResources.MaxDualSourceDrawBuffers, &mOutputVariables,
                                          &mSymbolTable, mShaderVersion))
         {
             return false;
@@ -1017,6 +1017,15 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     {
         return false;
     }
+
+    if (compileOptions.rescopeGlobalVariables)
+    {
+        if (!RescopeGlobalVariables(*this, *root))
+        {
+            return false;
+        }
+    }
+
     mValidateASTOptions.validateMultiDeclarations = true;
 
     if (!SplitSequenceOperator(this, root, IntermNodePatternMatcher::kArrayLengthMethod,
@@ -1042,6 +1051,13 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     // invalid state. Relies on that PruneNoOps and RemoveUnreferencedVariables have already been
     // run.
     if (!PruneEmptyCases(this, root))
+    {
+        return false;
+    }
+
+    // Run after RemoveUnreferencedVariables, validate that the shader does not have excessively
+    // large variables.
+    if (shouldLimitTypeSizes() && !ValidateTypeSizeLimitations(root, &mSymbolTable, &mDiagnostics))
     {
         return false;
     }
@@ -1085,6 +1101,10 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     if (compileOptions.enforcePackingRestrictions)
     {
         int maxUniformVectors = GetMaxUniformVectorsForShaderType(mShaderType, mResources);
+        if (mShaderType == GL_VERTEX_SHADER && compileOptions.emulateClipOrigin)
+        {
+            --maxUniformVectors;
+        }
         // Returns true if, after applying the packing rules in the GLSL ES 1.00.17 spec
         // Appendix A, section 7, the shader does not use too many uniforms.
         if (!CheckVariablesInPackingLimits(maxUniformVectors, mUniforms))
@@ -1137,7 +1157,7 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
     // be optimized out
     if (!enableNonConstantInitializers &&
         !DeferGlobalInitializers(this, root, initializeLocalsAndGlobals, canUseLoopsToInitialize,
-                                 highPrecisionSupported, forceDeferGlobalInitializers,
+                                 highPrecisionSupported, forceDeferNonConstGlobalInitializers,
                                  &mSymbolTable))
     {
         return false;
@@ -1173,7 +1193,8 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
 
     if (getShaderType() == GL_VERTEX_SHADER && compileOptions.clampPointSize)
     {
-        if (!ClampPointSize(this, root, mResources.MaxPointSize, &getSymbolTable()))
+        if (!ClampPointSize(this, root, mResources.MinPointSize, mResources.MaxPointSize,
+                            &getSymbolTable()))
         {
             return false;
         }

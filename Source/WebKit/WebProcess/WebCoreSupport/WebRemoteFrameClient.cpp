@@ -27,14 +27,16 @@
 #include "WebRemoteFrameClient.h"
 
 #include "MessageSenderInlines.h"
-#include "WebProcess.h"
-#include "WebProcessProxyMessages.h"
+#include "WebPage.h"
+#include "WebPageProxyMessages.h"
 #include <WebCore/FrameLoadRequest.h>
 #include <WebCore/FrameTree.h>
+#include <WebCore/HitTestResult.h>
 #include <WebCore/PolicyChecker.h>
 #include <WebCore/RemoteFrame.h>
 
 namespace WebKit {
+using namespace WebCore;
 
 WebRemoteFrameClient::WebRemoteFrameClient(Ref<WebFrame>&& frame, ScopeExit<Function<void()>>&& frameInvalidator)
     : WebFrameLoaderClient(WTFMove(frame))
@@ -59,34 +61,37 @@ void WebRemoteFrameClient::frameDetached()
     m_frame->invalidate();
 }
 
-void WebRemoteFrameClient::sizeDidChange(WebCore::IntSize size)
+void WebRemoteFrameClient::sizeDidChange(IntSize size)
 {
     m_frame->updateRemoteFrameSize(size);
 }
 
-void WebRemoteFrameClient::postMessageToRemote(WebCore::FrameIdentifier identifier, std::optional<WebCore::SecurityOriginData> target, const WebCore::MessageWithMessagePorts& message)
+void WebRemoteFrameClient::postMessageToRemote(FrameIdentifier source, const String& sourceOrigin, FrameIdentifier target, std::optional<SecurityOriginData> targetOrigin, const MessageWithMessagePorts& message)
 {
-    WebProcess::singleton().send(Messages::WebProcessProxy::PostMessageToRemote(identifier, target, message), 0);
+    if (auto* page = m_frame->page())
+        page->send(Messages::WebPageProxy::PostMessageToRemote(source, sourceOrigin, target, targetOrigin, message));
 }
 
-void WebRemoteFrameClient::changeLocation(WebCore::FrameLoadRequest&& request)
+void WebRemoteFrameClient::changeLocation(FrameLoadRequest&& request)
 {
-    // FIXME: FrameLoadRequest and NavigationAction can probably be refactored to share more.
-    WebCore::NavigationAction action(request.requester(), request.resourceRequest(), request.initiatedByMainFrame());
-    // FIXME: action.request and request are probably duplicate information.
-    // FIXME: PolicyCheckIdentifier should probably be pushed to another layer.
-    // FIXME: Get more parameters correct and add tests for each one.
-    dispatchDecidePolicyForNavigationAction(action, action.resourceRequest(), WebCore::ResourceResponse(), nullptr, WebCore::PolicyDecisionMode::Asynchronous, WebCore::PolicyCheckIdentifier::generate(), [protectedFrame = Ref { m_frame }, request = WTFMove(request)] (WebCore::PolicyAction policyAction, WebCore::PolicyCheckIdentifier responseIdentifier) mutable {
-        // FIXME: Check responseIdentifier.
+    // FIXME: FrameLoadRequest and NavigationAction can probably be refactored to share more. <rdar://116202911>
+    NavigationAction action(request.requester(), request.resourceRequest(), request.initiatedByMainFrame(), request.isRequestFromClientOrUserInput());
+    // FIXME: action.request and request are probably duplicate information. <rdar://116203126>
+    // FIXME: Get more parameters correct and add tests for each one. <rdar://116203354>
+    dispatchDecidePolicyForNavigationAction(action, action.originalRequest(), ResourceResponse(), nullptr, { }, { }, { }, { }, { }, PolicyDecisionMode::Asynchronous, [protectedFrame = Ref { m_frame }, request = WTFMove(request)] (PolicyAction policyAction) mutable {
         // WebPage::loadRequest will make this load happen if needed.
+        // FIXME: What if PolicyAction::Ignore is sent. Is everything in the right state? We probably need to make sure the load event still happens on the parent frame. <rdar://116203453>
     });
 }
 
-String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior)
+String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<RenderAsTextFlag> behavior)
 {
-    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebProcessProxy::RenderTreeAsText(m_frame->frameID(), baseIndent, behavior), 0);
+    RefPtr page = m_frame->page();
+    if (!page)
+        return "Test Error - Missing page"_s;
+    auto sendResult = page->sendSync(Messages::WebPageProxy::RenderTreeAsText(m_frame->frameID(), baseIndent, behavior));
     if (!sendResult.succeeded())
-        return { };
+        return "Test Error - sending WebPageProxy::RenderTreeAsText failed"_s;
     auto [result] = sendResult.takeReply();
     return result;
 }
@@ -94,6 +99,30 @@ String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<WebCo
 void WebRemoteFrameClient::broadcastFrameRemovalToOtherProcesses()
 {
     WebFrameLoaderClient::broadcastFrameRemovalToOtherProcesses();
+}
+
+void WebRemoteFrameClient::closePage()
+{
+    if (auto* page = m_frame->page())
+        page->sendClose();
+}
+
+void WebRemoteFrameClient::focus()
+{
+    if (auto* page = m_frame->page())
+        page->send(Messages::WebPageProxy::FocusRemoteFrame(m_frame->frameID()));
+}
+
+void WebRemoteFrameClient::unfocus()
+{
+    if (auto* page = m_frame->page())
+        page->send(Messages::WebPageProxy::SetFocus(false));
+}
+
+void WebRemoteFrameClient::dispatchDecidePolicyForNavigationAction(const NavigationAction& navigationAction, const ResourceRequest& request, const ResourceResponse& redirectResponse,
+    FormState* formState, const String& clientRedirectSourceForHistory, uint64_t navigationID, std::optional<HitTestResult>&& hitTestResult, bool hasOpener, SandboxFlags sandboxFlags, PolicyDecisionMode policyDecisionMode, FramePolicyFunction&& function)
+{
+    WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(navigationAction, request, redirectResponse, formState, clientRedirectSourceForHistory, navigationID, WTFMove(hitTestResult), hasOpener, sandboxFlags, policyDecisionMode, WTFMove(function));
 }
 
 }

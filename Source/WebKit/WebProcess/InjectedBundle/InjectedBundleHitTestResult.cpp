@@ -59,7 +59,7 @@ RefPtr<InjectedBundleNodeHandle> InjectedBundleHitTestResult::urlElementHandle()
     return InjectedBundleNodeHandle::getOrCreate(m_hitTestResult.URLElement());
 }
 
-WebFrame* InjectedBundleHitTestResult::frame() const
+RefPtr<WebFrame> InjectedBundleHitTestResult::frame() const
 {
     auto* node = m_hitTestResult.innerNonSharedNode();
     if (!node)
@@ -72,7 +72,7 @@ WebFrame* InjectedBundleHitTestResult::frame() const
     return WebFrame::fromCoreFrame(*frame);
 }
 
-WebFrame* InjectedBundleHitTestResult::targetFrame() const
+RefPtr<WebFrame> InjectedBundleHitTestResult::targetFrame() const
 {
     auto* frame = m_hitTestResult.targetFrame();
     if (!frame)
@@ -150,7 +150,7 @@ IntRect InjectedBundleHitTestResult::imageRect() const
         
     // The image rect in HitTestResult is in frame coordinates, but we need it in WKView
     // coordinates since WebKit2 clients don't have enough context to do the conversion themselves.
-    auto* webFrame = frame();
+    auto webFrame = frame();
     if (!webFrame)
         return imageRect;
     
@@ -167,20 +167,19 @@ IntRect InjectedBundleHitTestResult::imageRect() const
 
 RefPtr<WebImage> InjectedBundleHitTestResult::image() const
 {
-    Image* image = m_hitTestResult.image();
     // For now, we only handle bitmap images.
-    if (!is<BitmapImage>(image))
+    auto* bitmapImage = dynamicDowncast<BitmapImage>(m_hitTestResult.image());
+    if (!bitmapImage)
         return nullptr;
 
-    BitmapImage& bitmapImage = downcast<BitmapImage>(*image);
-    IntSize size(bitmapImage.size());
+    IntSize size(bitmapImage->size());
     auto webImage = WebImage::create(size, static_cast<ImageOptions>(0), DestinationColorSpace::SRGB());
-    if (!webImage)
+    if (!webImage->context())
         return nullptr;
 
     // FIXME: need to handle EXIF rotation.
-    auto& graphicsContext = webImage->context();
-    graphicsContext.drawImage(bitmapImage, { { }, size });
+    auto& graphicsContext = *webImage->context();
+    graphicsContext.drawImage(*bitmapImage, { { }, size });
 
     return webImage;
 }

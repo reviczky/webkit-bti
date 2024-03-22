@@ -380,7 +380,6 @@ static void bindGtkData(Vector<CString>& args)
 }
 #endif
 
-#if ENABLE(ACCESSIBILITY)
 static void bindA11y(Vector<CString>& args, XDGDBusProxy& dbusProxy)
 {
     GUniquePtr<char> sandboxedAccessibilityBusPath(g_build_filename(dbusProxyDirectory(), "at-spi-bus", nullptr));
@@ -394,7 +393,6 @@ static void bindA11y(Vector<CString>& args, XDGDBusProxy& dbusProxy)
         "--setenv", "AT_SPI_BUS_ADDRESS", proxyAddress.get()
     });
 }
-#endif
 
 static bool bindPathVar(Vector<CString>& args, const char* varname)
 {
@@ -845,13 +843,11 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
             }));
         }
 
-#if ENABLE(ACCESSIBILITY)
         if (auto a11yBusDirectory = directoryContainingDBusSocket(PlatformDisplay::sharedDisplay().accessibilityBusAddress().utf8().data())) {
             sandboxArgs.appendVector(Vector<CString>({
                 "--bind", *a11yBusDirectory, *a11yBusDirectory,
             }));
         }
-#endif
     }
 
     if (shouldUnshareNetwork(launchOptions.processType, argv))
@@ -919,10 +915,8 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         bindOpenGL(sandboxArgs);
         // FIXME: This is also fixed by Pipewire once in use.
         bindV4l(sandboxArgs);
-#if ENABLE(ACCESSIBILITY)
         if (dbusProxy)
             bindA11y(sandboxArgs, *dbusProxy);
-#endif
 #if PLATFORM(GTK)
         bindGtkData(sandboxArgs);
 #endif

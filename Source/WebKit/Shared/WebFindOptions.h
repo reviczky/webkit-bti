@@ -26,7 +26,6 @@
 #pragma once
 
 #include <WebCore/FindOptions.h>
-#include <wtf/EnumTraits.h>
 
 namespace WebKit {
 
@@ -42,6 +41,7 @@ enum class FindOptions : uint16_t {
     DetermineMatchIndex = 1 << 8,
     NoIndexChange = 1 << 9,
     AtWordEnds = 1 << 10,
+    DoNotSetSelection = 1 << 11,
 };
 
 enum class FindDecorationStyle : uint8_t {
@@ -53,33 +53,3 @@ enum class FindDecorationStyle : uint8_t {
 WebCore::FindOptions core(OptionSet<FindOptions>);
 
 } // namespace WebKit
-
-namespace WTF {
-
-template<> struct EnumTraits<WebKit::FindOptions> {
-    using values = EnumValues<
-        WebKit::FindOptions,
-        WebKit::FindOptions::CaseInsensitive,
-        WebKit::FindOptions::AtWordStarts,
-        WebKit::FindOptions::TreatMedialCapitalAsWordStart,
-        WebKit::FindOptions::Backwards,
-        WebKit::FindOptions::WrapAround,
-        WebKit::FindOptions::ShowOverlay,
-        WebKit::FindOptions::ShowFindIndicator,
-        WebKit::FindOptions::ShowHighlight,
-        WebKit::FindOptions::DetermineMatchIndex,
-        WebKit::FindOptions::NoIndexChange,
-        WebKit::FindOptions::AtWordEnds
-    >;
-};
-
-template<> struct EnumTraits<WebKit::FindDecorationStyle> {
-    using values = EnumValues<
-        WebKit::FindDecorationStyle,
-        WebKit::FindDecorationStyle::Normal,
-        WebKit::FindDecorationStyle::Found,
-        WebKit::FindDecorationStyle::Highlighted
-    >;
-};
-
-} // namespace WTF

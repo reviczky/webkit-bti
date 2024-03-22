@@ -26,8 +26,6 @@
 #include "config.h"
 #include "WebSWRegistrationStore.h"
 
-#if ENABLE(SERVICE_WORKER)
-
 #include "NetworkStorageManager.h"
 #include <WebCore/SWServer.h>
 
@@ -41,6 +39,16 @@ WebSWRegistrationStore::WebSWRegistrationStore(WebCore::SWServer& server, Networ
     ASSERT(RunLoop::isMain());
 }
 
+CheckedPtr<NetworkStorageManager> WebSWRegistrationStore::checkedManager() const
+{
+    return m_manager.get();
+}
+
+RefPtr<WebCore::SWServer> WebSWRegistrationStore::protectedServer() const
+{
+    return m_server.get();
+}
+
 void WebSWRegistrationStore::clearAll(CompletionHandler<void()>&& callback)
 {
     m_updates.clear();
@@ -48,7 +56,7 @@ void WebSWRegistrationStore::clearAll(CompletionHandler<void()>&& callback)
     if (!m_manager)
         return callback();
 
-    m_manager->clearServiceWorkerRegistrations(WTFMove(callback));
+    checkedManager()->clearServiceWorkerRegistrations(WTFMove(callback));
 }
 
 void WebSWRegistrationStore::flushChanges(CompletionHandler<void()>&& callback)
@@ -64,7 +72,7 @@ void WebSWRegistrationStore::closeFiles(CompletionHandler<void()>&& callback)
     if (!m_manager)
         return callback();
 
-    m_manager->closeServiceWorkerRegistrationFiles(WTFMove(callback));
+    checkedManager()->closeServiceWorkerRegistrationFiles(WTFMove(callback));
 }
 
 void WebSWRegistrationStore::importRegistrations(CompletionHandler<void(std::optional<Vector<WebCore::ServiceWorkerContextData>>)>&& callback)
@@ -72,7 +80,7 @@ void WebSWRegistrationStore::importRegistrations(CompletionHandler<void(std::opt
     if (!m_manager)
         return callback(std::nullopt);
 
-    m_manager->importServiceWorkerRegistrations(WTFMove(callback));
+    checkedManager()->importServiceWorkerRegistrations(WTFMove(callback));
 }
 
 void WebSWRegistrationStore::updateRegistration(const WebCore::ServiceWorkerContextData& registration)
@@ -114,7 +122,7 @@ void WebSWRegistrationStore::updateToStorage(CompletionHandler<void()>&& callbac
     if (!m_manager)
         return callback();
 
-    m_manager->updateServiceWorkerRegistrations(WTFMove(registrationsToUpdate), WTFMove(registrationsToDelete), [this, weakThis = WeakPtr { *this }, callback = WTFMove(callback)](auto&& result) mutable {
+    checkedManager()->updateServiceWorkerRegistrations(WTFMove(registrationsToUpdate), WTFMove(registrationsToDelete), [this, weakThis = WeakPtr { *this }, callback = WTFMove(callback)](auto&& result) mutable {
         ASSERT(RunLoop::isMain());
 
         if (!weakThis || !m_server || !result)
@@ -122,12 +130,10 @@ void WebSWRegistrationStore::updateToStorage(CompletionHandler<void()>&& callbac
 
         auto allScripts = WTFMove(result.value());
         for (auto&& scripts : allScripts)
-            m_server->didSaveWorkerScriptsToDisk(scripts.identifier, WTFMove(scripts.mainScript), WTFMove(scripts.importedScripts));
+            protectedServer()->didSaveWorkerScriptsToDisk(scripts.identifier, WTFMove(scripts.mainScript), WTFMove(scripts.importedScripts));
 
         callback();
     });
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)

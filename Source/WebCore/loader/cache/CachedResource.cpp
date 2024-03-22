@@ -306,6 +306,11 @@ void CachedResource::loadFrom(const CachedResource& resource)
     setLoading(false);
 }
 
+RefPtr<SecurityOrigin> CachedResource::protectedOrigin() const
+{
+    return m_origin;
+}
+
 void CachedResource::setBodyDataFrom(const CachedResource& resource)
 {
     m_data = resource.m_data;
@@ -480,12 +485,10 @@ void CachedResource::setResponse(const ResourceResponse& newResponse)
     mutableResponse() = newResponse;
     m_varyingHeaderValues = collectVaryingRequestHeaders(cookieJar(), m_resourceRequest, response());
 
-#if ENABLE(SERVICE_WORKER)
     if (response().source() == ResourceResponse::Source::ServiceWorker) {
         m_responseTainting = response().tainting();
         return;
     }
-#endif
     mutableResponse().setRedirected(m_redirectChainCacheStatus.status != RedirectChainCacheStatus::Status::NoRedirection);
     if ((response().tainting() == ResourceResponse::Tainting::Basic || response().tainting() == ResourceResponse::Tainting::Cors) && !response().url().protocolIsData())
         mutableResponse().setTainting(m_responseTainting);
@@ -788,7 +791,7 @@ void CachedResource::switchClientsToRevalidatedResource()
     ASSERT(!m_handleCount);
     m_handlesToRevalidate.clear();
 
-    Vector<WeakPtr<CachedResourceClient>> clientsToMove;
+    Vector<SingleThreadWeakPtr<CachedResourceClient>> clientsToMove;
     for (auto entry : m_clients) {
         auto& client = entry.key;
         unsigned count = entry.value;

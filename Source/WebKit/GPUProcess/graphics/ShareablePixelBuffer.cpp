@@ -26,7 +26,7 @@
 #include "config.h"
 #include "ShareablePixelBuffer.h"
 
-#include "SharedMemory.h"
+#include <WebCore/SharedMemory.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -35,12 +35,9 @@ RefPtr<ShareablePixelBuffer> ShareablePixelBuffer::tryCreate(const PixelBufferFo
 {
     ASSERT(supportedPixelFormat(format.pixelFormat));
 
-    auto bufferSize = computeBufferSize(format, size);
+    auto bufferSize = computeBufferSize(format.pixelFormat, size);
     if (bufferSize.hasOverflowed())
         return nullptr;
-    if (bufferSize > std::numeric_limits<int32_t>::max())
-        return nullptr;
-
     RefPtr<SharedMemory> sharedMemory = SharedMemory::allocate(bufferSize);
     if (!sharedMemory)
         return nullptr;

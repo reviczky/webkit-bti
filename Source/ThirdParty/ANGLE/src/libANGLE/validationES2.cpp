@@ -84,6 +84,7 @@ bool IsValidCopyTextureSourceInternalFormatEnum(GLenum internalFormat)
         case GL_RGBA8:
         case GL_BGRA_EXT:
         case GL_BGRA8_EXT:
+        case GL_SRGB_ALPHA_EXT:
             return true;
 
         default:
@@ -2153,7 +2154,7 @@ static bool ValidateObjectIdentifierAndName(const Context *context,
             return true;
 
         case GL_SHADER:
-            if (context->getShader({name}) == nullptr)
+            if (context->getShaderNoResolveCompile({name}) == nullptr)
             {
                 ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kInvalidShaderName);
                 return false;
@@ -4192,7 +4193,7 @@ bool ValidateDeleteProgram(const Context *context,
 
     if (!context->getProgramResolveLink(program))
     {
-        if (context->getShader(program))
+        if (context->getShaderNoResolveCompile(program))
         {
             ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExpectedProgramName);
             return false;
@@ -4216,7 +4217,7 @@ bool ValidateDeleteShader(const Context *context,
         return false;
     }
 
-    if (!context->getShader(shader))
+    if (!context->getShaderNoResolveCompile(shader))
     {
         if (context->getProgramResolveLink(shader))
         {
@@ -4370,7 +4371,7 @@ bool ValidateGetActiveAttrib(const Context *context,
         return false;
     }
 
-    if (index >= static_cast<GLuint>(programObject->getActiveAttributeCount()))
+    if (index >= static_cast<GLuint>(programObject->getExecutable().getProgramInputs().size()))
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kIndexExceedsMaxActiveUniform);
         return false;
@@ -4402,7 +4403,7 @@ bool ValidateGetActiveUniform(const Context *context,
         return false;
     }
 
-    if (index >= static_cast<GLuint>(programObject->getActiveUniformCount()))
+    if (index >= programObject->getExecutable().getUniforms().size())
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kIndexExceedsMaxActiveUniform);
         return false;
@@ -4674,14 +4675,6 @@ bool ValidateHint(const PrivateState &state,
     switch (target)
     {
         case GL_GENERATE_MIPMAP_HINT:
-            break;
-
-        case GL_TEXTURE_FILTERING_HINT_CHROMIUM:
-            if (!state.getExtensions().textureFilteringHintCHROMIUM)
-            {
-                errors->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, target);
-                return false;
-            }
             break;
 
         case GL_FRAGMENT_SHADER_DERIVATIVE_HINT:
@@ -5805,34 +5798,6 @@ bool ValidateGetTexParameteriv(const Context *context,
     return ValidateGetTexParameterBase(context, entryPoint, target, pname, nullptr);
 }
 
-bool ValidateGetTexParameterIivOES(const Context *context,
-                                   angle::EntryPoint entryPoint,
-                                   TextureType target,
-                                   GLenum pname,
-                                   const GLint *params)
-{
-    if (context->getClientMajorVersion() < 3)
-    {
-        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
-        return false;
-    }
-    return ValidateGetTexParameterBase(context, entryPoint, target, pname, nullptr);
-}
-
-bool ValidateGetTexParameterIuivOES(const Context *context,
-                                    angle::EntryPoint entryPoint,
-                                    TextureType target,
-                                    GLenum pname,
-                                    const GLuint *params)
-{
-    if (context->getClientMajorVersion() < 3)
-    {
-        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
-        return false;
-    }
-    return ValidateGetTexParameterBase(context, entryPoint, target, pname, nullptr);
-}
-
 bool ValidateGetUniformfv(const Context *context,
                           angle::EntryPoint entryPoint,
                           ShaderProgramID program,
@@ -5962,34 +5927,6 @@ bool ValidateTexParameteriv(const Context *context,
     return ValidateTexParameterBase(context, entryPoint, target, pname, -1, true, params);
 }
 
-bool ValidateTexParameterIivOES(const Context *context,
-                                angle::EntryPoint entryPoint,
-                                TextureType target,
-                                GLenum pname,
-                                const GLint *params)
-{
-    if (context->getClientMajorVersion() < 3)
-    {
-        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
-        return false;
-    }
-    return ValidateTexParameterBase(context, entryPoint, target, pname, -1, true, params);
-}
-
-bool ValidateTexParameterIuivOES(const Context *context,
-                                 angle::EntryPoint entryPoint,
-                                 TextureType target,
-                                 GLenum pname,
-                                 const GLuint *params)
-{
-    if (context->getClientMajorVersion() < 3)
-    {
-        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
-        return false;
-    }
-    return ValidateTexParameterBase(context, entryPoint, target, pname, -1, true, params);
-}
-
 bool ValidateUseProgram(const Context *context,
                         angle::EntryPoint entryPoint,
                         ShaderProgramID program)
@@ -6000,7 +5937,7 @@ bool ValidateUseProgram(const Context *context,
         if (!programObject)
         {
             // ES 3.1.0 section 7.3 page 72
-            if (context->getShader(program))
+            if (context->getShaderNoResolveCompile(program))
             {
                 ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExpectedProgramName);
                 return false;
@@ -6162,7 +6099,7 @@ bool ValidateGetTranslatedShaderSourceANGLE(const Context *context,
         return false;
     }
 
-    Shader *shaderObject = context->getShader(shader);
+    Shader *shaderObject = context->getShaderNoResolveCompile(shader);
 
     if (!shaderObject)
     {

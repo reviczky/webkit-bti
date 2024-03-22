@@ -154,6 +154,8 @@ AudioFileReader::AudioFileReader(const void* data, size_t dataSize)
 AudioFileReader::~AudioFileReader()
 {
     if (m_pipeline) {
+        unregisterPipeline(m_pipeline);
+
         GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
         ASSERT(bus);
         gst_bus_set_sync_handler(bus.get(), nullptr, nullptr, nullptr);
@@ -253,7 +255,7 @@ GstFlowReturn AudioFileReader::handleSample(GstAppSink* sink)
 
 void AudioFileReader::handleMessage(GstMessage* message)
 {
-    ASSERT(&m_runLoop == &RunLoop::current());
+    assertIsCurrent(m_runLoop);
 
     GUniqueOutPtr<GError> error;
     GUniqueOutPtr<gchar> debug;
@@ -389,18 +391,19 @@ void AudioFileReader::plugDeinterleave(GstPad* pad)
 
 void AudioFileReader::decodeAudioForBusCreation()
 {
-    ASSERT(&m_runLoop == &RunLoop::current());
+    assertIsCurrent(m_runLoop);
 
     // Build the pipeline giostreamsrc ! decodebin
     // A deinterleave element is added once a src pad becomes available in decodebin.
     static Atomic<uint32_t> pipelineId;
     m_pipeline = gst_pipeline_new(makeString("audio-file-reader-", pipelineId.exchangeAdd(1)).ascii().data());
+    registerActivePipeline(m_pipeline);
 
     GRefPtr<GstBus> bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
     ASSERT(bus);
     gst_bus_set_sync_handler(bus.get(), [](GstBus*, GstMessage* message, gpointer userData) {
         auto& reader = *static_cast<AudioFileReader*>(userData);
-        if (&reader.m_runLoop == &RunLoop::current())
+        if (reader.m_runLoop.isCurrent())
             reader.handleMessage(message);
         else {
             GRefPtr<GstMessage> protectMessage(message);

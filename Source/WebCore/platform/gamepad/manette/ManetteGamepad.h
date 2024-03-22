@@ -64,7 +64,6 @@ public:
         DPadDown,
         DPadLeft,
         DPadRight,
-        Mode,
         Count,
     };
 

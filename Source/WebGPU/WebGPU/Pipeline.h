@@ -23,9 +23,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#import "ConstantValue.h"
 #import "ShaderModule.h"
 
 namespace WebGPU {
+
+class ShaderModule;
 
 struct LibraryCreationResult {
     id<MTLLibrary> library;
@@ -34,8 +37,8 @@ struct LibraryCreationResult {
 
 std::optional<LibraryCreationResult> createLibrary(id<MTLDevice>, const ShaderModule&, const PipelineLayout*, const String& entryPointName, NSString *label);
 
-MTLFunctionConstantValues *createConstantValues(uint32_t constantCount, const WGPUConstantEntry* constants, const WGSL::Reflection::EntryPointInformation&);
+std::tuple<MTLFunctionConstantValues *, HashMap<String, WGSL::ConstantValue>> createConstantValues(uint32_t constantCount, const WGPUConstantEntry* constants, const WGSL::Reflection::EntryPointInformation&, const ShaderModule&);
 
-id<MTLFunction> createFunction(id<MTLLibrary>, const WGSL::Reflection::EntryPointInformation&, unsigned constantCount, const WGPUConstantEntry*, NSString *label);
+id<MTLFunction> createFunction(id<MTLLibrary>, const WGSL::Reflection::EntryPointInformation&, MTLFunctionConstantValues *, NSString *label);
 
 } // namespace WebGPU

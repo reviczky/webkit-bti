@@ -29,6 +29,7 @@
 #include <JavaScriptCore/InspectorBackendDispatchers.h>
 #include <JavaScriptCore/InspectorFrontendDispatchers.h>
 #include <wtf/Forward.h>
+#include <wtf/WeakRef.h>
 
 namespace WebKit {
 
@@ -56,7 +57,7 @@ public:
 private:
     std::unique_ptr<Inspector::BrowserFrontendDispatcher> m_frontendDispatcher;
     RefPtr<Inspector::BrowserBackendDispatcher> m_backendDispatcher;
-    WebPageProxy& m_inspectedPage;
+    WeakRef<WebPageProxy> m_inspectedPage;
 };
 
 } // namespace WebKit

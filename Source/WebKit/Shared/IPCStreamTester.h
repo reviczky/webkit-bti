@@ -29,9 +29,9 @@
 
 #include "IPCStreamTesterIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
-#include "SharedMemory.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
+#include <WebCore/SharedMemory.h>
 #include <memory>
 #include <wtf/HashMap.h>
 
@@ -46,19 +46,20 @@ namespace WebKit {
 // Interface to test various IPC stream related activities.
 class IPCStreamTester final : public IPC::StreamMessageReceiver {
 public:
-    static RefPtr<IPCStreamTester> create(IPCStreamTesterIdentifier, IPC::StreamServerConnection::Handle&&);
+    static RefPtr<IPCStreamTester> create(IPCStreamTesterIdentifier, IPC::StreamServerConnection::Handle&&, bool ignoreInvalidMessageForTesting);
     void stopListeningForIPC(Ref<IPCStreamTester>&& refFromConnection);
 
     // IPC::StreamMessageReceiver overrides.
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 private:
-    IPCStreamTester(IPCStreamTesterIdentifier, IPC::StreamServerConnection::Handle&&);
+    IPCStreamTester(IPCStreamTesterIdentifier, IPC::StreamServerConnection::Handle&&, bool ignoreInvalidMessageForTesting);
     ~IPCStreamTester();
     void initialize();
     IPC::StreamConnectionWorkQueue& workQueue() const { return m_workQueue; }
 
     // Messages.
-    void syncMessageReturningSharedMemory1(uint32_t byteCount, CompletionHandler<void(SharedMemory::Handle)>&&);
+    void syncMessageReturningSharedMemory1(uint32_t byteCount, CompletionHandler<void(std::optional<WebCore::SharedMemory::Handle>&&)>&&);
+    void syncMessageEmptyReply(uint32_t, CompletionHandler<void()>&&);
     void syncCrashOnZero(int32_t, CompletionHandler<void(int32_t)>&&);
     void checkAutoreleasePool(CompletionHandler<void(int32_t)>&&);
     void asyncMessage(bool value, CompletionHandler<void(bool)>&&);

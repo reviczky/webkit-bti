@@ -58,6 +58,31 @@ template<typename MessageType, typename C> inline AsyncReplyID MessageSender::se
     return { };
 }
 
+template<typename MessageType> inline bool MessageSender::sendWithoutUsingIPCConnection(MessageType&& message) const
+{
+    static_assert(!MessageType::isSync);
+    auto encoder = makeUniqueRef<IPC::Encoder>(MessageType::name(), messageSenderDestinationID());
+    encoder.get() << std::forward<MessageType>(message).arguments();
+
+    return performSendWithoutUsingIPCConnection(WTFMove(encoder));
+}
+
+template<typename MessageType, typename C> inline bool MessageSender::sendWithAsyncReplyWithoutUsingIPCConnection(MessageType&& message, C&& completionHandler) const
+{
+    static_assert(!MessageType::isSync);
+    auto encoder = makeUniqueRef<IPC::Encoder>(MessageType::name(), messageSenderDestinationID());
+    encoder.get() << std::forward<MessageType>(message).arguments();
+
+    auto asyncHandler = [completionHandler = std::forward<C>(completionHandler)] (Decoder* decoder) mutable {
+        if (decoder && decoder->isValid())
+            Connection::callReply<MessageType>(*decoder, WTFMove(completionHandler));
+        else
+            Connection::cancelReply<MessageType>(WTFMove(completionHandler));
+    };
+
+    return performSendWithAsyncReplyWithoutUsingIPCConnection(WTFMove(encoder), WTFMove(asyncHandler));
+}
+
 template<typename MessageType> inline bool MessageSender::send(MessageType&& message)
 {
     return send(std::forward<MessageType>(message), messageSenderDestinationID(), { });
@@ -131,6 +156,24 @@ template<typename MessageType, typename C, typename U, typename V> inline AsyncR
 template<typename MessageType, typename C, typename U, typename V> inline AsyncReplyID MessageSender::sendWithAsyncReply(MessageType&& message, C&& completionHandler, ObjectIdentifierGeneric<U, V> destinationID, OptionSet<SendOption> options)
 {
     return sendWithAsyncReply(std::forward<MessageType>(message), std::forward<C>(completionHandler), destinationID.toUInt64(), options);
+}
+
+template<typename MessageType> Ref<typename MessageType::Promise> inline MessageSender::sendWithPromisedReply(MessageType&& message)
+{
+    return sendWithPromisedReply(std::forward<MessageType>(message), messageSenderDestinationID(), { });
+}
+
+template<typename MessageType> Ref<typename MessageType::Promise> inline MessageSender::sendWithPromisedReply(MessageType&& message, uint64_t destinationID)
+{
+    return sendWithPromisedReply(std::forward<MessageType>(message), destinationID, { });
+}
+
+template<typename MessageType> Ref<typename MessageType::Promise> inline MessageSender::sendWithPromisedReply(MessageType&& message, uint64_t destinationID, OptionSet<SendOption> options)
+{
+    static_assert(!MessageType::isSync);
+    if (RefPtr connection = messageSenderConnection())
+        return connection->sendWithPromisedReply(std::forward<MessageType>(message), destinationID, options);
+    return MessageType::Promise::createAndReject(Error::NoMessageSenderConnection);
 }
 
 } // namespace IPC

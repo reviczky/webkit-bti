@@ -148,13 +148,9 @@ static GstAudioChannelPosition webKitWebAudioGStreamerChannelPosition(int channe
 static GstCaps* getGStreamerAudioCaps(float sampleRate, unsigned numberOfChannels)
 {
     guint64 channelMask = 0;
-    Vector<GstAudioChannelPosition> positions;
-    positions.reserveInitialCapacity(numberOfChannels);
-
-    for (unsigned channelIndex = 0; channelIndex < numberOfChannels; channelIndex++) {
-        GstAudioChannelPosition position = webKitWebAudioGStreamerChannelPosition(channelIndex);
-        positions.uncheckedAppend(WTFMove(position));
-    }
+    Vector<GstAudioChannelPosition> positions(numberOfChannels, [&](size_t channelIndex) -> GstAudioChannelPosition {
+        return webKitWebAudioGStreamerChannelPosition(channelIndex);
+    });
 
     gst_audio_channel_positions_to_mask(reinterpret_cast<GstAudioChannelPosition*>(positions.data()),
         numberOfChannels, FALSE, &channelMask);
@@ -191,8 +187,7 @@ static void webkit_web_audio_src_class_init(WebKitWebAudioSrcClass* webKitWebAud
                                                        G_MINDOUBLE, G_MAXDOUBLE,
                                                        44100.0, flags));
 
-    g_object_class_install_property(objectClass, PROP_DESTINATION, g_param_spec_pointer("destination", "destination",
-        "Destination", flags));
+    g_object_class_install_property(objectClass, PROP_DESTINATION, g_param_spec_pointer("destination", "destination", "Destination", G_PARAM_READWRITE));
 
     g_object_class_install_property(objectClass,
                                     PROP_FRAMES,
@@ -297,7 +292,6 @@ static GRefPtr<GstBuffer> webKitWebAudioSrcAllocateBuffer(WebKitWebAudioSrc* src
     }
 
     ASSERT(buffer);
-    ASSERT(&priv->info);
     gst_buffer_add_audio_meta(buffer.get(), &priv->info, priv->framesToPull, nullptr);
 
     {
@@ -320,6 +314,9 @@ static void webKitWebAudioSrcRenderAndPushFrames(const GRefPtr<GstElement>& elem
         priv->dispatchDone = true;
         priv->dispatchCondition.notifyOne();
     });
+
+    if (!priv->destination)
+        return;
 
     GST_TRACE_OBJECT(element.get(), "Playing: %d", priv->destination->isPlaying());
     if (priv->hasRenderedAudibleFrame && !priv->destination->isPlaying())

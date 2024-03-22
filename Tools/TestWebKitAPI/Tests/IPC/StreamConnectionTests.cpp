@@ -54,8 +54,20 @@ struct MockStreamTestMessage1 {
     static constexpr bool isSync = false;
     static constexpr bool isStreamEncodable = true;
     static constexpr bool isStreamBatched = false;
-    static constexpr IPC::MessageName name()  { return IPC::MessageName::RemoteRenderingBackend_ReleaseAllResources; }
+    static constexpr IPC::MessageName name()  { return IPC::MessageName::RemoteRenderingBackend_ReleaseAllDrawingResources; }
     std::tuple<> arguments() { return { }; }
+};
+
+struct MockStreamTestMessage2 {
+    static constexpr bool isSync = false;
+    static constexpr bool isStreamEncodable = false;
+    static constexpr IPC::MessageName name()  { return IPC::MessageName::RemoteRenderingBackend_ReleaseAllDrawingResources; }
+    explicit MockStreamTestMessage2(IPC::Semaphore&& s)
+        : semaphore(WTFMove(s))
+    {
+    }
+    std::tuple<IPC::Semaphore> arguments() { return { WTFMove(semaphore) }; }
+    IPC::Semaphore semaphore;
 };
 
 struct MockStreamTestMessageWithAsyncReply1 {
@@ -212,9 +224,10 @@ public:
 
 TEST_F(StreamConnectionTest, OpenConnections)
 {
-    auto [clientConnection, serverConnectionHandle] = IPC::StreamClientConnection::create(defaultBufferSizeLog2);
-    ASSERT_TRUE(clientConnection);
-    auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle)).releaseNonNull();
+    auto connectionPair = IPC::StreamClientConnection::create(defaultBufferSizeLog2);
+    ASSERT_TRUE(!!connectionPair);
+    auto [clientConnection, serverConnectionHandle] = WTFMove(*connectionPair);
+    auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle), { }).releaseNonNull();
     auto cleanup = localReferenceBarrier();
     MockMessageReceiver mockClientReceiver;
     clientConnection->open(mockClientReceiver);
@@ -229,9 +242,10 @@ TEST_F(StreamConnectionTest, OpenConnections)
 
 TEST_F(StreamConnectionTest, InvalidateUnopened)
 {
-    auto [clientConnection, serverConnectionHandle] = IPC::StreamClientConnection::create(defaultBufferSizeLog2);
-    ASSERT_TRUE(clientConnection);
-    auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle)).releaseNonNull();
+    auto connectionPair = IPC::StreamClientConnection::create(defaultBufferSizeLog2);
+    ASSERT_TRUE(!!connectionPair);
+    auto [clientConnection, serverConnectionHandle] = WTFMove(*connectionPair);
+    auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle), { }).releaseNonNull();
     auto cleanup = localReferenceBarrier();
     serverQueue().dispatch([this, serverConnection] {
         assertIsCurrent(serverQueue());
@@ -250,9 +264,10 @@ public:
     void SetUp() override
     {
         setupBase();
-        auto [clientConnection, serverConnectionHandle] = IPC::StreamClientConnection::create(bufferSizeLog2());
-        ASSERT(clientConnection);
-        auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle)).releaseNonNull();
+        auto connectionPair = IPC::StreamClientConnection::create(bufferSizeLog2());
+        ASSERT(!!connectionPair);
+        auto [clientConnection, serverConnectionHandle] = WTFMove(*connectionPair);
+        auto serverConnection = IPC::StreamServerConnection::tryCreate(WTFMove(serverConnectionHandle), { }).releaseNonNull();
         m_clientConnection = WTFMove(clientConnection);
         m_clientConnection->setSemaphores(copyViaEncoder(serverQueue().wakeUpSemaphore()).value(), copyViaEncoder(serverConnection->clientWaitSemaphore()).value());
         m_clientConnection->open(m_mockClientReceiver);
@@ -362,6 +377,26 @@ TEST_P(StreamMessageTest, SendWithSwitchingDestinationIDs)
             EXPECT_EQ(message2.messageName, MockStreamTestMessage1::name());
             EXPECT_EQ(message2.destinationID, other.toUInt64());
         }
+    }
+}
+
+TEST_P(StreamMessageTest, SendAndInvalidate)
+{
+    const uint64_t messageCount = 2004;
+    auto cleanup = localReferenceBarrier();
+
+    for (uint64_t i = 0u; i < messageCount; ++i) {
+        auto result = m_clientConnection->send(MockStreamTestMessage2 { IPC::Semaphore { } }, defaultDestinationID(), defaultSendTimeout);
+        EXPECT_EQ(result, IPC::Error::NoError);
+    }
+    auto flushResult = m_clientConnection->flushSentMessages(defaultSendTimeout);
+    EXPECT_EQ(flushResult, IPC::Error::NoError);
+    m_clientConnection->invalidate();
+
+    for (uint64_t i = 0u; i < messageCount; ++i) {
+        auto message = m_mockServerReceiver->waitForMessage();
+        EXPECT_EQ(message.messageName, MockStreamTestMessage2::name());
+        EXPECT_EQ(message.destinationID, defaultDestinationID().toUInt64());
     }
 }
 

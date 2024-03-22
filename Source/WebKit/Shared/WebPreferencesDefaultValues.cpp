@@ -70,12 +70,12 @@ bool defaultShouldPrintBackgrounds()
 
 bool defaultAlternateFormControlDesignEnabled()
 {
-    return PAL::currentUserInterfaceIdiomIsVision();
+    return PAL::currentUserInterfaceIdiomIsVisionOrVisionLegacy();
 }
 
 bool defaultVideoFullscreenRequiresElementFullscreen()
 {
-    return PAL::currentUserInterfaceIdiomIsVision();
+    return PAL::currentUserInterfaceIdiomIsVisionOrVisionLegacy();
 }
 
 #endif
@@ -125,18 +125,6 @@ bool defaultAppleMailPaginationQuirkEnabled()
 
 #endif
 
-bool defaultOfflineWebApplicationCacheEnabled()
-{
-#if PLATFORM(COCOA)
-    static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::ApplicationCacheDisabledByDefault);
-    return !newSDK;
-#else
-    // FIXME: Other platforms should consider turning this off.
-    // ApplicationCache is on its way to being removed from WebKit.
-    return true;
-#endif
-}
-
 #if ENABLE(MEDIA_STREAM)
 
 bool defaultCaptureAudioInGPUProcessEnabled()
@@ -175,13 +163,10 @@ bool defaultManageCaptureStatusBarInGPUProcessEnabled()
 
 #endif // ENABLE(MEDIA_STREAM)
 
-#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE)
 bool defaultManagedMediaSourceEnabled()
 {
-#if PLATFORM(IOS_FAMILY)
-    // Enable everywhere that MediaSource is enabled
-    return defaultMediaSourceEnabled();
-#elif PLATFORM(MAC)
+#if PLATFORM(COCOA)
     return true;
 #else
     return false;
@@ -189,7 +174,7 @@ bool defaultManagedMediaSourceEnabled()
 }
 #endif
 
-#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE) && ENABLE(WIRELESS_PLAYBACK_TARGET)
+#if ENABLE(MEDIA_SOURCE) && ENABLE(WIRELESS_PLAYBACK_TARGET)
 bool defaultManagedMediaSourceNeedsAirPlay()
 {
 #if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
@@ -232,6 +217,16 @@ bool defaultShouldDropNearSuspendedAssertionAfterDelay()
     return newSDK;
 #else
     return false;
+#endif
+}
+
+bool defaultShouldTakeNearSuspendedAssertion()
+{
+#if PLATFORM(IOS_FAMILY)
+    static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::FullySuspendsBackgroundContentImmediately);
+    return !newSDK;
+#else
+    return true;
 #endif
 }
 

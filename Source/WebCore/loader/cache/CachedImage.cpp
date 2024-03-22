@@ -121,8 +121,8 @@ void CachedImage::setBodyDataFrom(const CachedResource& resource)
     if (m_imageObserver)
         m_imageObserver->cachedImages().add(*this);
 
-    if (m_image && is<SVGImage>(*m_image))
-        m_svgImageCache = makeUnique<SVGImageCache>(&downcast<SVGImage>(*m_image));
+    if (auto* svgImage = dynamicDowncast<SVGImage>(m_image.get()))
+        m_svgImageCache = makeUnique<SVGImageCache>(svgImage);
 }
 
 void CachedImage::didAddClient(CachedResourceClient& client)
@@ -183,9 +183,12 @@ void CachedImage::addClientWaitingForAsyncDecoding(CachedImageClient& client)
     
 void CachedImage::removeAllClientsWaitingForAsyncDecoding()
 {
-    if (m_clientsWaitingForAsyncDecoding.isEmptyIgnoringNullReferences() || !hasImage() || !is<BitmapImage>(image()))
+    if (m_clientsWaitingForAsyncDecoding.isEmptyIgnoringNullReferences() || !hasImage())
         return;
-    downcast<BitmapImage>(image())->stopAsyncDecodingQueue();
+    RefPtr bitmapImage = dynamicDowncast<BitmapImage>(image());
+    if (!bitmapImage)
+        return;
+    bitmapImage->stopAsyncDecodingQueue();
     for (auto& client : m_clientsWaitingForAsyncDecoding)
         client.imageChanged(this);
     m_clientsWaitingForAsyncDecoding.clear();
@@ -221,16 +224,16 @@ void CachedImage::allClientsRemoved()
 std::pair<Image*, float> CachedImage::brokenImage(float deviceScaleFactor) const
 {
     if (deviceScaleFactor >= 3) {
-        static NeverDestroyed<Image*> brokenImageVeryHiRes(&Image::loadPlatformResource("missingImage@3x").leakRef());
+        static NeverDestroyed<Image*> brokenImageVeryHiRes(&ImageAdapter::loadPlatformResource("missingImage@3x").leakRef());
         return std::make_pair(brokenImageVeryHiRes, 3);
     }
 
     if (deviceScaleFactor >= 2) {
-        static NeverDestroyed<Image*> brokenImageHiRes(&Image::loadPlatformResource("missingImage@2x").leakRef());
+        static NeverDestroyed<Image*> brokenImageHiRes(&ImageAdapter::loadPlatformResource("missingImage@2x").leakRef());
         return std::make_pair(brokenImageHiRes, 2);
     }
 
-    static NeverDestroyed<Image*> brokenImageLoRes(&Image::loadPlatformResource("missingImage").leakRef());
+    static NeverDestroyed<Image*> brokenImageLoRes(&ImageAdapter::loadPlatformResource("missingImage").leakRef());
     return std::make_pair(brokenImageLoRes, 1);
 }
 
@@ -252,6 +255,11 @@ Image* CachedImage::image() const
         return m_image.get();
 
     return &Image::nullImage();
+}
+
+RefPtr<Image> CachedImage::protectedImage() const
+{
+    return image();
 }
 
 Image* CachedImage::imageForRenderer(const RenderObject* renderer)
@@ -386,8 +394,8 @@ inline void CachedImage::createImage()
     m_image = Image::create(*m_imageObserver);
 
     if (m_image) {
-        if (is<SVGImage>(*m_image))
-            m_svgImageCache = makeUnique<SVGImageCache>(&downcast<SVGImage>(*m_image));
+        if (auto* svgImage = dynamicDowncast<SVGImage>(*m_image))
+            m_svgImageCache = makeUnique<SVGImageCache>(svgImage);
 
         // Send queued container size requests.
         if (m_image->usesContainerSize()) {

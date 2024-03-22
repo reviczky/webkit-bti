@@ -27,21 +27,16 @@
 
 #if ENABLE(CONTENT_EXTENSIONS)
 
-#include "SharedMemory.h"
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/SharedMemory.h>
 #include <variant>
 #include <wtf/RefPtr.h>
-
-namespace IPC {
-class Decoder;
-class Encoder;
-}
 
 namespace WebKit {
 
 class WebCompiledContentRuleListData {
 public:
-    WebCompiledContentRuleListData(String&& identifier, Ref<SharedMemory>&& data, size_t actionsOffset, size_t actionsSize, size_t urlFiltersBytecodeOffset, size_t urlFiltersBytecodeSize, size_t topURLFiltersBytecodeOffset, size_t topURLFiltersBytecodeSize, size_t frameURLFiltersBytecodeOffset, size_t frameURLFiltersBytecodeSize)
+    WebCompiledContentRuleListData(String&& identifier, Ref<WebCore::SharedMemory>&& data, size_t actionsOffset, size_t actionsSize, size_t urlFiltersBytecodeOffset, size_t urlFiltersBytecodeSize, size_t topURLFiltersBytecodeOffset, size_t topURLFiltersBytecodeSize, size_t frameURLFiltersBytecodeOffset, size_t frameURLFiltersBytecodeSize)
         : identifier(WTFMove(identifier))
         , data(WTFMove(data))
         , actionsOffset(actionsOffset)
@@ -55,11 +50,12 @@ public:
     {
     }
 
-    void encode(IPC::Encoder&) const;
-    static std::optional<WebCompiledContentRuleListData> decode(IPC::Decoder&);
+    WebCompiledContentRuleListData(String&& identifier, std::optional<WebCore::SharedMemoryHandle>&& data, size_t actionsOffset, size_t actionsSize, size_t urlFiltersBytecodeOffset, size_t urlFiltersBytecodeSize, size_t topURLFiltersBytecodeOffset, size_t topURLFiltersBytecodeSize, size_t frameURLFiltersBytecodeOffset, size_t frameURLFiltersBytecodeSize);
+
+    std::optional<WebCore::SharedMemoryHandle> createDataHandle(WebCore::SharedMemory::Protection = WebCore::SharedMemory::Protection::ReadOnly) const;
 
     String identifier;
-    Ref<SharedMemory> data;
+    RefPtr<WebCore::SharedMemory> data;
     size_t actionsOffset { 0 };
     size_t actionsSize { 0 };
     size_t urlFiltersBytecodeOffset { 0 };

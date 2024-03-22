@@ -43,6 +43,7 @@
 #include "LegacyRenderSVGImage.h"
 #include "LocalFrame.h"
 #include "Logging.h"
+#include "MemoryCache.h"
 #include "Page.h"
 #include "RenderImage.h"
 #include "RenderSVGImage.h"
@@ -110,6 +111,22 @@ static inline bool pageIsBeingDismissed(Document& document)
     return frame && frame->loader().pageDismissalEventBeingDispatched() != FrameLoader::PageDismissalType::None;
 }
 
+// https://html.spec.whatwg.org/multipage/images.html#updating-the-image-data:list-of-available-images
+static bool canReuseFromListOfAvailableImages(const CachedResourceRequest& request, Document& document)
+{
+    CachedResource* resource = MemoryCache::singleton().resourceForRequest(request.resourceRequest(), document.page()->sessionID());
+    if (!resource || resource->stillNeedsLoad() || resource->isPreloaded())
+        return false;
+
+    if (resource->options().mode == FetchOptions::Mode::Cors && !document.securityOrigin().isSameOriginAs(*resource->origin()))
+        return false;
+
+    if (resource->options().mode != request.options().mode || resource->options().credentials != request.options().credentials)
+        return false;
+
+    return true;
+}
+
 ImageLoader::ImageLoader(Element& element)
     : m_element(element)
     , m_image(nullptr)
@@ -174,7 +191,7 @@ void ImageLoader::updateFromElement(RelevantMutation relevantMutation)
 
     AtomString attr = element().imageSourceURL();
 
-    LOG_WITH_STREAM(LazyLoading, stream << "ImageLoader " << this << " updateFromElement, current URI is " << sourceURI(attr));
+    LOG_WITH_STREAM(LazyLoading, stream << "ImageLoader " << this << " updateFromElement, current URL is " << attr);
 
     // Avoid loading a URL we already failed to load.
     if (!m_failedLoadURL.isEmpty() && attr == m_failedLoadURL)
@@ -189,12 +206,11 @@ void ImageLoader::updateFromElement(RelevantMutation relevantMutation)
         options.loadedFromPluginElement = is<HTMLPlugInElement>(element()) ? LoadedFromPluginElement::Yes : LoadedFromPluginElement::No;
         options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
         options.serviceWorkersMode = is<HTMLPlugInElement>(element()) ? ServiceWorkersMode::None : ServiceWorkersMode::All;
-        bool isImageElement = is<HTMLImageElement>(element());
-        if (isImageElement) {
-            auto& imageElement = downcast<HTMLImageElement>(element());
-            options.referrerPolicy = imageElement.referrerPolicy();
-            options.fetchPriorityHint = imageElement.fetchPriorityHint();
-            if (imageElement.usesSrcsetOrPicture())
+        RefPtr imageElement = dynamicDowncast<HTMLImageElement>(element());
+        if (imageElement) {
+            options.referrerPolicy = imageElement->referrerPolicy();
+            options.fetchPriorityHint = imageElement->fetchPriorityHint();
+            if (imageElement->usesSrcsetOrPicture())
                 options.initiator = Initiator::Imageset;
         }
 
@@ -205,7 +221,7 @@ void ImageLoader::updateFromElement(RelevantMutation relevantMutation)
         if (m_image && attr == m_pendingURL)
             imageURL = m_image->url();
         else {
-            imageURL = document.completeURL(sourceURI(attr));
+            imageURL = document.completeURL(attr);
             m_pendingURL = attr;
         }
         ResourceRequest resourceRequest(imageURL);
@@ -227,9 +243,8 @@ void ImageLoader::updateFromElement(RelevantMutation relevantMutation)
 #if !LOG_DISABLED
             auto oldState = m_lazyImageLoadState;
 #endif
-            if (m_lazyImageLoadState == LazyImageLoadState::None && isImageElement) {
-                auto& imageElement = downcast<HTMLImageElement>(element());
-                if (imageElement.isLazyLoadable() && document.settings().lazyImageLoadingEnabled()) {
+            if (m_lazyImageLoadState == LazyImageLoadState::None && imageElement) {
+                if (imageElement->isLazyLoadable() && document.settings().lazyImageLoadingEnabled() && !canReuseFromListOfAvailableImages(request, document)) {
                     m_lazyImageLoadState = LazyImageLoadState::Deferred;
                     request.setIgnoreForRequestCount(true);
                 }
@@ -324,6 +339,19 @@ void ImageLoader::updateFromElementIgnoringPreviousError(RelevantMutation releva
     updateFromElement(relevantMutation);
 }
 
+void ImageLoader::updateFromElementIgnoringPreviousErrorToSameValue()
+{
+    if (!m_image || !m_image->allowsCaching() || !m_failedLoadURL.isEmpty() || element().document().activeServiceWorker()) {
+        updateFromElementIgnoringPreviousError(RelevantMutation::Yes);
+        return;
+    }
+    if (m_hasPendingLoadEvent || !m_pendingURL.isEmpty())
+        return;
+    ASSERT(m_image);
+    m_hasPendingLoadEvent = true;
+    notifyFinished(*m_image, NetworkLoadMetrics { });
+}
+
 static inline void resolvePromises(Vector<RefPtr<DeferredPromise>>& promises)
 {
     ASSERT(!promises.isEmpty());
@@ -337,7 +365,7 @@ static inline void rejectPromises(Vector<RefPtr<DeferredPromise>>& promises, ASC
     ASSERT(!promises.isEmpty());
     auto promisesToBeRejected = std::exchange(promises, { });
     for (auto& promise : promisesToBeRejected)
-        promise->reject(Exception { EncodingError, message });
+        promise->reject(Exception { ExceptionCode::EncodingError, message });
 }
 
 inline void ImageLoader::resolveDecodePromises()
@@ -417,8 +445,8 @@ RenderImageResource* ImageLoader::renderImageResource()
 
     // We don't return style generated image because it doesn't belong to the ImageLoader.
     // See <https://bugs.webkit.org/show_bug.cgi?id=42840>
-    if (is<RenderImage>(*renderer) && !downcast<RenderImage>(*renderer).isGeneratedContent())
-        return &downcast<RenderImage>(*renderer).imageResource();
+    if (auto* renderImage = dynamicDowncast<RenderImage>(*renderer); renderImage && !renderImage->isGeneratedContent())
+        return &renderImage->imageResource();
 
     if (auto* svgImage = dynamicDowncast<LegacyRenderSVGImage>(renderer))
         return &svgImage->imageResource();
@@ -429,8 +457,8 @@ RenderImageResource* ImageLoader::renderImageResource()
 #endif
 
 #if ENABLE(VIDEO)
-    if (is<RenderVideo>(*renderer))
-        return &downcast<RenderVideo>(*renderer).imageResource();
+    if (auto* renderVideo = dynamicDowncast<RenderVideo>(*renderer))
+        return &renderVideo->imageResource();
 #endif
 
     return nullptr;
@@ -511,14 +539,12 @@ void ImageLoader::decode()
         return;
     }
 
-    Image* image = m_image->image();
-    if (!is<BitmapImage>(image)) {
+    RefPtr bitmapImage = dynamicDowncast<BitmapImage>(m_image->image());
+    if (!bitmapImage) {
         resolveDecodePromises();
         return;
     }
-
-    auto& bitmapImage = downcast<BitmapImage>(*image);
-    bitmapImage.decode([promises = WTFMove(m_decodingPromises)]() mutable {
+    bitmapImage->decode([promises = WTFMove(m_decodingPromises)]() mutable {
         resolvePromises(promises);
     });
 }
@@ -629,11 +655,8 @@ VisibleInViewportState ImageLoader::imageVisibleInViewport(const Document& docum
     if (&element().document() != &document)
         return VisibleInViewportState::No;
 
-    auto* renderer = element().renderer();
-    if (!is<RenderReplaced>(renderer))
-        return VisibleInViewportState::No;
-
-    return downcast<RenderReplaced>(*renderer).isContentLikelyVisibleInViewport() ? VisibleInViewportState::Yes : VisibleInViewportState::No;
+    auto* renderReplaced = dynamicDowncast<RenderReplaced>(element().renderer());
+    return renderReplaced && renderReplaced->isContentLikelyVisibleInViewport() ? VisibleInViewportState::Yes : VisibleInViewportState::No;
 }
 
 }

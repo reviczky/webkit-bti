@@ -25,6 +25,7 @@
 #include "CachedImageClient.h"
 #include "CachedResourceHandle.h"
 #include "Element.h"
+#include "LoaderMalloc.h"
 #include "Timer.h"
 #include <wtf/Vector.h>
 #include <wtf/text/AtomString.h>
@@ -38,13 +39,13 @@ class Page;
 class RenderImageResource;
 
 template<typename T, typename Counter> class EventSender;
-using ImageEventSender = EventSender<ImageLoader, WTF::DefaultWeakPtrImpl>;
+using ImageEventSender = EventSender<ImageLoader, SingleThreadWeakPtrImpl>;
 
 enum class RelevantMutation : bool { No, Yes };
 enum class LazyImageLoadState : uint8_t { None, Deferred, LoadImmediately, FullImage };
 
 class ImageLoader : public CachedImageClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(Loader);
 public:
     virtual ~ImageLoader();
 
@@ -52,9 +53,11 @@ public:
     // loading if a load hasn't already been started.
     void updateFromElement(RelevantMutation = RelevantMutation::No);
 
-    // This function should be called whenever the 'src' attribute is set, even if its value
-    // doesn't change; starts new load unconditionally (matches Firefox and Opera behavior).
+    // This function should be called whenever the 'src' attribute is set.
+    // Starts new load unconditionally (matches Firefox and Opera behavior).
     void updateFromElementIgnoringPreviousError(RelevantMutation = RelevantMutation::No);
+
+    void updateFromElementIgnoringPreviousErrorToSameValue();
 
     void elementDidMoveToNewDocument(Document&);
 
@@ -93,7 +96,6 @@ private:
     void resetLazyImageLoading(Document&);
 
     virtual void dispatchLoadEvent() = 0;
-    virtual String sourceURI(const AtomString&) const = 0;
 
     void updatedHasPendingEvent();
     void didUpdateCachedImage(RelevantMutation, CachedResourceHandle<CachedImage>&&);

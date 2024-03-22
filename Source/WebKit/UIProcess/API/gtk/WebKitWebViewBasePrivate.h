@@ -51,15 +51,25 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase*, Ref<API::PageConfigurati
 void webkitWebViewBaseSetTooltipText(WebKitWebViewBase*, const char*);
 void webkitWebViewBaseSetTooltipArea(WebKitWebViewBase*, const WebCore::IntRect&);
 void webkitWebViewBaseSetMouseIsOverScrollbar(WebKitWebViewBase*, WebKit::WebHitTestResultData::IsScrollbar);
+#if USE(GTK4)
+void webkitWebViewBaseProcessAcceleratorsForKeyPressEvent(WebKitWebViewBase*, GdkEvent*);
+#else
 void webkitWebViewBasePropagateKeyEvent(WebKitWebViewBase*, GdkEvent*);
+#endif
 void webkitWebViewBasePropagateWheelEvent(WebKitWebViewBase*, GdkEvent*);
 void webkitWebViewBaseChildMoveResize(WebKitWebViewBase*, GtkWidget*, const WebCore::IntRect&);
+#if ENABLE(FULLSCREEN_API)
+void webkitWebViewBaseWillEnterFullScreen(WebKitWebViewBase*);
 void webkitWebViewBaseEnterFullScreen(WebKitWebViewBase*);
+void webkitWebViewBaseWillExitFullScreen(WebKitWebViewBase*);
 void webkitWebViewBaseExitFullScreen(WebKitWebViewBase*);
 bool webkitWebViewBaseIsFullScreen(WebKitWebViewBase*);
+#endif
 void webkitWebViewBaseSetInspectorViewSize(WebKitWebViewBase*, unsigned size);
+#if ENABLE(CONTEXT_MENUS)
 void webkitWebViewBaseSetActiveContextMenuProxy(WebKitWebViewBase*, WebKit::WebContextMenuProxyGtk*);
 WebKit::WebContextMenuProxyGtk* webkitWebViewBaseGetActiveContextMenuProxy(WebKitWebViewBase*);
+#endif // ENABLE(CONTEXT_MENUS)
 
 #if USE(GTK4)
 GRefPtr<GdkEvent> webkitWebViewBaseTakeContextMenuEvent(WebKitWebViewBase*);
@@ -86,7 +96,6 @@ void webkitWebViewBaseResetClickCounter(WebKitWebViewBase*);
 void webkitWebViewBaseEnterAcceleratedCompositingMode(WebKitWebViewBase*, const WebKit::LayerTreeContext&);
 void webkitWebViewBaseUpdateAcceleratedCompositingMode(WebKitWebViewBase*, const WebKit::LayerTreeContext&);
 void webkitWebViewBaseExitAcceleratedCompositingMode(WebKitWebViewBase*);
-bool webkitWebViewBaseMakeGLContextCurrent(WebKitWebViewBase*);
 void webkitWebViewBaseWillSwapWebProcess(WebKitWebViewBase*);
 void webkitWebViewBaseDidExitWebProcess(WebKitWebViewBase*);
 void webkitWebViewBaseDidRelaunchWebProcess(WebKitWebViewBase*);
@@ -115,10 +124,6 @@ void webkitWebViewBaseDidRestoreScrollPosition(WebKitWebViewBase*);
 
 void webkitWebViewBaseShowEmojiChooser(WebKitWebViewBase*, const WebCore::IntRect&, CompletionHandler<void(String)>&&);
 
-#if USE(WPE_RENDERER)
-int webkitWebViewBaseRenderHostFileDescriptor(WebKitWebViewBase*);
-#endif
-
 void webkitWebViewBaseRequestPointerLock(WebKitWebViewBase*);
 void webkitWebViewBaseDidLosePointerLock(WebKitWebViewBase*);
 
@@ -130,3 +135,9 @@ void webkitWebViewBaseSynthesizeWheelEvent(WebKitWebViewBase*, const GdkEvent*, 
 void webkitWebViewBaseMakeBlank(WebKitWebViewBase*, bool);
 void webkitWebViewBasePageGrabbedTouch(WebKitWebViewBase*);
 void webkitWebViewBaseSetShouldNotifyFocusEvents(WebKitWebViewBase*, bool);
+
+void webkitWebViewBaseToplevelWindowIsActiveChanged(WebKitWebViewBase*, bool);
+void webkitWebViewBaseToplevelWindowStateChanged(WebKitWebViewBase*, uint32_t, uint32_t);
+void webkitWebViewBaseToplevelWindowMonitorChanged(WebKitWebViewBase*, GdkMonitor*);
+
+void webkitWebViewBaseCallAfterNextPresentationUpdate(WebKitWebViewBase*, CompletionHandler<void()>&&);

@@ -40,8 +40,9 @@ extern "C" {
 
 #define WEBKIT2_LOG_CHANNELS(M) \
     M(ActivityState) \
-    M(PrivateClickMeasurement) \
+    M(AdvancedPrivacyProtections) \
     M(AppSSO) \
+    M(Animations) \
     M(Automation) \
     M(AutomationInteractions) \
     M(BackForward) \
@@ -83,10 +84,13 @@ extern "C" {
     M(NetworkScheduling) \
     M(NetworkSession) \
     M(Notifications) \
+    M(PDF) \
     M(PerformanceLogging) \
     M(Plugins) \
     M(Printing) \
+    M(PrivateClickMeasurement) \
     M(Process) \
+    M(ProcessCapabilities) \
     M(ProcessSuspension) \
     M(ProcessSwapping) \
     M(ProximityNetworking) \
@@ -107,9 +111,11 @@ extern "C" {
     M(Storage) \
     M(StorageAPI) \
     M(SystemPreview) \
+    M(Telephony) \
     M(TextInput) \
     M(TextInteraction) \
     M(Translation) \
+    M(UnifiedTextReplacement) \
     M(UIHitTesting) \
     M(ViewGestures) \
     M(ViewState) \

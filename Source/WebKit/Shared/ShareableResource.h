@@ -27,7 +27,8 @@
 
 #if ENABLE(SHAREABLE_RESOURCE)
 
-#include "SharedMemory.h"
+#include <WebCore/SharedMemory.h>
+#include <wtf/ArgumentCoder.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
@@ -40,22 +41,20 @@ namespace WebKit {
 class ShareableResourceHandle {
     WTF_MAKE_NONCOPYABLE(ShareableResourceHandle);
 public:
-    ShareableResourceHandle();
     ShareableResourceHandle(ShareableResourceHandle&&) = default;
+    ShareableResourceHandle(WebCore::SharedMemory::Handle&&, unsigned, unsigned);
+
     ShareableResourceHandle& operator=(ShareableResourceHandle&&) = default;
 
-    bool isNull() const { return m_handle.isNull(); }
     unsigned size() const { return m_size; }
-
-    void encode(IPC::Encoder&) &&;
-    static WARN_UNUSED_RETURN bool decode(IPC::Decoder&, ShareableResourceHandle&);
 
     RefPtr<WebCore::SharedBuffer> tryWrapInSharedBuffer() &&;
 
 private:
+    friend struct IPC::ArgumentCoder<ShareableResourceHandle, void>;
     friend class ShareableResource;
 
-    SharedMemory::Handle m_handle;
+    WebCore::SharedMemory::Handle m_handle;
     unsigned m_offset { 0 };
     unsigned m_size { 0 };
 };
@@ -65,7 +64,7 @@ public:
     using Handle = ShareableResourceHandle;
 
     // Create a shareable resource that uses malloced memory.
-    static RefPtr<ShareableResource> create(Ref<SharedMemory>&&, unsigned offset, unsigned size);
+    static RefPtr<ShareableResource> create(Ref<WebCore::SharedMemory>&&, unsigned offset, unsigned size);
 
     // Create a shareable resource from a handle.
     static RefPtr<ShareableResource> map(Handle&&);
@@ -80,10 +79,10 @@ public:
 private:
     friend class ShareableResourceHandle;
 
-    ShareableResource(Ref<SharedMemory>&&, unsigned offset, unsigned size);
+    ShareableResource(Ref<WebCore::SharedMemory>&&, unsigned offset, unsigned size);
     RefPtr<WebCore::SharedBuffer> wrapInSharedBuffer();
 
-    Ref<SharedMemory> m_sharedMemory;
+    Ref<WebCore::SharedMemory> m_sharedMemory;
 
     const unsigned m_offset;
     const unsigned m_size;

@@ -58,6 +58,8 @@ public:
     void allCaches(uint64_t updateCounter, WebCore::DOMCacheEngine::CacheInfosCallback&&);
     void reference(IPC::Connection::UniqueID, WebCore::DOMCacheIdentifier);
     void dereference(IPC::Connection::UniqueID, WebCore::DOMCacheIdentifier);
+    void lockStorage(IPC::Connection::UniqueID);
+    void unlockStorage(IPC::Connection::UniqueID);
 
     void connectionClosed(IPC::Connection::UniqueID);
     bool hasDataInMemory();
@@ -67,6 +69,7 @@ public:
     void requestSpace(uint64_t size, CompletionHandler<void(bool)>&&);
     void sizeIncreased(uint64_t amount);
     void sizeDecreased(uint64_t amount);
+    void reset();
 
 private:
     void makeDirty();
@@ -79,7 +82,7 @@ private:
     bool m_isInitialized { false };
     uint64_t m_updateCounter;
     std::optional<uint64_t> m_size;
-    std::pair<uint64_t, size_t> m_pendingSize;
+    std::pair<uint64_t, HashSet<WebCore::DOMCacheIdentifier>> m_pendingSize;
     String m_path;
     FileSystem::Salt m_salt;
     CacheStorageRegistry& m_registry;
@@ -87,6 +90,7 @@ private:
     Vector<std::unique_ptr<CacheStorageCache>> m_caches;
     HashMap<WebCore::DOMCacheIdentifier, std::unique_ptr<CacheStorageCache>> m_removedCaches;
     HashMap<WebCore::DOMCacheIdentifier, Vector<IPC::Connection::UniqueID>> m_cacheRefConnections;
+    HashSet<IPC::Connection::UniqueID> m_activeConnections;
     Ref<WorkQueue> m_queue;
     Deque<std::pair<uint64_t, CompletionHandler<void(bool)>>> m_pendingSpaceRequests;
 };

@@ -87,7 +87,7 @@ static std::optional<Vector<std::pair<String, String>>> readCachesList(const Str
         if (!uniqueName)
             return std::nullopt;
 
-        result.uncheckedAppend({ WTFMove(*name), WTFMove(*uniqueName) });
+        result.append({ WTFMove(*name), WTFMove(*uniqueName) });
     }
 
     return result;
@@ -255,14 +255,29 @@ CacheStorageManager::CacheStorageManager(const String& path, CacheStorageRegistr
 
 CacheStorageManager::~CacheStorageManager()
 {
-    for (auto& request : m_pendingSpaceRequests)
+    reset();
+}
+
+void CacheStorageManager::reset()
+{
+    while (!m_pendingSpaceRequests.isEmpty()) {
+        auto request = m_pendingSpaceRequests.takeFirst();
         request.second(false);
+    }
 
     for (auto& cache : m_caches)
         m_registry.unregisterCache(cache->identifier());
+    m_caches.clear();
 
     for (auto& identifier : m_removedCaches.keys())
         m_registry.unregisterCache(identifier);
+    m_removedCaches.clear();
+
+    m_cacheRefConnections.clear();
+    m_size = std::nullopt;
+    m_pendingSize = { 0, { } };
+    m_isInitialized = false;
+    makeDirty();
 }
 
 bool CacheStorageManager::initializeCaches()
@@ -342,12 +357,15 @@ void CacheStorageManager::allCaches(uint64_t updateCounter, WebCore::DOMCacheEng
 
 void CacheStorageManager::initializeCacheSize(CacheStorageCache& cache)
 {
-    cache.getSize([this, weakThis = WeakPtr { *this }](auto size) mutable {
+    cache.getSize([this, weakThis = WeakPtr { *this }, cacheIdentifier = cache.identifier()](auto size) mutable {
         if (!weakThis)
             return;
 
+        if (!m_pendingSize.second.remove(cacheIdentifier))
+            return;
+
         m_pendingSize.first += size;
-        if (!--m_pendingSize.second)
+        if (m_pendingSize.second.isEmpty())
             finishInitializingSize();
     });
 }
@@ -372,7 +390,13 @@ void CacheStorageManager::requestSpaceAfterInitializingSize(uint64_t spaceReques
     if (m_pendingSpaceRequests.size() > 1)
         return;
 
-    m_pendingSize = { 0, m_caches.size() + m_removedCaches.size() };
+    m_pendingSize = { 0, { } };
+    for (auto& cache : m_caches)
+        m_pendingSize.second.add(cache->identifier());
+
+    for (auto& identifier : m_removedCaches.keys())
+        m_pendingSize.second.add(identifier);
+
     for (auto& cache : m_caches)
         initializeCacheSize(*cache);
 
@@ -431,8 +455,22 @@ void CacheStorageManager::dereference(IPC::Connection::UniqueID connection, WebC
     removeUnusedCache(cacheIdentifier);
 }
 
+void CacheStorageManager::lockStorage(IPC::Connection::UniqueID connection)
+{
+    ASSERT(!m_activeConnections.contains(connection));
+    m_activeConnections.add(connection);
+}
+
+void CacheStorageManager::unlockStorage(IPC::Connection::UniqueID connection)
+{
+    ASSERT(m_activeConnections.contains(connection));
+    m_activeConnections.remove(connection);
+}
+
 void CacheStorageManager::connectionClosed(IPC::Connection::UniqueID connection)
 {
+    m_activeConnections.remove(connection);
+
     HashSet<WebCore::DOMCacheIdentifier> unusedCacheIdentifiers;
     for (auto& [identifier, refConnections] : m_cacheRefConnections) {
         refConnections.removeAllMatching([&](auto refConnection) {
@@ -475,7 +513,7 @@ bool CacheStorageManager::hasDataInMemory()
 
 bool CacheStorageManager::isActive()
 {
-    return !m_cacheRefConnections.isEmpty();
+    return !m_cacheRefConnections.isEmpty() || !m_activeConnections.isEmpty();
 }
 
 String CacheStorageManager::representationString()
