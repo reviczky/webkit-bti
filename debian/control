@@ -54,7 +54,7 @@ Build-Depends: debhelper-compat (= 13),
                libegl-dev,
                libgl-dev,
                libgles-dev
-Build-Depends-Indep: gi-docgen, libglib2.0-doc, libgtk-3-doc, libsoup2.4-doc, jdupes
+Build-Depends-Indep: gi-docgen, libglib2.0-doc, libgtk-3-doc, libsoup-3.0-doc, jdupes
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit

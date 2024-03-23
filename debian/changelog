@@ -6,6 +6,8 @@ webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
     - debian/control.in: Remove build dependency on ccache.
   * Replace debian/patches/fix-ftbfs-i386.patch with a new patch for this
     version.
+  * debian/control.in:
+    - Build depend on libsoup-3.0-doc instead of libsoup2.4-doc.
   * Bring all changes from the 2.43 (experimental) branch.
   * debian/gbp.conf:
     - Update upstream branch name.
