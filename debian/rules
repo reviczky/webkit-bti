@@ -11,7 +11,7 @@ export CCACHE_DIR=$(CURDIR)/ccache
 # soup2 build -> 4.0 API packages
 # soup3 build -> 4.1 API packages
 # gtk4 build  -> 6.0 API packages
-ENABLE_SOUP2=YES
+ENABLE_SOUP2=NO
 ENABLE_SOUP3=YES
 ENABLE_GTK4=YES
 # Set to YES to use the docs from the tarball instead of generating them.

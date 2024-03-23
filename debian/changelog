@@ -1,6 +1,9 @@
 webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Stop building the 4.0 API packages.
+    - debian/rules: Set ENABLE_SOUP2=NO
+    - debian/control.in: Remove build dependency on ccache.
   * Replace debian/patches/fix-ftbfs-i386.patch with a new patch for this
     version.
   * Bring all changes from the 2.43 (experimental) branch.
