@@ -183,7 +183,9 @@ endif
 # Disable commands and binary packages of the builds that we don't want
 ifneq ($(ENABLE_SOUP2),YES)
 	SOUP2_BUILD = @:
+ifeq ($(USE_OLD_JSCBIN_PKG),YES)
 	EXTRA_DH_ARGUMENTS += -Nlibjavascriptcoregtk-4.0-bin
+endif
 else
 	SOUP2_BUILD_DEP=libsoup2.4-dev,
 	GTK3_BUILD_DEP=libgtk-3-dev,
