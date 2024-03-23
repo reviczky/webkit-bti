@@ -1,0 +1,21 @@
+From: Michael Catanzaro <mcatanzaro@redhat.com>
+Subject: Fix FTBFS on i386: static assertion failed: Timer should stay small
+Bug: https://bugs.webkit.org/show_bug.cgi?id=271108
+Origin: https://github.com/WebKit/WebKit/commit/2922af379dc70b4b1a63b01d67179eb431f03ac4
+Index: webkitgtk/Source/WebCore/platform/Timer.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/Timer.cpp
++++ webkitgtk/Source/WebCore/platform/Timer.cpp
+@@ -263,7 +263,11 @@ struct SameSizeAsTimer {
+ 
+     WeakPtr<TimerAlignment> timerAlignment;
+     double times[2];
+-    void* pointers[3];
++    void* pointers[2];
++#if CPU(ADDRESS32)
++    uint8_t bitfields;
++#endif
++    void* pointer;
+ };
+ 
+ static_assert(sizeof(Timer) == sizeof(SameSizeAsTimer), "Timer should stay small");

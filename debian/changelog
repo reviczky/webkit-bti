@@ -1,6 +1,8 @@
 webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Replace debian/patches/fix-ftbfs-i386.patch with a new patch for this
+    version.
   * Bring all changes from the 2.43 (experimental) branch.
   * debian/gbp.conf:
     - Update upstream branch name.
@@ -29,7 +31,6 @@ webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
     - Remove debian/libjavascriptcoregtk-4.0-bin.*
     - debian/rules: Add the USE_OLD_DOC_PKG and USE_OLD_JSCBIN_PKG
       variables and the logic to decide which packages to build.
-  * Drop debian/patches/fix-ftbfs-i386.patch, this is no longer needed.
   * Refresh debian/patches/disable-dmabuf-nvidia.patch.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
