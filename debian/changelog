@@ -1,4 +1,4 @@
-webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.44.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Stop building the 4.0 API packages.
@@ -42,7 +42,7 @@ webkit2gtk (2.44.0-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 22 Mar 2024 16:17:52 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 25 Mar 2024 11:33:58 +0100
 
 webkit2gtk (2.42.5-2) unstable; urgency=medium
 
