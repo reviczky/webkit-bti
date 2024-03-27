@@ -5,6 +5,9 @@ webkit2gtk (2.44.0-2) UNRELEASED; urgency=medium
     - CVE-2024-23252, CVE-2024-23254, CVE-2024-23263, CVE-2024-23280,
       CVE-2024-23284, CVE-2023-42950, CVE-2023-42956, CVE-2023-42843
       (fixed in 2.44.0).
+  * debian/patches/fix-ftbfs-riscv64.patch:
+    - Treat riscv64 as an unknown CPU to fix a FTBFS in JavaScriptCore
+      (webkit bug #271371).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 27 Mar 2024 13:30:19 +0100
 

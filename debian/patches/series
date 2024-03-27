@@ -6,3 +6,4 @@ reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
 disable-dmabuf-nvidia.patch
 fix-ftbfs-i386.patch
+fix-ftbfs-riscv64.patch
