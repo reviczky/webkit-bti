@@ -9,6 +9,7 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
     - Don't copy CFLAGS to CXXFLAGS: -Werror=implicit-function-declaration
       (default since dpkg 1.22.6) causes a FTBFS when added to the latter
       (see #1066411).
+    - Stop using -DENABLE_WEBGL=OFF on armel and powerpc.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
 

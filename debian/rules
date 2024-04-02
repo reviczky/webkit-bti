@@ -38,11 +38,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
 endif
 
-# https://bugs.webkit.org/show_bug.cgi?id=252670
-ifneq (,$(filter $(DEB_HOST_ARCH),armel powerpc))
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_WEBGL=OFF
-endif
-
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
 ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
