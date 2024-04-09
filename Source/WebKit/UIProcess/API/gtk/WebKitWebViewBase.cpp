@@ -693,27 +693,18 @@ void webkitWebViewBaseAddDialog(WebKitWebViewBase* webViewBase, GtkWidget* dialo
 {
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
     priv->dialog = dialog;
-#if USE(GTK4)
-    g_object_add_weak_pointer(G_OBJECT(dialog), reinterpret_cast<void**>(&priv->dialog));
-#endif
     gtk_widget_set_parent(dialog, GTK_WIDGET(webViewBase));
     gtk_widget_show(dialog);
+
+#if USE(GTK4)
+    g_signal_connect_object(dialog, "notify::parent", G_CALLBACK(+[](GObject*, GParamSpec*, WebKitWebViewBase* webViewBase) {
+        webViewBase->priv->dialog = nullptr;
+    }), webViewBase, static_cast<GConnectFlags>(0));
+#endif
 
     // We need to draw the shadow over the widget.
     gtk_widget_queue_draw(GTK_WIDGET(webViewBase));
 }
-
-#if USE(GTK4)
-static void webkitWebViewBaseRemoveDialog(WebKitWebViewBase* webViewBase, GtkWidget* dialog)
-{
-    WebKitWebViewBasePrivate* priv = webViewBase->priv;
-    if (!priv->dialog)
-        return;
-
-    g_object_remove_weak_pointer(G_OBJECT(dialog), reinterpret_cast<void**>(&priv->dialog));
-    g_clear_pointer(&priv->dialog, gtk_widget_unparent);
-}
-#endif
 
 #if !USE(GTK4)
 static void webkitWebViewBaseContainerRemove(GtkContainer* container, GtkWidget* widget)
@@ -844,7 +835,7 @@ static void webkitWebViewBaseDispose(GObject* gobject)
     WebKitWebViewBase* webView = WEBKIT_WEB_VIEW_BASE(gobject);
     webkitWebViewBaseNextPresentationUpdateMonitorStop(webView);
 #if USE(GTK4)
-    webkitWebViewBaseRemoveDialog(webView, webView->priv->dialog);
+    g_clear_pointer(&webView->priv->dialog, gtk_widget_unparent);
     webkitWebViewBaseRemoveWebInspector(webView, webView->priv->inspectorView);
     if (auto* widget = webView->priv->keyBindingTranslator.widget())
         gtk_widget_unparent(widget);
@@ -2582,6 +2573,7 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<AP
     }
 
     priv->pageProxy = processPool->createWebPage(*priv->pageClient, WTFMove(configuration));
+    priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
     priv->acceleratedBackingStore = AcceleratedBackingStore::create(*priv->pageProxy);
     priv->pageProxy->initializeWebPage();
 
@@ -2589,7 +2581,6 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<AP
         priv->pageProxy->windowScreenDidChange(priv->displayID);
 
     // We attach this here, because changes in scale factor are passed directly to the page proxy.
-    priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
     g_signal_connect(webkitWebViewBase, "notify::scale-factor", G_CALLBACK(deviceScaleFactorChanged), nullptr);
 }
 

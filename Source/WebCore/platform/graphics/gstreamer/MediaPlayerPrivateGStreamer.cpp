@@ -328,8 +328,8 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
         m_fillTimer.stop();
 
     ASSERT(m_pipeline);
-    setVisibleInViewport(player->isVisibleInViewport());
     setPlaybinURL(url);
+    setVisibleInViewport(player->isVisibleInViewport());
 
     GST_DEBUG_OBJECT(pipeline(), "preload: %s", convertEnumerationToString(m_preload).utf8().data());
     if (m_preload == MediaPlayer::Preload::None && !isMediaSource()) {
@@ -3493,6 +3493,10 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
         }
     }
 
+    auto textureMapperFlags = m_textureMapperFlags;
+    if (GST_VIDEO_INFO_HAS_ALPHA(&videoInfo))
+        textureMapperFlags.add({ TextureMapperFlags::ShouldBlend, TextureMapperFlags::ShouldPremultiply });
+
     ++m_sampleCount;
 
     auto& proxy = m_nicosiaLayer->proxy();
@@ -3578,7 +3582,7 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
 #endif
                 }
                 return WTFMove(object);
-            }, m_textureMapperFlags);
+            }, textureMapperFlags);
 
         auto* quarkData = static_cast<DMABufMemoryQuarkData*>(gst_mini_object_get_qdata(GST_MINI_OBJECT_CAST(memory.get()), dmabuf_memory_quark()));
         if (quarkData)
@@ -3671,7 +3675,7 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
             auto object = swapchainBuffer->createDMABufObject(initialObject.handle);
             object.colorSpace = colorSpaceForColorimetry(&GST_VIDEO_INFO_COLORIMETRY(&videoInfo));
             return object;
-        }, m_textureMapperFlags);
+        }, textureMapperFlags);
 }
 #endif // USE(TEXTURE_MAPPER_DMABUF)
 
@@ -4005,10 +4009,18 @@ void MediaPlayerPrivateGStreamer::setVisibleInViewport(bool isVisible)
     if (!isVisible) {
         GstState currentState;
         gst_element_get_state(m_pipeline.get(), &currentState, nullptr, 0);
-        if (currentState > GST_STATE_NULL)
+        // WebKitMediaSrc cannot properly handle PAUSED -> READY -> PAUSED currently, so we have to avoid transitioning
+        // back to READY when the player becomes visible.
+        GstState minimumState = isMediaSource() ? GST_STATE_PAUSED : GST_STATE_READY;
+        if (currentState >= minimumState)
             m_invisiblePlayerState = currentState;
         m_isVisibleInViewport = false;
-        gst_element_set_state(m_pipeline.get(), GST_STATE_PAUSED);
+        // Avoid setting the pipeline to PAUSED unless the playbin URL has already been set,
+        // otherwise it will fail, and may leave the pipeline stuck on READY with PAUSE pending.
+        if (!m_url.isValid())
+            return;
+        [[maybe_unused]] auto setStateResult = gst_element_set_state(m_pipeline.get(), GST_STATE_PAUSED);
+        ASSERT(setStateResult != GST_STATE_CHANGE_FAILURE);
     } else {
         m_isVisibleInViewport = true;
         if (m_invisiblePlayerState != GST_STATE_VOID_PENDING)
