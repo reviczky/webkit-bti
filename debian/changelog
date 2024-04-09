@@ -2,10 +2,10 @@ webkit2gtk (2.44.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Re-enable WebGL on armel.
-    - debian/patches/fix-ftbfs-armel.patch: fix build due to failed
-      is_always_lock_free assertion.
     - debian/rules: stop using -DENABLE_WEBGL=OFF on armel, powerpc and
       sh4.
+  * debian/patches/fix-ftbfs-i386.patch:
+    - Drop this patch, it is included in this release.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 02 Apr 2024 16:36:20 +0200
 
