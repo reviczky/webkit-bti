@@ -1,5 +1,6 @@
-webkit2gtk (2.44.0-3) UNRELEASED; urgency=medium
+webkit2gtk (2.44.1-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * Re-enable WebGL on armel.
     - debian/patches/fix-ftbfs-armel.patch: fix build due to failed
       is_always_lock_free assertion.
