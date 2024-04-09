@@ -129,6 +129,9 @@ void LayerTreeHost::scheduleLayerFlush()
     if (!m_layerFlushSchedulingEnabled)
         return;
 
+    if (m_webPage.size().isEmpty())
+        return;
+
     if (m_isWaitingForRenderer) {
         m_scheduledWhileWaitingForRenderer = true;
         return;
@@ -173,10 +176,6 @@ void LayerTreeHost::layerFlushTimerFired()
     // that WebCore makes to the relevant layers, so re-apply our changes after flushing.
     if (m_transientZoom)
         applyTransientZoomToLayers(m_transientZoomScale, m_transientZoomOrigin);
-#endif
-
-#if HAVE(DISPLAY_LINK)
-    m_compositor->updateScene();
 #endif
 }
 

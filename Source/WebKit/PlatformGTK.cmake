@@ -339,15 +339,6 @@ list(APPEND GPUProcess_SOURCES
     GPUProcess/EntryPoint/unix/GPUProcessMain.cpp
 )
 
-if (USE_LIBDRM)
-    list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
-        ${LIBDRM_INCLUDE_DIR}
-    )
-    list(APPEND WebKit_LIBRARIES
-        ${LIBDRM_LIBRARIES}
-    )
-endif ()
-
 if (GTK_UNIX_PRINT_FOUND)
     list(APPEND WebKit_LIBRARIES GTK::UnixPrint)
 endif ()
@@ -370,7 +361,7 @@ if (ENABLE_MEDIA_STREAM)
     )
 endif ()
 
-if ("${GI_VERSION}" VERSION_GREATER_EQUAL 1.79.2)
+if (GI_VERSION VERSION_GREATER_EQUAL 1.79.2)
     set(USE_GI_FINISH_FUNC_ANNOTATION 1)
 else ()
     set(USE_GI_FINISH_FUNC_ANNOTATION 0)
