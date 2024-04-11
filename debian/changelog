@@ -2,6 +2,9 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Refresh all patches.
+  * debian/rules:
+    - Stop setting USE_LD_GOLD, it has been removed upstream so it no
+      longer has any effect (see webkit bug #235476).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
 
