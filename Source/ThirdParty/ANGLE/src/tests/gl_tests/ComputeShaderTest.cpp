@@ -2414,9 +2414,6 @@ TEST_P(ComputeShaderTest, AtomicFunctionsNoReturnValue)
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
 
-    // Fails on AMD windows drivers.  http://anglebug.com/3872
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsVulkan());
-
     // Fails to link on Android.  http://anglebug.com/3874
     ANGLE_SKIP_TEST_IF(IsAndroid());
 
@@ -2483,9 +2480,6 @@ TEST_P(ComputeShaderTest, AtomicFunctionsInNonInitializerSingleAssignment)
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
 
-    // Fails on AMD windows drivers.  http://anglebug.com/3872
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsVulkan());
-
     const char kCSShader[] = R"(#version 310 es
 layout (local_size_x = 9, local_size_y = 1, local_size_z = 1) in;
 layout (r32i, binding = 0) readonly uniform highp iimage2D srcImage;
@@ -2534,9 +2528,6 @@ TEST_P(ComputeShaderTest, AtomicFunctionsInitializerWithUnsigned)
 {
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
-
-    // Fails on AMD windows drivers.  http://anglebug.com/3872
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsVulkan());
 
     constexpr char kCShader[] = R"(#version 310 es
 layout (local_size_x = 9, local_size_y = 1, local_size_z = 1) in;
@@ -2597,9 +2588,6 @@ TEST_P(ComputeShaderTest, AtomicFunctionsReturnWithUnsigned)
 {
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
-
-    // Fails on AMD windows drivers.  http://anglebug.com/3872
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsVulkan());
 
     constexpr char kCShader[] = R"(#version 310 es
 layout (local_size_x = 9, local_size_y = 1, local_size_z = 1) in;
@@ -3248,9 +3236,6 @@ TEST_P(ComputeShaderTest, UniformDirty)
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
 
-    // glReadPixels is getting the result of the first dispatch call.  http://anglebug.com/3879
-    ANGLE_SKIP_TEST_IF(IsVulkan() && IsWindows() && (IsAMD() || IsNVIDIA()));
-
     GLTexture texture[2];
     GLFramebuffer framebuffer;
     constexpr char kCS[] = R"(#version 310 es
@@ -3766,9 +3751,6 @@ TEST_P(ComputeShaderTest, DrawDispatchDispatchDraw)
 {
     // http://anglebug.com/5072
     ANGLE_SKIP_TEST_IF(IsIntel() && IsLinux() && IsOpenGL());
-
-    // Fails on AMD windows drivers.  http://anglebug.com/3871
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsVulkan());
 
     const char kCSSource[] = R"(#version 310 es
 layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
@@ -5124,6 +5106,12 @@ void main()
 // Test fragment shader read a image, followed by compute shader sample it.
 TEST_P(ComputeShaderTest, FSReadImageThenCSSample)
 {
+    GLint maxFragmentImageUniforms = 0;
+    glGetIntegerv(GL_MAX_FRAGMENT_IMAGE_UNIFORMS, &maxFragmentImageUniforms);
+
+    // MAX_FRAGMENT_IMAGE_UNIFORMS can be 0 according to OpenGL ES 3.1 SPEC.
+    ANGLE_SKIP_TEST_IF(maxFragmentImageUniforms == 0);
+
     constexpr char kVSSource[] = R"(#version 310 es
 in vec4 a_position;
 out vec2 v_texCoord;
@@ -5390,6 +5378,58 @@ TEST_P(ComputeShaderTest, AtomicOpPreviousValueAssignedToSSBO)
     }
 }
 
+class StorageImageRenderProgramTest : public ANGLETest<>
+{};
+
+// Test creating a program with a vertex shader using storage image.
+TEST_P(StorageImageRenderProgramTest, StorageImageInVertexShader)
+{
+    GLint maxVertexShaderImage = 0;
+    glGetIntegerv(GL_MAX_VERTEX_IMAGE_UNIFORMS, &maxVertexShaderImage);
+
+    // MAX_VERTEX_IMAGE_UNIFORMS can be 0 according to OpenGL ES 3.1 SPEC.
+    ANGLE_SKIP_TEST_IF(maxVertexShaderImage == 0);
+
+    constexpr char kVSSource_readonly[] = R"(#version 310 es
+layout(rgba32f, binding = 0) readonly uniform highp image2D uIn;
+void main()
+{
+    gl_Position = imageLoad(uIn, ivec2(0, 0));
+})";
+
+    constexpr char kVSSource_writeonly[] = R"(#version 310 es
+layout(rgba32f, binding = 0) writeonly uniform highp image2D uOut;
+void main()
+{
+    gl_Position = vec4(0, 0, 0, 1);
+    imageStore(uOut, ivec2(0, 0), vec4(0, 0, 0, 1));
+})";
+
+    constexpr char kVSSource_readwrite[] = R"(#version 310 es
+layout(r32f, binding = 0) uniform highp image2D uImage;
+void main()
+{
+    gl_Position = imageLoad(uImage, ivec2(0, 0));
+    imageStore(uImage, ivec2(0, 0), vec4(0, 0, 0, 1));
+})";
+
+    constexpr char kFSSource[] = R"(#version 310 es
+precision mediump float;
+out vec4 out_FragColor;
+void main()
+{
+    out_FragColor = vec4(0, 1, 0, 1);
+})";
+    ANGLE_GL_PROGRAM(program1, kVSSource_readonly, kFSSource);
+    EXPECT_GL_NO_ERROR();
+
+    ANGLE_GL_PROGRAM(program2, kVSSource_writeonly, kFSSource);
+    EXPECT_GL_NO_ERROR();
+
+    ANGLE_GL_PROGRAM(program3, kVSSource_readwrite, kFSSource);
+    EXPECT_GL_NO_ERROR();
+}
+
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ComputeShaderTest);
 ANGLE_INSTANTIATE_TEST_ES31(ComputeShaderTest);
 
@@ -5398,4 +5438,7 @@ ANGLE_INSTANTIATE_TEST_ES3(ComputeShaderTestES3);
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(WebGL2ComputeTest);
 ANGLE_INSTANTIATE_TEST_ES31(WebGL2ComputeTest);
+
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(StorageImageRenderProgramTest);
+ANGLE_INSTANTIATE_TEST_ES31(StorageImageRenderProgramTest);
 }  // namespace

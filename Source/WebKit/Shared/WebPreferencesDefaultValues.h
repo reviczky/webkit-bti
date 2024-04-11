@@ -41,6 +41,8 @@ bool defaultCSSOMViewScrollingAPIEnabled();
 bool defaultShouldPrintBackgrounds();
 bool defaultAlternateFormControlDesignEnabled();
 bool defaultVideoFullscreenRequiresElementFullscreen();
+bool defaultUseAsyncUIKitInteractions();
+bool defaultWriteRichTextDataWhenCopyingOrDragging();
 #if ENABLE(TEXT_AUTOSIZING)
 bool defaultTextAutosizingUsesIdempotentMode();
 #endif
@@ -64,8 +66,6 @@ bool defaultAppleMailPaginationQuirkEnabled();
 bool allowsDeprecatedSynchronousXMLHttpRequestDuringUnload();
 #endif
 
-bool defaultOfflineWebApplicationCacheEnabled();
-
 #if ENABLE(MEDIA_STREAM)
 bool defaultCaptureAudioInGPUProcessEnabled();
 bool defaultCaptureAudioInUIProcessEnabled();
@@ -76,7 +76,7 @@ bool defaultManageCaptureStatusBarInGPUProcessEnabled();
 bool defaultMediaSourceEnabled();
 #endif
 
-#if ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE)
 bool defaultManagedMediaSourceEnabled();
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 bool defaultManagedMediaSourceNeedsAirPlay();
@@ -99,6 +99,7 @@ bool defaultGamepadVibrationActuatorEnabled();
 
 bool defaultRunningBoardThrottlingEnabled();
 bool defaultShouldDropNearSuspendedAssertionAfterDelay();
+bool defaultShouldTakeNearSuspendedAssertion();
 bool defaultShowModalDialogEnabled();
 bool defaultLiveRangeSelectionEnabled();
 

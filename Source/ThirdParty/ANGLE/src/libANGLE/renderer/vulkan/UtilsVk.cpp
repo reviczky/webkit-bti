@@ -26,6 +26,7 @@ namespace ImageClear_frag                   = vk::InternalShader::ImageClear_fra
 namespace ImageCopy_frag                    = vk::InternalShader::ImageCopy_frag;
 namespace CopyImageToBuffer_comp            = vk::InternalShader::CopyImageToBuffer_comp;
 namespace BlitResolve_frag                  = vk::InternalShader::BlitResolve_frag;
+namespace Blit3DSrc_frag                    = vk::InternalShader::Blit3DSrc_frag;
 namespace BlitResolveStencilNoExport_comp   = vk::InternalShader::BlitResolveStencilNoExport_comp;
 namespace ExportStencil_frag                = vk::InternalShader::ExportStencil_frag;
 namespace ConvertIndexIndirectLineLoop_comp = vk::InternalShader::ConvertIndexIndirectLineLoop_comp;
@@ -1342,6 +1343,11 @@ void UtilsVk::destroy(ContextVk *contextVk)
         programAndPipelines.program.destroy(renderer);
         programAndPipelines.pipelines.destroy(contextVk);
     }
+    for (GraphicsShaderProgramAndPipelines &programAndPipelines : mBlit3DSrc)
+    {
+        programAndPipelines.program.destroy(renderer);
+        programAndPipelines.pipelines.destroy(contextVk);
+    }
     for (ComputeShaderProgramAndPipelines &programAndPipelines : mBlitResolveStencilNoExport)
     {
         programAndPipelines.program.destroy(renderer);
@@ -1798,7 +1804,7 @@ angle::Result UtilsVk::setupComputeProgram(
 
     ASSERT(function >= Function::ComputeStartIndex);
 
-    const vk::BindingPointer<vk::PipelineLayout> &pipelineLayout = mPipelineLayouts[function];
+    const vk::AtomicBindingPointer<vk::PipelineLayout> &pipelineLayout = mPipelineLayouts[function];
 
     if (!programAndPipelines->program.valid(gl::ShaderType::Compute))
     {
@@ -2414,7 +2420,9 @@ angle::Result UtilsVk::clearFramebuffer(ContextVk *contextVk,
     shaderParams.clearDepth = params.depthStencilClearValue.depth;
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     pipelineDesc.setColorWriteMasks(0, gl::DrawBufferMask(), gl::DrawBufferMask());
     pipelineDesc.setSingleColorWriteMask(params.colorAttachmentIndexGL, params.colorMaskFlags);
     pipelineDesc.setRasterizationSamples(framebuffer->getSamples());
@@ -2570,7 +2578,9 @@ angle::Result UtilsVk::clearImage(ContextVk *contextVk,
     renderPassDesc.packColorAttachment(0, dstActualFormat.id);
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     pipelineDesc.setSingleColorWriteMask(0, params.colorMaskFlags);
     pipelineDesc.setRasterizationSamples(dst->getSamples());
     pipelineDesc.setRenderPassDesc(renderPassDesc);
@@ -2759,9 +2769,22 @@ angle::Result UtilsVk::blitResolveImpl(ContextVk *contextVk,
         GetBlitResolveFlags(blitColor, blitDepth, blitStencil, src->getIntendedFormat());
     flags |= src->getLayerCount() > 1 ? BlitResolve_frag::kSrcIsArray : 0;
     flags |= isResolve ? BlitResolve_frag::kIsResolve : 0;
+    Function function = Function::BlitResolve;
+
+    // Note: a different shader is used for 3D color blits, but otherwise the desc sets, parameters
+    // etc are identical.
+    const bool isSrc3D = src->getType() == VK_IMAGE_TYPE_3D;
+    ASSERT(!isSrc3D || (blitColor && !isResolve));
+    if (isSrc3D)
+    {
+        flags = GetFormatFlags(src->getIntendedFormat(), Blit3DSrc_frag::kBlitInt,
+                               Blit3DSrc_frag::kBlitUint, Blit3DSrc_frag::kBlitFloat);
+    }
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     if (blitColor)
     {
         constexpr VkColorComponentFlags kAllColorComponents =
@@ -2864,11 +2887,19 @@ angle::Result UtilsVk::blitResolveImpl(ContextVk *contextVk,
     vk::RefCounted<vk::ShaderModule> *vertexShader   = nullptr;
     vk::RefCounted<vk::ShaderModule> *fragmentShader = nullptr;
     ANGLE_TRY(shaderLibrary.getFullScreenTri_vert(contextVk, 0, &vertexShader));
-    ANGLE_TRY(shaderLibrary.getBlitResolve_frag(contextVk, flags, &fragmentShader));
+    if (isSrc3D)
+    {
+        ANGLE_TRY(shaderLibrary.getBlit3DSrc_frag(contextVk, flags, &fragmentShader));
+    }
+    else
+    {
+        ANGLE_TRY(shaderLibrary.getBlitResolve_frag(contextVk, flags, &fragmentShader));
+    }
 
-    ANGLE_TRY(setupGraphicsProgram(contextVk, Function::BlitResolve, vertexShader, fragmentShader,
-                                   &mBlitResolve[flags], &pipelineDesc, descriptorSet,
-                                   &shaderParams, sizeof(shaderParams), commandBuffer));
+    ANGLE_TRY(setupGraphicsProgram(contextVk, function, vertexShader, fragmentShader,
+                                   isSrc3D ? &mBlit3DSrc[flags] : &mBlitResolve[flags],
+                                   &pipelineDesc, descriptorSet, &shaderParams,
+                                   sizeof(shaderParams), commandBuffer));
 
     // Set dynamic state
     VkViewport viewport;
@@ -2926,8 +2957,8 @@ angle::Result UtilsVk::stencilBlitResolveNoShaderExport(ContextVk *contextVk,
     uint32_t bufferRowLengthInUints = UnsignedCeilDivide(params.blitArea.width, sizeof(uint32_t));
     VkDeviceSize bufferSize = bufferRowLengthInUints * sizeof(uint32_t) * params.blitArea.height;
 
-    ANGLE_TRY(blitBuffer.get().initSuballocation(
-        contextVk, contextVk->getRenderer()->getDeviceLocalMemoryTypeIndex(),
+    ANGLE_TRY(contextVk->initBufferAllocation(
+        &blitBuffer.get(), contextVk->getRenderer()->getDeviceLocalMemoryTypeIndex(),
         static_cast<size_t>(bufferSize), contextVk->getRenderer()->getDefaultBufferAlignment(),
         BufferUsageType::Static));
 
@@ -3108,7 +3139,7 @@ angle::Result UtilsVk::copyImage(ContextVk *contextVk,
     const angle::Format &srcIntendedFormat = src->getIntendedFormat();
     const angle::Format &dstIntendedFormat = dst->getIntendedFormat();
 
-    bool isYUV = srcIntendedFormat.isYUV;
+    bool isYUV = src->getYcbcrConversionDesc().valid();
 
     vk::SamplerDesc samplerDesc;
     if (isYUV)
@@ -3220,7 +3251,9 @@ angle::Result UtilsVk::copyImage(ContextVk *contextVk,
     ASSERT(src->getSamples() == 1);
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     pipelineDesc.setRenderPassDesc(renderPassDesc);
     pipelineDesc.setRasterizationSamples(dst->getSamples());
 
@@ -3233,7 +3266,6 @@ angle::Result UtilsVk::copyImage(ContextVk *contextVk,
         (params.srcRotation == SurfaceRotation::Rotated270Degrees))
     {
         // The surface is rotated 90/270 degrees.  This changes the aspect ratio of the surface.
-        std::swap(renderArea.x, renderArea.y);
         std::swap(renderArea.width, renderArea.height);
     }
 
@@ -4001,7 +4033,9 @@ angle::Result UtilsVk::unresolve(ContextVk *contextVk,
     }
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     pipelineDesc.setRasterizationSamples(framebuffer->getSamples());
     pipelineDesc.setRenderPassDesc(framebuffer->getRenderPassDesc());
 
@@ -4234,7 +4268,9 @@ angle::Result UtilsVk::drawOverlay(ContextVk *contextVk,
     renderPassDesc.packColorAttachment(0, dst->getActualFormatID());
 
     vk::GraphicsPipelineDesc pipelineDesc;
-    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete);
+    pipelineDesc.initDefaults(contextVk, vk::GraphicsPipelineSubset::Complete,
+                              contextVk->pipelineRobustness(),
+                              contextVk->pipelineProtectedAccess());
     pipelineDesc.setRenderPassDesc(renderPassDesc);
     pipelineDesc.setTopology(gl::PrimitiveMode::TriangleStrip);
     pipelineDesc.setSingleBlend(0, true, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_SRC_ALPHA,

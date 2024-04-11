@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(SERVICE_WORKER)
-
 #include <WebCore/SWRegistrationStore.h>
 #include <WebCore/ServiceWorkerContextData.h>
 #include <WebCore/Timer.h>
@@ -57,6 +55,9 @@ private:
     void updateToStorage(CompletionHandler<void()>&&);
     void updateTimerFired() { updateToStorage([] { }); }
 
+    CheckedPtr<NetworkStorageManager> checkedManager() const;
+    RefPtr<WebCore::SWServer> protectedServer() const;
+
     WeakPtr<WebCore::SWServer> m_server;
     WeakPtr<NetworkStorageManager> m_manager;
     WebCore::Timer m_updateTimer;
@@ -64,5 +65,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)

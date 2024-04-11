@@ -62,8 +62,8 @@ exclude Source/ThirdParty
 directory Source/ThirdParty/ANGLE
 directory Source/ThirdParty/gtest
 directory Source/ThirdParty/pdfjs
-# We need to include ThirdParty/pdfjs/web/locale/ca/viewer.properties manually, because ca directories are excluded as port specific.
-file Source/ThirdParty/pdfjs/web/locale/ca/viewer.properties
+# We need to include ThirdParty/pdfjs/web/locale/ca/viewer.ftl manually, because ca directories are excluded as port specific.
+file Source/ThirdParty/pdfjs/web/locale/ca/viewer.ftl
 directory Source/ThirdParty/xdgmime
 
 exclude Source/WebKit/Resources
@@ -71,7 +71,6 @@ exclude Source/WebKit/Resources
 # We do want to include the NEWS, but we want it to be in the root of the archive.
 file Source/WebKit/wpe/NEWS NEWS
 
-file Source/WebCore/en.lproj/mediaControlsLocalizedStrings.js Source/WebCore/en.lproj/mediaControlsLocalizedStrings.js
 file Source/WebInspectorUI/Localizations/en.lproj/localizedStrings.js Source/WebInspectorUI/Localizations/en.lproj/localizedStrings.js
 
 # Include only the resources we actually build
@@ -100,6 +99,8 @@ file CMakeLists.txt
 file Tools/CMakeLists.txt
 file Tools/PlatformWPE.cmake
 
+file Tools/Scripts/rewrite-compile-commands
+
 directory ${CMAKE_BINARY_DIR}/Documentation/wpe-javascriptcore-${WPE_API_VERSION} Documentation/wpe-javascriptcore-${WPE_API_VERSION}
 directory ${CMAKE_BINARY_DIR}/Documentation/wpe-webkit-${WPE_API_VERSION} Documentation/wpe-webkit-${WPE_API_VERSION}
-directory ${CMAKE_BINARY_DIR}/Documentation/wpe-web-extension-${WPE_API_VERSION} Documentation/wpe-web-extension-${WPE_API_VERSION}
+directory ${CMAKE_BINARY_DIR}/Documentation/${WPE_WEB_PROCESS_EXTENSION_PC_MODULE} Documentation/wpe-web-extension-${WPE_API_VERSION}

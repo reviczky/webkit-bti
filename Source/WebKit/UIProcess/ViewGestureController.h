@@ -31,6 +31,7 @@
 #include <WebCore/Color.h>
 #include <WebCore/FloatRect.h>
 #include <WebCore/FloatSize.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/RunLoop.h>
@@ -87,6 +88,8 @@ typedef struct {
     bool isEnd;
 } PlatformGtkScrollData;
 typedef PlatformGtkScrollData* PlatformScrollEvent;
+#else
+typedef void* PlatformScrollEvent;
 #endif
 
 namespace WebKit {
@@ -96,10 +99,14 @@ class WebBackForwardListItem;
 class WebPageProxy;
 class WebProcessProxy;
 
-class ViewGestureController : private IPC::MessageReceiver {
+class ViewGestureController : public IPC::MessageReceiver {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(ViewGestureController);
 public:
+
+    static constexpr double defaultMinMagnification { 1 };
+    static constexpr double defaultMaxMagnification { 3 };
+
     ViewGestureController(WebPageProxy&);
     ~ViewGestureController();
     void platformTeardown();
@@ -144,7 +151,7 @@ public:
 
 #if PLATFORM(MAC)
     void handleMagnificationGestureEvent(PlatformScrollEvent, WebCore::FloatPoint origin);
-    void handleSmartMagnificationGesture(WebCore::FloatPoint origin);
+    void handleSmartMagnificationGesture(WebCore::FloatPoint gestureLocationInViewCoordinates);
 
     void gestureEventWasNotHandledByWebCore(PlatformScrollEvent, WebCore::FloatPoint origin);
 
@@ -271,7 +278,7 @@ private:
 
 #if PLATFORM(MAC)
     // Message handlers.
-    void didCollectGeometryForSmartMagnificationGesture(WebCore::FloatPoint origin, WebCore::FloatRect renderRect, WebCore::FloatRect visibleContentBounds, bool fitEntireRect, double viewportMinimumScale, double viewportMaximumScale);
+    void didCollectGeometryForSmartMagnificationGesture(WebCore::FloatPoint origin, WebCore::FloatRect absoluteTargetRect, WebCore::FloatRect visibleContentBounds, bool fitEntireRect, double viewportMinimumScale, double viewportMaximumScale);
 #endif
 
 #if !PLATFORM(IOS_FAMILY)
@@ -292,7 +299,7 @@ private:
     bool shouldUseSnapshotForSize(ViewSnapshot&, WebCore::FloatSize swipeLayerSize, float topContentInset);
 
 #if PLATFORM(MAC)
-    static double resistanceForDelta(double deltaScale, double currentScale);
+    static double resistanceForDelta(double deltaScale, double currentScale, double minMagnification, double maxMagnification);
 
     CALayer* determineSnapshotLayerParent() const;
     CALayer* determineLayerAdjacentToSnapshotForParent(SwipeDirection, CALayer* snapshotLayerParent) const;
@@ -368,10 +375,10 @@ private:
 
     bool m_hasOutstandingRepaintRequest { false };
 
-    double m_magnification;
+    double m_magnification { 1 };
     WebCore::FloatPoint m_magnificationOrigin;
 
-    double m_initialMagnification;
+    double m_initialMagnification { 1 };
     WebCore::FloatPoint m_initialMagnificationOrigin;
 #endif
 
@@ -484,11 +491,6 @@ private:
 
     SnapshotRemovalTracker m_snapshotRemovalTracker;
     WTF::Function<void()> m_loadCallback;
-
-#if !PLATFORM(IOS_FAMILY)
-    static constexpr double minMagnification { 1 };
-    static constexpr double maxMagnification { 3 };
-#endif
 };
 
 } // namespace WebKit

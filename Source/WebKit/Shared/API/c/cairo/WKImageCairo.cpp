@@ -27,10 +27,10 @@
 #include "config.h"
 #include "WKImageCairo.h"
 
-#include "ShareableBitmap.h"
 #include "WKSharedAPICast.h"
 #include "WebImage.h"
 #include <WebCore/GraphicsContextCairo.h>
+#include <WebCore/ShareableBitmap.h>
 #include <cairo.h>
 
 cairo_surface_t* WKImageCreateCairoSurface(WKImageRef imageRef)
@@ -43,7 +43,9 @@ WKImageRef WKImageCreateFromCairoSurface(cairo_surface_t* surface, WKImageOption
 {
     WebCore::IntSize imageSize(cairo_image_surface_get_width(surface), cairo_image_surface_get_height(surface));
     auto webImage = WebKit::WebImage::create(imageSize, WebKit::toImageOptions(options), WebCore::DestinationColorSpace::SRGB());
-    auto& graphicsContext = webImage->context();
+    if (!webImage->context())
+        return nullptr;
+    auto& graphicsContext = *webImage->context();
 
     cairo_t* cr = graphicsContext.platformContext()->cr();
     cairo_set_source_surface(cr, surface, 0, 0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,17 +29,18 @@
 
 #include "Connection.h"
 #include "GPUConnectionToWebProcessMessages.h"
+#include "GPUProcessPreferencesForWebProcess.h"
 #include "MessageReceiverMap.h"
 #include "RemoteAudioHardwareListenerIdentifier.h"
 #include "RemoteAudioSessionIdentifier.h"
 #include "RemoteGPU.h"
-#include "RemoteImageBuffer.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
 #include "RemoteSerializedImageBufferIdentifier.h"
 #include "RenderingBackendIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
 #include "ThreadSafeObjectHeap.h"
 #include "WebGPUIdentifier.h"
+#include <WebCore/ImageBuffer.h>
 #include <WebCore/IntDegrees.h>
 #include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/NowPlayingManager.h>
@@ -51,6 +52,10 @@
 #include <wtf/Logger.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/ThreadSafeRefCounted.h>
+
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+#include "SampleBufferDisplayLayerIdentifier.h"
+#endif
 
 #if ENABLE(WEBGL)
 #include "GraphicsContextGLIdentifier.h"
@@ -131,14 +136,19 @@ public:
     static Ref<GPUConnectionToWebProcess> create(GPUProcess&, WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&);
     virtual ~GPUConnectionToWebProcess();
 
-    void updateWebGPUEnabled(bool webGPUEnabled) { m_webGPUEnabled = webGPUEnabled; }
-    void updateDOMRenderingEnabled(bool isDOMRenderingEnabled) { m_isDOMRenderingEnabled = isDOMRenderingEnabled; }
+    bool isWebGPUEnabled() const { return m_preferences.isWebGPUEnabled; }
+    bool isWebGLEnabled() const { return m_preferences.isWebGLEnabled; }
+
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    bool isDynamicContentScalingEnabled() const { return m_preferences.isDynamicContentScalingEnabled; }
+#endif
 
     using WebCore::NowPlayingManager::Client::weakPtrFactory;
     using WebCore::NowPlayingManager::Client::WeakValueType;
     using WebCore::NowPlayingManager::Client::WeakPtrImplType;
 
     IPC::Connection& connection() { return m_connection.get(); }
+    Ref<IPC::Connection> protectedConnection() { return m_connection; }
     IPC::MessageReceiverMap& messageReceiverMap() { return m_messageReceiverMap; }
     GPUProcess& gpuProcess() { return m_gpuProcess.get(); }
     WebCore::ProcessIdentifier webProcessIdentifier() const { return m_webProcessIdentifier; }
@@ -150,7 +160,7 @@ public:
     PAL::SessionID sessionID() const { return m_sessionID; }
 
     bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
-    bool allowTestOnlyIPC() const { return m_allowTestOnlyIPC; }
+    bool allowTestOnlyIPC() const { return m_preferences.allowTestOnlyIPC; }
 
     Logger& logger();
 
@@ -214,7 +224,7 @@ public:
 
     void lowMemoryHandler(WTF::Critical, WTF::Synchronous);
 
-    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
+    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<WebCore::ImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
 
 #if ENABLE(WEBGL)
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
@@ -237,6 +247,11 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void overridePresentingApplicationPIDIfNeeded();
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    String mediaEnvironment(WebCore::PageIdentifier);
+    void setMediaEnvironment(WebCore::PageIdentifier, const String&);
 #endif
 
 private:
@@ -268,12 +283,11 @@ private:
     void clearNowPlayingInfo();
     void setNowPlayingInfo(WebCore::NowPlayingInfo&&);
 
-#if ENABLE(VP9)
-    void enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder);
-#endif
-
 #if ENABLE(MEDIA_SOURCE)
     void enableMockMediaSource();
+#endif
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    void updateSampleBufferDisplayLayerBoundsAndPosition(WebKit::SampleBufferDisplayLayerIdentifier, WebCore::FloatRect, std::optional<MachSendRight>&&);
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
@@ -333,7 +347,7 @@ private:
     std::unique_ptr<RemoteAudioDestinationManager> m_remoteAudioDestinationManager;
 #endif
 #if ENABLE(VIDEO)
-    std::unique_ptr<RemoteMediaResourceManager> m_remoteMediaResourceManager;
+    RefPtr<RemoteMediaResourceManager> m_remoteMediaResourceManager WTF_GUARDED_BY_CAPABILITY(mainThread);
     UniqueRef<RemoteMediaPlayerManagerProxy> m_remoteMediaPlayerManagerProxy;
 #endif
     PAL::SessionID m_sessionID;
@@ -359,7 +373,7 @@ private:
     IPC::ScopedActiveMessageReceiveQueue<LibWebRTCCodecsProxy> m_libWebRTCCodecsProxy;
 #endif
 #if HAVE(AUDIT_TOKEN)
-    std::optional<audit_token_t> m_presentingApplicationAuditToken;
+    const std::optional<audit_token_t> m_presentingApplicationAuditToken;
 #endif
 
     RemoteRenderingBackendMap m_remoteRenderingBackendMap;
@@ -367,7 +381,7 @@ private:
     using RemoteGraphicsContextGLMap = HashMap<GraphicsContextGLIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGraphicsContextGL>>;
     RemoteGraphicsContextGLMap m_remoteGraphicsContextGLMap;
 #endif
-    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
+    IPC::ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<WebCore::ImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
     using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
     RemoteGPUMap m_remoteGPUMap;
 #if ENABLE(ENCRYPTED_MEDIA)
@@ -401,12 +415,14 @@ private:
 #endif
 
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;
-    bool m_isDOMRenderingEnabled { false };
     bool m_isActiveNowPlayingProcess { false };
-    bool m_isLockdownModeEnabled { false };
-    bool m_allowTestOnlyIPC { false };
+    const bool m_isLockdownModeEnabled { false };
 #if ENABLE(MEDIA_SOURCE)
     bool m_mockMediaSourceEnabled { false };
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    HashMap<WebCore::PageIdentifier, String> m_mediaEnvironments;
 #endif
 
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
@@ -415,7 +431,9 @@ private:
 #if ENABLE(IPC_TESTING_API)
     IPCTester m_ipcTester;
 #endif
-    bool m_webGPUEnabled { false };
+    // GPU preferences don't change for a given WebProcess. Pages that use different GPUProcessPreferences
+    // cannot be in the same WebProcess.
+    const GPUProcessPreferencesForWebProcess m_preferences;
 };
 
 } // namespace WebKit

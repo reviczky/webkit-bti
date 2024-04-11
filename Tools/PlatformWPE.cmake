@@ -30,7 +30,7 @@ if (ENABLE_COG)
         set(WPE_COG_REPO "https://github.com/Igalia/cog.git")
     endif ()
     if ("${WPE_COG_TAG}" STREQUAL "")
-        set(WPE_COG_TAG "49c2de4c82fe95571b95df48ec2a9319561d15b0")
+        set(WPE_COG_TAG "843f874484d09b9e492683a50f4707e584e3fcb6")
     endif ()
     # TODO Use GIT_REMOTE_UPDATE_STRATEGY with 3.18 to allow switching between
     # conflicting branches without having to delete the repo

@@ -32,6 +32,7 @@
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/WallTime.h>
+#include <wtf/WeakRef.h>
 
 #if USE(SOUP)
 #include "SoupCookiePersistentStorageType.h"
@@ -55,7 +56,7 @@ public:
     WebCookieManager(NetworkProcess&);
     ~WebCookieManager();
 
-    static const char* supplementName();
+    static ASCIILiteral supplementName();
 
     void setHTTPCookieAcceptPolicy(PAL::SessionID, WebCore::HTTPCookieAcceptPolicy, CompletionHandler<void()>&&);
 
@@ -66,6 +67,8 @@ public:
     void notifyCookiesDidChange(PAL::SessionID);
 
 private:
+    Ref<NetworkProcess> protectedProcess();
+
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
@@ -91,7 +94,7 @@ private:
     void startObservingCookieChanges(PAL::SessionID);
     void stopObservingCookieChanges(PAL::SessionID);
 
-    NetworkProcess& m_process;
+    WeakRef<NetworkProcess> m_process;
 };
 
 #if PLATFORM(COCOA)

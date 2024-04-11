@@ -11,7 +11,6 @@
 #include "common/debug.h"
 #include "common/utilities.h"
 #include "libANGLE/Context.h"
-#include "libANGLE/Display.h"
 #include "libANGLE/Renderbuffer.h"
 #include "libANGLE/Texture.h"
 #include "libANGLE/angletypes.h"
@@ -152,6 +151,11 @@ bool ImageSibling::hasFrontBufferUsage() const
 bool ImageSibling::hasProtectedContent() const
 {
     return mTargetOf.get() && mTargetOf->hasProtectedContent();
+}
+
+bool ImageSibling::hasFoveatedRendering() const
+{
+    return mTargetOf.get() && mTargetOf->hasFoveatedRendering();
 }
 
 void ImageSibling::notifySiblings(angle::SubjectMessage message)
@@ -312,16 +316,23 @@ Image::Image(rx::EGLImplFactory *factory,
     : mState(id, target, buffer, attribs),
       mImplementation(factory->createImage(mState, context, target, attribs)),
       mOrphanedAndNeedsInit(false),
-      mSharedContextMutex(nullptr)
+      mContextMutex(nullptr)
 {
     ASSERT(mImplementation != nullptr);
     ASSERT(buffer != nullptr);
 
-    if (kIsSharedContextMutexEnabled && context != nullptr)
+    if (kIsContextMutexEnabled)
     {
-        ASSERT(context->isSharedContextMutexActive());
-        mSharedContextMutex = context->getContextMutex();
-        mSharedContextMutex->addRef();
+        if (context != nullptr)
+        {
+            mContextMutex = context->getContextMutex().getRoot();
+            ASSERT(mContextMutex->isReferenced());
+        }
+        else
+        {
+            mContextMutex = new ContextMutex();
+        }
+        mContextMutex->addRef();
     }
 
     mState.source->addImageSource(this);
@@ -360,10 +371,10 @@ Image::~Image()
 {
     SafeDelete(mImplementation);
 
-    if (mSharedContextMutex != nullptr)
+    if (mContextMutex != nullptr)
     {
-        mSharedContextMutex->release();
-        mSharedContextMutex = nullptr;
+        mContextMutex->release();
+        mContextMutex = nullptr;
     }
 }
 
@@ -497,12 +508,6 @@ rx::ImageImpl *Image::getImplementation() const
 
 Error Image::initialize(const Display *display, const gl::Context *context)
 {
-    if (kIsSharedContextMutexEnabled && mSharedContextMutex == nullptr)
-    {
-        mSharedContextMutex = display->getSharedContextMutexManager()->create();
-        mSharedContextMutex->addRef();
-    }
-
     if (IsExternalImageTarget(mState.target))
     {
         ExternalImageSibling *externalSibling = rx::GetAs<ExternalImageSibling>(mState.source);

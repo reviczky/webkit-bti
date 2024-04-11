@@ -84,12 +84,17 @@ is_clang = false (NOT RECOMMENDED)   (to use system default compiler instead of 
 For a release build run `gn args out/Release` and set `is_debug = false`.
 Optionally set `angle_assert_always_on = true` for Release testing.
 
-On Windows, you can build for the Universal Windows Platform (UWP) by setting
-`target_os = "winuwp"` in the args. Setting `is_component_build = false` is
-highly recommended to support moving libEGL.dll and libGLESv2.dll to an
-application's directory and being self-contained, instead of depending on
-other DLLs (d3dcompiler_47.dll is still needed for the Direct3D backend). We
-also recommend using `is_clang = false` with UWP.
+On Windows, you can build for the Universal Windows Platform (UWP) or WinUI 3.
+For UWP, set `target_os = "winuwp"` in the args. For WinUI 3, instead set
+`angle_is_winappsdk=true` along with the path to the Windows App SDK
+headers: `winappsdk_dir="/path/to/headers"`. The headers need to be generated
+from the winmd files, which is done by running the `scripts/winappsdk_setup.py`
+script and passing in the path to store the headers.  
+For both UWP and WinUI 3, setting `is_component_build = false` is highly
+recommended to support moving libEGL.dll and libGLESv2.dll to an application's
+directory and being self-contained, instead of depending on other DLLs
+(d3dcompiler_47.dll is still needed for the Direct3D backend).  
+We also recommend using `is_clang = false`.
 
 For more information on GN run `gn help`.
 
@@ -107,12 +112,60 @@ thread count to `ninja` based on your system configuration.
 
 ### Building with Goma (Google employees only)
 
-In addition, we highly recommend Google employees use goma, a distributed
-compilation system. Detailed information is available internally. To enable
-Goma set the GN arg:
+Deprecated, see Reclient.
+
+To enable Goma set the GN arg:
 
 ```
 use_goma = true
+```
+
+### Building with Reclient (Google employees only)
+
+Reclient is the recommended distributed compiler service to build ANGLE faster.
+
+Step 1. Follow [Setup remote execution](https://g3doc.corp.google.com/company/teams/chrome/linux_build_instructions.md?cl=head#setup-remote-execution)
+to download the required configuration, and complete the authentication.
+
+To download the required configuration:
+
+In .gclient, add `"download_remoteexec_cfg: True,"` in custom_vars:
+
+```
+solutions = [
+  {
+    # some other args
+    "custom_vars": {
+        "download_remoteexec_cfg": True,
+    },
+  },
+]
+
+```
+
+Then run
+
+```
+gclient sync
+```
+
+To complete authentication:
+
+1. Install gcloud SDK go/gcloud-cli#installing-and-using-the-cloud-sdk.
+Make sure the gcloud tool is available on your `$PATH`.
+
+2. Log into gcloud with your @google.com account:
+
+```
+gcloud auth login
+```
+
+If asked for a project ID, enter "0".
+
+Step 2. Enable the usage of reclient by adding below content in GN arg:
+
+```
+use_remoteexec = true
 ```
 
 ### Building and Debugging with Visual Studio

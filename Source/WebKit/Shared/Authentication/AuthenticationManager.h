@@ -68,8 +68,9 @@ class AuthenticationManager : public NetworkProcessSupplement, public IPC::Messa
     WTF_MAKE_NONCOPYABLE(AuthenticationManager);
 public:
     explicit AuthenticationManager(NetworkProcess&);
+    ~AuthenticationManager();
 
-    static const char* supplementName();
+    static ASCIILiteral supplementName();
 
     void didReceiveAuthenticationChallenge(PAL::SessionID, WebPageProxyIdentifier, const WebCore::SecurityOriginData* , const WebCore::AuthenticationChallenge&, NegotiatedLegacyTLS, ChallengeCompletionHandler&&);
     void didReceiveAuthenticationChallenge(IPC::MessageSender& download, const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
@@ -79,6 +80,7 @@ public:
     void negotiatedLegacyTLS(WebPageProxyIdentifier) const;
 
 private:
+    Ref<NetworkProcess> protectedProcess() const;
     struct Challenge {
         WTF_MAKE_STRUCT_FAST_ALLOCATED;
         Challenge(WebPageProxyIdentifier pageID, const WebCore::AuthenticationChallenge& challenge, ChallengeCompletionHandler&& completionHandler)
@@ -104,7 +106,7 @@ private:
 
     Vector<AuthenticationChallengeIdentifier> coalesceChallengesMatching(AuthenticationChallengeIdentifier) const;
 
-    NetworkProcess& m_process;
+    WeakRef<NetworkProcess> m_process;
 
     HashMap<AuthenticationChallengeIdentifier, UniqueRef<Challenge>> m_challenges;
 };

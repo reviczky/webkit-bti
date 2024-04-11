@@ -324,7 +324,7 @@ TEST_F(SecurityOriginTest, SecurityOriginHash)
 
 TEST_F(SecurityOriginTest, IsSecureBlobURL)
 {
-    EXPECT_FALSE(SecurityOrigin::isSecure(URL { "blob:"_str }));
+    EXPECT_TRUE(SecurityOrigin::isSecure(URL { "blob:"_str }));
 }
 
 } // namespace TestWebKitAPI

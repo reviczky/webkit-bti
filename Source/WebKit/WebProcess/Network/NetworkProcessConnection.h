@@ -26,12 +26,12 @@
 #pragma once
 
 #include "Connection.h"
-#include "ShareableResource.h"
 #include <JavaScriptCore/ConsoleTypes.h>
 #include <WebCore/MessagePortChannelProvider.h>
 #include <WebCore/RTCDataChannelIdentifier.h>
 #include <WebCore/ResourceLoaderIdentifier.h>
 #include <WebCore/ServiceWorkerTypes.h>
+#include <WebCore/ShareableResource.h>
 #include <wtf/RefCounted.h>
 #include <wtf/text/WTFString.h>
 
@@ -65,6 +65,7 @@ public:
     }
     ~NetworkProcessConnection();
     
+    Ref<IPC::Connection> protectedConnection() { return m_connection; }
     IPC::Connection& connection() { return m_connection.get(); }
 
     void didReceiveNetworkProcessConnectionMessage(IPC::Connection&, IPC::Decoder&);
@@ -74,9 +75,7 @@ public:
     WebIDBConnectionToServer* existingIDBConnectionToServer() const { return m_webIDBConnection.get(); };
     WebIDBConnectionToServer& idbConnectionToServer();
 
-#if ENABLE(SERVICE_WORKER)
     WebSWClientConnection& serviceWorkerConnection();
-#endif
     WebSharedWorkerObjectConnection& sharedWorkerConnection();
 
 #if HAVE(AUDIT_TOKEN)
@@ -92,6 +91,7 @@ public:
     void cookiesDeleted(const String& host, Vector<WebCore::Cookie>&&);
     void allCookiesDeleted();
 #endif
+    void updateCachedCookiesEnabled();
 
     void addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&&);
 
@@ -113,7 +113,7 @@ private:
 
 #if ENABLE(SHAREABLE_RESOURCE)
     // Message handlers.
-    void didCacheResource(const WebCore::ResourceRequest&, ShareableResource::Handle&&);
+    void didCacheResource(const WebCore::ResourceRequest&, WebCore::ShareableResource::Handle&&);
 #endif
 #if ENABLE(WEB_RTC)
     void connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier source, WebCore::RTCDataChannelIdentifier handler, CompletionHandler<void(std::optional<bool>)>&&);
@@ -129,9 +129,7 @@ private:
 
     RefPtr<WebIDBConnectionToServer> m_webIDBConnection;
 
-#if ENABLE(SERVICE_WORKER)
     RefPtr<WebSWClientConnection> m_swConnection;
-#endif
     RefPtr<WebSharedWorkerObjectConnection> m_sharedWorkerConnection;
     WebCore::HTTPCookieAcceptPolicy m_cookieAcceptPolicy;
 };

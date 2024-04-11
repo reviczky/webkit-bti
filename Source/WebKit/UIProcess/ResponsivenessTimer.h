@@ -27,12 +27,13 @@
 #define ResponsivenessTimer_h
 
 #include <wtf/RunLoop.h>
+#include <wtf/WeakRef.h>
 
 namespace WebKit {
 
 class ResponsivenessTimer {
 public:
-    class Client {
+    class Client : public CanMakeWeakPtr<Client> {
     public:
         virtual ~Client() { }
         virtual void didBecomeUnresponsive() = 0;
@@ -80,7 +81,7 @@ private:
 
     bool mayBecomeUnresponsive() const;
 
-    ResponsivenessTimer::Client& m_client;
+    WeakRef<ResponsivenessTimer::Client> m_client;
 
     RunLoop::Timer m_timer;
     MonotonicTime m_restartFireTime;

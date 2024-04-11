@@ -27,6 +27,7 @@
 
 #include "Attachment.h"
 #include "MessageNames.h"
+#include <WebCore/PlatformExportMacros.h>
 #include <WebCore/SharedBuffer.h>
 #include <wtf/Forward.h>
 #include <wtf/OptionSet.h>
@@ -57,13 +58,15 @@ public:
     bool isSyncMessage() const { return messageIsSync(messageName()); }
 
     void setShouldDispatchMessageWhenWaitingForSyncReply(ShouldDispatchWhenWaitingForSyncReply);
-    ShouldDispatchWhenWaitingForSyncReply shouldDispatchMessageWhenWaitingForSyncReply() const;
 
     bool isFullySynchronousModeForTesting() const;
     void setFullySynchronousModeForTesting();
     void setShouldMaintainOrderingWithAsyncMessages();
     bool isAllowedWhenWaitingForSyncReply() const { return messageAllowedWhenWaitingForSyncReply(messageName()) || isFullySynchronousModeForTesting(); }
     bool isAllowedWhenWaitingForUnboundedSyncReply() const { return messageAllowedWhenWaitingForUnboundedSyncReply(messageName()); }
+#if ENABLE(IPC_TESTING_API)
+    void setSyncMessageDeserializationFailure();
+#endif
 
     void wrapForTesting(UniqueRef<Encoder>&&);
 
@@ -76,6 +79,12 @@ public:
     Encoder& operator<<(T&& t)
     {
         ArgumentCoder<std::remove_cvref_t<T>, void>::encode(*this, std::forward<T>(t));
+        return *this;
+    }
+
+    Encoder& operator<<(Attachment&& attachment)
+    {
+        addAttachment(WTFMove(attachment));
         return *this;
     }
 

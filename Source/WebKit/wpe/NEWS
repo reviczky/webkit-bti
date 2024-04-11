@@ -1,78 +1,54 @@
 =================
-WPE WebKit 2.42.5
+WPE WebKit 2.44.1
 =================
 
-What's new in WPE WebKit 2.42.5?
+What's new in WPE WebKit 2.44.1?
 
-  - Fix webkit_web_context_allow_tls_certificate_for_host to handle IPv6 URIs
-    produced by SoupURI.
-  - Ignore stops with offset zero before last one when rendering gradients
-    with Cairo.
+  - Do not schedule layer flushes when drawing area size is empty.
+  - Fix videos with alpha when using the DMA-BUF sink.
+  - Fix the build with ENABLE_WEB_AUDIO=OFF.
+  - Fix the build with ENABLE_VIDEO=OFF.
+  - Fix the build with USE_GBM=OFF.
+  - Fix the build in 32bit platforms
+  - Fix several crashes and rendering issues.
+
+=================
+WPE WebKit 2.44.0
+=================
+
+What's new in WPE WebKit 2.43.1?
+
+  - Add BubblewrapLauncher sandbox directory for the GStreamer user
+    registry cache directory.
+  - Fix bug causing the preferred language to not be passed to
+    NetworkProcess if set in the WebKitWebContext before creating
+    a WebKitWebView.
+  - Do not use real time priority for the display link thread.
+  - Do not special case the "sans" font family name.
+  - Use a shorter web process cache lifetime.
   - Write bwrapinfo.json to disk for xdg-desktop-portal.
-  - Support gamepad button sixteen (center button in center cluster).
-  - Update quirks to fix compatibility issues in a number of websites,
-    including bing.com, nfl.com, msn.com, bankofamerica.com, outlook.live.com,
-    hulu.com, jsfiddle.net, vote.gov, youtube.com, airtable.com, gizmodo.com,
-    and ceac.state.gov among others.
-  - Fix incorrent periodic deletion of LocalStorage and IndexedDB databases
-    for all websites.
+  - Fallback to timer based vblank monitor if drmWaitVBlank fails.
+  - Show vertical blank monitor information in webkit://gpu.
+  - Fix webkit_web_context_allow_tls_certificate_for_host() for IPv6
+    URIs produced by SoupURI.
+  - Fix mixed versions of WPE and backend in webkit://gpu.
+  - Fix several memory leaks in the multimedia backend.
+  - Fix rendering after history navigation.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.42.4
+WPE WebKit 2.43.1
 =================
 
-What's new in WPE WebKit 2.42.4?
+What's new in WPE WebKit 2.43.1?
 
-  - Fix incorrect random images incorrectly displayed as backgrounds
-    of <div> elements.
-  - Fix videos displayed aliased after being resized e.g. in YouTube.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.42.3
-=================
-
-What's new in WPE WebKit 2.42.3?
-
-  - Fix flickering in videos when using VA-API with DMA-BUF for rendering.
-  - Fix color picker being triggered in the inspector when typing "tan".
-  - Fix wrong choice of font fallback in some cases when using "sans" as
-    the font family.
-  - Fix build failure with libxml2 version 2.12.0 due to an API change.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.42.2
-=================
-
-What's new in WPE WebKit 2.42.2?
-
-  - Bump Safari version in user agent header.
-  - Fix CSP regression that broke Unity WebGL applications.
-  - Fix the build with GBM disabled.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.42.1
-=================
-
-What's new in WPE WebKit 2.42.1?
-
-  - Fix enable-html5-database setting to properly enable/disable IndexedDB API.
-  - Fix the build with GBM disabled.
-  - Fix rendering on the Raspberry Pi.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.42.0
-=================
-
-What's new in WPE WebKit 2.42.0?
-
-  - GBM is no longer required for WebGL implementation.
-  - Add API to configure experimental features at runtime.
-  - Add API to set the percentage of volume space that can be used for data storage.
+  - Improve vblank synchronization when rendering.
+  - Improve DMA-BUF buffers handling for video frames.
+  - Use the buffer format preferred by the driver in DMA-BUF renderer.
+  - Do not block the compositing thread waiting for rendering threads.
+  - Improve performance when scaling images in a canvas.
+  - Allow disabling WebGL support using the API.
+  - Enable usage of libbacktrace by default.
   - Fix several crashes and rendering issues.
 
 =================

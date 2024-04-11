@@ -24,8 +24,6 @@
  */
 
 #include "config.h"
-
-#if ENABLE(SERVICE_WORKER)
 #include "WebSWOriginStore.h"
 
 #include "MessageSenderInlines.h"
@@ -93,9 +91,7 @@ void WebSWOriginStore::sendStoreHandle(WebSWServerConnection& connection)
 void WebSWOriginStore::didInvalidateSharedMemory()
 {
     for (auto& connection : m_webSWServerConnections)
-        sendStoreHandle(connection);
+        sendStoreHandle(CheckedRef { connection }.get());
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)

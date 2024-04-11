@@ -39,6 +39,7 @@
 #include <WebCore/LayoutMilestone.h>
 #include <WebCore/MediaPlayerEnums.h>
 #include <WebCore/PlatformCALayer.h>
+#include <WebCore/ProcessIdentifier.h>
 #include <WebCore/ScrollTypes.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
@@ -54,10 +55,14 @@
 #include <WebCore/AcceleratedEffectValues.h>
 #endif
 
+#if ENABLE(MODEL_ELEMENT)
+#include <WebCore/Model.h>
+#endif
+
 namespace WebKit {
 
 struct LayerProperties;
-using LayerPropertiesMap = HashMap<WebCore::PlatformLayerIdentifier, UniqueRef<LayerProperties>>;
+typedef HashMap<WebCore::PlatformLayerIdentifier, UniqueRef<LayerProperties>> LayerPropertiesMap;
 
 struct ChangedLayers {
     HashSet<Ref<PlatformCALayerRemote>> changedLayers; // Only used in the Web process.
@@ -95,7 +100,7 @@ public:
         >;
 
         WebCore::PlatformLayerIdentifier layerID;
-        WebCore::PlatformCALayer::LayerType type { WebCore::PlatformCALayer::LayerTypeLayer };
+        WebCore::PlatformCALayer::LayerType type { WebCore::PlatformCALayer::LayerType::LayerTypeLayer };
         std::optional<VideoElementData> videoElementData;
         AdditionalData additionalData;
 
@@ -121,6 +126,9 @@ public:
     void setCreatedLayers(Vector<LayerCreationProperties>);
     void setDestroyedLayerIDs(Vector<WebCore::PlatformLayerIdentifier>);
     void setLayerIDsWithNewlyUnreachableBackingStore(Vector<WebCore::PlatformLayerIdentifier>);
+
+    WebCore::ProcessIdentifier processIdentifier() const { return m_processIdentifier; }
+    void setProcessIdentifier(WebCore::ProcessIdentifier processIdentifier) { m_processIdentifier = processIdentifier; }
 
 #if !defined(NDEBUG) || !LOG_DISABLED
     String description() const;
@@ -235,10 +243,16 @@ public:
     void setDynamicViewportSizeUpdateID(DynamicViewportSizeUpdateID resizeID) { m_dynamicViewportSizeUpdateID = resizeID; }
 #endif
 
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    Seconds acceleratedTimelineTimeOrigin() const { return m_acceleratedTimelineTimeOrigin; }
+    void setAcceleratedTimelineTimeOrigin(Seconds timeOrigin) { m_acceleratedTimelineTimeOrigin = timeOrigin; }
+#endif
+
 private:
     friend struct IPC::ArgumentCoder<RemoteLayerTreeTransaction, void>;
 
     WebCore::PlatformLayerIdentifier m_rootLayerID;
+    WebCore::ProcessIdentifier m_processIdentifier;
     ChangedLayers m_changedLayers;
 
     Markable<WebCore::LayerHostingContextIdentifier> m_remoteContextHostedIdentifier;
@@ -284,6 +298,9 @@ private:
     std::optional<EditorState> m_editorState;
 #if PLATFORM(IOS_FAMILY)
     std::optional<DynamicViewportSizeUpdateID> m_dynamicViewportSizeUpdateID;
+#endif
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    Seconds m_acceleratedTimelineTimeOrigin;
 #endif
 };
 

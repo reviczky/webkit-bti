@@ -32,6 +32,7 @@
 #include "LayerTreeContext.h"
 #include "PageLoadState.h"
 #include "ProcessThrottler.h"
+#include "RemotePageProxyState.h"
 #include "ScrollingAccelerationCurve.h"
 #include "VisibleWebPageCounter.h"
 #include "WebColorPicker.h"
@@ -42,6 +43,7 @@
 #include "WebPopupMenuProxy.h"
 #include "WebURLSchemeHandlerIdentifier.h"
 #include "WindowKind.h"
+#include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/PrivateClickMeasurement.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceRequest.h>
@@ -72,10 +74,6 @@
 #include <WebCore/PlatformSpeechSynthesizer.h>
 #endif
 
-#if HAVE(TOUCH_BAR)
-#include "TouchBarMenuData.h"
-#endif
-
 #if ENABLE(TOUCH_EVENTS)
 #include "NativeWebTouchEvent.h"
 #include <WebCore/EventTrackingRegions.h>
@@ -89,7 +87,13 @@
 #include <WebCore/WebMediaSessionManagerClient.h>
 #endif
 
+#if ENABLE(EXTENSION_CAPABILITIES)
+#include "MediaCapability.h"
+#endif
+
 namespace WebKit {
+
+class WebPageProxyFrameLoadStateObserver;
 
 struct PrivateClickMeasurementAndMetadata {
     WebCore::PrivateClickMeasurement pcm;
@@ -169,7 +173,6 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     WebCore::LayoutSize baseLayoutViewportSize;
     std::optional<WebCore::FontAttributes> cachedFontAttributesAtSelectionStart;
     Vector<Function<void()>> callbackHandlersAfterProcessingPendingMouseEvents;
-    WebCore::ResourceRequest decidePolicyForResponseRequest;
     WebCore::FloatSize defaultUnobscuredSize;
     EditorState editorState;
     WebCore::IntSize fixedLayoutSize;
@@ -216,9 +219,8 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     WindowKind windowKind { WindowKind::Unparented };
     PageAllowedToRunInTheBackgroundCounter::Token pageAllowedToRunInTheBackgroundToken;
 
-    HashMap<WebCore::RegistrableDomain, WeakPtr<RemotePageProxy>> domainToRemotePageProxyMap;
-    RefPtr<RemotePageProxy> remotePageProxyInOpenerProcess;
-    HashSet<Ref<RemotePageProxy>> openedRemotePageProxies;
+    RemotePageProxyState remotePageProxyState;
+
     WebPageProxyMessageReceiverRegistration messageReceiverRegistration;
 
     WeakHashSet<WebPageProxy> m_openedPages;
@@ -237,7 +239,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     ContextMenuContextData activeContextMenuContextData;
 #endif
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
     PAL::HysteresisActivity wheelEventActivityHysteresis;
 #endif
 
@@ -273,17 +275,11 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     HashSet<WebCore::SecurityOriginData> notificationPermissionRequesters;
 #endif
 
-#if ENABLE(SERVICE_WORKER)
     CompletionHandler<void(bool)> serviceWorkerLaunchCompletionHandler;
     CompletionHandler<void(std::optional<WebCore::PageIdentifier>)> serviceWorkerOpenWindowCompletionCallback;
-#endif
 
 #if ENABLE(SPEECH_SYNTHESIS)
     std::optional<SpeechSynthesisData> optionalSpeechSynthesisData;
-#endif
-
-#if HAVE(TOUCH_BAR)
-    TouchBarMenuData touchBarMenuData;
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
@@ -294,9 +290,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     Deque<QueuedTouchEvents> touchEventQueue;
 #endif
 
-#if ENABLE(TRACKING_PREVENTION)
     MonotonicTime didFinishDocumentLoadForMainFrameTimestamp;
-#endif
 
 #if ENABLE(UI_SIDE_COMPOSITING)
     VisibleContentRectUpdateInfo lastVisibleContentRectUpdate;
@@ -309,6 +303,15 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 
 #if ENABLE(WEBXR) && !USE(OPENXR)
     std::unique_ptr<PlatformXRSystem> xrSystem;
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    std::optional<MediaCapability> mediaCapability;
+#endif
+
+#if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+    std::unique_ptr<WebPageProxyFrameLoadStateObserver> frameLoadStateObserver;
+    HashMap<WebCore::RegistrableDomain, OptionSet<WebCore::WindowProxyProperty>> windowOpenerAccessedProperties;
 #endif
 
     explicit Internals(WebPageProxy&);
@@ -338,7 +341,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     std::unique_ptr<PaymentAuthorizationPresenter> paymentCoordinatorAuthorizationPresenter(WebPaymentCoordinatorProxy&, PKPaymentRequest *) final;
 #endif
 #if ENABLE(APPLE_PAY) && PLATFORM(IOS_FAMILY) && ENABLE(APPLE_PAY_REMOTE_UI_USES_SCENE)
-    void getWindowSceneIdentifierForPaymentPresentation(WebPageProxyIdentifier, CompletionHandler<void(const String&)>&&) final;
+    void getWindowSceneAndBundleIdentifierForPaymentPresentation(WebPageProxyIdentifier, CompletionHandler<void(const String&, const String&)>&&) final;
 #endif
 #if ENABLE(APPLE_PAY) && PLATFORM(MAC)
     NSWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) final;

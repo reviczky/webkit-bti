@@ -52,7 +52,7 @@ bool RemoteMediaPlayerMIMETypeCache::isEmpty() const
     return m_hasPopulatedSupportedTypesCacheFromGPUProcess && m_supportedTypesCache.isEmpty();
 }
 
-HashSet<String, ASCIICaseInsensitiveHash>& RemoteMediaPlayerMIMETypeCache::supportedTypes()
+HashSet<String>& RemoteMediaPlayerMIMETypeCache::supportedTypes()
 {
     ASSERT(isMainRunLoop());
     if (!m_hasPopulatedSupportedTypesCacheFromGPUProcess) {
@@ -62,7 +62,7 @@ HashSet<String, ASCIICaseInsensitiveHash>& RemoteMediaPlayerMIMETypeCache::suppo
             addSupportedTypes(types);
             m_hasPopulatedSupportedTypesCacheFromGPUProcess = true;
         } else
-            RELEASE_LOG_ERROR(Media, "RemoteMediaPlayerMIMETypeCache::supportedTypes: Sync IPC to the GPUProcess failed with error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error));
+            RELEASE_LOG_ERROR(Media, "RemoteMediaPlayerMIMETypeCache::supportedTypes: Sync IPC to the GPUProcess failed with error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error()));
     }
     return m_supportedTypesCache;
 }

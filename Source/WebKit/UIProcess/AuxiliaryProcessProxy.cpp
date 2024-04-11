@@ -32,23 +32,42 @@
 #include "OverrideLanguages.h"
 #include "UIProcessLogInitialization.h"
 #include "WebPageProxy.h"
+#include "WebPageProxyIdentifier.h"
 #include "WebProcessProxy.h"
 #include <wtf/RunLoop.h>
 
 #if PLATFORM(COCOA)
+#include "CoreIPCSecureCoding.h"
 #include "SandboxUtilities.h"
 #include <sys/sysctl.h>
 #include <wtf/spi/darwin/SandboxSPI.h>
 #endif
 
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
-#import <pal/spi/ios/MobileGestaltSPI.h>
+#include <pal/spi/ios/MobileGestaltSPI.h>
+#endif
+
+#if PLATFORM(VISION)
+#include <WebCore/ThermalMitigationNotifier.h>
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+#include "ExtensionCapabilityGrant.h"
 #endif
 
 namespace WebKit {
 
+static Seconds adjustedTimeoutForThermalState(Seconds timeout)
+{
+#if PLATFORM(VISION)
+    return WebCore::ThermalMitigationNotifier::isThermalMitigationEnabled() ? (timeout * 20) : timeout;
+#else
+    return timeout;
+#endif
+}
+
 AuxiliaryProcessProxy::AuxiliaryProcessProxy(bool alwaysRunsAtBackgroundPriority, Seconds responsivenessTimeout)
-    : m_responsivenessTimer(*this, responsivenessTimeout)
+    : m_responsivenessTimer(*this, adjustedTimeoutForThermalState(responsivenessTimeout))
     , m_alwaysRunsAtBackgroundPriority(alwaysRunsAtBackgroundPriority)
 #if USE(RUNNINGBOARD)
     , m_timedActivityForIPC(3_s)
@@ -58,15 +77,17 @@ AuxiliaryProcessProxy::AuxiliaryProcessProxy(bool alwaysRunsAtBackgroundPriority
 
 AuxiliaryProcessProxy::~AuxiliaryProcessProxy()
 {
-    if (m_connection)
-        m_connection->invalidate();
+    if (RefPtr connection = m_connection)
+        connection->invalidate();
 
-    if (m_processLauncher) {
-        m_processLauncher->invalidate();
-        m_processLauncher = nullptr;
-    }
+    if (RefPtr processLauncher = std::exchange(m_processLauncher, nullptr))
+        processLauncher->invalidate();
 
     replyToPendingMessages();
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    ASSERT(m_extensionCapabilityGrants.isEmpty());
+#endif
 }
 
 void AuxiliaryProcessProxy::populateOverrideLanguagesLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions) const
@@ -116,6 +137,11 @@ void AuxiliaryProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& lau
         varname = "GPU_PROCESS_CMD_PREFIX";
         break;
 #endif
+#if ENABLE(MODEL_PROCESS)
+    case ProcessLauncher::ProcessType::Model:
+        varname = "MODEL_PROCESS_CMD_PREFIX";
+        break;
+#endif
 #if ENABLE(BUBBLEWRAP_SANDBOX)
     case ProcessLauncher::ProcessType::DBusProxy:
         ASSERT_NOT_REACHED();
@@ -146,13 +172,15 @@ void AuxiliaryProcessProxy::terminate()
     RELEASE_LOG(Process, "AuxiliaryProcessProxy::terminate: PID=%d", processID());
 
 #if PLATFORM(COCOA)
-    if (m_connection && m_connection->kill())
-        return;
+    if (RefPtr connection = m_connection) {
+        if (connection->kill())
+            return;
+    }
 #endif
 
     // FIXME: We should really merge process launching into IPC connection creation and get rid of the process launcher.
-    if (m_processLauncher)
-        m_processLauncher->terminateProcess();
+    if (RefPtr processLauncher = m_processLauncher)
+        processLauncher->terminateProcess();
 }
 
 AuxiliaryProcessProxy::State AuxiliaryProcessProxy::state() const
@@ -232,10 +260,10 @@ bool AuxiliaryProcessProxy::sendMessage(UniqueRef<IPC::Encoder>&& encoder, Optio
 
     case State::Running:
         if (asyncReplyHandler) {
-            if (connection()->sendMessageWithAsyncReply(WTFMove(encoder), WTFMove(*asyncReplyHandler), sendOptions) == IPC::Error::NoError)
+            if (protectedConnection()->sendMessageWithAsyncReply(WTFMove(encoder), WTFMove(*asyncReplyHandler), sendOptions) == IPC::Error::NoError)
                 return true;
         } else {
-            if (connection()->sendMessage(WTFMove(encoder), sendOptions) == IPC::Error::NoError)
+            if (protectedConnection()->sendMessage(WTFMove(encoder), sendOptions) == IPC::Error::NoError)
                 return true;
         }
         break;
@@ -297,17 +325,18 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher*, IPC::Connection
 
 #if PLATFORM(MAC) && USE(RUNNINGBOARD)
     m_lifetimeActivity = throttler().foregroundActivity("Lifetime Activity"_s).moveToUniquePtr();
-    m_boostedJetsamAssertion = ProcessAssertion::create(xpc_connection_get_pid(connectionIdentifier.xpcConnection.get()), "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
+    m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
 #endif
 
-    m_connection = IPC::Connection::createServerConnection(connectionIdentifier);
+    RefPtr connection = IPC::Connection::createServerConnection(connectionIdentifier);
+    m_connection = connection.copyRef();
 
-    connectionWillOpen(*m_connection);
-    m_connection->open(*this);
-    m_connection->setOutgoingMessageQueueIsGrowingLargeCallback([weakThis = WeakPtr { *this }] {
+    connectionWillOpen(*connection);
+    connection->open(*this);
+    connection->setOutgoingMessageQueueIsGrowingLargeCallback([weakThis = WeakPtr { *this }] {
         ensureOnMainRunLoop([weakThis] {
-            if (weakThis)
-                weakThis->outgoingMessageQueueIsGrowingLarge();
+            if (RefPtr protectedThis = weakThis.get())
+                protectedThis->outgoingMessageQueueIsGrowingLarge();
         });
     });
 
@@ -315,9 +344,9 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher*, IPC::Connection
         if (!shouldSendPendingMessage(pendingMessage))
             continue;
         if (pendingMessage.asyncReplyHandler)
-            m_connection->sendMessageWithAsyncReply(WTFMove(pendingMessage.encoder), WTFMove(*pendingMessage.asyncReplyHandler), pendingMessage.sendOptions);
+            connection->sendMessageWithAsyncReply(WTFMove(pendingMessage.encoder), WTFMove(*pendingMessage.asyncReplyHandler), pendingMessage.sendOptions);
         else
-            m_connection->sendMessage(WTFMove(pendingMessage.encoder), pendingMessage.sendOptions);
+            connection->sendMessage(WTFMove(pendingMessage.encoder), pendingMessage.sendOptions);
     }
 }
 
@@ -350,10 +379,11 @@ void AuxiliaryProcessProxy::replyToPendingMessages()
 void AuxiliaryProcessProxy::shutDownProcess()
 {
     switch (state()) {
-    case State::Launching:
-        m_processLauncher->invalidate();
-        m_processLauncher = nullptr;
+    case State::Launching: {
+        RefPtr processLauncher = std::exchange(m_processLauncher, nullptr);
+        processLauncher->invalidate();
         break;
+    }
     case State::Running:
         platformStartConnectionTerminationWatchdog();
         break;
@@ -361,15 +391,16 @@ void AuxiliaryProcessProxy::shutDownProcess()
         return;
     }
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
-    processWillShutDown(*m_connection);
+    processWillShutDown(*connection);
 
     if (canSendMessage())
         send(Messages::AuxiliaryProcess::ShutDown(), 0);
 
-    m_connection->invalidate();
+    connection->invalidate();
     m_connection = nullptr;
     m_responsivenessTimer.invalidate();
 }
@@ -380,7 +411,7 @@ void AuxiliaryProcessProxy::setProcessSuppressionEnabled(bool processSuppression
     if (state() != State::Running)
         return;
 
-    connection()->send(Messages::AuxiliaryProcess::SetProcessSuppressionEnabled(processSuppressionEnabled), 0);
+    protectedConnection()->send(Messages::AuxiliaryProcess::SetProcessSuppressionEnabled(processSuppressionEnabled), 0);
 #else
     UNUSED_PARAM(processSuppressionEnabled);
 #endif
@@ -457,8 +488,8 @@ void AuxiliaryProcessProxy::checkForResponsiveness(CompletionHandler<void()>&& r
         // Schedule an asynchronous task because our completion handler may have been called as a result of the AuxiliaryProcessProxy
         // being in the middle of destruction.
         RunLoop::main().dispatch([weakThis = WTFMove(weakThis), responsivenessHandler = WTFMove(responsivenessHandler)]() mutable {
-            if (weakThis)
-                weakThis->stopResponsivenessTimer();
+            if (RefPtr protectedThis = weakThis.get())
+                protectedThis->stopResponsivenessTimer();
 
             if (responsivenessHandler)
                 responsivenessHandler();
@@ -474,6 +505,13 @@ AuxiliaryProcessCreationParameters AuxiliaryProcessProxy::auxiliaryProcessParame
     parameters.webCoreLoggingChannels = UIProcess::webCoreLogLevelString();
     parameters.webKitLoggingChannels = UIProcess::webKitLogLevelString();
 #endif
+
+#if PLATFORM(COCOA)
+    auto* exemptClassNames = SecureCoding::classNamesExemptFromSecureCodingCrash();
+    if (exemptClassNames)
+        parameters.classNamesExemptFromSecureCodingCrash = WTF::makeUnique<HashSet<String>>(*exemptClassNames);
+#endif
+
     return parameters;
 }
 

@@ -31,7 +31,7 @@
 
 namespace IPC {
 
-StreamConnectionBuffer::StreamConnectionBuffer(Ref<WebKit::SharedMemory>&& memory)
+StreamConnectionBuffer::StreamConnectionBuffer(Ref<WebCore::SharedMemory>&& memory)
     : m_dataSize(memory->size() - headerSize())
     , m_sharedMemory(WTFMove(memory))
 {
@@ -42,25 +42,10 @@ StreamConnectionBuffer::~StreamConnectionBuffer() = default;
 
 StreamConnectionBuffer::Handle StreamConnectionBuffer::createHandle()
 {
-    auto handle = m_sharedMemory->createHandle(WebKit::SharedMemory::Protection::ReadWrite);
+    auto handle = m_sharedMemory->createHandle(WebCore::SharedMemory::Protection::ReadWrite);
     if (!handle)
         CRASH();
     return { WTFMove(*handle) };
-}
-
-void StreamConnectionBuffer::Handle::encode(Encoder& encoder) &&
-{
-    encoder << WTFMove(memory);
-}
-
-std::optional<StreamConnectionBuffer::Handle> StreamConnectionBuffer::Handle::decode(Decoder& decoder)
-{
-    auto handle = decoder.decode<WebKit::SharedMemory::Handle>();
-    if (UNLIKELY(!decoder.isValid()))
-        return std::nullopt;
-    if (UNLIKELY(!sharedMemorySizeIsValid(handle->size())))
-        return std::nullopt;
-    return Handle { WTFMove(*handle) };
 }
 
 std::span<uint8_t> StreamConnectionBuffer::headerForTesting()

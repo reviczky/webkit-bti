@@ -5142,10 +5142,17 @@ bool OutputSPIRVTraverser::visitTernary(Visit visit, TIntermTernary *node)
     // If the condition was just visited, evaluate it and decide if OpSelect could be used or an
     // if-else must be emitted.  OpSelect is only used if the type is scalar or vector (required by
     // OpSelect) and if neither side has a side effect.
-    const TType &type         = node->getType();
-    const bool canUseOpSelect = (type.isScalar() || type.isVector()) &&
-                                !node->getTrueExpression()->hasSideEffects() &&
-                                !node->getFalseExpression()->hasSideEffects();
+    const TType &type   = node->getType();
+    bool canUseOpSelect = (type.isScalar() || type.isVector()) &&
+                          !node->getTrueExpression()->hasSideEffects() &&
+                          !node->getFalseExpression()->hasSideEffects();
+
+    // Don't use OpSelect on buggy drivers.  Technically this is only needed if the two sides don't
+    // have matching use of RelaxedPrecision, but not worth being precise about it.
+    if (mCompileOptions.avoidOpSelectWithMismatchingRelaxedPrecision)
+    {
+        canUseOpSelect = false;
+    }
 
     if (lastChildIndex == 0)
     {
@@ -6480,14 +6487,15 @@ void OutputSPIRVTraverser::visitPreprocessorDirective(TIntermPreprocessorDirecti
 
 void OutputSPIRVTraverser::markVertexOutputOnShaderEnd()
 {
-    // Vertex output happens in vertex stages at return from main, except for geometry shaders.  In
-    // that case, it's done at EmitVertex.
+    // Output happens in vertex and fragment stages at return from main.
+    // In geometry shaders, it's done at EmitVertex.
     switch (mCompiler->getShaderType())
     {
+        case GL_FRAGMENT_SHADER:
         case GL_VERTEX_SHADER:
         case GL_TESS_CONTROL_SHADER_EXT:
         case GL_TESS_EVALUATION_SHADER_EXT:
-            mBuilder.writeNonSemanticInstruction(vk::spirv::kNonSemanticVertexOutput);
+            mBuilder.writeNonSemanticInstruction(vk::spirv::kNonSemanticOutput);
             break;
         default:
             break;
@@ -6499,7 +6507,7 @@ void OutputSPIRVTraverser::markVertexOutputOnEmitVertex()
     // Vertex output happens in the geometry stage at EmitVertex.
     if (mCompiler->getShaderType() == GL_GEOMETRY_SHADER)
     {
-        mBuilder.writeNonSemanticInstruction(vk::spirv::kNonSemanticVertexOutput);
+        mBuilder.writeNonSemanticInstruction(vk::spirv::kNonSemanticOutput);
     }
 }
 

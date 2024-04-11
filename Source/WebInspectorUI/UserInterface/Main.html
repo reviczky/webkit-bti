@@ -150,6 +150,7 @@
     <link rel="stylesheet" href="Views/LayoutDetailsSidebarPanel.css">
     <link rel="stylesheet" href="Views/LayoutTimelineOverviewGraph.css">
     <link rel="stylesheet" href="Views/LayoutTimelineView.css">
+    <link rel="stylesheet" href="Views/LinearTimingFunctionEditor.css">
     <link rel="stylesheet" href="Views/LocalRemoteObjectContentView.css">
     <link rel="stylesheet" href="Views/LocalResourceOverrideLabelView.css">
     <link rel="stylesheet" href="Views/LocalResourceOverridePopover.css">
@@ -158,6 +159,7 @@
     <link rel="stylesheet" href="Views/LocalResourceOverrideWarningView.css">
     <link rel="stylesheet" href="Views/LogContentView.css">
     <link rel="stylesheet" href="Views/LogIcon.css">
+    <link rel="stylesheet" href="Views/MediaDetailsSidebarPanel.css">
     <link rel="stylesheet" href="Views/MediaTimelineOverviewGraph.css">
     <link rel="stylesheet" href="Views/MediaTimelineView.css">
     <link rel="stylesheet" href="Views/MemoryCategoryView.css">
@@ -239,6 +241,7 @@
     <link rel="stylesheet" href="Views/SpreadsheetRulesStyleDetailsPanel.css">
     <link rel="stylesheet" href="Views/SpringTimingFunctionEditor.css">
     <link rel="stylesheet" href="Views/StackTraceView.css">
+    <link rel="stylesheet" href="Views/StepsTimingFunctionEditor.css">
     <link rel="stylesheet" href="Views/StorageIcons.css">
     <link rel="stylesheet" href="Views/StorageSidebarPanel.css">
     <link rel="stylesheet" href="Views/StyleRuleIcons.css">
@@ -464,6 +467,7 @@
     <script src="Models/LayoutTimelineRecord.js"></script>
     <script src="Models/LazySourceCodeLocation.js"></script>
     <script src="Models/LineWidget.js"></script>
+    <script src="Models/LinearTimingFunction.js"></script>
     <script src="Models/LocalResourceOverride.js"></script>
     <script src="Models/LogObject.js"></script>
     <script src="Models/LoggingChannel.js"></script>
@@ -579,6 +583,12 @@
     <script src="Views/TreeOutline.js"></script>
     <script src="Views/TreeOutlineGroup.js"></script>
 
+    <script src="Views/DetailsSection.js"></script>
+    <script src="Views/DetailsSectionDataGridRow.js"></script>
+    <script src="Views/DetailsSectionGroup.js"></script>
+    <script src="Views/DetailsSectionSimpleRow.js"></script>
+    <script src="Views/DetailsSectionTextRow.js"></script>
+
     <script src="Views/ButtonNavigationItem.js"></script>
     <script src="Views/DatabaseUserQueryViewBase.js"></script>
     <script src="Views/DatabaseUserQueryErrorView.js"></script>
@@ -614,6 +624,7 @@
     <script src="Views/RulesStyleDetailsSidebarPanel.js"></script>
     <script src="Views/ComputedStyleDetailsSidebarPanel.js"></script>
     <script src="Views/StyleDetailsPanel.js"></script>
+    <script src="Views/MediaDetailsSidebarPanel.js"></script>
 
     <script src="Views/AuditTabContentView.js"></script>
     <script src="Views/ConsoleTabContentView.js"></script>
@@ -628,12 +639,6 @@
     <script src="Views/StorageTabContentView.js"></script>
     <script src="Views/TimelineTabContentView.js"></script>
     <script src="Views/WebInspectorExtensionTabContentView.js"></script>
-
-    <script src="Views/DetailsSection.js"></script>
-    <script src="Views/DetailsSectionDataGridRow.js"></script>
-    <script src="Views/DetailsSectionGroup.js"></script>
-    <script src="Views/DetailsSectionSimpleRow.js"></script>
-    <script src="Views/DetailsSectionTextRow.js"></script>
 
     <script src="Views/NodeOverlayListSection.js"></script>
 
@@ -703,6 +708,7 @@
     <script src="Views/ConsoleGroup.js"></script>
     <script src="Views/ConsolePrompt.js"></script>
     <script src="Views/ConsoleSession.js"></script>
+    <script src="Views/ConsoleSourceMapMessageGroup.js"></script>
     <script src="Views/ConsoleSnippetTreeElement.js"></script>
     <script src="Views/ContentViewContainer.js"></script>
     <script src="Views/ContextMenu.js"></script>
@@ -794,6 +800,7 @@
     <script src="Views/LayoutTimelineDataGridNode.js"></script>
     <script src="Views/LayoutTimelineOverviewGraph.js"></script>
     <script src="Views/LayoutTimelineView.js"></script>
+    <script src="Views/LinearTimingFunctionEditor.js"></script>
     <script src="Views/LocalDOMContentView.js"></script>
     <script src="Views/LocalJSONContentView.js"></script>
     <script src="Views/LocalResourceOverrideLabelView.js"></script>
@@ -899,6 +906,7 @@
     <script src="Views/StackTraceView.js"></script>
     <script src="Views/StackedAreaChart.js"></script>
     <script src="Views/StackedColumnChart.js"></script>
+    <script src="Views/StepsTimingFunctionEditor.js"></script>
     <script src="Views/StorageSidebarPanel.js"></script>
     <script src="Views/SymbolicBreakpointPopover.js"></script>
     <script src="Views/SymbolicBreakpointTreeElement.js"></script>
@@ -942,7 +950,9 @@
     <script src="Controllers/CodeMirrorCubicBezierTimingFunctionEditingController.js"></script>
     <script src="Controllers/CodeMirrorDragToAdjustNumberController.js"></script>
     <script src="Controllers/CodeMirrorGradientEditingController.js"></script>
+    <script src="Controllers/CodeMirrorLinearTimingFunctionEditingController.js"></script>
     <script src="Controllers/CodeMirrorSpringTimingFunctionEditingController.js"></script>
+    <script src="Controllers/CodeMirrorStepsTimingFunctionEditingController.js"></script>
     <script src="Controllers/CodeMirrorTokenTrackingController.js"></script>
     <script src="Controllers/CodeMirrorTextKillController.js"></script>
     <script src="Controllers/ConsoleManager.js"></script>

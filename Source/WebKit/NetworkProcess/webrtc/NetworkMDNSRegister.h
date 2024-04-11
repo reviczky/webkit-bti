@@ -30,6 +30,7 @@
 #include "RTCNetwork.h"
 #include <WebCore/ProcessQualified.h>
 #include <WebCore/ScriptExecutionContextIdentifier.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/Expected.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
@@ -54,7 +55,7 @@ class SessionID;
 }
 
 namespace WebCore {
-enum class MDNSRegisterError;
+enum class MDNSRegisterError : uint8_t;
 }
 
 namespace WebKit {
@@ -78,9 +79,10 @@ private:
 
     PAL::SessionID sessionID() const;
 
-    NetworkConnectionToWebProcess& m_connection;
+    WeakRef<NetworkConnectionToWebProcess> m_connection;
 #if ENABLE_MDNS
-    HashMap<WebCore::ScriptExecutionContextIdentifier, DNSServiceRef> m_services;
+    struct DNSServiceDeallocator;
+    HashMap<WebCore::ScriptExecutionContextIdentifier, std::unique_ptr<_DNSServiceRef_t, DNSServiceDeallocator>> m_services;
 #endif
 };
 

@@ -30,30 +30,43 @@
 
 #include "WebExtensionControllerParameters.h"
 #include "WebExtensionControllerProxyMessages.h"
+#include "WebPageProxy.h"
+#include <wtf/BlockPtr.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebKit {
 
-using namespace WebCore;
+constexpr auto freshlyCreatedTimeout = 5_s;
 
-static HashMap<WebExtensionControllerIdentifier, WeakPtr<WebExtensionController>>& webExtensionControllers()
+static HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionController>>& webExtensionControllers()
 {
-    static MainThreadNeverDestroyed<HashMap<WebExtensionControllerIdentifier, WeakPtr<WebExtensionController>>> controllers;
+    static MainThreadNeverDestroyed<HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionController>>> controllers;
     return controllers;
 }
 
 WebExtensionController* WebExtensionController::get(WebExtensionControllerIdentifier identifier)
 {
-    return webExtensionControllers().get(identifier).get();
+    return webExtensionControllers().get(identifier);
 }
 
 WebExtensionController::WebExtensionController(Ref<WebExtensionControllerConfiguration> configuration)
     : m_configuration(configuration)
     , m_identifier(WebExtensionControllerIdentifier::generate())
 {
-    ASSERT(!webExtensionControllers().contains(m_identifier));
-    webExtensionControllers().add(m_identifier, this);
+    ASSERT(!get(m_identifier));
+    webExtensionControllers().add(m_identifier, *this);
+
+    // A freshly created extension controller will be used to determine if the startup event
+    // should be fired for any loaded extensions during a brief time window. Start a timer
+    // when the first extension is about to be loaded.
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(freshlyCreatedTimeout.seconds() * NSEC_PER_SEC)), dispatch_get_main_queue(), makeBlockPtr([this, weakThis = WeakPtr { *this }] {
+        if (!weakThis)
+            return;
+
+        m_freshlyCreated = false;
+    }).get());
 }
 
 WebExtensionController::~WebExtensionController()
@@ -66,14 +79,9 @@ WebExtensionControllerParameters WebExtensionController::parameters() const
     WebExtensionControllerParameters parameters;
 
     parameters.identifier = identifier();
-
-    Vector<WebExtensionContextParameters> contextParameters;
-    contextParameters.reserveInitialCapacity(extensionContexts().size());
-
-    for (auto& context : extensionContexts())
-        contextParameters.append(context->parameters());
-
-    parameters.contextParameters = contextParameters;
+    parameters.contextParameters = WTF::map(extensionContexts(), [](auto& context) {
+        return context->parameters();
+    });
 
     return parameters;
 }

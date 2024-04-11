@@ -78,7 +78,7 @@ CaptureSourceOrError GStreamerVideoCaptureSource::create(String&& deviceID, Medi
     auto source = adoptRef(*new GStreamerVideoCaptureSource(WTFMove(*device), WTFMove(hashSalts)));
     if (constraints) {
         if (auto result = source->applyConstraints(*constraints))
-            return CaptureSourceOrError({ WTFMove(result->badConstraint), MediaAccessDenialReason::InvalidConstraint });
+            return CaptureSourceOrError(CaptureSourceError { result->invalidConstraint });
     }
     return CaptureSourceOrError(WTFMove(source));
 }
@@ -88,7 +88,7 @@ CaptureSourceOrError GStreamerVideoCaptureSource::createPipewireSource(String&& 
     auto source = adoptRef(*new GStreamerVideoCaptureSource(WTFMove(deviceID), { }, WTFMove(hashSalts), "pipewiresrc", deviceType, nodeAndFd));
     if (constraints) {
         if (auto result = source->applyConstraints(*constraints))
-            return CaptureSourceOrError({ WTFMove(result->badConstraint), MediaAccessDenialReason::InvalidConstraint });
+            return CaptureSourceOrError(CaptureSourceError { result->invalidConstraint });
     }
     return CaptureSourceOrError(WTFMove(source));
 }
@@ -183,9 +183,6 @@ void GStreamerVideoCaptureSource::captureEnded()
 
 void GStreamerVideoCaptureSource::startProducingData()
 {
-    if (m_capturer->pipeline())
-        return;
-
     m_capturer->setupPipeline();
 
     if (m_deviceType == CaptureDevice::DeviceType::Camera)
@@ -251,7 +248,7 @@ const RealtimeMediaSourceSettings& GStreamerVideoCaptureSource::settings()
 void GStreamerVideoCaptureSource::generatePresets()
 {
     Vector<VideoPreset> presets;
-    GRefPtr<GstCaps> caps = adoptGRef(m_capturer->caps());
+    auto caps = m_capturer->caps();
     for (unsigned i = 0; i < gst_caps_get_size(caps.get()); i++) {
         GstStructure* str = gst_caps_get_structure(caps.get(), i);
 

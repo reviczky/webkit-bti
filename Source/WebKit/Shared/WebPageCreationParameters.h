@@ -31,6 +31,7 @@
 #include "SandboxExtension.h"
 #include "SessionState.h"
 #include "UserContentControllerParameters.h"
+#include "ViewWindowCoordinates.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebPageGroupData.h"
 #include "WebPageProxyIdentifier.h"
@@ -69,6 +70,10 @@
 #include "WebExtensionControllerParameters.h"
 #endif
 
+#if (PLATFORM(GTK) || PLATFORM(WPE)) && USE(GBM)
+#include "DMABufRendererBufferFormat.h"
+#endif
+
 namespace IPC {
 class Decoder;
 class Encoder;
@@ -99,6 +104,9 @@ struct WebPageCreationParameters {
     WebCore::FloatSize maximumUnobscuredSize;
 
     std::optional<WebCore::FloatRect> viewExposedRect;
+
+    std::optional<uint32_t> displayID;
+    std::optional<unsigned> nominalFramesPerSecond;
 
     bool alwaysShowsHorizontalScroller;
     bool alwaysShowsVerticalScroller;
@@ -164,6 +172,7 @@ struct WebPageCreationParameters {
     bool useFormSemanticContext { false };
     int headerBannerHeight { 0 };
     int footerBannerHeight { 0 };
+    std::optional<ViewWindowCoordinates> viewWindowCoordinates;
 #endif
 #if ENABLE(META_VIEWPORT)
     bool ignoresViewportScaleLimits;
@@ -195,6 +204,9 @@ struct WebPageCreationParameters {
 #endif
 #if HAVE(APP_ACCENT_COLORS)
     WebCore::Color accentColor;
+#if PLATFORM(MAC)
+    bool appUsesCustomAccentColor;
+#endif
 #endif
 #if USE(WPE_RENDERER)
     UnixFileDescriptor hostFileDescriptor;
@@ -242,6 +254,7 @@ struct WebPageCreationParameters {
     bool userScriptsShouldWaitUntilNotification { true };
     bool loadsSubresources { true };
     std::optional<MemoryCompactLookupOnlyRobinHoodHashSet<String>> allowedNetworkHosts;
+    std::optional<std::pair<uint16_t, uint16_t>> portsForUpgradingInsecureSchemeForTesting;
 
     bool crossOriginAccessControlCheckEnabled { true };
     String processDisplayName;
@@ -287,7 +300,11 @@ struct WebPageCreationParameters {
 
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
 
-    std::optional<FrameTreeCreationParameters> subframeProcessFrameTreeCreationParameters;
+    struct SubframeProcessPageParameters {
+        URL initialMainDocumentURL;
+        FrameTreeCreationParameters frameTreeParameters;
+    };
+    std::optional<SubframeProcessPageParameters> subframeProcessPageParameters;
     std::optional<WebCore::FrameIdentifier> openerFrameIdentifier;
     std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
 
@@ -298,6 +315,10 @@ struct WebPageCreationParameters {
 
 #if HAVE(MACH_BOOTSTRAP_EXTENSION)
     SandboxExtension::Handle machBootstrapHandle;
+#endif
+
+#if (PLATFORM(GTK) || PLATFORM(WPE)) && USE(GBM)
+    Vector<DMABufRendererBufferFormat> preferredBufferFormats;
 #endif
 };
 

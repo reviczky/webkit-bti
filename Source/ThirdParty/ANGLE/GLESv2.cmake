@@ -145,7 +145,7 @@ endif()
 if(is_win)
     list(APPEND libangle_common_sources "src/common/system_utils_win.cpp")
 
-    if(target_os STREQUAL "winuwp")
+    if(angle_is_winuwp)
         list(APPEND libangle_common_sources "src/common/system_utils_winuwp.cpp")
     else()
         list(APPEND libangle_common_sources "src/common/system_utils_win32.cpp")
@@ -306,7 +306,7 @@ set(libangle_headers
     "src/libANGLE/Semaphore.h"
     "src/libANGLE/Shader.h"
     "src/libANGLE/ShareGroup.h"
-    "src/libANGLE/SharedContextMutex.h"
+    "src/libANGLE/ContextMutex.h"
     "src/libANGLE/SizedMRUCache.h"
     "src/libANGLE/State.h"
     "src/libANGLE/Stream.h"
@@ -354,6 +354,7 @@ set(libangle_headers
     "src/libANGLE/renderer/MemoryObjectImpl.h"
     "src/libANGLE/renderer/OverlayImpl.h"
     "src/libANGLE/renderer/ProgramImpl.h"
+    "src/libANGLE/renderer/ProgramExecutableImpl.h"
     "src/libANGLE/renderer/ProgramPipelineImpl.h"
     "src/libANGLE/renderer/QueryImpl.h"
     "src/libANGLE/renderer/RenderbufferImpl.h"
@@ -404,6 +405,7 @@ set(libangle_sources
     "src/libANGLE/Compiler.cpp"
     "src/libANGLE/Config.cpp"
     "src/libANGLE/Context.cpp"
+    "src/libANGLE/ContextMutex.cpp"
     "src/libANGLE/Context_gles_1_0.cpp"
     "src/libANGLE/Debug.cpp"
     "src/libANGLE/Device.cpp"
@@ -442,7 +444,6 @@ set(libangle_sources
     "src/libANGLE/Semaphore.cpp"
     "src/libANGLE/Shader.cpp"
     "src/libANGLE/ShareGroup.cpp"
-    "src/libANGLE/SharedContextMutex.cpp"
     "src/libANGLE/State.cpp"
     "src/libANGLE/Stream.cpp"
     "src/libANGLE/Surface.cpp"
@@ -539,7 +540,7 @@ set(libangle_cl_headers
     "src/libANGLE/CLProgram.h"
     "src/libANGLE/CLRefPointer.h"
     "src/libANGLE/CLSampler.h"
-    "src/libANGLE/CLtypes.h"
+    "src/libANGLE/cl_types.h"
     "src/libANGLE/cl_utils.h"
     "src/libANGLE/renderer/CLCommandQueueImpl.h"
     "src/libANGLE/renderer/CLContextImpl.h"
@@ -551,7 +552,7 @@ set(libangle_cl_headers
     "src/libANGLE/renderer/CLPlatformImpl.h"
     "src/libANGLE/renderer/CLProgramImpl.h"
     "src/libANGLE/renderer/CLSamplerImpl.h"
-    "src/libANGLE/renderer/CLtypes.h"
+    "src/libANGLE/renderer/cl_types.h"
     "src/libANGLE/validationCL.h"
     "src/libANGLE/validationCL_autogen.h"
 )

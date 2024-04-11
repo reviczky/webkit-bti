@@ -44,7 +44,7 @@ class WebKit::NetworkLoadParameters {
     bool shouldClearReferrerOnHTTPSToHTTPRedirect;
     bool needsCertificateInfo;
     bool isMainFrameNavigation;
-    bool isMainResourceNavigationForAnyFrame;
+    std::optional<WebKit::NavigationActionData> mainResourceNavigationDataForAnyFrame;
     WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking;
     [NotSerialized] Vector<RefPtr<WebCore::BlobDataFileReference>> blobFileReferences;
     WebKit::PreconnectOnly shouldPreconnectOnly;
@@ -96,16 +96,18 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
     uint64_t navigationID;
     std::optional<WebCore::NavigationRequester> navigationRequester;
     
-#if ENABLE(SERVICE_WORKER)
     WebCore::ServiceWorkersMode serviceWorkersMode;
     std::optional<WebCore::ServiceWorkerRegistrationIdentifier> serviceWorkerRegistrationIdentifier;
     OptionSet<WebCore::HTTPHeadersToKeepFromCleaning> httpHeadersToKeep;
     std::optional<WebCore::FetchIdentifier> navigationPreloadIdentifier;
-#endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
     URL mainDocumentURL;
     std::optional<WebKit::UserContentControllerIdentifier> userContentControllerIdentifier;
+#endif
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    bool pageHasExtensionController;
 #endif
 
     bool linkPreconnectEarlyHintsEnabled;

@@ -32,6 +32,7 @@ class DisplayMtl;
 class FramebufferMtl;
 class VertexArrayMtl;
 class ProgramMtl;
+class ProgramExecutableMtl;
 class RenderTargetMtl;
 class WindowSurfaceMtl;
 class TransformFeedbackMtl;
@@ -213,12 +214,14 @@ class ContextMtl : public ContextImpl, public mtl::Context
     const gl::Limitations &getNativeLimitations() const override;
     const ShPixelLocalStorageOptions &getNativePixelLocalStorageOptions() const override;
 
-    const ProgramMtl *getProgram() const { return mProgram; }
+    const ProgramExecutableMtl *getProgramExecutable() const { return mExecutable; }
 
     // Shader creation
     CompilerImpl *createCompiler() override;
     ShaderImpl *createShader(const gl::ShaderState &state) override;
     ProgramImpl *createProgram(const gl::ProgramState &state) override;
+    ProgramExecutableImpl *createProgramExecutable(
+        const gl::ProgramExecutable *executable) override;
 
     // Framebuffer creation
     FramebufferImpl *createFramebuffer(const gl::FramebufferState &state) override;
@@ -314,9 +317,12 @@ class ContextMtl : public ContextImpl, public mtl::Context
     void onTransformFeedbackActive(const gl::Context *context, TransformFeedbackMtl *xfb);
     void onTransformFeedbackInactive(const gl::Context *context, TransformFeedbackMtl *xfb);
 
-    // Invoke by mtl::Sync
-    void queueEventSignal(const mtl::SharedEventRef &event, uint64_t value);
-    void serverWaitEvent(const mtl::SharedEventRef &event, uint64_t value);
+    // Invoked by multiple classes in SyncMtl.mm
+#if ANGLE_MTL_EVENT_AVAILABLE
+    // Enqueue an event and return the command queue serial that the event was or will be placed in.
+    uint64_t queueEventSignal(id<MTLEvent> event, uint64_t value);
+    void serverWaitEvent(id<MTLEvent> event, uint64_t value);
+#endif
 
     const mtl::ClearColorValue &getClearColorValue() const;
     const mtl::WriteMaskArray &getWriteMaskArray() const;
@@ -334,6 +340,7 @@ class ContextMtl : public ContextImpl, public mtl::Context
 
     angle::Result getIncompleteTexture(const gl::Context *context,
                                        gl::TextureType type,
+                                       gl::SamplerFormat format,
                                        gl::Texture **textureOut);
 
     // Recommended to call these methods to end encoding instead of invoking the encoder's
@@ -589,10 +596,10 @@ class ContextMtl : public ContextImpl, public mtl::Context
     mtl::PipelineCache mPipelineCache;
 
     // Cached back-end objects
-    FramebufferMtl *mDrawFramebuffer = nullptr;
-    VertexArrayMtl *mVertexArray     = nullptr;
-    ProgramMtl *mProgram             = nullptr;
-    QueryMtl *mOcclusionQuery        = nullptr;
+    FramebufferMtl *mDrawFramebuffer  = nullptr;
+    VertexArrayMtl *mVertexArray      = nullptr;
+    ProgramExecutableMtl *mExecutable = nullptr;
+    QueryMtl *mOcclusionQuery         = nullptr;
     mtl::TextureRef mWorkTexture;
     mtl::BufferRef mWorkBuffer;
 

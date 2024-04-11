@@ -87,6 +87,8 @@ struct WebKitMediaSrcPrivate {
 
     // Only used by URI Handler API implementation.
     GUniquePtr<char> uri;
+
+    WeakPtr<MediaPlayerPrivateGStreamerMSE> player;
 };
 
 static void webKitMediaSrcUriHandlerInit(gpointer, gpointer);
@@ -98,6 +100,7 @@ static void webKitMediaSrcTearDownStream(WebKitMediaSrc* source, const AtomStrin
 static void webKitMediaSrcGetProperty(GObject*, unsigned propId, GValue*, GParamSpec*);
 static void webKitMediaSrcStreamFlush(Stream*, bool isSeekingFlush);
 static gboolean webKitMediaSrcSendEvent(GstElement*, GstEvent*);
+static MediaPlayerPrivateGStreamerMSE* webKitMediaSrcPlayer(WebKitMediaSrc*);
 
 #define webkit_media_src_parent_class parent_class
 
@@ -195,6 +198,7 @@ struct Stream : public ThreadSafeRefCounted<Stream> {
     DataMutex<StreamingMembers> streamingMembersDataMutex;
 };
 
+#ifndef GST_DISABLE_GST_DEBUG
 static GRefPtr<GstElement> findPipeline(GRefPtr<GstElement> element)
 {
     while (true) {
@@ -204,6 +208,7 @@ static GRefPtr<GstElement> findPipeline(GRefPtr<GstElement> element)
         element = parentElement;
     }
 }
+#endif // GST_DISABLE_GST_DEBUG
 
 static GstStreamType gstStreamType(TrackPrivateBaseGStreamer::TrackType type)
 {
@@ -302,18 +307,20 @@ void webKitMediaSrcEmitStreams(WebKitMediaSrc* source, const Vector<RefPtr<Media
 
     source->priv->collection = adoptGRef(gst_stream_collection_new("WebKitMediaSrc"));
     for (const auto& track : tracks) {
-        GST_DEBUG_OBJECT(source, "Adding stream with trackId '%s' of type %s with caps %" GST_PTR_FORMAT, track->trackId().string().utf8().data(), streamTypeToString(track->type()), track->initialCaps().get());
+#ifndef GST_DISABLE_GST_DEBUG
+        GST_DEBUG_OBJECT(source, "Adding stream with trackId '%s' of type %s with caps %" GST_PTR_FORMAT, track->stringId().string().utf8().data(), streamTypeToString(track->type()), track->initialCaps().get());
+#endif // GST_DISABLE_GST_DEBUG
 
-        GRefPtr<WebKitMediaSrcPad> pad = WEBKIT_MEDIA_SRC_PAD(g_object_new(webkit_media_src_pad_get_type(), "name", makeString("src_", track->trackId()).utf8().data(), "direction", GST_PAD_SRC, NULL));
+        GRefPtr<WebKitMediaSrcPad> pad = WEBKIT_MEDIA_SRC_PAD(g_object_new(webkit_media_src_pad_get_type(), "name", makeString("src_", track->stringId()).utf8().data(), "direction", GST_PAD_SRC, NULL));
         gst_pad_set_activatemode_function(GST_PAD(pad.get()), webKitMediaSrcActivateMode);
 
         ASSERT(track->initialCaps());
         auto stream = adoptRef(new Stream(source, GRefPtr<GstPad>(GST_PAD(pad.get())), *track,
-            adoptGRef(gst_stream_new(track->trackId().string().utf8().data(), track->initialCaps().get(), gstStreamType(track->type()), GST_STREAM_FLAG_SELECT))));
+            adoptGRef(gst_stream_new(track->stringId().string().utf8().data(), track->initialCaps().get(), gstStreamType(track->type()), GST_STREAM_FLAG_SELECT))));
         pad->priv->stream = stream;
 
         gst_stream_collection_add_stream(source->priv->collection.get(), GRefPtr<GstStream>(stream->streamInfo.get()).leakRef());
-        source->priv->streams.set(track->trackId(), WTFMove(stream));
+        source->priv->streams.set(track->stringId(), WTFMove(stream));
     }
 
     gst_element_post_message(GST_ELEMENT(source), gst_message_new_stream_collection(GST_OBJECT(source), source->priv->collection.get()));
@@ -330,10 +337,20 @@ void webKitMediaSrcEmitStreams(WebKitMediaSrc* source, const Vector<RefPtr<Media
             if (state > GST_STATE_READY)
                 gst_pad_set_active(GST_PAD(stream->pad.get()), true);
         }
-        GST_DEBUG_OBJECT(source, "Adding pad '%s' for stream with name '%s'", GST_OBJECT_NAME(stream->pad.get()), stream->track->trackId().string().utf8().data());
+        GST_DEBUG_OBJECT(source, "Adding pad '%s' for stream with name '%s'", GST_OBJECT_NAME(stream->pad.get()), stream->track->stringId().string().utf8().data());
         gst_element_add_pad(GST_ELEMENT(source), GST_PAD(stream->pad.get()));
     }
     GST_DEBUG_OBJECT(source, "All pads added");
+}
+
+static MediaPlayerPrivateGStreamerMSE* webKitMediaSrcPlayer(WebKitMediaSrc* source)
+{
+    return source->priv->player.get();
+}
+
+void webKitMediaSrcSetPlayer(WebKitMediaSrc* source, WeakPtr<MediaPlayerPrivateGStreamerMSE>&& player)
+{
+    source->priv->player = WTFMove(player);
 }
 
 static void webKitMediaSrcTearDownStream(WebKitMediaSrc* source, const AtomString& name)
@@ -450,7 +467,7 @@ static void webKitMediaSrcLoop(void* userData)
     }
 
     if (!streamingMembers->wasStreamStartSent) {
-        GUniquePtr<char> streamId { g_strdup_printf("mse/%s", stream->track->trackId().string().utf8().data()) };
+        GUniquePtr<char> streamId { g_strdup_printf("mse/%s", stream->track->stringId().string().utf8().data()) };
         GRefPtr<GstEvent> event = adoptGRef(gst_event_new_stream_start(streamId.get()));
         gst_event_set_group_id(event.get(), stream->source->priv->groupId);
         gst_event_set_stream(event.get(), stream->streamInfo.get());
@@ -544,7 +561,7 @@ static void webKitMediaSrcLoop(void* userData)
         bool pushingFirstBuffer = !streamingMembers->hasPushedFirstBuffer;
         if (pushingFirstBuffer) {
             GST_DEBUG_OBJECT(pad, "Sending first buffer on this pad.");
-            GUniquePtr<char> fileName { g_strdup_printf("playback-pipeline-before-playback-%s", stream->track->trackId().string().utf8().data()) };
+            GUniquePtr<char> fileName { g_strdup_printf("playback-pipeline-before-playback-%s", stream->track->stringId().string().utf8().data()) };
             GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(findPipeline(GRefPtr<GstElement>(GST_ELEMENT(stream->source))).get()),
                 GST_DEBUG_GRAPH_SHOW_ALL, fileName.get());
             streamingMembers->hasPushedFirstBuffer = true;
@@ -558,7 +575,7 @@ static void webKitMediaSrcLoop(void* userData)
         GstFlowReturn result = gst_pad_push(pad, buffer.leakRef());
         if (result != GST_FLOW_OK && result != GST_FLOW_FLUSHING) {
             GST_ERROR_OBJECT(pad, "Pushing buffer returned %s", gst_flow_get_name(result));
-            GUniquePtr<char> fileName { g_strdup_printf("playback-pipeline-pushing-buffer-failed-%s", stream->track->trackId().string().utf8().data()) };
+            GUniquePtr<char> fileName { g_strdup_printf("playback-pipeline-pushing-buffer-failed-%s", stream->track->stringId().string().utf8().data()) };
             GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(findPipeline(GRefPtr<GstElement>(GST_ELEMENT(stream->source))).get()),
                 GST_DEBUG_GRAPH_SHOW_ALL, fileName.get());
             gst_pad_pause_task(pad);
@@ -581,13 +598,13 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
     ASSERT(isMainThread());
     bool skipFlush = false;
     GST_DEBUG_OBJECT(stream->source, "Flush requested for stream '%s'. isSeekingFlush = %s",
-        stream->track->trackId().string().utf8().data(), boolForPrinting(isSeekingFlush));
+        stream->track->stringId().string().utf8().data(), boolForPrinting(isSeekingFlush));
 
     {
         DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
 
         if (!streamingMembers->hasPoppedFirstObject) {
-            GST_DEBUG_OBJECT(stream->source, "Flush request for stream '%s' occurred before hasPoppedFirstObject, just clearing the queue and readjusting the segment.", stream->track->trackId().string().utf8().data());
+            GST_DEBUG_OBJECT(stream->source, "Flush request for stream '%s' occurred before hasPoppedFirstObject, just clearing the queue and readjusting the segment.", stream->track->stringId().string().utf8().data());
             DataMutexLocker queue { stream->track->queueDataMutex() };
             // We use clear() instead of flush() because the WebKitMediaSrc streaming thread could be waiting
             // for the queue. flush() would cancel the notEmptyCallback therefore leaving the streaming thread
@@ -632,24 +649,19 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
     } else {
         // In the case of non-seeking flushes we don't reset the timeline, so instead we need to increase the `base` field
         // by however running time we're starting after the flush.
-
-        GstClockTime pipelineStreamTime;
-        gst_element_query_position(findPipeline(GRefPtr<GstElement>(GST_ELEMENT(stream->source))).get(), GST_FORMAT_TIME,
-            reinterpret_cast<gint64*>(&pipelineStreamTime));
-        GST_DEBUG_OBJECT(stream->source, "pipelineStreamTime from position query: %" GST_TIME_FORMAT, GST_TIME_ARGS(pipelineStreamTime));
-        // GST_CLOCK_TIME_NONE is returned when the pipeline is not yet pre-rolled (e.g. just after a seek). In this case
-        // we don't need to adjust the segment though, as running time has not advanced.
-        if (GST_CLOCK_TIME_IS_VALID(pipelineStreamTime)) {
+        MediaPlayerPrivateGStreamerMSE* player = webKitMediaSrcPlayer(stream->source);
+        if (player) {
+            MediaTime streamTime = player->currentMediaTime();
+            GstClockTime pipelineStreamTime = toGstClockTime(streamTime);
             DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
             // We need to increase the base by the running time accumulated during the previous segment.
-
             GstClockTime pipelineRunningTime = gst_segment_to_running_time(&streamingMembers->segment, GST_FORMAT_TIME, pipelineStreamTime);
-            assert(GST_CLOCK_TIME_IS_VALID(pipelineRunningTime));
-            GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT") and stream time (%" GST_TIME_FORMAT ")",
-                GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime));
-            streamingMembers->segment.base = pipelineRunningTime;
-
-            streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
+            if ((GST_CLOCK_TIME_IS_VALID(pipelineRunningTime))) {
+                GST_DEBUG_OBJECT(stream->source, "Resetting segment to current pipeline running time (%" GST_TIME_FORMAT " and stream time (%" GST_TIME_FORMAT " = %s)",
+                    GST_TIME_ARGS(pipelineRunningTime), GST_TIME_ARGS(pipelineStreamTime), streamTime.toString().ascii().data());
+                streamingMembers->segment.base = pipelineRunningTime;
+                streamingMembers->segment.start = streamingMembers->segment.time = static_cast<GstClockTime>(pipelineStreamTime);
+            }
         }
     }
 
@@ -663,6 +675,18 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
             GST_DEBUG_OBJECT(stream->pad.get(), "StreamingMembers mutex taken, using it to set isFlushing = false.");
             streamingMembers->isFlushing = false;
             streamingMembers->doesNeedSegmentEvent = true;
+
+            if (!webkitGstCheckVersion(1, 22, 0)) {
+                // In older GST versions STREAM_COLLECTION event is delivered to decodebin3
+                // from parsebin src pad probe. On the way, this event is cached inside
+                // parser element (GstBaseParse) and pushed downstream with first frame.
+                // Flushing before first frame is handled by the parser,
+                // the event is dropped from GstBaseParse and never reaches decodebin3.
+                // GST 1.21.3 added STREAM_COLLECTION event handling on decodebin3 sink pad directly
+                // so this workaround is not needed anymore.
+                GST_DEBUG_OBJECT(stream->pad.get(), "Reset hasPushedStreamCollectionEvent");
+                streamingMembers->hasPushedStreamCollectionEvent = false;
+            }
         }
 
         GST_DEBUG_OBJECT(stream->pad.get(), "Sending FLUSH_STOP downstream (resetTime = %s).", boolForPrinting(isSeekingFlush));
@@ -670,12 +694,17 @@ static void webKitMediaSrcStreamFlush(Stream* stream, bool isSeekingFlush)
         gst_pad_push_event(stream->pad.get(), gst_event_new_flush_stop(isSeekingFlush));
         GST_DEBUG_OBJECT(stream->pad.get(), "FLUSH_STOP sent.");
 
+        {
+            DataMutexLocker streamingMembers { stream->streamingMembersDataMutex };
+            streamingMembers->hasPoppedFirstObject = false;
+        }
+
         GST_DEBUG_OBJECT(stream->pad.get(), "Starting webKitMediaSrcLoop task and releasing the STREAM_LOCK.");
         gst_pad_start_task(stream->pad.get(), webKitMediaSrcLoop, stream->pad.get(), nullptr);
     }
 
     GST_DEBUG_OBJECT(stream->source, "Flush request for stream '%s' (isSeekingFlush = %s) satisfied.",
-        stream->track->trackId().string().utf8().data(), boolForPrinting(isSeekingFlush));
+        stream->track->stringId().string().utf8().data(), boolForPrinting(isSeekingFlush));
 }
 
 void webKitMediaSrcFlush(WebKitMediaSrc* source, const AtomString& streamName)
@@ -745,25 +774,26 @@ static GstStateChangeReturn webKitMediaSrcChangeState(GstElement* element, GstSt
     return GST_ELEMENT_CLASS(webkit_media_src_parent_class)->change_state(element, transition);
 }
 
-static gboolean webKitMediaSrcSendEvent(GstElement* element, GstEvent* event)
+static gboolean webKitMediaSrcSendEvent(GstElement* element, GstEvent* eventTransferFull)
 {
-    switch (GST_EVENT_TYPE(event)) {
+    auto event = adoptGRef(eventTransferFull);
+    switch (GST_EVENT_TYPE(event.get())) {
     case GST_EVENT_SEEK: {
         double rate;
         GstFormat format;
         GstSeekType startType;
         int64_t start;
-        gst_event_parse_seek(event, &rate, &format, nullptr, &startType, &start, nullptr, nullptr);
+        gst_event_parse_seek(event.get(), &rate, &format, nullptr, &startType, &start, nullptr, nullptr);
         if (format != GST_FORMAT_TIME || startType != GST_SEEK_TYPE_SET) {
-            GST_ERROR_OBJECT(element, "Rejecting unsupported seek event: %" GST_PTR_FORMAT, event);
+            GST_ERROR_OBJECT(element, "Rejecting unsupported seek event: %" GST_PTR_FORMAT, event.get());
             return false;
         }
-        GST_DEBUG_OBJECT(element, "Handling seek event: %" GST_PTR_FORMAT, event);
+        GST_DEBUG_OBJECT(element, "Handling seek event: %" GST_PTR_FORMAT, event.get());
         webKitMediaSrcSeek(WEBKIT_MEDIA_SRC(element), start, rate);
         return true;
     }
     default:
-        return GST_ELEMENT_CLASS(webkit_media_src_parent_class)->send_event(element, event);
+        return GST_ELEMENT_CLASS(webkit_media_src_parent_class)->send_event(element, event.leakRef());
     }
 }
 

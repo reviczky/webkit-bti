@@ -40,9 +40,10 @@ inline Expected<String, WGSL::FailedCheck> translate(const String& wgsl, const S
     if (auto* maybeError = std::get_if<WGSL::FailedCheck>(&result))
         return makeUnexpected(*maybeError);
 
-    auto preparedResults = WGSL::prepare(std::get<WGSL::SuccessfulCheck>(result).ast, entryPointName, { });
-
-    return { WTFMove(preparedResults.msl) };
+    auto prepareResult = WGSL::prepare(std::get<WGSL::SuccessfulCheck>(result).ast, entryPointName, { });
+    HashMap<String, WGSL::ConstantValue> constantValues;
+    auto msl = WGSL::generate(prepareResult.callGraph, constantValues);
+    return { WTFMove(msl) };
 }
 
 TEST(WGSLMetalGenerationTests, RedFrag)
@@ -54,12 +55,13 @@ fn main() -> @location(0) vec4<f32> {
 
     EXPECT_TRUE(mslSource.has_value());
     EXPECT_EQ(*mslSource, R"(#include <metal_stdlib>
+#include <metal_types>
 
 using namespace metal;
 
 [[fragment]] vec<float, 4> function0()
 {
-    return vec<float, 4>(1, 0, 0, 1);
+    return vec<float, 4>(1., 0., 0., 1.);
 }
 
 )"_s);
@@ -77,13 +79,14 @@ fn main(@builtin(position) position : vec4<f32>,
 
     EXPECT_TRUE(mslSource.has_value());
     EXPECT_EQ(*mslSource, R"(#include <metal_stdlib>
+#include <metal_types>
 
 using namespace metal;
 
-[[fragment]] void function0(unsigned parameter0 [[sample_mask]], unsigned parameter1 [[sample_id]], vec<float, 4> parameter2 [[position]])
+[[fragment]] void function0(vec<float, 4> parameter0 [[position]], unsigned parameter1 [[sample_id]], unsigned parameter2 [[sample_mask]])
 {
-    vec<float, 4> local0 = parameter2;
-    unsigned local1 = (parameter1 + parameter0);
+    vec<float, 4> local0 = parameter0;
+    unsigned local1 = (parameter1 + parameter2);
 }
 
 )"_s);

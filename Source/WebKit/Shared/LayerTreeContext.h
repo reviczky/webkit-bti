@@ -26,7 +26,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <wtf/Forward.h>
 
 namespace WebKit {
 
@@ -39,27 +38,17 @@ enum class LayerHostingMode : uint8_t {
 
 class LayerTreeContext {
 public:
-    LayerTreeContext();
-    LayerTreeContext(uint64_t id) : contextID(id) { };
-    ~LayerTreeContext();
+    LayerTreeContext() = default;
+    LayerTreeContext(uint64_t id)
+        : contextID(id)
+    {
+    }
 
-    bool isEmpty() const;
+    friend bool operator==(LayerTreeContext, LayerTreeContext) = default;
 
-    uint64_t contextID;
+    bool isEmpty() const { return !contextID; }
+
+    uint64_t contextID { 0 };
 };
 
-bool operator==(const LayerTreeContext&, const LayerTreeContext&);
-
-}
-
-namespace WTF {
-template<> struct EnumTraits<WebKit::LayerHostingMode> {
-    using values = EnumValues<
-        WebKit::LayerHostingMode,
-#if HAVE(OUT_OF_PROCESS_LAYER_HOSTING)
-        WebKit::LayerHostingMode::OutOfProcess,
-#endif
-        WebKit::LayerHostingMode::InProcess
-    >;
-};
 }

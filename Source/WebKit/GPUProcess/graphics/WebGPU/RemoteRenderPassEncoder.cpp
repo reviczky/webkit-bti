@@ -83,7 +83,12 @@ void RemoteRenderPassEncoder::setVertexBuffer(WebCore::WebGPU::Index32 slot, Web
     if (!convertedBuffer)
         return;
 
-    m_backing->setVertexBuffer(slot, *convertedBuffer, offset, size);
+    m_backing->setVertexBuffer(slot, convertedBuffer, offset, size);
+}
+
+void RemoteRenderPassEncoder::unsetVertexBuffer(WebCore::WebGPU::Index32 slot, std::optional<WebCore::WebGPU::Size64> offset, std::optional<WebCore::WebGPU::Size64> size)
+{
+    m_backing->setVertexBuffer(slot, nullptr, offset, size);
 }
 
 void RemoteRenderPassEncoder::draw(WebCore::WebGPU::Size32 vertexCount, std::optional<WebCore::WebGPU::Size32> instanceCount,
@@ -125,7 +130,6 @@ void RemoteRenderPassEncoder::setBindGroup(WebCore::WebGPU::Index32 index, WebGP
     std::optional<Vector<WebCore::WebGPU::BufferDynamicOffset>>&& dynamicOffsets)
 {
     auto convertedBindGroup = m_objectHeap.convertBindGroupFromBacking(bindGroup);
-    ASSERT(convertedBindGroup);
     if (!convertedBindGroup)
         return;
 
@@ -194,7 +198,7 @@ void RemoteRenderPassEncoder::executeBundles(Vector<WebGPUIdentifier>&& renderBu
         ASSERT(convertedBundle);
         if (!convertedBundle)
             return;
-        convertedBundles.uncheckedAppend(*convertedBundle);
+        convertedBundles.append(*convertedBundle);
     }
     m_backing->executeBundles(WTFMove(convertedBundles));
 }

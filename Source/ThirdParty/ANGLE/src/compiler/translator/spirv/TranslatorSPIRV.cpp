@@ -36,12 +36,14 @@
 #include "compiler/translator/tree_ops/spirv/EmulateFramebufferFetch.h"
 #include "compiler/translator/tree_ops/spirv/EmulateYUVBuiltIns.h"
 #include "compiler/translator/tree_ops/spirv/FlagSamplersWithTexelFetch.h"
+#include "compiler/translator/tree_ops/spirv/ReswizzleYUVOps.h"
 #include "compiler/translator/tree_ops/spirv/RewriteInterpolateAtOffset.h"
 #include "compiler/translator/tree_ops/spirv/RewriteR32fImages.h"
 #include "compiler/translator/tree_util/BuiltIn.h"
 #include "compiler/translator/tree_util/DriverUniform.h"
 #include "compiler/translator/tree_util/FindFunction.h"
 #include "compiler/translator/tree_util/FindMain.h"
+#include "compiler/translator/tree_util/FindSymbolNode.h"
 #include "compiler/translator/tree_util/IntermNode_util.h"
 #include "compiler/translator/tree_util/ReplaceClipCullDistanceVariable.h"
 #include "compiler/translator/tree_util/ReplaceVariable.h"
@@ -1026,8 +1028,9 @@ bool TranslatorSPIRV::translateImpl(TIntermBlock *root,
                 }
             }
 
-            bool hasGLSampleMask        = false;
-            bool hasGLSecondaryFragData = false;
+            bool hasGLSampleMask           = false;
+            bool hasGLSecondaryFragData    = false;
+            const TIntermSymbol *yuvOutput = nullptr;
 
             for (const ShaderVariable &outputVar : mOutputVariables)
             {
@@ -1041,6 +1044,13 @@ bool TranslatorSPIRV::translateImpl(TIntermBlock *root,
                 {
                     ASSERT(!hasGLSecondaryFragData);
                     hasGLSecondaryFragData = true;
+                    continue;
+                }
+                if (outputVar.yuv)
+                {
+                    // We can only have one yuv output
+                    ASSERT(yuvOutput == nullptr);
+                    yuvOutput = FindSymbolNode(root, ImmutableString(outputVar.name));
                     continue;
                 }
             }
@@ -1100,10 +1110,12 @@ bool TranslatorSPIRV::translateImpl(TIntermBlock *root,
                 return false;
             }
 
+            InputAttachmentMap inputAttachmentMap;
+
             // Emulate framebuffer fetch if used.
             if (HasFramebufferFetch(getExtensionBehavior(), compileOptions))
             {
-                if (!EmulateFramebufferFetch(this, root, &mUniforms))
+                if (!EmulateFramebufferFetch(this, root, &inputAttachmentMap))
                 {
                     return false;
                 }
@@ -1115,11 +1127,16 @@ bool TranslatorSPIRV::translateImpl(TIntermBlock *root,
             // attachment variable then create a new one.
             if (getAdvancedBlendEquations().any() &&
                 compileOptions.addAdvancedBlendEquationsEmulation &&
-                !EmulateAdvancedBlendEquations(this, root, &getSymbolTable(), driverUniforms,
-                                               &mUniforms, getAdvancedBlendEquations()))
+                !EmulateAdvancedBlendEquations(this, root, &getSymbolTable(),
+                                               getAdvancedBlendEquations(), driverUniforms,
+                                               &inputAttachmentMap))
             {
                 return false;
             }
+
+            // Input attachments are potentially added in framebuffer fetch and advanced blend
+            // emulation.  Declare their SPIR-V ids.
+            assignInputAttachmentIds(inputAttachmentMap);
 
             if (!RewriteDfdy(this, root, &getSymbolTable(), getShaderVersion(), specConst,
                              driverUniforms))
@@ -1161,6 +1178,11 @@ bool TranslatorSPIRV::translateImpl(TIntermBlock *root,
             if (IsExtensionEnabled(getExtensionBehavior(), TExtension::EXT_YUV_target))
             {
                 if (!EmulateYUVBuiltIns(this, root, &getSymbolTable()))
+                {
+                    return false;
+                }
+
+                if (!ReswizzleYUVOps(this, root, &getSymbolTable(), yuvOutput))
                 {
                     return false;
                 }
@@ -1293,6 +1315,22 @@ void TranslatorSPIRV::assignSpirvId(TSymbolUniqueId uniqueId, uint32_t spirvId)
     mUniqueToSpirvIdMap[uniqueId.get()] = spirvId;
 }
 
+void TranslatorSPIRV::assignInputAttachmentIds(const InputAttachmentMap &inputAttachmentMap)
+{
+    for (auto &iter : inputAttachmentMap)
+    {
+        const uint32_t index = iter.first;
+        const TVariable *var = iter.second;
+        ASSERT(var != nullptr);
+
+        assignSpirvId(var->uniqueId(), vk::spirv::kIdInputAttachment0 + index);
+
+        const MetadataFlags flag = static_cast<MetadataFlags>(
+            static_cast<uint32_t>(MetadataFlags::HasInputAttachment0) + index);
+        mMetadataFlags.set(flag);
+    }
+}
+
 void TranslatorSPIRV::assignSpirvIds(TIntermBlock *root)
 {
     // Match the declarations with collected variables and assign a new id to each, starting from
@@ -1378,7 +1416,8 @@ void TranslatorSPIRV::assignSpirvIds(TIntermBlock *root)
             // webgl_FragColor, webgl_FragData, webgl_SecondaryFragColor and webgl_SecondaryFragData
             // are recorded with their original names (starting with gl_)
             ImmutableString name(symbol->getName());
-            if (angle::BeginsWith(name.data(), "webgl_"))
+            if (angle::BeginsWith(name.data(), "webgl_") &&
+                symbol->variable().symbolType() == SymbolType::AngleInternal)
             {
                 name = ImmutableString(name.data() + 3, name.length() - 3);
             }

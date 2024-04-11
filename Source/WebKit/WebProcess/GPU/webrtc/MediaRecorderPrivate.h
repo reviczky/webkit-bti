@@ -27,7 +27,6 @@
 
 #if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
 
-#include "GPUProcessConnection.h"
 #include "MediaRecorderIdentifier.h"
 #include "SharedCARingBuffer.h"
 #include "SharedVideoFrame.h"
@@ -47,21 +46,17 @@ class WebAudioBufferList;
 
 namespace WebKit {
 
+class MediaRecorderPrivateGPUProcessDidCloseObserver;
+
 class MediaRecorderPrivate final
     : public WebCore::MediaRecorderPrivate
-    , public GPUProcessConnection::Client {
+    , public CanMakeWeakPtr<MediaRecorderPrivate> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<MediaRecorderPrivate> create(WebCore::MediaStreamPrivate&, const WebCore::MediaRecorderPrivateOptions&);
+    MediaRecorderPrivate(WebCore::MediaStreamPrivate&, const WebCore::MediaRecorderPrivateOptions&);
     ~MediaRecorderPrivate();
 
-    void ref() const final { return WebCore::MediaRecorderPrivate::ref(); }
-    void deref() const final { return WebCore::MediaRecorderPrivate::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return WebCore::MediaRecorderPrivate::controlBlock(); }
-
 private:
-    MediaRecorderPrivate(WebCore::MediaStreamPrivate&, const WebCore::MediaRecorderPrivateOptions&);
-
     // WebCore::MediaRecorderPrivate
     void videoFrameAvailable(WebCore::VideoFrame&, WebCore::VideoFrameTimeMetadata) final;
     void fetchData(CompletionHandler<void(RefPtr<WebCore::FragmentedSharedBuffer>&&, const String& mimeType, double)>&&) final;
@@ -72,8 +67,8 @@ private:
     void pauseRecording(CompletionHandler<void()>&&) final;
     void resumeRecording(CompletionHandler<void()>&&) final;
 
-    // GPUProcessConnection::Client
-    void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
+    friend class MediaRecorderPrivateGPUProcessDidCloseObserver;
+    void gpuProcessConnectionDidClose();
 
     MediaRecorderIdentifier m_identifier;
     Ref<WebCore::MediaStreamPrivate> m_stream;
@@ -88,6 +83,7 @@ private:
     bool m_isStopped { false };
     std::optional<WebCore::IntSize> m_blackFrameSize;
 
+    Ref<MediaRecorderPrivateGPUProcessDidCloseObserver> m_gpuProcessDidCloseObserver;
     SharedVideoFrameWriter m_sharedVideoFrameWriter;
 };
 

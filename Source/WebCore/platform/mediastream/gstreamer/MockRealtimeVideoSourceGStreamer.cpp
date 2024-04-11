@@ -46,7 +46,7 @@ CaptureSourceOrError MockRealtimeVideoSource::create(String&& deviceID, AtomStri
     Ref<RealtimeMediaSource> source = adoptRef(*new MockRealtimeVideoSourceGStreamer(WTFMove(deviceID), WTFMove(name), WTFMove(hashSalts)));
     if (constraints) {
         if (auto error = source->applyConstraints(*constraints))
-            return CaptureSourceOrError({ WTFMove(error->badConstraint), MediaAccessDenialReason::InvalidConstraint });
+            return CaptureSourceOrError(CaptureSourceError { error->invalidConstraint });
     }
 
     return source;
@@ -108,7 +108,7 @@ void MockRealtimeVideoSourceGStreamer::captureEnded()
 
 void MockRealtimeVideoSourceGStreamer::updateSampleBuffer()
 {
-    auto imageBuffer = this->imageBuffer();
+    auto imageBuffer = this->imageBufferInternal();
     if (!imageBuffer)
         return;
 
@@ -120,6 +120,8 @@ void MockRealtimeVideoSourceGStreamer::updateSampleBuffer()
     metadata.captureTime = MonotonicTime::now().secondsSinceEpoch();
     auto presentationTime = MediaTime::createWithDouble((elapsedTime()).seconds());
     auto videoFrame = VideoFrameGStreamer::createFromPixelBuffer(pixelBuffer.releaseNonNull(), VideoFrameGStreamer::CanvasContentType::Canvas2D, videoFrameRotation(), presentationTime, size(), frameRate(), false, WTFMove(metadata));
+    if (!videoFrame)
+        return;
 
     // Mock GstDevice is an appsrc, see webkitMockDeviceCreateElement().
     ASSERT(GST_IS_APP_SRC(m_capturer->source()));

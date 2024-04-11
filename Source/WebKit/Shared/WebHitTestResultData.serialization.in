@@ -28,6 +28,12 @@ headers: "ArgumentCoders.h"
     Horizontal
 };
 
+[Nested] enum class WebKit::WebHitTestResultData::ElementType : uint8_t {
+    None,
+    Audio,
+    Video
+};
+
 struct WebKit::WebHitTestResultData {
     String absoluteImageURL;
     String absolutePDFURL;
@@ -36,6 +42,7 @@ struct WebKit::WebHitTestResultData {
     String linkLabel;
     String linkTitle;
     String linkSuggestedFilename;
+    String imageSuggestedFilename;
     bool isContentEditable;
     WebCore::IntRect elementBoundingBox;
     WebKit::WebHitTestResultData::IsScrollbar isScrollbar;
@@ -43,14 +50,19 @@ struct WebKit::WebHitTestResultData {
     bool isTextNode;
     bool isOverTextInsideFormControlElement;
     bool isDownloadableMedia;
-
+    bool mediaIsInFullscreen;
+    WebKit::WebHitTestResultData::ElementType elementType;
+    std::optional<WebKit::FrameInfoData> frameInfo;
     String lookupText;
     String toolTipText;
     String imageText;
-    std::optional<WebKit::SharedMemoryHandle> getImageSharedMemoryHandle();
-    RefPtr<WebKit::ShareableBitmap> imageBitmap;
+    std::optional<WebCore::SharedMemoryHandle> getImageSharedMemoryHandle();
+    RefPtr<WebCore::ShareableBitmap> imageBitmap;
     String sourceImageMIMEType;
-    
+    String linkLocalDataMIMEType;
+    bool hasLocalDataForLinkURL;
+    bool hasEntireImage;
+
 #if PLATFORM(MAC)
     WebKit::WebHitTestResultPlatformData platformData;
 #endif

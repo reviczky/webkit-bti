@@ -84,6 +84,7 @@ typedef const struct OpaqueWKAuthenticationDecisionListener* WKAuthenticationDec
 typedef const struct OpaqueWKBackForwardList* WKBackForwardListRef;
 typedef const struct OpaqueWKBackForwardListItem* WKBackForwardListItemRef;
 typedef const struct OpaqueWKResourceCacheManager* WKResourceCacheManagerRef;
+typedef const struct OpaqueWKCaptionUserPreferencesTestingModeToken* WKCaptionUserPreferencesTestingModeTokenRef;
 typedef const struct OpaqueWKColorPickerResultListener* WKColorPickerResultListenerRef;
 typedef const struct OpaqueWKContext* WKContextRef;
 typedef const struct OpaqueWKContextConfiguration* WKContextConfigurationRef;
@@ -158,7 +159,6 @@ typedef const struct OpaqueWKBundleDOMWindowExtension* WKBundleDOMWindowExtensio
 typedef const struct OpaqueWKBundleFileHandle* WKBundleFileHandleRef;
 typedef const struct OpaqueWKBundleFrame* WKBundleFrameRef;
 typedef const struct OpaqueWKBundleHitTestResult* WKBundleHitTestResultRef;
-typedef const struct OpaqueWKBundleInspector* WKBundleInspectorRef;
 typedef const struct OpaqueWKBundleNavigationAction* WKBundleNavigationActionRef;
 typedef const struct OpaqueWKBundleNodeHandle* WKBundleNodeHandleRef;
 typedef const struct OpaqueWKBundlePage* WKBundlePageRef;

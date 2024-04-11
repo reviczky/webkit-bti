@@ -58,6 +58,7 @@ function generate_Android_bp_file() {
             "angle_enable_d3d11 = false"
             "angle_enable_null = false"
             "angle_enable_metal = false"
+            "angle_enable_wgpu = false"
 
             # SwiftShader is loaded as the system Vulkan driver on Android, not compiled by ANGLE
             "angle_enable_swiftshader = false"
@@ -96,7 +97,7 @@ function generate_Android_bp_file() {
         --gn_json_arm64=${GN_OUTPUT_DIRECTORY}/desc.arm64.json \
         --gn_json_x86=${GN_OUTPUT_DIRECTORY}/desc.x86.json \
         --gn_json_x64=${GN_OUTPUT_DIRECTORY}/desc.x64.json \
-        > Android.bp
+        --output=Android.bp
 }
 
 
@@ -137,6 +138,15 @@ for dep in "${third_party_deps[@]}" "${delete_only_deps[@]}"; do
     rm -rf "$dep"
 done
 
+# Remove cruft from any previous bad rolls (https://anglebug.com/8352)
+extra_third_party_removal_patterns=(
+   "*/_gclient_*"
+)
+
+for removal_dir in "${extra_third_party_removal_patterns[@]}"; do
+    find third_party -wholename "$removal_dir" -delete
+done
+
 # Sync all of ANGLE's deps so that 'gn gen' works
 python scripts/bootstrap.py
 gclient sync --reset --force --delete_unversioned_trees
@@ -171,6 +181,9 @@ for dep in "${third_party_deps[@]}"; do
    rm -rf "$dep"/.git
 done
 
+# Delete all the .gitmodules files, since they are not allowed in AOSP external projects.
+find . -name \.gitmodules -exec rm {} \;
+
 extra_removal_files=(
    # build/linux is hundreds of megs that aren't needed.
    "build/linux"
@@ -183,6 +196,7 @@ extra_removal_files=(
    "third_party/vulkan-deps/glslang/src/ndk_test/Android.mk"
    "third_party/vulkan-deps/spirv-tools/src/Android.mk"
    "third_party/vulkan-deps/spirv-tools/src/android_test/Android.mk"
+   "third_party/siso" # Not needed
 )
 
 for removal_file in "${extra_removal_files[@]}"; do

@@ -21,8 +21,10 @@
 #include "config.h"
 #include "TextureMapperLayer.h"
 
+#include "BitmapTexture.h"
 #include "FloatQuad.h"
 #include "Region.h"
+#include "TextureMapper.h"
 #include <wtf/MathExtras.h>
 #include <wtf/SetForScope.h>
 
@@ -199,7 +201,7 @@ void TextureMapperLayer::paintSelf(TextureMapperPaintOptions& options)
         backingStore = &solidColorLayer;
     }
 
-    options.textureMapper.setWrapMode(TextureMapper::StretchWrap);
+    options.textureMapper.setWrapMode(TextureMapper::WrapMode::Stretch);
     options.textureMapper.setPatternTransform(TransformationMatrix());
 
     if (backingStore) {
@@ -220,7 +222,7 @@ void TextureMapperLayer::paintSelf(TextureMapperPaintOptions& options)
         return;
 
     if (!m_state.contentsTileSize.isEmpty()) {
-        options.textureMapper.setWrapMode(TextureMapper::RepeatWrap);
+        options.textureMapper.setWrapMode(TextureMapper::WrapMode::Repeat);
 
         auto patternTransform = TransformationMatrix::rectToRect({ { }, m_state.contentsTileSize }, { { }, m_state.contentsRect.size() })
             .translate(m_state.contentsTilePhase.width() / m_state.contentsRect.width(), m_state.contentsTilePhase.height() / m_state.contentsRect.height());
@@ -676,8 +678,8 @@ void TextureMapperLayer::paintIntoSurface(TextureMapperPaintOptions& options)
 
     bool hasMask = !!m_state.maskLayer;
     bool hasReplicaMask = options.replicaLayer == this && m_state.replicaLayer->m_state.maskLayer;
-    bool defersLastFilter = !hasMask && !hasReplicaMask;
-    options.surface = options.surface->applyFilters(options.textureMapper, m_currentFilters, defersLastFilter);
+    bool defersLastFilterPass = !hasMask && !hasReplicaMask;
+    options.surface = options.textureMapper.applyFilters(options.surface, m_currentFilters, defersLastFilterPass);
     options.textureMapper.bindSurface(options.surface.get());
     if (hasMask)
         m_state.maskLayer->applyMask(options);
@@ -695,7 +697,7 @@ static void commitSurface(TextureMapperPaintOptions& options, BitmapTexture& sur
 
 void TextureMapperLayer::paintWithIntermediateSurface(TextureMapperPaintOptions& options, const IntRect& rect)
 {
-    auto surface = options.textureMapper.acquireTextureFromPool(rect.size(), BitmapTexture::SupportsAlpha);
+    auto surface = options.textureMapper.acquireTextureFromPool(rect.size(), { BitmapTexture::Flags::SupportsAlpha });
     {
         SetForScope scopedSurface(options.surface, surface);
         SetForScope scopedOffset(options.offset, -toIntSize(rect.location()));
@@ -710,7 +712,7 @@ void TextureMapperLayer::paintWithIntermediateSurface(TextureMapperPaintOptions&
 
 void TextureMapperLayer::paintSelfAndChildrenWithIntermediateSurface(TextureMapperPaintOptions& options, const IntRect& rect)
 {
-    auto surface = options.textureMapper.acquireTextureFromPool(rect.size(), BitmapTexture::SupportsAlpha);
+    auto surface = options.textureMapper.acquireTextureFromPool(rect.size(), { BitmapTexture::Flags::SupportsAlpha });
     {
         SetForScope scopedSurface(options.surface, surface);
         SetForScope scopedOffset(options.offset, -toIntSize(rect.location()));
@@ -794,7 +796,7 @@ void TextureMapperLayer::paintWith3DRenderingContext(TextureMapperPaintOptions& 
             for (int y = rect.y(); y < rect.maxY(); y += maxTextureSize.height()) {
                 IntRect tileRect(IntPoint(x, y), maxTextureSize);
                 tileRect.intersect(rect);
-                auto surface = options.textureMapper.acquireTextureFromPool(tileRect.size(), BitmapTexture::SupportsAlpha | BitmapTexture::DepthBuffer);
+                auto surface = options.textureMapper.acquireTextureFromPool(tileRect.size(), { BitmapTexture::Flags::SupportsAlpha, BitmapTexture::Flags::DepthBuffer });
                 {
                     SetForScope scopedSurface(options.surface, surface);
                     SetForScope scopedOffset(options.offset, -toIntSize(tileRect.location()));
@@ -984,19 +986,6 @@ void TextureMapperLayer::setFilters(const FilterOperations& filters)
     m_state.filters = filters;
 }
 
-void TextureMapperLayer::setDebugVisuals(bool showDebugBorders, const Color& debugBorderColor, float debugBorderWidth)
-{
-    m_state.showDebugBorders = showDebugBorders;
-    m_state.debugBorderColor = debugBorderColor;
-    m_state.debugBorderWidth = debugBorderWidth;
-}
-
-void TextureMapperLayer::setRepaintCounter(bool showRepaintCounter, int repaintCount)
-{
-    m_state.showRepaintCounter = showRepaintCounter;
-    m_state.repaintCount = repaintCount;
-}
-
 void TextureMapperLayer::setContentsLayer(TextureMapperPlatformLayer* platformLayer)
 {
     m_contentsLayer = platformLayer;
@@ -1054,7 +1043,7 @@ bool TextureMapperLayer::syncAnimations(MonotonicTime time)
 #if USE(COORDINATED_GRAPHICS)
     // Calculate localTransform 50ms in the future.
     Nicosia::Animation::ApplicationResult futureApplicationResults;
-    m_animations.applyKeepingInternalState(futureApplicationResults, time + 50_ms);
+    m_animations.apply(futureApplicationResults, time + 50_ms, Nicosia::Animation::KeepInternalState::Yes);
     m_layerTransforms.futureLocalTransform = futureApplicationResults.transform.value_or(m_layerTransforms.localTransform);
 #endif
 

@@ -29,49 +29,49 @@
 #include "SpinButtonElement.h"
 
 namespace WebCore {
-    
+
 class AccessibilitySpinButton final : public AccessibilityMockObject {
 public:
     static Ref<AccessibilitySpinButton> create();
     virtual ~AccessibilitySpinButton();
-    
+
     void setSpinButtonElement(SpinButtonElement* spinButton) { m_spinButtonElement = spinButton; }
-    
+
     AXCoreObject* incrementButton() override;
     AXCoreObject* decrementButton() override;
 
     void step(int amount);
-    
+
 private:
     AccessibilitySpinButton();
 
-    AccessibilityRole roleValue() const override { return AccessibilityRole::SpinButton; }
+    AccessibilityRole determineAccessibilityRole() final { return AccessibilityRole::SpinButton; }
     bool isNativeSpinButton() const override { return true; }
     void addChildren() override;
     LayoutRect elementRect() const override;
-    
+
     WeakPtr<SpinButtonElement, WeakPtrImplWithEventTargetData> m_spinButtonElement;
 }; 
-   
+
 class AccessibilitySpinButtonPart final : public AccessibilityMockObject {
 public:
     static Ref<AccessibilitySpinButtonPart> create();
     virtual ~AccessibilitySpinButtonPart() = default;
-    
+
     bool isIncrementor() const override { return m_isIncrementor; }
     void setIsIncrementor(bool value) { m_isIncrementor = value; }
-    
+
 private:
     AccessibilitySpinButtonPart();
-    
+
     bool press() override;
-    AccessibilityRole roleValue() const override { return AccessibilityRole::SpinButtonPart; }
+    AccessibilityRole determineAccessibilityRole() final { return AccessibilityRole::SpinButtonPart; }
     bool isSpinButtonPart() const override { return true; }
     LayoutRect elementRect() const override;
 
-    unsigned m_isIncrementor : 1;
+    bool m_isIncrementor { true };
 };
-    
+
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::AccessibilitySpinButton) \

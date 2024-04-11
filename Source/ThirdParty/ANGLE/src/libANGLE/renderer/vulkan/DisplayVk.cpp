@@ -350,9 +350,9 @@ StreamProducerImpl *DisplayVk::createStreamProducerD3DTexture(
     return static_cast<StreamProducerImpl *>(0);
 }
 
-EGLSyncImpl *DisplayVk::createSync(const egl::AttributeMap &attribs)
+EGLSyncImpl *DisplayVk::createSync()
 {
-    return new EGLSyncVk(attribs);
+    return new EGLSyncVk();
 }
 
 gl::Version DisplayVk::getMaxSupportedESVersion() const
@@ -536,6 +536,11 @@ void DisplayVk::generateExtensions(egl::DisplayExtensions *outExtensions) const
             isColorspaceSupported(VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT);
         outExtensions->glColorspaceScrgbLinear =
             isColorspaceSupported(VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT);
+        outExtensions->glColorspaceBt2020Linear =
+            isColorspaceSupported(VK_COLOR_SPACE_BT2020_LINEAR_EXT);
+        outExtensions->glColorspaceBt2020Pq =
+            isColorspaceSupported(VK_COLOR_SPACE_HDR10_ST2084_EXT);
+        outExtensions->glColorspaceBt2020Hlg = isColorspaceSupported(VK_COLOR_SPACE_HDR10_HLG_EXT);
     }
 }
 

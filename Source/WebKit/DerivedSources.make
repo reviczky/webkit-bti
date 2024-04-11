@@ -28,6 +28,7 @@ VPATH = \
     $(WebKit2)/GPUProcess/media \
     $(WebKit2)/GPUProcess/media/ios \
     $(WebKit2)/GPUProcess/webrtc \
+    $(WebKit2)/ModelProcess \
     $(WebKit2)/NetworkProcess \
     $(WebKit2)/NetworkProcess/Cookies \
     $(WebKit2)/NetworkProcess/cache \
@@ -40,7 +41,6 @@ VPATH = \
     $(WebKit2)/NetworkProcess/storage \
     $(WebKit2)/Platform \
     $(WebKit2)/Resources/SandboxProfiles/ios \
-    $(WebKit2)/Shared/Plugins \
     $(WebKit2)/Shared \
     $(WebKit2)/Shared/API/Cocoa \
     $(WebKit2)/Shared/ApplePay \
@@ -65,6 +65,7 @@ VPATH = \
     $(WebKit2)/WebProcess/MediaCache \
     $(WebKit2)/WebProcess/MediaSession \
     $(WebKit2)/WebProcess/MediaStream \
+    $(WebKit2)/WebProcess/Model \
     $(WebKit2)/WebProcess/Network \
     $(WebKit2)/WebProcess/Network/webrtc \
     $(WebKit2)/WebProcess/Notifications \
@@ -94,6 +95,7 @@ VPATH = \
     $(WebKit2)/UIProcess/Media \
     $(WebKit2)/UIProcess/Media/cocoa \
     $(WebKit2)/UIProcess/MediaStream \
+    $(WebKit2)/UIProcess/Model \
     $(WebKit2)/UIProcess/Network \
     $(WebKit2)/UIProcess/Network/CustomProtocols \
     $(WebKit2)/UIProcess/Notifications \
@@ -104,6 +106,7 @@ VPATH = \
     $(WebKit2)/UIProcess/WebAuthentication \
     $(WebKit2)/UIProcess/mac \
     $(WebKit2)/UIProcess/ios \
+    $(WebKit2)/webpushd \
     $(WebKit2)/webpushd/mac \
     $(WEBKITADDITIONS_HEADER_SEARCH_PATHS) \
 #
@@ -125,7 +128,6 @@ MESSAGE_RECEIVERS = \
 	NetworkProcess/NetworkBroadcastChannelRegistry \
 	NetworkProcess/NetworkConnectionToWebProcess \
 	NetworkProcess/NetworkContentRuleListManager \
-	NetworkProcess/cache/CacheStorageEngineConnection \
 	NetworkProcess/CustomProtocols/LegacyCustomProtocolManager \
 	NetworkProcess/NetworkSocketChannel \
 	NetworkProcess/ServiceWorker/WebSWServerConnection \
@@ -140,6 +142,7 @@ MESSAGE_RECEIVERS = \
 	NetworkProcess/webrtc/NetworkRTCProvider \
 	NetworkProcess/webrtc/NetworkRTCMonitor \
 	NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy \
+	NetworkProcess/webtransport/NetworkTransportSession \
 	NetworkProcess/Cookies/WebCookieManager \
 	NetworkProcess/storage/NetworkStorageManager \
 	Shared/AuxiliaryProcess \
@@ -175,7 +178,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/WebPermissionControllerProxy \
 	UIProcess/Cocoa/PlaybackSessionManagerProxy \
 	UIProcess/Cocoa/UserMediaCaptureManagerProxy \
-	UIProcess/Cocoa/VideoFullscreenManagerProxy \
+	UIProcess/Cocoa/VideoPresentationManagerProxy \
 	UIProcess/ViewGestureController \
 	UIProcess/WebProcessProxy \
 	UIProcess/Automation/WebAutomationSession \
@@ -186,6 +189,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/Extensions/WebExtensionController \
 	UIProcess/Media/AudioSessionRoutingArbitratorProxy \
 	UIProcess/Media/RemoteMediaSessionCoordinatorProxy \
+	UIProcess/Model/ModelProcessProxy \
 	UIProcess/SpeechRecognitionRemoteRealtimeMediaSourceManager \
 	UIProcess/SpeechRecognitionServer \
 	UIProcess/XR/PlatformXRSystem \
@@ -194,6 +198,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Extensions/WebExtensionControllerProxy \
 	WebProcess/GPU/GPUProcessConnection \
 	WebProcess/GPU/graphics/RemoteImageBufferProxy \
+	WebProcess/GPU/graphics/RemoteImageBufferSetProxy \
 	WebProcess/GPU/graphics/RemoteRenderingBackendProxy \
 	WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy \
 	WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy \
@@ -220,9 +225,11 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Inspector/WebInspector \
 	WebProcess/Inspector/RemoteWebInspectorUI \
 	WebProcess/MediaSession/RemoteMediaSessionCoordinator \
+	WebProcess/Model/ModelProcessConnection \
 	WebProcess/Network/WebSocketChannel \
 	WebProcess/Network/NetworkProcessConnection \
 	WebProcess/Network/WebResourceLoader \
+	WebProcess/Network/WebTransportSession \
 	WebProcess/Network/webrtc/LibWebRTCNetwork \
 	WebProcess/Network/webrtc/RTCDataChannelRemoteManager \
 	WebProcess/Network/webrtc/WebRTCMonitor \
@@ -243,7 +250,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/cocoa/PlaybackSessionManager \
 	WebProcess/cocoa/RemoteCaptureSampleManager \
 	WebProcess/cocoa/UserMediaCaptureManager \
-	WebProcess/cocoa/VideoFullscreenManager \
+	WebProcess/cocoa/VideoPresentationManager \
 	WebProcess/Geolocation/WebGeolocationManager \
 	WebProcess/Automation/WebAutomationSessionProxy \
 	WebProcess/FullScreen/WebFullScreenManager \
@@ -263,6 +270,8 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/ShapeDetection/RemoteFaceDetector \
 	GPUProcess/ShapeDetection/RemoteTextDetector \
 	GPUProcess/graphics/RemoteDisplayListRecorder \
+	GPUProcess/graphics/RemoteImageBuffer \
+	GPUProcess/graphics/RemoteImageBufferSet \
 	GPUProcess/graphics/RemoteRenderingBackend \
 	GPUProcess/graphics/RemoteGraphicsContextGL \
 	GPUProcess/graphics/WebGPU/RemoteAdapter \
@@ -315,6 +324,9 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteMediaSourceProxy \
 	GPUProcess/media/RemoteRemoteCommandListenerProxy \
 	GPUProcess/media/RemoteSourceBufferProxy \
+	ModelProcess/ModelConnectionToWebProcess \
+	ModelProcess/ModelProcess \
+	webpushd/PushClientConnection \
 #
 
 GENERATE_MESSAGE_RECEIVER_SCRIPT = $(WebKit2)/Scripts/generate-message-receiver.py
@@ -331,6 +343,10 @@ ifneq ($(SDKROOT),)
 	SDK_FLAGS=-isysroot $(SDKROOT)
 endif
 
+ifeq ($(ENABLE_ADDRESS_SANITIZER),YES)
+	SANITIZE_FLAGS = -fsanitize=address
+endif
+
 WK_CURRENT_ARCH=$(word 1, $(ARCHS))
 TARGET_TRIPLE_FLAGS=-target $(WK_CURRENT_ARCH)-$(LLVM_TARGET_TRIPLE_VENDOR)-$(LLVM_TARGET_TRIPLE_OS_VERSION)$(LLVM_TARGET_TRIPLE_SUFFIX)
 
@@ -338,7 +354,7 @@ FRAMEWORK_FLAGS := $(addprefix -F, $(BUILT_PRODUCTS_DIR) $(FRAMEWORK_SEARCH_PATH
 HEADER_FLAGS := $(addprefix -I, $(BUILT_PRODUCTS_DIR) $(HEADER_SEARCH_PATHS) $(SYSTEM_HEADER_SEARCH_PATHS))
 EXTERNAL_FLAGS := -DRELEASE_WITHOUT_OPTIMIZATIONS $(addprefix -D, $(GCC_PREPROCESSOR_DEFINITIONS))
 
-platform_h_compiler_command = $(CC) -std=c++2a -x c++ $(1) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" /dev/null
+platform_h_compiler_command = $(CC) -std=c++2a -x c++ $(1) $(SANITIZE_FLAGS) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" /dev/null
 
 FEATURE_AND_PLATFORM_FLAGS := $(shell $(call platform_h_compiler_command,-E -P -dM) | $(PERL) -ne "print if s/\#define ((?:HAVE_|USE_|ENABLE_|WTF_PLATFORM_)\w+) (1|0)/\1=\2/")
 FEATURE_AND_PLATFORM_DEFINES := $(patsubst %=1, %, $(filter %=1, $(FEATURE_AND_PLATFORM_FLAGS)))
@@ -356,6 +372,8 @@ GENERATED_MESSAGES_FILES_AS_PATTERNS := $(subst .,%,$(GENERATED_MESSAGES_FILES))
 
 MESSAGES_IN_FILES := $(addsuffix .messages.in,$(MESSAGE_RECEIVERS))
 
+SANDBOX_IMPORT_DIR=$(SDKROOT)/usr/local/share/sandbox/profiles/embedded/imports
+
 .PHONY : all
 
 all : $(GENERATED_MESSAGES_FILES)
@@ -369,12 +387,19 @@ ifeq ($(USE_SYSTEM_CONTENT_PATH),YES)
 	SANDBOX_DEFINES = -DUSE_SYSTEM_CONTENT_PATH=1 -DSYSTEM_CONTENT_PATH=$(SYSTEM_CONTENT_PATH)
 endif
 
-SANDBOX_PROFILES = \
+SANDBOX_PROFILES_WITHOUT_WEBPUSHD = \
 	com.apple.WebProcess.sb \
 	com.apple.WebKit.NetworkProcess.sb \
-	com.apple.WebKit.GPUProcess.sb \
+	com.apple.WebKit.GPUProcess.sb
+
+ifeq ($(WK_RELOCATABLE_WEBPUSHD),YES)
+WEBPUSHD_SANDBOX_PROFILE = \
+	com.apple.WebKit.webpushd.relocatable.mac.sb
+else
+WEBPUSHD_SANDBOX_PROFILE = \
 	com.apple.WebKit.webpushd.mac.sb
-	
+endif
+
 SANDBOX_PROFILES_IOS = \
 	com.apple.WebKit.adattributiond.sb \
 	com.apple.WebKit.webpushd.sb \
@@ -384,11 +409,12 @@ SANDBOX_PROFILES_IOS = \
 
 sandbox-profiles-ios : $(SANDBOX_PROFILES_IOS)
 
-all : $(SANDBOX_PROFILES) $(SANDBOX_PROFILES_IOS)
+all : $(SANDBOX_PROFILES_WITHOUT_WEBPUSHD) $(WEBPUSHD_SANDBOX_PROFILE) $(SANDBOX_PROFILES_IOS)
 
 %.sb : %.sb.in
 	@echo Pre-processing $* sandbox profile...
-	grep -o '^[^;]*' $< | $(CC) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(SANDBOX_DEFINES) $(TEXT_PREPROCESSOR_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" - > $@
+	grep -o '^[^;]*' $< | $(CC) $(SANITIZE_FLAGS) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(SANDBOX_DEFINES) $(TEXT_PREPROCESSOR_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" - > $@
+	$(WebKit2)/Scripts/compile-sandbox.sh $@ $* $(SDK_NAME) $(SANDBOX_IMPORT_DIR)
 
 AUTOMATION_PROTOCOL_GENERATOR_SCRIPTS = \
 	$(JavaScriptCore_SCRIPTS_DIR)/cpp_generator_templates.py \
@@ -458,8 +484,11 @@ $(WEB_PREFERENCES_PATTERNS) : $(WTF_BUILD_SCRIPTS_DIR)/GeneratePreferences.rb $(
 	$(RUBY) $< --frontend WebKit $(addprefix --template , $(WEB_PREFERENCES_TEMPLATES)) $(WEB_PREFERENCES)
 
 SERIALIZATION_DESCRIPTION_FILES = \
+	GPUProcess/GPUProcessCreationParameters.serialization.in \
+	GPUProcess/GPUProcessPreferences.serialization.in \
 	GPUProcess/GPUProcessSessionParameters.serialization.in \
 	GPUProcess/graphics/PathSegment.serialization.in \
+	GPUProcess/graphics/RemoteGraphicsContextGLInitializationState.serialization.in \
 	GPUProcess/graphics/RemoteRenderingBackendCreationParameters.serialization.in \
 	GPUProcess/graphics/WebGPU/RemoteGPURequestAdapterResponse.serialization.in \
 	GPUProcess/media/AudioTrackPrivateRemoteConfiguration.serialization.in \
@@ -469,76 +498,205 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	GPUProcess/media/TextTrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/TrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/VideoTrackPrivateRemoteConfiguration.serialization.in \
-	Platform/SharedMemory.serialization.in \
+	ModelProcess/ModelProcessCreationParameters.serialization.in \
 	NetworkProcess/NetworkProcessCreationParameters.serialization.in \
+	NetworkProcess/NetworkResourceLoadParameters.serialization.in \
+	NetworkProcess/NetworkSessionCreationParameters.serialization.in \
+	NetworkProcess/Classifier/ITPThirdPartyData.serialization.in \
+	NetworkProcess/Classifier/ITPThirdPartyDataForSpecificFirstParty.serialization.in \
+	NetworkProcess/Classifier/StorageAccessStatus.serialization.in \
+	NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementManagerInterface.serialization.in \
+	NetworkProcess/storage/FileSystemStorageError.serialization.in \
+	Platform/IPC/ConnectionHandle.serialization.in \
+	Platform/IPC/FormDataReference.serialization.in \
+	Platform/IPC/IPCEvent.serialization.in \
+	Platform/IPC/IPCSemaphore.serialization.in \
+	Platform/IPC/ObjectIdentifierReference.serialization.in \
+	Platform/IPC/SharedBufferReference.serialization.in \
+	Platform/IPC/SharedFileHandle.serialization.in \
+	Platform/IPC/StreamServerConnection.serialization.in \
+	Shared/AuxiliaryProcessCreationParameters.serialization.in \
+	Shared/API/APIArray.serialization.in \
 	Shared/API/APIData.serialization.in \
+	Shared/API/APIDictionary.serialization.in \
 	Shared/API/APIError.serialization.in \
 	Shared/API/APIFrameHandle.serialization.in \
-	NetworkProcess/NetworkResourceLoadParameters.serialization.in \
 	Shared/API/APIGeometry.serialization.in \
+	Shared/API/APINumber.serialization.in \
+	Shared/API/APIObject.serialization.in \
 	Shared/API/APIPageHandle.serialization.in \
+	Shared/API/APISerializedScriptValue.serialization.in \
+	Shared/API/APIString.serialization.in \
 	Shared/API/APIURL.serialization.in \
 	Shared/API/APIURLRequest.serialization.in \
 	Shared/API/APIURLResponse.serialization.in \
+	Shared/API/APIUserContentURLPattern.serialization.in \
+	Shared/AccessibilityPreferences.serialization.in \
 	Shared/AlternativeTextClient.serialization.in \
+	Shared/AppPrivacyReportTestingData.serialization.in \
+	Shared/Authentication/AuthenticationChallengeDisposition.serialization.in \
+	Shared/BackgroundFetchChange.serialization.in \
+	Shared/BackgroundFetchState.serialization.in \
+	Shared/CacheModel.serialization.in \
 	Shared/Cocoa/CacheStoragePolicy.serialization.in \
+	Shared/Cocoa/CoreIPCAVOutputContext.serialization.in \
+	Shared/Cocoa/CoreIPCArray.serialization.in \
+	Shared/Cocoa/CoreIPCAuditToken.serialization.in \
+	Shared/Cocoa/CoreIPCCFType.serialization.in \
+	Shared/Cocoa/CoreIPCCFURL.serialization.in \
+	Shared/Cocoa/CoreIPCColor.serialization.in \
+	Shared/Cocoa/CoreIPCContacts.serialization.in \
+	Shared/Cocoa/CoreIPCDDActionContext.serialization.in \
+	Shared/Cocoa/CoreIPCDDScannerResult.serialization.in \
+	Shared/Cocoa/CoreIPCData.serialization.in \
+	Shared/Cocoa/CoreIPCDate.serialization.in \
+	Shared/Cocoa/CoreIPCDictionary.serialization.in \
+	Shared/Cocoa/CoreIPCError.serialization.in \
+	Shared/Cocoa/CoreIPCFont.serialization.in \
+	Shared/Cocoa/CoreIPCLocale.serialization.in \
+	Shared/Cocoa/CoreIPCNSCFObject.serialization.in \
+	Shared/Cocoa/CoreIPCNSValue.serialization.in \
+	Shared/Cocoa/CoreIPCPassKit.serialization.in \
+	Shared/Cocoa/CoreIPCPersonNameComponents.serialization.in \
+	Shared/Cocoa/CoreIPCPresentationIntent.serialization.in \
+	Shared/Cocoa/CoreIPCSecureCoding.serialization.in \
+	Shared/Cocoa/CoreIPCString.serialization.in \
+	Shared/Cocoa/CoreIPCURL.serialization.in \
 	Shared/Cocoa/DataDetectionResult.serialization.in \
+	Shared/Cocoa/InsertTextOptions.serialization.in \
 	Shared/Cocoa/RevealItem.serialization.in \
+	Shared/Cocoa/SharedCARingBuffer.serialization.in \
 	Shared/Cocoa/WebCoreArgumentCodersCocoa.serialization.in \
 	Shared/CallbackID.serialization.in \
-	Shared/BackgroundFetchState.serialization.in \
+	Shared/ContextMenuContextData.serialization.in \
+	Shared/CoordinateSystem.serialization.in \
+	Shared/DebuggableInfoData.serialization.in \
 	Shared/DisplayListArgumentCoders.serialization.in \
+	Shared/DocumentEditingContext.serialization.in \
+	Shared/DragControllerAction.serialization.in \
+	Shared/DrawingAreaInfo.serialization.in \
+	Shared/EditingRange.serialization.in \
 	Shared/EditorState.serialization.in \
+	Shared/Extensions/WebExtensionAlarmParameters.serialization.in \
+	Shared/Extensions/WebExtensionCommandParameters.serialization.in \
+	Shared/Extensions/WebExtensionContentWorldType.serialization.in \
+	Shared/Extensions/WebExtensionContext.serialization.in \
 	Shared/Extensions/WebExtensionContextParameters.serialization.in \
 	Shared/Extensions/WebExtensionControllerParameters.serialization.in \
+	Shared/Extensions/WebExtensionCookieParameters.serialization.in \
+	Shared/Extensions/WebExtensionDynamicScripts.serialization.in \
 	Shared/Extensions/WebExtensionEventListenerType.serialization.in \
+	Shared/Extensions/WebExtensionFrameParameters.serialization.in \
+	Shared/Extensions/WebExtensionMatchedRuleParameters.serialization.in \
+	Shared/Extensions/WebExtensionMenuItem.serialization.in \
+	Shared/Extensions/WebExtensionMessageSenderParameters.serialization.in \
+	Shared/Extensions/WebExtensionStorage.serialization.in \
+	Shared/Extensions/WebExtensionTab.serialization.in \
+	Shared/Extensions/WebExtensionWindow.serialization.in \
 	Shared/FileSystemSyncAccessHandleInfo.serialization.in \
 	Shared/FocusedElementInformation.serialization.in \
+	Shared/FontInfo.serialization.in \
 	Shared/FrameInfoData.serialization.in \
 	Shared/FrameTreeCreationParameters.serialization.in \
 	Shared/FrameTreeNodeData.serialization.in \
 	Shared/Gamepad/GamepadData.serialization.in \
 	Shared/GPUProcessConnectionParameters.serialization.in \
+	Shared/GPUProcessPreferencesForWebProcess.serialization.in \
+	Shared/GoToBackForwardItemParameters.serialization.in \
+	Shared/InspectorExtensionTypes.serialization.in \
 	Shared/ios/DynamicViewportSizeUpdate.serialization.in \
+	Shared/ios/GestureTypes.serialization.in \
 	Shared/ios/InteractionInformationAtPosition.serialization.in \
+	Shared/ios/InteractionInformationRequest.serialization.in \
 	Shared/ios/WebAutocorrectionContext.serialization.in \
 	Shared/ios/WebAutocorrectionData.serialization.in \
+	Shared/JavaScriptCore.serialization.in \
 	Shared/LayerTreeContext.serialization.in \
+	Shared/LoadParameters.serialization.in \
 	Shared/LocalFrameCreationParameters.serialization.in \
+	Shared/MediaPlaybackState.serialization.in \
 	Shared/Model.serialization.in \
+	Shared/ModelProcessConnectionParameters.serialization.in \
+	Shared/MonotonicObjectIdentifier.serialization.in \
 	Shared/NavigationActionData.serialization.in \
 	Shared/NetworkProcessConnectionParameters.serialization.in \
 	Shared/Pasteboard.serialization.in \
 	Shared/PlatformPopupMenuData.serialization.in \
 	Shared/PolicyDecision.serialization.in \
-        Shared/RemoteWorkerType.serialization.in \
+	Shared/PrintInfo.serialization.in \
+	Shared/ProcessQualified.serialization.in \
+	Shared/PushMessageForTesting.serialization.in \
+	Shared/RTCNetwork.serialization.in \
+	Shared/RTCPacketOptions.serialization.in \
+	Shared/RemoteWorkerInitializationData.serialization.in \
+	Shared/RemoteWorkerType.serialization.in \
+	Shared/ResourceLoadInfo.serialization.in \
+	Shared/ResourceLoadStatisticsParameters.serialization.in \
 	Shared/SameDocumentNavigationType.serialization.in \
+	Shared/SandboxExtension.serialization.in \
+	Shared/ScrollingAccelerationCurve.serialization.in \
 	Shared/SessionState.serialization.in \
-	Shared/ShareableBitmap.serialization.in \
+	Shared/SyntheticEditingCommandType.serialization.in \
 	Shared/TextFlags.serialization.in \
 	Shared/TextRecognitionResult.serialization.in \
-	Shared/TouchBarMenuItemData.serialization.in \
+	Shared/TextRecognitionUpdateResult.serialization.in \
+	Shared/URLSchemeTaskParameters.serialization.in \
+	Shared/UndoOrRedo.serialization.in \
+	Shared/UnifiedTextReplacement.serialization.in \
+	Shared/UserContentControllerParameters.serialization.in \
+	Shared/UserData.serialization.in \
 	Shared/UserInterfaceIdiom.serialization.in \
+	Shared/VideoCodecType.serialization.in \
+	Shared/WebCompiledContentRuleListData.serialization.in \
+	Shared/ViewWindowCoordinates.serialization.in \
+	Shared/VisibleContentRectUpdateInfo.serialization.in \
 	Shared/WTFArgumentCoders.serialization.in \
+	Shared/WebBackForwardListCounts.serialization.in \
+	Shared/WebContextMenuItemData.serialization.in \
 	Shared/WebCoreArgumentCoders.serialization.in \
+	Shared/WebCoreFont.serialization.in \
 	Shared/WebEvent.serialization.in \
+	Shared/WebFindOptions.serialization.in \
+	Shared/WebFoundTextRange.serialization.in \
 	Shared/WebHitTestResultData.serialization.in \
+	Shared/WebImage.serialization.in \
+	Shared/WebNavigationDataStore.serialization.in \
 	Shared/WebPageCreationParameters.serialization.in \
+	Shared/WebPageNetworkParameters.serialization.in \
+	Shared/WebPageGroupData.serialization.in \
 	Shared/WebPopupItem.serialization.in \
+	Shared/WebPreferencesStore.serialization.in \
 	Shared/WebProcessCreationParameters.serialization.in \
 	Shared/WebProcessDataStoreParameters.serialization.in \
 	Shared/WebPushDaemonConnectionConfiguration.serialization.in \
 	Shared/WebPushMessage.serialization.in \
+	Shared/WebsiteAutoplayPolicy.serialization.in \
+	Shared/WebsiteAutoplayQuirk.serialization.in \
 	Shared/WebsitePoliciesData.serialization.in \
+	Shared/WebsitePopUpPolicy.serialization.in \
 	Shared/ApplePay/ApplePayPaymentSetupFeatures.serialization.in \
 	Shared/ApplePay/PaymentSetupConfiguration.serialization.in \
 	Shared/Databases/IndexedDB/WebIDBResult.serialization.in \
 	Shared/RemoteLayerTree/RemoteLayerTree.serialization.in \
+	Shared/RemoteLayerTree/BufferAndBackendInfo.serialization.in \
+	Shared/RemoteLayerTree/RemoteScrollingCoordinatorTransaction.serialization.in \
+	Shared/RemoteLayerTree/RemoteScrollingUIState.serialization.in \
+	Shared/cf/CFTypes.serialization.in \
+	Shared/cf/CoreIPCBoolean.serialization.in \
+	Shared/cf/CoreIPCCFArray.serialization.in \
+	Shared/cf/CoreIPCCFDictionary.serialization.in \
+	Shared/cf/CoreIPCCGColorSpace.serialization.in \
+	Shared/cf/CoreIPCNumber.serialization.in \
+	Shared/cf/CoreIPCSecAccessControl.serialization.in \
+	Shared/cf/CoreIPCSecCertificate.serialization.in \
+	Shared/cf/CoreIPCSecKeychainItem.serialization.in \
+	Shared/cf/CoreIPCSecTrust.serialization.in \
 	Shared/mac/PDFContextMenuItem.serialization.in \
 	Shared/mac/SecItemRequestData.serialization.in \
 	Shared/mac/SecItemResponseData.serialization.in \
 	Shared/mac/WebHitTestResultPlatformData.serialization.in \
 	Shared/WebsiteDataStoreParameters.serialization.in \
+	Shared/WebsiteData/UnifiedOriginStorageLevel.serialization.in \
 	Shared/WebsiteData/WebsiteData.serialization.in \
 	Shared/WebsiteData/WebsiteDataFetchOption.serialization.in \
 	Shared/WebsiteData/WebsiteDataType.serialization.in \
@@ -563,6 +721,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebGPU/WebGPUImageCopyTexture.serialization.in \
 	Shared/WebGPU/WebGPUImageCopyTextureTagged.serialization.in \
 	Shared/WebGPU/WebGPUImageDataLayout.serialization.in \
+	Shared/WebGPU/WebGPUInternalError.serialization.in \
 	Shared/WebGPU/WebGPUMultisampleState.serialization.in \
 	Shared/WebGPU/WebGPUOrigin2D.serialization.in \
 	Shared/WebGPU/WebGPUOutOfMemoryError.serialization.in \
@@ -584,7 +743,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebGPU/WebGPUTextureViewDescriptor.serialization.in \
 	Shared/WebGPU/WebGPUVertexState.serialization.in \
 	Shared/WebGPU/WebGPUVertexBufferLayout.serialization.in \
- 	Shared/WebGPU/WebGPUVertexAttribute.serialization.in \
+	Shared/WebGPU/WebGPUVertexAttribute.serialization.in \
 	Shared/WebGPU/WebGPUValidationError.serialization.in \
 	Shared/WebGPU/WebGPUTextureBindingLayout.serialization.in \
 	Shared/WebGPU/WebGPUSupportedLimits.serialization.in \
@@ -607,25 +766,60 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebGPU/WebGPUBlendState.serialization.in \
 	Shared/WebGPU/WebGPUBlendComponent.serialization.in \
 	Shared/WebGPU/WebGPUBindGroupEntry.serialization.in \
+	Shared/XR/PlatformXR.serialization.in \
 	Shared/XR/XRSystem.serialization.in \
+	Shared/WebUserContentControllerDataTypes.serialization.in \
+	WebProcess/GPU/GPUProcessConnectionInfo.serialization.in \
 	WebProcess/GPU/graphics/BufferIdentifierSet.serialization.in \
 	WebProcess/GPU/graphics/PrepareBackingStoreBuffersData.serialization.in \
+	WebProcess/GPU/media/MediaOverridesForTesting.serialization.in \
 	WebProcess/GPU/media/RemoteCDMConfiguration.serialization.in \
+	WebProcess/GPU/media/RemoteCDMInstanceConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteAudioSessionConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteMediaPlayerConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteMediaPlayerState.serialization.in \
+	WebProcess/GPU/media/RemoteVideoFrameProxyProperties.serialization.in \
+	WebProcess/GPU/webrtc/SharedVideoFrame.serialization.in \
+	WebProcess/MediaStream/MediaDeviceSandboxExtensions.serialization.in \
+	WebProcess/Model/ModelProcessConnectionInfo.serialization.in \
+	WebProcess/Network/NetworkProcessConnectionInfo.serialization.in \
+	WebProcess/UserContent/InjectUserScriptImmediately.serialization.in \
 	WebProcess/WebCoreSupport/WebSpeechSynthesisVoice.serialization.in \
+	WebProcess/WebPage/RemoteLayerTree/PlatformCAAnimationRemoteProperties.serialization.in \
 #
 
-all : GeneratedSerializers.h GeneratedSerializers.mm SerializedTypeInfo.mm WebKitPlatformGeneratedSerializers.mm
+WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
+	HTTPHeaderNames.serialization.in \
+	ActivityState.serialization.in \
+	DragActions.serialization.in \
+	InbandTextTrackPrivate.serialization.in \
+	IndexedDB.serialization.in \
+	LayoutMilestones.serialization.in \
+	MediaPlaybackTargetContext.serialization.in \
+	MediaProducer.serialization.in \
+	MDNSRegisterError.serialization.in \
+	PlatformEvent.serialization.in \
+	PlatformMediaSession.serialization.in \
+	PlatformScreen.serialization.in \
+	PlatformWheelEvent.serialization.in \
+	PlaybackSessionModel.serialization.in \
+	ProtectionSpaceBase.serialization.in \
+	ScrollTypes.serialization.in \
+	WebGPU.serialization.in \
+#
 
-GeneratedSerializers.h GeneratedSerializers.mm SerializedTypeInfo.mm WebKitPlatformGeneratedSerializers.mm : $(WebKit2)/Scripts/generate-serializers.py $(SERIALIZATION_DESCRIPTION_FILES) $(WebKit2)/DerivedSources.make
-	$(PYTHON) $(WebKit2)/Scripts/generate-serializers.py mm $(WebKit2)/ $(SERIALIZATION_DESCRIPTION_FILES)
+WEBCORE_SERIALIZATION_DESCRIPTION_FILES_FULLPATH := $(foreach I,$(WEBCORE_SERIALIZATION_DESCRIPTION_FILES),$(WebCorePrivateHeaders)/$I)
+
+all : GeneratedSerializers.h GeneratedSerializers.mm GeneratedWebKitSecureCoding.h GeneratedWebKitSecureCoding.mm SerializedTypeInfo.mm WebKitPlatformGeneratedSerializers.mm
+
+GeneratedSerializers.h GeneratedSerializers.mm GeneratedWebKitSecureCoding.h GeneratedWebKitSecureCoding.mm SerializedTypeInfo.mm WebKitPlatformGeneratedSerializers.mm : $(WebKit2)/Scripts/generate-serializers.py $(SERIALIZATION_DESCRIPTION_FILES) $(WebKit2)/DerivedSources.make $(WEBCORE_SERIALIZATION_DESCRIPTION_FILES_FULLPATH)
+	$(PYTHON) $(WebKit2)/Scripts/generate-serializers.py mm DIRECTORY $(WebKit2) $(SERIALIZATION_DESCRIPTION_FILES) DIRECTORY $(WebCorePrivateHeaders) $(WEBCORE_SERIALIZATION_DESCRIPTION_FILES)
 
 EXTENSIONS_DIR = $(WebKit2)/WebProcess/Extensions
 EXTENSIONS_SCRIPTS_DIR = $(EXTENSIONS_DIR)/Bindings/Scripts
 EXTENSIONS_INTERFACES_DIR = $(EXTENSIONS_DIR)/Interfaces
 IDL_ATTRIBUTES_FILE = $(EXTENSIONS_SCRIPTS_DIR)/IDLAttributes.json
+IDL_FILE_NAMES_LIST = WebExtensionIDLFileNamesList.txt
 
 BINDINGS_SCRIPTS = \
     $(WebCorePrivateHeaders)/generate-bindings.pl \
@@ -635,19 +829,46 @@ BINDINGS_SCRIPTS = \
 #
 
 EXTENSION_INTERFACES = \
+    WebExtensionAPIAction \
+    WebExtensionAPIAlarms \
+    WebExtensionAPICommands \
+    WebExtensionAPICookies \
+    WebExtensionAPIDeclarativeNetRequest \
+    WebExtensionAPIDevTools \
+    WebExtensionAPIDevToolsElementsPanel \
+    WebExtensionAPIDevToolsExtensionPanel \
+    WebExtensionAPIDevToolsExtensionSidebarPane \
+    WebExtensionAPIDevToolsInspectedWindow \
+    WebExtensionAPIDevToolsNetwork \
+    WebExtensionAPIDevToolsPanels \
     WebExtensionAPIEvent \
     WebExtensionAPIExtension \
+    WebExtensionAPILocalization \
+    WebExtensionAPIMenus \
     WebExtensionAPINamespace \
+    WebExtensionAPINotifications \
     WebExtensionAPIPermissions \
+    WebExtensionAPIPort \
     WebExtensionAPIRuntime \
+    WebExtensionAPIScripting \
+    WebExtensionAPIStorage \
+    WebExtensionAPIStorageArea \
+    WebExtensionAPITabs \
     WebExtensionAPITest \
     WebExtensionAPIWebNavigation \
     WebExtensionAPIWebNavigationEvent \
+    WebExtensionAPIWebRequest \
+    WebExtensionAPIWebRequestEvent \
+    WebExtensionAPIWindows \
+    WebExtensionAPIWindowsEvent \
 #
 
-JS%.h JS%.mm : %.idl $(BINDINGS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
+$(IDL_FILE_NAMES_LIST) : $(EXTENSION_INTERFACES:%=%.idl)
+	echo $^ | tr " " "\n" > $@
+
+JS%.h JS%.mm : %.idl $(BINDINGS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES) $(IDL_FILE_NAMES_LIST)
 	@echo Generating bindings for $*...
-	$(PERL) -I $(WebCorePrivateHeaders) -I $(EXTENSIONS_SCRIPTS_DIR) $(WebCorePrivateHeaders)/generate-bindings.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES)" --include $(EXTENSIONS_INTERFACES_DIR) --outputDir . --generator Extensions --idlAttributesFile $(IDL_ATTRIBUTES_FILE) $<
+	$(PERL) -I $(WebCorePrivateHeaders) -I $(EXTENSIONS_SCRIPTS_DIR) $(WebCorePrivateHeaders)/generate-bindings.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES)" --outputDir . --generator Extensions --idlAttributesFile $(IDL_ATTRIBUTES_FILE) --idlFileNamesList $(IDL_FILE_NAMES_LIST) $<
 
 all : $(EXTENSION_INTERFACES:%=JS%.h) $(EXTENSION_INTERFACES:%=JS%.mm)
 
@@ -655,3 +876,13 @@ module.private.modulemap : $(WK_MODULEMAP_PRIVATE_FILE)
 	unifdef $(addprefix -D, $(FEATURE_AND_PLATFORM_DEFINES)) $(addprefix -U, $(FEATURE_AND_PLATFORM_UNDEFINES)) -o $@ $< || [ $$? -eq 1 ]
 
 all : module.private.modulemap
+
+ifeq ($(USE_INTERNAL_SDK),YES)
+WEBKIT_ADDITIONS_SWIFT_FILES = \
+#
+
+$(WEBKIT_ADDITIONS_SWIFT_FILES): %.swift : %.swift.in
+	cp -f $< $@
+
+all : $(WEBKIT_ADDITIONS_SWIFT_FILES)
+endif

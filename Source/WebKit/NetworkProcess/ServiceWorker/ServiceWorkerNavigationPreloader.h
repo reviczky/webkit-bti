@@ -25,13 +25,12 @@
 
 #pragma once
 
-#if ENABLE(SERVICE_WORKER)
-
 #include "DownloadID.h"
 #include "NetworkCacheEntry.h"
 #include "NetworkLoadClient.h"
 #include "NetworkLoadParameters.h"
 #include <WebCore/NavigationPreloadState.h>
+#include <wtf/CheckedPtr.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -45,7 +44,7 @@ class DownloadManager;
 class NetworkLoad;
 class NetworkSession;
 
-class ServiceWorkerNavigationPreloader final : public NetworkLoadClient, public CanMakeWeakPtr<ServiceWorkerNavigationPreloader> {
+class ServiceWorkerNavigationPreloader final : public NetworkLoadClient, public CanMakeWeakPtr<ServiceWorkerNavigationPreloader>, public CanMakeCheckedPtr {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     ServiceWorkerNavigationPreloader(NetworkSession&, NetworkLoadParameters&&, const WebCore::NavigationPreloadState&, bool shouldCaptureExtraNetworkLoadMetrics);
@@ -106,6 +105,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // ENABLE(SERVICE_WORKER)
-

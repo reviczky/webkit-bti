@@ -116,10 +116,13 @@
 
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes;
+#endif
+
+#if PLATFORM(COCOA) || PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
     WebCore::ScreenProperties screenProperties;
 #endif
 
-#if ENABLE(TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
+#if !RELEASE_LOG_DISABLED
     bool shouldLogUserInteraction;
 #endif
 
@@ -160,7 +163,6 @@
 #if PLATFORM(COCOA)
     bool systemHasBattery;
     bool systemHasAC;
-    bool strictSecureDecodingForAllObjCEnabled;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -176,8 +178,11 @@
     String renderDeviceFile;
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
     OptionSet<WebKit::DMABufRendererBufferMode> dmaBufRendererBufferMode;
+#endif
+
+#if PLATFORM(GTK)
     bool useSystemAppearanceForScrollbars;
     WebKit::GtkSettingsState gtkSettings;
 #endif
@@ -214,4 +219,7 @@
 #endif
 
     String timeZoneOverride;
+
+    HashMap<WebCore::RegistrableDomain, String> storageAccessUserAgentStringQuirksData;
+    HashSet<WebCore::RegistrableDomain> storageAccessPromptQuirksDomains;
 };

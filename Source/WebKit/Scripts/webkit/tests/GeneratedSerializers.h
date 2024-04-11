@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2022-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,45 +27,111 @@
 #include <wtf/ArgumentCoder.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Ref.h>
+#include <wtf/RetainPtr.h>
 
+namespace EnumNamespace {
 #if ENABLE(BOOL_ENUM)
-namespace EnumNamespace { enum class BoolEnumType : bool; }
+enum class BoolEnumType : bool;
 #endif
-enum class EnumWithoutNamespace : uint8_t;
 #if ENABLE(UINT16_ENUM)
-namespace EnumNamespace { enum class EnumType : uint16_t; }
+enum class EnumType : uint16_t;
 #endif
+#if (ENABLE(OUTER_CONDITION)) && (ENABLE(INNER_CONDITION))
+enum class InnerEnumType : uint8_t;
+#endif
+#if (ENABLE(OUTER_CONDITION)) && (!(ENABLE(INNER_CONDITION)))
+enum class InnerBoolType : bool;
+#endif
+}
+
+namespace JSC {
+enum class Incredible;
+}
+
+namespace Namespace {
+class ReturnRefClass;
+struct EmptyConstructorStruct;
+class EmptyConstructorWithIf;
+#if ENABLE(TEST_FEATURE)
+class ConditionalCommonClass;
+#endif
+class CommonClass;
+class AnotherCommonClass;
+#if ENABLE(OUTER_CONDITION)
+class OuterClass;
+#endif
+#if !(ENABLE(OUTER_CONDITION))
+class OtherOuterClass;
+#endif
+}
+
+namespace Namespace::Subnamespace {
+#if ENABLE(TEST_FEATURE)
+struct StructName;
+#endif
+}
+
+namespace Testing {
+enum class StorageSize : uint8_t;
+}
+
+namespace WTF {
+class Seconds;
+class CreateUsingClass;
+}
+
+namespace WebCore {
+class InheritsFrom;
+class InheritanceGrandchild;
+class TimingFunction;
+class MoveOnlyBaseClass;
+class MoveOnlyDerivedClass;
+class ScrollingStateFrameHostingNode;
+class ScrollingStateFrameHostingNodeWithStuffAfterTuple;
+struct Amazing;
+}
+
+namespace WebKit {
+class PlatformClass;
+class CustomEncoded;
+class LayerProperties;
+#if USE(AVFOUNDATION)
+class CoreIPCAVOutputContext;
+#endif
+class CoreIPCNSSomeFoundationType;
+#if ENABLE(DATA_DETECTION)
+class CoreIPCDDScannerResult;
+#endif
+class RValueWithFunctionCalls;
+class Fabulous;
+}
+
+enum class EnumWithoutNamespace : uint8_t;
 enum class OptionSetEnumFirstCondition : uint32_t;
 enum class OptionSetEnumLastCondition : uint32_t;
 enum class OptionSetEnumAllCondition : uint32_t;
-#if ENABLE(TEST_FEATURE)
-namespace Namespace::Subnamespace { struct StructName; }
-#endif
-namespace Namespace { class ReturnRefClass; }
-namespace Namespace { struct EmptyConstructorStruct; }
-namespace Namespace { class EmptyConstructorWithIf; }
 class WithoutNamespace;
 class WithoutNamespaceWithAttributes;
-namespace WebCore { class InheritsFrom; }
-namespace WebCore { class InheritanceGrandchild; }
-namespace WTF { class Seconds; }
-namespace WTF { class CreateUsingClass; }
+struct SoftLinkedMember;
+struct RequestEncodedWithBody;
+struct RequestEncodedWithBodyRValue;
+
+#if USE(CFBAR)
+typedef struct __CFBar * CFBarRef;
+#endif
+namespace IPC { template<typename> class ObjectIdentifierReference; };
+namespace IPC { template<typename> class ObjectIdentifierWriteReference; };
+namespace WebKit { using RemoteVideoFrameIdentifier = AtomicObjectIdentifier<RemoteVideoFrameIdentifierType>; };
 namespace WebCore {
 template<typename, typename> class ScrollSnapOffsetsInfo;
 using FloatBoxExtent = ScrollSnapOffsetsInfo<float, double>;
 }
-struct SoftLinkedMember;
-namespace WebCore { class TimingFunction; }
-#if ENABLE(TEST_FEATURE)
-namespace Namespace { class ConditionalCommonClass; }
-#endif
-namespace Namespace { class CommonClass; }
-namespace Namespace { class AnotherCommonClass; }
-namespace WebCore { class MoveOnlyBaseClass; }
-namespace WebCore { class MoveOnlyDerivedClass; }
-namespace WebKit { class PlatformClass; }
-namespace WebKit { class CustomEncoded; }
-namespace WebKit { class LayerProperties; }
+namespace WebKit {
+using RemoteVideoFrameReference = IPC::ObjectIdentifierReference<RemoteVideoFrameIdentifier>;
+}
+namespace WebKit {
+using RemoteVideoFrameWriteReference = IPC::ObjectIdentifierWriteReference<RemoteVideoFrameIdentifier>;
+}
 
 namespace IPC {
 
@@ -184,6 +250,125 @@ template<> struct ArgumentCoder<WebKit::LayerProperties> {
     static std::optional<WebKit::LayerProperties> decode(Decoder&);
 };
 
+template<> struct ArgumentCoder<WebKit::TemplateTest<WebKit::Fabulous>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<WebKit::Fabulous>&);
+    static std::optional<WebKit::TemplateTest<WebKit::Fabulous>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<WebCore::Amazing>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<WebCore::Amazing>&);
+    static std::optional<WebKit::TemplateTest<WebCore::Amazing>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<JSC::Incredible>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<JSC::Incredible>&);
+    static std::optional<WebKit::TemplateTest<JSC::Incredible>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<Testing::StorageSize>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<Testing::StorageSize>&);
+    static std::optional<WebKit::TemplateTest<Testing::StorageSize>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebCore::ScrollingStateFrameHostingNode> {
+    static void encode(Encoder&, const WebCore::ScrollingStateFrameHostingNode&);
+    static std::optional<Ref<WebCore::ScrollingStateFrameHostingNode>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple> {
+    static void encode(Encoder&, const WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple&);
+    static std::optional<Ref<WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<RequestEncodedWithBody> {
+    static void encode(Encoder&, const RequestEncodedWithBody&);
+    static std::optional<RequestEncodedWithBody> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<RequestEncodedWithBodyRValue> {
+    static void encode(Encoder&, RequestEncodedWithBodyRValue&&);
+    static std::optional<RequestEncodedWithBodyRValue> decode(Decoder&);
+};
+
+#if USE(AVFOUNDATION)
+template<> struct ArgumentCoder<WebKit::CoreIPCAVOutputContext> {
+    static void encode(Encoder&, const WebKit::CoreIPCAVOutputContext&);
+    static std::optional<WebKit::CoreIPCAVOutputContext> decode(Decoder&);
+};
+#endif
+
+template<> struct ArgumentCoder<WebKit::CoreIPCNSSomeFoundationType> {
+    static void encode(Encoder&, const WebKit::CoreIPCNSSomeFoundationType&);
+    static std::optional<WebKit::CoreIPCNSSomeFoundationType> decode(Decoder&);
+};
+
+#if ENABLE(DATA_DETECTION)
+template<> struct ArgumentCoder<WebKit::CoreIPCDDScannerResult> {
+    static void encode(Encoder&, const WebKit::CoreIPCDDScannerResult&);
+    static std::optional<WebKit::CoreIPCDDScannerResult> decode(Decoder&);
+};
+#endif
+
+template<> struct ArgumentCoder<CFFooRef> {
+    static void encode(Encoder&, CFFooRef);
+};
+template<> struct ArgumentCoder<RetainPtr<CFFooRef>> {
+    static void encode(Encoder& encoder, const RetainPtr<CFFooRef>& retainPtr)
+    {
+        ArgumentCoder<CFFooRef>::encode(encoder, retainPtr.get());
+    }
+    static std::optional<RetainPtr<CFFooRef>> decode(Decoder&);
+};
+
+#if USE(CFBAR)
+template<> struct ArgumentCoder<CFBarRef> {
+    static void encode(Encoder&, CFBarRef);
+    static void encode(StreamConnectionEncoder&, CFBarRef);
+};
+template<> struct ArgumentCoder<RetainPtr<CFBarRef>> {
+    static void encode(Encoder& encoder, const RetainPtr<CFBarRef>& retainPtr)
+    {
+        ArgumentCoder<CFBarRef>::encode(encoder, retainPtr.get());
+    }
+    static void encode(StreamConnectionEncoder& encoder, const RetainPtr<CFBarRef>& retainPtr)
+    {
+        ArgumentCoder<CFBarRef>::encode(encoder, retainPtr.get());
+    }
+    static std::optional<RetainPtr<CFBarRef>> decode(Decoder&);
+};
+#endif
+
+template<> struct ArgumentCoder<WebKit::RValueWithFunctionCalls> {
+    static void encode(Encoder&, WebKit::RValueWithFunctionCalls&&);
+    static std::optional<WebKit::RValueWithFunctionCalls> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::RemoteVideoFrameReference> {
+    static void encode(Encoder&, const WebKit::RemoteVideoFrameReference&);
+    static void encode(StreamConnectionEncoder&, const WebKit::RemoteVideoFrameReference&);
+    static std::optional<WebKit::RemoteVideoFrameReference> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::RemoteVideoFrameWriteReference> {
+    static void encode(Encoder&, const WebKit::RemoteVideoFrameWriteReference&);
+    static void encode(StreamConnectionEncoder&, const WebKit::RemoteVideoFrameWriteReference&);
+    static std::optional<WebKit::RemoteVideoFrameWriteReference> decode(Decoder&);
+};
+
+#if ENABLE(OUTER_CONDITION)
+template<> struct ArgumentCoder<Namespace::OuterClass> {
+    static void encode(Encoder&, const Namespace::OuterClass&);
+    static std::optional<Namespace::OuterClass> decode(Decoder&);
+};
+#endif
+
+#if !(ENABLE(OUTER_CONDITION))
+template<> struct ArgumentCoder<Namespace::OtherOuterClass> {
+    static void encode(Encoder&, const Namespace::OtherOuterClass&);
+    static std::optional<Namespace::OtherOuterClass> decode(Decoder&);
+};
+#endif
+
 } // namespace IPC
 
 
@@ -196,5 +381,8 @@ template<> bool isValidEnum<EnumNamespace::EnumType, void>(uint16_t);
 template<> bool isValidOptionSet<OptionSetEnumFirstCondition>(OptionSet<OptionSetEnumFirstCondition>);
 template<> bool isValidOptionSet<OptionSetEnumLastCondition>(OptionSet<OptionSetEnumLastCondition>);
 template<> bool isValidOptionSet<OptionSetEnumAllCondition>(OptionSet<OptionSetEnumAllCondition>);
+#if (ENABLE(OUTER_CONDITION)) && (ENABLE(INNER_CONDITION))
+template<> bool isValidEnum<EnumNamespace::InnerEnumType, void>(uint8_t);
+#endif
 
 } // namespace WTF

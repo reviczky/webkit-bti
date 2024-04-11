@@ -83,9 +83,10 @@ class NetworkResourceLoader final
     , public WebCore::CrossOriginAccessControlCheckDisabler
 #if ENABLE(CONTENT_FILTERING)
     , public WebCore::ContentFilterClient
+#else
+    , public CanMakeWeakPtr<NetworkResourceLoader>
 #endif
-    , public WebCore::ReportingClient
-    , public CanMakeWeakPtr<NetworkResourceLoader> {
+    , public WebCore::ReportingClient {
 public:
     static Ref<NetworkResourceLoader> create(NetworkResourceLoadParameters&& parameters, NetworkConnectionToWebProcess& connection, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse, Vector<uint8_t>&&)>&& reply = nullptr)
     {
@@ -146,7 +147,7 @@ public:
     bool isMainFrameLoad() const { return isMainResource() && m_parameters.frameAncestorOrigins.isEmpty(); }
     bool isCrossOriginPrefetch() const;
 
-#if ENABLE(TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
+#if !RELEASE_LOG_DISABLED
     static bool shouldLogCookieInformation(NetworkConnectionToWebProcess&, PAL::SessionID);
     static void logCookieInformation(NetworkConnectionToWebProcess&, ASCIILiteral label, const void* loggedObject, const WebCore::NetworkStorageSession&, const URL& firstParty, const WebCore::SameSiteInfo&, const URL&, const String& referrer, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, std::optional<WebCore::ResourceLoaderIdentifier>);
 #endif
@@ -157,13 +158,11 @@ public:
 
     void consumeSandboxExtensionsIfNeeded();
 
-#if ENABLE(SERVICE_WORKER)
     void startWithServiceWorker();
     void serviceWorkerDidNotHandle(ServiceWorkerFetchTask*);
     void setServiceWorkerRegistration(WebCore::SWServerRegistration& serviceWorkerRegistration) { m_serviceWorkerRegistration = serviceWorkerRegistration; }
     void setWorkerStart(MonotonicTime);
     MonotonicTime workerStart() const { return m_workerStart; }
-#endif
 
     std::optional<WebCore::ResourceError> doCrossOriginOpenerHandlingOfResponse(const WebCore::ResourceResponse&);
     void sendDidReceiveResponsePotentiallyInNewBrowsingContextGroup(const WebCore::ResourceResponse&, PrivateRelayed, bool needsContinueDidReceiveResponseMessage);
@@ -238,7 +237,7 @@ private:
     void consumeSandboxExtensions();
     void invalidateSandboxExtensions();
 
-#if ENABLE(TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
+#if !RELEASE_LOG_DISABLED
     void logCookieInformation() const;
 #endif
 
@@ -274,6 +273,8 @@ private:
 
     void startRequest(const WebCore::ResourceRequest&);
     bool abortIfServiceWorkersOnly();
+
+    bool shouldSendResourceLoadMessages() const;
 
     NetworkResourceLoadParameters m_parameters;
 
@@ -312,11 +313,9 @@ private:
     std::unique_ptr<EarlyHintsResourceLoader> m_earlyHintsResourceLoader;
 
     std::optional<NetworkActivityTracker> m_networkActivityTracker;
-#if ENABLE(SERVICE_WORKER)
-    std::unique_ptr<ServiceWorkerFetchTask> m_serviceWorkerFetchTask;
+    RefPtr<ServiceWorkerFetchTask> m_serviceWorkerFetchTask;
     WeakPtr<WebCore::SWServerRegistration> m_serviceWorkerRegistration;
     MonotonicTime m_workerStart;
-#endif
     NetworkResourceLoadIdentifier m_resourceLoadID;
     WebCore::ResourceResponse m_redirectResponse;
     URL m_firstResponseURL; // First URL in response's URL list (https://fetch.spec.whatwg.org/#concept-response-url-list).

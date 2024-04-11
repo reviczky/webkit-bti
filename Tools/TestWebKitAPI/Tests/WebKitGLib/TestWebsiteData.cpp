@@ -53,20 +53,6 @@ static void serverCallback(SoupServer* server, SoupServerMessage* message, const
         soup_message_body_append(responseBody, SOUP_MEMORY_STATIC, emptyHTML, strlen(emptyHTML));
         soup_message_body_complete(responseBody);
         soup_server_message_set_status(message, SOUP_STATUS_OK, nullptr);
-    } else if (g_str_equal(path, "/appcache")) {
-        static const char* appcacheHTML = "<html manifest=appcache.manifest><body></body></html>";
-        soup_message_body_append(responseBody, SOUP_MEMORY_STATIC, appcacheHTML, strlen(appcacheHTML));
-        soup_message_body_complete(responseBody);
-        soup_server_message_set_status(message, SOUP_STATUS_OK, nullptr);
-    } else if (g_str_equal(path, "/appcache.manifest")) {
-        static const char* appcacheManifest = "CACHE MANIFEST\nCACHE:\nappcache/foo.txt\n";
-        soup_message_body_append(responseBody, SOUP_MEMORY_STATIC, appcacheManifest, strlen(appcacheManifest));
-        soup_message_body_complete(responseBody);
-        soup_server_message_set_status(message, SOUP_STATUS_OK, nullptr);
-    } else if (g_str_equal(path, "/appcache/foo.txt")) {
-        soup_message_body_append(responseBody, SOUP_MEMORY_STATIC, "foo", 3);
-        soup_message_body_complete(responseBody);
-        soup_server_message_set_status(message, SOUP_STATUS_OK, nullptr);
     } else if (g_str_equal(path, "/sessionstorage")) {
         static const char* sessionStorageHTML = "<html><body onload=\"sessionStorage.foo = 'bar';\"></body></html>";
         soup_message_body_append(responseBody, SOUP_MEMORY_STATIC, sessionStorageHTML, strlen(sessionStorageHTML));
@@ -163,6 +149,7 @@ public:
     GList* m_dataList { nullptr };
 };
 
+#if !ENABLE(2022_GLIB_API)
 static void loadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent, WebViewTest* test)
 {
     if (loadEvent != WEBKIT_LOAD_FINISHED)
@@ -170,6 +157,7 @@ static void loadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent, WebVi
     g_signal_handlers_disconnect_by_func(webView, reinterpret_cast<void*>(loadChanged), test);
     g_main_loop_quit(test->m_mainLoop);
 }
+#endif
 
 static void testWebsiteDataConfiguration(WebsiteDataTest* test, gconstpointer)
 {
@@ -206,15 +194,6 @@ static void testWebsiteDataConfiguration(WebsiteDataTest* test, gconstpointer)
 #endif
     test->assertFileIsCreated(indexedDBDirectory.get());
     g_assert_true(g_file_test(indexedDBDirectory.get(), G_FILE_TEST_IS_DIR));
-
-    test->loadURI(kServer->getURIForPath("/appcache").data());
-    test->waitUntilLoadFinished();
-    GUniquePtr<char> applicationCacheDirectory(g_build_filename(Test::dataDirectory(), "applications", nullptr));
-#if !ENABLE(2022_GLIB_API)
-    g_assert_cmpstr(applicationCacheDirectory.get(), ==, webkit_website_data_manager_get_offline_application_cache_directory(test->m_manager));
-#endif
-    GUniquePtr<char> applicationCacheDatabase(g_build_filename(applicationCacheDirectory.get(), "ApplicationCache.db", nullptr));
-    test->assertFileIsCreated(applicationCacheDatabase.get());
 
     GUniquePtr<char> diskCacheDirectory(g_build_filename(Test::dataDirectory(), nullptr));
 #if !ENABLE(2022_GLIB_API)
@@ -279,7 +258,6 @@ static void testWebsiteDataConfiguration(WebsiteDataTest* test, gconstpointer)
     g_assert_cmpstr(webkit_website_data_manager_get_local_storage_directory(test->m_manager), !=, webkit_website_data_manager_get_local_storage_directory(defaultManager));
     g_assert_cmpstr(webkit_website_data_manager_get_indexeddb_directory(test->m_manager), !=, webkit_website_data_manager_get_indexeddb_directory(defaultManager));
     g_assert_cmpstr(webkit_website_data_manager_get_disk_cache_directory(test->m_manager), !=, webkit_website_data_manager_get_disk_cache_directory(defaultManager));
-    g_assert_cmpstr(webkit_website_data_manager_get_offline_application_cache_directory(test->m_manager), !=, webkit_website_data_manager_get_offline_application_cache_directory(defaultManager));
     g_assert_cmpstr(webkit_website_data_manager_get_hsts_cache_directory(test->m_manager), !=, webkit_website_data_manager_get_hsts_cache_directory(defaultManager));
     g_assert_cmpstr(webkit_website_data_manager_get_itp_directory(test->m_manager), !=, webkit_website_data_manager_get_itp_directory(defaultManager));
     g_assert_cmpstr(webkit_website_data_manager_get_service_worker_registrations_directory(test->m_manager), !=, webkit_website_data_manager_get_service_worker_registrations_directory(defaultManager));
@@ -289,16 +267,14 @@ static void testWebsiteDataConfiguration(WebsiteDataTest* test, gconstpointer)
 #if !ENABLE(2022_GLIB_API)
     // Any specific configuration provided takes precedence over base dirs.
     indexedDBDirectory.reset(g_build_filename(Test::dataDirectory(), "mycustomindexeddb", nullptr));
-    applicationCacheDirectory.reset(g_build_filename(Test::dataDirectory(), "mycustomappcache", nullptr));
     GRefPtr<WebKitWebsiteDataManager> baseDataManager = adoptGRef(webkit_website_data_manager_new(
         "base-data-directory", Test::dataDirectory(), "base-cache-directory", Test::dataDirectory(),
-        "indexeddb-directory", indexedDBDirectory.get(), "offline-application-cache-directory", applicationCacheDirectory.get(),
+        "indexeddb-directory", indexedDBDirectory.get(),
         "origin-storage-ratio", 1.0, "total-storage-ratio", 1.0,
         nullptr));
     g_assert_true(WEBKIT_IS_WEBSITE_DATA_MANAGER(baseDataManager.get()));
 
     g_assert_cmpstr(webkit_website_data_manager_get_indexeddb_directory(baseDataManager.get()), ==, indexedDBDirectory.get());
-    g_assert_cmpstr(webkit_website_data_manager_get_offline_application_cache_directory(baseDataManager.get()), ==, applicationCacheDirectory.get());
     // The result should be the same as previous manager.
     g_assert_cmpstr(webkit_website_data_manager_get_local_storage_directory(baseDataManager.get()), ==, localStorageDirectory.get());
     g_assert_cmpstr(webkit_website_data_manager_get_itp_directory(baseDataManager.get()), ==, itpDirectory.get());
@@ -357,7 +333,6 @@ static void testWebsiteDataEphemeral(WebViewTest* test, gconstpointer)
     ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     g_assert_null(webkit_website_data_manager_get_local_storage_directory(manager.get()));
     g_assert_null(webkit_website_data_manager_get_disk_cache_directory(manager.get()));
-    g_assert_null(webkit_website_data_manager_get_offline_application_cache_directory(manager.get()));
     g_assert_null(webkit_website_data_manager_get_indexeddb_directory(manager.get()));
     g_assert_null(webkit_website_data_manager_get_hsts_cache_directory(manager.get()));
     g_assert_null(webkit_website_data_manager_get_itp_directory(manager.get()));
@@ -428,6 +403,9 @@ static void testWebsiteDataEphemeral(WebViewTest* test, gconstpointer)
 static void testWebsiteDataCache(WebsiteDataTest* test, gconstpointer)
 {
     static const WebKitWebsiteDataTypes cacheTypes = static_cast<WebKitWebsiteDataTypes>(WEBKIT_WEBSITE_DATA_MEMORY_CACHE | WEBKIT_WEBSITE_DATA_DISK_CACHE);
+
+    test->clear(cacheTypes, 0);
+
     GList* dataList = test->fetch(cacheTypes);
     g_assert_null(dataList);
 
@@ -435,9 +413,9 @@ static void testWebsiteDataCache(WebsiteDataTest* test, gconstpointer)
     test->waitUntilLoadFinished();
 
     // Disk cache delays the storing of initial resources for 1 second to avoid
-    // affecting early page load. So, wait 1 second here to make sure resources
+    // affecting early page load. So, wait here to make sure resources
     // have already been stored.
-    test->wait(1);
+    test->wait(2);
 
     dataList = test->fetch(cacheTypes);
     g_assert_nonnull(dataList);
@@ -617,39 +595,6 @@ static void testWebsiteDataDatabases(WebsiteDataTest* test, gconstpointer)
     static const WebKitWebsiteDataTypes cacheAndDatabaseTypes = static_cast<WebKitWebsiteDataTypes>(databaseTypes | WEBKIT_WEBSITE_DATA_MEMORY_CACHE | WEBKIT_WEBSITE_DATA_DISK_CACHE);
     test->clear(cacheAndDatabaseTypes, 0);
     dataList = test->fetch(cacheAndDatabaseTypes);
-    g_assert_null(dataList);
-}
-
-static void testWebsiteDataAppcache(WebsiteDataTest* test, gconstpointer)
-{
-    GList* dataList = test->fetch(WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE);
-    g_assert_null(dataList);
-
-    test->loadURI(kServer->getURIForPath("/appcache").data());
-    test->waitUntilLoadFinished();
-
-    test->wait(1);
-    dataList = test->fetch(WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE);
-    g_assert_nonnull(dataList);
-    g_assert_cmpuint(g_list_length(dataList), ==, 1);
-    WebKitWebsiteData* data = static_cast<WebKitWebsiteData*>(dataList->data);
-    g_assert_nonnull(data);
-    WebKitSecurityOrigin* origin = webkit_security_origin_new_for_uri(kServer->getURIForPath("/").data());
-    g_assert_cmpstr(webkit_website_data_get_name(data), ==, webkit_security_origin_get_host(origin));
-    webkit_security_origin_unref(origin);
-    g_assert_cmpuint(webkit_website_data_get_types(data), ==, WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE);
-    // Appcache size is unknown.
-    g_assert_cmpuint(webkit_website_data_get_size(data, WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE), ==, 0);
-
-    GList removeList = { data, nullptr, nullptr };
-    test->remove(WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE, &removeList);
-    dataList = test->fetch(WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE);
-    g_assert_null(dataList);
-
-    // Clear all.
-    static const WebKitWebsiteDataTypes cacheAndAppcacheTypes = static_cast<WebKitWebsiteDataTypes>(WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE | WEBKIT_WEBSITE_DATA_MEMORY_CACHE | WEBKIT_WEBSITE_DATA_DISK_CACHE);
-    test->clear(cacheAndAppcacheTypes, 0);
-    dataList = test->fetch(cacheAndAppcacheTypes);
     g_assert_null(dataList);
 }
 
@@ -960,62 +905,6 @@ static void testWebViewHandleCorruptedLocalStorage(WebsiteDataTest* test, gconst
     g_assert_cmpstr(fooValue.get(), ==, "value");
 }
 
-class MemoryPressureTest : public WebViewTest {
-public:
-    MAKE_GLIB_TEST_FIXTURE_WITH_SETUP_TEARDOWN(MemoryPressureTest, setup, teardown);
-
-    static void setup()
-    {
-        WebKitMemoryPressureSettings* settings = webkit_memory_pressure_settings_new();
-        webkit_memory_pressure_settings_set_memory_limit(settings, 1);
-        webkit_memory_pressure_settings_set_poll_interval(settings, 0.001);
-        webkit_memory_pressure_settings_set_kill_threshold(settings, 1);
-        webkit_memory_pressure_settings_set_strict_threshold(settings, 0.75);
-        webkit_memory_pressure_settings_set_conservative_threshold(settings, 0.5);
-#if ENABLE(2022_GLIB_API)
-        webkit_network_session_set_memory_pressure_settings(settings);
-#else
-        webkit_website_data_manager_set_memory_pressure_settings(settings);
-#endif
-        webkit_memory_pressure_settings_free(settings);
-    }
-
-    static void teardown()
-    {
-#if ENABLE(2022_GLIB_API)
-        webkit_network_session_set_memory_pressure_settings(nullptr);
-#else
-        webkit_website_data_manager_set_memory_pressure_settings(nullptr);
-#endif
-    }
-
-    static gboolean loadFailedCallback(WebKitWebView* webView, WebKitLoadEvent loadEvent, const char* failingURI, GError* error, MemoryPressureTest* test)
-    {
-        g_signal_handlers_disconnect_by_func(webView, reinterpret_cast<void*>(loadFailedCallback), test);
-        g_main_loop_quit(test->m_mainLoop);
-
-        return TRUE;
-    }
-
-    void waitUntilLoadFailed()
-    {
-        g_signal_connect(m_webView, "load-failed", G_CALLBACK(MemoryPressureTest::loadFailedCallback), this);
-        g_main_loop_run(m_mainLoop);
-    }
-};
-
-static void testMemoryPressureSettings(MemoryPressureTest* test, gconstpointer)
-{
-    // We have set a memory limit of 1MB with a kill threshold of 1 and a poll interval of 0.001.
-    // The network process will use around 2MB to load the test. The MemoryPressureHandler will
-    // kill the process as soon as it detects that it's using more than 1MB, so the network process
-    // won't be able to complete the resource load. This causes an internal error and the load-failed
-    // signal is emitted.
-    GUniquePtr<char> fileURL(g_strdup_printf("file://%s/simple.html", Test::getResourcesDir(Test::WebKit2Resources).data()));
-    test->loadURI(fileURL.get());
-    test->waitUntilLoadFailed();
-}
-
 void beforeAll()
 {
     kServer = new WebKitTestServer();
@@ -1030,7 +919,6 @@ void beforeAll()
     WebsiteDataTest::add("WebKitWebsiteData", "cache", testWebsiteDataCache);
     WebsiteDataTest::add("WebKitWebsiteData", "storage", testWebsiteDataStorage);
     WebsiteDataTest::add("WebKitWebsiteData", "databases", testWebsiteDataDatabases);
-    WebsiteDataTest::add("WebKitWebsiteData", "appcache", testWebsiteDataAppcache);
     WebsiteDataTest::add("WebKitWebsiteData", "cookies", testWebsiteDataCookies);
 #if SOUP_CHECK_VERSION(2, 67, 91)
     WebsiteDataTest::add("WebKitWebsiteData", "hsts", testWebsiteDataHsts);
@@ -1040,7 +928,6 @@ void beforeAll()
     WebsiteDataTest::add("WebKitWebsiteData", "service-worker-registrations", testWebsiteDataServiceWorkerRegistrations);
     WebsiteDataTest::add("WebKitWebsiteData", "dom-cache", testWebsiteDataDOMCache);
     WebsiteDataTest::add("WebKitWebsiteData", "handle-corrupted-local-storage", testWebViewHandleCorruptedLocalStorage);
-    MemoryPressureTest::add("WebKitWebsiteData", "memory-pressure", testMemoryPressureSettings);
     WebsiteDataTest::add("WebKitWebsiteData", "origin-and-total-storage-ratio", testWebsiteDataOriginAndTotalStorageRatio);
 }
 
