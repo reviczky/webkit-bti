@@ -16,6 +16,9 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
       (see #1066411).
     - Stop using -DENABLE_WEBGL=OFF on armel and powerpc.
     - Build with -DUSE_LIBBACKTRACE=OFF.
+  * debian/control:
+    - Enable the bubblewrap sandbox only in the architectures where
+      libseccomp is working.
   * debian/patches/fix-ftbfs-riscv64.patch:
     - Treat riscv64 as an unknown CPU to fix a FTBFS in JavaScriptCore
       (webkit bug #271371).
