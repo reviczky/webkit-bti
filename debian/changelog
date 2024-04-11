@@ -6,6 +6,9 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
     - Stop setting USE_LD_GOLD, it has been removed upstream so it no
       longer has any effect (see webkit bug #235476).
     - Unify the sh3 and sh4 build flags.
+    - Don't copy CFLAGS to CXXFLAGS: -Werror=implicit-function-declaration
+      (default since dpkg 1.22.6) causes a FTBFS when added to the latter
+      (see #1066411).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
 
