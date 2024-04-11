@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,6 +36,7 @@
 #include "GPUProcessConnectionParameters.h"
 #include "GPUProcessCreationParameters.h"
 #include "GPUProcessPreferences.h"
+#include "GPUProcessPreferencesForWebProcess.h"
 #include "GPUProcessProxyMessages.h"
 #include "GPUProcessSessionParameters.h"
 #include "LogInitialization.h"
@@ -73,11 +74,8 @@
 #if PLATFORM(COCOA)
 #include "ArgumentCodersCocoa.h"
 #include <WebCore/CoreAudioSharedUnit.h>
+#include <WebCore/UTIUtilities.h>
 #include <WebCore/VP9UtilitiesCocoa.h>
-#endif
-
-#if HAVE(CGIMAGESOURCE_WITH_SET_ALLOWABLE_TYPES)
-#include <pal/spi/cg/ImageIOSPI.h>
 #endif
 
 #if HAVE(SCREEN_CAPTURE_KIT)
@@ -118,18 +116,6 @@ void GPUProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& de
     }
 
     didReceiveGPUProcessMessage(connection, decoder);
-}
-
-void GPUProcess::updateWebGPUEnabled(WebCore::ProcessIdentifier processIdentifier, bool webGPUEnabled)
-{
-    if (auto* connection = m_webProcessConnections.get(processIdentifier))
-        connection->updateWebGPUEnabled(webGPUEnabled);
-}
-
-void GPUProcess::updateDOMRenderingEnabled(WebCore::ProcessIdentifier processIdentifier, bool isDOMRenderingEnabled)
-{
-    if (auto* connection = m_webProcessConnections.get(processIdentifier))
-        connection->updateDOMRenderingEnabled(isDOMRenderingEnabled);
 }
 
 void GPUProcess::createGPUConnectionToWebProcess(WebCore::ProcessIdentifier identifier, PAL::SessionID sessionID, IPC::Connection::Handle&& connectionHandle, GPUProcessConnectionParameters&& parameters, CompletionHandler<void()>&& completionHandler)
@@ -279,9 +265,8 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
     SandboxExtension::consumePermanently(parameters.gpuToolsExtensionHandles);
 #endif
 
-#if HAVE(CGIMAGESOURCE_WITH_SET_ALLOWABLE_TYPES)
-    auto emptyArray = adoptCF(CFArrayCreate(kCFAllocatorDefault, nullptr, 0, &kCFTypeArrayCallBacks));
-    CGImageSourceSetAllowableTypes(emptyArray.get());
+#if PLATFORM(COCOA)
+    WebCore::setImageSourceAllowableTypes({ });
 #endif
 
 #if USE(GBM)
@@ -289,9 +274,6 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
 #endif
 
     m_applicationVisibleName = WTFMove(parameters.applicationVisibleName);
-#if PLATFORM(COCOA)
-    IPC::setStrictSecureDecodingForAllObjCEnabled(parameters.strictSecureDecodingForAllObjCEnabled);
-#endif
 
     // Match the QoS of the UIProcess since the GPU process is doing rendering on its behalf.
     WTF::Thread::setCurrentThreadIsUserInteractive(0);
@@ -305,9 +287,7 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
     registerWithStateDumper("GPUProcess state"_s);
 #endif
 
-#if PLATFORM(COCOA)
     platformInitializeGPUProcess(parameters);
-#endif
 }
 
 void GPUProcess::updateGPUProcessPreferences(GPUProcessPreferences&& preferences)
@@ -350,6 +330,41 @@ void GPUProcess::updateGPUProcessPreferences(GPUProcessPreferences&& preferences
 #if HAVE(SC_CONTENT_SHARING_PICKER)
     if (updatePreference(m_preferences.useSCContentSharingPicker, preferences.useSCContentSharingPicker))
         PlatformMediaSessionManager::setUseSCContentSharingPicker(*m_preferences.useSCContentSharingPicker);
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    if (updatePreference(m_preferences.mediaCapabilityGrantsEnabled, preferences.mediaCapabilityGrantsEnabled))
+        PlatformMediaSessionManager::setMediaCapabilityGrantsEnabled(*m_preferences.mediaCapabilityGrantsEnabled);
+#endif
+
+#if ENABLE(VP9)
+    if (updatePreference(m_preferences.vp8DecoderEnabled, preferences.vp8DecoderEnabled)) {
+        PlatformMediaSessionManager::setShouldEnableVP8Decoder(*m_preferences.vp8DecoderEnabled);
+#if PLATFORM(COCOA)
+        if (!m_haveEnabledVP8Decoder && *m_preferences.vp8DecoderEnabled) {
+            m_haveEnabledVP8Decoder = true;
+            WebCore::registerWebKitVP8Decoder();
+        }
+#endif
+    }
+    if (updatePreference(m_preferences.vp9DecoderEnabled, preferences.vp9DecoderEnabled)) {
+        PlatformMediaSessionManager::setShouldEnableVP9Decoder(*m_preferences.vp9DecoderEnabled);
+#if PLATFORM(COCOA)
+        if (!m_haveEnabledVP9Decoder && *m_preferences.vp9DecoderEnabled) {
+            m_haveEnabledVP9Decoder = true;
+            WebCore::registerSupplementalVP9Decoder();
+        }
+#endif
+    }
+    if (updatePreference(m_preferences.vp9SWDecoderEnabled, preferences.vp9SWDecoderEnabled)) {
+        PlatformMediaSessionManager::setShouldEnableVP9SWDecoder(*m_preferences.vp9SWDecoderEnabled);
+#if PLATFORM(COCOA)
+        if (!m_haveEnabledVP9SWDecoder && *m_preferences.vp9SWDecoderEnabled) {
+            m_haveEnabledVP9SWDecoder = true;
+            WebCore::registerWebKitVP9Decoder();
+        }
+#endif
+    }
 #endif
 }
 
@@ -482,9 +497,9 @@ void GPUProcess::setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool
     MockRealtimeMediaSourceCenter::setMockCaptureDevicesInterrupted(isCameraInterrupted, isMicrophoneInterrupted);
 }
 
-void GPUProcess::triggerMockMicrophoneConfigurationChange()
+void GPUProcess::triggerMockCaptureConfigurationChange(bool forMicrophone, bool forDisplay)
 {
-    MockRealtimeMediaSourceCenter::singleton().triggerMockMicrophoneConfigurationChange();
+    MockRealtimeMediaSourceCenter::singleton().triggerMockCaptureConfigurationChange(forMicrophone, forDisplay);
 }
 #endif // ENABLE(MEDIA_STREAM)
 
@@ -573,30 +588,6 @@ WorkQueue& GPUProcess::libWebRTCCodecsQueue()
 }
 #endif
 
-#if ENABLE(VP9)
-void GPUProcess::enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder)
-{
-    if (shouldEnableVP9Decoder && !m_enableVP9Decoder) {
-        m_enableVP9Decoder = true;
-#if PLATFORM(COCOA)
-        WebCore::registerSupplementalVP9Decoder();
-#endif
-    }
-    if (shouldEnableVP8Decoder && !m_enableVP8Decoder) {
-        m_enableVP8Decoder = true;
-#if PLATFORM(COCOA)
-        WebCore::registerWebKitVP8Decoder();
-#endif
-    }
-    if (shouldEnableVP9SWDecoder && !m_enableVP9SWDecoder) {
-        m_enableVP9SWDecoder = true;
-#if PLATFORM(COCOA)
-        WebCore::registerWebKitVP9Decoder();
-#endif
-    }
-}
-#endif
-
 void GPUProcess::webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&& completionHandler)
 {
     completionHandler(GPUConnectionToWebProcess::objectCountForTesting());
@@ -611,11 +602,11 @@ void GPUProcess::processIsStartingToCaptureAudio(GPUConnectionToWebProcess& proc
 #endif
 
 #if ENABLE(VIDEO)
-void GPUProcess::requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier, CompletionHandler<void(ShareableBitmap::Handle&&)>&& completion)
+void GPUProcess::requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& completion)
 {
     auto iterator = m_webProcessConnections.find(processIdentifier);
     if (iterator == m_webProcessConnections.end()) {
-        completion({ });
+        completion(std::nullopt);
         return;
     }
 

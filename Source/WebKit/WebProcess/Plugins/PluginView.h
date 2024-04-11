@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
 
 #include <WebCore/FindOptions.h>
 #include <WebCore/PluginViewBase.h>
@@ -42,12 +42,13 @@ OBJC_CLASS PDFSelection;
 namespace WebCore {
 class HTMLPlugInElement;
 class LocalFrame;
+class RenderEmbeddedObject;
+class ShareableBitmap;
 }
 
 namespace WebKit {
 
-class PDFPlugin;
-class ShareableBitmap;
+class PDFPluginBase;
 class WebPage;
 
 struct WebHitTestResultData;
@@ -72,13 +73,16 @@ public:
     id accessibilityObject() const final;
     id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const final;
 
+    void layerHostingStrategyDidChange() final;
+
     WebCore::HTMLPlugInElement& pluginElement() const { return m_pluginElement; }
     const URL& mainResourceURL() const { return m_mainResourceURL; }
 
-    void setPageScaleFactor(double);
+    void didBeginMagnificationGesture();
+    void didEndMagnificationGesture();
+    void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin);
     double pageScaleFactor() const;
 
-    void pageScaleFactorDidChange();
     void topContentInsetDidChange();
 
     void webPageDestroyed();
@@ -101,14 +105,23 @@ public:
     
     bool isUsingUISideCompositing() const;
 
+    void invalidateRect(const WebCore::IntRect&) final;
+
+    void didChangeSettings();
+
+    void windowActivityDidChange();
+
 private:
     PluginView(WebCore::HTMLPlugInElement&, const URL&, const String& contentType, bool shouldUseManualLoader, WebPage&);
     virtual ~PluginView();
 
     void initializePlugin();
 
+    Ref<PDFPluginBase> protectedPlugin() const;
+
     void viewGeometryDidChange();
     void viewVisibilityDidChange();
+
     WebCore::IntRect clipRectInWindowCoordinates() const;
     void focusPluginElement();
     
@@ -119,8 +132,16 @@ private:
 
     bool shouldCreateTransientPaintingSnapshot() const;
 
+    void updateDocumentForPluginSizingBehavior();
+
+    CheckedPtr<WebCore::RenderEmbeddedObject> checkedRenderer() const;
+
     // WebCore::PluginViewBase
+    WebCore::PluginLayerHostingStrategy layerHostingStrategy() const final;
+
     PlatformLayer* platformLayer() const final;
+    WebCore::GraphicsLayer* graphicsLayer() const final;
+
     bool scroll(WebCore::ScrollDirection, WebCore::ScrollGranularity) final;
     WebCore::ScrollPosition scrollPositionForTesting() const final;
     WebCore::Scrollbar* horizontalScrollbar() final;
@@ -129,10 +150,12 @@ private:
     bool shouldAllowNavigationFromDrags() const final;
     void willDetachRenderer() final;
 
+    bool usesAsyncScrolling() const final;
+    WebCore::ScrollingNodeID scrollingNodeID() const final;
+
     // WebCore::Widget
     void setFrameRect(const WebCore::IntRect&) final;
     void paint(WebCore::GraphicsContext&, const WebCore::IntRect&, WebCore::Widget::SecurityOriginPaintPolicy, WebCore::RegionContext*) final;
-    void invalidateRect(const WebCore::IntRect&) final;
     void frameRectsChanged() final;
     void setParent(WebCore::ScrollView*) final;
     void handleEvent(WebCore::Event&) final;
@@ -144,7 +167,7 @@ private:
     void clipRectChanged() final;
 
     Ref<WebCore::HTMLPlugInElement> m_pluginElement;
-    Ref<PDFPlugin> m_plugin;
+    Ref<PDFPluginBase> m_plugin;
     WeakPtr<WebPage> m_webPage;
     URL m_mainResourceURL;
     String m_mainResourceContentType;
@@ -167,9 +190,7 @@ private:
     WebCore::SharedBufferBuilder m_manualStreamData;
 
     // This snapshot is used to avoid side effects should the plugin run JS during painting.
-    RefPtr<ShareableBitmap> m_transientPaintingSnapshot;
-
-    double m_pageScaleFactor { 1 };
+    RefPtr<WebCore::ShareableBitmap> m_transientPaintingSnapshot;
 };
 
 } // namespace WebKit

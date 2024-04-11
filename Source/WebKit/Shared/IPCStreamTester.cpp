@@ -42,16 +42,16 @@
 
 namespace WebKit {
 
-RefPtr<IPCStreamTester> IPCStreamTester::create(IPCStreamTesterIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle)
+RefPtr<IPCStreamTester> IPCStreamTester::create(IPCStreamTesterIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle, bool ignoreInvalidMessageForTesting)
 {
-    auto tester = adoptRef(*new IPCStreamTester(identifier, WTFMove(connectionHandle)));
+    auto tester = adoptRef(*new IPCStreamTester(identifier, WTFMove(connectionHandle), ignoreInvalidMessageForTesting));
     tester->initialize();
     return tester;
 }
 
-IPCStreamTester::IPCStreamTester(IPCStreamTesterIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle)
+IPCStreamTester::IPCStreamTester(IPCStreamTesterIdentifier identifier, IPC::StreamServerConnection::Handle&& connectionHandle, bool ignoreInvalidMessageForTesting)
     : m_workQueue(IPC::StreamConnectionWorkQueue::create("IPCStreamTester work queue"))
-    , m_streamConnection(IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle)).releaseNonNull())
+    , m_streamConnection(IPC::StreamServerConnection::tryCreate(WTFMove(connectionHandle), { ignoreInvalidMessageForTesting }).releaseNonNull())
     , m_identifier(identifier)
 {
 }
@@ -76,21 +76,26 @@ void IPCStreamTester::stopListeningForIPC(Ref<IPCStreamTester>&& refFromConnecti
     workQueue().stopAndWaitForCompletion();
 }
 
-void IPCStreamTester::syncMessageReturningSharedMemory1(uint32_t byteCount, CompletionHandler<void(SharedMemory::Handle)>&& completionHandler)
+void IPCStreamTester::syncMessageReturningSharedMemory1(uint32_t byteCount, CompletionHandler<void(std::optional<WebCore::SharedMemory::Handle>&&)>&& completionHandler)
 {
-    auto result = [&]() -> SharedMemory::Handle {
-        auto sharedMemory = WebKit::SharedMemory::allocate(byteCount);
+    auto result = [&]() -> std::optional<WebCore::SharedMemory::Handle> {
+        auto sharedMemory = WebCore::SharedMemory::allocate(byteCount);
         if (!sharedMemory)
-            return { };
-        auto handle = sharedMemory->createHandle(SharedMemory::Protection::ReadOnly);
+            return std::nullopt;
+        auto handle = sharedMemory->createHandle(WebCore::SharedMemory::Protection::ReadOnly);
         if (!handle)
-            return { };
+            return std::nullopt;
         uint8_t* data = static_cast<uint8_t*>(sharedMemory->data());
         for (size_t i = 0; i < sharedMemory->size(); ++i)
             data[i] = i;
         return WTFMove(*handle);
     }();
     completionHandler(WTFMove(result));
+}
+
+void IPCStreamTester::syncMessageEmptyReply(uint32_t, CompletionHandler<void()>&& completionHandler)
+{
+    completionHandler();
 }
 
 void IPCStreamTester::syncCrashOnZero(int32_t value, CompletionHandler<void(int32_t)>&& completionHandler)

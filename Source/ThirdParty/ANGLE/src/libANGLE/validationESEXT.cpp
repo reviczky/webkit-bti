@@ -117,7 +117,7 @@ bool ValidateObjectIdentifierAndName(const Context *context,
                 ANGLE_VALIDATION_ERROR(GL_INVALID_ENUM, kInvalidType);
                 return false;
             }
-            if (context->getShader({name}) == nullptr)
+            if (context->getShaderNoResolveCompile({name}) == nullptr)
             {
                 ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kInvalidShaderName);
                 return false;
@@ -322,13 +322,6 @@ bool ValidateGetCompressedTexImageANGLE(const Context *context,
         return false;
     }
 
-    if (texture->isCompressedFormatEmulated(context, target, level))
-    {
-        // TODO (anglebug.com/7464): We can't currently read back from an emulated format
-        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kInvalidEmulatedFormat);
-        return false;
-    }
-
     return true;
 }
 
@@ -402,7 +395,7 @@ bool ValidateDrawElementsInstancedBaseVertexEXT(const Context *context,
     }
 
     return ValidateDrawElementsInstancedBase(context, entryPoint, mode, count, type, indices,
-                                             instancecount);
+                                             instancecount, 0);
 }
 
 bool ValidateDrawRangeElementsBaseVertexEXT(const Context *context,
@@ -544,7 +537,8 @@ bool ValidateDrawArraysInstancedBaseInstanceEXT(const Context *context,
         return false;
     }
 
-    return ValidateDrawArraysInstancedBase(context, entryPoint, mode, first, count, instanceCount);
+    return ValidateDrawArraysInstancedBase(context, entryPoint, mode, first, count, instanceCount,
+                                           baseInstance);
 }
 
 bool ValidateDrawElementsInstancedBaseInstanceEXT(const Context *context,
@@ -563,7 +557,7 @@ bool ValidateDrawElementsInstancedBaseInstanceEXT(const Context *context,
     }
 
     return ValidateDrawElementsInstancedBase(context, entryPoint, mode, count, type, indices,
-                                             instancecount);
+                                             instancecount, baseinstance);
 }
 
 bool ValidateDrawElementsInstancedBaseVertexBaseInstanceEXT(const Context *context,
@@ -583,7 +577,7 @@ bool ValidateDrawElementsInstancedBaseVertexBaseInstanceEXT(const Context *conte
     }
 
     return ValidateDrawElementsInstancedBase(context, entryPoint, mode, count, typePacked, indices,
-                                             instancecount);
+                                             instancecount, baseinstance);
 }
 
 bool ValidateDrawElementsBaseVertexOES(const Context *context,
@@ -619,7 +613,7 @@ bool ValidateDrawElementsInstancedBaseVertexOES(const Context *context,
     }
 
     return ValidateDrawElementsInstancedBase(context, entryPoint, mode, count, type, indices,
-                                             instancecount);
+                                             instancecount, 0);
 }
 
 bool ValidateDrawRangeElementsBaseVertexOES(const Context *context,
@@ -1470,6 +1464,158 @@ bool ValidateImportSemaphoreFdEXT(const Context *context,
     return true;
 }
 
+bool ValidateGetTexParameterIivOES(const Context *context,
+                                   angle::EntryPoint entryPoint,
+                                   TextureType target,
+                                   GLenum pname,
+                                   const GLint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateGetTexParameterBase(context, entryPoint, target, pname, nullptr);
+}
+
+bool ValidateGetTexParameterIuivOES(const Context *context,
+                                    angle::EntryPoint entryPoint,
+                                    TextureType target,
+                                    GLenum pname,
+                                    const GLuint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+    }
+    return ValidateGetTexParameterBase(context, entryPoint, target, pname, nullptr);
+}
+
+bool ValidateTexParameterIivOES(const Context *context,
+                                angle::EntryPoint entryPoint,
+                                TextureType target,
+                                GLenum pname,
+                                const GLint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateTexParameterBase(context, entryPoint, target, pname, -1, true, params);
+}
+
+bool ValidateTexParameterIuivOES(const Context *context,
+                                 angle::EntryPoint entryPoint,
+                                 TextureType target,
+                                 GLenum pname,
+                                 const GLuint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+
+    return ValidateTexParameterBase(context, entryPoint, target, pname, -1, true, params);
+}
+
+bool ValidateGetSamplerParameterIivOES(const Context *context,
+                                       angle::EntryPoint entryPoint,
+                                       SamplerID sampler,
+                                       GLenum pname,
+                                       const GLint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateGetSamplerParameterBase(context, entryPoint, sampler, pname, nullptr);
+}
+
+bool ValidateGetSamplerParameterIuivOES(const Context *context,
+                                        angle::EntryPoint entryPoint,
+                                        SamplerID sampler,
+                                        GLenum pname,
+                                        const GLuint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateGetSamplerParameterBase(context, entryPoint, sampler, pname, nullptr);
+}
+
+bool ValidateSamplerParameterIivOES(const Context *context,
+                                    angle::EntryPoint entryPoint,
+                                    SamplerID sampler,
+                                    GLenum pname,
+                                    const GLint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateSamplerParameterBase(context, entryPoint, sampler, pname, -1, true, params);
+}
+
+bool ValidateSamplerParameterIuivOES(const Context *context,
+                                     angle::EntryPoint entryPoint,
+                                     SamplerID sampler,
+                                     GLenum pname,
+                                     const GLuint *params)
+{
+    if (context->getClientMajorVersion() < 3)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampOES)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return ValidateSamplerParameterBase(context, entryPoint, sampler, pname, -1, true, params);
+}
+
 bool ValidateGetSamplerParameterIivEXT(const Context *context,
                                        angle::EntryPoint entryPoint,
                                        SamplerID samplerPacked,
@@ -1479,6 +1625,11 @@ bool ValidateGetSamplerParameterIivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateGetSamplerParameterBase(context, entryPoint, samplerPacked, pname, nullptr);
@@ -1493,6 +1644,11 @@ bool ValidateGetSamplerParameterIuivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateGetSamplerParameterBase(context, entryPoint, samplerPacked, pname, nullptr);
@@ -1507,6 +1663,11 @@ bool ValidateGetTexParameterIivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateGetTexParameterBase(context, entryPoint, targetPacked, pname, nullptr);
@@ -1521,6 +1682,11 @@ bool ValidateGetTexParameterIuivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateGetTexParameterBase(context, entryPoint, targetPacked, pname, nullptr);
@@ -1535,6 +1701,11 @@ bool ValidateSamplerParameterIivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateSamplerParameterBase(context, entryPoint, samplerPacked, pname, -1, true, param);
@@ -1549,6 +1720,11 @@ bool ValidateSamplerParameterIuivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateSamplerParameterBase(context, entryPoint, samplerPacked, pname, -1, true, param);
@@ -1563,6 +1739,11 @@ bool ValidateTexParameterIivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateTexParameterBase(context, entryPoint, targetPacked, pname, -1, true, params);
@@ -1577,6 +1758,11 @@ bool ValidateTexParameterIuivEXT(const Context *context,
     if (context->getClientMajorVersion() < 3)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kES3Required);
+    }
+
+    if (!context->getExtensions().textureBorderClampEXT)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;
     }
     return ValidateTexParameterBase(context, entryPoint, targetPacked, pname, -1, true, params);
@@ -1737,7 +1923,7 @@ bool ValidatePLSTextureType(const Context *context,
 
 bool ValidatePLSActiveBlendFunc(const Context *context,
                                 angle::EntryPoint entryPoint,
-                                GLenum blendFunc)
+                                gl::BlendFactorType blendFunc)
 {
     // INVALID_OPERATION is generated if BLEND_DST_ALPHA, BLEND_DST_RGB, BLEND_SRC_ALPHA, or
     // BLEND_SRC_RGB, for any draw buffer, is a blend function requiring the secondary color input,
@@ -1745,10 +1931,10 @@ bool ValidatePLSActiveBlendFunc(const Context *context,
     ASSERT(context->getState().getExtensions().blendFuncExtendedEXT);
     switch (blendFunc)
     {
-        case GL_SRC1_COLOR_EXT:
-        case GL_ONE_MINUS_SRC1_COLOR_EXT:
-        case GL_SRC1_ALPHA_EXT:
-        case GL_ONE_MINUS_SRC1_ALPHA_EXT:
+        case gl::BlendFactorType::Src1Color:
+        case gl::BlendFactorType::OneMinusSrc1Color:
+        case gl::BlendFactorType::Src1Alpha:
+        case gl::BlendFactorType::OneMinusSrc1Alpha:
             ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kPLSSecondaryBlendEnabled);
             return false;
         default:
@@ -1757,28 +1943,28 @@ bool ValidatePLSActiveBlendFunc(const Context *context,
 }
 bool ValidatePLSActiveBlendEquation(const Context *context,
                                     angle::EntryPoint entryPoint,
-                                    GLenum blendEquation)
+                                    gl::BlendEquationType blendEquation)
 {
     // INVALID_OPERATION is generated if BLEND_EQUATION_RGB and/or BLEND_EQUATION_ALPHA is an
     // advanced blend equation defined in KHR_blend_equation_advanced.
     ASSERT(context->getState().getExtensions().blendEquationAdvancedKHR);
     switch (blendEquation)
     {
-        case GL_MULTIPLY_KHR:
-        case GL_SCREEN_KHR:
-        case GL_OVERLAY_KHR:
-        case GL_DARKEN_KHR:
-        case GL_LIGHTEN_KHR:
-        case GL_COLORDODGE_KHR:
-        case GL_COLORBURN_KHR:
-        case GL_HARDLIGHT_KHR:
-        case GL_SOFTLIGHT_KHR:
-        case GL_DIFFERENCE_KHR:
-        case GL_EXCLUSION_KHR:
-        case GL_HSL_HUE_KHR:
-        case GL_HSL_SATURATION_KHR:
-        case GL_HSL_COLOR_KHR:
-        case GL_HSL_LUMINOSITY_KHR:
+        case gl::BlendEquationType::Multiply:
+        case gl::BlendEquationType::Screen:
+        case gl::BlendEquationType::Overlay:
+        case gl::BlendEquationType::Darken:
+        case gl::BlendEquationType::Lighten:
+        case gl::BlendEquationType::Colordodge:
+        case gl::BlendEquationType::Colorburn:
+        case gl::BlendEquationType::Hardlight:
+        case gl::BlendEquationType::Softlight:
+        case gl::BlendEquationType::Difference:
+        case gl::BlendEquationType::Exclusion:
+        case gl::BlendEquationType::HslHue:
+        case gl::BlendEquationType::HslSaturation:
+        case gl::BlendEquationType::HslColor:
+        case gl::BlendEquationType::HslLuminosity:
             ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kPLSAdvancedBlendEnabled);
             return false;
         default:
@@ -3996,5 +4182,139 @@ bool ValidateLogicOpANGLE(const PrivateState &state,
     }
 
     return ValidateLogicOpCommon(state, errors, entryPoint, opcodePacked);
+}
+
+bool ValidateFramebufferFoveationConfigQCOM(const Context *context,
+                                            angle::EntryPoint entryPoint,
+                                            FramebufferID framebufferPacked,
+                                            GLuint numLayers,
+                                            GLuint focalPointsPerLayer,
+                                            GLuint requestedFeatures,
+                                            const GLuint *providedFeatures)
+{
+    Framebuffer *framebuffer = context->getFramebuffer(framebufferPacked);
+
+    // INVALID_VALUE is generated by FramebufferFoveationConfigQCOM if 'fbo' is not a valid
+    // framebuffer.
+    if (framebuffer == nullptr)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kInvalidFramebufferName);
+        return false;
+    }
+
+    // INVALID_VALUE is generated by FramebufferFoveationConfigQCOM if 'numLayers' is greater than
+    // GL_MAX_ARRAY_TEXTURE_LAYERS - 1.
+    if (numLayers > static_cast<GLuint>(context->getState().getCaps().maxArrayTextureLayers) - 1)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFramebufferFoveationLayersExceedMaxArrayLayers);
+        return false;
+    }
+
+    // INVALID_VALUE is generated by FramebufferFoveationConfigQCOM if 'numFocalPoints' is greater
+    // than implementation can support.
+    if (focalPointsPerLayer > gl::IMPLEMENTATION_MAX_FOCAL_POINTS)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFocalPointsExceedMaxFocalPoints);
+        return false;
+    }
+
+    // INVALID_OPERATION is generated by FramebufferFoveationConfigQCOM if it is called for a fbo
+    // that has already been cofigured for foveated rendering.
+    if (framebuffer->isFoveationConfigured())
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFramebufferFoveationAlreadyConfigured);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateFramebufferFoveationParametersQCOM(const Context *context,
+                                                angle::EntryPoint entryPoint,
+                                                FramebufferID framebufferPacked,
+                                                GLuint layer,
+                                                GLuint focalPoint,
+                                                GLfloat focalX,
+                                                GLfloat focalY,
+                                                GLfloat gainX,
+                                                GLfloat gainY,
+                                                GLfloat foveaArea)
+{
+    Framebuffer *framebuffer = context->getFramebuffer(framebufferPacked);
+
+    // INVALID_VALUE is generated by FramebufferFoveationParametersQCOM if 'fbo' is not a valid
+    // framebuffer.
+    if (framebuffer == nullptr)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kInvalidFramebufferName);
+        return false;
+    }
+
+    // INVALID_OPERATION is generated by FramebufferFoveationParametersQCOM if 'fbo' has not been
+    // configured for foveated rendering.
+    if (!framebuffer->isFoveationConfigured())
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kFramebufferFoveationNotConfigured);
+        return false;
+    }
+
+    // INVALID_VALUE is generated by FramebufferFoveationParametersQCOM if 'layer' is greater than
+    // or equal to the numLayers that the fbo was previously configured for in
+    // FramebufferFoveationConfigQCOM.
+    if (layer >= gl::IMPLEMENTATION_MAX_NUM_LAYERS)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFramebufferFoveationLayersExceedMaxArrayLayers);
+        return false;
+    }
+
+    // INVALID_VALUE is generated by FramebufferFoveationParametersQCOM if 'numFocalPoints' is
+    // greater than implementation can support. INVALID_OPERATION is generated by
+    if (focalPoint >= gl::IMPLEMENTATION_MAX_FOCAL_POINTS)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFocalPointsExceedMaxFocalPoints);
+        return false;
+    }
+    return true;
+}
+
+bool ValidateTextureFoveationParametersQCOM(const Context *context,
+                                            angle::EntryPoint entryPoint,
+                                            TextureID texturePacked,
+                                            GLuint layer,
+                                            GLuint focalPoint,
+                                            GLfloat focalX,
+                                            GLfloat focalY,
+                                            GLfloat gainX,
+                                            GLfloat gainY,
+                                            GLfloat foveaArea)
+{
+    Texture *texture = context->getTexture(texturePacked);
+
+    // INVALID_VALUE is generated by TextureFoveationParametersQCOM if 'texture' is not a valid
+    // texture object.
+    if (texture == nullptr)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kInvalidTextureName);
+        return false;
+    }
+
+    // INVALID_OPERATION is generated by TextureFoveationParametersQCOM if 'texture' has not been
+    // set as foveated. i.e. 'texture's parameter TEXTURE_FOVEATED_FEATURE_BITS_QCOM does not
+    // contain FOVEATION_ENABLE_BIT_QCOM.
+    if (!texture->isFoveationEnabled())
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kTextureFoveationNotEnabled);
+        return false;
+    }
+
+    // INVALID_VALUE is generated by TextureFoveationParametersQCOM if 'focalPoint' is larger than
+    // TEXTURE_FOVEATED_NUM_FOCAL_POINTS_QUERY_QCOM minus one.
+    if (focalPoint > texture->getNumFocalPoints() - 1)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_VALUE, kFocalPointsExceedMaxFocalPoints);
+        return false;
+    }
+
+    return true;
 }
 }  // namespace gl

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2022-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,12 +28,26 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #include "JSWebExtensionAPINamespace.h"
+#include "WebExtensionAPIAction.h"
+#include "WebExtensionAPIAlarms.h"
+#include "WebExtensionAPICommands.h"
+#include "WebExtensionAPICookies.h"
+#include "WebExtensionAPIDeclarativeNetRequest.h"
+#include "WebExtensionAPIDevTools.h"
 #include "WebExtensionAPIExtension.h"
+#include "WebExtensionAPILocalization.h"
+#include "WebExtensionAPIMenus.h"
+#include "WebExtensionAPINotifications.h"
 #include "WebExtensionAPIObject.h"
 #include "WebExtensionAPIPermissions.h"
 #include "WebExtensionAPIRuntime.h"
+#include "WebExtensionAPIScripting.h"
+#include "WebExtensionAPIStorage.h"
+#include "WebExtensionAPITabs.h"
 #include "WebExtensionAPITest.h"
 #include "WebExtensionAPIWebNavigation.h"
+#include "WebExtensionAPIWebRequest.h"
+#include "WebExtensionAPIWindows.h"
 
 namespace WebKit {
 
@@ -45,21 +59,56 @@ class WebExtensionAPINamespace : public WebExtensionAPIObject, public JSWebExten
 
 public:
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(String propertyName, WebPage*);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
 
+    WebExtensionAPIAction& action();
+    WebExtensionAPIAlarms& alarms();
+    WebExtensionAPIAction& browserAction() { return action(); }
+    WebExtensionAPICommands& commands();
+    WebExtensionAPICookies& cookies();
+    WebExtensionAPIMenus& contextMenus() { return menus(); }
+    WebExtensionAPIDeclarativeNetRequest& declarativeNetRequest();
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    WebExtensionAPIDevTools& devtools();
+#endif
     WebExtensionAPIExtension& extension();
+    WebExtensionAPILocalization& i18n();
+    WebExtensionAPIMenus& menus();
+    WebExtensionAPINotifications& notifications();
+    WebExtensionAPIAction& pageAction() { return action(); }
     WebExtensionAPIPermissions& permissions();
     WebExtensionAPIRuntime& runtime() final;
+    WebExtensionAPIScripting& scripting();
+    WebExtensionAPIStorage& storage();
+    WebExtensionAPITabs& tabs();
     WebExtensionAPITest& test();
+    WebExtensionAPIWindows& windows();
     WebExtensionAPIWebNavigation& webNavigation();
+    WebExtensionAPIWebRequest& webRequest();
 #endif
 
 private:
+    RefPtr<WebExtensionAPIAction> m_action;
+    RefPtr<WebExtensionAPIAlarms> m_alarms;
+    RefPtr<WebExtensionAPICommands> m_commands;
+    RefPtr<WebExtensionAPICookies> m_cookies;
+    RefPtr<WebExtensionAPIDeclarativeNetRequest> m_declarativeNetRequest;
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    RefPtr<WebExtensionAPIDevTools> m_devtools;
+#endif
     RefPtr<WebExtensionAPIExtension> m_extension;
+    RefPtr<WebExtensionAPILocalization> m_i18n;
+    RefPtr<WebExtensionAPIMenus> m_menus;
+    RefPtr<WebExtensionAPINotifications> m_notifications;
     RefPtr<WebExtensionAPIPermissions> m_permissions;
     RefPtr<WebExtensionAPIRuntime> m_runtime;
+    RefPtr<WebExtensionAPIScripting> m_scripting;
+    RefPtr<WebExtensionAPIStorage> m_storage;
+    RefPtr<WebExtensionAPITabs> m_tabs;
     RefPtr<WebExtensionAPITest> m_test;
+    RefPtr<WebExtensionAPIWindows> m_windows;
     RefPtr<WebExtensionAPIWebNavigation> m_webNavigation;
+    RefPtr<WebExtensionAPIWebRequest> m_webRequest;
 };
 
 } // namespace WebKit

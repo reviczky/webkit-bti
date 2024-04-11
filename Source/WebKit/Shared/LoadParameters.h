@@ -46,18 +46,12 @@ class Encoder;
 }
 
 namespace WebCore {
-typedef int SandboxFlags;
+using SandboxFlags = int;
 }
 
 namespace WebKit {
 
 struct LoadParameters {
-    void encode(IPC::Encoder&) const;
-    static WARN_UNUSED_RETURN bool decode(IPC::Decoder&, LoadParameters&);
-
-    void platformEncode(IPC::Encoder&) const;
-    static WARN_UNUSED_RETURN bool platformDecode(IPC::Decoder&, LoadParameters&);
-
 #if ENABLE(PUBLIC_SUFFIX_LIST)
     String topPrivatelyControlledDomain;
     String host;

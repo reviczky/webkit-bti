@@ -33,6 +33,7 @@
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(MAC)
@@ -63,7 +64,7 @@ class WebView;
 class WebInspectorUIExtensionControllerProxy;
 #endif
 
-class RemoteWebInspectorUIProxyClient {
+class RemoteWebInspectorUIProxyClient : public CanMakeWeakPtr<RemoteWebInspectorUIProxyClient>, public CanMakeCheckedPtr {
 public:
     virtual ~RemoteWebInspectorUIProxyClient() { }
     virtual void sendMessageToBackend(const String& message) = 0;
@@ -124,6 +125,7 @@ public:
 
 private:
     RemoteWebInspectorUIProxy();
+    RefPtr<WebPageProxy> protectedInspectorPage();
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -164,8 +166,8 @@ private:
     void platformRevealFileExternally(const String& path);
     void platformShowCertificate(const WebCore::CertificateInfo&);
 
-    RemoteWebInspectorUIProxyClient* m_client { nullptr };
-    WebPageProxy* m_inspectorPage { nullptr };
+    WeakPtr<RemoteWebInspectorUIProxyClient> m_client;
+    WeakPtr<WebPageProxy> m_inspectorPage;
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
     RefPtr<WebInspectorUIExtensionControllerProxy> m_extensionController;

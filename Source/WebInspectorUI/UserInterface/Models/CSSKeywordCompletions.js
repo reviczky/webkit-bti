@@ -423,7 +423,7 @@ WI.CSSKeywordCompletions._colors = [
     "royalblue", "saddlebrown", "salmon", "sandybrown", "seagreen", "seashell", "sienna", "skyblue", "slateblue",
     "slategray", "slategrey", "snow", "springgreen", "steelblue", "tan", "thistle", "tomato", "turquoise", "violet",
     "wheat", "whitesmoke", "yellowgreen", "rgb()", "rgba()", "hsl()", "hsla()", "color()", "hwb()", "lch()", "lab()",
-    "color-mix()", "color-contrast()",
+    "color-mix()", "color-contrast()", "light-dark()",
 ];
 
 WI.CSSKeywordCompletions._colorAwareProperties = new Set([
@@ -836,6 +836,9 @@ WI.CSSKeywordCompletions._propertyKeywordMap = {
     ],
     "animation-play-state": [
         "paused", "running"
+    ],
+    "animation-timeline": [
+        "auto", "none", "scroll()", "view()"
     ],
     "animation-timing-function": [
         "ease", "linear", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end", "steps()", "cubic-bezier()", "linear()", "spring()"

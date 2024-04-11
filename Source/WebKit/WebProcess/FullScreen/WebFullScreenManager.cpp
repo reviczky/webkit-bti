@@ -22,6 +22,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include "config.h"
 #include "WebFullScreenManager.h"
 
@@ -51,7 +52,7 @@
 
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
 #include "PlaybackSessionManager.h"
-#include "VideoFullscreenManager.h"
+#include "VideoPresentationManager.h"
 #endif
 
 namespace WebKit {
@@ -117,13 +118,18 @@ void WebFullScreenManager::videoControlsManagerDidChange()
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     ALWAYS_LOG(LOGIDENTIFIER);
 
-    auto* currentPlaybackControlsElement = m_page->playbackSessionManager().currentPlaybackControlsElement();
-    if (!m_element || !is<WebCore::HTMLVideoElement>(currentPlaybackControlsElement)) {
+    if (!m_element) {
         setPIPStandbyElement(nullptr);
         return;
     }
 
-    setPIPStandbyElement(downcast<WebCore::HTMLVideoElement>(currentPlaybackControlsElement));
+    RefPtr currentPlaybackControlsElement = dynamicDowncast<WebCore::HTMLVideoElement>(m_page->playbackSessionManager().currentPlaybackControlsElement());
+    if (!currentPlaybackControlsElement) {
+        setPIPStandbyElement(nullptr);
+        return;
+    }
+
+    setPIPStandbyElement(currentPlaybackControlsElement.get());
 #endif
 }
 
@@ -194,7 +200,7 @@ void WebFullScreenManager::clearElement()
     m_element = nullptr;
 }
 
-void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element)
+void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element, WebCore::HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
     ASSERT(element);
     if (!element)
@@ -208,7 +214,7 @@ void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element)
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     isVideoElement = is<HTMLVideoElement>(element);
 
-    if (m_page->videoFullscreenManager().videoElementInPictureInPicture() && m_element->document().quirks().blocksEnteringStandardFullscreenFromPictureInPictureQuirk())
+    if (m_page->videoPresentationManager().videoElementInPictureInPicture() && m_element->document().quirks().blocksEnteringStandardFullscreenFromPictureInPictureQuirk())
         return;
 
     if (auto* currentPlaybackControlsElement = m_page->playbackSessionManager().currentPlaybackControlsElement())
@@ -223,7 +229,13 @@ void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element)
     if (m_mainVideoElement)
         videoDimensions = FloatSize(m_mainVideoElement->videoWidth(), m_mainVideoElement->videoHeight());
 #endif
-    m_page->injectedBundleFullScreenClient().enterFullScreenForElement(m_page.ptr(), element, m_element->document().quirks().blocksReturnToFullscreenFromPictureInPictureQuirk(), isVideoElement, videoDimensions);
+    m_page->injectedBundleFullScreenClient().enterFullScreenForElement(m_page.ptr(), element, m_element->document().quirks().blocksReturnToFullscreenFromPictureInPictureQuirk(), isVideoElement, videoDimensions, mode);
+
+    if (mode == WebCore::HTMLMediaElementEnums::VideoFullscreenModeInWindow) {
+        willEnterFullScreen(mode);
+        didEnterFullScreen();
+        m_inWindowFullScreenMode = true;
+    }
 }
 
 void WebFullScreenManager::exitFullScreenForElement(WebCore::Element* element)
@@ -233,13 +245,19 @@ void WebFullScreenManager::exitFullScreenForElement(WebCore::Element* element)
     else
         ALWAYS_LOG(LOGIDENTIFIER, "null");
 
-    m_page->injectedBundleFullScreenClient().exitFullScreenForElement(m_page.ptr(), element);
+    m_page->injectedBundleFullScreenClient().exitFullScreenForElement(m_page.ptr(), element, m_inWindowFullScreenMode);
+
+    if (m_inWindowFullScreenMode) {
+        willExitFullScreen();
+        didExitFullScreen();
+        m_inWindowFullScreenMode = false;
+    }
 #if ENABLE(VIDEO)
     setMainVideoElement(nullptr);
 #endif
 }
 
-void WebFullScreenManager::willEnterFullScreen()
+void WebFullScreenManager::willEnterFullScreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
     ASSERT(m_element);
     if (!m_element)
@@ -247,7 +265,7 @@ void WebFullScreenManager::willEnterFullScreen()
 
     ALWAYS_LOG(LOGIDENTIFIER, "<", m_element->tagName(), " id=\"", m_element->getIdAttribute(), "\">");
 
-    if (!m_element->document().fullscreenManager().willEnterFullscreen(*m_element)) {
+    if (!m_element->document().fullscreenManager().willEnterFullscreen(*m_element, mode)) {
         close();
         return;
     }
@@ -306,7 +324,7 @@ void WebFullScreenManager::updateMainVideoElement()
             if (!rendererAndBounds)
                 continue;
 
-            auto [renderer, bounds] = *rendererAndBounds;
+            auto& [renderer, bounds] = *rendererAndBounds;
             if (!renderer || bounds.isEmpty())
                 continue;
 
@@ -343,6 +361,19 @@ void WebFullScreenManager::willExitFullScreen()
     m_page->injectedBundleFullScreenClient().beganExitFullScreen(m_page.ptr(), m_finalFrame, m_initialFrame);
 }
 
+static Vector<Ref<Element>> collectFullscreenElementsFromElement(Element* element)
+{
+    Vector<Ref<Element>> fullscreenElements;
+
+    while (element && element->document().fullscreenManager().fullscreenElement() == element) {
+        fullscreenElements.append(*element);
+        auto parentDocument = element->document().parentDocument();
+        element = parentDocument ? parentDocument->fullscreenManager().fullscreenElement() : nullptr;
+    }
+
+    return fullscreenElements;
+}
+
 void WebFullScreenManager::didExitFullScreen()
 {
     if (!m_element)
@@ -352,7 +383,17 @@ void WebFullScreenManager::didExitFullScreen()
 
     setFullscreenInsets(WebCore::FloatBoxExtent());
     setFullscreenAutoHideDuration(0_s);
+
+    auto fullscreenElements = collectFullscreenElementsFromElement(m_element.get());
+
     m_element->document().fullscreenManager().didExitFullscreen();
+
+    // Ensure the element (and all its parent fullscreen elements) that just exited fullscreen are still in view:
+    while (!fullscreenElements.isEmpty()) {
+        auto element = fullscreenElements.takeLast();
+        element->scrollIntoViewIfNotVisible(true);
+    }
+
     clearElement();
 }
 
@@ -377,7 +418,7 @@ void WebFullScreenManager::requestRestoreFullScreen()
     }
 
     ALWAYS_LOG(LOGIDENTIFIER, "<", element->tagName(), " id=\"", element->getIdAttribute(), "\">");
-    WebCore::UserGestureIndicator gestureIndicator(WebCore::ProcessingUserGesture, &element->document());
+    WebCore::UserGestureIndicator gestureIndicator(WebCore::IsProcessingUserGesture::Yes, &element->document());
     element->document().fullscreenManager().requestFullscreenForElement(*element, nullptr, WebCore::FullscreenManager::ExemptIFrameAllowFullscreenRequirement);
 }
 
@@ -412,8 +453,7 @@ void WebFullScreenManager::close()
 
 void WebFullScreenManager::saveScrollPosition()
 {
-    if (auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->corePage()->mainFrame()))
-        m_scrollPosition = localMainFrame->view()->scrollPosition();
+    m_scrollPosition = m_page->corePage()->mainFrame().virtualView()->scrollPosition();
 }
 
 void WebFullScreenManager::restoreScrollPosition()
@@ -433,11 +473,6 @@ void WebFullScreenManager::setFullscreenInsets(const WebCore::FloatBoxExtent& in
 void WebFullScreenManager::setFullscreenAutoHideDuration(Seconds duration)
 {
     m_page->corePage()->setFullscreenAutoHideDuration(duration);
-}
-
-void WebFullScreenManager::setFullscreenControlsHidden(bool hidden)
-{
-    m_page->corePage()->setFullscreenControlsHidden(hidden);
 }
 
 void WebFullScreenManager::handleEvent(WebCore::ScriptExecutionContext& context, WebCore::Event& event)

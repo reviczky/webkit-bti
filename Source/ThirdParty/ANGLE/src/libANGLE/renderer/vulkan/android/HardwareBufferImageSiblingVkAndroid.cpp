@@ -239,23 +239,38 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
     angle::android::GetANativeWindowBufferProperties(windowBuffer, &mSize.width, &mSize.height,
                                                      &mSize.depth, &pixelFormat, &mUsage);
 
-    // BUG: b/223456677 Android sometimes uses an uninitialized value for layerCount of the
-    // ANativeWindowBuffer. Force depth <= 256 here. If we see a bigger value,
-    // force to 1.
-    mSize.depth = mSize.depth > 256 ? 1 : mSize.depth;
-
     struct AHardwareBuffer *hardwareBuffer =
         angle::android::ANativeWindowBufferToAHardwareBuffer(windowBuffer);
 
     functions.acquire(hardwareBuffer);
+
+    VkAndroidHardwareBufferPropertiesANDROID bufferProperties = {};
+    bufferProperties.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID;
+    bufferProperties.pNext = nullptr;
+
     VkAndroidHardwareBufferFormatPropertiesANDROID bufferFormatProperties;
     bufferFormatProperties.sType =
         VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID;
     bufferFormatProperties.pNext = nullptr;
+    vk::AddToPNextChain(&bufferProperties, &bufferFormatProperties);
 
-    VkAndroidHardwareBufferPropertiesANDROID bufferProperties = {};
-    bufferProperties.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID;
-    bufferProperties.pNext = &bufferFormatProperties;
+    VkAndroidHardwareBufferFormatResolvePropertiesANDROID bufferFormatResolveProperties = {};
+    if (renderer->getFeatures().supportsExternalFormatResolve.enabled)
+    {
+        bufferFormatResolveProperties.sType =
+            VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_RESOLVE_PROPERTIES_ANDROID;
+        bufferFormatResolveProperties.pNext = nullptr;
+        vk::AddToPNextChain(&bufferFormatProperties, &bufferFormatResolveProperties);
+    }
+
+    VkAndroidHardwareBufferFormatProperties2ANDROID bufferFormatProperties2 = {};
+    if (renderer->getFeatures().supportsFormatFeatureFlags2.enabled)
+    {
+        bufferFormatProperties2.sType =
+            VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_2_ANDROID;
+        bufferFormatProperties2.pNext = nullptr;
+        vk::AddToPNextChain(&bufferFormatProperties, &bufferFormatProperties2);
+    }
 
     VkDevice device = renderer->getDevice();
     ANGLE_VK_TRY(displayVk, vkGetAndroidHardwareBufferPropertiesANDROID(device, hardwareBuffer,
@@ -288,14 +303,13 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
             &renderer->getFormat(angle::android::NativePixelFormatToGLInternalFormat(pixelFormat));
     }
 
-    const vk::Format &externalVkFormat = renderer->getFormat(angle::FormatID::NONE);
-    const angle::Format &imageFormat   = vkFormat->getActualRenderableImageFormat();
-    bool isDepthOrStencilFormat        = imageFormat.hasDepthOrStencilBits();
-    mFormat                            = gl::Format(vkFormat->getIntendedGLFormat());
+    const angle::Format &imageFormat = vkFormat->getActualRenderableImageFormat();
+    bool isDepthOrStencilFormat      = imageFormat.hasDepthOrStencilBits();
+    mFormat                          = gl::Format(vkFormat->getIntendedGLFormat());
 
-    // TODO (b/223456677): VK_EXT_ycbcr_attachment Extension query
-    bool externalRenderTargetSupported = false;
-
+    bool externalRenderTargetSupported =
+        renderer->getFeatures().supportsExternalFormatResolve.enabled &&
+        bufferFormatResolveProperties.colorAttachmentFormat != VK_FORMAT_UNDEFINED;
     // Can assume based on us getting here already. The supportsYUVSamplerConversion
     // check below should serve as a backup otherwise.
     bool externalTexturingSupported = true;
@@ -316,10 +330,12 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
         // VkImageCreateInfo struct: If the pNext chain includes a VkExternalFormatANDROID structure
         // whose externalFormat member is not 0, usage must not include any usages except
         // VK_IMAGE_USAGE_SAMPLED_BIT
-        if (!externalRenderTargetSupported)
+        if (externalFormat.externalFormat != 0 && !externalRenderTargetSupported)
         {
             // Clear all other bits except sampled
-            usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+            usage = (renderer->getFeatures().forceSampleUsageForImageWithExternalFormat.enabled)
+                        ? VK_IMAGE_USAGE_SAMPLED_BIT
+                        : (usage & VK_IMAGE_USAGE_SAMPLED_BIT);
         }
 
         // If the pNext chain includes a VkExternalFormatANDROID structure whose externalFormat
@@ -352,21 +368,65 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
 
     mImage->setTilingMode(imageTilingMode);
     VkImageCreateFlags imageCreateFlags = AhbDescUsageToVkImageCreateFlags(ahbDescription);
+    vk::YcbcrConversionDesc conversionDesc{};
 
-    const vk::Format &format          = isExternal ? externalVkFormat : *vkFormat;
+    if (isExternal)
+    {
+        if (externalRenderTargetSupported)
+        {
+            angle::FormatID externalFormatID =
+                renderer->mExternalFormatTable.getOrAllocExternalFormatID(
+                    bufferFormatProperties.externalFormat,
+                    bufferFormatResolveProperties.colorAttachmentFormat,
+                    bufferFormatProperties.formatFeatures);
+
+            vkFormat = &renderer->getFormat(externalFormatID);
+        }
+        else
+        {
+            // If not renderable, don't burn a slot on it.
+            vkFormat = &renderer->getFormat(angle::FormatID::NONE);
+        }
+
+        // Note from Vulkan spec: Since GL_OES_EGL_image_external does not require the same sampling
+        // and conversion calculations as Vulkan does, achieving identical results between APIs may
+        // not be possible on some implementations.
+        ANGLE_VK_CHECK(displayVk, renderer->getFeatures().supportsYUVSamplerConversion.enabled,
+                       VK_ERROR_FEATURE_NOT_PRESENT);
+        ASSERT(externalFormat.pNext == nullptr);
+
+        // This may not actually mean the format is YUV. But the rest of ANGLE makes this
+        // assumption and needs this member variable.
+        mYUV = true;
+
+        vk::YcbcrLinearFilterSupport linearFilterSupported =
+            (bufferFormatProperties.formatFeatures &
+             VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT) != 0
+                ? vk::YcbcrLinearFilterSupport::Supported
+                : vk::YcbcrLinearFilterSupport::Unsupported;
+
+        conversionDesc.update(
+            renderer, bufferFormatProperties.externalFormat,
+            bufferFormatProperties.suggestedYcbcrModel, bufferFormatProperties.suggestedYcbcrRange,
+            bufferFormatProperties.suggestedXChromaOffset,
+            bufferFormatProperties.suggestedYChromaOffset, vk::kDefaultYCbCrChromaFilter,
+            bufferFormatProperties.samplerYcbcrConversionComponents, angle::FormatID::NONE,
+            linearFilterSupported);
+    }
+
     const gl::TextureType textureType = AhbDescUsageToTextureType(ahbDescription, layerCount);
 
     VkImageFormatListCreateInfoKHR imageFormatListInfoStorage;
     vk::ImageHelper::ImageListFormats imageListFormatsStorage;
     const void *imageCreateInfoPNext = vk::ImageHelper::DeriveCreateInfoPNext(
-        displayVk, format.getActualRenderableImageFormatID(), &externalMemoryImageCreateInfo,
+        displayVk, vkFormat->getActualRenderableImageFormatID(), &externalMemoryImageCreateInfo,
         &imageFormatListInfoStorage, &imageListFormatsStorage, &imageCreateFlags);
 
-    ANGLE_TRY(mImage->initExternal(displayVk, textureType, vkExtents, format.getIntendedFormatID(),
-                                   format.getActualRenderableImageFormatID(), 1, usage,
-                                   imageCreateFlags, vk::ImageLayout::ExternalPreInitialized,
-                                   imageCreateInfoPNext, gl::LevelIndex(0), mLevelCount, layerCount,
-                                   robustInitEnabled, hasProtectedContent()));
+    ANGLE_TRY(mImage->initExternal(
+        displayVk, textureType, vkExtents, vkFormat->getIntendedFormatID(),
+        vkFormat->getActualRenderableImageFormatID(), 1, usage, imageCreateFlags,
+        vk::ImageLayout::ExternalPreInitialized, imageCreateInfoPNext, gl::LevelIndex(0),
+        mLevelCount, layerCount, robustInitEnabled, hasProtectedContent(), conversionDesc));
 
     VkImportAndroidHardwareBufferInfoANDROID importHardwareBufferInfo = {};
     importHardwareBufferInfo.sType  = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
@@ -387,27 +447,6 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
     const VkMemoryPropertyFlags flags =
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
         (hasProtectedContent() ? VK_MEMORY_PROPERTY_PROTECTED_BIT : 0);
-
-    if (isExternal)
-    {
-        // Note from Vulkan spec: Since GL_OES_EGL_image_external does not require the same sampling
-        // and conversion calculations as Vulkan does, achieving identical results between APIs may
-        // not be possible on some implementations.
-        ANGLE_VK_CHECK(displayVk, renderer->getFeatures().supportsYUVSamplerConversion.enabled,
-                       VK_ERROR_FEATURE_NOT_PRESENT);
-        ASSERT(externalFormat.pNext == nullptr);
-
-        // Update the SamplerYcbcrConversionCache key
-        mImage->updateYcbcrConversionDesc(
-            renderer, bufferFormatProperties.externalFormat,
-            bufferFormatProperties.suggestedYcbcrModel, bufferFormatProperties.suggestedYcbcrRange,
-            bufferFormatProperties.suggestedXChromaOffset,
-            bufferFormatProperties.suggestedYChromaOffset, vk::kDefaultYCbCrChromaFilter,
-            bufferFormatProperties.samplerYcbcrConversionComponents, angle::FormatID::NONE);
-        // This may not actually mean the format is YUV. But the rest of ANGLE makes this
-        // assumption and needs this member variable.
-        mYUV = true;
-    }
 
     ANGLE_TRY(mImage->initExternalMemory(displayVk, renderer->getMemoryProperties(),
                                          externalMemoryRequirements, 1, &dedicatedAllocInfoPtr,

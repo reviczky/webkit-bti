@@ -13,27 +13,21 @@ list(APPEND WPEToolingBackends_SOURCES
     ${WPEToolingBackends_DERIVED_SOURCES_DIR}/xdg-shell-protocol.c
     ${WPEToolingBackends_DERIVED_SOURCES_DIR}/xdg-shell-unstable-v6-protocol.c
 
-    atk/ViewBackendAtk.cpp
-    atk/WebKitAccessibleApplication.cpp
-
     fdo/HeadlessViewBackendFdo.cpp
     fdo/WindowViewBackend.cpp
 )
 
 list(APPEND WPEToolingBackends_PRIVATE_INCLUDE_DIRECTORIES
-    ${TOOLS_DIR}/wpe/backends/atk
     ${TOOLS_DIR}/wpe/backends/fdo
 )
 
 list(APPEND WPEToolingBackends_SYSTEM_INCLUDE_DIRECTORIES
-    ${ATK_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${LIBEPOXY_INCLUDE_DIRS}
     ${WPEBACKEND_FDO_INCLUDE_DIRS}
 )
 
 list(APPEND WPEToolingBackends_LIBRARIES
-    ${ATK_LIBRARIES}
     ${GLIB_GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${LIBEPOXY_LIBRARIES}
@@ -43,6 +37,29 @@ list(APPEND WPEToolingBackends_LIBRARIES
 )
 
 list(APPEND WPEToolingBackends_DEFINITIONS USE_GLIB=1)
+
+if (USE_ATK)
+    list(APPEND WPEToolingBackends_SOURCES
+        atk/ViewBackendAtk.cpp
+        atk/WebKitAccessibleApplication.cpp
+    )
+
+    list(APPEND WPEToolingBackends_PRIVATE_INCLUDE_DIRECTORIES
+        ${TOOLS_DIR}/wpe/backends/atk
+    )
+
+    list(APPEND WPEToolingBackends_SYSTEM_INCLUDE_DIRECTORIES
+        ${ATK_INCLUDE_DIRS}
+    )
+
+    list(APPEND WPEToolingBackends_LIBRARIES
+        ATK::Bridge
+        ${ATK_LIBRARIES}
+    )
+
+    list(APPEND WPEToolingBackends_DEFINITIONS USE_ATK=1)
+endif ()
+
 list(APPEND WPEToolingBackends_PRIVATE_DEFINITIONS ${LIBEPOXY_DEFINITIONS})
 
 add_custom_command(
@@ -74,10 +91,6 @@ add_custom_command(
 list(APPEND WPEToolingBackends_DEFINITIONS WPE_BACKEND_FDO)
 list(APPEND WPEToolingBackends_PRIVATE_DEFINITIONS WPE_BACKEND="libWPEBackend-fdo-1.0.so")
 
-if (ENABLE_ACCESSIBILITY)
-    list(APPEND WPEToolingBackends_DEFINITIONS ENABLE_ACCESSIBILITY=1)
-    list(APPEND WPEToolingBackends_PRIVATE_DEFINITIONS
-        GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40
-    )
-    list(APPEND WPEToolingBackends_LIBRARIES ATK::Bridge)
-endif ()
+list(APPEND WPEToolingBackends_PRIVATE_DEFINITIONS
+    GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40
+)

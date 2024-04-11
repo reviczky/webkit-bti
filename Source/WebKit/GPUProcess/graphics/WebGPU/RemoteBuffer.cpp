@@ -34,11 +34,12 @@
 
 namespace WebKit {
 
-RemoteBuffer::RemoteBuffer(WebCore::WebGPU::Buffer& buffer, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+RemoteBuffer::RemoteBuffer(WebCore::WebGPU::Buffer& buffer, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, bool mappedAtCreation, WebGPUIdentifier identifier)
     : m_backing(buffer)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTFMove(streamConnection))
     , m_identifier(identifier)
+    , m_isMapped(mappedAtCreation)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteBuffer::messageReceiverName(), m_identifier.toUInt64());
 }
@@ -55,13 +56,13 @@ void RemoteBuffer::mapAsync(WebCore::WebGPU::MapModeFlags mapModeFlags, WebCore:
     m_isMapped = true;
     m_mapModeFlags = mapModeFlags;
 
-    m_backing->mapAsync(mapModeFlags, offset, size, [offset, size, protectedThis = Ref<RemoteBuffer>(*this), callback = WTFMove(callback)] (bool success) mutable {
+    m_backing->mapAsync(mapModeFlags, offset, size, [protectedThis = Ref<RemoteBuffer>(*this), callback = WTFMove(callback)] (bool success) mutable {
         if (!success) {
             callback(std::nullopt);
             return;
         }
 
-        auto mappedRange = protectedThis->m_backing->getMappedRange(offset, size);
+        auto mappedRange = protectedThis->m_backing->getMappedRange(0, std::nullopt);
         protectedThis->m_mappedRange = mappedRange;
         callback(Vector<uint8_t>(static_cast<const uint8_t*>(mappedRange.source), mappedRange.byteLength));
     });
@@ -79,14 +80,11 @@ void RemoteBuffer::getMappedRange(WebCore::WebGPU::Size64 offset, std::optional<
 
 void RemoteBuffer::unmap(Vector<uint8_t>&& data)
 {
-    if (!m_mappedRange || m_mappedRange->byteLength < data.size())
-        return;
-    ASSERT(m_isMapped);
-
-    if (m_mapModeFlags.contains(WebCore::WebGPU::MapMode::Write))
+    if (m_isMapped && m_mappedRange && m_mappedRange->byteLength >= data.size() && m_mapModeFlags.contains(WebCore::WebGPU::MapMode::Write))
         memcpy(m_mappedRange->source, data.data(), data.size());
 
-    m_backing->unmap();
+    if (m_isMapped)
+        m_backing->unmap();
     m_isMapped = false;
     m_mappedRange = std::nullopt;
     m_mapModeFlags = { };
@@ -94,6 +92,7 @@ void RemoteBuffer::unmap(Vector<uint8_t>&& data)
 
 void RemoteBuffer::destroy()
 {
+    unmap(Vector<uint8_t>());
     m_backing->destroy();
 }
 

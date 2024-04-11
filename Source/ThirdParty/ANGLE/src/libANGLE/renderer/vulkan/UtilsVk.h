@@ -489,6 +489,7 @@ class UtilsVk : angle::NonCopyable
         ImageClear,
         ImageCopy,
         BlitResolve,
+        Blit3DSrc,
         ExportStencil,
         OverlayDraw,
         // Note: unresolve is special as it has a different layout per attachment count.  Depth and
@@ -646,12 +647,12 @@ class UtilsVk : angle::NonCopyable
         VkDescriptorSet *descriptorSetOut);
 
     angle::PackedEnumMap<Function, vk::DescriptorSetLayoutPointerArray> mDescriptorSetLayouts;
-    angle::PackedEnumMap<Function, vk::BindingPointer<vk::PipelineLayout>> mPipelineLayouts;
+    angle::PackedEnumMap<Function, vk::AtomicBindingPointer<vk::PipelineLayout>> mPipelineLayouts;
     angle::PackedEnumMap<Function, vk::DynamicDescriptorPool> mDescriptorPools;
 
     std::unordered_map<vk::SamplerDesc, vk::DescriptorSetLayoutPointerArray>
         mImageCopyWithSamplerDescriptorSetLayouts;
-    std::unordered_map<vk::SamplerDesc, vk::BindingPointer<vk::PipelineLayout>>
+    std::unordered_map<vk::SamplerDesc, vk::AtomicBindingPointer<vk::PipelineLayout>>
         mImageCopyWithSamplerPipelineLayouts;
     std::unordered_map<vk::SamplerDesc, vk::DynamicDescriptorPool>
         mImageCopyWithSamplerDescriptorPools;
@@ -672,6 +673,7 @@ class UtilsVk : angle::NonCopyable
     ComputeShaderProgramAndPipelines
         mCopyImageToBuffer[vk::InternalShader::CopyImageToBuffer_comp::kArrayLen];
     GraphicsShaderProgramAndPipelines mBlitResolve[vk::InternalShader::BlitResolve_frag::kArrayLen];
+    GraphicsShaderProgramAndPipelines mBlit3DSrc[vk::InternalShader::Blit3DSrc_frag::kArrayLen];
     ComputeShaderProgramAndPipelines
         mBlitResolveStencilNoExport[vk::InternalShader::BlitResolveStencilNoExport_comp::kArrayLen];
     GraphicsShaderProgramAndPipelines mExportStencil;

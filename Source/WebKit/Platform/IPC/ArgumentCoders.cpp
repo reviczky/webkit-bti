@@ -37,45 +37,6 @@
 namespace IPC {
 
 template<typename Encoder>
-void ArgumentCoder<CString>::encode(Encoder& encoder, const CString& string)
-{
-    // Special case the null string.
-    if (string.isNull()) {
-        encoder << std::numeric_limits<size_t>::max();
-        return;
-    }
-
-    encoder << static_cast<size_t>(string.length());
-    encoder.encodeSpan(string.bytes());
-}
-template void ArgumentCoder<CString>::encode<Encoder>(Encoder&, const CString&);
-
-template<typename Decoder>
-std::optional<CString> ArgumentCoder<CString>::decode(Decoder& decoder)
-{
-    auto length = decoder.template decode<size_t>();
-    if (!length)
-        return std::nullopt;
-
-    if (*length == std::numeric_limits<size_t>::max()) {
-        // This is the null string.
-        return CString();
-    }
-
-    auto data = decoder.template decodeSpan<uint8_t>(*length);
-    if (!data.data())
-        return std::nullopt;
-
-    char* buffer;
-    CString string = CString::newUninitialized(*length, buffer);
-    static_assert(sizeof(typename decltype(data)::element_type) == 1);
-    memcpy(buffer, data.data(), data.size_bytes());
-    return string;
-}
-template
-std::optional<CString> ArgumentCoder<CString>::decode<Decoder>(Decoder&);
-
-template<typename Encoder>
 void ArgumentCoder<String>::encode(Encoder& encoder, const String& string)
 {
     // Special case the null string.
@@ -154,24 +115,5 @@ template
 void ArgumentCoder<StringView>::encode<Encoder>(Encoder&, StringView);
 template
 void ArgumentCoder<StringView>::encode<StreamConnectionEncoder>(StreamConnectionEncoder&, StringView);
-
-#if HAVE(AUDIT_TOKEN)
-
-void ArgumentCoder<audit_token_t>::encode(Encoder& encoder, const audit_token_t& auditToken)
-{
-    for (unsigned i = 0; i < std::size(auditToken.val); i++)
-        encoder << auditToken.val[i];
-}
-
-WARN_UNUSED_RETURN bool ArgumentCoder<audit_token_t>::decode(Decoder& decoder, audit_token_t& auditToken)
-{
-    for (unsigned i = 0; i < std::size(auditToken.val); i++) {
-        if (!decoder.decode(auditToken.val[i]))
-            return false;
-    }
-    return true;
-}
-
-#endif // HAVE(AUDIT_TOKEN)
 
 } // namespace IPC

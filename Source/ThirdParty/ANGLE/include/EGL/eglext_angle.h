@@ -93,6 +93,11 @@
 #define EGL_PLATFORM_ANGLE_TYPE_NULL_ANGLE 0x33AE
 #endif /* EGL_ANGLE_platform_angle_null */
 
+#ifndef EGL_ANGLE_platform_angle_webgpu
+#define EGL_ANGLE_platform_angle_webgpu 1
+#define EGL_PLATFORM_ANGLE_TYPE_WEBGPU_ANGLE 0x34DD
+#endif /* EGL_ANGLE_platform_angle_webgpu */
+
 #ifndef EGL_ANGLE_platform_angle_vulkan
 #define EGL_ANGLE_platform_angle_vulkan 1
 #define EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE 0x3450
@@ -377,7 +382,6 @@ EGLAPI EGLBoolean EGLAPIENTRY eglPrepareSwapBuffersANGLE(EGLDisplay dpy, EGLSurf
 #define EGL_ANGLE_external_context_and_surface 1
 #define EGL_EXTERNAL_CONTEXT_ANGLE 0x348E
 #define EGL_EXTERNAL_SURFACE_ANGLE 0x348F
-#define EGL_EXTERNAL_CONTEXT_SAVE_STATE_ANGLE 0x3490
 typedef void (EGLAPIENTRYP PFNEGLACQUIREEXTERNALCONTEXTANGLEPROC) (EGLDisplay dpy, EGLSurface readAndDraw);
 typedef void (EGLAPIENTRYP PFNEGLRELEASEEXTERNALCONTEXTANGLEPROC) (EGLDisplay dpy);
 #ifdef EGL_EGLEXT_PROTOTYPES

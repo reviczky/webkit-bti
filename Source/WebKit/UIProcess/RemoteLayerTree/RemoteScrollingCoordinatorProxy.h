@@ -31,6 +31,7 @@
 #include "RemoteScrollingCoordinator.h"
 #include "RemoteScrollingTree.h"
 #include "RemoteScrollingUIState.h"
+#include <WebCore/PlatformLayer.h>
 #include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/ScrollSnapOffsetsInfo.h>
 #include <WebCore/WheelEventTestMonitor.h>
@@ -49,6 +50,7 @@ namespace WebKit {
 
 class NativeWebWheelEvent;
 class RemoteLayerTreeHost;
+class RemoteLayerTreeNode;
 class RemoteScrollingCoordinatorTransaction;
 class RemoteScrollingTree;
 class WebPageProxy;
@@ -123,12 +125,18 @@ public:
     virtual void clearNodesWithUserScrollInProgress() { }
     virtual void hasNodeWithAnimatedScrollChanged(bool) { }
     virtual void setRootNodeIsInUserScroll(bool) { }
+    virtual void setRubberBandingInProgressForNode(WebCore::ScrollingNodeID, bool isRubberBanding) { }
 
     virtual void scrollingTreeNodeDidBeginScrollSnapping(WebCore::ScrollingNodeID) { }
     virtual void scrollingTreeNodeDidEndScrollSnapping(WebCore::ScrollingNodeID) { }
     
     virtual void willCommitLayerAndScrollingTrees() { }
     virtual void didCommitLayerAndScrollingTrees() { }
+
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    virtual void animationsWereAddedToNode(RemoteLayerTreeNode&) { }
+    virtual void animationsWereRemovedFromNode(RemoteLayerTreeNode&) { }
+#endif
 
     String scrollingTreeAsText() const;
 

@@ -232,14 +232,10 @@ void RemoteMediaPlayerProxy::pause()
     sendCachedState();
 }
 
-void RemoteMediaPlayerProxy::seek(const MediaTime& time)
+void RemoteMediaPlayerProxy::seekToTarget(const WebCore::SeekTarget& target)
 {
-    m_player->seek(time);
-}
-
-void RemoteMediaPlayerProxy::seekWithTolerance(const MediaTime& time, const MediaTime& negativeTolerance, const MediaTime& positiveTolerance)
-{
-    m_player->seekWithTolerance(time, negativeTolerance, positiveTolerance);
+    ALWAYS_LOG(LOGIDENTIFIER, target);
+    m_player->seekToTarget(target);
 }
 
 void RemoteMediaPlayerProxy::setVolume(double volume)
@@ -278,10 +274,10 @@ void RemoteMediaPlayerProxy::prepareForRendering()
     m_player->prepareForRendering();
 }
 
-void RemoteMediaPlayerProxy::setPageIsVisible(bool visible)
+void RemoteMediaPlayerProxy::setPageIsVisible(bool visible, String&& sceneIdentifier)
 {
     ALWAYS_LOG(LOGIDENTIFIER, visible);
-    m_player->setPageIsVisible(visible);
+    m_player->setPageIsVisible(visible, WTFMove(sceneIdentifier));
 }
 
 void RemoteMediaPlayerProxy::setShouldMaintainAspectRatio(bool maintainRatio)
@@ -329,6 +325,8 @@ void RemoteMediaPlayerProxy::setPresentationSize(const WebCore::IntSize& size)
 
 RefPtr<PlatformMediaResource> RemoteMediaPlayerProxy::requestResource(ResourceRequest&& request, PlatformMediaResourceLoader::LoadOptions options)
 {
+    ASSERT(isMainRunLoop());
+
     ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
     if (!m_manager || !m_manager->gpuConnectionToWebProcess())
         return nullptr;
@@ -437,6 +435,12 @@ void RemoteMediaPlayerProxy::mediaPlayerVolumeChanged()
 void RemoteMediaPlayerProxy::mediaPlayerMuteChanged()
 {
     m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::MuteChanged(m_player->muted()), m_id);
+}
+
+void RemoteMediaPlayerProxy::mediaPlayerSeeked(const MediaTime& time)
+{
+    ALWAYS_LOG(LOGIDENTIFIER, time);
+    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::Seeked(time), m_id);
 }
 
 void RemoteMediaPlayerProxy::mediaPlayerTimeChanged()
@@ -588,100 +592,96 @@ void RemoteMediaPlayerProxy::requestHostingContextID(LayerHostingContextIDCallba
 }
 #endif
 
-TrackPrivateRemoteIdentifier RemoteMediaPlayerProxy::addRemoteAudioTrackProxy(WebCore::AudioTrackPrivate& track)
+void RemoteMediaPlayerProxy::addRemoteAudioTrackProxy(WebCore::AudioTrackPrivate& track)
 {
+    ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
+    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
+        return;
+
 #if !RELEASE_LOG_DISABLED
     track.setLogger(mediaPlayerLogger(), mediaPlayerLogIdentifier());
 #endif
 
-    ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
-    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
-        return { };
-
-    for (auto& [localTrack, remoteTrack] : m_audioTracks) {
-        if (localTrack == track) {
-            auto identifier = remoteTrack->identifier();
-            m_audioTracks.set(track, *m_audioTracks.take(localTrack));
-            return identifier;
+    for (auto& audioTrack : m_audioTracks) {
+        if (audioTrack.get() == track)
+            return;
+        if (audioTrack->id() == track.id()) {
+            audioTrack = RemoteAudioTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id);
+            return;
         }
     }
 
-    auto identifier = TrackPrivateRemoteIdentifier::generate();
-    m_audioTracks.set(track, RemoteAudioTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), identifier, track, m_id));
-    return identifier;
+    m_audioTracks.append(RemoteAudioTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id));
 }
 
-void RemoteMediaPlayerProxy::audioTrackSetEnabled(const TrackPrivateRemoteIdentifier& identifier, bool enabled)
+void RemoteMediaPlayerProxy::audioTrackSetEnabled(TrackID trackId, bool enabled)
 {
-    for (auto& track : m_audioTracks.values()) {
-        if (track->identifier() == identifier) {
+    for (auto& track : m_audioTracks) {
+        if (track->id() == trackId) {
             track->setEnabled(enabled);
             return;
         }
     }
 }
 
-TrackPrivateRemoteIdentifier RemoteMediaPlayerProxy::addRemoteVideoTrackProxy(WebCore::VideoTrackPrivate& track)
+void RemoteMediaPlayerProxy::addRemoteVideoTrackProxy(WebCore::VideoTrackPrivate& track)
 {
+    ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
+    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
+        return;
+
 #if !RELEASE_LOG_DISABLED
     track.setLogger(mediaPlayerLogger(), mediaPlayerLogIdentifier());
 #endif
 
-    ASSERT(m_manager);
-    ASSERT(m_manager->gpuConnectionToWebProcess());
-    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
-        return { };
-
-    for (auto& [localTrack, remoteTrack] : m_videoTracks) {
-        if (localTrack == track) {
-            auto identifier = remoteTrack->identifier();
-            m_videoTracks.set(track, *m_videoTracks.take(localTrack));
-            return identifier;
+    for (auto& videoTrack : m_videoTracks) {
+        if (videoTrack.get() == track)
+            return;
+        if (videoTrack->id() == track.id()) {
+            videoTrack = RemoteVideoTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id);
+            return;
         }
     }
 
-    auto identifier = TrackPrivateRemoteIdentifier::generate();
-    m_videoTracks.set(track, RemoteVideoTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), identifier, track, m_id));
-    return identifier;
+    m_videoTracks.append(RemoteVideoTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id));
 }
 
-void RemoteMediaPlayerProxy::videoTrackSetSelected(const TrackPrivateRemoteIdentifier& identifier, bool selected)
+void RemoteMediaPlayerProxy::videoTrackSetSelected(TrackID trackId, bool selected)
 {
-    for (auto& track : m_videoTracks.values()) {
-        if (track->identifier() == identifier) {
+    for (auto& track : m_videoTracks) {
+        if (track->id() == trackId) {
             track->setSelected(selected);
             return;
         }
     }
 }
 
-TrackPrivateRemoteIdentifier RemoteMediaPlayerProxy::addRemoteTextTrackProxy(WebCore::InbandTextTrackPrivate& track)
+void RemoteMediaPlayerProxy::addRemoteTextTrackProxy(WebCore::InbandTextTrackPrivate& track)
 {
+    ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
+    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
+        return;
+
 #if !RELEASE_LOG_DISABLED
     track.setLogger(mediaPlayerLogger(), mediaPlayerLogIdentifier());
 #endif
 
-    ASSERT(m_manager && m_manager->gpuConnectionToWebProcess());
-    if (!m_manager || !m_manager->gpuConnectionToWebProcess())
-        return { };
-
-    for (auto& [localTrack, remoteTrack] : m_textTracks) {
-        if (localTrack == track) {
-            auto identifier = remoteTrack->identifier();
-            m_textTracks.set(track, *m_textTracks.take(localTrack));
-            return identifier;
+    for (auto& textTrack : m_textTracks) {
+        if (textTrack.get() == track)
+            return;
+        if (textTrack->id() == track.id()) {
+            textTrack = RemoteTextTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id);
+            return;
         }
     }
 
-    auto identifier = TrackPrivateRemoteIdentifier::generate();
-    m_textTracks.set(track, RemoteTextTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), identifier, track, m_id));
-    return identifier;
+    m_textTracks.append(RemoteTextTrackProxy::create(*m_manager->gpuConnectionToWebProcess(), track, m_id));
 }
 
-void RemoteMediaPlayerProxy::textTrackSetMode(const TrackPrivateRemoteIdentifier& identifier, WebCore::InbandTextTrackPrivate::Mode mode)
+void RemoteMediaPlayerProxy::textTrackSetMode(TrackID trackId, WebCore::InbandTextTrackPrivate::Mode mode)
 {
-    for (auto& track : m_textTracks.values()) {
-        if (track->identifier() == identifier) {
+    for (auto& track : m_textTracks) {
+        if (track->id() == trackId) {
             track->setMode(mode);
             return;
         }
@@ -695,13 +695,10 @@ void RemoteMediaPlayerProxy::mediaPlayerDidAddAudioTrack(WebCore::AudioTrackPriv
 
 void RemoteMediaPlayerProxy::mediaPlayerDidRemoveAudioTrack(WebCore::AudioTrackPrivate& track)
 {
-    ASSERT(m_audioTracks.contains(&track));
-    if (!m_audioTracks.contains(&track))
-        return;
-
-    auto audioTrack = m_audioTracks.get(&track);
-    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteAudioTrack(audioTrack->identifier()), m_id);
-    m_audioTracks.remove(&track);
+    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteAudioTrack(track.id()), m_id);
+    m_audioTracks.removeFirstMatching([&track] (auto& current) {
+        return track.id() == current->id();
+    });
 }
 
 void RemoteMediaPlayerProxy::mediaPlayerDidAddVideoTrack(WebCore::VideoTrackPrivate& track)
@@ -711,13 +708,10 @@ void RemoteMediaPlayerProxy::mediaPlayerDidAddVideoTrack(WebCore::VideoTrackPriv
 
 void RemoteMediaPlayerProxy::mediaPlayerDidRemoveVideoTrack(WebCore::VideoTrackPrivate& track)
 {
-    ASSERT(m_videoTracks.contains(&track));
-    if (!m_videoTracks.contains(&track))
-        return;
-
-    auto videoTrack = m_videoTracks.get(&track);
-    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteVideoTrack(videoTrack->identifier()), m_id);
-    m_videoTracks.remove(&track);
+    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteVideoTrack(track.id()), m_id);
+    m_videoTracks.removeFirstMatching([&track] (auto& current) {
+        return track.id() == current->id();
+    });
 }
 
 void RemoteMediaPlayerProxy::mediaPlayerDidAddTextTrack(WebCore::InbandTextTrackPrivate& track)
@@ -727,13 +721,10 @@ void RemoteMediaPlayerProxy::mediaPlayerDidAddTextTrack(WebCore::InbandTextTrack
 
 void RemoteMediaPlayerProxy::mediaPlayerDidRemoveTextTrack(WebCore::InbandTextTrackPrivate& track)
 {
-    ASSERT(m_textTracks.contains(&track));
-    if (!m_textTracks.contains(&track))
-        return;
-
-    auto textTrack = m_textTracks.get(&track);
-    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteTextTrack(textTrack->identifier()), m_id);
-    m_textTracks.remove(&track);
+    m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::RemoveRemoteTextTrack(track.id()), m_id);
+    m_textTracks.removeFirstMatching([&track] (auto& current) {
+        return track.id() == current->id();
+    });
 }
 
 void RemoteMediaPlayerProxy::textTrackRepresentationBoundsChanged(const IntRect&)
@@ -816,11 +807,6 @@ void RemoteMediaPlayerProxy::setShouldPlayToPlaybackTarget(bool shouldPlay)
 void RemoteMediaPlayerProxy::setWirelessPlaybackTarget(MediaPlaybackTargetContext&& targetContext)
 {
     switch (targetContext.type()) {
-    case MediaPlaybackTargetContext::Type::SerializedAVOutputContext: {
-        if (targetContext.deserializeOutputContext())
-            m_player->setWirelessPlaybackTarget(MediaPlaybackTargetCocoa::create(WTFMove(targetContext)));
-        break;
-    }
     case MediaPlaybackTargetContext::Type::Mock:
 #if PLATFORM(MAC)
         m_player->setWirelessPlaybackTarget(MediaPlaybackTargetMock::create(targetContext.deviceName(), targetContext.mockState()));
@@ -909,8 +895,7 @@ bool RemoteMediaPlayerProxy::mediaPlayerShouldDisableSleep() const
 
 bool RemoteMediaPlayerProxy::mediaPlayerShouldCheckHardwareSupport() const
 {
-    notImplemented();
-    return false;
+    return m_shouldCheckHardwareSupport;
 }
 
 void RemoteMediaPlayerProxy::startUpdateCachedStateMessageTimer()
@@ -1146,7 +1131,7 @@ void RemoteMediaPlayerProxy::setVideoPlaybackMetricsUpdateInterval(double interv
 
 void RemoteMediaPlayerProxy::maybeUpdateCachedVideoMetrics()
 {
-    if (m_cachedState.paused || !m_videoPlaybackMetricsUpdateInterval || MonotonicTime::now() < m_nextPlaybackQualityMetricsUpdateTime)
+    if (m_cachedState.paused || !m_videoPlaybackMetricsUpdateInterval || MonotonicTime::now() < m_nextPlaybackQualityMetricsUpdateTime || m_hasPlaybackMetricsUpdatePending)
         return;
 
     updateCachedVideoMetrics();
@@ -1156,7 +1141,19 @@ void RemoteMediaPlayerProxy::updateCachedVideoMetrics()
 {
     ALWAYS_LOG(LOGIDENTIFIER);
     m_nextPlaybackQualityMetricsUpdateTime = MonotonicTime::now() + m_videoPlaybackMetricsUpdateInterval;
-    m_cachedState.videoMetrics = m_player->videoPlaybackQualityMetrics();
+    if (m_hasPlaybackMetricsUpdatePending)
+        return;
+    m_hasPlaybackMetricsUpdatePending = true;
+    m_player->asyncVideoPlaybackQualityMetrics()->whenSettled(RunLoop::current(), [weakThis = WeakPtr { *this }, this](auto&& result) {
+        if (!weakThis)
+            return;
+        if (result) {
+            m_cachedState.videoMetrics = *result;
+            m_webProcessConnection->send(Messages::MediaPlayerPrivateRemote::UpdatePlaybackQualityMetrics(WTFMove(*result)), m_id);
+        } else
+            m_cachedState.videoMetrics.reset();
+        m_hasPlaybackMetricsUpdatePending = false;
+    });
 }
 
 void RemoteMediaPlayerProxy::setPreferredDynamicRangeMode(DynamicRangeMode mode)
@@ -1220,6 +1217,12 @@ void RemoteMediaPlayerProxy::playerContentBoxRectChanged(const WebCore::LayoutRe
 
     if (m_player)
         m_player->playerContentBoxRectChanged(contentRect);
+}
+
+void RemoteMediaPlayerProxy::setShouldCheckHardwareSupport(bool value)
+{
+    m_player->setShouldCheckHardwareSupport(value);
+    m_shouldCheckHardwareSupport = value;
 }
 
 #if !RELEASE_LOG_DISABLED

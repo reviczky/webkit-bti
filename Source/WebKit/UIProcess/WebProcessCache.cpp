@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WebProcessCache.h"
 
+#include "APIPageConfiguration.h"
 #include "LegacyGlobalSettings.h"
 #include "Logging.h"
 #include "WebProcessPool.h"
@@ -37,8 +38,13 @@
 
 namespace WebKit {
 
+#if PLATFORM(COCOA)
 Seconds WebProcessCache::cachedProcessLifetime { 30_min };
 Seconds WebProcessCache::clearingDelayAfterApplicationResignsActive { 5_min };
+#else
+Seconds WebProcessCache::cachedProcessLifetime { 5_min };
+Seconds WebProcessCache::clearingDelayAfterApplicationResignsActive = cachedProcessLifetime;
+#endif
 static Seconds cachedProcessSuspensionDelay { 30_s };
 
 void WebProcessCache::setCachedProcessSuspensionDelayForTesting(Seconds delay)
@@ -121,10 +127,11 @@ bool WebProcessCache::addProcess(std::unique_ptr<CachedProcess>&& cachedProcess)
     ASSERT(!cachedProcess->process().suspendedPageCount());
     ASSERT(!cachedProcess->process().isRunningServiceWorkers());
 
-    if (!canCacheProcess(cachedProcess->process()))
+    Ref process = cachedProcess->process();
+    if (!canCacheProcess(process))
         return false;
 
-    auto registrableDomain = cachedProcess->process().registrableDomain();
+    auto registrableDomain = process->registrableDomain();
     RELEASE_ASSERT(!registrableDomain.isEmpty());
 
     if (auto previousProcess = m_processesPerRegistrableDomain.take(registrableDomain))
@@ -146,7 +153,7 @@ bool WebProcessCache::addProcess(std::unique_ptr<CachedProcess>&& cachedProcess)
     return true;
 }
 
-RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode)
+RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode, const API::PageConfiguration& pageConfiguration)
 {
     auto it = m_processesPerRegistrableDomain.find(registrableDomain);
     if (it == m_processesPerRegistrableDomain.end())
@@ -156,6 +163,9 @@ RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableD
         return nullptr;
 
     if (it->value->process().lockdownMode() != lockdownMode)
+        return nullptr;
+
+    if (!it->value->process().hasSameGPUProcessPreferencesAs(pageConfiguration))
         return nullptr;
 
     auto process = it->value->takeProcess();
@@ -174,6 +184,7 @@ RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableD
 
 void WebProcessCache::updateCapacity(WebProcessPool& processPool)
 {
+#if ENABLE(WEBPROCESS_CACHE)
     if (!processPool.configuration().processSwapsOnNavigation() || !processPool.configuration().usesWebProcessCache() || LegacyGlobalSettings::singleton().cacheModel() != CacheModel::PrimaryWebBrowser || processPool.configuration().usesSingleWebProcess()) {
         if (!processPool.configuration().processSwapsOnNavigation())
             WEBPROCESSCACHE_RELEASE_LOG("updateCapacity: Cache is disabled because process swap on navigation is disabled", 0);
@@ -205,6 +216,7 @@ void WebProcessCache::updateCapacity(WebProcessPool& processPool)
 
     if (!m_capacity)
         clear();
+#endif
 }
 
 void WebProcessCache::clear()
@@ -327,7 +339,8 @@ Ref<WebProcessProxy> WebProcessCache::CachedProcess::takeProcess()
 void WebProcessCache::CachedProcess::evictionTimerFired()
 {
     ASSERT(m_process);
-    m_process->processPool().webProcessCache().removeProcess(*m_process, ShouldShutDownProcess::Yes);
+    auto process = m_process.copyRef();
+    process->processPool().checkedWebProcessCache()->removeProcess(*process, ShouldShutDownProcess::Yes);
 }
 
 #if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WPE)

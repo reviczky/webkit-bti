@@ -46,8 +46,11 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/glib/ApplicationGLib.h
 
+    platform/graphics/gbm/GBMVersioning.h
+
+    platform/graphics/libwpe/PlatformDisplayLibWPE.h
+
     platform/graphics/wayland/PlatformDisplayWayland.h
-    platform/graphics/wayland/WlUniquePtr.h
 )
 
 set(CSS_VALUE_PLATFORM_DEFINES "HAVE_OS_DARK_MODE_SUPPORT=1")
@@ -121,13 +124,9 @@ if (USE_ATSPI)
 endif ()
 
 if (USE_GBM)
-    list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
-        ${LIBDRM_INCLUDE_DIR}
-    )
-    list(APPEND WebCore_LIBRARIES
-        GBM::GBM
-        ${LIBDRM_LIBRARIES}
-    )
+    list(APPEND WebCore_LIBRARIES GBM::GBM)
+elseif (USE_LIBDRM)
+    list(APPEND WebCore_LIBRARIES LibDRM::LibDRM)
 endif ()
 
 if (ENABLE_GAMEPAD)

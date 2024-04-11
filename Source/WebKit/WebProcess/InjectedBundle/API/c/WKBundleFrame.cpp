@@ -39,6 +39,7 @@
 #include "WebFrame.h"
 #include "WebPage.h"
 #include <WebCore/Document.h>
+#include <WebCore/DocumentInlines.h>
 #include <WebCore/FocusController.h>
 #include <WebCore/FrameLoader.h>
 #include <WebCore/LocalFrame.h>
@@ -56,9 +57,14 @@ bool WKBundleFrameIsMainFrame(WKBundleFrameRef frameRef)
     return WebKit::toImpl(frameRef)->isMainFrame();
 }
 
+bool WKBundleFrameIsRemote(WKBundleFrameRef frameRef)
+{
+    return WebKit::toImpl(frameRef)->coreFrame()->frameType() == WebCore::Frame::FrameType::Remote;
+}
+
 WKBundleFrameRef WKBundleFrameGetParentFrame(WKBundleFrameRef frameRef)
 {
-    return toAPI(WebKit::toImpl(frameRef)->parentFrame());
+    return toAPI(WebKit::toImpl(frameRef)->parentFrame().get());
 }
 
 WKURLRef WKBundleFrameCopyURL(WKBundleFrameRef frameRef)
@@ -102,7 +108,7 @@ JSGlobalContextRef WKBundleFrameGetJavaScriptContext(WKBundleFrameRef frameRef)
 
 WKBundleFrameRef WKBundleFrameForJavaScriptContext(JSContextRef context)
 {
-    return toAPI(WebKit::WebFrame::frameForContext(context));
+    return toAPI(WebKit::WebFrame::frameForContext(context).get());
 }
 
 JSGlobalContextRef WKBundleFrameGetJavaScriptContextForWorld(WKBundleFrameRef frameRef, WKBundleScriptWorldRef worldRef)
@@ -149,7 +155,7 @@ void WKBundleFrameClearOpener(WKBundleFrameRef frameRef)
 {
     auto* coreFrame = WebKit::toImpl(frameRef)->coreLocalFrame();
     if (coreFrame)
-        coreFrame->loader().setOpener(0);
+        coreFrame->loader().setOpener(nullptr);
 }
 
 void WKBundleFrameStopLoading(WKBundleFrameRef frameRef)

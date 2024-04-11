@@ -466,6 +466,31 @@ bool ValidateColorspaceAttribute(const ValidationContext *val,
                 return false;
             }
             break;
+        case EGL_GL_COLORSPACE_BT2020_LINEAR_EXT:
+            if (!displayExtensions.glColorspaceBt2020Linear &&
+                !displayExtensions.eglColorspaceAttributePassthroughANGLE)
+            {
+                val->setError(EGL_BAD_ATTRIBUTE,
+                              "EXT_gl_colorspace_bt2020_linear is not available");
+                return false;
+            }
+            break;
+        case EGL_GL_COLORSPACE_BT2020_PQ_EXT:
+            if (!displayExtensions.glColorspaceBt2020Pq &&
+                !displayExtensions.eglColorspaceAttributePassthroughANGLE)
+            {
+                val->setError(EGL_BAD_ATTRIBUTE, "EXT_gl_colorspace_bt2020_pq is not available");
+                return false;
+            }
+            break;
+        case EGL_GL_COLORSPACE_BT2020_HLG_EXT:
+            if (!displayExtensions.glColorspaceBt2020Hlg &&
+                !displayExtensions.eglColorspaceAttributePassthroughANGLE)
+            {
+                val->setError(EGL_BAD_ATTRIBUTE, "EXT_gl_colorspace_bt2020_hlg is not available");
+                return false;
+            }
+            break;
         default:
             val->setError(EGL_BAD_ATTRIBUTE);
             return false;
@@ -505,6 +530,14 @@ bool ValidatePlatformType(const ValidationContext *val,
                 val->setError(EGL_BAD_ATTRIBUTE,
                               "Display type EGL_PLATFORM_ANGLE_TYPE_NULL_ANGLE "
                               "requires EGL_ANGLE_platform_angle_null.");
+                return false;
+            }
+            break;
+
+        case EGL_PLATFORM_ANGLE_TYPE_WEBGPU_ANGLE:
+            if (!clientExtensions.platformANGLEWebgpu)
+            {
+                val->setError(EGL_BAD_ATTRIBUTE, "WebGPU platform is unsupported.");
                 return false;
             }
             break;
@@ -567,6 +600,13 @@ bool ValidateGetPlatformDisplayCommon(const ValidationContext *val,
             if (!clientExtensions.platformWaylandEXT)
             {
                 val->setError(EGL_BAD_PARAMETER, "Platform Wayland extension is not active");
+                return false;
+            }
+            break;
+        case EGL_PLATFORM_SURFACELESS_MESA:
+            if (!clientExtensions.platformSurfacelessMESA)
+            {
+                val->setError(EGL_BAD_PARAMETER, "Platform Surfaceless extension is not active");
                 return false;
             }
             break;
@@ -1752,16 +1792,6 @@ bool ValidateCreateContextAttribute(const ValidationContext *val,
                 return false;
             }
             break;
-        case EGL_EXTERNAL_CONTEXT_SAVE_STATE_ANGLE:
-            if (!display->getExtensions().externalContextAndSurface)
-            {
-                val->setError(EGL_BAD_ATTRIBUTE,
-                              "Attribute "
-                              "EGL_EXTERNAL_CONTEXT_SAVE_STATE_ANGLE requires "
-                              "EGL_ANGLE_external_context_and_surface.");
-                return false;
-            }
-            break;
 
         case EGL_PROTECTED_CONTENT_EXT:
             if (!display->getExtensions().protectedContentEXT)
@@ -2031,15 +2061,6 @@ bool ValidateCreateContextAttributeValue(const ValidationContext *val,
                 val->setError(
                     EGL_BAD_ATTRIBUTE,
                     "EGL_EXTERNAL_CONTEXT_ANGLE doesn't allow creating with sharedContext.");
-                return false;
-            }
-            break;
-        case EGL_EXTERNAL_CONTEXT_SAVE_STATE_ANGLE:
-            if (value != EGL_TRUE && value != EGL_FALSE)
-            {
-                val->setError(EGL_BAD_ATTRIBUTE,
-                              "EGL_EXTERNAL_CONTEXT_SAVE_STATE_ANGLE must "
-                              "be either EGL_TRUE or EGL_FALSE.");
                 return false;
             }
             break;
@@ -3326,7 +3347,10 @@ bool ValidateMakeCurrent(const ValidationContext *val,
         ANGLE_VALIDATION_TRY(ValidateContext(val, display, contextID));
     }
 
-    if (display->isInitialized() && display->isDeviceLost())
+    // Allow "un-make" the lost context:
+    // If the context is lost, but EGLContext passed to eglMakeCurrent is EGL_NO_CONTEXT, we should
+    // not return EGL_CONTEXT_LOST error code.
+    if (display->isInitialized() && display->isDeviceLost() && !noContext)
     {
         val->setError(EGL_CONTEXT_LOST);
         return false;

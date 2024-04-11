@@ -49,15 +49,23 @@ static bool canCoalesceChallenge(const WebCore::AuthenticationChallenge& challen
     return challenge.protectionSpace().authenticationScheme() != ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested;
 }
 
-const char* AuthenticationManager::supplementName()
+ASCIILiteral AuthenticationManager::supplementName()
 {
-    return "AuthenticationManager";
+    return "AuthenticationManager"_s;
 }
 
 AuthenticationManager::AuthenticationManager(NetworkProcess& process)
     : m_process(process)
 {
-    m_process.addMessageReceiver(Messages::AuthenticationManager::messageReceiverName(), *this);
+    process.addMessageReceiver(Messages::AuthenticationManager::messageReceiverName(), *this);
+}
+
+AuthenticationManager::~AuthenticationManager() = default;
+
+inline Ref<NetworkProcess> AuthenticationManager::protectedProcess() const
+{
+    ASSERT(RunLoop::isMain());
+    return m_process.get();
 }
 
 AuthenticationChallengeIdentifier AuthenticationManager::addChallengeToChallengeMap(UniqueRef<Challenge>&& challenge)
@@ -117,7 +125,7 @@ void AuthenticationManager::didReceiveAuthenticationChallenge(PAL::SessionID ses
     std::optional<SecurityOriginData> topOriginData;
     if (topOrigin)
         topOriginData = *topOrigin;
-    m_process.send(Messages::NetworkProcessProxy::DidReceiveAuthenticationChallenge(sessionID, pageID, topOriginData, authenticationChallenge, negotiatedLegacyTLS == NegotiatedLegacyTLS::Yes, challengeID));
+    protectedProcess()->send(Messages::NetworkProcessProxy::DidReceiveAuthenticationChallenge(sessionID, pageID, topOriginData, authenticationChallenge, negotiatedLegacyTLS == NegotiatedLegacyTLS::Yes, challengeID));
 }
 
 void AuthenticationManager::didReceiveAuthenticationChallenge(IPC::MessageSender& download, const WebCore::AuthenticationChallenge& authenticationChallenge, ChallengeCompletionHandler&& completionHandler)
@@ -145,7 +153,7 @@ void AuthenticationManager::completeAuthenticationChallenge(AuthenticationChalle
 
 void AuthenticationManager::negotiatedLegacyTLS(WebPageProxyIdentifier pageID) const
 {
-    m_process.send(Messages::NetworkProcessProxy::NegotiatedLegacyTLS(pageID));
+    protectedProcess()->send(Messages::NetworkProcessProxy::NegotiatedLegacyTLS(pageID));
 }
 
 } // namespace WebKit

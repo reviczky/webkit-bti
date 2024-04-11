@@ -33,6 +33,9 @@
 #include "WebProcessCreationParameters.h"
 #include "WebProcessExtensionManager.h"
 
+#include <WebCore/PlatformScreen.h>
+#include <WebCore/ScreenProperties.h>
+
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
@@ -127,7 +130,8 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
 
 #if PLATFORM(WPE)
-    if (!parameters.isServiceWorkerProcess) {
+    m_dmaBufRendererBufferMode = parameters.dmaBufRendererBufferMode;
+    if (!parameters.isServiceWorkerProcess && m_dmaBufRendererBufferMode.isEmpty()) {
         auto& implementationLibraryName = parameters.implementationLibraryName;
         if (!implementationLibraryName.isNull() && implementationLibraryName.data()[0] != '\0')
             wpe_loader_init(parameters.implementationLibraryName.data());
@@ -139,6 +143,11 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 
 #if USE(GBM)
     WebCore::GBMDevice::singleton().initialize(parameters.renderDeviceFile);
+#endif
+
+#if PLATFORM(WPE)
+    if (!parameters.isServiceWorkerProcess && !m_dmaBufRendererBufferMode.isEmpty())
+        WebCore::PlatformDisplay::setUseDMABufForRendering(true);
 #endif
 
 #if PLATFORM(GTK) && USE(EGL)
@@ -155,18 +164,6 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
         if (!m_displayForCompositing)
             m_displayForCompositing = WebCore::PlatformDisplaySurfaceless::create();
-    }
-#endif
-
-#if PLATFORM(WAYLAND)
-    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland && !parameters.isServiceWorkerProcess && m_dmaBufRendererBufferMode.isEmpty()) {
-        auto hostClientFileDescriptor = parameters.hostClientFileDescriptor.release();
-        if (hostClientFileDescriptor != -1) {
-            wpe_loader_init(parameters.implementationLibraryName.data());
-            m_displayForCompositing = WebCore::PlatformDisplayLibWPE::create();
-            if (!downcast<WebCore::PlatformDisplayLibWPE>(*m_displayForCompositing).initialize(hostClientFileDescriptor))
-                m_displayForCompositing = nullptr;
-        }
     }
 #endif
 
@@ -201,6 +198,15 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 
 #if PLATFORM(GTK)
     GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
+#endif
+
+#if PLATFORM(GTK)
+    WebCore::setScreenProperties(parameters.screenProperties);
+#endif
+
+#if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
+    if (!m_dmaBufRendererBufferMode.isEmpty())
+        WebCore::setScreenProperties(parameters.screenProperties);
 #endif
 }
 
@@ -252,6 +258,17 @@ void WebProcess::releaseSystemMallocMemory()
 #endif
 #endif
 }
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+void WebProcess::setScreenProperties(const WebCore::ScreenProperties& properties)
+{
+#if PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
+    WebCore::setScreenProperties(properties);
+#endif
+    for (auto& page : m_pageMap.values())
+        page->screenPropertiesDidChange();
+}
+#endif
 
 } // namespace WebKit
 

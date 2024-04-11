@@ -31,12 +31,12 @@ public:
 
     bool setPayloadType(const GRefPtr<GstCaps>&) final;
     void setParameters(GUniquePtr<GstStructure>&&) final;
+    void teardown() final;
 
 protected:
     explicit RealtimeOutgoingAudioSourceGStreamer(const RefPtr<UniqueSSRCGenerator>&, const String& mediaStreamId, MediaStreamTrack&);
 
 private:
-    void codecPreferencesChanged(const GRefPtr<GstCaps>&) final;
     RTCRtpCapabilities rtpCapabilities() const final;
 
     void connectFallbackSource() final;
@@ -45,6 +45,8 @@ private:
 
     GRefPtr<GstElement> m_audioconvert;
     GRefPtr<GstElement> m_audioresample;
+    GRefPtr<GstElement> m_inputCapsFilter;
+    GRefPtr<GstCaps> m_inputCaps;
 };
 
 } // namespace WebCore

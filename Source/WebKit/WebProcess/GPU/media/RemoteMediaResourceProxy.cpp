@@ -56,7 +56,7 @@ void RemoteMediaResourceProxy::responseReceived(WebCore::PlatformMediaResource&,
 
 void RemoteMediaResourceProxy::redirectReceived(WebCore::PlatformMediaResource&, WebCore::ResourceRequest&& request, const WebCore::ResourceResponse& response, CompletionHandler<void(WebCore::ResourceRequest&&)>&& completionHandler)
 {
-    m_connection->sendWithAsyncReply(Messages::RemoteMediaResourceManager::RedirectReceived(m_id, request, response), [completionHandler = WTFMove(completionHandler)](auto&& request) mutable {
+    m_connection->sendWithAsyncReply(Messages::RemoteMediaResourceManager::RedirectReceived(m_id, request, response), [completionHandler = WTFMove(completionHandler)](WebCore::ResourceRequest&& request) mutable {
         completionHandler(WTFMove(request));
     });
 }
@@ -77,7 +77,7 @@ void RemoteMediaResourceProxy::dataReceived(WebCore::PlatformMediaResource&, con
     m_connection->sendWithAsyncReply(Messages::RemoteMediaResourceManager::DataReceived(m_id, IPC::SharedBufferReference { buffer }), [] (auto&& bufferHandle) {
         // Take ownership of shared memory and mark it as media-related memory.
         if (bufferHandle)
-            bufferHandle->takeOwnershipOfMemory(MemoryLedger::Media);
+            bufferHandle->takeOwnershipOfMemory(WebCore::MemoryLedger::Media);
     }, 0);
 }
 

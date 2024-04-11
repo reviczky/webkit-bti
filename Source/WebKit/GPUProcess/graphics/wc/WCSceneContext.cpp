@@ -29,7 +29,7 @@
 #if USE(GRAPHICS_LAYER_WC)
 
 #include <WebCore/GLContext.h>
-#include <WebCore/TextureMapperGL.h>
+#include <WebCore/TextureMapper.h>
 
 namespace WebKit {
 
@@ -42,12 +42,14 @@ WCSceneContext::~WCSceneContext() = default;
 
 bool WCSceneContext::makeContextCurrent()
 {
+    if (!m_glContext)
+        return false;
     return m_glContext->makeContextCurrent();
 }
 
 std::unique_ptr<WebCore::TextureMapper> WCSceneContext::createTextureMapper()
 {
-    return WebCore::TextureMapperGL::create();
+    return WebCore::TextureMapper::create();
 }
 
 void WCSceneContext::swapBuffers()

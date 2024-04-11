@@ -38,6 +38,7 @@ namespace WebCore {
 // When testing changes, be sure to test with application branding enabled.
 // Otherwise, we will not notice when urlRequiresUnbrandedUserAgent is needed.
 
+#if ENABLE(PUBLIC_SUFFIX_LIST)
 // Be careful with this quirk: it's an invitation for sites to use JavaScript
 // that works in Chrome that WebKit cannot handle. Prefer other quirks instead.
 static bool urlRequiresChromeBrowser(const String& domain, const String& baseDomain)
@@ -71,11 +72,12 @@ static bool urlRequiresChromeBrowser(const String& domain, const String& baseDom
         return true;
 
     // https://webcompat.com/issues/123672
-    if (baseDomain == "apple.com"_s)
+    if (domain == "www.apple.com"_s)
         return true;
 
     return false;
 }
+#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
 // Prefer using the macOS platform quirk rather than the Firefox quirk. This
 // quirk is good for websites that do macOS-specific things we don't want on
@@ -96,6 +98,7 @@ static bool urlRequiresFirefoxBrowser(const String& domain)
     return false;
 }
 
+#if ENABLE(PUBLIC_SUFFIX_LIST)
 static bool urlRequiresMacintoshPlatform(const String& domain, const String& baseDomain)
 {
     // At least finance.yahoo.com displays a mobile version with WebKitGTK's standard user agent.
@@ -133,8 +136,15 @@ static bool urlRequiresMacintoshPlatform(const String& domain, const String& bas
     if (domain == "www.sspa.juntadeandalucia.es"_s)
         return true;
 
+    // Atlassian Confluence discrimates against WebKitGTK's standard user agent
+    // by completely blocking access to the application. It runs on different
+    // subdomains for each Atlassian customer so the quirk must apply broadly.
+    if (baseDomain == "atlassian.net"_s)
+        return true;
+
     return false;
 }
+#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
 static bool urlRequiresUnbrandedUserAgent(const String& domain)
 {

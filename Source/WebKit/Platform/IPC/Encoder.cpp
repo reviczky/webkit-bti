@@ -77,15 +77,6 @@ Encoder::~Encoder()
     // FIXME: We need to dispose of the attachments in cases of failure.
 }
 
-ShouldDispatchWhenWaitingForSyncReply Encoder::shouldDispatchMessageWhenWaitingForSyncReply() const
-{
-    if (messageFlags().contains(MessageFlags::DispatchMessageWhenWaitingForSyncReply))
-        return ShouldDispatchWhenWaitingForSyncReply::Yes;
-    if (messageFlags().contains(MessageFlags::DispatchMessageWhenWaitingForUnboundedSyncReply))
-        return ShouldDispatchWhenWaitingForSyncReply::YesDuringUnboundedIPC;
-    return ShouldDispatchWhenWaitingForSyncReply::No;
-}
-
 void Encoder::setShouldDispatchMessageWhenWaitingForSyncReply(ShouldDispatchWhenWaitingForSyncReply shouldDispatchWhenWaitingForSyncReply)
 {
     switch (shouldDispatchWhenWaitingForSyncReply) {
@@ -113,6 +104,13 @@ void Encoder::setFullySynchronousModeForTesting()
 {
     messageFlags().add(MessageFlags::UseFullySynchronousModeForTesting);
 }
+
+#if ENABLE(IPC_TESTING_API)
+void Encoder::setSyncMessageDeserializationFailure()
+{
+    messageFlags().add(MessageFlags::SyncMessageDeserializationFailure);
+}
+#endif
 
 void Encoder::setShouldMaintainOrderingWithAsyncMessages()
 {

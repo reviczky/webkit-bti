@@ -74,6 +74,7 @@ TEST(WTF_CompactPtr, Basic)
     {
         CompactPtr<AlignedRefLogger> p1 = &a;
         CompactPtr<AlignedRefLogger> p2 = WTFMove(p1);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_EQ(nullptr, p1.get());
         EXPECT_EQ(&a, p2.get());
     }
@@ -81,6 +82,7 @@ TEST(WTF_CompactPtr, Basic)
     {
         CompactPtr<AlignedRefLogger> p1 = &a;
         CompactPtr<AlignedRefLogger> p2(WTFMove(p1));
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_EQ(nullptr, p1.get());
         EXPECT_EQ(&a, p2.get());
     }
@@ -95,6 +97,7 @@ TEST(WTF_CompactPtr, Basic)
     {
         CompactPtr<DerivedAlignedRefLogger> p1 = &a;
         CompactPtr<AlignedRefLogger> p2 = WTFMove(p1);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_EQ(nullptr, p1.get());
         EXPECT_EQ(&a, p2.get());
     }
@@ -165,6 +168,7 @@ TEST(WTF_CompactPtr, Assignment)
         EXPECT_EQ(&b, p2.get());
         p1 = WTFMove(p2);
         EXPECT_EQ(&b, p1.get());
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_EQ(nullptr, p2.get());
     }
 
@@ -185,6 +189,7 @@ TEST(WTF_CompactPtr, Assignment)
         EXPECT_EQ(&c, p2.get());
         p1 = WTFMove(p2);
         EXPECT_EQ(&c, p1.get());
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_EQ(nullptr, p2.get());
     }
 
@@ -197,6 +202,7 @@ TEST(WTF_CompactPtr, Assignment)
 }
 
 struct alignas(16) AlignedPackingTarget {
+    WTF_ALLOW_STRUCT_COMPACT_POINTERS;
     unsigned m_value { 0 };
 };
 TEST(WTF_CompactPtr, HashMap)
@@ -205,7 +211,7 @@ TEST(WTF_CompactPtr, HashMap)
     HashMap<PackedPtr<AlignedPackingTarget>, unsigned> map;
     vector.reserveCapacity(10000);
     for (unsigned i = 0; i < 10000; ++i)
-        vector.uncheckedAppend(AlignedPackingTarget { i });
+        vector.append(AlignedPackingTarget { i });
 
     for (auto& target : vector)
         map.add(&target, target.m_value);
@@ -222,7 +228,7 @@ TEST(WTF_CompactPtr, HashMapRemoveAndAdd)
     HashMap<PackedPtr<AlignedPackingTarget>, unsigned> map;
     vector.reserveCapacity(10000);
     for (unsigned i = 0; i < 10000; ++i)
-        vector.uncheckedAppend(AlignedPackingTarget { i });
+        vector.append(AlignedPackingTarget { i });
 
     for (auto& target : vector)
         map.add(&target, target.m_value);
@@ -249,7 +255,7 @@ TEST(WTF_CompactPtr, StringHashSet)
     HashSet<CompactPtr<StringImpl>> set;
     vector.reserveCapacity(10000);
     for (unsigned i = 0; i < 10000; ++i)
-        vector.uncheckedAppend(String::number(i));
+        vector.append(String::number(i));
 
     for (auto& target : vector)
         set.add(target.impl());

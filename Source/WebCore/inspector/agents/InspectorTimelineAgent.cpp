@@ -171,7 +171,7 @@ Protocol::ErrorStringOr<void> InspectorTimelineAgent::setInstruments(Ref<JSON::A
         if (!instrument)
             return makeUnexpected(makeString("Unknown instrument: ", instrumentString));
 
-        newInstruments.uncheckedAppend(*instrument);
+        newInstruments.append(*instrument);
     }
 
     m_instruments.swap(newInstruments);
@@ -284,8 +284,8 @@ std::optional<double> InspectorTimelineAgent::timestampFromMonotonicTime(Monoton
 
 static LocalFrame* frame(JSC::JSGlobalObject* globalObject)
 {
-    auto context = executionContext(globalObject);
-    return is<Document>(context) ? downcast<Document>(*context).frame() : nullptr;
+    RefPtr document = dynamicDowncast<Document>(executionContext(globalObject));
+    return document ? document->frame() : nullptr;
 }
 
 void InspectorTimelineAgent::startFromConsole(JSC::JSGlobalObject* globalObject, const String& title)

@@ -27,11 +27,16 @@
 
 #include "Test.h"
 #include <thread>
+#include <wtf/HashCountedSet.h>
+#include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
+#include <wtf/ListHashSet.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ThreadSafeWeakHashSet.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakListHashSet.h>
+#include <wtf/WeakRef.h>
 
 namespace TestWebKitAPI {
 
@@ -223,6 +228,7 @@ TEST(WTF_WeakPtr, Operators)
 
     WeakPtr<Foo> weakPtr4 = WTFMove(weakPtr);
     EXPECT_EQ(weakPtr4.get(), &f);
+    IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
     EXPECT_FALSE(weakPtr);
 }
 
@@ -328,6 +334,7 @@ TEST(WTF_WeakPtr, DerivedConstructAndAssign)
         WeakPtr<Derived> derivedWeakPtr = makeWeakPtr(derived);
         WeakPtr<Base> baseWeakPtr { WTFMove(derivedWeakPtr) };
         EXPECT_EQ(baseWeakPtr.get(), &derived);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_NULL(derivedWeakPtr.get());
     }
 
@@ -343,6 +350,7 @@ TEST(WTF_WeakPtr, DerivedConstructAndAssign)
         WeakPtr<Base> baseWeakPtr;
         baseWeakPtr = WTFMove(derivedWeakPtr);
         EXPECT_EQ(baseWeakPtr.get(), &derived);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_NULL(derivedWeakPtr.get());
     }
 
@@ -362,6 +370,7 @@ TEST(WTF_WeakPtr, DerivedConstructAndAssignConst)
         auto derivedWeakPtr = makeWeakPtr(derived);
         WeakPtr<const Base> baseWeakPtr { WTFMove(derivedWeakPtr) };
         EXPECT_EQ(baseWeakPtr.get(), &derived);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_NULL(derivedWeakPtr.get());
     }
 
@@ -377,6 +386,7 @@ TEST(WTF_WeakPtr, DerivedConstructAndAssignConst)
         WeakPtr<const Base> baseWeakPtr;
         baseWeakPtr = WTFMove(derivedWeakPtr);
         EXPECT_EQ(baseWeakPtr.get(), &derived);
+        IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
         EXPECT_NULL(derivedWeakPtr.get());
     }
 
@@ -1952,7 +1962,7 @@ TEST(WTF_WeakPtr, WeakHashMap_iterator_destruction)
     for (unsigned i = 0; i < objectCount; ++i) {
         auto object = makeUnique<Base>();
         weakHashMap.add(*object, i);
-        objects.uncheckedAppend(WTFMove(object));
+        objects.append(WTFMove(object));
     }
 
     auto a = objects.takeLast();
@@ -2765,8 +2775,8 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafety)
         readyThreads++;
         while (readyThreads < 3) { }
         for (size_t i = 0; i < 100; i++) {
-            strongReferences.uncheckedAppend(counter);
-            strongReferences.uncheckedAppend(counter);
+            strongReferences.append(counter);
+            strongReferences.append(counter);
             strongReferences.takeLast();
         }
         counter = nullptr;
@@ -2776,8 +2786,8 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafety)
         readyThreads++;
         while (readyThreads < 3) { }
         for (size_t i = 0; i < 100; i++) {
-            weakReferences.uncheckedAppend(counter);
-            weakReferences.uncheckedAppend(counter);
+            weakReferences.append(counter);
+            weakReferences.append(counter);
             weakReferences.takeLast();
         }
         counter = nullptr;
@@ -2789,10 +2799,10 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafety)
         readyThreads++;
         while (readyThreads < 3) { }
         for (size_t i = 0; i < 50; i++) {
-            strongReferences.uncheckedAppend(counter.get());
-            weakReferences.uncheckedAppend(counter);
-            weakReferences.uncheckedAppend(counter);
-            strongReferences.uncheckedAppend(weakReferences.takeLast().get());
+            strongReferences.append(counter.get());
+            weakReferences.append(counter);
+            weakReferences.append(counter);
+            strongReferences.append(weakReferences.takeLast().get());
             strongReferences.takeLast();
         }
         counter = nullptr;
@@ -2810,6 +2820,7 @@ TEST(WTF_ThreadSafeWeakPtr, UseAfterMoveResistance)
     auto counter = adoptRef(*new ThreadSafeInstanceCounter());
     auto weakPtr = ThreadSafeWeakPtr { counter.get() };
     auto movedTo = WTFMove(weakPtr);
+    IGNORE_CLANG_STATIC_ANALYZER_USE_AFTER_MOVE_ATTRIBUTE
     EXPECT_NULL(weakPtr.get());
     EXPECT_NOT_NULL(movedTo.get());
     ThreadSafeWeakPtr<ThreadSafeInstanceCounter> emptyConstructor;
@@ -2831,7 +2842,7 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafeWeakHashSet)
         Vector<Ref<ThreadSafeInstanceCounter>> strongReferences;
         strongReferences.reserveInitialCapacity(100);
         for (size_t i = 0; i < 100; i++)
-            strongReferences.uncheckedAppend(adoptRef(*new ThreadSafeInstanceCounter));
+            strongReferences.append(adoptRef(*new ThreadSafeInstanceCounter));
         readyThreads++;
         while (readyThreads < 3) { }
         for (size_t i = 0; i < 100; i++)
@@ -2854,7 +2865,7 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafeWeakHashSet)
         Vector<Ref<ThreadSafeInstanceCounter>> strongReferences;
         strongReferences.reserveInitialCapacity(101);
         for (size_t i = 0; i < 101; i++)
-            strongReferences.uncheckedAppend(adoptRef(*new ThreadSafeInstanceCounter));
+            strongReferences.append(adoptRef(*new ThreadSafeInstanceCounter));
         readyThreads++;
         while (readyThreads < 3) { }
         for (size_t i = 0; i < 100; i++) {
@@ -2897,15 +2908,16 @@ public:
 
     ~ObjectAddingAndRemovingItself()
     {
+        EXPECT_FALSE(m_set.contains(*this));
+        auto sizeBefore = m_set.sizeIncludingEmptyEntriesForTesting();
+        EXPECT_FALSE(m_set.remove(*this));
+        auto sizeAfter = m_set.sizeIncludingEmptyEntriesForTesting();
         static size_t i { 0 };
-        i++;
-        if (i == 8) {
-            // amortized cleanup of the set in contains makes this return false sometimes,
-            // but only in the destructor, where contains is less meaningful.
-            EXPECT_FALSE(m_set.contains(*this));
+        if (++i == 8) {
+            // Amortized cleanup gets this one during the contains call.
+            EXPECT_EQ(sizeBefore, sizeAfter);
         } else
-            EXPECT_TRUE(m_set.contains(*this));
-        m_set.remove(*this);
+            EXPECT_EQ(sizeBefore, sizeAfter + 1);
         EXPECT_FALSE(m_set.contains(*this));
     }
 
@@ -3102,7 +3114,7 @@ TEST(WTF_ThreadSafeWeakPtr, RemoveInDestructor)
         vector.reserveInitialCapacity(i);
         ThreadSafeWeakHashSet<Struct> set;
         for (size_t j = 0; j < i; j++) {
-            vector.uncheckedAppend(adoptRef(*new Struct()));
+            vector.append(adoptRef(*new Struct()));
             set.add(vector.last().get());
         }
     }
@@ -3121,6 +3133,166 @@ TEST(WTF_ThreadSafeWeakPtr, WeakRefInDestructor)
     }
     auto shouldBeNull = weakPtr.get();
     EXPECT_NULL(shouldBeNull.get());
+}
+
+class DidUpdateRefCountWeakPtrImpl final {
+    WTF_MAKE_NONCOPYABLE(DidUpdateRefCountWeakPtrImpl);
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(DidUpdateRefCountWeakPtrImpl);
+public:
+    ~DidUpdateRefCountWeakPtrImpl() = default;
+
+    template<typename T> typename T::WeakValueType* get()
+    {
+        return static_cast<typename T::WeakValueType*>(m_ptr);
+    }
+
+    explicit operator bool() const { return m_ptr; }
+    void clear() { m_ptr = nullptr; }
+
+    template<typename T>
+    explicit DidUpdateRefCountWeakPtrImpl(T* ptr)
+        : m_ptr(static_cast<typename T::WeakValueType*>(ptr))
+    {
+    }
+
+#if ASSERT_ENABLED
+    bool wasConstructedOnMainThread() const { return true; }
+#endif
+
+    void resetDidUpdateRefCount() { m_didUpdateRefCount = false; }
+    bool didUpdateRefCount() const { return m_didUpdateRefCount; }
+
+    void ref() const
+    {
+        m_didUpdateRefCount = true;
+        ++m_refCount;
+    }
+    void deref() const
+    {
+        m_didUpdateRefCount = true;
+        uint32_t tempRefCount = m_refCount - 1;
+        if (!tempRefCount) {
+            delete this;
+            return;
+        }
+        m_refCount = tempRefCount;
+    }
+
+private:
+    mutable uint32_t m_refCount { 1 };
+    void* m_ptr;
+    mutable bool m_didUpdateRefCount { false };
+};
+
+class TestType : public WTF::CanMakeWeakPtr<TestType, WeakPtrFactoryInitialization::Lazy, DidUpdateRefCountWeakPtrImpl> {
+public:
+    TestType() = default;
+
+    void resetDidUpdateImplRefCount() { weakPtrFactory().impl()->resetDidUpdateRefCount(); }
+    bool didUpdateImplRefCount() const { return weakPtrFactory().impl()->didUpdateRefCount(); }
+};
+
+TEST(WTF_WeakRef, HashSetLookupFromRawRef)
+{
+    HashSet<WTF::WeakRef<TestType, DidUpdateRefCountWeakPtrImpl>> set;
+
+    TestType object;
+    set.add(object);
+    EXPECT_EQ(set.size(), 1U);
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.contains(object));
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.find(object) != set.end());
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    EXPECT_TRUE(set.remove(object));
+    set.add(object);
+
+    object.resetDidUpdateImplRefCount();
+    WTF::WeakPtr<TestType, DidUpdateRefCountWeakPtrImpl> taken = set.take(object);
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+    EXPECT_EQ(taken.get(), &object);
+}
+
+TEST(WTF_WeakRef, HashMapLookupFromRawRef)
+{
+    HashMap<WTF::WeakRef<TestType, DidUpdateRefCountWeakPtrImpl>, unsigned> map;
+
+    TestType object;
+    map.add(object, 1);
+    EXPECT_EQ(map.size(), 1U);
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(map.contains(object));
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(map.find(object) != map.end());
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    EXPECT_TRUE(map.remove(object));
+    map.add(object, 2);
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_EQ(map.get(object), 2U);
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    unsigned taken = map.take(object);
+    EXPECT_EQ(taken, 2U);
+}
+
+TEST(WTF_WeakRef, ListHashSetLookupFromRawRef)
+{
+    ListHashSet<WTF::WeakRef<TestType, DidUpdateRefCountWeakPtrImpl>> set;
+
+    TestType object;
+    set.add(object);
+    EXPECT_EQ(set.size(), 1U);
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.contains(object));
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.find(object) != set.end());
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    EXPECT_TRUE(set.remove(object));
+    set.add(object);
+
+    object.resetDidUpdateImplRefCount();
+    TestType object2;
+    set.insertBefore(object, object2);
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+    EXPECT_EQ(set.size(), 2U);
+}
+
+TEST(WTF_WeakRef, HashCountedSetLookupFromRawRef)
+{
+    HashCountedSet<WTF::WeakRef<TestType, DidUpdateRefCountWeakPtrImpl>> set;
+
+    TestType object;
+    set.add(object);
+    EXPECT_EQ(set.size(), 1U);
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.contains(object));
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_TRUE(set.find(object) != set.end());
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    object.resetDidUpdateImplRefCount();
+    EXPECT_EQ(set.count(object), 1U);
+    EXPECT_FALSE(object.didUpdateImplRefCount());
+
+    EXPECT_TRUE(set.remove(object));
+    EXPECT_EQ(set.size(), 0U);
+    set.add(object);
 }
 
 } // namespace TestWebKitAPI

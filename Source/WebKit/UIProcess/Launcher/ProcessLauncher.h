@@ -44,6 +44,10 @@
 #include "XPCEventHandler.h"
 #endif
 
+#if USE(EXTENSIONKIT)
+OBJC_CLASS _SEExtensionProcess;
+#endif
+
 namespace WebKit {
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
@@ -78,6 +82,9 @@ public:
 #if ENABLE(BUBBLEWRAP_SANDBOX)
         DBusProxy,
 #endif
+#if ENABLE(MODEL_PROCESS)
+        Model,
+#endif
     };
 
     struct LaunchOptions {
@@ -105,19 +112,29 @@ public:
         return adoptRef(*new ProcessLauncher(client, WTFMove(launchOptions)));
     }
 
+    virtual ~ProcessLauncher();
+
     bool isLaunching() const { return m_isLaunching; }
     ProcessID processID() const { return m_processID; }
 
     void terminateProcess();
     void invalidate();
 
+#if USE(EXTENSIONKIT)
+    RetainPtr<_SEExtensionProcess> extensionProcess() const { return m_process; }
+    void setIsRetryingLaunch() { m_isRetryingLaunch = true; }
+    bool isRetryingLaunch() const { return m_isRetryingLaunch; }
+#endif
+
 private:
     ProcessLauncher(Client*, LaunchOptions&&);
 
     void launchProcess();
+    void finishLaunchingProcess(const char* name);
     void didFinishLaunchingProcess(ProcessID, IPC::Connection::Identifier);
 
     void platformInvalidate();
+    void platformDestroy();
 
 #if PLATFORM(COCOA)
     void terminateXPCConnection();
@@ -127,6 +144,11 @@ private:
 
 #if PLATFORM(COCOA)
     OSObjectPtr<xpc_connection_t> m_xpcConnection;
+#endif
+
+#if USE(EXTENSIONKIT)
+    RetainPtr<_SEExtensionProcess> m_process;
+    bool m_isRetryingLaunch { false };
 #endif
 
 #if PLATFORM(WIN)

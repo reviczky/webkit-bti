@@ -48,15 +48,14 @@ RemoteQueueProxy::~RemoteQueueProxy()
 
 void RemoteQueueProxy::submit(Vector<std::reference_wrapper<WebCore::WebGPU::CommandBuffer>>&& commandBuffers)
 {
-    Vector<WebGPUIdentifier> convertedCommandBuffers;
-    convertedCommandBuffers.reserveInitialCapacity(commandBuffers.size());
-    for (auto commandBuffer : commandBuffers) {
+    auto convertedCommandBuffers = WTF::compactMap(commandBuffers, [&](auto& commandBuffer) -> std::optional<WebGPUIdentifier> {
         auto convertedCommandBuffer = m_convertToBackingContext->convertToBacking(commandBuffer);
         ASSERT(convertedCommandBuffer);
         if (!convertedCommandBuffer)
-            return;
-        convertedCommandBuffers.uncheckedAppend(convertedCommandBuffer);
-    }
+            return std::nullopt;
+        return convertedCommandBuffer;
+    });
+
     auto sendResult = send(Messages::RemoteQueue::Submit(convertedCommandBuffers));
     UNUSED_VARIABLE(sendResult);
 }
@@ -104,6 +103,27 @@ void RemoteQueueProxy::writeTexture(
 
     auto sendResult = send(Messages::RemoteQueue::WriteTexture(*convertedDestination, Vector<uint8_t>(static_cast<const uint8_t*>(source), byteLength), *convertedDataLayout, *convertedSize));
     UNUSED_VARIABLE(sendResult);
+}
+
+void RemoteQueueProxy::writeBuffer(
+    const WebCore::WebGPU::Buffer&,
+    WebCore::WebGPU::Size64,
+    void*,
+    size_t,
+    WebCore::WebGPU::Size64,
+    std::optional<WebCore::WebGPU::Size64>)
+{
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
+void RemoteQueueProxy::writeTexture(
+    const WebCore::WebGPU::ImageCopyTexture&,
+    void*,
+    size_t,
+    const WebCore::WebGPU::ImageDataLayout&,
+    const WebCore::WebGPU::Extent3D&)
+{
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 void RemoteQueueProxy::copyExternalImageToTexture(

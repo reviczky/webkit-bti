@@ -2140,7 +2140,9 @@ WI.SourceCodeTextEditor = class SourceCodeTextEditor extends WI.TextEditor
             this.createColorMarkers(range);
             this.createGradientMarkers(range);
             this.createCubicBezierTimingFunctionMarkers(range);
+            this.createLinearTimingFunctionMarkers(range);
             this.createSpringTimingFunctionMarkers(range);
+            this.createStepsTimingFunctionMarkers(range);
         }
 
         this._updateTokenTrackingControllerState();

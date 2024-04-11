@@ -469,10 +469,7 @@ public:
     static constexpr bool needsDestruction = true;
     static void destroy(JSCell*);
 
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
-    {
-        return Structure::create(vm, globalObject, prototype, TypeInfo(CellType, StructureFlags), info());
-    }
+    inline static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
     // You must hold the lock until after you're done with the iterator.
     Map::iterator find(const ConcurrentJSLocker&, UniquedStringImpl* key)
@@ -646,7 +643,7 @@ public:
     {
         return m_map.contains(key);
     }
-
+    
     bool contains(UniquedStringImpl* key)
     {
         ConcurrentJSLocker locker(m_lock);
@@ -692,7 +689,7 @@ public:
     
     bool trySetArgumentOffset(VM& vm, uint32_t i, ScopeOffset offset)
     {
-        RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(m_arguments);
+        ASSERT_WITH_SECURITY_IMPLICATION(m_arguments);
         auto* maybeCloned = m_arguments->trySet(vm, i, offset);
         if (!maybeCloned)
             return false;
@@ -717,7 +714,7 @@ public:
         m_arguments->lock();
         return m_arguments.get();
     }
-
+    
     const LocalToEntryVec& localToEntry(const ConcurrentJSLocker&);
     SymbolTableEntry* entryFor(const ConcurrentJSLocker&, ScopeOffset);
     
@@ -760,6 +757,10 @@ public:
     DECLARE_VISIT_CHILDREN;
 
     DECLARE_EXPORT_INFO;
+
+#if ASSERT_ENABLED
+    bool hasScopedWatchpointSet(WatchpointSet*);
+#endif
 
     void finalizeUnconditionally(VM&, CollectionScope);
     void dump(PrintStream&) const;

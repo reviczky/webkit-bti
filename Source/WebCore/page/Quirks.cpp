@@ -31,6 +31,7 @@
 #include "DOMTokenList.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
+#include "DocumentInlines.h"
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
 #include "ElementInlines.h"
@@ -47,6 +48,7 @@
 #include "LocalDOMWindow.h"
 #include "NamedNodeMap.h"
 #include "NetworkStorageSession.h"
+#include "OrganizationStorageAccessPromptQuirk.h"
 #include "PlatformMouseEvent.h"
 #include "RegistrableDomain.h"
 #include "ResourceLoadObserver.h"
@@ -69,6 +71,10 @@
 #include <JavaScriptCore/SourceProvider.h>
 #include <JavaScriptCore/StackVisitor.h>
 
+#if PLATFORM(IOS_FAMILY)
+#include <pal/system/ios/UserInterfaceIdiom.h>
+#endif
+
 #if PLATFORM(COCOA)
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
@@ -82,6 +88,13 @@ static inline OptionSet<AutoplayQuirk> allowedAutoplayQuirks(Document& document)
         return { };
 
     return loader->allowedAutoplayQuirks();
+}
+
+static HashMap<RegistrableDomain, String>& updatableStorageAccessUserAgentStringQuirks()
+{
+    // FIXME: Make this a member of Quirks.
+    static MainThreadNeverDestroyed<HashMap<RegistrableDomain, String>> map;
+    return map.get();
 }
 
 #if PLATFORM(IOS_FAMILY)
@@ -119,6 +132,13 @@ bool Quirks::isDomain(const String& domainString) const
     return RegistrableDomain(m_document->topDocument().url()).string() == domainString;
 }
 
+bool Quirks::isEmbedDomain(const String& domainString) const
+{
+    if (m_document->isTopDocument())
+        return false;
+    return RegistrableDomain(m_document->url()).string() == domainString;
+}
+
 // vote.gov https://bugs.webkit.org/show_bug.cgi?id=267779
 bool Quirks::needsAnchorElementsToBeMouseFocusable() const
 {
@@ -153,6 +173,10 @@ bool Quirks::needsAutoplayPlayPauseEvents() const
 }
 
 // netflix.com https://bugs.webkit.org/show_bug.cgi?id=173030
+// This quirk handles several scenarios:
+// - Inserting / Removing Airpods
+// - macOS w/ Touch Bar
+// - iOS PiP
 bool Quirks::needsSeekingSupportDisabled() const
 {
     if (!needsQuirks())
@@ -233,7 +257,7 @@ bool Quirks::shouldTooltipPreventFromProceedingWithClick(const Element& element)
 // FIXME: Remove after the site is fixed, <rdar://problem/75792913>
 bool Quirks::shouldHideSearchFieldResultsButton() const
 {
-#if ENABLE(IOS_FORM_CONTROL_REFRESH)
+#if PLATFORM(IOS_FAMILY)
     if (!needsQuirks())
         return false;
 
@@ -354,6 +378,56 @@ bool Quirks::shouldAvoidUsingIOS13ForGmail() const
 #endif
 }
 
+void Quirks::updateStorageAccessUserAgentStringQuirks(HashMap<RegistrableDomain, String>&& userAgentStringQuirks)
+{
+    auto& quirks = updatableStorageAccessUserAgentStringQuirks();
+    quirks.clear();
+    for (auto&& [domain, userAgent] : userAgentStringQuirks)
+        quirks.add(WTFMove(domain), WTFMove(userAgent));
+}
+
+String Quirks::storageAccessUserAgentStringQuirkForDomain(const URL& url)
+{
+    if (!needsQuirks())
+        return { };
+
+    const auto& quirks = updatableStorageAccessUserAgentStringQuirks();
+    RegistrableDomain domain { url };
+    auto iterator = quirks.find(domain);
+    if (iterator == quirks.end())
+        return { };
+    return iterator->value;
+}
+
+bool Quirks::shouldDisableElementFullscreenQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    // Vimeo.com has incorrect layout on iOS on certain videos with wider
+    // aspect ratios than the device's screen in landscape mode.
+    // (Ref: rdar://116531089)
+    // Instagram.com stories flow under the notch and status bar
+    // (Ref: rdar://121014613)
+    // Twitter.com video embeds have controls that are too tiny and
+    // show page behind fullscreen.
+    // (Ref: rdar://121473410)
+    // YouTube.com does not provide AirPlay controls in fullscreen
+    // (Ref: rdar://121471373)
+    if (!m_shouldDisableElementFullscreen) {
+        m_shouldDisableElementFullscreen = isDomain("vimeo.com"_s)
+            || isDomain("instagram.com"_s)
+            || isEmbedDomain("twitter.com"_s)
+            || (PAL::currentUserInterfaceIdiomIsSmallScreen() && (isDomain("youtube.com"_s) || isEmbedDomain("youtube.com"_s)));
+    }
+
+    return m_shouldDisableElementFullscreen.value();
+#else
+    return false;
+#endif
+}
+
 #if ENABLE(TOUCH_EVENTS)
 bool Quirks::isAmazon() const
 {
@@ -440,11 +514,10 @@ bool Quirks::shouldDispatchSimulatedMouseEvents(const EventTarget* target) const
         return false;
 
     case ShouldDispatchSimulatedMouseEvents::DependingOnTargetFor_mybinder_org:
-        if (is<Node>(target)) {
-            for (const auto* node = downcast<Node>(target); node; node = node->parentNode()) {
-                if (is<Element>(node) && const_cast<Element&>(downcast<Element>(*node)).classList().contains("lm-DockPanel-tabBar"_s))
-                    return true;
-            }
+        for (RefPtr node = dynamicDowncast<Node>(target); node; node = node->parentNode()) {
+            // This uses auto* instead of RefPtr as otherwise GCC does not compile.
+            if (auto* element = dynamicDowncast<Element>(*node); element && const_cast<Element&>(*element).classList().contains("lm-DockPanel-tabBar"_s))
+                return true;
         }
         return false;
 
@@ -463,18 +536,21 @@ bool Quirks::shouldDispatchedSimulatedMouseEventsAssumeDefaultPrevented(EventTar
     if (!needsQuirks() || !shouldDispatchSimulatedMouseEvents(target))
         return false;
 
-    if (isAmazon() && is<Element>(target)) {
+    RefPtr element = dynamicDowncast<Element>(target);
+    if (!element)
+        return false;
+
+    if (isAmazon()) {
         // When panning on an Amazon product image, we're either touching on the #magnifierLens element
         // or its previous sibling.
-        auto& element = downcast<Element>(*target);
-        if (element.getIdAttribute() == "magnifierLens"_s)
+        if (element->getIdAttribute() == "magnifierLens"_s)
             return true;
-        if (auto* sibling = element.nextElementSibling())
+        if (auto* sibling = element->nextElementSibling())
             return sibling->getIdAttribute() == "magnifierLens"_s;
     }
 
-    if (isDomain("soundcloud.com"_s) && is<Element>(target))
-        return downcast<Element>(*target).classList().contains("sceneLayer"_s);
+    if (isDomain("soundcloud.com"_s))
+        return element->classList().contains("sceneLayer"_s);
 
     return false;
 }
@@ -488,7 +564,7 @@ std::optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(Even
 
     // On Google Maps, we want to limit simulated mouse events to dragging the little man that allows entering into Street View.
     if (isGoogleMaps()) {
-        if (is<Element>(target) && downcast<Element>(target)->getAttribute(HTMLNames::classAttr) == "widget-expand-button-pegman-icon"_s)
+        if (RefPtr element = dynamicDowncast<Element>(target); element && element->getAttribute(HTMLNames::classAttr) == "widget-expand-button-pegman-icon"_s)
             return Event::IsCancelable::Yes;
         return { };
     }
@@ -508,9 +584,9 @@ bool Quirks::shouldMakeTouchEventNonCancelableForTarget(EventTarget* target) con
     auto host = m_document->topDocument().url().host();
 
     if (host == "www.youtube.com"_s) {
-        if (is<Element>(target)) {
+        if (RefPtr element = dynamicDowncast<Element>(target)) {
             unsigned depth = 3;
-            for (auto* element = downcast<Element>(target); element && depth; element = element->parentElement(), --depth) {
+            for (; element && depth; element = element->parentElement(), --depth) {
                 if (element->localName() == "paper-item"_s && element->classList().contains("yt-dropdown-menu"_s))
                     return true;
             }
@@ -535,8 +611,8 @@ bool Quirks::shouldPreventDispatchOfTouchEvent(const AtomString& touchEventType,
     if (!needsQuirks())
         return false;
 
-    if (is<Element>(target) && touchEventType == eventNames().touchendEvent && m_document->topDocument().url().host() == "sites.google.com"_s) {
-        auto& classList = downcast<Element>(*target).classList();
+    if (RefPtr element = dynamicDowncast<Element>(target); element && touchEventType == eventNames().touchendEvent && m_document->topDocument().url().host() == "sites.google.com"_s) {
+        auto& classList = element->classList();
         return classList.contains("DPvwYc"_s) && classList.contains("sm8sCf"_s);
     }
 
@@ -660,6 +736,22 @@ bool Quirks::needsFullscreenDisplayNoneQuirk() const
         m_needsFullscreenDisplayNoneQuirk = isDomain("gizmodo.com"_s);
 
     return *m_needsFullscreenDisplayNoneQuirk;
+#else
+    return false;
+#endif
+}
+
+// cnn.com rdar://119640248
+bool Quirks::needsFullscreenObjectFitQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsFullscreenObjectFitQuirk)
+        m_needsFullscreenObjectFitQuirk = isDomain("cnn.com"_s);
+
+    return *m_needsFullscreenObjectFitQuirk;
 #else
     return false;
 #endif
@@ -874,9 +966,8 @@ bool Quirks::shouldBypassBackForwardCache() const
     // Note that this does not check for docs.google.com host because of hosted G Suite apps.
     static MainThreadNeverDestroyed<const AtomString> googleDocsOverlayDivClass("docs-homescreen-freeze-el-full"_s);
     auto* firstChildInBody = m_document->body() ? m_document->body()->firstChild() : nullptr;
-    if (is<HTMLDivElement>(firstChildInBody)) {
-        auto& div = downcast<HTMLDivElement>(*firstChildInBody);
-        if (div.hasClass() && div.classNames().contains(googleDocsOverlayDivClass))
+    if (RefPtr div = dynamicDowncast<HTMLDivElement>(firstChildInBody)) {
+        if (div->hasClass() && div->classNames().contains(googleDocsOverlayDivClass))
             return true;
     }
 
@@ -900,15 +991,14 @@ bool Quirks::shouldBypassAsyncScriptDeferring() const
 }
 
 // smoothscroll JS library rdar://52712513
-bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, const AtomString& eventType)
+bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, const EventTypeInfo& eventType)
 {
     auto eventTargetIsRoot = [](const EventTarget& eventTarget) {
         if (is<LocalDOMWindow>(eventTarget))
             return true;
 
-        if (is<Node>(eventTarget)) {
-            auto& node = downcast<Node>(eventTarget);
-            return is<Document>(node) || node.document().documentElement() == &node || node.document().body() == &node;
+        if (RefPtr node = dynamicDowncast<Node>(eventTarget)) {
+            return is<Document>(*node) || node->document().documentElement() == node || node->document().body() == node;
         }
         return false;
     };
@@ -917,7 +1007,7 @@ bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, cons
         return downcast<Document>(eventTarget.scriptExecutionContext());
     };
 
-    if (eventNames().isTouchScrollBlockingEventType(eventType)) {
+    if (eventType.isInCategory(EventCategory::TouchScrollBlocking)) {
         if (eventTargetIsRoot(eventTarget)) {
             if (auto* document = documentFromEventTarget(eventTarget))
                 return document->settings().passiveTouchListenersAsDefaultOnDocument();
@@ -925,7 +1015,7 @@ bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, cons
         return false;
     }
 
-    if (eventNames().isWheelEventType(eventType)) {
+    if (eventType.isInCategory(EventCategory::Wheel)) {
         if (eventTargetIsRoot(eventTarget)) {
             if (auto* document = documentFromEventTarget(eventTarget))
                 return document->settings().passiveWheelListenersAsDefaultOnDocument();
@@ -949,6 +1039,18 @@ bool Quirks::shouldEnableLegacyGetUserMediaQuirk() const
         m_shouldEnableLegacyGetUserMediaQuirk = host == "www.baidu.com"_s || host == "www.warbyparker.com"_s;
     }
     return m_shouldEnableLegacyGetUserMediaQuirk.value();
+}
+
+// zoom.us rdar://118185086
+bool Quirks::shouldDisableImageCaptureQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableImageCaptureQuirk)
+        m_shouldDisableImageCaptureQuirk = isDomain("zoom.us"_s);
+
+    return m_shouldDisableImageCaptureQuirk.value();
 }
 #endif
 
@@ -979,16 +1081,6 @@ bool Quirks::shouldLayOutAtMinimumWindowWidthWhenIgnoringScalingConstraints() co
     return isWikipediaDomain(m_document->url());
 }
 
-// shutterstock.com rdar://58843932
-bool Quirks::shouldIgnoreContentObservationForSyntheticClick(bool isFirstSyntheticClickOnPage) const
-{
-    if (!needsQuirks())
-        return false;
-
-    auto host = m_document->url().host();
-    return isFirstSyntheticClickOnPage && (equalLettersIgnoringASCIICase(host, "shutterstock.com"_s) || host.endsWithIgnoringASCIICase(".shutterstock.com"_s));
-}
-
 // mail.yahoo.com rdar://63511613
 bool Quirks::shouldAvoidPastingImagesAsWebContent() const
 {
@@ -1004,7 +1096,6 @@ bool Quirks::shouldAvoidPastingImagesAsWebContent() const
 #endif
 }
 
-#if ENABLE(TRACKING_PREVENTION)
 // kinja.com and related sites rdar://60601895
 static bool isKinjaLoginAvatarElement(const Element& element)
 {
@@ -1045,17 +1136,14 @@ static bool elementHasClassInClosestAncestors(const Element& element, const Atom
     if (element.hasClass() && element.classNames().contains(className))
         return true;
 
-    unsigned currentDistance = 1;
+    unsigned currentDistance = 0;
     RefPtr ancestor = dynamicDowncast<Element>(element.parentNode());
-    while (currentDistance <= distance) {
+    while (ancestor && currentDistance < distance) {
+        ++currentDistance;
         if (ancestor->hasClass() && ancestor->classNames().contains(className))
             return true;
 
         ancestor = dynamicDowncast<Element>(ancestor->parentNode());
-        if (!ancestor)
-            return false;
-
-        ++currentDistance;
     }
     return false;
 }
@@ -1130,7 +1218,25 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
     });
     return Quirks::StorageAccessResult::ShouldCancelEvent;
 }
-#endif
+
+void Quirks::triggerOptionalStorageAccessIframeQuirk(const URL& frameURL, CompletionHandler<void()>&& completionHandler) const
+{
+    if (m_document) {
+        if (m_document->frame() && !m_document->frame()->isMainFrame()) {
+            auto& mainFrame = m_document->frame()->mainFrame();
+            if (auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame); localMainFrame && localMainFrame->document()) {
+                localMainFrame->document()->quirks().triggerOptionalStorageAccessIframeQuirk(frameURL, WTFMove(completionHandler));
+                return;
+            }
+        }
+        if (subFrameDomainsForStorageAccessQuirk().contains(RegistrableDomain { frameURL })) {
+            return DocumentStorageAccess::requestStorageAccessForNonDocumentQuirk(*m_document, RegistrableDomain { frameURL }, [completionHandler = WTFMove(completionHandler)](StorageAccessWasGranted) mutable {
+                completionHandler();
+            });
+        }
+    }
+    completionHandler();
+}
 
 // rdar://64549429
 Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, bool isParentProcessAFullWebBrowser, IsSyntheticClick isSyntheticClick) const
@@ -1138,7 +1244,6 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
     if (!DeprecatedGlobalSettings::trackingPreventionEnabled() || !isParentProcessAFullWebBrowser)
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
-#if ENABLE(TRACKING_PREVENTION)
     if (!needsQuirks())
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
@@ -1200,10 +1305,9 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
             auto proxy = proxyOrException.releaseReturnValue();
 
             auto* abstractFrame = proxy->frame();
-            if (abstractFrame && is<LocalFrame>(*abstractFrame)) {
-                auto& frame = downcast<LocalFrame>(*abstractFrame);
+            if (auto* frame = dynamicDowncast<LocalFrame>(abstractFrame)) {
                 auto world = ScriptController::createWorld("kinjaComQuirkWorld"_s, ScriptController::WorldType::User);
-                frame.addUserScriptAwaitingNotification(world.get(), kinjaLoginUserScript);
+                frame->addUserScriptAwaitingNotification(world.get(), kinjaLoginUserScript);
                 return Quirks::StorageAccessResult::ShouldCancelEvent;
             }
         }
@@ -1220,14 +1324,6 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
             });
         }
     }
-#else
-    UNUSED_PARAM(element);
-    UNUSED_PARAM(platformEvent);
-    UNUSED_PARAM(eventType);
-    UNUSED_PARAM(detail);
-    UNUSED_PARAM(relatedTarget);
-    UNUSED_PARAM(isSyntheticClick);
-#endif
     return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 }
 
@@ -1383,22 +1479,18 @@ bool Quirks::allowLayeredFullscreenVideos() const
 // mail.google.com rdar://97351877
 bool Quirks::shouldEnableApplicationCacheQuirk() const
 {
-    bool shouldEnableBySetting = m_document && m_document->settings().offlineWebApplicationCacheEnabled();
 #if PLATFORM(IOS_FAMILY)
     if (!needsQuirks())
-        return shouldEnableBySetting;
+        return false;
 
     if (!m_shouldEnableApplicationCacheQuirk) {
         auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
-        if (domain.endsWith("mail.google.com"_s))
-            m_shouldEnableApplicationCacheQuirk = true;
-        else
-            m_shouldEnableApplicationCacheQuirk = shouldEnableBySetting;
+        m_shouldEnableApplicationCacheQuirk = domain.endsWith("mail.google.com"_s);
     }
 
     return m_shouldEnableApplicationCacheQuirk.value();
 #else
-    return shouldEnableBySetting;
+    return false;
 #endif
 }
 
@@ -1579,6 +1671,17 @@ bool Quirks::shouldStarBeFeaturePolicyDefaultValue() const
     return *m_shouldStarBeFeaturePolicyDefaultValueQuirk;
 }
 
+// Microsoft office online generates data URLs with incorrect padding on Safari only (rdar://114573089).
+bool Quirks::shouldDisableDataURLPaddingValidation() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableDataURLPaddingValidation)
+        m_shouldDisableDataURLPaddingValidation = m_document->url().host().endsWith("officeapps.live.com"_s) || m_document->url().host().endsWith("onedrive.live.com"_s);
+    return *m_shouldDisableDataURLPaddingValidation;
+}
+
 bool Quirks::needsDisableDOMPasteAccessQuirk() const
 {
     if (!needsQuirks())
@@ -1599,6 +1702,19 @@ bool Quirks::needsDisableDOMPasteAccessQuirk() const
         return globalObject->hasProperty(globalObject, tableauPrepProperty);
     }();
     return *m_needsDisableDOMPasteAccessQuirk;
+}
+
+// oracle.com rdar://117673533
+bool Quirks::shouldDisableNavigatorStandaloneQuirk() const
+{
+#if PLATFORM(MAC)
+    if (!needsQuirks())
+        return false;
+
+    if (isDomain("oracle.com"_s))
+        return true;
+#endif
+    return false;
 }
 
 }
