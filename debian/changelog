@@ -1,4 +1,4 @@
-wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
+wpewebkit (2.44.1-1) unstable; urgency=high
 
   * New upstream release.
   * The WPE WebKit security advisory WSA-2024-0002 lists the following
