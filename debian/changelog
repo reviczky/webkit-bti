@@ -1,3 +1,9 @@
+wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
+
 wpewebkit (2.42.5-2~exp) experimental; urgency=medium
 
   * Replace the 1.1 API build with the 2.0 one.
