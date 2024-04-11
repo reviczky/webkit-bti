@@ -27,6 +27,8 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
   * debian/debian/libwpewebkit-doc.*
     - Update debhelper scripts to reflect the upstream changes of the
       installation paths.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
   * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
