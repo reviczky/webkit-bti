@@ -1,6 +1,11 @@
 wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * The WPE WebKit security advisory WSA-2024-0002 lists the following
+    security fixes in the latest versions of WPE WebKit:
+    - CVE-2024-23252, CVE-2024-23254, CVE-2024-23263, CVE-2024-23280,
+      CVE-2024-23284, CVE-2023-42950, CVE-2023-42956, CVE-2023-42843
+      (fixed in 2.44.0).
   * Refresh all patches.
   * debian/rules:
     - Stop setting USE_LD_GOLD, it has been removed upstream so it no
