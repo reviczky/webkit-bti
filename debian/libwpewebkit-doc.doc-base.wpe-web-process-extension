@@ -1,9 +1,9 @@
-Document: wpe-web-extension
+Document: wpe-web-process-extension
 Title: WPE Web Extension and DOM Reference Manual
 Author: WPE WebKit development team
 Abstract: This is the reference manual of the WPE Web Extension and DOM API
 Section: Programming
 
 Format: HTML
-Index: /usr/share/doc/libwpewebkit-doc/html/wpe-web-extension-2.0/index.html
-Files: /usr/share/doc/libwpewebkit-doc/html/wpe-web-extension-2.0/*.html
+Index: /usr/share/doc/libwpewebkit-doc/html/wpe-web-process-extension-2.0/index.html
+Files: /usr/share/doc/libwpewebkit-doc/html/wpe-web-process-extension-2.0/*.html

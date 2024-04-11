@@ -105,12 +105,12 @@ override_dh_auto_clean: debian/control
 
 # Create dummy doc directories in case the "nodoc" build option is set.
 override_dh_install-indep:
-	mkdir -p debian/tmp/usr/share/gtk-doc/html/wpe-webkit-2.0
-	touch debian/tmp/usr/share/gtk-doc/html/wpe-webkit-2.0/index.html
-	mkdir -p debian/tmp/usr/share/gtk-doc/html/wpe-web-extension-2.0
-	touch debian/tmp/usr/share/gtk-doc/html/wpe-web-extension-2.0/index.html
-	mkdir -p debian/tmp/usr/share/gtk-doc/html/wpe-javascriptcore-2.0
-	touch debian/tmp/usr/share/gtk-doc/html/wpe-javascriptcore-2.0/index.html
+	mkdir -p debian/tmp/usr/share/doc/wpe-webkit-2.0
+	touch debian/tmp/usr/share/doc/wpe-webkit-2.0/index.html
+	mkdir -p debian/tmp/usr/share/doc/wpe-web-process-extension-2.0
+	touch debian/tmp/usr/share/doc/wpe-web-process-extension-2.0/index.html
+	mkdir -p debian/tmp/usr/share/doc/wpe-javascriptcore-2.0
+	touch debian/tmp/usr/share/doc/wpe-javascriptcore-2.0/index.html
 	dh_install -i
 	jdupes -rl debian/libwpewebkit-doc/usr
 

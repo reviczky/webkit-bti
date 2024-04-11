@@ -24,6 +24,9 @@ wpewebkit (2.44.1-1) UNRELEASED; urgency=medium
       (webkit bug #271371).
   * debian/patches/fix-ftbfs-i386.patch:
     - Drop this patch, it is included in this release.
+  * debian/debian/libwpewebkit-doc.*
+    - Update debhelper scripts to reflect the upstream changes of the
+      installation paths.
   * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 11 Apr 2024 15:35:46 +0200
