@@ -109,13 +109,11 @@ endif
 # Don't recommend xdg portals on Ubuntu i386 where it doesn't exist
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes i386)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
-	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
-					xdg-dbus-proxy"
+	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), xdg-dbus-proxy"
 # Disable the bubblewrap sandbox if libseccomp-dev is not available
 else ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
-	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
-					xdg-dbus-proxy"
+	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), xdg-dbus-proxy"
 	DH_GENCONTROL_ARGS += -Vbwrap:Recommends="xdg-desktop-portal-gtk"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
