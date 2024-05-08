@@ -1,3 +1,19 @@
+webkit2gtk (2.44.1-1~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+  * Disable JPEG XL to avoid adding new dependencies.
+    - debian/control.in: Remove build dependency on libjxl-dev.
+    - debian/rules: Build with -DUSE_JPEGXL=OFF.
+  * debian/rules:
+    - Enable ENABLE_SOUP2, USE_OLD_DOC_PKG and USE_OLD_JSCBIN_PKG to keep
+      using the old package names.
+  * debian/control.in:
+    - Replace gobject-introspection-bin with gobject-introspection.
+    - Make the -dev packages depend on the gir packages.
+    - Build depend on ccache.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 08 May 2024 12:14:02 +0200
+
 webkit2gtk (2.44.1-1) unstable; urgency=medium
 
   * New upstream release.
