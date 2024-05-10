@@ -5,7 +5,7 @@ Source: https://webkitgtk.org/releases/
 
 Files: *
 Copyright: 1999 Antti Koivisto <koivisto@kde.org>
-           1999-2000 Lars Knoll <knoll@kde.org>
+           1999 Lars Knoll <knoll@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
            2003-2024 Apple Inc
@@ -70,6 +70,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2011 Renata Hodovan <reni@webkit.org>
            2011, 2014-2017, 2022-2023 The Chromium Authors
            2011-2012, 2014-2015 Ericsson AB
+           2011-2012, 2019 the V8 project authors
            2011-2013 Intel Corporation
            2011-2013 Samsung Electronics
            2011-2014 Adobe Systems Inc
@@ -83,7 +84,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2012 Sony Network Entertainment
            2012 Victor Carbune <victor@rosedu.org>
            2012, 2016 SoftAtHome
-           2012, 2019 the V8 project authors
            2012-2013 Company 100 Inc
            2012-2013 Digia Plc
            2012-2013 Michael Pruett <michael@68k.org>
@@ -91,7 +91,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2013 Adenilson Cavalcanti <cavalcantii@gmail.com>
            2013 Andrew Bortz
            2013 Carlos Garnacho <carlosg@gnome.org>
-           2013 ChangSeok Oh <shivamidow@gmail.com>
            2013 Gustavo Noronha Silva <gns@gnome.org>
            2013 The MathJax Consortium
            2013 Xidorn Quan <quanxunzhen@gmail.com>
@@ -132,15 +131,18 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
-           2020 RDK Management
            2020 WikiMedia Foundation. All Rights Reserve
+           2020, 2024 RDK Management
+           2021 7-2022 Apple Inc
            2021 Purism SPC
            2021 Tyler Wilcock <twilco.o@protonmail.com>
+           2022 0-2024 Apple Inc
            2022 Jarred Sumner
            2022 Leaning Technologies Inc
            2022 Leonardo Taccari <leot@NetBSD.org>
            2023 ChangSeok Oh <changseok@webkit.org>
            2023 Colin Vidal <colin@cvidal.org>
+           2023 James Howard <jameshoward@mac.com>
 License: BSD-2-clause
 Comment:
  The default license of WebKit is BSD 2-clause. The exceptions are
@@ -164,9 +166,10 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/ANGLE/third_party/logdog/get.sh
        Source/ThirdParty/ANGLE/util/android/third_party/*
        Source/ThirdParty/pdfjs/web/*
+       Source/ThirdParty/skia/include/third_party/vulkan/vulkan/*
        Source/WTF/wtf/*
        Tools/TestWebKitAPI/Tests/WTF/Int128.cpp
-Copyright: 2007-2021 The Khronos Group Inc
+Copyright: 2007-2023 The Khronos Group Inc
            2010, 2014, 2018-2019, 2023 The Android Open Source Project
            2014 Mozilla Foundation
            2015-2016 LunarG Inc
@@ -272,6 +275,8 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/runtime/JSSegmentedVariableObject.h
        Source/JavaScriptCore/runtime/JSSymbolTableObject.cpp
        Source/JavaScriptCore/runtime/JSSymbolTableObject.h
+       Source/JavaScriptCore/runtime/RegisterTZoneTypes.cpp
+       Source/JavaScriptCore/runtime/RegisterTZoneTypes.h
        Source/JavaScriptCore/runtime/SamplingCounter.cpp
        Source/JavaScriptCore/runtime/SamplingCounter.h
        Source/JavaScriptCore/runtime/SymbolTable.cpp
@@ -381,12 +386,12 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/accessibility/AXImage.h
        Source/WebCore/accessibility/AXLogger.cpp
        Source/WebCore/accessibility/AXObjectCache.cpp
-       Source/WebCore/accessibility/AccessibilityARIAGrid.cpp
-       Source/WebCore/accessibility/AccessibilityARIAGrid.h
        Source/WebCore/accessibility/AccessibilityARIAGridCell.cpp
        Source/WebCore/accessibility/AccessibilityARIAGridCell.h
        Source/WebCore/accessibility/AccessibilityARIAGridRow.cpp
        Source/WebCore/accessibility/AccessibilityARIAGridRow.h
+       Source/WebCore/accessibility/AccessibilityARIATable.cpp
+       Source/WebCore/accessibility/AccessibilityARIATable.h
        Source/WebCore/accessibility/AccessibilityImageMapLink.cpp
        Source/WebCore/accessibility/AccessibilityImageMapLink.h
        Source/WebCore/accessibility/AccessibilityLabel.cpp
@@ -631,6 +636,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/platform/graphics/coretext/GlyphPageCoreText.cpp
        Source/WebCore/platform/graphics/freetype/GlyphPageTreeNodeFreeType.cpp
        Source/WebCore/platform/graphics/freetype/SimpleFontDataFreeType.cpp
+       Source/WebCore/platform/graphics/skia/GlyphPageSkia.cpp
        Source/WebCore/platform/image-decoders/webp/*
        Source/WebCore/platform/mediastream/RealtimeOutgoingAudioSource.cpp
        Source/WebCore/platform/mediastream/RealtimeOutgoingAudioSource.h
@@ -666,15 +672,19 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebInspectorUI/UserInterface/Views/GradientSlider.js
        Source/WebInspectorUI/UserInterface/Views/TreeElement.js
        Source/WebInspectorUI/UserInterface/Views/TreeOutline.js
+       Source/WebKit/Shared/API/RegisterTZoneTypes.cpp
+       Source/WebKit/Shared/API/RegisterTZoneTypes.h
        Source/WebKit/UIProcess/Launcher/playstation/ProcessLauncherPlayStation.cpp
        Source/bmalloc/libpas/src/libpas/pas_red_black_tree.c
        Source/bmalloc/libpas/src/libpas/pas_red_black_tree.h
        Source/bmalloc/libpas/src/test/CartesianTreeTests.cpp
        Source/bmalloc/libpas/src/test/RedBlackTreeTests.cpp
+       Tools/Scripts/rewrite-compile-commands
        Tools/TestWebKitAPI/Tests/WTF/MediaTime.cpp
        Tools/TestWebKitAPI/Tests/WTF/MetaAllocator.cpp
        Tools/TestWebKitAPI/Tests/WTF/RedBlackTree.cpp
        Tools/TestWebKitAPI/Tests/WTF/SafeStrerror.cpp
+       Tools/TestWebKitAPI/Tests/WTF/UTF8Conversion.cpp
 Copyright: 2003, 2005-2024 Apple Inc
            2006 Alexey Proskuryakov
            2006 Alexey Proskuryakov <ap@webkit.org>
@@ -704,7 +714,7 @@ Copyright: 2003, 2005-2024 Apple Inc
            2011-2012 Research In Motion Limited
            2012 Intel Inc
            2012 Patrick Gansterer <paroga@paroga.com>
-           2012, 2018 Igalia S.L.
+           2012, 2018, 2023-2024 Igalia S.L.
            2012-2014 Adobe Systems Inc
            2013 Samsung Electronics
            2013 Xidorn Quan <quanxunzhen@gmail.com>
@@ -814,7 +824,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/JavaScriptCore/inspector/agents/InspectorRuntimeAgent.h
        Source/ThirdParty/gtest/include/gtest/*
        Source/ThirdParty/gtest/samples/*
-       Source/ThirdParty/gtest/scripts/*
        Source/ThirdParty/gtest/src/*
        Source/ThirdParty/gtest/test/*
        Source/ThirdParty/gtest/xcode/Samples/FrameworkSample/*
@@ -1009,7 +1018,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/dom/ScopedEventQueue.h
        Source/WebCore/dom/StringCallback.cpp
        Source/WebCore/dom/StringCallback.h
-       Source/WebCore/dom/TreeDepthLimit.h
        Source/WebCore/dom/TreeScopeOrderedMap.cpp
        Source/WebCore/dom/TreeScopeOrderedMap.h
        Source/WebCore/dom/VisibilityState.h
@@ -1088,6 +1096,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/html/SearchInputType.h
        Source/WebCore/html/SubmitInputType.cpp
        Source/WebCore/html/SubmitInputType.h
+       Source/WebCore/html/SwitchTrigger.h
        Source/WebCore/html/TelephoneInputType.cpp
        Source/WebCore/html/TelephoneInputType.h
        Source/WebCore/html/TextFieldInputType.cpp
@@ -1301,14 +1310,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/rendering/OrderIterator.h
        Source/WebCore/rendering/RenderFlexibleBox.cpp
        Source/WebCore/rendering/RenderFlexibleBox.h
-       Source/WebCore/rendering/RenderRuby.cpp
-       Source/WebCore/rendering/RenderRuby.h
-       Source/WebCore/rendering/RenderRubyBase.cpp
-       Source/WebCore/rendering/RenderRubyBase.h
-       Source/WebCore/rendering/RenderRubyRun.cpp
-       Source/WebCore/rendering/RenderRubyRun.h
-       Source/WebCore/rendering/RenderRubyText.cpp
-       Source/WebCore/rendering/RenderRubyText.h
        Source/WebCore/rendering/style/GapLength.cpp
        Source/WebCore/rendering/style/GapLength.h
        Source/WebCore/rendering/style/GridArea.h
@@ -1388,7 +1389,7 @@ Copyright: 2004-2024 Apple Inc
            2013 Cable Television Labs Inc
            2013 Nokia
            2013 Opera Software ASA
-           2013-2022 Igalia S.L.
+           2013-2022, 2024 Igalia S.L.
            2014 PDFium Authors
            2014 University of Washington
            2014-2019, 2023 The Chromium Authors
@@ -1442,6 +1443,7 @@ Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/etc_decoder/etc_decoder.h
        Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/ThirdParty/ANGLE/third_party/renderdoc/src/renderdoc_app.h
+       Source/WTF/wtf/simde/arm/*
        Source/WebCore/xml/XSLTExtensions.cpp
 Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2007 Alexey Proskuryakov <ap@webkit.org>
@@ -1449,6 +1451,7 @@ Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2013-2020 The Khronos Group Inc
            2015-2018 Baldur Karlsson
            2018-2023 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
+           2020-2021 Evan Nemerson <evan@nemerson.com>
            2020-2022 Hans-Kristian Arntzen
 License: Expat
 
@@ -1496,6 +1499,7 @@ Files: Source/ThirdParty/ANGLE/include/GLES/gl.h
        Source/ThirdParty/ANGLE/include/KHR/khrplatform.h
        Source/ThirdParty/ANGLE/include/WGL/wgl.h
        Source/ThirdParty/ANGLE/src/third_party/khronos/GL/wglext.h
+       Source/ThirdParty/skia/src/sksl/*
 Copyright: 2008-2018 The Khronos Group Inc
 License: Expat
 
@@ -1824,6 +1828,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/bindings/js/JSDOMOperationReturningPromise.h
        Source/WebCore/bindings/js/JSDOMWindowBase.cpp
        Source/WebCore/bindings/js/JSDOMWindowBase.h
+       Source/WebCore/bindings/js/JSDOMWindowCustom.cpp
+       Source/WebCore/bindings/js/JSDOMWindowCustom.h
        Source/WebCore/bindings/js/JSDOMWrapper.h
        Source/WebCore/bindings/js/JSDOMWrapperCache.cpp
        Source/WebCore/bindings/js/JSDOMWrapperCache.h
@@ -1833,8 +1839,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/bindings/js/JSHTMLCollectionCustom.cpp
        Source/WebCore/bindings/js/JSLazyEventListener.cpp
        Source/WebCore/bindings/js/JSLazyEventListener.h
-       Source/WebCore/bindings/js/JSLocalDOMWindowCustom.cpp
-       Source/WebCore/bindings/js/JSLocalDOMWindowCustom.h
        Source/WebCore/bindings/js/JSLocationCustom.cpp
        Source/WebCore/bindings/js/JSNodeIteratorCustom.cpp
        Source/WebCore/bindings/js/JSOffscreenCanvasRenderingContext2DCustom.cpp
@@ -2342,6 +2346,10 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/egl/GLContext.cpp
        Source/WebCore/platform/graphics/egl/GLContext.h
        Source/WebCore/platform/graphics/egl/GLContextLibWPE.cpp
+       Source/WebCore/platform/graphics/egl/GLContextWrapper.cpp
+       Source/WebCore/platform/graphics/egl/GLContextWrapper.h
+       Source/WebCore/platform/graphics/egl/GLFence.cpp
+       Source/WebCore/platform/graphics/egl/GLFence.h
        Source/WebCore/platform/graphics/filters/DistantLightSource.h
        Source/WebCore/platform/graphics/filters/FEBlend.cpp
        Source/WebCore/platform/graphics/filters/FEBlend.h
@@ -2521,6 +2529,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedBackingStore.h
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.h
+       Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayerCairo.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStore.h
        Source/WebCore/platform/graphics/texmap/coordinated/TiledBackingStoreClient.h
@@ -2542,6 +2551,23 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gstreamer/GStreamerCodecUtilities.h
        Source/WebCore/platform/gstreamer/GStreamerElementHarness.cpp
        Source/WebCore/platform/gstreamer/GStreamerElementHarness.h
+       Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkBcmNexus.cpp
+       Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkBcmNexus.h
+       Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkFake.h
+       Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkWesteros.cpp
+       Source/WebCore/platform/gstreamer/GStreamerHolePunchQuirkWesteros.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkAmLogic.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkAmLogic.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBcmNexus.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBcmNexus.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirks.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirks.h
        Source/WebCore/platform/gstreamer/GUniquePtrFlite.h
        Source/WebCore/platform/gstreamer/VideoEncoderPrivateGStreamer.cpp
        Source/WebCore/platform/gstreamer/VideoEncoderPrivateGStreamer.h
@@ -2626,13 +2652,10 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/HitTestResult.h
        Source/WebCore/rendering/LayoutRepainter.cpp
        Source/WebCore/rendering/LayoutRepainter.h
-       Source/WebCore/rendering/LegacyEllipsisBox.cpp
-       Source/WebCore/rendering/LegacyEllipsisBox.h
        Source/WebCore/rendering/LegacyInlineBox.cpp
        Source/WebCore/rendering/LegacyInlineBox.h
        Source/WebCore/rendering/LegacyInlineFlowBox.cpp
        Source/WebCore/rendering/LegacyInlineFlowBox.h
-       Source/WebCore/rendering/LegacyInlineFlowBoxInlines.h
        Source/WebCore/rendering/LegacyInlineIterator.h
        Source/WebCore/rendering/LegacyInlineIteratorInlines.h
        Source/WebCore/rendering/LegacyInlineTextBox.cpp
@@ -2888,12 +2911,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/SVGRenderSupport.h
        Source/WebCore/rendering/svg/SVGRenderingContext.cpp
        Source/WebCore/rendering/svg/SVGRenderingContext.h
-       Source/WebCore/rendering/svg/SVGResources.cpp
-       Source/WebCore/rendering/svg/SVGResources.h
-       Source/WebCore/rendering/svg/SVGResourcesCache.cpp
-       Source/WebCore/rendering/svg/SVGResourcesCache.h
-       Source/WebCore/rendering/svg/SVGResourcesCycleSolver.cpp
-       Source/WebCore/rendering/svg/SVGResourcesCycleSolver.h
        Source/WebCore/rendering/svg/SVGRootInlineBox.cpp
        Source/WebCore/rendering/svg/SVGRootInlineBox.h
        Source/WebCore/rendering/svg/SVGSubpathData.h
@@ -2918,6 +2935,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/SVGTextMetricsBuilder.h
        Source/WebCore/rendering/svg/SVGTextQuery.cpp
        Source/WebCore/rendering/svg/SVGTextQuery.h
+       Source/WebCore/rendering/svg/SVGVisitedRendererTracking.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGContainer.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGContainer.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGForeignObject.cpp
@@ -2958,6 +2976,12 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGTransformableContainer.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGViewportContainer.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGViewportContainer.h
+       Source/WebCore/rendering/svg/legacy/SVGResources.cpp
+       Source/WebCore/rendering/svg/legacy/SVGResources.h
+       Source/WebCore/rendering/svg/legacy/SVGResourcesCache.cpp
+       Source/WebCore/rendering/svg/legacy/SVGResourcesCache.h
+       Source/WebCore/rendering/svg/legacy/SVGResourcesCycleSolver.cpp
+       Source/WebCore/rendering/svg/legacy/SVGResourcesCycleSolver.h
        Source/WebCore/rendering/updating/RenderTreeBuilderFirstLetter.cpp
        Source/WebCore/rendering/updating/RenderTreeBuilderList.cpp
        Source/WebCore/rendering/updating/RenderTreeBuilderMultiColumn.cpp
@@ -3005,8 +3029,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/svg/SVGAltGlyphItemElement.h
        Source/WebCore/svg/SVGAngleValue.cpp
        Source/WebCore/svg/SVGAngleValue.h
-       Source/WebCore/svg/SVGAnimateColorElement.cpp
-       Source/WebCore/svg/SVGAnimateColorElement.h
        Source/WebCore/svg/SVGAnimateElementBase.cpp
        Source/WebCore/svg/SVGAnimateElementBase.h
        Source/WebCore/svg/SVGAnimateMotionElement.cpp
@@ -3239,6 +3261,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/svg/SVGViewElement.h
        Source/WebCore/svg/SVGViewSpec.cpp
        Source/WebCore/svg/SVGViewSpec.h
+       Source/WebCore/svg/SVGVisitedElementTracking.h
        Source/WebCore/svg/SVGZoomAndPan.cpp
        Source/WebCore/svg/SVGZoomAndPan.h
        Source/WebCore/svg/graphics/SVGImageCache.cpp
@@ -3267,6 +3290,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/xml/parser/XMLDocumentParserLibxml2.cpp
        Source/WebGPU/WGSL/config.h
        Source/WebGPU/WebGPU/config.h
+       Source/WebKit/Platform/IPC/glib/ArgumentCodersGlib.h
        Source/WebKit/Shared/API/glib/WebKitContextMenu.cpp
        Source/WebKit/Shared/API/glib/WebKitContextMenuActions.cpp
        Source/WebKit/Shared/API/glib/WebKitContextMenuActionsPrivate.h
@@ -3925,7 +3949,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2015 Jordan Harband <ljharb@gmail.com>
            2015 Yusuke Suzuki<utatane.tea@gmail.com>
            2015-2016 Canon Inc
-           2015-2023 Metrological Group B.V
+           2015-2024 Metrological Group B.V
            2017 Aidan Holm <aidanholm@gmail.com>
            2017 Endless Mobile Inc
            2017, 2020-2022 Sony Interactive Entertainment
@@ -3934,6 +3958,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2020 WikiMedia Inc
            2021 Zixing Liu
            2023 Tetsuharu Ohzeki <tetsuharu.ohzeki@gmail.com>
+           2024 Alexander M <webkit@sata.lol>
 License: LGPL-2+
 
 Files: Source/WebCore/html/HTMLDocument.cpp
