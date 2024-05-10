@@ -65,7 +65,7 @@ public:
         , bool shouldRestrictHTTPResponseAccess
         , WebCore::PreflightPolicy
         , bool shouldEnableCrossOriginResourcePolicy
-        , Vector<RefPtr<WebCore::SecurityOrigin>>&& frameAncestorOrigins
+        , Vector<Ref<WebCore::SecurityOrigin>>&& frameAncestorOrigins
         , bool pageHasResourceLoadClient
         , std::optional<WebCore::FrameIdentifier> parentFrameID
         , bool crossOriginAccessControlCheckEnabled
@@ -87,9 +87,10 @@ public:
         , std::optional<UserContentControllerIdentifier>
 #endif
 #if ENABLE(WK_WEB_EXTENSIONS)
-        , bool pageHasExtensionController
+        , bool pageHasLoadedWebExtensions
 #endif
         , bool linkPreconnectEarlyHintsEnabled
+        , bool shouldRecordFrameLoadForStorageAccess
     );
     
     std::optional<Vector<SandboxExtension::Handle>> sandboxExtensionsIfHttpBody() const;
@@ -111,7 +112,7 @@ public:
     bool shouldRestrictHTTPResponseAccess { false };
     WebCore::PreflightPolicy preflightPolicy { WebCore::PreflightPolicy::Consider };
     bool shouldEnableCrossOriginResourcePolicy { false };
-    Vector<RefPtr<WebCore::SecurityOrigin>> frameAncestorOrigins;
+    Vector<Ref<WebCore::SecurityOrigin>> frameAncestorOrigins;
     bool pageHasResourceLoadClient { false };
     std::optional<WebCore::FrameIdentifier> parentFrameID;
     bool crossOriginAccessControlCheckEnabled { true };
@@ -137,10 +138,11 @@ public:
 #endif
 
 #if ENABLE(WK_WEB_EXTENSIONS)
-    bool pageHasExtensionController { false };
+    bool pageHasLoadedWebExtensions { false };
 #endif
 
     bool linkPreconnectEarlyHintsEnabled { false };
+    bool shouldRecordFrameLoadForStorageAccess { false };
 };
 
 } // namespace WebKit

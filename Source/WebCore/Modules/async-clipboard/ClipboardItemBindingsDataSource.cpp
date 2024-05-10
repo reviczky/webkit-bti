@@ -260,7 +260,7 @@ void ClipboardItemBindingsDataSource::ClipboardItemTypeLoader::didFinishLoading(
     if (!stringResult.isNull())
         m_data = { stringResult };
     else if (auto arrayBuffer = m_blobLoader->arrayBufferResult())
-        m_data = { SharedBuffer::create(static_cast<const char*>(arrayBuffer->data()), arrayBuffer->byteLength()) };
+        m_data = { SharedBuffer::create(arrayBuffer->span()) };
     m_blobLoader = nullptr;
     invokeCompletionHandler();
 }
@@ -276,7 +276,7 @@ String ClipboardItemBindingsDataSource::ClipboardItemTypeLoader::dataAsString() 
 {
     if (std::holds_alternative<Ref<SharedBuffer>>(m_data)) {
         auto& buffer = std::get<Ref<SharedBuffer>>(m_data);
-        return String::fromUTF8(buffer->data(), buffer->size());
+        return String::fromUTF8(buffer->span());
     }
 
     if (std::holds_alternative<String>(m_data))

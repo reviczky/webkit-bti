@@ -24,6 +24,7 @@
 GPUProcess/GPUProcess.cpp
 GPUProcess/GPUConnectionToWebProcess.cpp
 GPUProcess/GPUProcessPreferences.cpp
+GPUProcess/RemoteSharedResourceCache.cpp
 GPUProcess/ShapeDetection/RemoteBarcodeDetector.cpp
 GPUProcess/ShapeDetection/RemoteFaceDetector.cpp
 GPUProcess/ShapeDetection/RemoteTextDetector.cpp
@@ -93,6 +94,7 @@ GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager.cpp
 
 ModelProcess/ModelProcess.cpp
 ModelProcess/ModelConnectionToWebProcess.cpp
+ModelProcess/ModelProcessModelPlayerManagerProxy.cpp
 
 NetworkProcess/BackgroundFetchLoad.cpp
 NetworkProcess/DatabaseUtilities.cpp
@@ -270,6 +272,7 @@ Shared/API/APIDictionary.cpp
 Shared/API/APIError.cpp
 Shared/API/APIObject.cpp
 Shared/API/APIURLRequest.cpp
+Shared/API/RegisterTZoneTypes.cpp
 
 Shared/API/c/WKArray.cpp
 Shared/API/c/WKCertificateInfo.cpp
@@ -382,6 +385,7 @@ UIProcess/DisplayLinkProcessProxyClient.cpp
 UIProcess/DrawingAreaProxy.cpp
 UIProcess/FindStringCallbackAggregator.cpp
 UIProcess/FrameLoadState.cpp
+UIProcess/FrameProcess.cpp
 UIProcess/GeolocationPermissionRequestManagerProxy.cpp
 UIProcess/GeolocationPermissionRequestProxy.cpp
 UIProcess/LegacyGlobalSettings.cpp
@@ -470,6 +474,8 @@ UIProcess/API/APIPageConfiguration.cpp
 UIProcess/API/APIProcessPoolConfiguration.cpp
 UIProcess/API/APIOpenPanelParameters.cpp
 UIProcess/API/APISessionState.cpp
+UIProcess/API/APITargetedElementInfo.cpp
+UIProcess/API/APITargetedElementRequest.cpp
 UIProcess/API/APIUIClient.cpp
 UIProcess/API/APIUserScript.cpp
 UIProcess/API/APIUserStyleSheet.cpp
@@ -549,6 +555,7 @@ UIProcess/Extensions/WebExtensionAlarm.cpp
 UIProcess/Extensions/WebExtensionContext.cpp
 UIProcess/Extensions/WebExtensionController.cpp
 UIProcess/Extensions/WebExtensionControllerConfiguration.cpp
+UIProcess/Extensions/WebExtensionDataRecord.cpp
 
 UIProcess/Gamepad/UIGamepad.cpp
 UIProcess/Gamepad/UIGamepadProvider.cpp
@@ -683,10 +690,12 @@ WebProcess/MediaStream/MediaDeviceSandboxExtensions.cpp
 WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
 
 WebProcess/Model/WebModelPlayerProvider.cpp
-
 WebProcess/Model/ModelProcessConnection.cpp
+WebProcess/Model/ModelProcessModelPlayer.cpp
+WebProcess/Model/ModelProcessModelPlayerManager.cpp
 
 WebProcess/GPU/GPUProcessConnection.cpp
+WebProcess/GPU/RemoteSharedResourceCacheProxy.cpp
 WebProcess/GPU/ShapeDetection/RemoteBarcodeDetectorProxy.cpp
 WebProcess/GPU/ShapeDetection/RemoteFaceDetectorProxy.cpp
 WebProcess/GPU/ShapeDetection/RemoteTextDetectorProxy.cpp
@@ -810,6 +819,7 @@ WebProcess/WebCoreSupport/WebBroadcastChannelRegistry.cpp
 WebProcess/WebCoreSupport/WebChromeClient.cpp
 WebProcess/WebCoreSupport/WebColorChooser.cpp
 WebProcess/WebCoreSupport/WebContextMenuClient.cpp
+WebProcess/WebCoreSupport/WebCryptoClient.cpp
 WebProcess/WebCoreSupport/WebDataListSuggestionPicker.cpp
 WebProcess/WebCoreSupport/WebDateTimeChooser.cpp
 WebProcess/WebCoreSupport/WebDiagnosticLoggingClient.cpp
@@ -844,7 +854,6 @@ WebProcess/WebPage/FindController.cpp
 WebProcess/WebPage/IPCTestingAPI.cpp
 WebProcess/WebPage/MomentumEventDispatcher.cpp
 WebProcess/WebPage/PageBanner.cpp
-WebProcess/WebPage/UnifiedTextReplacementController.cpp
 WebProcess/WebPage/VisitedLinkTableController.cpp
 WebProcess/WebPage/WebBackForwardListProxy.cpp
 WebProcess/WebPage/WebContextMenu.cpp
@@ -874,6 +883,8 @@ IPCStreamTesterMessageReceiver.cpp
 IPCStreamTesterProxyMessageReceiver.cpp
 IPCTesterMessageReceiver.cpp
 IPCTesterReceiverMessageReceiver.cpp
+ModelProcessModelPlayerManagerProxyMessageReceiver.cpp
+ModelProcessModelPlayerMessageReceiver.cpp
 NetworkBroadcastChannelRegistryMessageReceiver.cpp
 NetworkTransportSessionMessageReceiver.cpp
 RTCDataChannelRemoteManagerMessageReceiver.cpp

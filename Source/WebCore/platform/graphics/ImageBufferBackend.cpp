@@ -60,7 +60,7 @@ void ImageBufferBackend::convertToLuminanceMask()
         return;
     getPixelBuffer(sourceRect, *pixelBuffer);
 
-    unsigned pixelArrayLength = pixelBuffer->sizeInBytes();
+    unsigned pixelArrayLength = pixelBuffer->bytes().size();
     for (unsigned pixelOffset = 0; pixelOffset < pixelArrayLength; pixelOffset += 4) {
         uint8_t a = pixelBuffer->item(pixelOffset + 3);
         if (!a)
@@ -101,7 +101,7 @@ void ImageBufferBackend::getPixelBuffer(const IntRect& sourceRect, void* sourceD
     PixelBufferConversionView destination {
         destinationPixelBuffer.format(),
         destinationBytesPerRow,
-        destinationPixelBuffer.bytes() + destinationRect.y() * destinationBytesPerRow + destinationRect.x() * 4
+        destinationPixelBuffer.bytes().data() + destinationRect.y() * destinationBytesPerRow + destinationRect.x() * 4
     };
 
     convertImagePixels(source, destination, destinationRect.size());
@@ -127,7 +127,7 @@ void ImageBufferBackend::putPixelBuffer(const PixelBuffer& sourcePixelBuffer, co
     ConstPixelBufferConversionView source {
         sourcePixelBuffer.format(),
         sourceBytesPerRow,
-        sourcePixelBuffer.bytes() + sourceRectClipped.y() * sourceBytesPerRow + sourceRectClipped.x() * 4
+        sourcePixelBuffer.bytes().data() + sourceRectClipped.y() * sourceBytesPerRow + sourceRectClipped.x() * 4
     };
     unsigned destinationBytesPerRow = bytesPerRow();
     PixelBufferConversionView destination {
@@ -139,17 +139,16 @@ void ImageBufferBackend::putPixelBuffer(const PixelBuffer& sourcePixelBuffer, co
     convertImagePixels(source, destination, destinationRect.size());
 }
 
-AffineTransform ImageBufferBackend::calculateBaseTransform(const Parameters& parameters, bool originAtBottomLeftCorner)
+AffineTransform ImageBufferBackend::calculateBaseTransform(const Parameters& parameters)
 {
     AffineTransform baseTransform;
-
-    if (originAtBottomLeftCorner) {
-        baseTransform.scale(1, -1);
-        baseTransform.translate(0, -parameters.backendSize.height());
-    }
-
+#if USE(CG)
+    // CoreGraphics origin is at bottom left corner. GraphicsContext origin is at top left corner. Flip the drawing with GraphicsContext base
+    // transform.
+    baseTransform.scale(1, -1);
+    baseTransform.translate(0, -parameters.backendSize.height());
+#endif
     baseTransform.scale(parameters.resolutionScale);
-
     return baseTransform;
 }
 

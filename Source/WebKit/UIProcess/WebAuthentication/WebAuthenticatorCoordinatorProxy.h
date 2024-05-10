@@ -61,6 +61,15 @@ OBJC_CLASS ASCAgentProxy;
 #endif
 
 namespace WebKit {
+class WebAuthenticatorCoordinatorProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebAuthenticatorCoordinatorProxy> : std::true_type { };
+}
+
+namespace WebKit {
 
 class WebPageProxy;
 
@@ -78,8 +87,10 @@ public:
     ~WebAuthenticatorCoordinatorProxy();
 
 #if HAVE(WEB_AUTHN_AS_MODERN)
-    void pauseConditionalAssertion();
+    static WeakPtr<WebAuthenticatorCoordinatorProxy>& activeConditionalMediationProxy();
+    void pauseConditionalAssertion(CompletionHandler<void()>&&);
     void unpauseConditionalAssertion();
+    void makeActiveConditionalAssertion();
 #endif
 
 private:
@@ -89,7 +100,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
     // Receivers.
-    void makeCredential(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::PublicKeyCredentialCreationOptions&&, RequestCompletionHandler&&);
+    void makeCredential(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::PublicKeyCredentialCreationOptions&&, WebCore::MediationRequirement, RequestCompletionHandler&&);
     void getAssertion(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::PublicKeyCredentialRequestOptions&&, WebCore::MediationRequirement, std::optional<WebCore::SecurityOriginData>, RequestCompletionHandler&&);
     void isUserVerifyingPlatformAuthenticatorAvailable(const WebCore::SecurityOriginData&, QueryCompletionHandler&&);
     void isConditionalMediationAvailable(const WebCore::SecurityOriginData&, QueryCompletionHandler&&);
@@ -105,7 +116,7 @@ private:
 
 #if HAVE(WEB_AUTHN_AS_MODERN)
     RetainPtr<ASAuthorizationController> constructASController(const WebAuthenticationRequestData&);
-    RetainPtr<NSArray> requestsForRegisteration(const WebCore::PublicKeyCredentialCreationOptions&, const WebCore::SecurityOriginData& callerOrigin);
+    RetainPtr<NSArray> requestsForRegistration(const WebCore::PublicKeyCredentialCreationOptions&, const WebCore::SecurityOriginData& callerOrigin);
     RetainPtr<NSArray> requestsForAssertion(const WebCore::PublicKeyCredentialRequestOptions&, const WebCore::SecurityOriginData& callerOrigin, const std::optional<WebCore::SecurityOriginData>& parentOrigin);
 #endif
 
@@ -119,7 +130,7 @@ private:
     RetainPtr<_WKASDelegate> m_delegate;
     RetainPtr<ASAuthorizationController> m_controller;
     bool m_paused { false };
-    bool m_isConditionalAssertion { false };
+    bool m_isConditionalMediation { false };
 #endif
 
     RetainPtr<ASCAuthorizationRemotePresenter> m_presenter;

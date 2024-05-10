@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <wtf/EnumTraits.h>
+#include <wtf/text/ASCIILiteral.h>
 
 namespace IPC {
 
@@ -209,7 +210,7 @@ enum class MessageName : uint16_t {
 
 namespace Detail {
 struct MessageDescription {
-    const char* const description;
+    ASCIILiteral description;
     ReceiverName receiverName;
     bool messageAllowedWhenWaitingForSyncReply : 1;
     bool messageAllowedWhenWaitingForUnboundedSyncReply : 1;
@@ -224,7 +225,7 @@ inline ReceiverName receiverName(MessageName messageName)
     return Detail::messageDescriptions[static_cast<size_t>(messageName)].receiverName;
 }
 
-inline const char* description(MessageName messageName)
+inline ASCIILiteral description(MessageName messageName)
 {
     messageName = std::min(messageName, MessageName::Last);
     return Detail::messageDescriptions[static_cast<size_t>(messageName)].description;
@@ -240,6 +241,12 @@ inline bool messageAllowedWhenWaitingForUnboundedSyncReply(MessageName messageNa
 {
     messageName = std::min(messageName, MessageName::Last);
     return Detail::messageDescriptions[static_cast<size_t>(messageName)].messageAllowedWhenWaitingForUnboundedSyncReply;
+}
+
+inline ASCIILiteral descriptionLiteral(MessageName messageName)
+{
+    messageName = std::min(messageName, MessageName::Last);
+    return ASCIILiteral::fromLiteralUnsafe(Detail::messageDescriptions[static_cast<size_t>(messageName)].description);
 }
 
 constexpr bool messageIsSync(MessageName name)

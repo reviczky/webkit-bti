@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2008, 2009, 2010, 2011 Google Inc. All rights reserved.
  * Copyright (C) 2011 Igalia S.L.
  * Copyright (C) 2011 Motorola Mobility. All rights reserved.
@@ -55,12 +55,14 @@
 #include "FrameLoader.h"
 #include "HTMLAttachmentElement.h"
 #include "HTMLBRElement.h"
+#include "HTMLBaseElement.h"
 #include "HTMLBodyElement.h"
 #include "HTMLDivElement.h"
 #include "HTMLHeadElement.h"
 #include "HTMLHtmlElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLNames.h"
+#include "HTMLPictureElement.h"
 #include "HTMLStyleElement.h"
 #include "HTMLTableElement.h"
 #include "HTMLTextAreaElement.h"
@@ -195,7 +197,6 @@ Ref<Page> createPageForSanitizingWebContent()
 #endif
     page->settings().setScriptEnabled(false);
     page->settings().setHTMLParserScriptingFlagPolicy(HTMLParserScriptingFlagPolicy::Enabled);
-    page->settings().setPluginsEnabled(false);
     page->settings().setAcceleratedCompositingEnabled(false);
     page->settings().setLinkPreloadEnabled(false);
 
@@ -333,10 +334,27 @@ public:
         return node.parentOrShadowHostNode();
     }
 
-    void prependMetaCharsetUTF8TagIfNonASCIICharactersArePresent()
+    void prependHeadIfNecessary(const HTMLBaseElement* baseElement)
     {
-        if (!containsOnlyASCII())
+#if PLATFORM(COCOA)
+        // On Cocoa platforms, this markup is eventually persisted to the pasteboard and read back as UTF-8 data,
+        // so this meta tag is needed for clients that read this data in the future from the pasteboard and load it.
+        bool shouldAppendMetaCharset = !containsOnlyASCII();
+#else
+        bool shouldAppendMetaCharset = false;
+#endif
+        if (!shouldAppendMetaCharset && !baseElement)
+            return;
+
+        m_reversedPrecedingMarkup.append("</head>"_s);
+        if (baseElement) {
+            StringBuilder markupForBase;
+            appendStartTag(markupForBase, *baseElement, false, DoesNotFullySelectNode);
+            m_reversedPrecedingMarkup.append(markupForBase.toString());
+        }
+        if (shouldAppendMetaCharset)
             m_reversedPrecedingMarkup.append("<meta charset=\"UTF-8\">"_s);
+        m_reversedPrecedingMarkup.append("<head>"_s);
     }
 
 private:
@@ -476,11 +494,11 @@ void StyledMarkupAccumulator::appendStyleNodeOpenTag(StringBuilder& out, StylePr
     // With AnnotateForInterchange::Yes, wrappingStyleForSerialization should have removed -webkit-text-decorations-in-effect
     ASSERT(!shouldAnnotate() || propertyMissingOrEqualToNone(style, CSSPropertyWebkitTextDecorationsInEffect));
     if (isBlock)
-        out.append("<div style=\"");
+        out.append("<div style=\""_s);
     else
-        out.append("<span style=\"");
+        out.append("<span style=\""_s);
     appendAttributeValue(out, style->asText(), document.isHTMLDocument());
-    out.append("\">");
+    out.append("\">"_s);
 }
 
 const String& StyledMarkupAccumulator::styleNodeCloseTag(bool isBlock)
@@ -632,7 +650,7 @@ void StyledMarkupAccumulator::appendStartTag(StringBuilder& out, const Element& 
 
     auto replacementType = spanReplacementForElement(element);
     if (UNLIKELY(replacementType != SpanReplacementType::None))
-        out.append("<span");
+        out.append("<span"_s);
     else
         appendOpenTag(out, element, nullptr);
 
@@ -695,7 +713,7 @@ void StyledMarkupAccumulator::appendStartTag(StringBuilder& out, const Element& 
         }
 
         if (!newInlineStyle->isEmpty()) {
-            out.append(" style=\"");
+            out.append(" style=\""_s);
             appendAttributeValue(out, newInlineStyle->style()->asText(), documentIsHTML);
             out.append('"');
         }
@@ -707,7 +725,7 @@ void StyledMarkupAccumulator::appendStartTag(StringBuilder& out, const Element& 
 void StyledMarkupAccumulator::appendEndTag(StringBuilder& out, const Element& element)
 {
     if (UNLIKELY(spanReplacementForElement(element) != SpanReplacementType::None))
-        out.append("</span>");
+        out.append("</span>"_s);
     else
         MarkupAccumulator::appendEndTag(out, element);
 }
@@ -972,13 +990,16 @@ static RefPtr<Node> highestAncestorToWrapMarkup(const Position& start, const Pos
     if (RefPtr enclosingAnchor = enclosingElementWithTag(firstPositionInNode(specialCommonAncestor ? specialCommonAncestor.get() : &commonAncestor), aTag))
         specialCommonAncestor = WTFMove(enclosingAnchor);
 
+    if (RefPtr enclosingPicture = enclosingElementWithTag(firstPositionInNode(specialCommonAncestor ? specialCommonAncestor.get() : &commonAncestor), pictureTag))
+        specialCommonAncestor = WTFMove(enclosingPicture);
+
     return specialCommonAncestor;
 }
 
 static String serializePreservingVisualAppearanceInternal(const Position& start, const Position& end, Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, SerializeComposedTree serializeComposedTree, IgnoreUserSelectNone ignoreUserSelectNone,
-    AnnotateForInterchange annotate, ConvertBlocksToInlines convertBlocksToInlines, StandardFontFamilySerializationMode standardFontFamilySerializationMode, MSOListMode msoListMode)
+    AnnotateForInterchange annotate, ConvertBlocksToInlines convertBlocksToInlines, StandardFontFamilySerializationMode standardFontFamilySerializationMode, MSOListMode msoListMode, PreserveBaseElement preserveBaseElement)
 {
-    static NeverDestroyed<const String> interchangeNewlineString(MAKE_STATIC_STRING_IMPL("<br class=\"" AppleInterchangeNewline "\">"));
+    static NeverDestroyed<const String> interchangeNewlineString { makeString("<br class=\"", AppleInterchangeNewline, "\">") };
 
     if (!(start < end))
         return emptyString();
@@ -1004,19 +1025,23 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
 
     StyledMarkupAccumulator accumulator(start, end, nodes, resolveURLs, serializeComposedTree, ignoreUserSelectNone, annotate, standardFontFamilySerializationMode, msoListMode, needsPositionStyleConversion, specialCommonAncestor.get());
 
-    Position startAdjustedForInterchangeNewline = start;
+    Position adjustedStart = start;
+
+    if (RefPtr pictureElement = dynamicDowncast<HTMLPictureElement>(specialCommonAncestor))
+        adjustedStart = firstPositionInNode(pictureElement.get());
+
     if (annotate == AnnotateForInterchange::Yes && needInterchangeNewlineAfter(visibleStart)) {
         if (visibleStart == visibleEnd.previous())
             return interchangeNewlineString;
 
         accumulator.append(interchangeNewlineString.get());
-        startAdjustedForInterchangeNewline = visibleStart.next().deepEquivalent();
+        adjustedStart = visibleStart.next().deepEquivalent();
 
-        if (!(startAdjustedForInterchangeNewline < end))
+        if (!(adjustedStart < end))
             return interchangeNewlineString;
     }
 
-    RefPtr lastClosed = accumulator.serializeNodes(startAdjustedForInterchangeNewline, end);
+    RefPtr lastClosed = accumulator.serializeNodes(adjustedStart, end);
 
     if (specialCommonAncestor && lastClosed) {
         // Also include all of the ancestors of lastClosed up to this special ancestor.
@@ -1055,7 +1080,7 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
     
     if (accumulator.needRelativeStyleWrapper() && needsPositionStyleConversion) {
         if (accumulator.needClearingDiv())
-            accumulator.append("<div style=\"clear: both;\"></div>");
+            accumulator.append("<div style=\"clear: both;\"></div>"_s);
         RefPtr<EditingStyle> positionRelativeStyle = styleFromMatchedRulesAndInlineDecl(*body);
         positionRelativeStyle->style()->setProperty(CSSPropertyPosition, CSSValueRelative);
         accumulator.wrapWithStyleNode(positionRelativeStyle->style(), document, true);
@@ -1065,11 +1090,8 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
     if (annotate == AnnotateForInterchange::Yes && needInterchangeNewlineAfter(visibleEnd.previous()))
         accumulator.append(interchangeNewlineString.get());
 
-#if PLATFORM(COCOA)
-    // On Cocoa platforms, this markup is eventually persisted to the pasteboard and read back as UTF-8 data,
-    // so this meta tag is needed for clients that read this data in the future from the pasteboard and load it.
-    accumulator.prependMetaCharsetUTF8TagIfNonASCIICharactersArePresent();
-#endif
+    RefPtr baseElement = preserveBaseElement == PreserveBaseElement::Yes ? document->firstBaseElement() : nullptr;
+    accumulator.prependHeadIfNecessary(baseElement.get());
 
     return accumulator.takeResults();
 }
@@ -1078,13 +1100,13 @@ String serializePreservingVisualAppearance(const SimpleRange& range, Vector<Ref<
 {
     return serializePreservingVisualAppearanceInternal(makeDeprecatedLegacyPosition(range.start), makeDeprecatedLegacyPosition(range.end),
         nodes, resolveURLs, SerializeComposedTree::No, IgnoreUserSelectNone::No,
-        annotate, convertBlocksToInlines, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve);
+        annotate, convertBlocksToInlines, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve, PreserveBaseElement::No);
 }
 
-String serializePreservingVisualAppearance(const VisibleSelection& selection, ResolveURLs resolveURLs, SerializeComposedTree serializeComposedTree, IgnoreUserSelectNone ignoreUserSelectNone, Vector<Ref<Node>>* nodes)
+String serializePreservingVisualAppearance(const VisibleSelection& selection, ResolveURLs resolveURLs, SerializeComposedTree serializeComposedTree, IgnoreUserSelectNone ignoreUserSelectNone, PreserveBaseElement preserveBaseElement, Vector<Ref<Node>>* nodes)
 {
     return serializePreservingVisualAppearanceInternal(selection.start(), selection.end(), nodes, resolveURLs, serializeComposedTree, ignoreUserSelectNone,
-        AnnotateForInterchange::Yes, ConvertBlocksToInlines::No, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve);
+        AnnotateForInterchange::Yes, ConvertBlocksToInlines::No, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve, preserveBaseElement);
 }
 
 static bool shouldPreserveMSOLists(StringView markup)
@@ -1110,7 +1132,7 @@ String sanitizedMarkupForFragmentInDocument(Ref<DocumentFragment>&& fragment, Do
 
     // SerializeComposedTree::No because there can't be a shadow tree in the pasted fragment.
     auto result = serializePreservingVisualAppearanceInternal(firstPositionInNode(bodyElement.get()), lastPositionInNode(bodyElement.get()), nullptr,
-        ResolveURLs::YesExcludingURLsForPrivacy, SerializeComposedTree::No, IgnoreUserSelectNone::No, AnnotateForInterchange::Yes, ConvertBlocksToInlines::No, StandardFontFamilySerializationMode::Strip, msoListMode);
+        ResolveURLs::YesExcludingURLsForPrivacy, SerializeComposedTree::No, IgnoreUserSelectNone::No, AnnotateForInterchange::Yes, ConvertBlocksToInlines::No, StandardFontFamilySerializationMode::Strip, msoListMode, PreserveBaseElement::No);
 
     if (msoListMode != MSOListMode::Preserve)
         return result;
@@ -1185,11 +1207,22 @@ Ref<DocumentFragment> createFragmentFromMarkup(Document& document, const String&
     return fragment;
 }
 
-String serializeFragment(const Node& node, SerializedNodes root, Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, std::optional<SerializationSyntax> serializationSyntax, HashMap<String, String>&& replacementURLStrings, HashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet, ShouldIncludeShadowDOM shouldIncludeShadowDOM, const Vector<MarkupExclusionRule>& exclusionRules)
+String serializeFragment(const Node& node, SerializedNodes root, Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, std::optional<SerializationSyntax> serializationSyntax, SerializeShadowRoots serializeShadowRoots, Vector<Ref<ShadowRoot>>&& explicitShadowRoots, const Vector<MarkupExclusionRule>& exclusionRules)
 {
     if (!serializationSyntax)
         serializationSyntax = node.document().isHTMLDocument() ? SerializationSyntax::HTML : SerializationSyntax::XML;
-    MarkupAccumulator accumulator(nodes, resolveURLs, *serializationSyntax, WTFMove(replacementURLStrings), WTFMove(replacementURLStringsForCSSStyleSheet), shouldIncludeShadowDOM, exclusionRules);
+
+    MarkupAccumulator accumulator(nodes, resolveURLs, *serializationSyntax, serializeShadowRoots, WTFMove(explicitShadowRoots), exclusionRules);
+    return accumulator.serializeNodes(const_cast<Node&>(node), root);
+}
+
+String serializeFragmentWithURLReplacement(const Node& node, SerializedNodes root, Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, std::optional<SerializationSyntax> serializationSyntax, HashMap<String, String>&& replacementURLStrings, HashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet, SerializeShadowRoots serializeShadowRoots, Vector<Ref<ShadowRoot>>&& explicitShadowRoots, const Vector<MarkupExclusionRule>& exclusionRules)
+{
+    if (!serializationSyntax)
+        serializationSyntax = node.document().isHTMLDocument() ? SerializationSyntax::HTML : SerializationSyntax::XML;
+
+    MarkupAccumulator accumulator(nodes, resolveURLs, *serializationSyntax, serializeShadowRoots, WTFMove(explicitShadowRoots), exclusionRules);
+    accumulator.enableURLReplacement(WTFMove(replacementURLStrings), WTFMove(replacementURLStringsForCSSStyleSheet));
     return accumulator.serializeNodes(const_cast<Node&>(node), root);
 }
 
@@ -1271,7 +1304,7 @@ Ref<DocumentFragment> createFragmentFromText(const SimpleRange& context, const S
 
     auto createHTMLBRElement = [document]() {
         auto element = HTMLBRElement::create(document);
-        element->setAttributeWithoutSynchronization(classAttr, AppleInterchangeNewline ""_s);
+        element->setAttributeWithoutSynchronization(classAttr, AppleInterchangeNewline);
         return element;
     };
 
@@ -1342,9 +1375,9 @@ String documentTypeString(const Document& document)
 String urlToMarkup(const URL& url, const String& title)
 {
     StringBuilder markup;
-    markup.append("<a href=\"", url.string(), "\">");
+    markup.append("<a href=\""_s, url.string(), "\">"_s);
     MarkupAccumulator::appendCharactersReplacingEntities(markup, title, 0, title.length(), EntityMaskInPCDATA);
-    markup.append("</a>");
+    markup.append("</a>"_s);
     return markup.toString();
 }
 

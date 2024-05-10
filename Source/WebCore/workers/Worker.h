@@ -66,6 +66,10 @@ public:
     static ExceptionOr<Ref<Worker>> create(ScriptExecutionContext&, JSC::RuntimeFlags, const String& url, WorkerOptions&&);
     virtual ~Worker();
 
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     ExceptionOr<void> postMessage(JSC::JSGlobalObject&, JSC::JSValue message, StructuredSerializeOptions&&);
 
     void terminate();
@@ -92,7 +96,7 @@ public:
 private:
     Worker(ScriptExecutionContext&, JSC::RuntimeFlags, WorkerOptions&&);
 
-    EventTargetInterface eventTargetInterface() const final { return WorkerEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::Worker; }
 
     void didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse&) final;
     void notifyFinished() final;
@@ -101,7 +105,6 @@ private:
     void stop() final;
     void suspend(ReasonForSuspension) final;
     void resume() final;
-    const char* activeDOMObjectName() const final;
     bool virtualHasPendingActivity() const final;
 
     static void networkStateChanged(bool isOnLine);

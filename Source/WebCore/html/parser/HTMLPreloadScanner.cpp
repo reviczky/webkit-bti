@@ -119,9 +119,8 @@ public:
 
         Ref document = protectedDocument();
         for (auto& attribute : attributes) {
-            auto knownAttributeName = AtomString::lookUp(attribute.name.data(), attribute.name.size());
-            StringView attributeValue { attribute.value.data(), static_cast<unsigned>(attribute.value.size()) };
-            processAttribute(knownAttributeName, attributeValue, pictureState);
+            auto knownAttributeName = AtomString::lookUp(attribute.name.span());
+            processAttribute(knownAttributeName, attribute.value.span(), pictureState);
         }
 
         if (m_tagId == TagId::Source && !pictureState.isEmpty() && !pictureState.last() && m_mediaMatched && m_typeMatched && !m_srcSetAttribute.isEmpty()) {
@@ -129,7 +128,7 @@ public:
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, AtomString { m_urlToLoad }, m_srcSetAttribute, sourceSize);
             if (!imageCandidate.isEmpty()) {
                 pictureState.last() = true;
-                setURLToLoadAllowingReplacement(imageCandidate.string);
+                setURLToLoadAllowingReplacement(imageCandidate.string.view);
             }
         }
 
@@ -137,7 +136,7 @@ public:
         if (m_tagId == TagId::Img && !m_srcSetAttribute.isEmpty()) {
             auto sourceSize = SizesAttributeParser(m_sizesAttribute, document).length();
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, AtomString { m_urlToLoad }, m_srcSetAttribute, sourceSize);
-            setURLToLoadAllowingReplacement(imageCandidate.string);
+            setURLToLoadAllowingReplacement(imageCandidate.string.view);
         }
 
         if (m_metaIsViewport && !m_metaContent.isNull())
@@ -538,7 +537,7 @@ void HTMLPreloadScanner::scan(HTMLResourcePreloader& preloader, Document& docume
 
     while (auto token = m_tokenizer.nextToken(m_source)) {
         if (token->type() == HTMLToken::Type::StartTag)
-            m_tokenizer.updateStateFor(AtomString::lookUp(token->name().data(), token->name().size()));
+            m_tokenizer.updateStateFor(AtomString::lookUp(token->name().span()));
         m_scanner.scan(*token, requests, document);
     }
 

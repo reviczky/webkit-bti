@@ -91,7 +91,7 @@ protected:
     // For some reason friendship doesn't extend to parent classes...
     using Base::m_lock;
 
-    bool parseAndValidateModule(const uint8_t*, size_t);
+    bool parseAndValidateModule(std::span<const uint8_t>);
 
     const char* stateString(State);
     void moveToState(State);
@@ -103,7 +103,7 @@ protected:
     virtual void didCompleteCompilation() WTF_REQUIRES_LOCK(m_lock) = 0;
 
     template<typename T>
-    bool tryReserveCapacity(Vector<T>& vector, size_t size, const char* what)
+    bool tryReserveCapacity(Vector<T>& vector, size_t size, ASCIILiteral what)
     {
         if (UNLIKELY(!vector.tryReserveCapacity(size))) {
             Locker locker { m_lock };

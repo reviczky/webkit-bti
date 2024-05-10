@@ -45,6 +45,15 @@
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
+class PeerConnectionBackend;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::PeerConnectionBackend> : std::true_type { };
+}
+
+namespace WebCore {
 
 class DeferredPromise;
 class Document;
@@ -142,7 +151,7 @@ public:
     };
     struct TransceiverState {
         String mid;
-        Vector<RefPtr<MediaStream>> receiverStreams;
+        Vector<Ref<MediaStream>> receiverStreams;
         std::optional<RTCRtpTransceiverDirection> firedDirection;
     };
     using TransceiverStates = Vector<TransceiverState>;
@@ -160,7 +169,7 @@ public:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
     const void* logIdentifier() const final { return m_logIdentifier; }
-    const char* logClassName() const override { return "PeerConnectionBackend"; }
+    ASCIILiteral logClassName() const override { return "PeerConnectionBackend"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
 
@@ -211,6 +220,9 @@ public:
 
     void iceGatheringStateChanged(RTCIceGatheringState);
 
+    virtual void startGatheringStatLogs(Function<void(String&&)>&&) { }
+    virtual void stopGatheringStatLogs() { }
+
 protected:
     void doneGatheringCandidates();
 
@@ -231,7 +243,7 @@ protected:
     struct PendingTrackEvent {
         Ref<RTCRtpReceiver> receiver;
         Ref<MediaStreamTrack> track;
-        Vector<RefPtr<MediaStream>> streams;
+        Vector<Ref<MediaStream>> streams;
         RefPtr<RTCRtpTransceiver> transceiver;
     };
     void addPendingTrackEvent(PendingTrackEvent&&);

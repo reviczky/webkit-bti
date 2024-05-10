@@ -182,7 +182,7 @@ namespace WebCore {
     macro(DecompressionStreamTransform) \
     macro(DelayNode) \
     macro(DeprecationReportBody) \
-    macro(DigitalIdentity) \
+    macro(DigitalCredential) \
     macro(DocumentTimeline) \
     macro(DynamicsCompressorNode) \
     macro(ElementInternals) \
@@ -270,6 +270,7 @@ namespace WebCore {
     macro(IDBTransaction) \
     macro(IDBVersionChangeEvent) \
     macro(IIRFilterNode) \
+    macro(IdentityCredentialsContainer) \
     macro(ImageBitmap) \
     macro(ImageBitmapRenderingContext) \
     macro(ImageCapture) \
@@ -301,6 +302,7 @@ namespace WebCore {
     macro(MediaRecorderErrorEvent) \
     macro(MediaSessionCoordinator) \
     macro(MediaSource) \
+    macro(MediaSourceHandle) \
     macro(MediaStream) \
     macro(MediaStreamAudioDestinationNode) \
     macro(MediaStreamAudioSourceNode) \
@@ -316,6 +318,7 @@ namespace WebCore {
     macro(NavigationPreloadManager) \
     macro(NavigationTransition) \
     macro(NavigatorCredentials) \
+    macro(NavigatorIdentity) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorPermissions) \
     macro(NavigatorUserMedia) \
@@ -456,6 +459,7 @@ namespace WebCore {
     macro(ViewTimeline) \
     macro(ViewTransition) \
     macro(VisualViewport) \
+    macro(WGSLLanguageFeatures) \
     macro(WakeLock) \
     macro(WakeLockSentinel) \
     macro(WaveShaperNode) \

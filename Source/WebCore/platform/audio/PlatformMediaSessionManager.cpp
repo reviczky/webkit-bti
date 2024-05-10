@@ -29,6 +29,7 @@
 #include "AudioSession.h"
 #include "Document.h"
 #include "Logging.h"
+#include "NowPlayingInfo.h"
 #include "PlatformMediaSession.h"
 
 namespace WebCore {
@@ -142,11 +143,25 @@ bool PlatformMediaSessionManager::activeAudioSessionRequired() const
     });
 }
 
+bool PlatformMediaSessionManager::hasActiveAudioSession() const
+{
+#if USE(AUDIO_SESSION)
+    return m_becameActive;
+#else
+    return true;
+#endif
+}
+
 bool PlatformMediaSessionManager::canProduceAudio() const
 {
     return anyOfSessions([] (auto& session) {
         return session.canProduceAudio();
     });
+}
+
+std::optional<NowPlayingInfo> PlatformMediaSessionManager::nowPlayingInfo() const
+{
+    return { };
 }
 
 int PlatformMediaSessionManager::count(PlatformMediaSession::MediaType type) const
@@ -613,7 +628,7 @@ bool PlatformMediaSessionManager::anyOfSessions(const Function<bool(const Platfo
     });
 }
 
-void PlatformMediaSessionManager::addAudioCaptureSource(PlatformMediaSession::AudioCaptureSource& source)
+void PlatformMediaSessionManager::addAudioCaptureSource(AudioCaptureSource& source)
 {
     ASSERT(!m_audioCaptureSources.contains(source));
     m_audioCaptureSources.add(source);
@@ -621,7 +636,7 @@ void PlatformMediaSessionManager::addAudioCaptureSource(PlatformMediaSession::Au
 }
 
 
-void PlatformMediaSessionManager::removeAudioCaptureSource(PlatformMediaSession::AudioCaptureSource& source)
+void PlatformMediaSessionManager::removeAudioCaptureSource(AudioCaptureSource& source)
 {
     m_audioCaptureSources.remove(source);
     scheduleUpdateSessionState();
@@ -654,8 +669,10 @@ void PlatformMediaSessionManager::maybeDeactivateAudioSession()
 bool PlatformMediaSessionManager::maybeActivateAudioSession()
 {
 #if USE(AUDIO_SESSION)
-    if (!activeAudioSessionRequired())
+    if (!activeAudioSessionRequired()) {
+        ALWAYS_LOG(LOGIDENTIFIER, "active audio session not required");
         return true;
+    }
 
     m_becameActive = AudioSession::sharedSession().tryToSetActive(true);
     ALWAYS_LOG(LOGIDENTIFIER, m_becameActive ? "successfully activated" : "failed to activate", " AudioSession");
@@ -822,6 +839,47 @@ void PlatformMediaSessionManager::setMediaCapabilityGrantsEnabled(bool mediaCapa
     s_mediaCapabilityGrantsEnabled = mediaCapabilityGrantsEnabled;
 }
 #endif
+
+WeakPtr<PlatformMediaSession> PlatformMediaSessionManager::bestEligibleSessionForRemoteControls(const Function<bool(const PlatformMediaSession&)>& filterFunction, PlatformMediaSession::PlaybackControlsPurpose purpose)
+{
+    Vector<WeakPtr<PlatformMediaSession>> eligibleAudioVideoSessions;
+    Vector<WeakPtr<PlatformMediaSession>> eligibleWebAudioSessions;
+    forEachMatchingSession(filterFunction, [&](auto& session) {
+        if (session.presentationType() == PlatformMediaSession::MediaType::WebAudio) {
+            if (eligibleAudioVideoSessions.isEmpty())
+                eligibleWebAudioSessions.append(session);
+        } else
+            eligibleAudioVideoSessions.append(session);
+    });
+
+    if (eligibleAudioVideoSessions.isEmpty()) {
+        if (eligibleWebAudioSessions.isEmpty())
+            return nullptr;
+        return eligibleWebAudioSessions[0]->selectBestMediaSession(eligibleWebAudioSessions, purpose);
+    }
+
+    return eligibleAudioVideoSessions[0]->selectBestMediaSession(eligibleAudioVideoSessions, purpose);
+}
+
+void PlatformMediaSessionManager::addNowPlayingMetadataObserver(const NowPlayingMetadataObserver& observer)
+{
+    ASSERT(!m_nowPlayingMetadataObservers.contains(observer));
+    m_nowPlayingMetadataObservers.add(observer);
+    observer(nowPlayingInfo().value_or(NowPlayingInfo { }).metadata);
+}
+
+void PlatformMediaSessionManager::removeNowPlayingMetadataObserver(const NowPlayingMetadataObserver& observer)
+{
+    ASSERT(m_nowPlayingMetadataObservers.contains(observer));
+    m_nowPlayingMetadataObservers.remove(observer);
+}
+
+void PlatformMediaSessionManager::nowPlayingMetadataChanged(const NowPlayingMetadata& metadata)
+{
+    m_nowPlayingMetadataObservers.forEach([&] (auto& observer) {
+        observer(metadata);
+    });
+}
 
 #if !RELEASE_LOG_DISABLED
 WTFLogChannel& PlatformMediaSessionManager::logChannel() const

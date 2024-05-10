@@ -44,6 +44,7 @@ class WebPage;
 
 class WebEditorClient final : public WebCore::EditorClient, public WebCore::TextCheckerClient {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebEditorClient);
 public:
     WebEditorClient(WebPage* page)
         : m_page(page)
@@ -194,6 +195,7 @@ private:
     bool shouldAllowSingleClickToChangeSelection(WebCore::Node&, const WebCore::VisibleSelection&) const final;
     bool shouldRevealCurrentSelectionAfterInsertion() const final;
     bool shouldSuppressPasswordEcho() const final;
+    bool shouldRemoveDictationAlternativesAfterEditing() const final;
 #endif
 
     void willChangeSelectionForAccessibility() final;

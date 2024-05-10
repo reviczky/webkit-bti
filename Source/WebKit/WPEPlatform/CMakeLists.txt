@@ -11,7 +11,7 @@ set(WPEPlatform_SOURCES
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEEvent.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBuffer.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABuf.cpp
-    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABufFormat.cpp
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABufFormats.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferSHM.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPECursorTheme.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEDisplay.cpp
@@ -21,6 +21,7 @@ set(WPEPlatform_SOURCES
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeymap.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeymapXKB.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEMonitor.cpp
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPERectangle.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEVersion.cpp
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEView.cpp
     ${WPEPlatform_DERIVED_SOURCES_DIR}/wpe/WPEEnumTypes.cpp
@@ -30,7 +31,7 @@ set(WPEPlatform_INSTALLED_HEADERS
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEEvent.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBuffer.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABuf.h
-    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABufFormat.h
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferDMABufFormats.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEBufferSHM.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEDefines.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEDisplay.h
@@ -40,6 +41,7 @@ set(WPEPlatform_INSTALLED_HEADERS
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeymapXKB.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEKeysyms.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEMonitor.h
+    ${WEBKIT_DIR}/WPEPlatform/wpe/WPERectangle.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/WPEView.h
     ${WEBKIT_DIR}/WPEPlatform/wpe/wpe-platform.h
     ${WPEPlatform_DERIVED_SOURCES_DIR}/wpe/WPEConfig.h

@@ -43,6 +43,9 @@
 #include <wtf/HashMap.h>
 #include <wtf/WeakPtr.h>
 
+// Used by generate-gpup-webgl
+#define IPC_MESSAGE_ATTRIBUTE(x)
+
 namespace WebKit {
 
 struct RemoteGraphicsContextGLInitializationState;
@@ -71,8 +74,6 @@ public:
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) final { }
 
     // WebCore::GraphicsContextGL overrides.
-    std::optional<WebCore::GraphicsContextGL::EGLImageAttachResult> createAndBindEGLImage(GCGLenum, WebCore::GraphicsContextGL::EGLImageSource) override;
-    GCEGLSync createEGLSync(ExternalEGLSyncEvent) override;
     std::tuple<GCGLenum, GCGLenum> externalImageTextureBindingPoint() final;
     void reshape(int width, int height) final;
     void setContextVisibility(bool) final;
@@ -90,7 +91,7 @@ public:
     RefPtr<WebCore::Image> videoFrameToImage(WebCore::VideoFrame&) final;
 #endif
 
-    void simulateEventForTesting(SimulatedEventForTesting) final;
+    void simulateEventForTesting(WebCore::GraphicsContextGLSimulatedEventForTesting) final;
     void readPixels(WebCore::IntRect, GCGLenum format, GCGLenum type, std::span<uint8_t> data, GCGLint alignment, GCGLint rowLength) final;
     void multiDrawArraysANGLE(GCGLenum mode, GCGLSpanTuple<const GCGLint, const GCGLsizei> firstsAndCounts) final;
     void multiDrawArraysInstancedANGLE(GCGLenum mode, GCGLSpanTuple<const GCGLint, const GCGLsizei, const GCGLsizei> firstsCountsAndInstanceCounts) final;
@@ -137,7 +138,6 @@ public:
     void depthFunc(GCGLenum func) final;
     void depthMask(GCGLboolean flag) final;
     void depthRange(GCGLclampf zNear, GCGLclampf zFar) final;
-    void destroyEGLImage(GCEGLImage handle) final;
     void detachShader(PlatformGLObject arg0, PlatformGLObject arg1) final;
     void disable(GCGLenum cap) final;
     void disableVertexAttribArray(GCGLuint index) final;
@@ -334,7 +334,7 @@ public:
     GCGLuint getUniformBlockIndex(PlatformGLObject program, const String& uniformBlockName) final;
     String getActiveUniformBlockName(PlatformGLObject program, GCGLuint uniformBlockIndex) final;
     void uniformBlockBinding(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLuint uniformBlockBinding) final;
-    void getActiveUniformBlockiv(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params) final;
+    void getActiveUniformBlockiv(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params) final;
     String getTranslatedShaderSourceANGLE(PlatformGLObject arg0) final;
     void drawBuffersEXT(std::span<const GCGLenum> bufs) final;
     PlatformGLObject createQueryEXT() final;
@@ -361,14 +361,24 @@ public:
     void polygonModeANGLE(GCGLenum face, GCGLenum mode) final;
     void polygonOffsetClampEXT(GCGLfloat factor, GCGLfloat units, GCGLfloat clamp) final;
     void renderbufferStorageMultisampleANGLE(GCGLenum target, GCGLsizei samples, GCGLenum internalformat, GCGLsizei width, GCGLsizei height) final;
-    void blitFramebufferANGLE(GCGLint srcX0, GCGLint srcY0, GCGLint srcX1, GCGLint srcY1, GCGLint dstX0, GCGLint dstY0, GCGLint dstX1, GCGLint dstY1, GCGLbitfield mask, GCGLenum filter) final;
     void getInternalformativ(GCGLenum target, GCGLenum internalformat, GCGLenum pname, std::span<GCGLint> params) final;
     void setDrawingBufferColorSpace(const WebCore::DestinationColorSpace&) final;
-    RefPtr<WebCore::PixelBuffer> drawingBufferToPixelBuffer(WebCore::GraphicsContextGL::FlipY) final;
-    bool destroyEGLSync(GCEGLSync) final;
-    void clientWaitEGLSyncWithFlush(GCEGLSync, uint64_t timeout) final;
+    RefPtr<WebCore::PixelBuffer> drawingBufferToPixelBuffer(WebCore::GraphicsContextGLFlipY) final;
 
-    bool enableRequiredWebXRExtensions() final;
+#if ENABLE(WEBXR)
+    GCGLExternalImage createExternalImage(WebCore::GraphicsContextGL::ExternalImageSource&&, GCGLenum internalFormat, GCGLint layer) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    void deleteExternalImage(GCGLExternalImage handle) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    void bindExternalImage(GCGLenum target, GCGLExternalImage) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    GCGLExternalSync createExternalSync(WebCore::GraphicsContextGL::ExternalSyncSource&&) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+#endif
+    void deleteExternalSync(GCGLExternalSync) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+
+#if ENABLE(WEBXR)
+    bool enableRequiredWebXRExtensions() IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    bool addFoveation(WebCore::IntSize physicalSizeLeft, WebCore::IntSize physicalSizeRight, WebCore::IntSize screenSize, std::span<const GCGLfloat> horizontalSamplesLeft, std::span<const GCGLfloat> verticalSamples, std::span<const GCGLfloat> horizontalSamplesRight) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    void enableFoveation(GCGLuint) IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+    void disableFoveation() IPC_MESSAGE_ATTRIBUTE(EnabledIf='webXREnabled()') final;
+#endif
     // End of list used by generate-gpup-webgl script.
 
     static bool handleMessageToRemovedDestination(IPC::Connection&, IPC::Decoder&);
@@ -413,6 +423,7 @@ private:
     void waitUntilInitialized();
     void disconnectGpuProcessIfNeeded();
     void abandonGpuProcess();
+    uint32_t createObjectName();
 
     RefPtr<IPC::Connection> m_connection;
     bool m_didInitialize { false };
@@ -430,6 +441,7 @@ private:
 #endif
     GCGLenum m_externalImageTarget { 0 };
     GCGLenum m_externalImageBindingQuery { 0 };
+    uint32_t m_nextObjectName { 0 };
 };
 
 // The GCGL types map to following WebKit IPC types. The list is used by generate-gpup-webgl script.
@@ -448,6 +460,8 @@ static_assert(std::is_same_v<GCGLhalffloat, uint16_t>);
 static_assert(std::is_same_v<GCGLclampf, float>);
 static_assert(std::is_same_v<GCGLvoid, void>);
 static_assert(std::is_same_v<PlatformGLObject, uint32_t>);
+static_assert(std::is_same_v<GCGLExternalImage, uint32_t>);
+static_assert(std::is_same_v<GCGLExternalSync, uint32_t>);
 static_assert(sizeof(GCGLchar) == sizeof(uint8_t));
 static_assert(sizeof(GCGLint64) == sizeof(int64_t));
 static_assert(sizeof(GCGLuint64) == sizeof(uint64_t));
@@ -457,8 +471,6 @@ static_assert(sizeof(GCGLintptr) <= sizeof(uint64_t));
 static_assert(sizeof(GCGLsizeiptr) <= sizeof(uint64_t));
 static_assert(sizeof(GCGLvoidptr) <= sizeof(uint64_t));
 static_assert(sizeof(GCGLsync) <= sizeof(uint64_t) && sizeof(GCGLsync) == sizeof(intptr_t));
-static_assert(sizeof(GCEGLImage) <= sizeof(uint64_t) && sizeof(GCEGLImage) == sizeof(intptr_t));
-static_assert(sizeof(GCEGLSync) <= sizeof(uint64_t) && sizeof(GCEGLSync) == sizeof(intptr_t));
 // End of list used by generate-gpup-webgl script.
 
 } // namespace WebKit

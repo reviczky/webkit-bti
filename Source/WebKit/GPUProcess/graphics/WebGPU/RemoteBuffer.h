@@ -35,6 +35,7 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/Ref.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakRef.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore::WebGPU {
@@ -78,8 +79,9 @@ private:
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 
     void getMappedRange(WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> sizeForMap, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
-    void mapAsync(WebCore::WebGPU::MapModeFlags, WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> sizeForMap, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
-    void unmap(Vector<uint8_t>&&);
+    void mapAsync(WebCore::WebGPU::MapModeFlags, WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> sizeForMap, CompletionHandler<void(bool)>&&);
+    void copy(Vector<uint8_t>&&, size_t offset);
+    void unmap();
 
     void destroy();
     void destruct();
@@ -87,11 +89,10 @@ private:
     void setLabel(String&&);
 
     Ref<WebCore::WebGPU::Buffer> m_backing;
-    WebGPU::ObjectHeap& m_objectHeap;
+    WeakRef<WebGPU::ObjectHeap> m_objectHeap;
     Ref<IPC::StreamServerConnection> m_streamConnection;
     WebGPUIdentifier m_identifier;
     bool m_isMapped { false };
-    std::optional<WebCore::WebGPU::Buffer::MappedRange> m_mappedRange;
     WebCore::WebGPU::MapModeFlags m_mapModeFlags;
 };
 

@@ -35,7 +35,15 @@
 #include "TransformationMatrix.h"
 #include <wtf/Function.h>
 #include <wtf/RunLoop.h>
+#include <wtf/WorkerPool.h>
 #include <wtf/text/StringHash.h>
+
+#if USE(SKIA)
+namespace WebCore {
+class BitmapTexture;
+class SkiaAcceleratedBufferPool;
+}
+#endif
 
 namespace Nicosia {
 class Animations;
@@ -52,7 +60,13 @@ public:
     virtual FloatRect visibleContentsRect() const = 0;
     virtual void detachLayer(CoordinatedGraphicsLayer*) = 0;
     virtual void attachLayer(CoordinatedGraphicsLayer*) = 0;
+#if USE(CAIRO)
     virtual Nicosia::PaintingEngine& paintingEngine() = 0;
+#elif USE(SKIA)
+    virtual SkiaAcceleratedBufferPool* skiaAcceleratedBufferPool() const = 0;
+    virtual WorkerPool* skiaUnacceleratedThreadedRenderingPool() const = 0;
+#endif
+
     virtual RefPtr<Nicosia::ImageBackingStore> imageBackingStore(uint64_t, Function<RefPtr<Nicosia::Buffer>()>) = 0;
 };
 
@@ -170,6 +184,8 @@ public:
 
     double backingStoreMemoryEstimate() const override;
 
+    Vector<std::pair<String, double>> acceleratedAnimationsForTesting(const Settings&) const final;
+
 private:
     enum class FlushNotification {
         Required,
@@ -193,6 +209,9 @@ private:
     void computeTransformedVisibleRect();
     void updateContentBuffers();
 
+    Ref<Nicosia::Buffer> paintTile(const IntRect&, const IntRect& mappedTileRect, float contentsScale);
+    Ref<Nicosia::Buffer> paintImage(Image&);
+
     void notifyFlushRequired();
 
     bool shouldHaveBackingStore() const;
@@ -206,6 +225,10 @@ private:
     void requestPendingTileCreationTimerFired();
 
     bool filtersCanBeComposited(const FilterOperations&) const;
+
+#if USE(SKIA)
+    RefPtr<BitmapTexture> acquireTextureForAcceleratedBuffer(const IntSize&);
+#endif
 
     Nicosia::PlatformLayer::LayerID m_id;
     GraphicsLayerTransform m_layerTransform;

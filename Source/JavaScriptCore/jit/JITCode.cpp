@@ -125,7 +125,7 @@ FTL::ForOSREntryJITCode* JITCode::ftlForOSREntry()
     return nullptr;
 }
 
-void JITCode::shrinkToFit(const ConcurrentJSLocker&)
+void JITCode::shrinkToFit()
 {
 }
 
@@ -164,7 +164,7 @@ JITCodeWithCodeRef::JITCodeWithCodeRef(CodeRef<JSEntryPtrTag> ref, JITType jitTy
 
 JITCodeWithCodeRef::~JITCodeWithCodeRef()
 {
-    if ((Options::dumpDisassembly() || (isOptimizingJIT(jitType()) && Options::dumpDFGDisassembly()))
+    if ((Options::dumpDisassembly() || ((jitType() == JITType::BaselineJIT) && Options::dumpBaselineDisassembly()) || (isOptimizingJIT(jitType()) && Options::dumpDFGDisassembly()))
         && m_executableMemory)
         dataLog("Destroying JIT code at ", pointerDump(m_executableMemory.get()), "\n");
 }
@@ -197,8 +197,9 @@ unsigned JITCodeWithCodeRef::offsetOf(void* pointerIntoCode)
 
 size_t JITCodeWithCodeRef::size()
 {
-    RELEASE_ASSERT(m_executableMemory);
-    return m_executableMemory->sizeInBytes();
+    if (RefPtr memory = m_executableMemory)
+        return memory->sizeInBytes();
+    return 0;
 }
 
 bool JITCodeWithCodeRef::contains(void* address)

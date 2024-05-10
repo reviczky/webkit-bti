@@ -95,6 +95,10 @@ struct WebProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCachePartitioned;
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
+#if ENABLE(WK_WEB_EXTENSIONS)
+    Vector<String> urlSchemesRegisteredAsWebExtensions;
+#endif
+
     Vector<String> fontAllowList;
     Vector<String> overrideLanguages;
 #if USE(GSTREAMER)
@@ -274,6 +278,9 @@ struct WebProcessCreationParameters {
 
     HashMap<WebCore::RegistrableDomain, String> storageAccessUserAgentStringQuirksData;
     HashSet<WebCore::RegistrableDomain> storageAccessPromptQuirksDomains;
+
+    Seconds memoryFootprintPollIntervalForTesting;
+    Vector<size_t> memoryFootprintNotificationThresholds;
 };
 
 } // namespace WebKit

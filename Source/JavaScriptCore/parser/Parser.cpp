@@ -130,7 +130,7 @@ void Parser<LexerType>::logError(bool shouldPrintToken, Args&&... args)
 }
 
 template <typename LexerType>
-Parser<LexerType>::Parser(VM& vm, const SourceCode& source, ImplementationVisibility implementationVisibility, JSParserBuiltinMode builtinMode, JSParserStrictMode strictMode, JSParserScriptMode scriptMode, SourceParseMode parseMode, FunctionMode functionMode, SuperBinding superBinding, ConstructorKind defaultConstructorKindForTopLevelFunction, DerivedContextType derivedContextType, bool isEvalContext, EvalContextType evalContextType, DebuggerParseData* debuggerParseData, bool isInsideOrdinaryFunction)
+Parser<LexerType>::Parser(VM& vm, const SourceCode& source, ImplementationVisibility implementationVisibility, JSParserBuiltinMode builtinMode, JSParserStrictMode strictMode, JSParserScriptMode scriptMode, SourceParseMode parseMode, FunctionMode functionMode, SuperBinding superBinding, ConstructorKind constructorKind, DerivedContextType derivedContextType, bool isEvalContext, EvalContextType evalContextType, DebuggerParseData* debuggerParseData, bool isInsideOrdinaryFunction)
     : m_vm(vm)
     , m_source(&source)
     , m_hasStackOverflow(false)
@@ -142,7 +142,6 @@ Parser<LexerType>::Parser(VM& vm, const SourceCode& source, ImplementationVisibi
     , m_functionMode(functionMode)
     , m_scriptMode(scriptMode)
     , m_superBinding(superBinding)
-    , m_defaultConstructorKindForTopLevelFunction(defaultConstructorKindForTopLevelFunction)
     , m_immediateParentAllowsFunctionDeclarationInStatement(false)
     , m_debuggerParseData(debuggerParseData)
     , m_isInsideOrdinaryFunction(isInsideOrdinaryFunction)
@@ -161,13 +160,14 @@ Parser<LexerType>::Parser(VM& vm, const SourceCode& source, ImplementationVisibi
     scope->setIsEvalContext(isEvalContext);
     if (isEvalContext)
         scope->setEvalContextType(evalContextType);
-    
-    if (derivedContextType == DerivedContextType::DerivedConstructorContext) {
-        scope->setConstructorKind(ConstructorKind::Extends);
-        scope->setExpectedSuperBinding(SuperBinding::Needed);
-    }
-    
-    if (derivedContextType == DerivedContextType::DerivedMethodContext)
+
+    if (scope->isFunction())
+        scope->setConstructorKind(constructorKind);
+    else
+        ASSERT(constructorKind == ConstructorKind::None);
+
+    scope->setDerivedContextType(derivedContextType);
+    if (derivedContextType != DerivedContextType::None)
         scope->setExpectedSuperBinding(SuperBinding::Needed);
 
     if (strictMode == JSParserStrictMode::Strict)
@@ -1697,6 +1697,7 @@ template <typename LexerType>
 template <class TreeBuilder> TreeStatement Parser<LexerType>::parseReturnStatement(TreeBuilder& context)
 {
     ASSERT(match(RETURN));
+    m_parserState.returnStatementCount++;
     JSTokenLocation location(tokenLocation());
     semanticFailIfFalse(currentScope()->isFunction() && !currentScope()->isStaticBlock(), "Return statements are only valid inside functions");
     JSTextPosition start = tokenStartPosition();
@@ -1857,8 +1858,10 @@ template <class TreeBuilder> TreeStatement Parser<LexerType>::parseTryStatement(
     next();
     matchOrFail(OPENBRACE, "Expected a block statement as body of a try statement");
     
+    int returnStatementCountBeforeTryBlock = m_parserState.returnStatementCount;
     tryBlock = parseBlockStatement(context);
     failIfFalse(tryBlock, "Cannot parse the body of try block");
+    bool tryBlockContainsReturn = m_parserState.returnStatementCount != returnStatementCountBeforeTryBlock;
     int lastLine = m_lastTokenEndPosition.line;
     VariableEnvironment catchEnvironment; 
     DeclarationStacks::FunctionStack functionStack;
@@ -1904,6 +1907,15 @@ template <class TreeBuilder> TreeStatement Parser<LexerType>::parseTryStatement(
         failIfFalse(finallyBlock, "Cannot parse finally body");
     }
     failIfFalse(catchBlock || finallyBlock, "Try statements must have at least a catch or finally block");
+
+    if (tryBlockContainsReturn && !finallyBlock && currentFunctionScope()->constructorKind() == ConstructorKind::Extends) {
+        // Empty `finally` statement is necessary to prevent BytecodeGenerator::emitReturn() from being
+        // called inside the `try` block, which would otherwise result in errors thrown at steps 10-12
+        // of https://tc39.es/ecma262/#sec-ecmascript-function-objects-construct-argumentslist-newtarget
+        // being caught by the `catch` block.
+        finallyBlock = context.createEmptyStatement(location);
+    }
+
     return context.createTryStatement(location, tryBlock, catchPattern, catchBlock, finallyBlock, firstLine, lastLine, WTFMove(catchEnvironment));
 }
 
@@ -2188,6 +2200,33 @@ template <class TreeBuilder> bool Parser<LexerType>::parseFormalParameters(TreeB
 #undef failIfDuplicateIfViolation
 }
 
+static ALWAYS_INLINE SuperBinding adjustSuperBindingForBaseConstructor(ConstructorKind constructorKind, SuperBinding expectedSuperBinding, SourceParseMode parseMode, bool scopeNeedsSuperBinding, bool currentScopeUsesEval, InnerArrowFunctionCodeFeatures innerArrowFunctionFeatures)
+{
+    if (expectedSuperBinding == SuperBinding::NotNeeded)
+        return SuperBinding::NotNeeded;
+
+    if (constructorKind == ConstructorKind::None) {
+        if (SourceParseModeSet(
+                SourceParseMode::AsyncGeneratorWrapperMethodMode,
+                SourceParseMode::GeneratorWrapperMethodMode,
+                SourceParseMode::AsyncMethodMode
+                ).contains(parseMode))
+            return SuperBinding::Needed;
+    }
+
+    if (constructorKind == ConstructorKind::None || constructorKind == ConstructorKind::Base) {
+        bool isSuperUsedInInnerArrowFunction = innerArrowFunctionFeatures & SuperPropertyInnerArrowFunctionFeature;
+        return (scopeNeedsSuperBinding || isSuperUsedInInnerArrowFunction || currentScopeUsesEval) ? SuperBinding::Needed : SuperBinding::NotNeeded;
+    }
+
+    return SuperBinding::Needed;
+}
+
+static ALWAYS_INLINE SuperBinding adjustSuperBindingForBaseConstructor(ConstructorKind constructorKind, SuperBinding expectedSuperBinding, SourceParseMode parseMode, ScopeRef functionScope)
+{
+    return adjustSuperBindingForBaseConstructor(constructorKind, expectedSuperBinding, parseMode, functionScope->needsSuperBinding(), functionScope->usesEval(), functionScope->innerArrowFunctionFeatures());
+}
+
 template <typename LexerType>
 template <class TreeBuilder> TreeFunctionBody Parser<LexerType>::parseFunctionBody(
     TreeBuilder& context, SyntaxChecker& syntaxChecker, const JSTokenLocation& startLocation, int startColumn, unsigned functionStart, int functionNameStart, int parametersStart,
@@ -2199,7 +2238,7 @@ template <class TreeBuilder> TreeFunctionBody Parser<LexerType>::parseFunctionBo
         next();
         if (match(CLOSEBRACE)) {
             unsigned endColumn = tokenColumn();
-            SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, superBinding, currentScope());
+            SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, superBinding, sourceParseMode(), currentScope());
             return context.createFunctionMetadata(startLocation, tokenLocation(), startColumn, endColumn, functionStart, functionNameStart, parametersStart, implementationVisibility(), lexicalScopeFeatures(), constructorKind, functionSuperBinding, parameterCount, sourceParseMode(), isArrowFunctionBodyExpression);
         }
     }
@@ -2218,7 +2257,7 @@ template <class TreeBuilder> TreeFunctionBody Parser<LexerType>::parseFunctionBo
             failIfFalse(parseSourceElements(syntaxChecker, CheckForStrictMode), bodyType == StandardFunctionBodyBlock ? "Cannot parse body of this function" : "Cannot parse body of this arrow function");
     }
     unsigned endColumn = tokenColumn();
-    SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, superBinding, currentScope());
+    SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, superBinding, sourceParseMode(), currentScope());
     return context.createFunctionMetadata(startLocation, tokenLocation(), startColumn, endColumn, functionStart, functionNameStart, parametersStart, implementationVisibility(), lexicalScopeFeatures(), constructorKind, functionSuperBinding, parameterCount, sourceParseMode(), isArrowFunctionBodyExpression);
 }
 
@@ -2466,7 +2505,7 @@ template <class TreeBuilder> bool Parser<LexerType>::parseFunctionInfo(TreeBuild
             else
                 functionBodyType = StandardFunctionBodyBlock;
 
-            SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, expectedSuperBinding, cachedInfo->needsSuperBinding, cachedInfo->usesEval, cachedInfo->innerArrowFunctionFeatures);
+            SuperBinding functionSuperBinding = adjustSuperBindingForBaseConstructor(constructorKind, expectedSuperBinding, mode, cachedInfo->needsSuperBinding, cachedInfo->usesEval, cachedInfo->innerArrowFunctionFeatures);
 
             // Grab this from the current `Scope` instead of saving it to `SourceProviderCacheItem`
             // since it's trivial to compute each time.
@@ -2616,16 +2655,8 @@ template <class TreeBuilder> bool Parser<LexerType>::parseFunctionInfo(TreeBuild
         // BytecodeGenerator emits code to throw TypeError when a class constructor is "call"ed.
         // Set ConstructorKind to None for non-constructor methods of classes.
     
-        if (parentScope->isGlobalCode() && m_defaultConstructorKindForTopLevelFunction != ConstructorKind::None) {
-            constructorKind = m_defaultConstructorKindForTopLevelFunction;
-            expectedSuperBinding = m_defaultConstructorKindForTopLevelFunction == ConstructorKind::Extends ? SuperBinding::Needed : SuperBinding::NotNeeded;
-        }
-
         functionBodyType = StandardFunctionBodyBlock;
     }
-
-    functionScope->setConstructorKind(constructorKind);
-    functionScope->setExpectedSuperBinding(expectedSuperBinding);
 
     m_parserState.lastFunctionName = lastFunctionName;
     ParserState oldState = internalSaveParserState(context);
@@ -3230,11 +3261,10 @@ parseMethod:
             semanticFailIfTrue(tag == ClassElementTag::Static && methodInfo.name && *methodInfo.name == propertyNames.prototype,
                 "Cannot declare a static method named 'prototype'");
 
-            if (computedPropertyName) {
+            if (computedPropertyName)
                 property = context.createProperty(computedPropertyName, method, type, SuperBinding::Needed, tag);
-            } else {
+            else
                 property = context.createProperty(methodInfo.name, method, type, SuperBinding::Needed, InferName::Allowed, tag);
-            }
         }
 
         if (classElementsTail)
@@ -4124,13 +4154,13 @@ template <typename TreeBuilder> NEVER_INLINE const char* Parser<LexerType>::meta
 }
 
 template <typename LexerType>
-template <typename TreeBuilder> bool Parser<LexerType>::isSimpleAssignmentTarget(TreeBuilder& context, TreeExpression expr)
+template <typename TreeBuilder> bool Parser<LexerType>::isSimpleAssignmentTarget(TreeBuilder& context, TreeExpression expr, bool ignoreStrictCheck)
 {
     // Web compatibility concerns prevent us from handling a function call LHS as an early error in sloppy mode.
     // This behavior is currently unspecified, but see: https://github.com/tc39/ecma262/issues/257#issuecomment-195106880
-    return context.isLocation(expr) || (!strictMode() && context.isFunctionCall(expr));
+    return context.isLocation(expr) || (!(strictMode() || ignoreStrictCheck) && context.isFunctionCall(expr));
 }
-    
+
 template <typename LexerType>
 template <typename TreeBuilder> TreeExpression Parser<LexerType>::parseAssignmentExpression(TreeBuilder& context, ExpressionErrorClassifier& classifier)
 {
@@ -4254,7 +4284,9 @@ template <typename TreeBuilder> TreeExpression Parser<LexerType>::parseAssignmen
         m_parserState.nonTrivialExpressionCount++;
         hadAssignment = true;
         semanticFailIfTrue(context.isMetaProperty(lhs), metaPropertyName(context, lhs), " can't be the left hand side of an assignment expression");
-        semanticFailIfFalse(isSimpleAssignmentTarget(context, lhs), "Left side of assignment is not a reference");
+        // Even if in sloppy mode, we should throw a syntax error for logical assignment expressions that are not simple.
+        // https://tc39.es/ecma262/#sec-assignment-operators-static-semantics-early-errors
+        semanticFailIfFalse(isSimpleAssignmentTarget(context, lhs, op == Operator::CoalesceEq || op == Operator::OrEq || op == Operator::AndEq), "Left side of assignment is not a reference");
         context.assignmentStackAppend(assignmentStack, lhs, start, tokenStartPosition(), m_parserState.assignmentCount, op);
         start = tokenStartPosition();
         m_parserState.assignmentCount++;
@@ -4885,7 +4917,11 @@ template <class TreeBuilder> TreeExpression Parser<LexerType>::parseFunctionExpr
     if (consume(TIMES))
         parseMode = SourceParseMode::GeneratorWrapperFunctionMode;
     SetForScope setInnerParseMode(m_parseMode, parseMode);
-    failIfFalse((parseFunctionInfo(context, FunctionNameRequirements::None, false, ConstructorKind::None, SuperBinding::NotNeeded, functionStart, functionInfo, FunctionDefinitionType::Expression)), "Cannot parse function expression");
+
+    ConstructorKind constructorKind = currentScope()->isGlobalCode() ? m_constructorKindForTopLevelFunctionExpressions : ConstructorKind::None;
+    SuperBinding expectedSuperBinding = constructorKind == ConstructorKind::Extends ? SuperBinding::Needed : SuperBinding::NotNeeded;
+
+    failIfFalse((parseFunctionInfo(context, FunctionNameRequirements::None, false, constructorKind, expectedSuperBinding, functionStart, functionInfo, FunctionDefinitionType::Expression)), "Cannot parse function expression");
     return context.createFunctionExpr(location, functionInfo);
 }
 
@@ -5433,11 +5469,7 @@ template <class TreeBuilder> TreeExpression Parser<LexerType>::parseMemberExpres
                         // inside of the constructor or method.
                         if (!m_lexer->isReparsingFunction()) {
                             ScopeRef closestOrdinaryFunctionScope = closestParentOrdinaryFunctionNonLexicalScope();
-                            ConstructorKind functionConstructorKind = !functionScope->isArrowFunction() && !closestOrdinaryFunctionScope->isEvalContext()
-                                ? functionScope->constructorKind()
-                                : closestOrdinaryFunctionScope->constructorKind();
-                            semanticFailIfTrue(functionConstructorKind == ConstructorKind::None, "super is not valid in this context");
-                            semanticFailIfTrue(functionConstructorKind != ConstructorKind::Extends, "super is not valid in this context");
+                            semanticFailIfFalse(closestOrdinaryFunctionScope->constructorKind() == ConstructorKind::Extends || (closestOrdinaryFunctionScope->isEvalContext() && closestOrdinaryFunctionScope->derivedContextType() == DerivedContextType::DerivedConstructorContext), "super is not valid in this context");
                         }
                         if (currentScope()->isArrowFunction())
                             functionScope->setInnerArrowFunctionUsesSuperCall();

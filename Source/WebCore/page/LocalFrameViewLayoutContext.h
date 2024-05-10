@@ -61,7 +61,9 @@ struct UpdateScrollInfoAfterLayoutTransaction {
     SingleThreadWeakHashSet<RenderBlock> blocks;
 };
 
-class LocalFrameViewLayoutContext : public CanMakeCheckedPtr {
+class LocalFrameViewLayoutContext final : public CanMakeCheckedPtr<LocalFrameViewLayoutContext> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LocalFrameViewLayoutContext);
 public:
     LocalFrameViewLayoutContext(LocalFrameView&);
     ~LocalFrameViewLayoutContext();
@@ -172,11 +174,13 @@ private:
     void enablePaintOffsetCache() { ASSERT(m_paintOffsetCacheDisableCount > 0); m_paintOffsetCacheDisableCount--; }
 
     LocalFrame& frame() const;
+    Ref<LocalFrame> protectedFrame();
     LocalFrameView& view() const;
+    Ref<LocalFrameView> protectedView() const;
     RenderView* renderView() const;
     Document* document() const;
 
-    LocalFrameView& m_frameView;
+    SingleThreadWeakRef<LocalFrameView> m_frameView;
     Timer m_layoutTimer;
     Timer m_postLayoutTaskTimer;
     SingleThreadWeakPtr<RenderElement> m_subtreeLayoutRoot;

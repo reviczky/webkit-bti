@@ -171,7 +171,7 @@ Ref<Document> DOMImplementation::createDocument(const String& contentType, Local
 #endif
 
     bool isImage = MIMETypeRegistry::isSupportedImageMIMEType(contentType);
-    if (frame && isImage && !MIMETypeRegistry::isPDFOrPostScriptMIMEType(contentType))
+    if (frame && isImage && !MIMETypeRegistry::isPDFMIMEType(contentType))
         return ImageDocument::create(*frame, url);
 
     // The "image documents for subframe PDFs" mode will override a PDF plug-in.
@@ -196,14 +196,9 @@ Ref<Document> DOMImplementation::createDocument(const String& contentType, Local
         return FTPDirectoryDocument::create(frame, settings, url);
 #endif
 
-    if (frame && frame->loader().client().shouldAlwaysUsePluginDocument(contentType))
-        return PluginDocument::create(*frame, url);
-
     // The following is the relatively costly lookup that requires initializing the plug-in database.
     if (frame && frame->page()) {
-        auto allowedPluginTypes = frame->arePluginsEnabled()
-            ? PluginData::AllPlugins : PluginData::OnlyApplicationPlugins;
-        if (frame->page()->pluginData().supportsWebVisibleMimeType(contentType, allowedPluginTypes))
+        if (frame->page()->pluginData().supportsWebVisibleMimeType(contentType, PluginData::OnlyApplicationPlugins))
             return PluginDocument::create(*frame, url);
     }
 

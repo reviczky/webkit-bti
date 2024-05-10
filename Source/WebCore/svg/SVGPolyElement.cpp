@@ -47,7 +47,7 @@ void SVGPolyElement::attributeChanged(const QualifiedName& name, const AtomStrin
 {
     if (name == SVGNames::pointsAttr) {
         if (!m_points->baseVal()->parse(newValue))
-            document().accessSVGExtensions().reportError("Problem parsing points=\"" + newValue + "\"");
+            protectedDocument()->checkedSVGExtensions()->reportError("Problem parsing points=\"" + newValue + "\"");
     }
 
     SVGGeometryElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
@@ -59,14 +59,14 @@ void SVGPolyElement::svgAttributeChanged(const QualifiedName& attrName)
         ASSERT(attrName == SVGNames::pointsAttr);
         InstanceInvalidationGuard guard(*this);
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-        if (auto* path = dynamicDowncast<RenderSVGPath>(renderer()))
+        if (CheckedPtr path = dynamicDowncast<RenderSVGPath>(renderer()))
             path->setNeedsShapeUpdate();
-#endif
-        if (auto* path = dynamicDowncast<LegacyRenderSVGPath>(renderer()))
+
+        if (CheckedPtr path = dynamicDowncast<LegacyRenderSVGPath>(renderer()))
             path->setNeedsShapeUpdate();
 
         updateSVGRendererForElementChange();
+        invalidateResourceImageBuffersIfNeeded();
         return;
     }
 
@@ -77,12 +77,10 @@ size_t SVGPolyElement::approximateMemoryCost() const
 {
     size_t pointsCost = m_points->baseVal()->items().size() * sizeof(FloatPoint);
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (document().settings().layerBasedSVGEngineEnabled()) {
         // We need to account for the memory which is allocated by the RenderSVGPath::m_path.
         return sizeof(*this) + (renderer() ? pointsCost * 2 + sizeof(RenderSVGPath) : pointsCost);
     }
-#endif
 
     // We need to account for the memory which is allocated by the LegacyRenderSVGPath::m_path.
     return sizeof(*this) + (renderer() ? pointsCost * 2 + sizeof(LegacyRenderSVGPath) : pointsCost);

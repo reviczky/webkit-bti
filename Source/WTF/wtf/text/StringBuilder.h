@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,21 +51,19 @@ public:
     bool hasOverflowed() const { return m_length > String::MaxLength; }
     bool crashesOnOverflow() const { return m_shouldCrashOnOverflow; }
 
-    WTF_EXPORT_PRIVATE void appendCharacters(const UChar*, unsigned);
-    WTF_EXPORT_PRIVATE void appendCharacters(const LChar*, unsigned);
-    void appendCharacters(const char* characters, unsigned length) { appendCharacters(reinterpret_cast<const LChar*>(characters), length); }
-
     template<typename... StringTypes> void append(StringTypes...);
 
     // FIXME: We should keep these overloads only if optimizations make them more efficient than the single-argument form of the variadic append above.
+    WTF_EXPORT_PRIVATE void append(std::span<const UChar>);
+    WTF_EXPORT_PRIVATE void append(std::span<const LChar>);
     void append(const AtomString& string) { append(string.string()); }
     void append(const String&);
     void append(StringView);
     void append(ASCIILiteral);
+    void append(const char*) = delete; // Pass ASCIILiteral or span instead.
     void append(UChar);
     void append(LChar);
     void append(char character) { append(static_cast<LChar>(character)); }
-    void append(const char*);
 
     // FIXME: Add a StringTypeAdapter so we can append one string builder to another with variadic append.
     void append(const StringBuilder&);
@@ -152,35 +150,35 @@ inline void StringBuilder::swap(StringBuilder& other)
 inline StringBuilder::operator StringView() const
 {
     if (is8Bit())
-        return { characters<LChar>(), length() };
-    return { characters<UChar>(), length() };
+        return span<LChar>();
+    return span<UChar>();
 }
 
 inline void StringBuilder::append(UChar character)
 {
     if (m_buffer && m_length < m_buffer->length() && m_string.isNull()) {
         if (!m_buffer->is8Bit()) {
-            const_cast<UChar*>(m_buffer->characters<UChar>())[m_length++] = character;
+            spanConstCast(m_buffer->span16())[m_length++] = character;
             return;
         }
         if (isLatin1(character)) {
-            const_cast<LChar*>(m_buffer->characters<LChar>())[m_length++] = static_cast<LChar>(character);
+            spanConstCast(m_buffer->span8())[m_length++] = static_cast<LChar>(character);
             return;
         }
     }
-    appendCharacters(&character, 1);
+    append(WTF::span(character));
 }
 
 inline void StringBuilder::append(LChar character)
 {
     if (m_buffer && m_length < m_buffer->length() && m_string.isNull()) {
         if (m_buffer->is8Bit())
-            const_cast<LChar*>(m_buffer->characters<LChar>())[m_length++] = character;
+            spanConstCast(m_buffer->span8())[m_length++] = character;
         else
-            const_cast<UChar*>(m_buffer->characters<UChar>())[m_length++] = character;
+            spanConstCast(m_buffer->span16())[m_length++] = character;
         return;
     }
-    appendCharacters(&character, 1);
+    append(WTF::span(character));
 }
 
 inline void StringBuilder::append(const String& string)
@@ -213,24 +211,19 @@ inline void StringBuilder::append(const StringBuilder& other)
 inline void StringBuilder::append(StringView string)
 {
     if (string.is8Bit())
-        appendCharacters(string.characters8(), string.length());
+        append(string.span8());
     else
-        appendCharacters(string.characters16(), string.length());
+        append(string.span16());
 }
 
 inline void StringBuilder::append(ASCIILiteral string)
 {
-    appendCharacters(string.characters8(), string.length());
+    append(string.span8());
 }
 
 inline void StringBuilder::appendSubstring(const String& string, unsigned offset, unsigned length)
 {
     append(StringView { string }.substring(offset, length));
-}
-
-inline void StringBuilder::append(const char* characters)
-{
-    append(StringView::fromLatin1(characters));
 }
 
 inline String StringBuilder::toString()
@@ -293,8 +286,8 @@ template<typename CharacterType> inline const CharacterType* StringBuilder::char
     if (!m_length)
         return nullptr;
     if (!m_string.isNull())
-        return m_string.characters<CharacterType>();
-    return m_buffer->characters<CharacterType>();
+        return m_string.span<CharacterType>().data();
+    return m_buffer->span<CharacterType>().data();
 }
 
 template<typename... StringTypeAdapters> void StringBuilder::appendFromAdapters(StringTypeAdapters... adapters)
@@ -320,13 +313,13 @@ template<typename... StringTypes> void StringBuilder::append(StringTypes... stri
 
 template<typename CharacterType> bool equal(const StringBuilder& builder, const CharacterType* buffer, unsigned length)
 {
-    return builder == StringView { buffer, length };
+    return builder == StringView { std::span { buffer, length } };
 }
 
 template<> struct IntegerToStringConversionTrait<StringBuilder> {
     using ReturnType = void;
     using AdditionalArgumentType = StringBuilder;
-    static void flush(const LChar* characters, unsigned length, StringBuilder* builder) { builder->appendCharacters(characters, length); }
+    static void flush(std::span<const LChar> characters, StringBuilder* builder) { builder->append(characters); }
 };
 
 } // namespace WTF

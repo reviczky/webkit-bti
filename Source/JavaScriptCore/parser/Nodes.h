@@ -741,6 +741,8 @@ namespace JSC {
     enum class ClassElementTag : uint8_t { No, Instance, Static, LastTag };
     class PropertyNode final : public ParserArenaFreeable {
     public:
+        friend class ObjectLiteralNode;
+
         enum Type : uint16_t { Constant = 1, Getter = 2, Setter = 4, Computed = 8, Shorthand = 16, Spread = 32, PrivateField = 64, PrivateMethod = 128, PrivateSetter = 256, PrivateGetter = 512, Block = 1024 };
 
         PropertyNode(const Identifier&, Type, SuperBinding, ClassElementTag);
@@ -792,6 +794,8 @@ namespace JSC {
 
     class PropertyListNode final : public ExpressionNode {
     public:
+        friend class ObjectLiteralNode;
+
         PropertyListNode(const JSTokenLocation&, PropertyNode*);
         PropertyListNode(const JSTokenLocation&, PropertyNode*, PropertyListNode*);
 
@@ -1628,6 +1632,8 @@ namespace JSC {
 
         void setNext(CommaNode* next) { m_next = next; }
         CommaNode* next() { return m_next; }
+
+        ExpressionNode* expr() const { return m_expr; }
 
     private:
         bool isCommaNode() const final { return true; }
@@ -2473,7 +2479,6 @@ namespace JSC {
         virtual bool isBindingNode() const { return false; }
         virtual bool isAssignmentElementNode() const { return false; }
         virtual bool isRestParameter() const { return false; }
-        virtual RegisterID* emitDirectBinding(BytecodeGenerator&, RegisterID*, ExpressionNode*) { return nullptr; }
 
         virtual RegisterID* writableDirectBindingIfPossible(BytecodeGenerator&) const { return nullptr; }
         virtual void finishDirectBindingAssignment(BytecodeGenerator&) const { }
@@ -2505,7 +2510,6 @@ namespace JSC {
         };
         void collectBoundIdentifiers(Vector<Identifier>&) const final;
         void bindValue(BytecodeGenerator&, RegisterID*) const final;
-        RegisterID* emitDirectBinding(BytecodeGenerator&, RegisterID* dst, ExpressionNode*) final;
         void toString(StringBuilder&) const final;
 
         Vector<Entry> m_targetPatterns;

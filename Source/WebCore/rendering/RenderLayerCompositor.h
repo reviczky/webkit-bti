@@ -302,8 +302,14 @@ public:
     static bool isCompositedPlugin(const RenderObject&);
 
     static RenderLayerCompositor* frameContentsCompositor(RenderWidget&);
-    // Returns true the widget contents layer was parented.
-    bool attachWidgetContentLayers(RenderWidget&);
+
+    struct WidgetLayerAttachment {
+        bool widgetLayersAttachedAsChildren { false };
+        bool layerHierarchyChanged { false };
+    };
+    WidgetLayerAttachment attachWidgetContentLayersIfNecessary(RenderWidget&);
+
+    void collectViewTransitionNewContentLayers(RenderLayer&, Vector<Ref<GraphicsLayer>>&);
 
     // Update the geometry of the layers used for clipping and scrolling in frames.
     void frameViewDidChangeLocation(const IntPoint& contentsOffset);
@@ -402,7 +408,7 @@ private:
     // GraphicsLayerClient implementation
     void paintContents(const GraphicsLayer*, GraphicsContext&, const FloatRect&, OptionSet<GraphicsLayerPaintBehavior>) override;
     void customPositionForVisibleRectComputation(const GraphicsLayer*, FloatPoint&) const override;
-    bool shouldDumpPropertyForLayer(const GraphicsLayer*, const char* propertyName, OptionSet<LayerTreeAsTextOptions>) const override;
+    bool shouldDumpPropertyForLayer(const GraphicsLayer*, ASCIILiteral propertyName, OptionSet<LayerTreeAsTextOptions>) const override;
     bool isTrackingRepaints() const override { return m_isTrackingRepaints; }
 
     // Copy the accelerated compositing related flags from Settings
@@ -495,6 +501,7 @@ private:
     bool requiresCompositingForAnimation(RenderLayerModelObject&) const;
     bool requiresCompositingForTransform(RenderLayerModelObject&) const;
     bool requiresCompositingForBackfaceVisibility(RenderLayerModelObject&) const;
+    bool requiresCompositingForViewTransition(RenderLayerModelObject&) const;
     bool requiresCompositingForVideo(RenderLayerModelObject&) const;
     bool requiresCompositingForCanvas(RenderLayerModelObject&) const;
     bool requiresCompositingForFilters(RenderLayerModelObject&) const;
@@ -571,8 +578,8 @@ private:
     bool shouldCompositeOverflowControls() const;
 
 #if !LOG_DISABLED
-    const char* logOneReasonForCompositing(const RenderLayer&);
-    void logLayerInfo(const RenderLayer&, const char*, int depth);
+    ASCIILiteral logOneReasonForCompositing(const RenderLayer&);
+    void logLayerInfo(const RenderLayer&, ASCIILiteral, int depth);
 #endif
 
     bool documentUsesTiledBacking() const;

@@ -353,7 +353,7 @@ public:
     void bail(AbortReason);
     void compileCurrentBlock();
 
-    void exceptionCheck();
+    void exceptionCheck(GPRReg exceptionReg = InvalidGPRReg);
     CallSiteIndex recordCallSiteAndGenerateExceptionHandlingOSRExitIfNeeded(const CodeOrigin& callSiteCodeOrigin, unsigned eventStreamIndex);
 
     void checkArgumentTypes();
@@ -698,7 +698,7 @@ public:
     void compileCheckDetached(Node*);
 
     void cachedGetById(Node*, CodeOrigin, JSValueRegs base, JSValueRegs result, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedPutById(Node*, CodeOrigin, GPRReg baseGPR, JSValueRegs valueRegs, GPRReg stubInfoGPR, GPRReg scratchGPR, GPRReg scratch2GPR, CacheableIdentifier, AccessType, ECMAMode, JITCompiler::Jump slowPathTarget = JITCompiler::Jump(), SpillRegistersMode = NeedToSpill);
+    void cachedPutById(Node*, CodeOrigin, GPRReg baseGPR, JSValueRegs valueRegs, GPRReg stubInfoGPR, GPRReg scratchGPR, GPRReg scratch2GPR, CacheableIdentifier, AccessType, JITCompiler::Jump slowPathTarget = JITCompiler::Jump(), SpillRegistersMode = NeedToSpill);
 
 #if USE(JSVALUE64)
     void cachedGetById(Node*, CodeOrigin, GPRReg baseGPR, GPRReg resultGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
@@ -716,7 +716,9 @@ public:
     void compileGetByIdMegamorphic(Node*);
     void compileGetByIdWithThisMegamorphic(Node*);
     void compileInById(Node*);
+    void compileInByIdMegamorphic(Node*);
     void compileInByVal(Node*);
+    void compileInByValMegamorphic(Node*);
     void compileHasPrivate(Node*, AccessType);
     void compileHasPrivateName(Node*);
     void compileHasPrivateBrand(Node*);
@@ -935,44 +937,112 @@ public:
         }
     }
 
+    template<typename OperationType>
+    void operationExceptionCheck()
+    {
+        using ResultType = typename FunctionTraits<OperationType>::ResultType;
+        exceptionCheck(operationExceptionRegister<ResultType>());
+    }
+
     template<typename OperationType, typename ResultRegType, typename... Args>
-    std::enable_if_t<
-        FunctionTraits<OperationType>::hasResult,
-    JITCompiler::Call>
-    callOperation(OperationType operation, ResultRegType result, Args... args)
+    requires (OperationHasResult<OperationType>)
+    JITCompiler::Call callOperation(OperationType operation, ResultRegType result, Args... args)
     {
         setupArguments<OperationType>(args...);
-        return appendCallSetResult(operation, result);
+        auto call = appendCall(operation);
+        operationExceptionCheck<OperationType>();
+        setupResults(result);
+        return call;
     }
 
     template<typename OperationType, typename... Args>
-    std::enable_if_t<
-        !FunctionTraits<OperationType>::hasResult,
-    JITCompiler::Call>
-    callOperation(OperationType operation, Args... args)
+    requires (!OperationHasResult<OperationType>)
+    JITCompiler::Call callOperation(OperationType operation, Args... args)
+    {
+        setupArguments<OperationType>(args...);
+        auto call = appendCall(operation);
+        operationExceptionCheck<OperationType>();
+        return call;
+    }
+
+    template<typename OperationType, typename ResultRegType, typename... Args>
+    requires (OperationHasResult<OperationType>)
+    JITCompiler::Call callOperation(const CodePtr<OperationPtrTag> operation, ResultRegType result, Args... args)
+    {
+        setupArguments<OperationType>(args...);
+        auto call = appendCall(operation);
+        operationExceptionCheck<OperationType>();
+        setupResults(result);
+        return call;
+    }
+
+    template<typename OperationType, typename... Args>
+    requires (!OperationHasResult<OperationType>)
+    JITCompiler::Call callOperation(const CodePtr<OperationPtrTag> operation, Args... args)
+    {
+        setupArguments<OperationType>(args...);
+        auto call = appendCall(operation);
+        operationExceptionCheck<OperationType>();
+        return call;
+    }
+
+    template<typename OperationType, typename ResultRegType, typename... Args>
+    requires (OperationHasResult<OperationType>)
+    void callOperation(Address address, ResultRegType result, Args... args)
+    {
+        setupArgumentsForIndirectCall<OperationType>(address, args...);
+        appendCall(Address(GPRInfo::nonArgGPR0, address.offset));
+        operationExceptionCheck<OperationType>();
+        setupResults(result);
+    }
+
+
+    template<typename OperationType, typename... Args>
+    requires (!OperationHasResult<OperationType>
+        && !isExceptionOperationResult<typename FunctionTraits<OperationType>::ResultType>) // Sanity check
+    void callOperationWithoutExceptionCheck(Address address, Args... args)
+    {
+        setupArgumentsForIndirectCall<OperationType>(address, args...);
+        appendCall(Address(GPRInfo::nonArgGPR0, address.offset));
+    }
+
+    template<typename OperationType, typename ResultRegType, typename... Args>
+    requires (OperationHasResult<OperationType>
+        && !isExceptionOperationResult<typename FunctionTraits<OperationType>::ResultType>) // Sanity check
+    JITCompiler::Call callOperationWithoutExceptionCheck(OperationType operation, ResultRegType result, Args... args)
+    {
+        setupArguments<OperationType>(args...);
+        auto call = appendCall(operation);
+        setupResults(result);
+        return call;
+    }
+
+    template<typename OperationType, typename... Args>
+    requires (!OperationHasResult<OperationType>
+        && !isExceptionOperationResult<typename FunctionTraits<OperationType>::ResultType>) // Sanity check
+    JITCompiler::Call callOperationWithoutExceptionCheck(OperationType operation, Args... args)
     {
         setupArguments<OperationType>(args...);
         return appendCall(operation);
     }
 
     template<typename OperationType, typename ResultRegType, typename... Args>
-    std::enable_if_t<
-        FunctionTraits<OperationType>::hasResult,
-    void>
-    callOperation(Address address, ResultRegType result, Args... args)
+    requires (OperationHasResult<OperationType>
+        && !isExceptionOperationResult<typename FunctionTraits<OperationType>::ResultType>) // Sanity check
+    void callOperationWithoutExceptionCheck(Address address, ResultRegType result, Args... args)
     {
         setupArgumentsForIndirectCall<OperationType>(address, args...);
-        appendCallSetResult(Address(GPRInfo::nonArgGPR0, address.offset), result);
+        appendCall(Address(GPRInfo::nonArgGPR0, address.offset), result);
+        setupResults(result);
     }
 
     template<typename OperationType, typename... Args>
-    std::enable_if_t<
-        !FunctionTraits<OperationType>::hasResult,
-    void>
-    callOperation(Address address, Args... args)
+    requires (!OperationHasResult<OperationType>)
+    void callOperation(Address address, Args... args)
     {
         setupArgumentsForIndirectCall<OperationType>(address, args...);
         appendCall(Address(GPRInfo::nonArgGPR0, address.offset));
+        operationExceptionCheck<OperationType>();
     }
 
     JITCompiler::Call callThrowOperationWithCallFrameRollback(V_JITOperation_Cb operation, GPRReg codeBlockGPR)
@@ -1002,7 +1072,7 @@ public:
     }
 
     // These methods add call instructions, optionally setting results, and optionally rolling back the call frame on an exception.
-    JITCompiler::Call appendCall(const CodePtr<CFunctionPtrTag> function)
+    JITCompiler::Call appendCall(const CodePtr<OperationPtrTag> function)
     {
         prepareForExternalCall();
         emitStoreCodeOrigin(m_currentNode->origin.semantic);
@@ -1010,7 +1080,7 @@ public:
     }
 
 #if OS(WINDOWS) && CPU(X86_64)
-    JITCompiler::Call appendCallWithUGPRPair(const CodePtr<CFunctionPtrTag> function)
+    JITCompiler::Call appendCallWithUGPRPair(const CodePtr<OperationPtrTag> function)
     {
         prepareForExternalCall();
         emitStoreCodeOrigin(m_currentNode->origin.semantic);
@@ -1041,41 +1111,8 @@ public:
         return Base::appendOperationCall(function);
     }
 
-    void appendCallSetResult(Address address, GPRReg result)
-    {
-        appendCall(address);
-        if (result != InvalidGPRReg)
-            move(GPRInfo::returnValueGPR, result);
-    }
-
-    void appendCallSetResult(Address address, GPRReg result1, GPRReg result2)
-    {
-#if OS(WINDOWS) && CPU(X86_64)
-        appendCallWithUGPRPair(address);
-#else
-        appendCall(address);
-#endif
-        setupResults(result1, result2);
-    }
-
-    void appendCallSetResult(Address address, JSValueRegs resultRegs)
-    {
-#if USE(JSVALUE64)
-        appendCallSetResult(address, resultRegs.gpr());
-#else
-        appendCallSetResult(address, resultRegs.payloadGPR(), resultRegs.tagGPR());
-#endif
-    }
-
-    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, GPRReg result)
-    {
-        JITCompiler::Call call = appendCall(function);
-        if (result != InvalidGPRReg)
-            move(GPRInfo::returnValueGPR, result);
-        return call;
-    }
-
-    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, GPRReg result1, GPRReg result2)
+    // FIXME: We can remove this when we don't support MSVC since on clang-cl we could use systemV ABI for JIT operations.
+    JITCompiler::Call appendCallSetResult(const CodePtr<OperationPtrTag> function, GPRReg result1, GPRReg result2)
     {
 #if OS(WINDOWS) && CPU(X86_64)
         JITCompiler::Call call = appendCallWithUGPRPair(function);
@@ -1083,23 +1120,6 @@ public:
         JITCompiler::Call call = appendCall(function);
 #endif
         setupResults(result1, result2);
-        return call;
-    }
-
-    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, JSValueRegs resultRegs)
-    {
-#if USE(JSVALUE64)
-        return appendCallSetResult(function, resultRegs.gpr());
-#else
-        return appendCallSetResult(function, resultRegs.payloadGPR(), resultRegs.tagGPR());
-#endif
-    }
-
-    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, FPRReg result)
-    {
-        JITCompiler::Call call = appendCall(function);
-        if (result != InvalidFPRReg)
-            moveDouble(FPRInfo::returnValueFPR, result);
         return call;
     }
 
@@ -1259,7 +1279,7 @@ public:
     void compileStringIdentEquality(Node*);
     void compileStringToUntypedEquality(Node*, Edge stringEdge, Edge untypedEdge);
     void compileStringIdentToNotStringVarEquality(Node*, Edge stringEdge, Edge notStringVarEdge);
-    void compileMiscStrictEq(Node*);
+    void compileBitwiseStrictEq(Node*);
 
     void compileSymbolEquality(Node*);
     void compileHeapBigIntEquality(Node*);
@@ -1437,7 +1457,7 @@ public:
     template <typename Generator, typename RepatchingFunction, typename NonRepatchingFunction>
     void compileMathIC(Node*, JITUnaryMathIC<Generator>*, RepatchingFunction, NonRepatchingFunction);
 
-    void compileArithDoubleUnaryOp(Node*, double (*doubleFunction)(double), double (*operation)(JSGlobalObject*, EncodedJSValue));
+    void compileArithDoubleUnaryOp(Node*, Arith::UnaryFunction, Arith::UnaryOperation);
     void compileValueAdd(Node*);
     void compileValueSub(Node*);
     void compileArithAdd(Node*);
@@ -1468,7 +1488,6 @@ public:
     void compileResolveRope(Node*);
     JITCompiler::Jump jumpForTypedArrayOutOfBounds(Node*, GPRReg baseGPR, GPRReg indexGPR, GPRReg scratchGPR, GPRReg scratch2GPR);
     JITCompiler::Jump jumpForTypedArrayIsDetachedIfOutOfBounds(Node*, GPRReg baseGPR, JITCompiler::Jump outOfBounds);
-    void emitTypedArrayBoundsCheck(Node*, GPRReg baseGPR, GPRReg indexGPR, GPRReg scratchGPR, GPRReg scratch2GPR);
     void compileGetTypedArrayByteOffset(Node*);
 #if USE(LARGE_TYPED_ARRAYS)
     void compileGetTypedArrayByteOffsetAsInt52(Node*);
@@ -1508,7 +1527,7 @@ public:
 #endif
         Edge valueUse);
     void loadFromIntTypedArray(GPRReg storageReg, GPRReg propertyReg, GPRReg resultReg, TypedArrayType);
-    void setIntTypedArrayLoadResult(Node*, JSValueRegs resultRegs, TypedArrayType, bool canSpeculate, bool shouldBox, FPRReg);
+    void setIntTypedArrayLoadResult(Node*, JSValueRegs resultRegs, TypedArrayType, bool canSpeculate, bool shouldBox, FPRReg, Jump);
     template <typename ClassType> void compileNewFunctionCommon(GPRReg, RegisteredStructure, GPRReg, GPRReg, GPRReg, JumpList&, size_t, FunctionExecutable*);
     void compileNewFunction(Node*);
     void compileSetFunctionName(Node*);
@@ -1623,6 +1642,7 @@ public:
     void compileNewInternalFieldObject(Node*);
     void compileToPrimitive(Node*);
     void compileToPropertyKey(Node*);
+    void compileToPropertyKeyOrNumber(Node*);
     void compileToNumeric(Node*);
     void compileCallNumberConstructor(Node*);
     void compileLogShadowChickenPrologue(Node*);

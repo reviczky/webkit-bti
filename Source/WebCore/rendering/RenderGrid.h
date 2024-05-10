@@ -50,6 +50,7 @@ enum class GridAxisPosition : uint8_t { GridAxisStart, GridAxisEnd, GridAxisCent
 
 class RenderGrid final : public RenderBlock {
     WTF_MAKE_ISO_ALLOCATED(RenderGrid);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderGrid);
 public:
     RenderGrid(Element&, RenderStyle&&);
     virtual ~RenderGrid();
@@ -129,6 +130,9 @@ public:
 
     LayoutUnit masonryContentSize() const;
     Vector<LayoutRect> gridItemsLayoutRects();
+
+    bool shouldCheckExplicitIntrinsicInnerLogicalSize(GridTrackSizingDirection) const;
+
 private:
     friend class GridTrackSizingAlgorithm;
     friend class GridMasonryLayout;
@@ -150,7 +154,6 @@ private:
     bool namedGridLinesDefinitionDidChange(const RenderStyle&) const;
     bool implicitGridLinesDefinitionDidChange(const RenderStyle&) const;
 
-    bool shouldCheckExplicitIntrinsicInnerLogicalSize(GridTrackSizingDirection) const;
     unsigned computeAutoRepeatTracksCount(GridTrackSizingDirection, std::optional<LayoutUnit> availableSize) const;
 
     unsigned clampAutoRepeatTracks(GridTrackSizingDirection, unsigned autoRepeatTracks) const;

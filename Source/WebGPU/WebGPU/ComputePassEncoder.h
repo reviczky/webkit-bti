@@ -31,6 +31,7 @@
 #import <wtf/Ref.h>
 #import <wtf/RefCounted.h>
 #import <wtf/Vector.h>
+#import <wtf/WeakPtr.h>
 
 struct WGPUComputePassEncoderImpl {
 };
@@ -83,7 +84,7 @@ private:
     bool validatePopDebugGroup() const;
 
     void makeInvalid(NSString* = nil);
-    void executePreDispatchCommands(id<MTLBuffer> = nil);
+    void executePreDispatchCommands(const Buffer* = nullptr);
     id<MTLBuffer> runPredispatchIndirectCallValidation(const Buffer&, uint64_t);
 
     id<MTLComputeCommandEncoder> m_computeCommandEncoder { nil };
@@ -92,13 +93,12 @@ private:
         Ref<QuerySet> querySet;
         uint32_t queryIndex;
     };
-    Vector<PendingTimestampWrites> m_pendingTimestampWrites;
     uint64_t m_debugGroupStackSize { 0 };
 
     const Ref<Device> m_device;
     MTLSize m_threadsPerThreadgroup;
     Vector<uint32_t> m_computeDynamicOffsets;
-    const ComputePipeline* m_pipeline { nullptr };
+    WeakPtr<const ComputePipeline> m_pipeline;
     Ref<CommandEncoder> m_parentEncoder;
     HashMap<uint32_t, Vector<uint32_t>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_bindGroupDynamicOffsets;
     HashMap<uint32_t, Vector<const BindableResources*>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_bindGroupResources;

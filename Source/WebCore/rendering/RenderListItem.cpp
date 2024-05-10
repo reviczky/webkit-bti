@@ -65,7 +65,7 @@ RenderListItem::~RenderListItem()
 RenderStyle RenderListItem::computeMarkerStyle() const
 {
     if (!is<PseudoElement>(element())) {
-        if (auto markerStyle = getCachedPseudoStyle(PseudoId::Marker, &style()))
+        if (auto markerStyle = getCachedPseudoStyle({ PseudoId::Marker }, &style()))
             return RenderStyle::clone(*markerStyle);
     }
 
@@ -86,22 +86,6 @@ RenderStyle RenderListItem::computeMarkerStyle() const
     markerStyle.setTextWrapMode(TextWrapMode::NoWrap);
     markerStyle.setTextTransform({ });
     return markerStyle;
-}
-
-void RenderListItem::insertedIntoTree(IsInternalMove isInternalMove)
-{
-    RenderBlockFlow::insertedIntoTree(isInternalMove);
-
-    if (isInternalMove == IsInternalMove::No)
-        updateListMarkerNumbers();
-}
-
-void RenderListItem::willBeRemovedFromTree(IsInternalMove isInternalMove)
-{
-    RenderBlockFlow::willBeRemovedFromTree(isInternalMove);
-
-    if (isInternalMove == IsInternalMove::No)
-        updateListMarkerNumbers();
 }
 
 bool isHTMLListElement(const Node& node)
@@ -292,13 +276,6 @@ void RenderListItem::layout()
     ASSERT(needsLayout());
 
     RenderBlockFlow::layout();
-}
-
-void RenderListItem::addOverflowFromChildren()
-{
-    if (m_marker)
-        m_marker->addOverflowFromListMarker();
-    RenderBlockFlow::addOverflowFromChildren();
 }
 
 void RenderListItem::computePreferredLogicalWidths()

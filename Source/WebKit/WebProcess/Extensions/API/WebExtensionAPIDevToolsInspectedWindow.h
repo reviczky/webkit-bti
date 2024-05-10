@@ -33,20 +33,17 @@
 
 namespace WebKit {
 
+class WebPage;
+
 class WebExtensionAPIDevToolsInspectedWindow : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsInspectedWindow, devToolsInspectedWindow);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsInspectedWindow, devToolsInspectedWindow, devtools.inspectedWindow);
 
 public:
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
+    void eval(WebPage&, NSString *expression, NSDictionary *options, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    void reload(WebPage&, NSDictionary *options, NSString **outExceptionString);
 
-    void eval(NSString *expression, NSDictionary *options, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-    void reload(NSDictionary *options, NSString **outExceptionString);
-    void getResources(NSDictionary *options, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-
-    double tabId();
-
-    WebExtensionAPIEvent& onResourceAdded();
+    double tabId(WebPage&);
 #endif
 
 private:

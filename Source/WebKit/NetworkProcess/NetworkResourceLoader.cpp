@@ -117,9 +117,12 @@ static void sendReplyToSynchronousRequest(NetworkResourceLoader::SynchronousLoad
     ASSERT(data.delayedReply);
     ASSERT(!data.response.isNull() || !data.error.isNull());
 
+    if (!data.delayedReply)
+        return;
+
     Vector<uint8_t> responseBuffer;
     if (buffer && buffer->size())
-        responseBuffer.append(buffer->makeContiguous()->data(), buffer->size());
+        responseBuffer.append(buffer->makeContiguous()->span());
 
     data.response.setDeprecatedNetworkLoadMetrics(Box<NetworkLoadMetrics>::create(metrics));
 
@@ -352,7 +355,7 @@ bool NetworkResourceLoader::shouldSendResourceLoadMessages() const
         return true;
 
 #if ENABLE(WK_WEB_EXTENSIONS)
-    if (m_parameters.pageHasExtensionController)
+    if (m_parameters.pageHasLoadedWebExtensions)
         return true;
 #endif
 
@@ -646,10 +649,10 @@ bool NetworkResourceLoader::shouldInterruptLoadForXFrameOptions(const String& xF
     case XFrameOptionsDisposition::SameOrigin: {
         auto origin = SecurityOrigin::create(url);
         auto topFrameOrigin = m_parameters.frameAncestorOrigins.last();
-        if (!topFrameOrigin || !origin->isSameSchemeHostPort(*topFrameOrigin))
+        if (!origin->isSameSchemeHostPort(topFrameOrigin))
             return true;
         for (auto& ancestorOrigin : m_parameters.frameAncestorOrigins) {
-            if (!ancestorOrigin || !origin->isSameSchemeHostPort(*ancestorOrigin))
+            if (!origin->isSameSchemeHostPort(ancestorOrigin))
                 return true;
         }
         return false;
@@ -781,7 +784,7 @@ void NetworkResourceLoader::processClearSiteDataHeader(const WebCore::ResourceRe
     if (clearSiteDataValues.contains(ClearSiteDataValue::Cookies))
         typesToRemove.add(WebsiteDataType::Cookies);
     if (clearSiteDataValues.contains(ClearSiteDataValue::Storage)) {
-        typesToRemove.add({ WebsiteDataType::LocalStorage, WebsiteDataType::SessionStorage, WebsiteDataType::IndexedDBDatabases, WebsiteDataType::DOMCache, WebsiteDataType::OfflineWebApplicationCache, WebsiteDataType::FileSystem, WebsiteDataType::WebSQLDatabases });
+        typesToRemove.add({ WebsiteDataType::LocalStorage, WebsiteDataType::SessionStorage, WebsiteDataType::IndexedDBDatabases, WebsiteDataType::DOMCache, WebsiteDataType::FileSystem, WebsiteDataType::WebSQLDatabases });
         typesToRemove.add(WebsiteDataType::ServiceWorkerRegistrations);
     }
 
@@ -923,6 +926,8 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
             });
             return completionHandler(PolicyAction::Ignore);
         }
+        if (m_networkLoad && m_networkLoadChecker->timingAllowFailedFlag())
+            m_networkLoad->setTimingAllowFailedFlag();
     }
 
     initializeReportingEndpoints(m_response);
@@ -997,7 +1002,7 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
 void NetworkResourceLoader::sendDidReceiveResponsePotentiallyInNewBrowsingContextGroup(const WebCore::ResourceResponse& response, PrivateRelayed privateRelayed, bool needsContinueDidReceiveResponseMessage)
 {
-    auto browsingContextGroupSwitchDecision = toBrowsingContextGroupSwitchDecision(m_currentCoopEnforcementResult);
+    auto browsingContextGroupSwitchDecision = m_connection->usesSingleWebProcess()? BrowsingContextGroupSwitchDecision::StayInGroup: toBrowsingContextGroupSwitchDecision(m_currentCoopEnforcementResult);
     if (browsingContextGroupSwitchDecision == BrowsingContextGroupSwitchDecision::StayInGroup) {
         send(Messages::WebResourceLoader::DidReceiveResponse { response, privateRelayed, needsContinueDidReceiveResponseMessage, computeResponseMetrics(response) });
         return;
@@ -1053,6 +1058,8 @@ void NetworkResourceLoader::didReceiveBuffer(const WebCore::FragmentedSharedBuff
 
 void NetworkResourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMetrics)
 {
+    ASSERT(!m_networkLoadChecker || networkLoadMetrics.failsTAOCheck == m_networkLoadChecker->timingAllowFailedFlag());
+
     LOADER_RELEASE_LOG("didFinishLoading: (numBytesReceived=%zd, hasCacheEntryForValidation=%d)", m_numBytesReceived, !!m_cacheEntryForValidation);
 
     if (shouldCaptureExtraNetworkLoadMetrics())
@@ -1244,6 +1251,9 @@ void NetworkResourceLoader::willSendRedirectedRequestInternal(ResourceRequest&& 
                 this->didFailLoading(result.error());
                 return completionHandler({ });
             }
+
+            if (m_networkLoad && m_networkLoadChecker && m_networkLoadChecker->timingAllowFailedFlag())
+                m_networkLoad->setTimingAllowFailedFlag();
 
             LOADER_RELEASE_LOG("willSendRedirectedRequest: NetworkLoadChecker::checkRedirection is done");
             if (m_parameters.options.redirect == FetchOptions::Redirect::Manual) {
@@ -1850,9 +1860,9 @@ static void logCookieInformationInternal(NetworkConnectionToWebProcess& connecti
     auto size = cookies.size();
     decltype(size) count = 0;
     for (const auto& cookie : cookies) {
-        const char* trailingComma = ",";
+        auto trailingComma = ","_s;
         if (++count == size)
-            trailingComma = "";
+            trailingComma = ""_s;
 
         auto escapedName = escapeForJSON(cookie.name);
         auto escapedValue = escapeForJSON(cookie.value);
@@ -1873,7 +1883,7 @@ static void logCookieInformationInternal(NetworkConnectionToWebProcess& connecti
         LOCAL_LOG("    \"session\": %" PUBLIC_LOG_STRING ",", cookie.session ? "true" : "false");
         LOCAL_LOG("    \"comment\": \"%" PUBLIC_LOG_STRING "\",", escapedComment.utf8().data());
         LOCAL_LOG("    \"commentURL\": \"%" PUBLIC_LOG_STRING "\"", escapedCommentURL.utf8().data());
-        LOCAL_LOG("  }%" PUBLIC_LOG_STRING, trailingComma);
+        LOCAL_LOG("  }%" PUBLIC_LOG_STRING, trailingComma.characters());
     }
     LOCAL_LOG("]}");
 #undef LOCAL_LOG
@@ -2100,10 +2110,7 @@ void NetworkResourceLoader::cancelMainResourceLoadForContentFilter(const WebCore
 
 void NetworkResourceLoader::handleProvisionalLoadFailureFromContentFilter(const URL& blockedPageURL, WebCore::SubstituteData& substituteData)
 {
-    auto blockedPageDomain = RegistrableDomain { WebCore::ContentFilter::blockedPageURL() };
-    if (auto* connection = m_connection->networkProcess().webProcessConnection(m_connection->webProcessIdentifier()))
-        connection->addAllowedFirstPartyForCookies(blockedPageDomain);
-    m_connection->networkProcess().addAllowedFirstPartyForCookies(m_connection->webProcessIdentifier(), WTFMove(blockedPageDomain), LoadedWebArchive::No, [] { });
+    m_connection->networkProcess().addAllowedFirstPartyForCookies(m_connection->webProcessIdentifier(), RegistrableDomain { WebCore::ContentFilter::blockedPageURL() }, LoadedWebArchive::No, [] { });
     send(Messages::WebResourceLoader::ContentFilterDidBlockLoad(m_unblockHandler, m_unblockRequestDeniedScript, m_contentFilter->blockedError(), blockedPageURL, substituteData));
 }
 #endif // ENABLE(CONTENT_FILTERING)

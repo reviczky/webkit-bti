@@ -109,6 +109,7 @@ void HistoryItem::reset()
     m_itemSequenceNumber = generateSequenceNumber();
 
     m_stateObject = nullptr;
+    m_navigationAPIStateObject = nullptr;
     m_documentSequenceNumber = generateSequenceNumber();
 
     m_formData = nullptr;
@@ -278,6 +279,12 @@ void HistoryItem::setStateObject(RefPtr<SerializedScriptValue>&& object)
     notifyChanged();
 }
 
+// https://html.spec.whatwg.org/multipage/browsing-the-web.html#she-navigation-api-state
+void HistoryItem::setNavigationAPIStateObject(RefPtr<SerializedScriptValue>&& object)
+{
+    m_navigationAPIStateObject = WTFMove(object);
+}
+
 void HistoryItem::addChildItem(Ref<HistoryItem>&& child)
 {
     ASSERT(!childItemWithTarget(child->target()));
@@ -323,11 +330,6 @@ const Vector<Ref<HistoryItem>>& HistoryItem::children() const
     return m_children;
 }
 
-bool HistoryItem::hasChildren() const
-{
-    return !m_children.isEmpty();
-}
-
 void HistoryItem::clearChildren()
 {
     m_children.clear();
@@ -365,24 +367,6 @@ bool HistoryItem::hasSameDocumentTree(HistoryItem& otherItem) const
         auto& child = children()[i].get();
         auto* otherChild = otherItem.childItemWithDocumentSequenceNumber(child.documentSequenceNumber());
         if (!otherChild || !child.hasSameDocumentTree(*otherChild))
-            return false;
-    }
-
-    return true;
-}
-
-// Does a non-recursive check that this item and its immediate children have the
-// same frames as the other item.
-bool HistoryItem::hasSameFrames(HistoryItem& otherItem) const
-{
-    if (target() != otherItem.target())
-        return false;
-        
-    if (children().size() != otherItem.children().size())
-        return false;
-
-    for (size_t i = 0; i < children().size(); i++) {
-        if (!otherItem.childItemWithTarget(children()[i]->target()))
             return false;
     }
 
@@ -446,8 +430,8 @@ int HistoryItem::showTreeWithIndent(unsigned indentLevel) const
 {
     Vector<char> prefix;
     for (unsigned i = 0; i < indentLevel; ++i)
-        prefix.append("  ", 2);
-    prefix.append("\0", 1);
+        prefix.append("  "_span);
+    prefix.append('\0');
 
     fprintf(stderr, "%s+-%s (%p)\n", prefix.data(), m_urlString.utf8().data(), this);
     
@@ -460,9 +444,9 @@ int HistoryItem::showTreeWithIndent(unsigned indentLevel) const
 #endif
 
 #if !LOG_DISABLED
-const char* HistoryItem::logString() const
+String HistoryItem::logString() const
 {
-    return debugString("HistoryItem current URL ", urlString(), ", identifier ", m_identifier.toString());
+    return makeString("HistoryItem current URL ", urlString(), ", identifier ", m_identifier.toString());
 }
 #endif
 

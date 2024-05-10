@@ -31,6 +31,15 @@
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
+class CSSCalcSymbolTable;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::CSSCalcSymbolTable> : std::true_type { };
+}
+
+namespace WebCore {
 
 enum class CSSUnitType : uint8_t;
 
@@ -45,6 +54,7 @@ public:
     CSSCalcSymbolTable(std::initializer_list<std::tuple<CSSValueID, CSSUnitType, double>>);
 
     std::optional<Value> get(CSSValueID) const;
+    bool contains(CSSValueID) const;
 
 private:
     HashMap<CSSValueID, std::pair<CSSUnitType, double>> m_table;

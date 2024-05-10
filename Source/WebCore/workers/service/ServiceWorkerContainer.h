@@ -59,6 +59,10 @@ public:
 
     ~ServiceWorkerContainer();
 
+    // ActiveDOMObject.
+    void ref() const final;
+    void deref() const final;
+
     ServiceWorker* controller() const;
 
     using ReadyPromise = DOMPromiseProxy<IDLInterface<ServiceWorkerRegistration>>;
@@ -130,13 +134,12 @@ private:
 
     SWClientConnection& ensureSWClientConnection();
 
-    // ActiveDOMObject.
-    const char* activeDOMObjectName() const final;
-    
     ScriptExecutionContext* scriptExecutionContext() const final { return ActiveDOMObject::scriptExecutionContext(); }
-    EventTargetInterface eventTargetInterface() const final { return ServiceWorkerContainerEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::ServiceWorkerContainer; }
     void refEventTarget() final;
     void derefEventTarget() final;
+
+    // ActiveDOMObject.
     void stop() final;
 
     void notifyRegistrationIsSettled(const ServiceWorkerRegistrationKey&);

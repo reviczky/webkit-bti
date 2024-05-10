@@ -1,29 +1,18 @@
 ================
-WebKitGTK 2.44.1
+WebKitGTK 2.45.1
 ================
 
-What's new in WebKitGTK 2.44.1?
+What's new in WebKitGTK 2.45.1?
 
-  - Fix handling of lifetime of web view child dialogs in GTK4.
-  - Do not schedule layer flushes when drawing area size is empty.
-  - Fix videos with alpha when using the DMA-BUF sink.
-  - Fix the build with USE_GBM=OFF.
-  - Fix the build in 32bit platforms
+  - Use skia instead of cairo for rendering.
+  - Sync WebGL content with fences when available.
+  - Implement printing using the Print portal.
+  - Disable the gst-libav aac decoder.
+  - Fix text scaling.
+  - Consider keycode when activating application accelerators.
+  - Support AXActiveElement and AXSelectedChildren for comboboxes, lists and listboxes.
+  - Avoid notifying an empty cursor rectangle to input methods.
   - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.44.0
-================
-
-What's new in WebKitGTK 2.44.0?
-
-  - Fix connection of UI and web process accessibility tree in GTK4.
-  - Add BubblewrapLauncher sandbox directory for the gstreamer user registry cache directory.
-  - Fix bug causing preferred language to not be passed to NetworkProcess if set in WebContext before creating WebView.
-  - Do not use real time priority for the display link thread.
-  - Use a shorter web process cache lifetime.
-  - Fix several crashes and rendering issues.
-  - Translation updates: German, Polish, Swedish, Turkish.
 
 ================
 WebKitGTK 2.43.4

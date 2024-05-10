@@ -26,7 +26,6 @@
 #include "config.h"
 #include "WebSWContextManagerConnection.h"
 
-#include "DataReference.h"
 #include "FormDataReference.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcessMessages.h"
@@ -42,6 +41,7 @@
 #include "WebCompiledContentRuleListData.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebCryptoClient.h"
 #include "WebDatabaseProvider.h"
 #include "WebLocalFrameLoaderClient.h"
 #include "WebMessagePortChannelProvider.h"
@@ -92,7 +92,7 @@ WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection
     , m_userAgent(standardUserAgent())
 #endif
     , m_userContentController(WebUserContentController::getOrCreate(initializationData.userContentControllerIdentifier))
-    , m_queue(WorkQueue::create("WebSWContextManagerConnection queue", WorkQueue::QOS::UserInitiated))
+    , m_queue(WorkQueue::create("WebSWContextManagerConnection queue"_s, WorkQueue::QOS::UserInitiated))
 {
 #if ENABLE(CONTENT_EXTENSIONS)
     m_userContentController->addContentRuleLists(WTFMove(initializationData.contentRuleLists));
@@ -162,6 +162,7 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         pageConfiguration.broadcastChannelRegistry = WebProcess::singleton().broadcastChannelRegistry();
         pageConfiguration.userContentProvider = m_userContentController;
         pageConfiguration.cookieJar = WebCookieJar::create();
+        pageConfiguration.cryptoClient = makeUniqueRef<WebCryptoClient>();
 #if ENABLE(WEB_RTC)
         pageConfiguration.webRTCProvider = makeUniqueRef<RemoteWorkerLibWebRTCProvider>();
 #endif
@@ -175,7 +176,9 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         auto loaderClientForMainFrame = makeUniqueRef<RemoteWorkerFrameLoaderClient>(m_webPageProxyID, m_pageID, effectiveUserAgent);
         if (contextData.serviceWorkerPageIdentifier)
             loaderClientForMainFrame->setServiceWorkerPageIdentifier(*contextData.serviceWorkerPageIdentifier);
-        pageConfiguration.clientForMainFrame = UniqueRef<WebCore::LocalFrameLoaderClient>(WTFMove(loaderClientForMainFrame));
+        pageConfiguration.clientCreatorForMainFrame = CompletionHandler<UniqueRef<WebCore::LocalFrameLoaderClient>(WebCore::LocalFrame&)> { [client = WTFMove(loaderClientForMainFrame)] (auto&) mutable {
+            return WTFMove(client);
+        } };
 
 #if !RELEASE_LOG_DISABLED
         auto serviceWorkerIdentifier = contextData.serviceWorkerIdentifier;
@@ -292,13 +295,13 @@ void WebSWContextManagerConnection::fireActivateEvent(ServiceWorkerIdentifier id
         serviceWorkerThreadProxy->fireActivateEvent();
 }
 
-void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identifier, const std::optional<IPC::DataReference>& ipcData, std::optional<NotificationPayload>&& proposedPayload, CompletionHandler<void(bool, std::optional<NotificationPayload>&&)>&& callback)
+void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identifier, std::optional<std::span<const uint8_t>> ipcData, std::optional<NotificationPayload>&& proposedPayload, CompletionHandler<void(bool, std::optional<NotificationPayload>&&)>&& callback)
 {
     assertIsCurrent(m_queue.get());
 
     std::optional<Vector<uint8_t>> data;
     if (ipcData)
-        data = Vector<uint8_t> { ipcData->data(), ipcData->size() };
+        data = Vector<uint8_t> { *ipcData };
 
     auto inQueueCallback = [queue = m_queue, callback = WTFMove(callback)](bool result, std::optional<NotificationPayload>&& resultPayload) mutable {
         queue->dispatch([result, resultPayload = crossThreadCopy(WTFMove(resultPayload)), callback = WTFMove(callback)]() mutable {

@@ -31,6 +31,7 @@
 #include "CSSParserIdioms.h"
 #include "CSSPendingSubstitutionValue.h"
 #include "CSSPropertyNames.h"
+#include "CSSPropertyParserConsumer+Ident.h"
 #include "CSSValueKeywords.h"
 #include "CSSValuePair.h"
 #include "CSSVariableReferenceValue.h"
@@ -98,9 +99,9 @@ private:
     bool commonSerializationChecks(const StyleProperties&);
 
     String serializeLonghands() const;
-    String serializeLonghands(unsigned lengthLimit, const char* separator = " ") const;
+    String serializeLonghands(unsigned lengthLimit, ASCIILiteral separator = " "_s) const;
     String serializeLonghandsOmittingInitialValues() const;
-    String serializeLonghandsOmittingTrailingInitialValue(const char* separator = " ") const;
+    String serializeLonghandsOmittingTrailingInitialValue(ASCIILiteral separator = " "_s) const;
 
     String serializeCommonValue() const;
     String serializeCommonValue(unsigned startIndex, unsigned count) const;
@@ -361,7 +362,7 @@ String ShorthandSerializer::serialize()
     case CSSPropertyWebkitBorderRadius:
         return serializeBorderRadius();
     case CSSPropertyContainer:
-        return serializeLonghandsOmittingTrailingInitialValue(" / ");
+        return serializeLonghandsOmittingTrailingInitialValue(" / "_s);
     case CSSPropertyFlex:
     case CSSPropertyPerspectiveOrigin:
         return serializeLonghands();
@@ -419,7 +420,7 @@ String ShorthandSerializer::serializeLonghands() const
     return serializeLonghands(length());
 }
 
-String ShorthandSerializer::serializeLonghands(unsigned lengthLimit, const char* separator) const
+String ShorthandSerializer::serializeLonghands(unsigned lengthLimit, ASCIILiteral separator) const
 {
     ASSERT(lengthLimit <= length());
     switch (lengthLimit) {
@@ -433,7 +434,7 @@ String ShorthandSerializer::serializeLonghands(unsigned lengthLimit, const char*
         return makeString(serializeLonghandValue(0), separator, serializeLonghandValue(1), separator, serializeLonghandValue(2), separator, serializeLonghandValue(3));
     default:
         StringBuilder result;
-        auto prefix = "";
+        auto prefix = ""_s;
         for (unsigned i = 0; i < lengthLimit; ++i)
             result.append(std::exchange(prefix, separator), serializeLonghandValue(i));
         return result.toString();
@@ -451,7 +452,7 @@ String ShorthandSerializer::serializeLonghandsOmittingInitialValues() const
     return result.isEmpty() ? serializeLonghandValue(0) : result.toString();
 }
 
-String ShorthandSerializer::serializeLonghandsOmittingTrailingInitialValue(const char* separator) const
+String ShorthandSerializer::serializeLonghandsOmittingTrailingInitialValue(ASCIILiteral separator) const
 {
     ASSERT(length() >= 2);
     return serializeLonghands(length() - isLonghandInitialValue(length() - 1), separator);
@@ -864,7 +865,7 @@ String ShorthandSerializer::serializeBorderRadius() const
     };
     serializeRadii(horizontalRadii);
     if (serializeBoth) {
-        result.append(" / ");
+        result.append(" / "_s);
         serializeRadii(verticalRadii);
     }
     return result.toString();
@@ -1118,13 +1119,13 @@ String ShorthandSerializer::serializeGridArea() const
                 --longhandsToSerialize;
         }
     }
-    return serializeLonghands(longhandsToSerialize, " / ");
+    return serializeLonghands(longhandsToSerialize, " / "_s);
 }
 
 String ShorthandSerializer::serializeGridRowColumn() const
 {
     ASSERT(length() == 2);
-    return serializeLonghands(canOmitTrailingGridAreaValue(longhandValue(0), longhandValue(1)) ? 1 : 2, " / ");
+    return serializeLonghands(canOmitTrailingGridAreaValue(longhandValue(0), longhandValue(1)) ? 1 : 2, " / "_s);
 }
 
 String ShorthandSerializer::serializeGridTemplate() const
@@ -1139,7 +1140,7 @@ String ShorthandSerializer::serializeGridTemplate() const
     if (!areasValue) {
         if (isLonghandValueNone(rowsIndex) && isLonghandValueNone(columnsIndex))
             return nameString(CSSValueNone);
-        return serializeLonghands(2, " / ");
+        return serializeLonghands(2, " / "_s);
     }
 
     // Depending on the values of grid-template-rows and grid-template-columns, we may not
@@ -1192,7 +1193,7 @@ String ShorthandSerializer::serializeGridTemplate() const
         }
     }
     if (!isLonghandValueNone(columnsIndex))
-        result.append(" / ", serializeLonghandValue(columnsIndex));
+        result.append(" / "_s, serializeLonghandValue(columnsIndex));
     return result.toString();
 }
 

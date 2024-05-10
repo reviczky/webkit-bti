@@ -117,7 +117,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "WebFullScreenManager"; }
+    ASCIILiteral logClassName() const { return "WebFullScreenManager"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 
@@ -128,7 +128,7 @@ private:
     void updateMainVideoElement();
     void setMainVideoElement(RefPtr<WebCore::HTMLVideoElement>&&);
 
-    WeakPtr<WebCore::HTMLVideoElement, WebCore::WeakPtrImplWithEventTargetData> m_mainVideoElement;
+    WeakPtr<WebCore::HTMLVideoElement> m_mainVideoElement;
     RunLoop::Timer m_mainVideoElementTextRecognitionTimer;
     bool m_isPerformingTextRecognitionInMainVideo { false };
 #endif // ENABLE(VIDEO)

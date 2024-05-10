@@ -31,7 +31,6 @@
 #include "ReadableStreamSource.h"
 #include "RealtimeMediaSource.h"
 #include "WebCodecsVideoFrame.h"
-#include <wtf/IsoMalloc.h>
 
 namespace JSC {
 class JSGlobaObject;
@@ -61,7 +60,7 @@ public:
 
     class Source final
         : public ReadableStreamSource
-        , public MediaStreamTrackPrivate::Observer {
+        , public MediaStreamTrackPrivateObserver {
         WTF_MAKE_ISO_ALLOCATED(Source);
     public:
         Source(Ref<MediaStreamTrack>&&, MediaStreamTrackProcessor&);
@@ -76,7 +75,7 @@ public:
 
     private:
 
-        // MediaStreamTrackPrivate::Observer
+        // MediaStreamTrackPrivateObserver
         void trackEnded(MediaStreamTrackPrivate&) final;
         void trackMutedChanged(MediaStreamTrackPrivate&) final { }
         void trackSettingsChanged(MediaStreamTrackPrivate&) final { }

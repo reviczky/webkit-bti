@@ -60,9 +60,7 @@ WebCodecsVideoDecoder::WebCodecsVideoDecoder(ScriptExecutionContext& context, In
 {
 }
 
-WebCodecsVideoDecoder::~WebCodecsVideoDecoder()
-{
-}
+WebCodecsVideoDecoder::~WebCodecsVideoDecoder() = default;
 
 static bool isSupportedDecoderCodec(const String& codec, const Settings::Values& settings)
 {
@@ -351,11 +349,6 @@ void WebCodecsVideoDecoder::stop()
 {
     m_state = WebCodecsCodecState::Closed;
     m_internalDecoder = nullptr;
-}
-
-const char* WebCodecsVideoDecoder::activeDOMObjectName() const
-{
-    return "VideoDecoder";
 }
 
 bool WebCodecsVideoDecoder::virtualHasPendingActivity() const

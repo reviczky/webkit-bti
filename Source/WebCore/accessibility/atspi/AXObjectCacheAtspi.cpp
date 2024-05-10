@@ -33,12 +33,12 @@
 
 namespace WebCore {
 
-void AXObjectCache::attachWrapper(AccessibilityObject* axObject)
+void AXObjectCache::attachWrapper(AccessibilityObject& axObject)
 {
-    auto wrapper = AccessibilityObjectAtspi::create(axObject, document().page()->accessibilityRootObject());
-    axObject->setWrapper(wrapper.ptr());
+    auto wrapper = AccessibilityObjectAtspi::create(&axObject, document().page()->accessibilityRootObject());
+    axObject.setWrapper(wrapper.ptr());
 
-    m_deferredParentChangedList.add(axObject);
+    m_deferredParentChangedList.add(&axObject);
     m_performCacheUpdateTimer.startOneShot(0_s);
 }
 
@@ -136,8 +136,12 @@ void AXObjectCache::postPlatformNotification(AXCoreObject* coreObject, AXNotific
         wrapper->stateChanged("required", coreObject->isRequired());
         break;
     case AXActiveDescendantChanged:
-        if (auto* descendant = coreObject->activeDescendant())
-            platformHandleFocusedUIElementChanged(nullptr, descendant->node());
+        if (auto* descendant = coreObject->activeDescendant()) {
+            if (coreObject->isComboBox() || coreObject->canBeControlledBy(AccessibilityRole::ComboBox))
+                wrapper->activeDescendantChanged();
+            else
+                platformHandleFocusedUIElementChanged(nullptr, descendant->node());
+        }
         break;
     case AXChildrenChanged:
         coreObject->updateChildrenIfNecessary();

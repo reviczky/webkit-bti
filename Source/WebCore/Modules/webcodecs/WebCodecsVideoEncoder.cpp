@@ -64,9 +64,7 @@ WebCodecsVideoEncoder::WebCodecsVideoEncoder(ScriptExecutionContext& context, In
 {
 }
 
-WebCodecsVideoEncoder::~WebCodecsVideoEncoder()
-{
-}
+WebCodecsVideoEncoder::~WebCodecsVideoEncoder() = default;
 
 static bool isSupportedEncoderCodec(const String& codec, const Settings::Values& settings)
 {
@@ -413,11 +411,6 @@ void WebCore::WebCodecsVideoEncoder::suspend(ReasonForSuspension)
 void WebCodecsVideoEncoder::stop()
 {
     // FIXME: Implement.
-}
-
-const char* WebCodecsVideoEncoder::activeDOMObjectName() const
-{
-    return "VideoEncoder";
 }
 
 bool WebCodecsVideoEncoder::virtualHasPendingActivity() const

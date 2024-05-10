@@ -32,6 +32,15 @@
 #import <wtf/WeakHashSet.h>
 #import <wtf/WeakPtr.h>
 
+namespace WebKit {
+class RemoteLayerBackingStoreCollection;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLayerBackingStoreCollection> : std::true_type { };
+}
+
 namespace WebCore {
 class ImageBuffer;
 class ThreadSafeImageBufferFlusher;
@@ -46,7 +55,9 @@ class RemoteLayerWithInProcessRenderingBackingStore;
 class RemoteLayerTreeContext;
 class RemoteLayerTreeTransaction;
 class RemoteImageBufferSetProxy;
+class ThreadSafeImageBufferSetFlusher;
 
+enum class BufferInSetType : uint8_t;
 enum class SwapBuffersDisplayRequirement : uint8_t;
 
 class RemoteLayerBackingStoreCollection : public CanMakeWeakPtr<RemoteLayerBackingStoreCollection> {

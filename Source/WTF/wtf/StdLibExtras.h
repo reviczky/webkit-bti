@@ -28,6 +28,7 @@
 
 #include <cstring>
 #include <memory>
+#include <span>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -132,7 +133,7 @@ inline bool is8ByteAligned(void* p)
 }
 
 template<typename ToType, typename FromType>
-inline ToType bitwise_cast(FromType from)
+constexpr inline ToType bitwise_cast(FromType from)
 {
     static_assert(sizeof(FromType) == sizeof(ToType), "bitwise_cast size of FromType and ToType must be equal!");
 #if COMPILER_SUPPORTS(BUILTIN_IS_TRIVIALLY_COPYABLE)
@@ -596,22 +597,22 @@ public:
 template<class T, class... Args>
 ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
 {
-    static_assert(std::is_same<typename T::webkitFastMalloced, int>::value, "T is FastMalloced");
-    static_assert(!TypeHasRefMemberFunction<T>::value, "T should not be refcounted");
+    static_assert(std::is_same<typename T::WTFIsFastAllocated, int>::value, "T sould use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
+    static_assert(!TypeHasRefMemberFunction<T>::value, "T should not be RefCounted");
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 template<class T, class... Args>
 ALWAYS_INLINE decltype(auto) makeUniqueWithoutRefCountedCheck(Args&&... args)
 {
-    static_assert(std::is_same<typename T::webkitFastMalloced, int>::value, "T is FastMalloced");
+    static_assert(std::is_same<typename T::WTFIsFastAllocated, int>::value, "T sould use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 template<class T, class... Args>
 ALWAYS_INLINE decltype(auto) makeUniqueWithoutFastMallocCheck(Args&&... args)
 {
-    static_assert(!TypeHasRefMemberFunction<T>::value, "T should not be refcounted");
+    static_assert(!TypeHasRefMemberFunction<T>::value, "T should not be RefCounted");
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
@@ -670,6 +671,60 @@ template<typename OptionalType> auto valueOrDefault(OptionalType&& optionalValue
     return optionalValue ? *std::forward<OptionalType>(optionalValue) : std::remove_reference_t<decltype(*optionalValue)> { };
 }
 
+template<typename T, typename U, std::size_t Extent>
+std::span<T, Extent> spanReinterpretCast(std::span<U, Extent> span)
+{
+    RELEASE_ASSERT(!(span.size_bytes() % sizeof(T)));
+    static_assert(std::is_const_v<T> || (!std::is_const_v<T> && !std::is_const_v<U>), "spanCast will not remove constness from source");
+    return std::span<T, Extent> { reinterpret_cast<T*>(const_cast<std::remove_const_t<U>*>(span.data())), span.size_bytes() / sizeof(T) };
+}
+
+template<typename T, std::size_t Extent>
+std::span<T, Extent> spanConstCast(std::span<const T, Extent> span)
+{
+    return std::span<T, Extent> { const_cast<T*>(span.data()), span.size() };
+}
+
+template<typename T, std::size_t Extent>
+std::span<const uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> asBytes(std::span<T, Extent> span)
+{
+    return std::span<const uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> { reinterpret_cast<const uint8_t*>(span.data()), span.size_bytes() };
+}
+
+template<typename T, std::size_t Extent>
+std::span<uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> asWritableBytes(std::span<T, Extent> span)
+{
+    return std::span<uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> { reinterpret_cast<uint8_t*>(span.data()), span.size_bytes() };
+}
+
+template<typename T, std::size_t TExtent, typename U, std::size_t UExtent>
+bool equalSpans(std::span<T, TExtent> a, std::span<U, UExtent> b)
+{
+    static_assert(sizeof(T) == sizeof(U));
+    static_assert(std::has_unique_object_representations_v<T>);
+    static_assert(std::has_unique_object_representations_v<U>);
+    if (a.size() != b.size())
+        return false;
+    return !memcmp(a.data(), b.data(), a.size_bytes());
+}
+
+template<typename T, std::size_t TExtent, typename U, std::size_t UExtent>
+void memcpySpan(std::span<T, TExtent> destination, std::span<U, UExtent> source)
+{
+    RELEASE_ASSERT(destination.size() == source.size());
+    static_assert(sizeof(T) == sizeof(U));
+    static_assert(std::is_trivially_copyable_v<T>);
+    static_assert(std::is_trivially_copyable_v<U>);
+    memcpy(destination.data(), source.data(), destination.size_bytes());
+}
+
+template<typename T, std::size_t Extent>
+void memsetSpan(std::span<T, Extent> destination, uint8_t byte)
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+    memset(destination.data(), byte, destination.size_bytes());
+}
+
 } // namespace WTF
 
 #define WTFMove(value) std::move<WTF::CheckMoveParameter>(value)
@@ -702,11 +757,14 @@ using WTF::GB;
 using WTF::KB;
 using WTF::MB;
 using WTF::approximateBinarySearch;
+using WTF::asBytes;
+using WTF::asWritableBytes;
 using WTF::binarySearch;
 using WTF::bitwise_cast;
 using WTF::callStatelessLambda;
 using WTF::checkAndSet;
 using WTF::constructFixedSizeArrayWithArguments;
+using WTF::equalSpans;
 using WTF::findBitInWord;
 using WTF::insertIntoBoundedVector;
 using WTF::is8ByteAligned;
@@ -716,11 +774,15 @@ using WTF::isStatelessLambda;
 using WTF::makeUnique;
 using WTF::makeUniqueWithoutFastMallocCheck;
 using WTF::makeUniqueWithoutRefCountedCheck;
+using WTF::memcpySpan;
+using WTF::memsetSpan;
 using WTF::mergeDeduplicatedSorted;
 using WTF::roundUpToMultipleOf;
 using WTF::roundUpToMultipleOfNonPowerOfTwo;
 using WTF::roundDownToMultipleOf;
 using WTF::safeCast;
+using WTF::spanConstCast;
+using WTF::spanReinterpretCast;
 using WTF::tryBinarySearch;
 using WTF::valueOrCompute;
 using WTF::valueOrDefault;

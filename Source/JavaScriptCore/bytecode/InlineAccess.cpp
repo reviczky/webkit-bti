@@ -155,7 +155,7 @@ ALWAYS_INLINE static bool linkCodeInline(const char* name, CCallHelpers& jit, St
         bool needsBranchCompaction = true;
         LinkBuffer linkBuffer(jit, stubInfo.startLocation, stubInfo.inlineCodeSize(), LinkBuffer::Profile::InlineCache, JITCompilationMustSucceed, needsBranchCompaction);
         ASSERT(linkBuffer.isValid());
-        FINALIZE_CODE(linkBuffer, NoPtrTag, "InlineAccessType: '%s'", name);
+        FINALIZE_CODE(linkBuffer, NoPtrTag, ASCIILiteral::fromLiteralUnsafe(name), "InlineAccessType: '%s'", name);
         return true;
     }
 
@@ -392,29 +392,6 @@ bool InlineAccess::generateSelfInAccess(CodeBlock* codeBlock, StructureStubInfo&
     jit.boxBoolean(true, value);
 
     return linkCodeInline("in access", jit, stubInfo);
-}
-
-void InlineAccess::rewireStubAsJumpInAccess(CodeBlock* codeBlock, StructureStubInfo& stubInfo, InlineCacheHandler& handler)
-{
-    stubInfo.m_handler = &handler;
-    if (codeBlock->useDataIC()) {
-        stubInfo.m_codePtr = handler.callTarget();
-        stubInfo.m_inlineAccessBaseStructureID.clear(); // Clear out the inline access code.
-        return;
-    }
-
-    CCallHelpers::replaceWithJump(stubInfo.startLocation.retagged<JSInternalPtrTag>(), CodeLocationLabel { handler.callTarget() });
-}
-
-void InlineAccess::resetStubAsJumpInAccess(CodeBlock* codeBlock, StructureStubInfo& stubInfo)
-{
-    if (JITCode::isBaselineCode(codeBlock->jitType()) && Options::useHandlerIC()) {
-        auto handler = InlineCacheCompiler::generateSlowPathHandler(codeBlock->vm(), stubInfo.accessType);
-        InlineAccess::rewireStubAsJumpInAccess(codeBlock, stubInfo, handler.get());
-        return;
-    }
-    auto handler = InlineCacheHandler::createNonHandlerSlowPath(stubInfo.slowPathStartLocation);
-    InlineAccess::rewireStubAsJumpInAccess(codeBlock, stubInfo, handler.get());
 }
 
 } // namespace JSC

@@ -38,6 +38,7 @@
 #include "DeviceOrientationOrMotionPermissionState.h"
 #include "DocumentLoadTiming.h"
 #include "DocumentWriter.h"
+#include "ElementTargetingTypes.h"
 #include "FrameDestructionObserver.h"
 #include "LinkIcon.h"
 #include "NavigationAction.h"
@@ -67,6 +68,15 @@
 #if PLATFORM(COCOA)
 #include <wtf/SchedulePair.h>
 #endif
+
+namespace WebCore {
+class DataLoadToken;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::DataLoadToken> : std::true_type { };
+}
 
 namespace WebCore {
 
@@ -162,6 +172,11 @@ enum class ColorSchemePreference : uint8_t {
 enum class ContentExtensionDefaultEnablement : bool { Disabled, Enabled };
 using ContentExtensionEnablement = std::pair<ContentExtensionDefaultEnablement, HashSet<String>>;
 
+class DataLoadToken : public CanMakeWeakPtr<DataLoadToken> {
+public:
+    void clear() { weakPtrFactory().revokeAll(); }
+};
+
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(DocumentLoader);
 class DocumentLoader
     : public RefCounted<DocumentLoader>
@@ -254,6 +269,7 @@ public:
     RefPtr<Archive> popArchiveForSubframe(const String& frameName, const URL&);
     WEBCORE_EXPORT SharedBuffer* parsedArchiveData() const;
 
+    bool hasArchiveResourceCollection() const { return !!m_archiveResourceCollection; }
     WEBCORE_EXPORT bool scheduleArchiveLoad(ResourceLoader&, const ResourceRequest&);
 #endif
 
@@ -331,6 +347,9 @@ public:
     bool allowsActiveContentRuleListActionsForURL(const String& contentRuleListIdentifier, const URL&) const;
     WEBCORE_EXPORT void setActiveContentRuleListActionPatterns(const HashMap<String, Vector<String>>&);
 
+    const Vector<TargetedElementSelectors>& visibilityAdjustmentSelectors() const { return m_visibilityAdjustmentSelectors; }
+    void setVisibilityAdjustmentSelectors(Vector<TargetedElementSelectors>&& selectors) { m_visibilityAdjustmentSelectors = WTFMove(selectors); }
+
 #if ENABLE(DEVICE_ORIENTATION)
     DeviceOrientationOrMotionPermissionState deviceOrientationAndMotionAccessState() const { return m_deviceOrientationAndMotionAccessState; }
     void setDeviceOrientationAndMotionAccessState(DeviceOrientationOrMotionPermissionState state) { m_deviceOrientationAndMotionAccessState = state; }
@@ -379,8 +398,8 @@ public:
     WEBCORE_EXPORT ColorSchemePreference colorSchemePreference() const;
     void setColorSchemePreference(ColorSchemePreference preference) { m_colorSchemePreference = preference; }
 
-    void addSubresourceLoader(ResourceLoader&);
-    void removeSubresourceLoader(LoadCompletionType, ResourceLoader*);
+    void addSubresourceLoader(SubresourceLoader&);
+    void removeSubresourceLoader(LoadCompletionType, SubresourceLoader&);
     void addPlugInStreamLoader(ResourceLoader&);
     void removePlugInStreamLoader(ResourceLoader&);
 
@@ -454,9 +473,6 @@ public:
 
     WEBCORE_EXPORT void applyPoliciesToSettings();
 
-    void setAllowContentChangeObserverQuirk(bool allow) { m_allowContentChangeObserverQuirk = allow; }
-    bool allowContentChangeObserverQuirk() const { return m_allowContentChangeObserverQuirk; }
-
     void setAdvancedPrivacyProtections(OptionSet<AdvancedPrivacyProtections> policy) { m_advancedPrivacyProtections = policy; }
     OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections() const { return m_advancedPrivacyProtections; }
 
@@ -497,11 +513,6 @@ protected:
     WEBCORE_EXPORT virtual void attachToFrame();
 
 private:
-    class DataLoadToken : public CanMakeWeakPtr<DataLoadToken> {
-    public:
-        void clear() { weakPtrFactory().revokeAll(); }
-    };
-
     Document* document() const;
 
     void matchRegistration(const URL&, CompletionHandler<void(std::optional<ServiceWorkerRegistrationData>&&)>&&);
@@ -696,6 +707,8 @@ private:
     MemoryCompactRobinHoodHashMap<String, Vector<UserContentURLPattern>> m_activeContentRuleListActionPatterns;
     ContentExtensionEnablement m_contentExtensionEnablement { ContentExtensionDefaultEnablement::Enabled, { } };
 
+    Vector<TargetedElementSelectors> m_visibilityAdjustmentSelectors;
+
     ScriptExecutionContextIdentifier m_resultingClientId;
 
     std::unique_ptr<ServiceWorkerRegistrationData> m_serviceWorkerRegistrationData;
@@ -718,7 +731,6 @@ private:
     ColorSchemePreference m_colorSchemePreference { ColorSchemePreference::NoPreference };
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
 
-    bool m_allowContentChangeObserverQuirk { false };
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
 
     bool m_isRequestFromClientOrUserInput { false };

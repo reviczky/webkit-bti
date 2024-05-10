@@ -27,6 +27,7 @@ namespace WebCore {
 
 class RenderReplaced : public RenderBox {
     WTF_MAKE_ISO_ALLOCATED(RenderReplaced);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderReplaced);
 public:
     virtual ~RenderReplaced();
 
@@ -87,7 +88,7 @@ private:
 
     RepaintRects localRectsForRepaint(RepaintOutlineBounds) const override;
 
-    VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*) final;
+    VisiblePosition positionForPoint(const LayoutPoint&, HitTestSource, const RenderFragmentContainer*) final;
     
     bool canBeSelectionLeaf() const override { return true; }
 

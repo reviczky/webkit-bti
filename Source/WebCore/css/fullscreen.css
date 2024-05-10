@@ -69,4 +69,17 @@ iframe:fullscreen {
     background: black;
 }
 
+*|*:not(:root):-internal-in-window-fullscreen {
+    margin: auto !important;
+    width: auto !important;
+    height: 80vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 20px !important;
+}
+
+*|*:not(:root):-internal-in-window-fullscreen::backdrop {
+    background: rgba(0,0,0,0.85);
+}
+
 #endif

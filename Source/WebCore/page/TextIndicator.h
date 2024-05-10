@@ -27,7 +27,6 @@
 
 #include "FloatRect.h"
 #include "Image.h"
-#include <wtf/EnumTraits.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Seconds.h>
@@ -157,6 +156,7 @@ public:
     float contentImageScaleFactor() const { return m_data.contentImageScaleFactor; }
     Image* contentImageWithHighlight() const { return m_data.contentImageWithHighlight.get(); }
     Image* contentImage() const { return m_data.contentImage.get(); }
+    RefPtr<Image> protectedContentImage() const { return contentImage(); }
 
     TextIndicatorPresentationTransition presentationTransition() const { return m_data.presentationTransition; }
     void setPresentationTransition(TextIndicatorPresentationTransition transition) { m_data.presentationTransition = transition; }

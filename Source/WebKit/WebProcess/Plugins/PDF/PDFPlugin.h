@@ -77,12 +77,14 @@ class WebWheelEvent;
 struct WebHitTestResultData;
 
 class PDFPlugin final : public PDFPluginBase {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(PDFPlugin);
 public:
     static bool pdfKitLayerControllerIsAvailable();
 
     static Ref<PDFPlugin> create(WebCore::HTMLPlugInElement&);
-    virtual ~PDFPlugin() = default;
 
+    virtual ~PDFPlugin();
 
     void paintControlForLayerInContext(CALayer *, CGContextRef);
     void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) final;
@@ -98,10 +100,7 @@ public:
 
     void clickedLink(NSURL *);
 
-    void writeItemsToPasteboard(NSString *pasteboardName, NSArray *items, NSArray *types);
     void showDefinitionForAttributedString(NSAttributedString *, CGPoint);
-    void performWebSearch(NSString *);
-    void performSpotlightSearch(NSString *);
 
     CGRect pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
     void focusNextAnnotation() final;
@@ -111,7 +110,6 @@ public:
 
     bool showContextMenuAtPoint(const WebCore::IntPoint&);
 
-    PDFPluginAnnotation* activeAnnotation() const { return m_activeAnnotation.get(); }
     WebCore::AXObjectCache* axObjectCache() const;
 
     WebCore::IntPoint convertFromPluginToPDFView(const WebCore::IntPoint&) const;
@@ -120,8 +118,9 @@ public:
     WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
     WebCore::FloatRect convertFromPDFViewToScreen(const WebCore::FloatRect&) const;
 
-    CGFloat scaleFactor() const override;
-    CGSize contentSizeRespectingZoom() const final;
+    double scaleFactor() const override;
+    double contentScaleFactor() const final;
+    CGSize contentSizeRespectingZoom() const;
 
 private:
     explicit PDFPlugin(WebCore::HTMLPlugInElement&);
@@ -167,22 +166,22 @@ private:
     bool handleEditingCommand(const String& commandName, const String& argument) override;
     bool isEditingCommandEnabled(const String& commandName) override;
 
-    String getSelectionString() const override;
+    String selectionString() const override;
     bool existingSelectionContainsPoint(const WebCore::FloatPoint&) const override;
     WebCore::FloatRect rectForSelectionInRootView(PDFSelection *) const override;
 
     unsigned countFindMatches(const String& target, WebCore::FindOptions, unsigned maxMatchCount) override;
     bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount) override;
+    bool drawsFindOverlay() const final { return true; }
 
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
-    std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
+    std::pair<String, RetainPtr<PDFSelection>> textForImmediateActionHitTestAtPoint(const WebCore::FloatPoint&, WebHitTestResultData&) override;
 
     bool shouldCreateTransientPaintingSnapshot() const override { return true; }
     RefPtr<WebCore::ShareableBitmap> snapshot() override;
 
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
     id accessibilityObject() const override;
-    id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const override;
 
     NSEvent *nsEventForWebMouseEvent(const WebMouseEvent&);
 
@@ -203,7 +202,6 @@ private:
     RefPtr<PDFPluginPasswordField> m_passwordField;
 
     String m_temporaryPDFUUID;
-    String m_lastFoundString;
 
     RetainPtr<WKPDFLayerControllerDelegate> m_pdfLayerControllerDelegate;
 

@@ -179,6 +179,11 @@ struct WGPUVertexState;
 struct WGPUFragmentState;
 struct WGPURenderPipelineDescriptor;
 
+typedef enum WGPUColorSpace {
+    SRGB,
+    DisplayP3,
+} WGPUColorSpace;
+
 typedef enum WGPUAdapterType {
     WGPUAdapterType_DiscreteGPU = 0x00000000,
     WGPUAdapterType_IntegratedGPU = 0x00000001,
@@ -725,8 +730,13 @@ typedef WGPUFlags WGPUTextureUsageFlags WGPU_ENUM_ATTRIBUTE;
 
 typedef void (*WGPUBufferMapCallback)(WGPUBufferMapAsyncStatus status, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
 typedef void (*WGPUCompilationInfoCallback)(WGPUCompilationInfoRequestStatus status, struct WGPUCompilationInfo const * compilationInfo, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
-typedef void (*WGPUCreateComputePipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPUComputePipeline pipeline, char const * message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
-typedef void (*WGPUCreateRenderPipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPURenderPipeline pipeline, char const * message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
+#ifdef __cplusplus
+typedef void (*WGPUCreateComputePipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPUComputePipeline pipeline, WTF::String&& message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
+typedef void (*WGPUCreateRenderPipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPURenderPipeline pipeline, WTF::String&& message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
+#else
+typedef void (*WGPUCreateComputePipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPUComputePipeline pipeline, const char* message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
+typedef void (*WGPUCreateRenderPipelineAsyncCallback)(WGPUCreatePipelineAsyncStatus status, WGPURenderPipeline pipeline, const char* message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
+#endif
 typedef void (*WGPUDeviceLostCallback)(WGPUDeviceLostReason reason, char const * message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
 typedef void (*WGPUErrorCallback)(WGPUErrorType type, char const * message, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
 typedef void (*WGPUProc)(void) WGPU_FUNCTION_ATTRIBUTE;
@@ -777,6 +787,7 @@ typedef struct WGPUBufferBindingLayout {
     WGPUBufferBindingType type;
     WGPUBool hasDynamicOffset;
     uint64_t minBindingSize;
+    uint64_t bufferSizeForBinding;
 } WGPUBufferBindingLayout WGPU_STRUCTURE_ATTRIBUTE;
 
 typedef struct WGPUBufferDescriptor {
@@ -1087,6 +1098,9 @@ typedef struct WGPUSwapChainDescriptor {
 #ifdef __cplusplus
     Vector<WGPUTextureFormat> viewFormats;
 #endif
+    WGPUColorSpace colorSpace;
+    WGPUCompositeAlphaMode compositeAlphaMode;
+    WGPUBool reportValidationErrors;
 } WGPUSwapChainDescriptor WGPU_STRUCTURE_ATTRIBUTE;
 
 typedef struct WGPUTextureBindingLayout {
@@ -1583,6 +1597,7 @@ WGPU_EXPORT void wgpuBufferDestroy(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void const * wgpuBufferGetConstMappedRange(WGPUBuffer buffer, size_t offset, size_t size) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT WGPUBufferMapState wgpuBufferGetMapState(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void * wgpuBufferGetMappedRange(WGPUBuffer buffer, size_t offset, size_t size) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT void * wgpuBufferGetBufferContents(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT uint64_t wgpuBufferGetSize(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT WGPUBufferUsageFlags wgpuBufferGetUsage(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void wgpuBufferMapAsync(WGPUBuffer buffer, WGPUMapModeFlags mode, size_t offset, size_t size, WGPUBufferMapCallback callback, void * userdata) WGPU_FUNCTION_ATTRIBUTE;
@@ -1783,6 +1798,29 @@ WGPU_EXPORT void wgpuTextureRelease(WGPUTexture texture) WGPU_FUNCTION_ATTRIBUTE
 WGPU_EXPORT void wgpuTextureViewSetLabel(WGPUTextureView textureView, char const * label) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void wgpuTextureViewReference(WGPUTextureView textureView) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void wgpuTextureViewRelease(WGPUTextureView textureView) WGPU_FUNCTION_ATTRIBUTE;
+
+// isValid checks
+WGPU_EXPORT WGPUBool wgpuBufferIsValid(WGPUBuffer buffer) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuAdapterIsValid(WGPUAdapter adapter) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuBindGroupIsValid(WGPUBindGroup bindGroup) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuBindGroupLayoutIsValid(WGPUBindGroupLayout bindGroupLayout) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuCommandBufferIsValid(WGPUCommandBuffer commandBuffer) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuCommandEncoderIsValid(WGPUCommandEncoder commandEncoder) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuComputePassEncoderIsValid(WGPUComputePassEncoder computePassEncoder) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuComputePipelineIsValid(WGPUComputePipeline computePipeline) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuDeviceIsValid(WGPUDevice device) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuPipelineLayoutIsValid(WGPUPipelineLayout pipelineLayout) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuPresentationContextIsValid(WGPUSurface presentationContext) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuQuerySetIsValid(WGPUQuerySet querySet) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuQueueIsValid(WGPUQueue queue) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuRenderBundleEncoderIsValid(WGPURenderBundleEncoder renderBundleEncoder) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuRenderBundleIsValid(WGPURenderBundle renderBundle) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuRenderPassEncoderIsValid(WGPURenderPassEncoder renderPassEncoder) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuRenderPipelineIsValid(WGPURenderPipeline renderPipeline) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuSamplerIsValid(WGPUSampler sampler) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuShaderModuleIsValid(WGPUShaderModule shaderModule) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuTextureIsValid(WGPUTexture texture) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUBool wgpuTextureViewIsValid(WGPUTextureView textureView) WGPU_FUNCTION_ATTRIBUTE;
 
 #endif  // !defined(WGPU_SKIP_DECLARATIONS)
 

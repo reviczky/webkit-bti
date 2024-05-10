@@ -71,7 +71,7 @@
 namespace WebCore {
 using namespace Inspector;
 
-static String consoleMessageForViolation(const ContentSecurityPolicyDirective& violatedDirective, const URL& blockedURL, const char* prefix, const char* subject = "it")
+static String consoleMessageForViolation(const ContentSecurityPolicyDirective& violatedDirective, const URL& blockedURL, ASCIILiteral prefix, ASCIILiteral subject = "it"_s)
 {
     bool isDefaultSrc = violatedDirective.isDefaultSrc();
     String name = violatedDirective.nameForReporting();
@@ -80,11 +80,11 @@ static String consoleMessageForViolation(const ContentSecurityPolicyDirective& v
     else if (violatedDirective.nameForReporting().startsWith(StringView { ContentSecurityPolicyDirectiveNames::styleSrc }))
         name = ContentSecurityPolicyDirectiveNames::styleSrc;
 
-    return makeString(violatedDirective.directiveList().isReportOnly() ? "[Report Only] " : "",
-        prefix, blockedURL.isEmpty() ? "" : " ", blockedURL.stringCenterEllipsizedToLength(), " because ", subject,
-        isDefaultSrc ? " appears in neither the " : " does not appear in the ",
+    return makeString(violatedDirective.directiveList().isReportOnly() ? "[Report Only] "_s : ""_s,
+        prefix, blockedURL.isEmpty() ? ""_s : " "_s, blockedURL.stringCenterEllipsizedToLength(), " because "_s, subject,
+        isDefaultSrc ? " appears in neither the "_s : " does not appear in the "_s,
         name,
-        isDefaultSrc ? " directive nor the default-src directive of the Content Security Policy." : " directive of the Content Security Policy.");
+        isDefaultSrc ? " directive nor the default-src directive of the Content Security Policy."_s : " directive of the Content Security Policy."_s);
 }
 
 ContentSecurityPolicy::ContentSecurityPolicy(URL&& protectedURL, ContentSecurityPolicyClient* client, ReportingClient* reportingClient)
@@ -261,7 +261,7 @@ void ContentSecurityPolicy::didReceiveHeader(const String& header, ContentSecuri
 
             // header1,header2 OR header1
             //        ^                  ^
-            m_policies.append(ContentSecurityPolicyDirectiveList::create(*this, String(begin, buffer.position() - begin), type, policyFrom));
+            m_policies.append(ContentSecurityPolicyDirectiveList::create(*this, String({ begin, buffer.position() }), type, policyFrom));
 
             // Skip the comma, and begin the next header from the current position.
             ASSERT(buffer.atEnd() || *buffer == ',');
@@ -395,7 +395,7 @@ static Vector<ContentSecurityPolicyHash> generateHashesForContent(const StringVi
     CString utf8Content = content.utf8(StrictConversionReplacingUnpairedSurrogatesWithFFFD);
     Vector<ContentSecurityPolicyHash> hashes;
     for (auto algorithm : algorithms) {
-        auto hash = cryptographicDigestForBytes(algorithm, utf8Content.data(), utf8Content.length());
+        auto hash = cryptographicDigestForBytes(algorithm, utf8Content.span());
         hashes.append(hash);
     }
 
@@ -406,7 +406,7 @@ bool ContentSecurityPolicy::allowJavaScriptURLs(const String& contextURL, const 
 {
     bool didNotifyInspector = false;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script", "its hash or 'unsafe-inline'");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script"_s, "its hash or 'unsafe-inline'"_s);
         reportViolation(violatedDirective, "inline"_s, consoleMessage, contextURL, source, TextPosition(contextLine, OrdinalNumber()), URL(), nullptr, element);
         if (!didNotifyInspector && violatedDirective.directiveList().isReportOnly()) {
             reportBlockedScriptExecutionToInspector(violatedDirective.text());
@@ -424,7 +424,7 @@ bool ContentSecurityPolicy::allowInlineEventHandlers(const String& contextURL, c
         return true;
     bool didNotifyInspector = false;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script for an inline event handler", "'unsafe-inline'");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script for an inline event handler"_s, "'unsafe-inline'"_s);
         reportViolation(violatedDirective, "inline"_s, consoleMessage, contextURL, source, TextPosition(contextLine, OrdinalNumber()), URL(), nullptr, element);
         if (!didNotifyInspector && !violatedDirective.directiveList().isReportOnly()) {
             reportBlockedScriptExecutionToInspector(violatedDirective.text());
@@ -476,7 +476,7 @@ bool ContentSecurityPolicy::allowNonParserInsertedScripts(const URL& sourceURL, 
 
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
         TextPosition sourcePosition(contextLine, OrdinalNumber());
-        const char* message = sourceURL.isEmpty() ? "Refused to execute a script" : "Refused to load";
+        const auto message = sourceURL.isEmpty() ? "Refused to execute a script"_s : "Refused to load"_s;
         String consoleMessage = consoleMessageForViolation(violatedDirective, sourceURL, message);
         reportViolation(violatedDirective, sourceURL.isEmpty() ? "inline"_s : sourceURL.string(), consoleMessage, contextURL.string(), scriptContent, sourcePosition);
     };
@@ -492,7 +492,7 @@ bool ContentSecurityPolicy::allowInlineScript(const String& contextURL, const Or
         return true;
     bool didNotifyInspector = false;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script", "its hash, its nonce, or 'unsafe-inline'");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script"_s, "its hash, its nonce, or 'unsafe-inline'"_s);
         reportViolation(violatedDirective, "inline"_s, consoleMessage, contextURL, scriptContent, TextPosition(contextLine, OrdinalNumber()), URL(), nullptr, &element);
         if (!didNotifyInspector && !violatedDirective.directiveList().isReportOnly()) {
             reportBlockedScriptExecutionToInspector(violatedDirective.text());
@@ -512,7 +512,7 @@ bool ContentSecurityPolicy::allowInlineStyle(const String& contextURL, const Ord
     if (m_overrideInlineStyleAllowed)
         return true;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to apply a stylesheet", "its hash, its nonce, or 'unsafe-inline'");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, URL(), "Refused to apply a stylesheet"_s, "its hash, its nonce, or 'unsafe-inline'"_s);
         reportViolation(violatedDirective, "inline"_s, consoleMessage, contextURL, styleContent, TextPosition(contextLine, OrdinalNumber()), URL(), nullptr, &element);
     };
 
@@ -531,7 +531,7 @@ bool ContentSecurityPolicy::allowEval(JSC::JSGlobalObject* state, LogToConsole s
         return true;
     bool didNotifyInspector = false;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = shouldLogToConsole == LogToConsole::Yes ? consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script", "'unsafe-eval'") : String();
+        String consoleMessage = shouldLogToConsole == LogToConsole::Yes ? consoleMessageForViolation(violatedDirective, URL(), "Refused to execute a script"_s, "'unsafe-eval'"_s) : String();
         reportViolation(violatedDirective, "eval"_s, consoleMessage, state, codeContent);
         if (!didNotifyInspector && !violatedDirective.directiveList().isReportOnly()) {
             reportBlockedScriptExecutionToInspector(violatedDirective.text());
@@ -551,7 +551,7 @@ bool ContentSecurityPolicy::allowFrameAncestors(const LocalFrame& frame, const U
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFrameAncestor, frame);
@@ -569,7 +569,7 @@ bool ContentSecurityPolicy::overridesXFrameOptions() const
     return false;
 }
 
-bool ContentSecurityPolicy::allowFrameAncestors(const Vector<RefPtr<SecurityOrigin>>& ancestorOrigins, const URL& url, bool overrideContentSecurityPolicy) const
+bool ContentSecurityPolicy::allowFrameAncestors(const Vector<Ref<SecurityOrigin>>& ancestorOrigins, const URL& url, bool overrideContentSecurityPolicy) const
 {
     if (m_policies.isEmpty() || overrideContentSecurityPolicy)
         return true;
@@ -579,7 +579,7 @@ bool ContentSecurityPolicy::allowFrameAncestors(const Vector<RefPtr<SecurityOrig
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFrameAncestorOrigins, ancestorOrigins);
@@ -592,7 +592,7 @@ bool ContentSecurityPolicy::allowPluginType(const String& type, const String& ty
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load", "its MIME type");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s, "its MIME type"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForPluginType, type, typeAttribute);
@@ -609,7 +609,7 @@ bool ContentSecurityPolicy::allowObjectFromSource(const URL& url, RedirectRespon
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     const auto& blockedURL = !preRedirectURL.isNull() ? preRedirectURL : url;
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, blockedURL.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForObjectSource, url, redirectResponseReceived == RedirectResponseReceived::Yes, ContentSecurityPolicySourceListDirective::ShouldAllowEmptyURLIfSourceListIsNotNone::Yes);
@@ -622,7 +622,7 @@ bool ContentSecurityPolicy::allowChildFrameFromSource(const URL& url, RedirectRe
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForFrame, url, redirectResponseReceived == RedirectResponseReceived::Yes);
@@ -636,7 +636,7 @@ bool ContentSecurityPolicy::allowResourceFromSource(const URL& url, RedirectResp
     const auto& blockedURL = !preRedirectURL.isNull() ? preRedirectURL : url;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, blockedURL.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), resourcePredicate, url, redirectResponseReceived == RedirectResponseReceived::Yes);
@@ -651,7 +651,7 @@ bool ContentSecurityPolicy::allowWorkerFromSource(const URL& url, RedirectRespon
     const auto& blockedURL = !preRedirectURL.isNull() ? preRedirectURL : url;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        auto consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        auto consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, blockedURL.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
 
@@ -669,7 +669,7 @@ bool ContentSecurityPolicy::allowScriptFromSource(const URL& url, RedirectRespon
     const auto& blockedURL = !preRedirectURL.isNull() ? preRedirectURL : url;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, blockedURL.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
 
@@ -696,7 +696,7 @@ bool ContentSecurityPolicy::allowStyleFromSource(const URL& url, RedirectRespons
     const auto& blockedURL = !preRedirectURL.isNull() ? preRedirectURL : url;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to load"_s);
         reportViolation(violatedDirective, blockedURL.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
 
@@ -728,7 +728,7 @@ bool ContentSecurityPolicy::allowConnectToSource(const URL& url, RedirectRespons
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to connect to");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to connect to"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition, preRedirectURL);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForConnectSource, url, redirectResponseReceived == RedirectResponseReceived::Yes);
@@ -748,7 +748,7 @@ bool ContentSecurityPolicy::allowBaseURI(const URL& url, bool overrideContentSec
     String sourceURL;
     TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
     auto handleViolatedDirective = [&] (const ContentSecurityPolicyDirective& violatedDirective) {
-        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to change the document base URL to");
+        String consoleMessage = consoleMessageForViolation(violatedDirective, url, "Refused to change the document base URL to"_s);
         reportViolation(violatedDirective, url.string(), consoleMessage, sourceURL, StringView(), sourcePosition);
     };
     return allPoliciesAllow(WTFMove(handleViolatedDirective), &ContentSecurityPolicyDirectiveList::violatedDirectiveForBaseURI, url);
@@ -774,6 +774,39 @@ AllowTrustedTypePolicy ContentSecurityPolicy::allowTrustedTypesPolicy(const Stri
     return isAllowed
         ? AllowTrustedTypePolicy::Allowed
         : details;
+}
+
+// https://w3c.github.io/trusted-types/dist/spec/#does-sink-require-trusted-types
+bool ContentSecurityPolicy::requireTrustedTypesForSinkGroup(const String& sinkGroup) const
+{
+    bool required = false;
+    for (auto& policy : m_policies) {
+        if (policy->requiresTrustedTypesForScript() && sinkGroup == "script"_s) {
+            required = true;
+            break;
+        }
+    }
+    return required;
+}
+
+// https://w3c.github.io/trusted-types/dist/spec/#should-block-sink-type-mismatch
+bool ContentSecurityPolicy::allowMissingTrustedTypesForSinkGroup(const String& stringContext, const String& sink, const String& sinkGroup, const String& source) const
+{
+    return allOf(m_policies, [&](auto& policy) {
+        bool isAllowed = true;
+        if (policy->requiresTrustedTypesForScript() && sinkGroup == "script"_s) {
+            if (!policy->isReportOnly())
+                isAllowed = false;
+
+            String consoleMessage = makeString(policy->isReportOnly() ? "[Report Only] " : "",
+                "This requires a "_s, stringContext, " value else it violates the following Content Security Policy directive: \"require-trusted-types-for 'script'\""_s);
+
+            TextPosition sourcePosition(OrdinalNumber::beforeFirst(), OrdinalNumber());
+            String sample = makeString(sink, '|', source);
+            reportViolation("require-trusted-types-for"_s, *policy, "trusted-types-sink"_s, consoleMessage, nullString(), sample, sourcePosition, nullptr);
+        }
+        return isAllowed;
+    });
 }
 
 static bool shouldReportProtocolOnly(const URL& url)
@@ -803,7 +836,7 @@ String ContentSecurityPolicy::createURLForReporting(const URL& url, const String
     //     content-security-policy/reporting-api/report-to-directive-allowed-in-meta.https.sub.html
     //     content-security-policy/reporting-api/reporting-api-sends-reports-on-violation.https.sub.html
     if (securityOrigin->canRequest(url, originAccessPatternsForWebProcessOrEmpty()) || directiveIsSafe)
-        return usesReportingAPI ? url.strippedForUseAsReferrerWithExplicitPort() : url.strippedForUseAsReferrer();
+        return (usesReportingAPI ? url.strippedForUseAsReferrerWithExplicitPort() : url.strippedForUseAsReferrer()).string;
 
     return SecurityOrigin::create(url)->toString();
 }
@@ -838,14 +871,14 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
     bool usesReportTo = !violatedDirectiveList.reportToTokens().isEmpty();
 
     String blockedURI;
-    if (blockedURLString == "eval"_s || blockedURLString == "inline"_s || blockedURLString == "trusted-types-policy"_s)
+    if (blockedURLString == "eval"_s || blockedURLString == "inline"_s || blockedURLString == "trusted-types-policy"_s || blockedURLString == "trusted-types-sink"_s)
         blockedURI = blockedURLString;
     else {
         // If there is a redirect then we use the pre-redirect URL: https://www.w3.org/TR/CSP3/#security-violation-reports.
         blockedURI = createURLForReporting(preRedirectURL.isNull() ? URL { blockedURLString } : preRedirectURL, effectiveViolatedDirective, usesReportTo);
     }
 
-    info.documentURI = m_documentURL ? m_documentURL.value().strippedForUseAsReferrer() : blockedURI;
+    info.documentURI = m_documentURL ? m_documentURL.value().strippedForUseAsReferrer().string : blockedURI;
     info.lineNumber = sourcePosition.m_line.oneBasedInt();
     info.columnNumber = sourcePosition.m_column.oneBasedInt();
     info.sample = violatedDirectiveList.shouldReportSample(effectiveViolatedDirective) ? sourceContent.left(40).toString() : emptyString();
@@ -855,7 +888,7 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
         if (!document || !document->frame())
             return;
 
-        info.documentURI = shouldReportProtocolOnly(document->url()) ? document->url().protocol().toString() : document->url().strippedForUseAsReferrer();
+        info.documentURI = shouldReportProtocolOnly(document->url()) ? document->url().protocol().toString() : document->url().strippedForUseAsReferrer().string;
 
         auto stack = createScriptCallStack(JSExecState::currentState(), 2);
         auto* callFrame = stack->firstNonNativeCallFrame();
@@ -929,7 +962,7 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
     if (!m_reportingClient)
         return;
 
-    auto reportURL = m_documentURL ? m_documentURL.value().strippedForUseAsReferrer() : blockedURI;
+    auto reportURL = m_documentURL ? m_documentURL.value().strippedForUseAsReferrer().string : blockedURI;
 
     auto reportFormData = reportBody->createReportFormDataForViolation(usesReportTo, violatedDirectiveList.isReportOnly());
     m_reportingClient->sendReportToEndpoints(m_protectedURL, endpointURIs, endpointTokens, WTFMove(reportFormData), ViolationReportType::ContentSecurityPolicy);
@@ -1018,12 +1051,12 @@ void ContentSecurityPolicy::reportInvalidPathCharacter(const String& directiveNa
 {
     ASSERT(invalidChar == '#' || invalidChar == '?');
 
-    const char* ignoring;
-    if (invalidChar == '?')
-        ignoring = "The query component, including the '?', will be ignored.";
-    else
-        ignoring = "The fragment identifier, including the '#', will be ignored.";
-    logToConsole(makeString("The source list for Content Security Policy directive '", directiveName, "' contains a source with an invalid path: '", value, "'. ", ignoring));
+    ASCIILiteral ignoring = [&] {
+        if (invalidChar == '?')
+            return "The query component, including the '?', will be ignored."_s;
+        return "The fragment identifier, including the '#', will be ignored."_s;
+    }();
+    logToConsole(makeString("The source list for Content Security Policy directive '"_s, directiveName, "' contains a source with an invalid path: '"_s, value, "'. "_s, ignoring));
 }
 
 void ContentSecurityPolicy::reportInvalidSourceExpression(const String& directiveName, const String& source) const
@@ -1062,23 +1095,30 @@ void ContentSecurityPolicy::reportBlockedScriptExecutionToInspector(const String
         InspectorInstrumentation::scriptExecutionBlockedByCSP(m_scriptExecutionContext.get(), directiveText);
 }
 
-void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(ResourceRequest& request, InsecureRequestType requestType) const
+void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(ResourceRequest& request, InsecureRequestType requestType, AlwaysUpgradeRequest alwaysUpgradeRequest) const
 {
     URL url = request.url();
-    upgradeInsecureRequestIfNeeded(url, requestType);
+    upgradeInsecureRequestIfNeeded(url, requestType, alwaysUpgradeRequest);
     request.setURL(url);
 }
 
-void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(URL& url, InsecureRequestType requestType) const
+void ContentSecurityPolicy::upgradeInsecureRequestIfNeeded(URL& url, InsecureRequestType requestType, AlwaysUpgradeRequest alwaysUpgradeRequest) const
 {
     if (!url.protocolIs("http"_s) && !url.protocolIs("ws"_s))
         return;
 
     bool upgradeRequest = m_insecureNavigationRequestsToUpgrade.contains(SecurityOriginData::fromURL(url));
+    bool isUpgradeMixedContentEnabled = m_scriptExecutionContext ? m_scriptExecutionContext->settingsValues().upgradeMixedContentEnabled : false;
+    bool shouldUpgradeLocalhost = isUpgradeMixedContentEnabled && m_scriptExecutionContext ? m_scriptExecutionContext->settingsValues().iPAddressAndLocalhostMixedContentUpgradeTestingEnabled : false;
+
     if (requestType == InsecureRequestType::Load || requestType == InsecureRequestType::FormSubmission)
         upgradeRequest |= m_upgradeInsecureRequests;
 
-    if (!upgradeRequest)
+    if (!upgradeRequest && (alwaysUpgradeRequest == AlwaysUpgradeRequest::No || !isUpgradeMixedContentEnabled))
+        return;
+
+    // Do not automatically upgrade locahost connections.
+    if (!upgradeRequest && SecurityOrigin::isLocalhostAddress(url.host()) && !shouldUpgradeLocalhost && alwaysUpgradeRequest == AlwaysUpgradeRequest::Yes)
         return;
 
     if (url.protocolIs("http"_s))

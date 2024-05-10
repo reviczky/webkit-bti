@@ -146,7 +146,7 @@ void ImageInputType::attach()
         return;
 
     auto& imageResource = renderer->imageResource();
-    imageResource.setCachedImage(imageLoader.image());
+    imageResource.setCachedImage(imageLoader.protectedImage());
 
     // If we have no image at all because we have no src attribute, set
     // image height and width for the alt text instead.
@@ -174,7 +174,7 @@ unsigned ImageInputType::height() const
     ASSERT(element());
     Ref<HTMLInputElement> element(*this->element());
 
-    element->document().updateLayout({ LayoutOptions::ContentVisibilityForceLayout }, element.ptr());
+    element->protectedDocument()->updateLayout({ LayoutOptions::ContentVisibilityForceLayout }, element.ptr());
 
     if (auto* renderer = element->renderer())
         return adjustForAbsoluteZoom(downcast<RenderBox>(*renderer).contentHeight(), *renderer);
@@ -196,7 +196,7 @@ unsigned ImageInputType::width() const
     ASSERT(element());
     Ref<HTMLInputElement> element(*this->element());
 
-    element->document().updateLayout({ LayoutOptions::ContentVisibilityForceLayout }, element.ptr());
+    element->protectedDocument()->updateLayout({ LayoutOptions::ContentVisibilityForceLayout }, element.ptr());
 
     if (auto* renderer = element->renderer())
         return adjustForAbsoluteZoom(downcast<RenderBox>(*renderer).contentWidth(), *renderer);

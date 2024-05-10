@@ -62,6 +62,7 @@ PutByStatus PutByStatus::computeFromLLInt(CodeBlock* profiledBlock, BytecodeInde
     switch (instruction->opcodeID()) {
     case op_put_by_id:
         break;
+    case op_enumerator_put_by_val:
     case op_put_by_val:
     case op_put_by_val_direct:
         return PutByStatus(NoInformation);
@@ -257,7 +258,10 @@ PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, Co
                 if (!conditionSet.isStillValid())
                     continue;
 
-                Structure* currStructure = access.hasAlternateBase() ? access.alternateBase()->structure() : access.structure();
+                Structure* currStructure = access.structure();
+                if (auto* object = access.tryGetAlternateBase())
+                    currStructure = object->structure();
+
                 // For now, we only support cases which JSGlobalObject is the same to the currently profiledBlock.
                 if (currStructure->globalObject() != profiledBlock->globalObject())
                     return PutByStatus(JSC::slowVersion(summary), *stubInfo);

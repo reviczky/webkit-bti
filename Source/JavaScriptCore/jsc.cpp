@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2023 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2024 Apple Inc. All rights reserved.
  *  Copyright (C) 2006 Bjoern Graf (bjoern.graf@gmail.com)
  *
  *  This library is free software; you can redistribute it and/or
@@ -70,6 +70,7 @@
 #include "ObjectConstructor.h"
 #include "ParserError.h"
 #include "ProfilerDatabase.h"
+#include "RegisterTZoneTypes.h"
 #include "ReleaseHeapAccessScope.h"
 #include "SamplingProfiler.h"
 #include "SideDataRepository.h"
@@ -93,6 +94,7 @@
 #include <sys/types.h>
 #include <type_traits>
 #include <wtf/CPUTime.h>
+#include <wtf/CommaPrinter.h>
 #include <wtf/FileSystem.h>
 #include <wtf/MainThread.h>
 #include <wtf/MemoryPressureHandler.h>
@@ -100,6 +102,7 @@
 #include <wtf/SafeStrerror.h>
 #include <wtf/Scope.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/TZoneMallocInitialization.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 #include <wtf/WTFProcess.h>
@@ -120,6 +123,7 @@
 #if PLATFORM(COCOA)
 #include <crt_externs.h>
 #include <wtf/OSObjectPtr.h>
+#include <wtf/cocoa/CrashReporter.h>
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
@@ -292,6 +296,8 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(Workers);
 
 static JSC_DECLARE_HOST_FUNCTION(functionAtob);
 static JSC_DECLARE_HOST_FUNCTION(functionBtoa);
+
+static JSC_DECLARE_HOST_FUNCTION(functionDisassembleBase64);
 
 static JSC_DECLARE_HOST_FUNCTION(functionCreateGlobalObject);
 static JSC_DECLARE_HOST_FUNCTION(functionCreateHeapBigInt);
@@ -517,7 +523,7 @@ long StopWatch::getElapsedMS()
 template<typename Vector>
 static inline String stringFromUTF(const Vector& utf8)
 {
-    return String::fromUTF8WithLatin1Fallback(utf8.data(), utf8.size());
+    return String::fromUTF8WithLatin1Fallback(utf8.span());
 }
 
 static JSC_DECLARE_CUSTOM_GETTER(accessorMakeMasquerader);
@@ -619,6 +625,7 @@ private:
 
         addFunction(vm, "atob"_s, functionAtob, 1);
         addFunction(vm, "btoa"_s, functionBtoa, 1);
+        addFunction(vm, "disassembleBase64"_s, functionDisassembleBase64, 1);
         addFunction(vm, "debug"_s, functionDebug, 1);
         addFunction(vm, "describe"_s, functionDescribe, 1);
         addFunction(vm, "describeArray"_s, functionDescribeArray, 1);
@@ -1502,26 +1509,25 @@ void GlobalObject::promiseRejectionTracker(JSGlobalObject*, JSPromise*, JSPromis
 
 #endif // ENABLE(FUZZILLI)
 
-template <typename T>
-static CString toCString(JSGlobalObject* globalObject, ThrowScope& scope, T& string)
+static CString toCString(JSGlobalObject* globalObject, ThrowScope& scope, Expected<CString, UTF8ConversionError> expectedString)
 {
-    Expected<CString, UTF8ConversionError> expectedString = string.tryGetUTF8();
     if (expectedString)
         return expectedString.value();
     switch (expectedString.error()) {
     case UTF8ConversionError::OutOfMemory:
         throwOutOfMemoryError(globalObject, scope);
-        break;
-    case UTF8ConversionError::IllegalSource:
+        return { };
+    case UTF8ConversionError::Invalid:
         scope.throwException(globalObject, createError(globalObject, "Illegal source encountered during UTF8 conversion"_s));
-        break;
-    case UTF8ConversionError::SourceExhausted:
-        scope.throwException(globalObject, createError(globalObject, "Source exhausted during UTF8 conversion"_s));
-        break;
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
+        return { };
     }
+    RELEASE_ASSERT_NOT_REACHED();
     return { };
+}
+
+template<typename T> static CString toCString(JSGlobalObject* globalObject, ThrowScope& scope, T& string)
+{
+    return toCString(globalObject, scope, string.tryGetUTF8());
 }
 
 static EncodedJSValue printInternal(JSGlobalObject* globalObject, CallFrame* callFrame, FILE* out, bool pretty)
@@ -1621,6 +1627,34 @@ JSC_DEFINE_HOST_FUNCTION(functionBtoa, (JSGlobalObject* globalObject, CallFrame*
     return JSValue::encode(jsString(vm, encodedString));
 }
 
+JSC_DEFINE_HOST_FUNCTION(functionDisassembleBase64, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (!callFrame->argumentCount())
+        return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Missing input for disassembleBase64."_s)));
+
+    String encodedString = callFrame->argument(0).toWTFString(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    if (encodedString.isNull())
+        return JSValue::encode(jsEmptyString(vm));
+
+    std::optional<Vector<uint8_t>> decodedVector = base64Decode(encodedString, Base64DecodeMode::DefaultValidatePaddingAndIgnoreWhitespace);
+    if (!decodedVector)
+        return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Invalid character in base64 string argument."_s)));
+
+    auto code = CodePtr<DisassemblyPtrTag>::fromUntaggedPtr(decodedVector->data());
+    StringPrintStream out;
+    // prefix with "\n" so the first line has the same whitespace as the rest when displayed from jsc.
+    out.print("\n");
+    if (tryToDisassemble(code, decodedVector->sizeInBytes(), "", out))
+        return JSValue::encode(jsString(vm, out.toString()));
+
+    return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Couldn't disassemble."_s)));
+}
+
 JSC_DEFINE_HOST_FUNCTION(functionDebug, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     VM& vm = globalObject->vm();
@@ -1691,7 +1725,7 @@ JSC_DEFINE_HOST_FUNCTION(functionJSCStack, (JSGlobalObject* globalObject, CallFr
 {
     VM& vm = globalObject->vm();
     StringBuilder trace;
-    trace.append("--> Stack trace:\n");
+    trace.append("--> Stack trace:\n"_s);
 
     FunctionJSCStackFunctor functor(trace);
     StackVisitor::visit(callFrame, vm, functor);
@@ -1977,7 +2011,7 @@ JSC_DEFINE_HOST_FUNCTION(functionReadFile, (JSGlobalObject* globalObject, CallFr
         return throwVMError(globalObject, scope, "Could not open file."_s);
 
     if (!isBinary)
-        return JSValue::encode(jsString(vm, String::fromUTF8WithLatin1Fallback(content->data(), content->length())));
+        return JSValue::encode(jsString(vm, String::fromUTF8WithLatin1Fallback(content->span())));
 
     Structure* structure = globalObject->typedArrayStructure(TypeUint8, content->isResizableOrGrowableShared());
     JSObject* result = JSUint8Array::create(vm, structure, WTFMove(content));
@@ -2177,7 +2211,7 @@ JSC_DEFINE_HOST_FUNCTION(functionOpenFile, (JSGlobalObject* globalObject, CallFr
 
     FILE* descriptor = fopen(filePath.fileSystemPath().ascii().data(), "r");
     if (!descriptor)
-        return throwVMException(globalObject, scope, createURIError(globalObject, makeString("Could not open file at "_s, filePath.string(), " fopen had error: "_s, safeStrerror(errno).data())));
+        return throwVMException(globalObject, scope, createURIError(globalObject, makeString("Could not open file at "_s, filePath.string(), " fopen had error: "_s, safeStrerror(errno).span())));
 
     RELEASE_AND_RETURN(scope, JSValue::encode(JSFileDescriptor::create(vm, globalObject, WTFMove(descriptor))));
 }
@@ -2471,7 +2505,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject
         return true;
     };
 
-    if (isGigacageMemoryExhausted(Gigacage::JSValue) || isGigacageMemoryExhausted(Gigacage::Primitive))
+    if (isGigacageMemoryExhausted(Gigacage::Primitive))
         return JSValue::encode(throwOutOfMemoryError(globalObject, scope, "Gigacage is exhausted"_s));
 
     String workerPath = "worker"_s;
@@ -2481,7 +2515,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject
     }
     
     Thread::create(
-        "JSC Agent",
+        "JSC Agent"_s,
         [sourceCode = WTFMove(sourceCode).isolatedCopy(), workerPath = WTFMove(workerPath).isolatedCopy(), &didStartLock, &didStartCondition, &didStart] () {
             CommandLine commandLine(CommandLine::CommandLineForWorkers);
             commandLine.m_interactive = false;
@@ -3029,9 +3063,9 @@ JSC_DEFINE_HOST_FUNCTION(functionCreateNonRopeNonAtomString, (JSGlobalObject* gl
 
     if (source.impl()->isAtom()) {
         if (source.is8Bit())
-            source = StringImpl::create(source.characters8(), source.length());
+            source = StringImpl::create(source.span8());
         else
-            source = StringImpl::create(source.characters16(), source.length());
+            source = StringImpl::create(source.span16());
     }
 
     RELEASE_ASSERT(!source.impl()->isAtom());
@@ -3344,7 +3378,7 @@ static void startMemoryMonitoringThreadIfNeeded()
     if (!memoryLimit)
         return;
 
-    Thread::create("jsc Memory Monitor", [=] {
+    Thread::create("jsc Memory Monitor"_s, [=] {
         while (true) {
             sleep(Seconds::fromMilliseconds(5));
             crashIfExceedingMemoryLimit();
@@ -3361,7 +3395,7 @@ static VM* s_vm;
 
 static void startTimeoutTimer(Seconds duration)
 {
-    Thread::create("jsc Timeout Thread", [=] () {
+    Thread::create("jsc Timeout Thread"_s, [=] () {
         sleep(duration);
         VMInspector::forEachVM([&] (VM& vm) -> IterationStatus {
             if (&vm != s_vm)
@@ -3384,13 +3418,22 @@ static void startTimeoutTimer(Seconds duration)
     });
 }
 
+// The purpose of crashDueToJSCShellTimeout is solely to make it easier to distinquish
+// jsc shell test timeouts (i.e. crashDueToJSCShellTimeout is present in crash stack
+// traces) from other crashes.
+NO_RETURN_DUE_TO_CRASH NEVER_INLINE void crashDueToJSCShellTimeout();
+void crashDueToJSCShellTimeout()
+{
+    CRASH();
+}
+
 static void timeoutCheckCallback(VM& vm)
 {
     RELEASE_ASSERT(&vm == s_vm);
     auto cpuTime = CPUTime::forCurrentThread();
     if (cpuTime >= s_maxAllowedCPUTime) {
         dataLog("Timed out after ", s_timeoutDuration, " seconds!\n");
-        CRASH();
+        crashDueToJSCShellTimeout();
     }
     auto remainingTime = s_maxAllowedCPUTime - cpuTime;
     startTimeoutTimer(remainingTime);
@@ -3419,14 +3462,11 @@ static void startTimeoutThreadIfNeeded(VM& vm)
     startTimeoutTimer(timeoutDuration);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char** argv WTF_TZONE_EXTRA_MAIN_ARGS)
 {
-#if OS(DARWIN) && CPU(ARM_THUMB2)
-    // Enabled IEEE754 denormal support.
-    fenv_t env;
-    fegetenv( &env );
-    env.__fpscr &= ~0x01000000u;
-    fesetenv( &env );
+#if USE(TZONE_MALLOC)
+    const char* boothash = GET_TZONE_SEED_FROM_ENV(darwinEnvp);
+    WTF_TZONE_INIT(boothash);
 #endif
 
 #if OS(DARWIN) && PLATFORM(MAC)
@@ -3469,11 +3509,18 @@ int main(int argc, char** argv)
     WTF::initialize();
 #if PLATFORM(COCOA)
     WTF::disableForwardingVPrintfStdErrToOSLog();
+
+    if (getenv("JSCTEST_CrashReportArgV")) {
+        StringPrintStream out;
+        CommaPrinter space(" "_s);
+        for (int i = 0; i < argc; ++i)
+            out.print(space, argv[i]);
+        WTF::setCrashLogMessage(out.toCString().data());
+    }
 #endif
 
 #if OS(UNIX)
     if (getenv("JS_SHELL_WAIT_FOR_SIGUSR2_TO_EXIT")) {
-        initializeSignalHandling();
         addSignalHandler(Signal::Usr, SignalHandler([&] (Signal, SigInfo&, PlatformRegisters&) {
             dataLogLn("Signal handler hit, we can exit now.");
             waitToExit.signal();
@@ -3674,7 +3721,7 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
         case Script::CodeSource::File: {
             fileName = String::fromLatin1(scripts[i].argument);
             if (scripts[i].strictMode == Script::StrictMode::Strict)
-                scriptBuffer.append("\"use strict\";\n", strlen("\"use strict\";\n"));
+                scriptBuffer.append("\"use strict\";\n"_span);
 
             if (isModule) {
                 // If necessary, prepend "./" so the module loader doesn't think this is a bare-name specifier.
@@ -3832,7 +3879,8 @@ static void runInteractive(GlobalObject* globalObject)
 static NO_RETURN void printUsageStatement(bool help = false)
 {
     fprintf(stderr, "Usage: jsc [options] [files] [-- arguments]\n");
-    fprintf(stderr, "  -d         Dumps bytecode (debug builds only)\n");
+    fprintf(stderr, "  -d         Dumps bytecode\n");
+    fprintf(stderr, "  -s         Synchronous compilation (equivalent to `--useConcurrentJIT=0`)\n");
     fprintf(stderr, "  -e         Evaluate argument as script code\n");
     fprintf(stderr, "  -f         Specifies a source file (deprecated)\n");
     fprintf(stderr, "  -h|--help  Prints this help message\n");
@@ -3841,12 +3889,12 @@ static NO_RETURN void printUsageStatement(bool help = false)
 #endif
     fprintf(stderr, "  -i         Enables interactive mode (default if no files are specified)\n");
     fprintf(stderr, "  -m         Execute as a module\n");
-#if OS(UNIX)
-    fprintf(stderr, "  -s         Installs signal handlers that exit on a crash (Unix platforms only, lldb will not work with this option) \n");
-#endif
     fprintf(stderr, "  -p <file>  Outputs profiling data to a file\n");
     fprintf(stderr, "  -x         Output exit code before terminating\n");
     fprintf(stderr, "\n");
+#if OS(UNIX)
+    fprintf(stderr, "  --signal-expected          Installs signal handlers that exit on a crash (Unix platforms only, lldb will not work with this option) \n");
+#endif
     fprintf(stderr, "  --sample                   Collects and outputs sampling profiler data\n");
     fprintf(stderr, "  --test262-async            Check that some script calls the print function with the string 'Test262:AsyncTestComplete'\n");
     fprintf(stderr, "  --strict-file=<file>       Parse the given file as if it were in strict mode (this option may be passed more than once)\n");
@@ -3934,6 +3982,10 @@ void CommandLine::parseArguments(int argc, char** argv)
             m_dump = true;
             continue;
         }
+        if (!strcmp(arg, "-s")) {
+            Options::useConcurrentJIT() = false;
+            continue;
+        }
         if (!strcmp(arg, "-p")) {
             if (++i == argc)
                 printUsageStatement();
@@ -3945,13 +3997,12 @@ void CommandLine::parseArguments(int argc, char** argv)
             m_module = true;
             continue;
         }
-        if (!strcmp(arg, "-s")) {
+        if (!strcmp(arg, "--signal-expected")) {
 #if OS(UNIX)
-            initializeSignalHandling();
-
             SignalAction (*exit)(Signal, SigInfo&, PlatformRegisters&) = [] (Signal, SigInfo&, PlatformRegisters&) {
-                dataLogLn("Signal handler hit. Exiting with status 0");
-                terminateProcess(EXIT_SUCCESS);
+                dataLogLn("Signal handler hit. Exiting with status 137");
+                // Deliberate exit with a SIGKILL code greater than 130.
+                terminateProcess(137);
                 return SignalAction::ForceDefault;
             };
 
@@ -4177,6 +4228,14 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
                 fprintf(stderr, "could not save profiler output.\n");
         }
 
+
+#if ENABLE(REGEXP_TRACING)
+        {
+            JSLockHolder locker(vm);
+            vm.dumpRegExpTrace();
+        }
+#endif
+
 #if ENABLE(JIT)
         {
             JSLockHolder locker(vm);
@@ -4251,12 +4310,22 @@ extern const JITOperationAnnotation startOfJITOperationsInShell __asm("section$s
 extern const JITOperationAnnotation endOfJITOperationsInShell __asm("section$end$__DATA_CONST$__jsc_ops");
 #endif
 
+#if USE(TZONE_MALLOC)
+extern const bmalloc::api::TZoneAnnotation startOfTZoneTypesInShell __asm("section$start$__DATA_CONST$__tzone_descs");
+extern const bmalloc::api::TZoneAnnotation endOfTZoneTypesInShell __asm("section$end$__DATA_CONST$__tzone_descs");
+#endif
+
 int jscmain(int argc, char** argv)
 {
     // Need to override and enable restricted options before we start parsing options below.
     JSC::Config::enableRestrictedOptions();
 
     WTF::initializeMainThread();
+#if USE(TZONE_MALLOC)
+    WTF_TZONE_REGISTER_TYPES(&startOfTZoneTypesInShell, &endOfTZoneTypesInShell);
+    JSC::registerTZoneTypes();
+    WTF_TZONE_REGISTRATION_DONE();
+#endif
 
     // Note that the options parsing can affect VM creation, and thus
     // comes first.
@@ -4283,6 +4352,9 @@ int jscmain(int argc, char** argv)
     if (UNLIKELY(Options::needDisassemblySupport()))
         JSC::JITOperationList::populateDisassemblyLabelsInEmbedder(&startOfJITOperationsInShell, &endOfJITOperationsInShell);
 #endif
+
+    if (!Options::maxHeapSizeAsRAMSizeMultiple())
+        Options::maxHeapSizeAsRAMSizeMultiple() = 2;
 
     initializeTimeoutIfNeeded();
 

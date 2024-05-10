@@ -472,7 +472,7 @@ private:
 
 };
 
-inline const char* makeString(const StorageType& storageType)
+inline ASCIILiteral makeString(const StorageType& storageType)
 {
     return(storageType.is<Type>() ? makeString(storageType.as<Type>().kind) :
         makeString(storageType.as<PackedType>()));
@@ -701,6 +701,7 @@ public:
 
     static ptrdiff_t offsetOfKind() { return OBJECT_OFFSETOF(RTT, m_kind); }
     static ptrdiff_t offsetOfDisplaySize() { return OBJECT_OFFSETOF(RTT, m_displaySize); }
+    static ptrdiff_t offsetOfPayload() { return sizeof(RTT); }
 
 private:
     // Payload starts past end of this object.
@@ -789,6 +790,7 @@ public:
     const TypeDefinition& unroll() const;
     const TypeDefinition& expand() const;
     bool hasRecursiveReference() const;
+    bool isFinalType() const;
 
     // Type definitions that are compound and contain references to other definitions
     // via a type index should ref() the other definition when new unique instances are

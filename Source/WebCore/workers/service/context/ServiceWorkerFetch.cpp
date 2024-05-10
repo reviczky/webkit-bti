@@ -140,7 +140,7 @@ static void processResponse(Ref<Client>&& client, Expected<Ref<FetchResponse>, s
             }
 
             if (auto* chunk = result.returnValue())
-                client->didReceiveData(SharedBuffer::create(chunk->data(), chunk->size()));
+                client->didReceiveData(SharedBuffer::create(*chunk));
             else
                 client->didFinish(response ? response->networkLoadMetrics() : NetworkLoadMetrics { });
         });
@@ -188,6 +188,9 @@ void dispatchFetchEvent(Ref<Client>&& client, ServiceWorkerGlobalScope& globalSc
     URL requestURL = request.url();
     auto fetchRequest = FetchRequest::create(globalScope, WTFMove(body), WTFMove(requestHeaders),  WTFMove(request), WTFMove(options), WTFMove(referrer));
 
+    // The request has already passed content extension checks, no need to reapply them if service worker does the fetch itself.
+    fetchRequest->disableContentExtensionsCheck();
+
     // If service worker navigation preload is not enabled, we do not want to reuse any preload directly.
     if (!isServiceWorkerNavigationPreloadEnabled)
         fetchRequest->setNavigationPreloadIdentifier(fetchIdentifier);
@@ -215,8 +218,8 @@ void dispatchFetchEvent(Ref<Client>&& client, ServiceWorkerGlobalScope& globalSc
 
     CertificateInfo certificateInfo = globalScope.certificateInfo();
 
-    event->onResponse([client, mode, redirect, requestURL, certificateInfo = WTFMove(certificateInfo), deferredPromise] (auto&& result) mutable {
-        processResponse(WTFMove(client), std::forward<decltype(result)>(result), mode, redirect, requestURL, WTFMove(certificateInfo), deferredPromise.get());
+    event->onResponse([client, mode, redirect, requestURL, certificateInfo = WTFMove(certificateInfo), deferredPromise]<typename Result> (Result&& result) mutable {
+        processResponse(WTFMove(client), std::forward<Result>(result), mode, redirect, requestURL, WTFMove(certificateInfo), deferredPromise.get());
     });
 
     globalScope.dispatchEvent(event);

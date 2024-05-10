@@ -44,6 +44,7 @@
 #include "LocalFrame.h"
 #include "Logging.h"
 #include "MediaConstraints.h"
+#include "PermissionsPolicy.h"
 #include "PlatformMediaSessionManager.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "Settings.h"
@@ -62,7 +63,6 @@ Ref<UserMediaRequest> UserMediaRequest::create(Document& document, MediaStreamRe
 
 UserMediaRequest::UserMediaRequest(Document& document, MediaStreamRequest&& request, TrackConstraints&& audioConstraints, TrackConstraints&& videoConstraints, DOMPromiseDeferred<IDLInterface<MediaStream>>&& promise)
     : ActiveDOMObject(document)
-    , m_identifier(UserMediaRequestIdentifier::generate())
     , m_promise(makeUniqueRef<DOMPromiseDeferred<IDLInterface<MediaStream>>>(WTFMove(promise)))
     , m_request(WTFMove(request))
     , m_audioConstraints(WTFMove(audioConstraints))
@@ -116,19 +116,19 @@ void UserMediaRequest::start()
     switch (m_request.type) {
     case MediaStreamRequest::Type::DisplayMedia:
     case MediaStreamRequest::Type::DisplayMediaWithAudio:
-        if (!isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::DisplayCapture, document)) {
+        if (!isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Type::DisplayCapture, document)) {
             deny(MediaAccessDenialReason::PermissionDenied);
             controller->logGetDisplayMediaDenial(document);
             return;
         }
         break;
     case MediaStreamRequest::Type::UserMedia:
-        if (m_request.audioConstraints.isValid && !isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::Microphone, document)) {
+        if (m_request.audioConstraints.isValid && !isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Type::Microphone, document)) {
             deny(MediaAccessDenialReason::PermissionDenied);
             controller->logGetUserMediaDenial(document);
             return;
         }
-        if (m_request.videoConstraints.isValid && !isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::Camera, document)) {
+        if (m_request.videoConstraints.isValid && !isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Type::Camera, document)) {
             deny(MediaAccessDenialReason::PermissionDenied);
             controller->logGetUserMediaDenial(document);
             return;
@@ -268,11 +268,6 @@ void UserMediaRequest::stop()
     auto& document = downcast<Document>(*scriptExecutionContext());
     if (auto* controller = UserMediaController::from(document.page()))
         controller->cancelUserMediaAccessRequest(*this);
-}
-
-const char* UserMediaRequest::activeDOMObjectName() const
-{
-    return "UserMediaRequest";
 }
 
 Document* UserMediaRequest::document() const

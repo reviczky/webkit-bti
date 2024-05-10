@@ -38,7 +38,8 @@
 namespace WebKit {
 
 class RemoteInspectorProxy final : public RemoteWebInspectorUIProxyClient {
-    WTF_MAKE_FAST_ALLOCATED();
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RemoteInspectorProxy);
 public:
     RemoteInspectorProxy(RemoteInspectorClient& inspectorClient, ConnectionID connectionID, TargetID targetID, Inspector::DebuggableType debuggableType)
         : m_proxy(RemoteWebInspectorUIProxy::create())
@@ -124,8 +125,7 @@ void RemoteInspectorClient::sendWebInspectorEvent(const String& event)
 {
     ASSERT(isMainRunLoop());
     ASSERT(m_connectionID);
-    auto message = event.utf8();
-    send(m_connectionID.value(), message.dataAsUInt8Ptr(), message.length());
+    send(m_connectionID.value(), event.utf8().span());
 }
 
 HashMap<String, Inspector::RemoteInspectorConnectionClient::CallHandler>& RemoteInspectorClient::dispatchMap()

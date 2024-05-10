@@ -31,7 +31,6 @@
 #include "ArgumentCoders.h"
 #include "Attachment.h"
 #include "AuxiliaryProcessMessages.h"
-#include "DataReference.h"
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcessConnectionParameters.h"
 #include "GPUProcessCreationParameters.h"
@@ -83,7 +82,7 @@
 #endif
 
 #if USE(GBM)
-#include <WebCore/GBMDevice.h>
+#include <WebCore/DRMDeviceManager.h>
 #endif
 
 namespace WebKit {
@@ -94,15 +93,20 @@ namespace WebKit {
 // work in the GPUProcess.
 constexpr Seconds minimumLifetimeBeforeIdleExit { 5_s };
 
-GPUProcess::GPUProcess(AuxiliaryProcessInitializationParameters&& parameters)
+GPUProcess::GPUProcess()
     : m_idleExitTimer(*this, &GPUProcess::tryExitIfUnused)
 {
-    initialize(WTFMove(parameters));
     RELEASE_LOG(Process, "%p - GPUProcess::GPUProcess:", this);
 }
 
 GPUProcess::~GPUProcess()
 {
+}
+
+GPUProcess& GPUProcess::singleton()
+{
+    static NeverDestroyed<GPUProcess> gpuProcess;
+    return gpuProcess.get();
 }
 
 void GPUProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -204,7 +208,7 @@ void GPUProcess::tryExitIfUnused()
     m_idleExitTimer.stop();
 
     RELEASE_LOG(Process, "GPUProcess::tryExitIfUnused: GPUProcess is exiting because we are under memory pressure and the process is no longer useful.");
-    parentProcessConnection()->send(Messages::GPUProcessProxy::ProcessIsReadyToExit(), 0);
+    protectedParentProcessConnection()->send(Messages::GPUProcessProxy::ProcessIsReadyToExit(), 0);
 }
 
 void GPUProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
@@ -270,7 +274,7 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
 #endif
 
 #if USE(GBM)
-    WebCore::GBMDevice::singleton().initialize(parameters.renderDeviceFile);
+    WebCore::DRMDeviceManager::singleton().initializeMainDevice(parameters.renderDeviceFile);
 #endif
 
     m_applicationVisibleName = WTFMove(parameters.applicationVisibleName);
@@ -448,7 +452,7 @@ void GPUProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapt
     ensureAVCaptureServerConnection();
 #endif
 
-    if (auto* connection = webProcessConnection(processID)) {
+    if (RefPtr connection = webProcessConnection(processID)) {
         connection->updateCaptureAccess(allowAudioCapture, allowVideoCapture, allowDisplayCapture);
         return completionHandler();
     }
@@ -463,7 +467,7 @@ void GPUProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapt
 
 void GPUProcess::updateCaptureOrigin(const WebCore::SecurityOriginData& originData, WebCore::ProcessIdentifier processID)
 {
-    if (auto* connection = webProcessConnection(processID))
+    if (RefPtr connection = webProcessConnection(processID))
         connection->updateCaptureOrigin(originData);
 }
 
@@ -508,6 +512,12 @@ void GPUProcess::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType type
 {
     WebCore::ScreenCaptureKitSharingSessionManager::singleton().promptForGetDisplayMedia(type, WTFMove(completionHandler));
 }
+
+void GPUProcess::cancelGetDisplayMediaPrompt()
+{
+    WebCore::ScreenCaptureKitSharingSessionManager::singleton().cancelGetDisplayMediaPrompt();
+}
+
 #endif // HAVE(SCREEN_CAPTURE_KIT)
 
 #if PLATFORM(MAC)
@@ -574,7 +584,7 @@ RemoteAudioSessionProxyManager& GPUProcess::audioSessionManager() const
 WorkQueue& GPUProcess::videoMediaStreamTrackRendererQueue()
 {
     if (!m_videoMediaStreamTrackRendererQueue)
-        m_videoMediaStreamTrackRendererQueue = WorkQueue::create("RemoteVideoMediaStreamTrackRenderer", WorkQueue::QOS::UserInitiated);
+        m_videoMediaStreamTrackRendererQueue = WorkQueue::create("RemoteVideoMediaStreamTrackRenderer"_s, WorkQueue::QOS::UserInitiated);
     return *m_videoMediaStreamTrackRendererQueue;
 }
 #endif
@@ -583,7 +593,7 @@ WorkQueue& GPUProcess::videoMediaStreamTrackRendererQueue()
 WorkQueue& GPUProcess::libWebRTCCodecsQueue()
 {
     if (!m_libWebRTCCodecsQueue)
-        m_libWebRTCCodecsQueue = WorkQueue::create("LibWebRTCCodecsQueue", WorkQueue::QOS::UserInitiated);
+        m_libWebRTCCodecsQueue = WorkQueue::create("LibWebRTCCodecsQueue"_s, WorkQueue::QOS::UserInitiated);
     return *m_libWebRTCCodecsQueue;
 }
 #endif

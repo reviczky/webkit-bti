@@ -152,6 +152,8 @@ public:
     void dumpAssumingJITType(PrintStream&, JITType) const;
     JS_EXPORT_PRIVATE void dump(PrintStream&) const;
 
+    void dumpSimpleName(PrintStream&) const;
+
     MetadataTable* metadataTable() const { return m_metadata.get(); }
 
     unsigned numParameters() const { return m_numParameters; }
@@ -344,7 +346,7 @@ public:
 
     bool useDataIC() const;
 
-    CodePtr<JSEntryPtrTag> addressForCallConcurrently(ArityCheckMode) const;
+    CodePtr<JSEntryPtrTag> addressForCallConcurrently(const ConcurrentJSLocker&, ArityCheckMode) const;
 
 #if ENABLE(JIT)
     CodeBlock* replacement();

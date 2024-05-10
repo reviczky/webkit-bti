@@ -28,7 +28,6 @@
 #include "config.h"
 #include "Connection.h"
 
-#include "DataReference.h"
 #include "IPCUtilities.h"
 #include "UnixMessage.h"
 #include <WebCore/SharedMemory.h>
@@ -365,7 +364,7 @@ void Connection::platformOpen()
 #endif
 
 #if PLATFORM(PLAYSTATION)
-    m_socketMonitor = Thread::create("SocketMonitor", [protectedThis] {
+    m_socketMonitor = Thread::create("SocketMonitor"_s, [protectedThis] {
         {
             int fd;
             while ((fd = protectedThis->m_socketDescriptor) != -1) {

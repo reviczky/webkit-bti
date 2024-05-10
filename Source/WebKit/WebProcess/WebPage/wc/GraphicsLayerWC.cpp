@@ -31,6 +31,7 @@
 
 #include "WCPlatformLayerGCGL.h"
 #include "WCTileGrid.h"
+#include <WebCore/GraphicsContext.h>
 #include <WebCore/TransformState.h>
 
 namespace WebKit {
@@ -38,6 +39,7 @@ using namespace WebCore;
 
 class WCTiledBacking final : public TiledBacking {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WCTiledBacking);
 public:
     WCTiledBacking(GraphicsLayerWC& owner)
         : m_owner(owner) { }
@@ -89,6 +91,7 @@ public:
     TiledBacking* tiledBacking() const { return const_cast<WCTiledBacking*>(this); };
 
     // TiledBacking override
+    void setClient(TiledBackingClient*) final { }
     void setVisibleRect(const FloatRect&) final { }
     FloatRect visibleRect() const final { return { }; };
     void setLayoutViewportRect(std::optional<FloatRect>) final { }
@@ -110,6 +113,7 @@ public:
     void willStartLiveResize() final { };
     void didEndLiveResize() final { };
     IntSize tileSize() const final { return m_tileGrid.tilePixelSize(); }
+    FloatRect rectForTile(TileIndex) const { return { }; }
     void revalidateTiles() final { }
     IntRect tileGridExtent() const final { return { }; }
     void setScrollingPerformanceTestingEnabled(bool flag) final { }
@@ -128,6 +132,7 @@ public:
     int rightMarginWidth() const final { return 0; };
     void setZoomedOutContentsScale(float) final { }
     float zoomedOutContentsScale() const final { return 1; }
+    float tilingScaleFactor() const final { return 1; }
     IntRect bounds() const final { return { { }, IntSize(m_owner.size()) }; };
     IntRect boundsWithoutMargin() const final { return bounds(); };
 
@@ -524,7 +529,7 @@ void GraphicsLayerWC::flushCompositingState(const FloatRect& passedVisibleRect)
     // passedVisibleRect doesn't contain the scrollbar area. Inflate it.
     FloatRect visibleRect = passedVisibleRect;
     visibleRect.inflate(20.f);
-    TransformState state(client().useCSS3DTransformInteroperability(), TransformState::UnapplyInverseTransformDirection, FloatQuad(visibleRect));
+    TransformState state(TransformState::UnapplyInverseTransformDirection, FloatQuad(visibleRect));
     state.setSecondaryQuad(FloatQuad { visibleRect });
     recursiveCommitChanges(state);
 }

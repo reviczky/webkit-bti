@@ -281,6 +281,7 @@ bytecode/ReduceWhitespace.cpp
 bytecode/Repatch.cpp
 bytecode/SetPrivateBrandStatus.cpp
 bytecode/SetPrivateBrandVariant.cpp
+bytecode/SharedJITStubSet.cpp
 bytecode/SpeculatedType.cpp
 bytecode/StructureSet.cpp
 bytecode/StructureStubClearingWatchpoint.cpp
@@ -779,6 +780,7 @@ runtime/CacheUpdate.cpp
 runtime/CacheableIdentifier.cpp
 runtime/CachedBytecode.cpp
 runtime/CachedSpecialPropertyAdaptiveStructureWatchpoint.cpp
+runtime/CachedTypes.cpp
 runtime/CatchScope.cpp
 runtime/ClassInfo.cpp
 runtime/ClonedArguments.cpp
@@ -899,6 +901,7 @@ runtime/JSAsyncGeneratorFunction.cpp
 runtime/JSArrayIterator.cpp
 runtime/JSBigInt.cpp
 runtime/JSBoundFunction.cpp
+runtime/JSCBytecodeCacheVersion.cpp
 runtime/JSCConfig.cpp
 runtime/JSCJSValue.cpp
 runtime/JSCPtrTag.cpp
@@ -1020,6 +1023,7 @@ runtime/RegExpMatchesArray.cpp
 runtime/RegExpObject.cpp
 runtime/RegExpPrototype.cpp
 runtime/RegExpStringIteratorPrototype.cpp
+runtime/RegisterTZoneTypes.cpp
 runtime/ResourceExhaustion.cpp
 runtime/RuntimeTZoneImpls.cpp
 runtime/RuntimeType.cpp
@@ -1053,6 +1057,7 @@ runtime/SymbolObject.cpp
 runtime/SymbolPrototype.cpp
 runtime/SymbolTable.cpp
 runtime/SyntheticModuleRecord.cpp
+runtime/TZoneInit.cpp
 runtime/TemplateObjectDescriptor.cpp
 runtime/TemporalCalendar.cpp
 runtime/TemporalCalendarConstructor.cpp
@@ -1110,7 +1115,7 @@ tools/Integrity.cpp
 tools/JSDollarVM.cpp
 tools/VMInspector.cpp
 
-wasm/WasmB3IRGenerator.cpp
+wasm/WasmOMGIRGenerator.cpp
 wasm/WasmBBQDisassembler.cpp
 wasm/WasmBBQJIT.cpp @no-unify
 wasm/WasmBBQJIT32_64.cpp @no-unify

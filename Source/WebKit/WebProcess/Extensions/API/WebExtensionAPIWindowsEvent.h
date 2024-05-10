@@ -38,7 +38,7 @@ OBJC_CLASS NSString;
 namespace WebKit {
 
 class WebExtensionAPIWindowsEvent : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIWindowsEvent, windowsEvent);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIWindowsEvent, windowsEvent, event);
 
 public:
     using WindowTypeFilter = WebExtensionWindow::TypeFilter;
@@ -61,10 +61,11 @@ public:
     }
 
 private:
-    explicit WebExtensionAPIWindowsEvent(ForMainWorld forMainWorld, WebExtensionAPIRuntimeBase& runtime, WebExtensionContextProxy& context, WebExtensionEventListenerType type)
-        : WebExtensionAPIObject(forMainWorld, runtime, context)
+    explicit WebExtensionAPIWindowsEvent(const WebExtensionAPIObject& parentObject, WebExtensionEventListenerType type)
+        : WebExtensionAPIObject(parentObject)
         , m_type(type)
     {
+        setPropertyPath(toAPIString(type), &parentObject);
     }
 
     WebPageProxyIdentifier m_pageProxyIdentifier;

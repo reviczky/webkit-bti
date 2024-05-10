@@ -58,7 +58,7 @@ inline uint32_t JSValue::toUInt32(JSGlobalObject* globalObject) const
     return toInt32(globalObject);
 }
 
-inline uint32_t JSValue::toIndex(JSGlobalObject* globalObject, const char* errorName) const
+inline uint32_t JSValue::toIndex(JSGlobalObject* globalObject, ASCIILiteral errorName) const
 {
     VM& vm = getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -1434,6 +1434,9 @@ ALWAYS_INLINE bool isThisValueAltered(const PutPropertySlot& slot, JSObject* bas
 // See section 7.2.9: https://tc39.github.io/ecma262/#sec-samevalue
 ALWAYS_INLINE bool sameValue(JSGlobalObject* globalObject, JSValue a, JSValue b)
 {
+    if (a == b)
+        return true;
+
     if (!a.isNumber())
         return JSValue::strictEqual(globalObject, a, b);
     if (!b.isNumber())

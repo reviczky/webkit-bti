@@ -178,6 +178,8 @@ static CodePtr<JSEntryPtrTag> callerReturnPC(CodeBlock* baselineCodeBlockForCall
         case InlineCallFrame::ProxyObjectLoadCall: {
             if (callInstruction.opcodeID() == op_get_by_id)
                 jumpTarget = LLINT_RETURN_LOCATION(op_get_by_id);
+            else if (callInstruction.opcodeID() == op_get_length)
+                jumpTarget = LLINT_RETURN_LOCATION(op_get_length);
             else if (callInstruction.opcodeID() == op_get_by_val)
                 jumpTarget = LLINT_RETURN_LOCATION(op_get_by_val);
             else
@@ -207,13 +209,7 @@ static CodePtr<JSEntryPtrTag> callerReturnPC(CodeBlock* baselineCodeBlockForCall
         case InlineCallFrame::CallVarargs:
         case InlineCallFrame::ConstructVarargs:
         case InlineCallFrame::BoundFunctionCall: {
-            CallLinkInfo* callLinkInfo = nullptr;
-            {
-                ConcurrentJSLocker locker(baselineCodeBlockForCaller->m_lock);
-                callLinkInfo = baselineCodeBlockForCaller->getCallLinkInfoForBytecodeIndex(locker, callBytecodeIndex);
-            }
-            RELEASE_ASSERT(callLinkInfo);
-            jumpTarget = callLinkInfo->doneLocation().retagged<JSEntryPtrTag>();
+            jumpTarget = static_cast<const BaselineJITCode*>(baselineCodeBlockForCaller->jitCode().get())->getCallLinkDoneLocationForBytecodeIndex(callBytecodeIndex).retagged<JSEntryPtrTag>();
             break;
         }
 

@@ -48,6 +48,7 @@ class ElementBox;
 
 class RenderElement : public RenderObject {
     WTF_MAKE_ISO_ALLOCATED(RenderElement);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderElement);
 public:
     virtual ~RenderElement();
 
@@ -79,7 +80,7 @@ public:
     // The pseudo element style can be cached or uncached. Use the uncached method if the pseudo element
     // has the concept of changing state (like ::-webkit-scrollbar-thumb:hover), or if it takes additional
     // parameters (like ::highlight(name)).
-    const RenderStyle* getCachedPseudoStyle(PseudoId, const RenderStyle* parentStyle = nullptr) const;
+    const RenderStyle* getCachedPseudoStyle(const Style::PseudoElementIdentifier&, const RenderStyle* parentStyle = nullptr) const;
     std::unique_ptr<RenderStyle> getUncachedPseudoStyle(const Style::PseudoElementRequest&, const RenderStyle* parentStyle = nullptr, const RenderStyle* ownStyle = nullptr) const;
 
     // This is null for anonymous renderers.
@@ -165,10 +166,9 @@ public:
     // Repaint only if our old bounds and new bounds are different. The caller may pass in newBounds and newOutlineBox if they are known.
     bool repaintAfterLayoutIfNeeded(const RenderLayerModelObject* repaintContainer, RequiresFullRepaint, const RepaintRects& oldRects, const RepaintRects& newRects);
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     void repaintClientsOfReferencedSVGResources() const;
     void repaintRendererOrClientsOfReferencedSVGResources() const;
-#endif
+    void repaintOldAndNewPositionsForSVGRenderer() const;
 
     bool borderImageIsLoadedAndCanBeRendered() const;
     bool isVisibleIgnoringGeometry() const;
@@ -191,6 +191,9 @@ public:
     inline bool hasClipOrNonVisibleOverflow() const;
     inline bool hasClipPath() const;
     inline bool hasHiddenBackface() const;
+    bool hasViewTransitionName() const;
+    bool isViewTransitionRoot() const;
+    bool requiresRenderingConsolidationForViewTransition() const;
     bool hasOutlineAnnotation() const;
     inline bool hasOutline() const;
     bool hasSelfPaintingLayer() const;
@@ -288,10 +291,11 @@ public:
     virtual bool establishesIndependentFormattingContext() const;
     bool createsNewFormattingContext() const;
 
-    bool isSkippedContentRoot() const;
-    bool isSkippedContentRootForLayout() const;
+    static void markRendererDirtyAfterTopLayerChange(RenderElement* renderer, RenderBlock* containingBlockBeforeStyleResolution);
 
-    void clearNeedsLayoutForDescendants();
+    bool isSkippedContentRoot() const;
+
+    void clearNeedsLayoutForSkippedContent();
 
 protected:
     RenderElement(Type, Element&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);
@@ -299,7 +303,10 @@ protected:
 
     bool layerCreationAllowedForSubtree() const;
 
-    enum StylePropagationType { PropagateToAllChildren, PropagateToBlockChildrenOnly };
+    enum class StylePropagationType {
+        AllChildren,
+        BlockChildrenOnly
+    };
     void propagateStyleToAnonymousChildren(StylePropagationType);
 
     bool repaintBeforeStyleChange(StyleDifference, const RenderStyle& oldStyle, const RenderStyle& newStyle);
@@ -307,8 +314,8 @@ protected:
     virtual void styleWillChange(StyleDifference, const RenderStyle& newStyle);
     virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
-    void insertedIntoTree(IsInternalMove) override;
-    void willBeRemovedFromTree(IsInternalMove) override;
+    void insertedIntoTree() override;
+    void willBeRemovedFromTree() override;
     void willBeDestroyed() override;
     void notifyFinished(CachedResource&, const NetworkLoadMetrics&) override;
 
@@ -322,9 +329,7 @@ protected:
     bool renderBlockShouldForceRelayoutChildren() const { return m_renderBlockShouldForceRelayoutChildren; }
 
     void setRenderBlockFlowLineLayoutPath(unsigned u) { m_renderBlockFlowLineLayoutPath = u; }
-    void setRenderBlockFlowHasMarkupTruncation(bool b) { m_renderBlockFlowHasMarkupTruncation = b; }
     unsigned renderBlockFlowLineLayoutPath() const { return m_renderBlockFlowLineLayoutPath; }
-    bool renderBlockFlowHasMarkupTruncation() const { return m_renderBlockFlowHasMarkupTruncation; }
 
     void paintOutline(PaintInfo&, const LayoutRect&);
     void updateOutlineAutoAncestor(bool hasOutlineAuto);
@@ -363,7 +368,7 @@ private:
 
     StyleDifference adjustStyleDifference(StyleDifference, OptionSet<StyleDifferenceContextSensitiveProperty>) const;
 
-    bool canDestroyDecodedData() final { return !isVisibleInViewport(); }
+    bool canDestroyDecodedData() const final { return !isVisibleInViewport(); }
     VisibleInViewportState imageFrameAvailable(CachedImage&, ImageAnimatingState, const IntRect* changeRect) final;
     VisibleInViewportState imageVisibleInViewport(const Document&) const final;
     void didRemoveCachedImageClient(CachedImage&) final;
@@ -400,14 +405,13 @@ private:
     unsigned m_renderBlockHasMarginBeforeQuirk : 1;
     unsigned m_renderBlockHasMarginAfterQuirk : 1;
     unsigned m_renderBlockShouldForceRelayoutChildren : 1;
-    unsigned m_renderBlockFlowHasMarkupTruncation : 1;
     unsigned m_renderBlockFlowLineLayoutPath : 3;
 
     unsigned m_isRegisteredForVisibleInViewportCallback : 1;
     unsigned m_visibleInViewportState : 2;
     unsigned m_didContributeToVisuallyNonEmptyPixelCount : 1;
 
-    // 3 bits free.
+    // 4 bits free.
 
     RenderStyle m_style;
 };
@@ -430,9 +434,8 @@ inline void RenderElement::setChildNeedsLayout(MarkingBehavior markParents)
         return;
     setNormalChildNeedsLayoutBit(true);
     if (markParents == MarkContainingBlockChain)
-        markContainingBlocksForLayout();
+        scheduleLayout(markContainingBlocksForLayout());
 }
-
 
 inline Element* RenderElement::generatingElement() const
 {

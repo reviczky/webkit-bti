@@ -42,8 +42,9 @@ namespace WebCore {
 class DeferredPromise;
 class RenderStyle;
 
-class FullscreenManager final : public CanMakeWeakPtr<FullscreenManager>, public CanMakeCheckedPtr {
+class FullscreenManager final : public CanMakeWeakPtr<FullscreenManager>, public CanMakeCheckedPtr<FullscreenManager> {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(FullscreenManager);
 public:
     FullscreenManager(Document&);
     ~FullscreenManager();
@@ -88,6 +89,12 @@ public:
     WEBCORE_EXPORT bool isAnimatingFullscreen() const;
     WEBCORE_EXPORT void setAnimatingFullscreen(bool);
 
+    enum class ResizeType : uint8_t {
+        DOMWindow           = 1 << 0,
+        VisualViewport      = 1 << 1,
+    };
+    void addPendingScheduledResize(ResizeType);
+
     void clear();
     void emptyEventQueue();
 
@@ -103,7 +110,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return document().logger(); }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "FullscreenManager"; }
+    ASCIILiteral logClassName() const { return "FullscreenManager"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 
@@ -122,6 +129,8 @@ private:
     RefPtr<Element> m_fullscreenElement;
     Deque<GCReachableRef<Node>> m_fullscreenChangeEventTargetQueue;
     Deque<GCReachableRef<Node>> m_fullscreenErrorEventTargetQueue;
+
+    OptionSet<ResizeType> m_pendingScheduledResize;
 
     bool m_areKeysEnabledInFullscreen { false };
     bool m_isAnimatingFullscreen { false };

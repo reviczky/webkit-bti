@@ -64,11 +64,6 @@ IDBIndex::~IDBIndex()
     ASSERT(canCurrentThreadAccessThreadLocalData(m_objectStore.transaction().database().originThread()));
 }
 
-const char* IDBIndex::activeDOMObjectName() const
-{
-    return "IDBIndex";
-}
-
 bool IDBIndex::virtualHasPendingActivity() const
 {
     return m_objectStore.hasPendingActivity();
@@ -425,12 +420,12 @@ void IDBIndex::markAsDeleted()
     m_deleted = true;
 }
 
-void IDBIndex::ref()
+void IDBIndex::ref() const
 {
     m_objectStore.ref();
 }
 
-void IDBIndex::deref()
+void IDBIndex::deref() const
 {
     m_objectStore.deref();
 }

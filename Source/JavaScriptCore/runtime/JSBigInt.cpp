@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2017 Caio Lima <ticaiolima@gmail.com>
- * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -384,15 +384,15 @@ JSValue JSBigInt::toPrimitive(JSGlobalObject*, PreferredPrimitiveType) const
 JSValue JSBigInt::parseInt(JSGlobalObject* globalObject, StringView s, ErrorParseMode parserMode)
 {
     if (s.is8Bit())
-        return parseInt(globalObject, s.characters8(), s.length(), parserMode);
-    return parseInt(globalObject, s.characters16(), s.length(), parserMode);
+        return parseInt(globalObject, s.span8(), parserMode);
+    return parseInt(globalObject, s.span16(), parserMode);
 }
 
 JSValue JSBigInt::parseInt(JSGlobalObject* nullOrGlobalObjectForOOM, VM& vm, StringView s, uint8_t radix, ErrorParseMode parserMode, ParseIntSign sign)
 {
     if (s.is8Bit())
-        return parseInt(nullOrGlobalObjectForOOM, vm, s.characters8(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
-    return parseInt(nullOrGlobalObjectForOOM, vm, s.characters16(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
+        return parseInt(nullOrGlobalObjectForOOM, vm, s.span8(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
+    return parseInt(nullOrGlobalObjectForOOM, vm, s.span16(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
 }
 
 JSValue JSBigInt::stringToBigInt(JSGlobalObject* globalObject, StringView s)
@@ -454,7 +454,7 @@ public:
         ASSERT(length());
         ASSERT_UNUSED(i, i == 0);
         if (sign())
-            return static_cast<JSBigInt::Digit>(-static_cast<int64_t>(m_value));
+            return static_cast<JSBigInt::Digit>(WTF::negate(static_cast<int64_t>(m_value)));
         return m_value;
     }
 
@@ -471,6 +471,45 @@ public:
 private:
     friend struct JSBigInt::ImplResult;
     int32_t m_value;
+};
+
+class Int64BigIntImpl {
+public:
+    static constexpr unsigned numDigits = isRegister64Bit() ? 1 : 2;
+
+    explicit Int64BigIntImpl(int64_t value)
+        : m_value(value)
+        , m_sign(value < 0)
+    {
+    }
+
+    explicit Int64BigIntImpl(uint64_t value)
+        : m_value(value)
+        , m_sign(false)
+    { }
+
+    ALWAYS_INLINE bool isZero() { return !m_value; }
+    ALWAYS_INLINE bool sign() { return m_sign; }
+    ALWAYS_INLINE unsigned length() { return isZero() ? 0 : numDigits; }
+    ALWAYS_INLINE JSBigInt::Digit digit(unsigned i)
+    {
+        ASSERT_UNUSED(i, i < length());
+#if CPU(REGISTER64)
+        if (sign())
+            return static_cast<JSBigInt::Digit>(WTF::negate(static_cast<int64_t>(m_value)));
+        return m_value;
+#else
+        static_assert(sizeof(JSBigInt::Digit) == 4);
+        if (sign())
+            return static_cast<JSBigInt::Digit>(WTF::negate(static_cast<int64_t>(m_value)) >> (32 * i));
+        return static_cast<JSBigInt::Digit>(m_value >> (32 * i));
+#endif
+    }
+
+private:
+    friend struct JSBigInt::ImplResult;
+    uint64_t m_value;
+    bool m_sign;
 };
 
 ALWAYS_INLINE JSBigInt::ImplResult::ImplResult(HeapBigIntImpl& heapImpl)
@@ -1439,13 +1478,66 @@ JSBigInt::ComparisonResult JSBigInt::compare(JSBigInt* x, JSBigInt* y)
 {
     return compareImpl(HeapBigIntImpl { x }, HeapBigIntImpl { y });
 }
+
 JSBigInt::ComparisonResult JSBigInt::compare(int32_t x, JSBigInt* y)
 {
     return compareImpl(Int32BigIntImpl { x }, HeapBigIntImpl { y });
 }
+
 JSBigInt::ComparisonResult JSBigInt::compare(JSBigInt* x, int32_t y)
 {
     return compareImpl(HeapBigIntImpl { x }, Int32BigIntImpl { y });
+}
+
+JSBigInt::ComparisonResult JSBigInt::compare(JSBigInt* x, int64_t y)
+{
+    return compareImpl(HeapBigIntImpl { x }, Int64BigIntImpl { y });
+}
+
+JSBigInt::ComparisonResult JSBigInt::compare(JSValue x, int64_t y)
+{
+    ASSERT(x.isBigInt());
+#if USE(BIGINT32)
+    if (x.isBigInt32())
+        return compareImpl(Int32BigIntImpl { x.bigInt32AsInt32() }, Int64BigIntImpl { y });
+#endif
+    return compare(x.asHeapBigInt(), y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compare(JSBigInt* x, uint64_t y)
+{
+    return compareImpl(HeapBigIntImpl { x }, Int64BigIntImpl { y });
+}
+
+JSBigInt::ComparisonResult JSBigInt::compare(JSValue x, uint64_t y)
+{
+    ASSERT(x.isBigInt());
+#if USE(BIGINT32)
+    if (x.isBigInt32())
+        return compareImpl(Int32BigIntImpl { x.bigInt32AsInt32() }, Int64BigIntImpl { y });
+#endif
+    return compare(x.asHeapBigInt(), y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compare(JSValue x, JSValue y)
+{
+    ASSERT(x.isBigInt() && y.isBigInt());
+#if USE(BIGINT32)
+    if (x.isBigInt32() && y.isBigInt32()) {
+        int32_t x1 = x.asBigInt32();
+        int32_t y1 = y.asBigInt32();
+        if (x1 == y1)
+            return JSBigInt::ComparisonResult::Equal;
+        if (x1 < y1)
+            return JSBigInt::ComparisonResult::LessThan;
+        return JSBigInt::ComparisonResult::GreaterThan;
+    }
+    if (x.isBigInt32())
+        return compare(x.bigInt32AsInt32(), y.asHeapBigInt());
+    if (y.isBigInt32())
+        return compare(x.asHeapBigInt(), y.bigInt32AsInt32());
+#endif
+    return compare(x.asHeapBigInt(), y.asHeapBigInt());
 }
 
 template <typename BigIntImpl1, typename BigIntImpl2>
@@ -2383,28 +2475,28 @@ double JSBigInt::toNumber(JSGlobalObject* globalObject) const
 }
 
 template <typename CharType>
-JSValue JSBigInt::parseInt(JSGlobalObject* globalObject, CharType*  data, unsigned length, ErrorParseMode errorParseMode)
+JSValue JSBigInt::parseInt(JSGlobalObject* globalObject, std::span<const CharType> data, ErrorParseMode errorParseMode)
 {
     VM& vm = globalObject->vm();
 
-    unsigned p = 0;
-    while (p < length && isStrWhiteSpace(data[p]))
+    size_t p = 0;
+    while (p < data.size() && isStrWhiteSpace(data[p]))
         ++p;
 
     // Check Radix from first characters
-    if (static_cast<unsigned>(p) + 1 < static_cast<unsigned>(length) && data[p] == '0') {
+    if (p + 1 < data.size() && data[p] == '0') {
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'b'))
-            return parseInt(globalObject, vm, data, length, p + 2, 2, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(globalObject, vm, data, p + 2, 2, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
         
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'x'))
-            return parseInt(globalObject, vm, data, length, p + 2, 16, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(globalObject, vm, data, p + 2, 16, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
         
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'o'))
-            return parseInt(globalObject, vm, data, length, p + 2, 8, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(globalObject, vm, data, p + 2, 8, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
     }
 
     ParseIntSign sign = ParseIntSign::Unsigned;
-    if (p < length) {
+    if (p < data.size()) {
         if (data[p] == '-') {
             sign = ParseIntSign::Signed;
             ++p;
@@ -2412,15 +2504,15 @@ JSValue JSBigInt::parseInt(JSGlobalObject* globalObject, CharType*  data, unsign
             ++p;
     }
 
-    return parseInt(globalObject, vm, data, length, p, 10, errorParseMode, sign);
+    return parseInt(globalObject, vm, data, p, 10, errorParseMode, sign);
 }
 
 template <typename CharType>
-JSValue JSBigInt::parseInt(JSGlobalObject* nullOrGlobalObjectForOOM, VM& vm, CharType* data, unsigned length, unsigned startIndex, unsigned radix, ErrorParseMode errorParseMode, ParseIntSign sign, ParseIntMode parseMode)
+JSValue JSBigInt::parseInt(JSGlobalObject* nullOrGlobalObjectForOOM, VM& vm, std::span<const CharType> data, unsigned startIndex, unsigned radix, ErrorParseMode errorParseMode, ParseIntSign sign, ParseIntMode parseMode)
 {
-    unsigned p = startIndex;
+    size_t p = startIndex;
 
-    if (parseMode != ParseIntMode::AllowEmptyString && startIndex == length) {
+    if (parseMode != ParseIntMode::AllowEmptyString && startIndex == data.size()) {
         ASSERT(nullOrGlobalObjectForOOM);
         if (errorParseMode == ErrorParseMode::ThrowExceptions) {
             auto scope = DECLARE_THROW_SCOPE(vm);
@@ -2430,15 +2522,15 @@ JSValue JSBigInt::parseInt(JSGlobalObject* nullOrGlobalObjectForOOM, VM& vm, Cha
     }
 
     // Skipping leading zeros
-    while (p < length && data[p] == '0')
+    while (p < data.size() && data[p] == '0')
         ++p;
 
-    int endIndex = length - 1;
+    int endIndex = data.size() - 1;
     // Removing trailing spaces
     while (endIndex >= static_cast<int>(p) && isStrWhiteSpace(data[endIndex]))
         --endIndex;
 
-    length = endIndex + 1;
+    size_t length = endIndex + 1;
 
     if (p == length) {
 #if USE(BIGINT32)
@@ -2603,11 +2695,23 @@ bool JSBigInt::equalsToInt32(int32_t value)
 
 JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
 {
+    return compareToDouble(HeapBigIntImpl { x }, y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(double x, JSBigInt* y)
+{
+    return compareToDouble(x, HeapBigIntImpl { y });
+}
+
+template <typename BigIntImpl>
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(BigIntImpl x, double y)
+{
     // This algorithm expect that the double format is IEEE 754
 
     uint64_t doubleBits = bitwise_cast<uint64_t>(y);
     int rawExponent = static_cast<int>(doubleBits >> 52) & 0x7FF;
 
+    // Handle finite doubles for {y}.
     if (rawExponent == 0x7FF) {
         if (std::isnan(y))
             return ComparisonResult::Undefined;
@@ -2615,7 +2719,7 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
         return (y == std::numeric_limits<double>::infinity()) ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
     }
 
-    bool xSign = x->sign();
+    bool xSign = x.sign();
     
     // Note that this is different from the double's sign bit for -0. That's
     // intentional because -0 must be treated like 0.
@@ -2624,14 +2728,20 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
         return xSign ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
 
     if (!y) {
+        // If {y} is zero, then ySign is false and xSign must be false.
         ASSERT(!xSign);
-        return x->isZero() ? ComparisonResult::Equal : ComparisonResult::GreaterThan;
+        return x.isZero() ? ComparisonResult::Equal : ComparisonResult::GreaterThan;
     }
 
-    if (x->isZero())
+    if (x.isZero()) {
+        // If {x} is zero, then xSign is false and ySign must be false which indicates that {y} is greater than zero.
+        ASSERT(!ySign && y > 0);
         return ComparisonResult::LessThan;
+    }
 
-    uint64_t mantissa = doubleBits & 0x000FFFFFFFFFFFFF;
+    // Right now, only two cases left:
+    //     {x} >= 1 and {y} > 0
+    //     {x} <= -1 and {y} < 0
 
     // Non-finite doubles are handled above.
     ASSERT(rawExponent != 0x7FF);
@@ -2639,11 +2749,12 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
     if (exponent < 0) {
         // The absolute value of the double is less than 1. Only 0n has an
         // absolute value smaller than that, but we've already covered that case.
+        // Note that this also handles denormal doubles for {y}.
         return xSign ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
     }
 
-    int xLength = x->length();
-    Digit xMSD = x->digit(xLength - 1);
+    int xLength = x.length();
+    Digit xMSD = x.digit(xLength - 1);
     int msdLeadingZeros = clz(xMSD);
 
     int xBitLength = xLength * digitBits - msdLeadingZeros;
@@ -2667,6 +2778,7 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
     //                    <-->          <------>
     //              msdTopBit         digitBits
     //
+    uint64_t mantissa = doubleBits & 0x000FFFFFFFFFFFFF;
     mantissa |= 0x0010000000000000;
     const int mantissaTopBit = 52; // 0-indexed.
 
@@ -2713,7 +2825,7 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
         } else
             compareMantissa = 0;
 
-        Digit digit = x->digit(digitIndex);
+        Digit digit = x.digit(digitIndex);
         if (digit > compareMantissa)
             return xSign ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
         if (digit < compareMantissa)
@@ -2727,6 +2839,31 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
     }
 
     return ComparisonResult::Equal;
+}
+
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(int32_t x, double y)
+{
+    return compareToDouble(Int32BigIntImpl { x }, y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(int64_t x, double y)
+{
+    return compareToDouble(Int64BigIntImpl { x }, y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(uint64_t x, double y)
+{
+    return compareToDouble(Int64BigIntImpl { x }, y);
+}
+
+JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSValue x, double y)
+{
+    ASSERT(x.isBigInt());
+#if USE(BIGINT32)
+    if (x.isBigInt32())
+        return compareToDouble(x.bigInt32AsInt32(), y);
+#endif
+    return compareToDouble(x.asHeapBigInt(), y);
 }
 
 template <typename BigIntImpl>

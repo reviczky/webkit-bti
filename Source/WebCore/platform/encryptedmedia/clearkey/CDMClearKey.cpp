@@ -221,7 +221,7 @@ static Ref<SharedBuffer> extractKeyidsFromCencInitData(const SharedBuffer& initD
 
     object->setArray("kids"_s, WTFMove(keyIdsArray));
     CString jsonData = object->toJSONString().utf8();
-    return SharedBuffer::create(jsonData.data(), jsonData.length());
+    return SharedBuffer::create(jsonData.span());
 }
 
 static Ref<SharedBuffer> extractKeyIdFromWebMInitData(const SharedBuffer& initData)
@@ -242,8 +242,7 @@ static Ref<SharedBuffer> extractKeyIdFromWebMInitData(const SharedBuffer& initDa
     keyIdsArray->pushString(base64URLEncodeToString(initData.data(), initData.size()));
 
     object->setArray("kids"_s, WTFMove(keyIdsArray));
-    CString jsonData = object->toJSONString().utf8();
-    return SharedBuffer::create(jsonData.data(), jsonData.length());
+    return SharedBuffer::create(object->toJSONString().utf8().span());
 }
 
 CDMFactoryClearKey& CDMFactoryClearKey::singleton()
@@ -510,7 +509,7 @@ void CDMInstanceSessionClearKey::updateLicense(const String& sessionId, LicenseT
     if (parseLicenseReleaseAcknowledgementFormat(*root)) {
         LOG(EME, "EME - ClearKey - session %s release acknowledged, clearing all known keys", sessionId.utf8().data());
         parentInstance().unrefAllKeysFrom(m_keyStore);
-        m_keyStore.unrefAllKeys();
+        m_keyStore.clear();
         dispatchCallback(true, std::nullopt, SuccessValue::Succeeded);
         return;
     }
@@ -567,7 +566,7 @@ void CDMInstanceSessionClearKey::removeSessionData(const String& sessionId, Lice
         auto rootObject = JSON::Object::create();
         {
             auto array = JSON::Array::create();
-            for (const auto& key : m_keyStore) {
+            for (const auto& key : m_keyStore.values()) {
                 ASSERT(key->id().size() <= std::numeric_limits<unsigned>::max());
                 array->pushString(base64URLEncodeToString(key->id().data(), key->id().size()));
             }
@@ -576,11 +575,10 @@ void CDMInstanceSessionClearKey::removeSessionData(const String& sessionId, Lice
 
         // Copy the JSON data into a SharedBuffer object.
         String messageString = rootObject->toJSONString();
-        CString messageCString = messageString.utf8();
-        message = SharedBuffer::create(messageCString.data(), messageCString.length());
+        message = SharedBuffer::create(messageString.utf8().span());
     }
 
-    m_keyStore.unrefAllKeys();
+    m_keyStore.clear();
     dispatchCallback(WTFMove(keyStatusVector), Ref<SharedBuffer>(*message), SuccessValue::Succeeded);
 }
 

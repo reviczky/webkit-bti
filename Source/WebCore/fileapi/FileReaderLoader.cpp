@@ -135,12 +135,15 @@ void FileReaderLoader::cleanup()
     }
 }
 
-void FileReaderLoader::didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse& response)
+bool FileReaderLoader::processResponse(const ResourceResponse& response)
 {
     if (response.httpStatusCode() != httpStatus200OK) {
         failed(httpStatusCodeToErrorCode(response.httpStatusCode()));
-        return;
+        return false;
     }
+
+    if (m_readType == ReadType::ReadAsBinaryChunks)
+        return true;
 
     long long length = response.expectedContentLength();
 
@@ -155,7 +158,7 @@ void FileReaderLoader::didReceiveResponse(ResourceLoaderIdentifier, const Resour
     // FIXME: Support reading more than the current size limit of ArrayBuffer.
     if (length > std::numeric_limits<unsigned>::max()) {
         failed(ExceptionCode::NotReadableError);
-        return;
+        return false;
     }
 
     ASSERT(!m_rawData);
@@ -163,10 +166,17 @@ void FileReaderLoader::didReceiveResponse(ResourceLoaderIdentifier, const Resour
 
     if (!m_rawData) {
         failed(ExceptionCode::NotReadableError);
-        return;
+        return false;
     }
 
     m_totalBytes = static_cast<unsigned>(length);
+    return true;
+}
+
+void FileReaderLoader::didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse& response)
+{
+    if (!processResponse(response))
+        return;
 
     if (m_client)
         m_client->didStartLoading();
@@ -310,7 +320,7 @@ String FileReaderLoader::stringResult()
         // No conversion is needed.
         break;
     case ReadAsBinaryString:
-        m_stringResult = String(static_cast<const char*>(m_rawData->data()), m_bytesLoaded);
+        m_stringResult = m_rawData->span().first(m_bytesLoaded);
         break;
     case ReadAsText:
         convertToText();
@@ -341,9 +351,9 @@ void FileReaderLoader::convertToText()
     if (!m_decoder)
         m_decoder = TextResourceDecoder::create("text/plain"_s, m_encoding.isValid() ? m_encoding : PAL::UTF8Encoding());
     if (isCompleted())
-        m_stringResult = m_decoder->decodeAndFlush(static_cast<const char*>(m_rawData->data()), m_bytesLoaded);
+        m_stringResult = m_decoder->decodeAndFlush(m_rawData->span().first(m_bytesLoaded));
     else
-        m_stringResult = m_decoder->decode(static_cast<const char*>(m_rawData->data()), m_bytesLoaded);
+        m_stringResult = m_decoder->decode(m_rawData->span().first(m_bytesLoaded));
 }
 
 void FileReaderLoader::convertToDataURL()

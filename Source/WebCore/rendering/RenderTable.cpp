@@ -135,7 +135,7 @@ RenderTableSection* RenderTable::topSection() const
 void RenderTable::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
     RenderBlock::styleDidChange(diff, oldStyle);
-    propagateStyleToAnonymousChildren(PropagateToAllChildren);
+    propagateStyleToAnonymousChildren(StylePropagationType::AllChildren);
 
     bool oldFixedTableLayout = oldStyle ? oldStyle->isFixedTableLayout() : false;
 
@@ -272,8 +272,8 @@ void RenderTable::updateLogicalWidth()
     LayoutUnit containerWidthInInlineDirection = hasPerpendicularContainingBlock ? perpendicularContainingBlockLogicalHeight() : availableLogicalWidth;
 
     Length styleLogicalWidth = style().logicalWidth();
-    if (hasOverridingLogicalWidth())
-        setLogicalWidth(overridingLogicalWidth());
+    if (auto overridingLogicalWidth = this->overridingLogicalWidth())
+        setLogicalWidth(*overridingLogicalWidth);
     else if ((styleLogicalWidth.isSpecified() && styleLogicalWidth.isPositive()) || styleLogicalWidth.isIntrinsic())
         setLogicalWidth(convertStyleLogicalWidthToComputedWidth(styleLogicalWidth, containerWidthInInlineDirection));
     else {
@@ -526,8 +526,8 @@ void RenderTable::layout()
         if (logicalHeightLength.isIntrinsic() || (logicalHeightLength.isSpecified() && logicalHeightLength.isPositive()))
             computedLogicalHeight = convertStyleLogicalHeightToComputedHeight(logicalHeightLength);
 
-        if (hasOverridingLogicalHeight())
-            computedLogicalHeight = std::max(computedLogicalHeight, overridingLogicalHeight() - borderAndPaddingAfter - sumCaptionsLogicalHeight());
+        if (auto overridingLogicalHeight = this->overridingLogicalHeight())
+            computedLogicalHeight = std::max(computedLogicalHeight, *overridingLogicalHeight - borderAndPaddingAfter - sumCaptionsLogicalHeight());
 
         Length logicalMaxHeightLength = style().logicalMaxHeight();
         if (logicalMaxHeightLength.isFillAvailable() || (logicalMaxHeightLength.isSpecified() && !logicalMaxHeightLength.isNegative()
@@ -553,7 +553,12 @@ void RenderTable::layout()
             // Completely empty tables (with no sections or anything) should at least honor their
             // overriding or specified height in strict mode, but this value will not be cached.
             shouldCacheIntrinsicContentLogicalHeightForFlexItem = false;
-            setLogicalHeight(hasOverridingLogicalHeight() ? overridingLogicalHeight() - borderAndPaddingAfter : logicalHeight() + computedLogicalHeight);
+            auto tableLogicalHeight = [&] {
+                if (auto overridingLogicalHeight = this->overridingLogicalHeight())
+                    return *overridingLogicalHeight - borderAndPaddingAfter;
+                return logicalHeight() + computedLogicalHeight;
+            };
+            setLogicalHeight(tableLogicalHeight());
         }
 
         LayoutUnit sectionLogicalLeft = style().isLeftToRightDirection() ? borderStart() : borderEnd();
@@ -736,7 +741,7 @@ void RenderTable::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 void RenderTable::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     PaintPhase paintPhase = paintInfo.phase;
-    if ((paintPhase == PaintPhase::BlockBackground || paintPhase == PaintPhase::ChildBlockBackground) && hasVisibleBoxDecorations() && style().visibility() == Visibility::Visible)
+    if ((paintPhase == PaintPhase::BlockBackground || paintPhase == PaintPhase::ChildBlockBackground) && hasVisibleBoxDecorations() && style().usedVisibility() == Visibility::Visible)
         paintBoxDecorations(paintInfo, paintOffset);
 
     if (paintPhase == PaintPhase::Mask) {
@@ -766,7 +771,7 @@ void RenderTable::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
         }
     }
     
-    if (collapseBorders() && paintPhase == PaintPhase::ChildBlockBackground && style().visibility() == Visibility::Visible) {
+    if (collapseBorders() && paintPhase == PaintPhase::ChildBlockBackground && style().usedVisibility() == Visibility::Visible) {
         recalcCollapsedBorders();
         // Using our cached sorted styles, we then do individual passes,
         // painting each style of border from lowest precedence to highest precedence.
@@ -783,7 +788,7 @@ void RenderTable::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
     }
 
     // Paint outline.
-    if ((paintPhase == PaintPhase::Outline || paintPhase == PaintPhase::SelfOutline) && hasOutline() && style().visibility() == Visibility::Visible)
+    if ((paintPhase == PaintPhase::Outline || paintPhase == PaintPhase::SelfOutline) && hasOutline() && style().usedVisibility() == Visibility::Visible)
         paintOutline(paintInfo, LayoutRect(paintOffset, size()));
 }
 
@@ -842,7 +847,7 @@ void RenderTable::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& p
 
 void RenderTable::paintMask(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    if (style().visibility() != Visibility::Visible || paintInfo.phase != PaintPhase::Mask)
+    if (style().usedVisibility() != Visibility::Visible || paintInfo.phase != PaintPhase::Mask)
         return;
 
     LayoutRect rect(paintOffset, size());
@@ -889,9 +894,9 @@ void RenderTable::computePreferredLogicalWidths()
     for (unsigned i = 0; i < m_captions.size(); i++)
         m_minPreferredLogicalWidth = std::max(m_minPreferredLogicalWidth, m_captions[i]->minPreferredLogicalWidth());
 
-    if (hasOverridingLogicalWidth()) {
-        m_minPreferredLogicalWidth = std::max(m_minPreferredLogicalWidth, overridingLogicalWidth());
-        m_maxPreferredLogicalWidth = std::max(m_maxPreferredLogicalWidth, overridingLogicalWidth());
+    if (auto overridingLogicalWidth = this->overridingLogicalWidth()) {
+        m_minPreferredLogicalWidth = std::max(m_minPreferredLogicalWidth, *overridingLogicalWidth);
+        m_maxPreferredLogicalWidth = std::max(m_maxPreferredLogicalWidth, *overridingLogicalWidth);
     }
 
     auto& styleToUse = style();
@@ -1635,7 +1640,7 @@ bool RenderTable::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
     LayoutRect boundsRect(adjustedLocation, size());
     if (visibleToHitTesting(request) && (action == HitTestBlockBackground || action == HitTestChildBlockBackground) && locationInContainer.intersects(boundsRect)) {
         updateHitTestResult(result, flipForWritingMode(locationInContainer.point() - toLayoutSize(adjustedLocation)));
-        if (result.addNodeToListBasedTestResult(nodeForHitTest(), request, locationInContainer, boundsRect) == HitTestProgress::Stop)
+        if (result.addNodeToListBasedTestResult(protectedNodeForHitTest().get(), request, locationInContainer, boundsRect) == HitTestProgress::Stop)
             return true;
     }
 

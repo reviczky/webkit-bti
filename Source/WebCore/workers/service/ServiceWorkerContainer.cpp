@@ -106,6 +106,16 @@ void ServiceWorkerContainer::derefEventTarget()
     m_navigator.deref();
 }
 
+void ServiceWorkerContainer::ref() const
+{
+    m_navigator.ref();
+}
+
+void ServiceWorkerContainer::deref() const
+{
+    m_navigator.deref();
+}
+
 auto ServiceWorkerContainer::ready() -> ReadyPromise&
 {
     if (!m_readyPromise) {
@@ -565,11 +575,6 @@ void ServiceWorkerContainer::destroyJob(ServiceWorkerJob& job)
     ASSERT(m_creationThread.ptr() == &Thread::current());
     ASSERT(m_jobMap.contains(job.identifier()));
     m_jobMap.remove(job.identifier());
-}
-
-const char* ServiceWorkerContainer::activeDOMObjectName() const
-{
-    return "ServiceWorkerContainer";
 }
 
 SWClientConnection& ServiceWorkerContainer::ensureSWClientConnection()

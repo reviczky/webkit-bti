@@ -62,14 +62,14 @@ static bool shouldRemoveFragmentIdentifier(const String& mediaType)
 
 static WorkQueue& decodeQueue()
 {
-    static auto& queue = WorkQueue::create("org.webkit.DataURLDecoder", WorkQueue::QOS::UserInitiated).leakRef();
+    static auto& queue = WorkQueue::create("org.webkit.DataURLDecoder"_s, WorkQueue::QOS::UserInitiated).leakRef();
     return queue;
 }
 
 static Result parseMediaType(const String& mediaType)
 {
     if (std::optional<ParsedContentType> parsedContentType = ParsedContentType::create(mediaType))
-        return { parsedContentType->mimeType(), parsedContentType->charset(), parsedContentType->serialize(), { } };
+        return { parsedContentType->mimeType().isolatedCopy(), parsedContentType->charset().isolatedCopy(), parsedContentType->serialize().isolatedCopy(), { } };
     return { "text/plain"_s, "US-ASCII"_s, "text/plain;charset=US-ASCII"_s, { } };
 }
 

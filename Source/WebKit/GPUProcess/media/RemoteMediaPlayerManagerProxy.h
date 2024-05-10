@@ -36,7 +36,17 @@
 #include <WebCore/ShareableBitmap.h>
 #include <wtf/Lock.h>
 #include <wtf/Logger.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class RemoteMediaPlayerManagerProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteMediaPlayerManagerProxy> : std::true_type { };
+}
 
 namespace WebKit {
 
@@ -52,7 +62,7 @@ public:
     explicit RemoteMediaPlayerManagerProxy(GPUConnectionToWebProcess&);
     ~RemoteMediaPlayerManagerProxy();
 
-    GPUConnectionToWebProcess* gpuConnectionToWebProcess() { return m_gpuConnectionToWebProcess.get(); }
+    RefPtr<GPUConnectionToWebProcess> gpuConnectionToWebProcess() { return m_gpuConnectionToWebProcess.get(); }
     void clear();
 
 #if !RELEASE_LOG_DISABLED
@@ -82,7 +92,7 @@ private:
     void supportsKeySystem(WebCore::MediaPlayerEnums::MediaEngineIdentifier, const String&&, const String&&, CompletionHandler<void(bool)>&&);
 
     HashMap<WebCore::MediaPlayerIdentifier, Ref<RemoteMediaPlayerProxy>> m_proxies;
-    WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
 
 #if !RELEASE_LOG_DISABLED
     RefPtr<Logger> m_logger;

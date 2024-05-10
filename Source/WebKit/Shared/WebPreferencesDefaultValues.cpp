@@ -70,12 +70,12 @@ bool defaultShouldPrintBackgrounds()
 
 bool defaultAlternateFormControlDesignEnabled()
 {
-    return PAL::currentUserInterfaceIdiomIsVisionOrVisionLegacy();
+    return PAL::currentUserInterfaceIdiomIsVision();
 }
 
 bool defaultVideoFullscreenRequiresElementFullscreen()
 {
-    return PAL::currentUserInterfaceIdiomIsVisionOrVisionLegacy();
+    return PAL::currentUserInterfaceIdiomIsVision();
 }
 
 #endif
@@ -222,11 +222,20 @@ bool defaultShouldDropNearSuspendedAssertionAfterDelay()
 
 bool defaultShouldTakeNearSuspendedAssertion()
 {
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(COCOA)
     static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::FullySuspendsBackgroundContentImmediately);
     return !newSDK;
 #else
     return true;
+#endif
+}
+
+bool defaultLinearMediaPlayerEnabled()
+{
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+    return PAL::currentUserInterfaceIdiomIsVision();
+#else
+    return false;
 #endif
 }
 

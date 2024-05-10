@@ -87,6 +87,16 @@ void RenderGrid::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
         return;
 
     const RenderStyle& newStyle = this->style();
+
+    auto hasDifferentTrackSizes = [&newStyle, &oldStyle](GridTrackSizingDirection direction) {
+        return newStyle.gridTrackSizes(direction) != oldStyle->gridTrackSizes(direction);
+    };
+
+    if (hasDifferentTrackSizes(GridTrackSizingDirection::ForColumns) || hasDifferentTrackSizes(GridTrackSizingDirection::ForRows)) {
+        for (auto& child : childrenOfType<RenderBox>(*this))
+            child.setChildNeedsLayout();
+    }
+
     if (oldStyle->resolvedAlignItems(selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch) {
         // Style changes on the grid container implying stretching (to-stretch) or
         // shrinking (from-stretch) require the affected items to be laid out again.
@@ -295,7 +305,7 @@ void RenderGrid::layoutGrid(bool relayoutChildren)
         // FIXME: We should use RenderBlock::hasDefiniteLogicalHeight() only but it does not work for positioned stuff.
         // FIXME: Consider caching the hasDefiniteLogicalHeight value throughout the layout.
         // FIXME: We might need to cache the hasDefiniteLogicalHeight if the call of RenderBlock::hasDefiniteLogicalHeight() causes a relevant performance regression.
-        bool hasDefiniteLogicalHeight = RenderBlock::hasDefiniteLogicalHeight() || hasOverridingLogicalHeight() || computeContentLogicalHeight(MainOrPreferredSize, style().logicalHeight(), std::nullopt);
+        bool hasDefiniteLogicalHeight = RenderBlock::hasDefiniteLogicalHeight() || overridingLogicalHeight() || computeContentLogicalHeight(MainOrPreferredSize, style().logicalHeight(), std::nullopt);
 
         auto aspectRatioBlockSizeDependentGridItems = computeAspectRatioDependentAndBaselineItems();
 
@@ -330,8 +340,14 @@ void RenderGrid::layoutGrid(bool relayoutChildren)
             computeTrackSizesForIndefiniteSize(m_trackSizingAlgorithm, GridTrackSizingDirection::ForRows);
             if (shouldApplySizeContainment())
                 shouldRecomputeHeight = true;
-        } else
-            computeTrackSizesForDefiniteSize(GridTrackSizingDirection::ForRows, availableLogicalHeight(ExcludeMarginBorderPadding));
+        } else {
+            auto availableLogicalHeightForContentBox = [&] {
+                if (auto overridingLogicalHeight = this->overridingLogicalHeight())
+                    return constrainContentBoxLogicalHeightByMinMax(*overridingLogicalHeight - borderAndPaddingLogicalHeight(), { });
+                return availableLogicalHeight(ExcludeMarginBorderPadding);
+            };
+            computeTrackSizesForDefiniteSize(GridTrackSizingDirection::ForRows, availableLogicalHeightForContentBox());
+        }
 
         LayoutUnit trackBasedLogicalHeight = borderAndPaddingLogicalHeight() + scrollbarLogicalHeight();
         if (auto size = explicitIntrinsicInnerLogicalSize(GridTrackSizingDirection::ForRows))
@@ -418,7 +434,7 @@ void RenderGrid::layoutMasonry(bool relayoutChildren)
         // FIXME: We should use RenderBlock::hasDefiniteLogicalHeight() only but it does not work for positioned stuff.
         // FIXME: Consider caching the hasDefiniteLogicalHeight value throughout the layout.
         // FIXME: We might need to cache the hasDefiniteLogicalHeight if the call of RenderBlock::hasDefiniteLogicalHeight() causes a relevant performance regression.
-        bool hasDefiniteLogicalHeight = RenderBlock::hasDefiniteLogicalHeight() || hasOverridingLogicalHeight() || computeContentLogicalHeight(MainOrPreferredSize, style().logicalHeight(), std::nullopt);
+        bool hasDefiniteLogicalHeight = RenderBlock::hasDefiniteLogicalHeight() || overridingLogicalHeight() || computeContentLogicalHeight(MainOrPreferredSize, style().logicalHeight(), std::nullopt);
 
         auto aspectRatioBlockSizeDependentGridItems = computeAspectRatioDependentAndBaselineItems();
 
@@ -642,7 +658,7 @@ void RenderGrid::computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, Layo
     m_grid.m_currentGrid = std::ref(grid);
     GridTrackSizingAlgorithm algorithm(this, grid);
     // placeItemsOnGrid isn't const since it mutates our grid, but it's safe to do
-    // so here since we've overriden m_currentGrid with a stack based temporary.
+    // so here since we've overridden m_currentGrid with a stack based temporary.
     const_cast<RenderGrid&>(*this).placeItemsOnGrid(std::nullopt);
 
     performPreLayoutForGridItems(algorithm, ShouldUpdateGridAreaLogicalSize::No);
@@ -1437,9 +1453,8 @@ bool RenderGrid::hasStaticPositionForChild(const RenderBox& child, GridTrackSizi
 
 void RenderGrid::layoutPositionedObject(RenderBox& child, bool relayoutChildren, bool fixedPositionObjectsOnly)
 {
-    if (isSkippedContentRootForLayout()) {
-        child.clearNeedsLayoutForDescendants();
-        child.clearNeedsLayout();
+    if (isSkippedContentRoot()) {
+        child.clearNeedsLayoutForSkippedContent();
         return;
     }
 

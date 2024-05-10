@@ -60,9 +60,7 @@ WebCodecsAudioDecoder::WebCodecsAudioDecoder(ScriptExecutionContext& context, In
 {
 }
 
-WebCodecsAudioDecoder::~WebCodecsAudioDecoder()
-{
-}
+WebCodecsAudioDecoder::~WebCodecsAudioDecoder() = default;
 
 static bool isValidDecoderConfig(const WebCodecsAudioDecoderConfig& config)
 {
@@ -315,11 +313,6 @@ void WebCodecsAudioDecoder::stop()
 {
     m_state = WebCodecsCodecState::Closed;
     m_internalDecoder = nullptr;
-}
-
-const char* WebCodecsAudioDecoder::activeDOMObjectName() const
-{
-    return "AudioDecoder";
 }
 
 bool WebCodecsAudioDecoder::virtualHasPendingActivity() const

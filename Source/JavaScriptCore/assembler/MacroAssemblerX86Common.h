@@ -892,10 +892,20 @@ public:
         sub32(right, dest);
     }
 
-    void sub32(RegisterID left, TrustedImm32 right, RegisterID dest)
+    void sub32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
-        move(left, dest);
-        sub32(right, dest);
+        if (!imm.m_value) {
+            zeroExtend32ToWord(src, dest);
+            return;
+        }
+
+        if (src == dest) {
+            sub32(imm, dest);
+            return;
+        }
+
+        // Add a negative using lea
+        m_assembler.leal_mr(WTF::negate(imm.m_value), src, dest);
     }
 
     void sub32(TrustedImm32 imm, RegisterID dest)
@@ -3008,6 +3018,13 @@ public:
         return Jump(m_assembler.jCC(x86Condition(cond)));
     }
 
+    Jump branch16(RelationalCondition cond, Address left, TrustedImm32 right)
+    {
+        TrustedImm32 right16(static_cast<int16_t>(right.m_value));
+        m_assembler.cmpw_im(right16.m_value, left.offset, left.base);
+        return Jump(m_assembler.jCC(x86Condition(cond)));
+    }
+
     Jump branch32(RelationalCondition cond, RegisterID left, RegisterID right)
     {
         m_assembler.cmpl_rr(right, left);
@@ -3179,6 +3196,13 @@ public:
     {
         TrustedImm32 right8(static_cast<int8_t>(right.m_value));
         m_assembler.cmpb_im(right8.m_value, left.offset, left.base, left.index, left.scale);
+        return Jump(m_assembler.jCC(x86Condition(cond)));
+    }
+
+    Jump branch16(RelationalCondition cond, BaseIndex left, TrustedImm32 right)
+    {
+        TrustedImm32 right16(static_cast<int16_t>(right.m_value));
+        m_assembler.cmpw_im(right16.m_value, left.offset, left.base, left.index, left.scale);
         return Jump(m_assembler.jCC(x86Condition(cond)));
     }
 

@@ -153,8 +153,8 @@ void DOMCache::matchAll(std::optional<RequestInfo>&& info, CacheQueryOptions&& o
     }
 
     auto requestStart = MonotonicTime::now();
-    queryCache(WTFMove(resourceRequest), options, ShouldRetrieveResponses::Yes, [this, promise = WTFMove(promise), requestStart](auto&& result) mutable {
-        queueTaskKeepingObjectAlive(*this, TaskSource::DOMManipulation, [this, promise = WTFMove(promise), result = std::forward<decltype(result)>(result), requestStart]() mutable {
+    queryCache(WTFMove(resourceRequest), options, ShouldRetrieveResponses::Yes, [this, promise = WTFMove(promise), requestStart]<typename Result> (Result&& result) mutable {
+        queueTaskKeepingObjectAlive(*this, TaskSource::DOMManipulation, [this, promise = WTFMove(promise), result = std::forward<Result>(result), requestStart]() mutable {
             if (result.hasException()) {
                 promise.reject(result.releaseException());
                 return;
@@ -337,7 +337,7 @@ void DOMCache::addAll(Vector<RequestInfo>&& infos, DOMPromiseDeferred<void>&& pr
                 }
 
                 if (auto* chunk = result.returnValue())
-                    data.append(chunk->data(), chunk->size());
+                    data.append(*chunk);
                 else
                     taskHandler->addResponseBody(recordPosition, response, data.takeAsContiguous());
             });
@@ -416,7 +416,7 @@ void DOMCache::put(RequestInfo&& info, Ref<FetchResponse>&& response, DOMPromise
             }
 
             if (auto* chunk = result.returnValue())
-                data.append(chunk->data(), chunk->size());
+                data.append(*chunk);
             else
                 this->putWithResponseData(WTFMove(promise), WTFMove(request), WTFMove(response), RefPtr<SharedBuffer> { data.takeAsContiguous() });
         });
@@ -574,11 +574,6 @@ void DOMCache::stop()
         return;
     m_isStopped = true;
     m_connection->dereference(m_identifier);
-}
-
-const char* DOMCache::activeDOMObjectName() const
-{
-    return "Cache";
 }
 
 } // namespace WebCore

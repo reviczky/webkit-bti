@@ -32,7 +32,6 @@
 #include "SandboxExtension.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/IntDegrees.h>
-#include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/ShareableBitmap.h>
 #include <WebCore/Timer.h>
@@ -74,8 +73,10 @@ class RemoteAudioSessionProxyManager;
 class GPUProcess : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess> {
     WTF_MAKE_NONCOPYABLE(GPUProcess);
 public:
-    explicit GPUProcess(AuxiliaryProcessInitializationParameters&&);
+    GPUProcess();
     ~GPUProcess();
+
+    static GPUProcess& singleton();
     static constexpr WebCore::AuxiliaryProcessType processType = WebCore::AuxiliaryProcessType::GPU;
 
     void removeGPUConnectionToWebProcess(GPUConnectionToWebProcess&);
@@ -117,6 +118,10 @@ public:
     const String& applicationVisibleName() const { return m_applicationVisibleName; }
 
     void webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&&);
+
+#if USE(EXTENSIONKIT)
+    void resolveBookmarkDataForCacheDirectory(const std::span<const uint8_t>& bookmarkData);
+#endif
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     void processIsStartingToCaptureAudio(GPUConnectionToWebProcess&);
@@ -170,6 +175,7 @@ private:
 #endif
 #if HAVE(SCREEN_CAPTURE_KIT)
     void promptForGetDisplayMedia(WebCore::DisplayCapturePromptType, CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&&);
+    void cancelGetDisplayMediaPrompt();
 #endif
 #if PLATFORM(MAC)
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
@@ -182,7 +188,6 @@ private:
 #endif
 
 #if ENABLE(CFPREFS_DIRECT_MODE)
-    void notifyPreferencesChanged(const String& domain, const String& key, const std::optional<String>& encodedValue);
     void dispatchSimulatedNotificationsForPreferenceChange(const String& key) final;
 #endif
 

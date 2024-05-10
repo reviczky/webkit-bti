@@ -34,6 +34,7 @@
 namespace WebCore {
 
 class Shape;
+class RenderObject;
 
 namespace Layout {
 
@@ -43,8 +44,9 @@ class InitialContainingBlock;
 class LayoutState;
 class TreeBuilder;
 
-class Box : public CanMakeCheckedPtr {
+class Box : public CanMakeCheckedPtr<Box> {
     WTF_MAKE_ISO_ALLOCATED(Box);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(Box);
 public:
     enum class NodeType : uint8_t {
         Text,
@@ -193,10 +195,10 @@ public:
     BoxGeometry* cachedGeometryForLayoutState(const LayoutState&) const;
     void setCachedGeometryForLayoutState(LayoutState&, std::unique_ptr<BoxGeometry>) const;
 
-    UniqueRef<Box> removeFromParent();
+    RenderObject* rendererForIntegration() const { return m_renderer.get(); }
+    void setRendererForIntegration(RenderObject* renderer) { m_renderer = renderer; }
 
-    void incrementPtrCount() const { CanMakeCheckedPtr::incrementPtrCount(); }
-    void decrementPtrCount() const { CanMakeCheckedPtr::decrementPtrCount(); }
+    UniqueRef<Box> removeFromParent();
 
 protected:
     Box(ElementAttributes&&, RenderStyle&&, std::unique_ptr<RenderStyle>&& firstLineStyle, OptionSet<BaseTypeFlag>);
@@ -238,7 +240,7 @@ private:
     RenderStyle m_style;
 
     CheckedPtr<ElementBox> m_parent;
-    
+
     std::unique_ptr<Box> m_nextSibling;
     CheckedPtr<Box> m_previousSibling;
 
@@ -246,6 +248,7 @@ private:
     mutable WeakPtr<LayoutState> m_cachedLayoutState;
     mutable std::unique_ptr<BoxGeometry> m_cachedGeometryForLayoutState;
 
+    CheckedPtr<RenderObject> m_renderer;
 };
 
 inline bool Box::isContainingBlockForInFlow() const

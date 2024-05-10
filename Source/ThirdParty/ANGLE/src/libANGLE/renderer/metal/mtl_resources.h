@@ -217,6 +217,11 @@ class Texture final : public Resource,
     TextureRef createCubeFaceView(uint32_t face);
     // Create a view of one slice at a level.
     TextureRef createSliceMipView(uint32_t slice, const MipmapNativeLevel &level);
+    // Same as above but the target format must be compatible, for example sRGB to linear. In this
+    // case texture doesn't need format view usage flag.
+    TextureRef createSliceMipViewWithCompatibleFormat(uint32_t slice,
+                                                      const MipmapNativeLevel &level,
+                                                      MTLPixelFormat format);
     // Create a view of a level.
     TextureRef createMipView(const MipmapNativeLevel &level);
     // Create a view with different format
@@ -337,16 +342,18 @@ class Texture final : public Resource,
             bool renderTargetOnly);
 
     // Create a texture view
-    Texture(Texture *original, MTLPixelFormat format);
-    Texture(Texture *original, MTLTextureType type, NSRange mipmapLevelRange, NSRange slices);
-    Texture(Texture *original, MTLPixelFormat format, const TextureSwizzleChannels &swizzle);
-
-    // Creates a view for a shader image binding.
+    Texture(Texture *original, MTLPixelFormat pixelFormat);
     Texture(Texture *original,
-            MTLTextureType type,
-            const MipmapNativeLevel &level,
-            int layer,
-            MTLPixelFormat pixelFormat);
+            MTLPixelFormat pixelFormat,
+            MTLTextureType textureType,
+            NSRange levels,
+            NSRange slices);
+    Texture(Texture *original,
+            MTLPixelFormat pixelFormat,
+            MTLTextureType textureType,
+            NSRange levels,
+            NSRange slices,
+            const TextureSwizzleChannels &swizzle);
 
     void syncContentIfNeeded(ContextMtl *context);
 

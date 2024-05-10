@@ -134,7 +134,7 @@ void NetworkDataTaskDataURL::didDecodeDataURL(std::optional<WebCore::DataURLDeco
 
     m_response = ResourceResponse::dataURLResponse(firstRequest().url(), result.value());
 
-    didReceiveResponse(ResourceResponse(m_response), NegotiatedLegacyTLS::No, PrivateRelayed::No, [this, protectedThis = Ref { *this }, data = WTFMove(result.value().data)](PolicyAction policyAction) mutable {
+    didReceiveResponse(ResourceResponse(m_response), NegotiatedLegacyTLS::No, PrivateRelayed::No, std::nullopt, [this, protectedThis = Ref { *this }, data = WTFMove(result.value().data)](PolicyAction policyAction) mutable {
         if (m_state == State::Canceling || m_state == State::Completed)
             return;
 
@@ -186,7 +186,7 @@ void NetworkDataTaskDataURL::downloadDecodedData(Vector<uint8_t>&& data)
 #elif USE(SOUP)
         ResourceError error(downloadDestinationError(m_response, "Cannot write destination file."_s));
 #endif
-        downloadPtr->didFail(error, IPC::DataReference());
+        downloadPtr->didFail(error, { });
         invalidateAndCancel();
         return;
     }

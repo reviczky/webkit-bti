@@ -28,101 +28,23 @@
 #include "ArgumentCoders.h"
 #include "Decoder.h"
 #include "Encoder.h"
-#include <WebCore/AutoplayEvent.h>
-#include <WebCore/ColorSpace.h>
-#include <WebCore/DisplayListItems.h>
-#include <WebCore/FloatRoundedRect.h>
-#include <WebCore/FloatSize.h>
-#include <WebCore/FrameLoaderTypes.h>
-#include <WebCore/IndexedDB.h>
-#include <WebCore/InputMode.h>
-#include <WebCore/LayoutPoint.h>
-#include <WebCore/LayoutSize.h>
-#include <WebCore/MediaSelectionOption.h>
-#include <WebCore/NetworkLoadMetrics.h>
-#include <WebCore/NotificationDirection.h>
-#include <WebCore/RealtimeMediaSource.h>
-#include <WebCore/RenderingMode.h>
-#include <WebCore/ScrollSnapOffsetsInfo.h>
-#include <WebCore/ScrollTypes.h>
-#include <WebCore/SerializedPlatformDataCueValue.h>
-#include <WebCore/ServiceWorkerTypes.h>
-#include <WebCore/StoredCredentialsPolicy.h>
-#include <WebCore/WorkerType.h>
+#include <WebCore/FontPlatformData.h>
 #include <wtf/ArgumentCoder.h>
 #include <wtf/EnumTraits.h>
 
-#if ENABLE(APPLE_PAY)
-#include <WebCore/PaymentHeaders.h>
-#endif
-
-#if USE(CURL)
-#include <WebCore/CurlProxySettings.h>
-#endif
-
-#if PLATFORM(IOS_FAMILY)
-#include <WebCore/InspectorOverlay.h>
+#if USE(SKIA)
+#include <skia/core/SkColorSpace.h>
+#include <skia/core/SkData.h>
 #endif
 
 #if PLATFORM(GTK)
 #include "ArgumentCodersGtk.h"
 #endif
 
-#if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
-#include <WebCore/GraphicsContextGL.h>
-#include <WebCore/GraphicsContextGLEnums.h>
-#endif
-
-#if ENABLE(WEBXR)
-#include <WebCore/PlatformXR.h>
-#endif
-
-#if ENABLE(CONTENT_FILTERING)
-#include <WebCore/MockContentFilterSettings.h>
-#endif
-
-#if PLATFORM(COCOA)
-#include "ArgumentCodersCF.h"
-#endif
-
-OBJC_CLASS VKCImageAnalysis;
-
-#if USE(AVFOUNDATION)
-typedef struct __CVBuffer* CVPixelBufferRef;
-#endif
-
 namespace WebCore {
 
-class AppKitControlSystemImage;
-class BlobPart;
-class Credential;
-class Cursor;
-class FilterEffect;
-class FilterFunction;
-class FilterOperation;
-class FilterOperations;
-class FixedPositionViewportConstraints;
 class Font;
 class FontPlatformData;
-class FragmentedSharedBuffer;
-class PaymentInstallmentConfiguration;
-class PixelBuffer;
-class SerializedScriptValue;
-class SharedBuffer;
-class StickyPositionViewportConstraints;
-class SystemImage;
-
-struct CompositionUnderline;
-struct DataDetectorElementInfo;
-struct SoupNetworkProxySettings;
-struct ViewportArguments;
-
-template <class>
-struct PathCommand;
-
-namespace DOMCacheEngine {
-struct Record;
-}
 
 } // namespace WebCore
 
@@ -136,11 +58,11 @@ template<> struct ArgumentCoder<WebCore::Font> {
     static std::optional<WebCore::FontPlatformData> decodePlatformData(Decoder&);
 };
 
-template<> struct ArgumentCoder<WebCore::FontPlatformData::Attributes> {
-    static void encode(Encoder&, const WebCore::FontPlatformData::Attributes&);
-    static std::optional<WebCore::FontPlatformData::Attributes> decode(Decoder&);
-    static void encodePlatformData(Encoder&, const WebCore::FontPlatformData::Attributes&);
-    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::FontPlatformData::Attributes&);
+template<> struct ArgumentCoder<WebCore::FontPlatformDataAttributes> {
+    static void encode(Encoder&, const WebCore::FontPlatformDataAttributes&);
+    static std::optional<WebCore::FontPlatformDataAttributes> decode(Decoder&);
+    static void encodePlatformData(Encoder&, const WebCore::FontPlatformDataAttributes&);
+    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::FontPlatformDataAttributes&);
 };
 
 template<> struct ArgumentCoder<WebCore::FontCustomPlatformData> {
@@ -149,66 +71,18 @@ template<> struct ArgumentCoder<WebCore::FontCustomPlatformData> {
 };
 #endif
 
-#if USE(APPKIT)
-
-template<> struct ArgumentCoder<WebCore::AppKitControlSystemImage> {
-    template<typename Encoder>
-    static void encode(Encoder&, const WebCore::AppKitControlSystemImage&);
-    static std::optional<Ref<WebCore::AppKitControlSystemImage>> decode(Decoder&);
+#if USE(SKIA)
+template<> struct ArgumentCoder<sk_sp<SkColorSpace>> {
+    static void encode(Encoder&, const sk_sp<SkColorSpace>&);
+    static void encode(StreamConnectionEncoder&, const sk_sp<SkColorSpace>&);
+    static std::optional<sk_sp<SkColorSpace>> decode(Decoder&);
 };
 
-#endif
-
-#if USE(SOUP)
-template<> struct ArgumentCoder<WebCore::SoupNetworkProxySettings> {
-    static void encode(Encoder&, const WebCore::SoupNetworkProxySettings&);
-    static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::SoupNetworkProxySettings&);
+template<> struct ArgumentCoder<sk_sp<SkData>> {
+    static void encode(Encoder&, const sk_sp<SkData>&);
+    static void encode(StreamConnectionEncoder&, const sk_sp<SkData>&);
+    static std::optional<sk_sp<SkData>> decode(Decoder&);
 };
-#endif
-
-#if USE(CURL)
-template<> struct ArgumentCoder<WebCore::CurlProxySettings> {
-    static void encode(Encoder&, const WebCore::CurlProxySettings&);
-    static std::optional<WebCore::CurlProxySettings> decode(Decoder&);
-};
-#endif
-
-template<> struct ArgumentCoder<WebCore::FragmentedSharedBuffer> {
-    static void encode(Encoder&, const WebCore::FragmentedSharedBuffer&);
-    static std::optional<Ref<WebCore::FragmentedSharedBuffer>> decode(Decoder&);
-};
-
-#if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
-
-template<> struct ArgumentCoder<RetainPtr<VKCImageAnalysis>> {
-    static void encode(Encoder&, const RetainPtr<VKCImageAnalysis>&);
-    static WARN_UNUSED_RETURN std::optional<RetainPtr<VKCImageAnalysis>> decode(Decoder&);
-};
-
-#endif // ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
-
-#if USE(AVFOUNDATION)
-
-template<> struct ArgumentCoder<RetainPtr<CVPixelBufferRef>> {
-    static void encode(Encoder&, const RetainPtr<CVPixelBufferRef>&);
-    static std::optional<RetainPtr<CVPixelBufferRef>> decode(Decoder&);
-};
-
 #endif
 
 } // namespace IPC
-
-namespace WTF {
-
-#if USE(CURL)
-template <> struct EnumTraits<WebCore::CurlProxySettings::Mode> {
-    using values = EnumValues<
-        WebCore::CurlProxySettings::Mode,
-        WebCore::CurlProxySettings::Mode::Default,
-        WebCore::CurlProxySettings::Mode::NoProxy,
-        WebCore::CurlProxySettings::Mode::Custom
-    >;
-};
-#endif
-
-} // namespace WTF

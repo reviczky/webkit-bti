@@ -45,7 +45,6 @@
 #include "JSWebAssemblyStruct.h"
 #include "MacroAssembler.h"
 #include "RegisterSet.h"
-#include "WasmB3IRGenerator.h"
 #include "WasmBBQDisassembler.h"
 #include "WasmCallingConvention.h"
 #include "WasmCompilationMode.h"
@@ -56,6 +55,7 @@
 #include "WasmMemoryInformation.h"
 #include "WasmModule.h"
 #include "WasmModuleInformation.h"
+#include "WasmOMGIRGenerator.h"
 #include "WasmOperations.h"
 #include "WasmOps.h"
 #include "WasmThunks.h"
@@ -2132,10 +2132,9 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addStructNewDefault(uint32_t typeIndex,
     result = topValue(TypeKind::I64);
     emitCCall(operationWasmStructNewEmpty, arguments, result);
 
-    // FIXME: What about OOM?
-
     const auto& structType = *m_info.typeSignatures[typeIndex]->expand().template as<StructType>();
     Location structLocation = allocate(result);
+    emitThrowOnNullReference(ExceptionType::BadStructNew, structLocation);
     m_jit.loadPtr(MacroAssembler::Address(structLocation.asGPR(), JSWebAssemblyStruct::offsetOfPayload()), wasmScratchGPR);
     for (StructFieldCount i = 0; i < structType.fieldCount(); ++i) {
         if (Wasm::isRefType(structType.field(i).type))
@@ -2166,6 +2165,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addStructNew(uint32_t typeIndex, Vector
 
     const auto& structType = *m_info.typeSignatures[typeIndex]->expand().template as<StructType>();
     Location structLocation = allocate(allocationResult);
+    emitThrowOnNullReference(ExceptionType::BadStructNew, structLocation);
     m_jit.loadPtr(MacroAssembler::Address(structLocation.asGPR(), JSWebAssemblyStruct::offsetOfPayload()), wasmScratchGPR);
     bool hasRefTypeField = false;
     for (uint32_t i = 0; i < args.size(); ++i) {
@@ -2201,7 +2201,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addStructGet(ExtGCOpType structGetKind,
         return { };
     }
 
-    Location structLocation = allocate(structValue);
+    Location structLocation = loadIfNecessary(structValue);
     emitThrowOnNullReference(ExceptionType::NullStructGet, structLocation);
 
     m_jit.loadPtr(MacroAssembler::Address(structLocation.asGPR(), JSWebAssemblyStruct::offsetOfPayload()), wasmScratchGPR);
@@ -2310,8 +2310,12 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64Add(Value lhs, Value rhs, Value& 
             m_jit.add64(lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
         ),
         BLOCK(
-            m_jit.move(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
-            m_jit.add64(TrustedImm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
+            if (LIKELY(isRepresentableAs<int32_t>(ImmHelpers::imm(lhs, rhs).asI64())))
+                m_jit.add64(TrustedImm32(ImmHelpers::imm(lhs, rhs).asI64()), ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
+            else {
+                m_jit.move(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
+                m_jit.add64(Imm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
+            }
         )
     );
 }
@@ -2326,9 +2330,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64Sub(Value lhs, Value rhs, Value& 
         ),
         BLOCK(
             if (rhs.isConst()) {
-                // Add a negative if rhs is a constant.
-                m_jit.move(lhsLocation.asGPR(), resultLocation.asGPR());
-                m_jit.add64(TrustedImm64(-rhs.asI64()), resultLocation.asGPR());
+                m_jit.sub64(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), Imm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
             } else {
                 emitMoveConst(lhs, Location::fromGPR(wasmScratchGPR));
                 m_jit.sub64(wasmScratchGPR, rhsLocation.asGPR(), resultLocation.asGPR());
@@ -2367,8 +2369,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64And(Value lhs, Value rhs, Value& 
             m_jit.and64(lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
         ),
         BLOCK(
-            m_jit.move(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
-            m_jit.and64(TrustedImm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
+            m_jit.and64(Imm64(ImmHelpers::imm(lhs, rhs).asI64()), ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
         )
     );
 }
@@ -2382,8 +2383,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64Xor(Value lhs, Value rhs, Value& 
             m_jit.xor64(lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
         ),
         BLOCK(
-            m_jit.move(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
-            m_jit.xor64(TrustedImm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
+            m_jit.xor64(Imm64(ImmHelpers::imm(lhs, rhs).asI64()), ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
         )
     );
 }
@@ -2397,8 +2397,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addI64Or(Value lhs, Value rhs, Value& r
             m_jit.or64(lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
         ),
         BLOCK(
-            m_jit.move(ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
-            m_jit.or64(TrustedImm64(ImmHelpers::imm(lhs, rhs).asI64()), resultLocation.asGPR());
+            m_jit.or64(Imm64(ImmHelpers::imm(lhs, rhs).asI64()), ImmHelpers::regLocation(lhsLocation, rhsLocation).asGPR(), resultLocation.asGPR());
         )
     );
 }
@@ -2562,9 +2561,10 @@ PartialResult BBQJIT::emitCompareI64(const char* opcode, Value& lhs, Value& rhs,
             m_jit.compare64(condition, lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
         ),
         BLOCK(
-            ImmHelpers::immLocation(lhsLocation, rhsLocation) = Location::fromGPR(wasmScratchGPR);
-            emitMoveConst(ImmHelpers::imm(lhs, rhs), Location::fromGPR(wasmScratchGPR));
-            m_jit.compare64(condition, lhsLocation.asGPR(), rhsLocation.asGPR(), resultLocation.asGPR());
+            if (lhs.isConst())
+                m_jit.compare64(condition, Imm64(lhs.asI64()), rhsLocation.asGPR(), resultLocation.asGPR());
+            else
+                m_jit.compare64(condition, lhsLocation.asGPR(), Imm64(rhs.asI64()), resultLocation.asGPR());
         )
     )
 }

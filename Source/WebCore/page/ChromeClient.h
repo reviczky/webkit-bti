@@ -248,6 +248,7 @@ public:
     virtual FloatSize screenSize() const { return const_cast<ChromeClient&>(*this).windowRect().size(); }
     virtual FloatSize availableScreenSize() const { return const_cast<ChromeClient&>(*this).windowRect().size(); }
     virtual FloatSize overrideScreenSize() const { return const_cast<ChromeClient&>(*this).windowRect().size(); }
+    virtual FloatSize overrideAvailableScreenSize() const { return const_cast<ChromeClient&>(*this).windowRect().size(); }
 
     virtual void dispatchDisabledAdaptationsDidChange(const OptionSet<DisabledAdaptations>&) const { }
     virtual void dispatchViewportPropertiesDidChange(const ViewportArguments&) const { }
@@ -281,7 +282,7 @@ public:
     // size or past the amount of free space on the device. 
     // The chrome client would need to take some action such as evicting some
     // old caches.
-    virtual void reachedMaxAppCacheSize(int64_t spaceNeeded) = 0;
+    virtual void reachedMaxAppCacheSize(int64_t) { }
 
     // Callback invoked when the application cache origin quota is reached. This
     // means that the resources attempting to be cached via the manifest are
@@ -291,7 +292,7 @@ public:
     // storage, in bytes, needed to store the new cache along with all of the
     // other existing caches for the origin that would not be replaced by
     // the new cache.
-    virtual void reachedApplicationCacheOriginQuota(SecurityOrigin&, int64_t totalSpaceNeeded) = 0;
+    virtual void reachedApplicationCacheOriginQuota(SecurityOrigin&, int64_t) { }
 
     virtual std::unique_ptr<WorkerClient> createWorkerClient(SerialFunctionDispatcher&) { return nullptr; }
 
@@ -432,7 +433,7 @@ public:
     virtual bool layerTreeStateIsFrozen() const { return false; }
 
     virtual RefPtr<ScrollingCoordinator> createScrollingCoordinator(Page&) const { return nullptr; }
-    WEBCORE_EXPORT virtual std::unique_ptr<ScrollbarsController> createScrollbarsController(Page&, ScrollableArea&) const;
+    WEBCORE_EXPORT virtual void ensureScrollbarsController(Page&, ScrollableArea&) const;
 
     virtual bool canEnterVideoFullscreen(HTMLMediaElementEnums::VideoFullscreenMode) const { return false; }
     virtual bool supportsVideoFullscreen(HTMLMediaElementEnums::VideoFullscreenMode) { return false; }
@@ -548,9 +549,6 @@ public:
     virtual void isPlayingMediaDidChange(MediaProducerMediaStateFlags) { }
     virtual void handleAutoplayEvent(AutoplayEvent, OptionSet<AutoplayEventFlags>) { }
 
-    virtual bool wrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const { return false; }
-    virtual bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const { return false; }
-
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
     virtual void handleTelephoneNumberClick(const String&, const IntPoint&, const IntRect&) { }
 #endif
@@ -656,6 +654,8 @@ public:
     virtual bool isInStableState() const { return true; }
 
     virtual FloatSize screenSizeForFingerprintingProtections(const LocalFrame&, FloatSize defaultSize) const { return defaultSize; }
+
+    virtual void didAdjustVisibilityWithSelectors(Vector<String>&&) { }
 
     WEBCORE_EXPORT virtual ~ChromeClient();
 

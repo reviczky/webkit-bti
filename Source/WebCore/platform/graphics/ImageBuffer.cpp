@@ -47,6 +47,10 @@
 #if USE(CAIRO)
 #include "ImageBufferUtilitiesCairo.h"
 #endif
+#if USE(SKIA)
+#include "ImageBufferSkiaAcceleratedBackend.h"
+#include "ImageBufferUtilitiesSkia.h"
+#endif
 
 #if HAVE(IOSURFACE)
 #include "ImageBufferIOSurfaceBackend.h"
@@ -76,6 +80,13 @@ RefPtr<ImageBuffer> ImageBuffer::create(const FloatSize& size, RenderingPurpose 
         if (graphicsClient)
             creationContext.displayID = graphicsClient->displayID();
         if (auto imageBuffer = ImageBuffer::create<ImageBufferIOSurfaceBackend>(size, resolutionScale, colorSpace, pixelFormat, purpose, creationContext))
+            return imageBuffer;
+    }
+#endif
+
+#if USE(SKIA)
+    if (options.contains(ImageBufferOptions::Accelerated)) {
+        if (auto imageBuffer = ImageBuffer::create<ImageBufferSkiaAcceleratedBackend>(size, resolutionScale, colorSpace, pixelFormat, purpose, { }))
             return imageBuffer;
     }
 #endif

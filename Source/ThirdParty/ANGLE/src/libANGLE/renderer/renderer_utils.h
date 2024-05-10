@@ -226,7 +226,6 @@ class IncompleteTextureSet final : angle::NonCopyable
     using TextureMapWithSamplerFormat = angle::PackedEnumMap<gl::SamplerFormat, gl::TextureMap>;
 
     TextureMapWithSamplerFormat mIncompleteTextures;
-    gl::Buffer *mIncompleteTextureBufferAttachment;
 };
 
 // Helpers to set a matrix uniform value based on GLSL or HLSL semantics.
@@ -278,7 +277,8 @@ angle::Result GetVertexRangeInfo(const gl::Context *context,
 gl::Rectangle ClipRectToScissor(const gl::State &glState, const gl::Rectangle &rect, bool invertY);
 
 // Helper method to intialize a FeatureSet with overrides from the DisplayState
-void ApplyFeatureOverrides(angle::FeatureSetBase *features, const egl::DisplayState &state);
+void ApplyFeatureOverrides(angle::FeatureSetBase *features,
+                           const angle::FeatureOverrides &overrides);
 
 template <typename In>
 uint32_t LineLoopRestartIndexCountHelper(GLsizei indexCount, const uint8_t *srcPtr)
@@ -452,6 +452,17 @@ template <bool swizzledLuma = true>
 const gl::ColorGeneric AdjustBorderColor(const angle::ColorGeneric &borderColorGeneric,
                                          const angle::Format &format,
                                          bool stencilMode);
+
+template <typename LargerInt>
+GLint LimitToInt(const LargerInt physicalDeviceValue)
+{
+    static_assert(sizeof(LargerInt) >= sizeof(int32_t), "Incorrect usage of LimitToInt");
+
+    // Limit to INT_MAX / 2 instead of INT_MAX.  If the limit is queried as float, the imprecision
+    // in floating point can cause the value to exceed INT_MAX.  This trips dEQP up.
+    return static_cast<GLint>(std::min(
+        physicalDeviceValue, static_cast<LargerInt>(std::numeric_limits<int32_t>::max() / 2)));
+}
 
 enum class PipelineType
 {

@@ -23,10 +23,20 @@
 #include "SVGPathUtilities.h"
 #include "SVGPropertyTraits.h"
 #include <wtf/Vector.h>
+#include <wtf/WeakPtr.h>
+
+namespace WebCore {
+class SVGPathByteStream;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::SVGPathByteStream> : std::true_type { };
+}
 
 namespace WebCore {
 
-class SVGPathByteStream {
+class SVGPathByteStream : public CanMakeSingleThreadWeakPtr<SVGPathByteStream> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     typedef Vector<uint8_t> Data;
@@ -40,6 +50,7 @@ public:
     }
 
     SVGPathByteStream(const SVGPathByteStream& other)
+        : CanMakeSingleThreadWeakPtr<SVGPathByteStream>()
     {
         *this = other;
     }
@@ -70,7 +81,7 @@ public:
         return *this;
     }
 
-    friend bool operator==(const SVGPathByteStream&, const SVGPathByteStream&) = default;
+    friend bool operator==(const SVGPathByteStream& a, const SVGPathByteStream& b) { return a.m_data == b.m_data; }
 
     std::unique_ptr<SVGPathByteStream> copy() const
     {

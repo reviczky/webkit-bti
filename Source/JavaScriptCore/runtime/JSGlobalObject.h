@@ -380,8 +380,11 @@ public:
 #undef DEFINE_STORAGE_FOR_SIMPLE_TYPE_STRUCTURE
 #undef DEFINE_STORAGE_FOR_LAZY_TYPE
 
-    WriteBarrier<GetterSetter> m_speciesGetterSetter;
-    
+    WriteBarrier<GetterSetter> m_arraySpeciesGetterSetter;
+    WriteBarrier<GetterSetter> m_typedArraySpeciesGetterSetter;
+    WriteBarrier<GetterSetter> m_arrayBufferSpeciesGetterSetter;
+    WriteBarrier<GetterSetter> m_sharedArrayBufferSpeciesGetterSetter;
+
     LazyProperty<JSGlobalObject, JSTypedArrayViewPrototype> m_typedArrayProto;
     LazyProperty<JSGlobalObject, JSTypedArrayViewConstructor> m_typedArraySuperConstructor;
     
@@ -414,6 +417,7 @@ public:
     Ref<WatchpointSet> m_varInjectionWatchpointSet;
     Ref<WatchpointSet> m_varReadOnlyWatchpointSet;
     Ref<WatchpointSet> m_regExpRecompiledWatchpointSet;
+    Ref<WatchpointSet> m_arrayBufferDetachWatchpointSet;
 
     struct RareData;
     std::unique_ptr<RareData> m_rareData;
@@ -433,6 +437,7 @@ public:
     InlineWatchpointSet m_setAddWatchpointSet { IsWatched };
     InlineWatchpointSet m_arraySpeciesWatchpointSet { ClearWatchpoint };
     InlineWatchpointSet m_arrayJoinWatchpointSet { IsWatched };
+    InlineWatchpointSet m_arrayNegativeOneWatchpointSet { IsWatched };
     InlineWatchpointSet m_arrayPrototypeChainIsSaneWatchpointSet { IsWatched };
     InlineWatchpointSet m_objectPrototypeChainIsSaneWatchpointSet { IsWatched };
     InlineWatchpointSet m_stringPrototypeChainIsSaneWatchpointSet { IsWatched };
@@ -467,6 +472,8 @@ public:
     std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>> m_stringIteratorPrototypeNextWatchpoint;
     std::unique_ptr<ObjectAdaptiveStructureWatchpoint> m_stringPrototypeSymbolReplaceMissWatchpoint;
     std::unique_ptr<ObjectAdaptiveStructureWatchpoint> m_objectPrototypeSymbolReplaceMissWatchpoint;
+    std::unique_ptr<ObjectAdaptiveStructureWatchpoint> m_arrayPrototypeNegativeOneMissWatchpoint;
+    std::unique_ptr<ObjectAdaptiveStructureWatchpoint> m_objectPrototypeNegativeOneMissWatchpoint;
     std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>> m_regExpPrototypeExecWatchpoint;
     std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>> m_regExpPrototypeGlobalWatchpoint;
     std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>> m_regExpPrototypeUnicodeWatchpoint;
@@ -507,6 +514,7 @@ public:
     InlineWatchpointSet& objectPrototypeChainIsSaneWatchpointSet() { return m_objectPrototypeChainIsSaneWatchpointSet; }
     InlineWatchpointSet& stringPrototypeChainIsSaneWatchpointSet() { return m_stringPrototypeChainIsSaneWatchpointSet; }
     InlineWatchpointSet& arrayJoinWatchpointSet() { return m_arrayJoinWatchpointSet; }
+    InlineWatchpointSet& arrayNegativeOneWatchpointSet() { return m_arrayNegativeOneWatchpointSet; }
     InlineWatchpointSet& numberToStringWatchpointSet()
     {
         RELEASE_ASSERT(Options::useJIT());
@@ -644,7 +652,8 @@ public:
     // The following accessors return pristine values, even if a script 
     // replaces the global object's associated property.
 
-    GetterSetter* speciesGetterSetter() const { return m_speciesGetterSetter.get(); }
+    GetterSetter* arraySpeciesGetterSetter() const { return m_arraySpeciesGetterSetter.get(); }
+    GetterSetter* typedArraySpeciesGetterSetter() const { return m_typedArraySpeciesGetterSetter.get(); }
 
     ArrayConstructor* arrayConstructor() const { return m_arrayConstructor.get(); }
     RegExpConstructor* regExpConstructor() const { return m_regExpConstructor.get(); }
@@ -885,7 +894,7 @@ public:
     unsigned* addressOfGlobalLexicalBindingEpoch() { return &m_globalLexicalBindingEpoch; }
 
     JS_EXPORT_PRIVATE void setConsoleClient(WeakPtr<ConsoleClient>&&);
-    WeakPtr<ConsoleClient> consoleClient() const { return m_consoleClient; }
+    JS_EXPORT_PRIVATE WeakPtr<ConsoleClient> consoleClient() const;
 
     void setName(const String&);
     const String& name() const { return m_name; }
@@ -904,6 +913,7 @@ public:
     inline Structure* arrayBufferStructure(ArrayBufferSharingMode) const;
     template<ArrayBufferSharingMode sharingMode> Structure* arrayBufferStructureWithSharingMode() const { return arrayBufferStructure(sharingMode); }
     inline JSObject* arrayBufferConstructor(ArrayBufferSharingMode) const;
+    inline GetterSetter* arrayBufferSpeciesGetterSetter(ArrayBufferSharingMode) const;
 
 #define DEFINE_ACCESSORS_FOR_SIMPLE_TYPE(capitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) \
     Structure* properName ## Structure() { return m_ ## properName ## Structure.get(); }
@@ -944,6 +954,7 @@ public:
     WatchpointSet& varInjectionWatchpointSet() { return m_varInjectionWatchpointSet.get(); }
     WatchpointSet& varReadOnlyWatchpointSet() { return m_varReadOnlyWatchpointSet.get(); }
     WatchpointSet& regExpRecompiledWatchpointSet() { return m_regExpRecompiledWatchpointSet.get(); }
+    WatchpointSet& arrayBufferDetachWatchpointSet() { return m_arrayBufferDetachWatchpointSet.get(); }
 
     bool isHavingABadTime() const
     {
@@ -951,6 +962,14 @@ public:
     }
         
     void haveABadTime(VM&);
+
+    void notifyArrayBufferDetaching()
+    {
+        if (!m_arrayBufferDetachWatchpointSet->isStillValid())
+            return;
+        notifyArrayBufferDetachingSlow();
+    }
+
     void clearStructureCache(VM&);
         
     static bool objectPrototypeIsSaneConcurrently(Structure* objectPrototypeStructure);
@@ -1066,7 +1085,7 @@ public:
 protected:
     enum class HasSpeciesProperty : bool { No, Yes };
     template<typename SpeciesWatchpoint>
-    void tryInstallSpeciesWatchpoint(JSObject* prototype, JSObject* constructor, std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>& constructorWatchpoint, std::unique_ptr<SpeciesWatchpoint>&, InlineWatchpointSet&, HasSpeciesProperty);
+    void tryInstallSpeciesWatchpoint(JSObject* prototype, JSObject* constructor, std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>& constructorWatchpoint, std::unique_ptr<SpeciesWatchpoint>&, InlineWatchpointSet&, HasSpeciesProperty, GetterSetter*);
 
     struct GlobalPropertyInfo;
     JS_EXPORT_PRIVATE void addStaticGlobals(GlobalPropertyInfo*, int count);
@@ -1078,6 +1097,7 @@ private:
 
     static const GlobalObjectMethodTable* baseGlobalObjectMethodTable();
 
+    void notifyArrayBufferDetachingSlow();
     void fireWatchpointAndMakeAllArrayStructuresSlowPut(VM&);
     void setGlobalThis(VM&, JSObject* globalThis);
 

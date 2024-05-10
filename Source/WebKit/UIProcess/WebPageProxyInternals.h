@@ -32,7 +32,6 @@
 #include "LayerTreeContext.h"
 #include "PageLoadState.h"
 #include "ProcessThrottler.h"
-#include "RemotePageProxyState.h"
 #include "ScrollingAccelerationCurve.h"
 #include "VisibleWebPageCounter.h"
 #include "WebColorPicker.h"
@@ -89,6 +88,10 @@
 
 #if ENABLE(EXTENSION_CAPABILITIES)
 #include "MediaCapability.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+#include "HardwareKeyboardState.h"
 #endif
 
 namespace WebKit {
@@ -154,7 +157,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     , WebColorPickerClient
 #endif
 #if PLATFORM(MACCATALYST)
-    , EndowmentStateTracker::Client
+    , EndowmentStateTrackerClient
 #endif
 #if ENABLE(SPEECH_SYNTHESIS)
     , WebCore::PlatformSpeechSynthesisUtteranceClient
@@ -217,9 +220,8 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     WebCore::IntRect visibleScrollerThumbRect;
     WebCore::PageIdentifier webPageID;
     WindowKind windowKind { WindowKind::Unparented };
-    PageAllowedToRunInTheBackgroundCounter::Token pageAllowedToRunInTheBackgroundToken;
-
-    RemotePageProxyState remotePageProxyState;
+    std::unique_ptr<ProcessThrottlerActivity> pageAllowedToRunInTheBackgroundActivityDueToTitleChanges;
+    std::unique_ptr<ProcessThrottlerActivity> pageAllowedToRunInTheBackgroundActivityDueToNotifications;
 
     WebPageProxyMessageReceiverRegistration messageReceiverRegistration;
 
@@ -291,6 +293,8 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 #endif
 
     MonotonicTime didFinishDocumentLoadForMainFrameTimestamp;
+    MonotonicTime lastActivationTimestamp;
+    MonotonicTime didCommitLoadForMainFrameTimestamp;
 
 #if ENABLE(UI_SIDE_COMPOSITING)
     VisibleContentRectUpdateInfo lastVisibleContentRectUpdate;
@@ -307,6 +311,10 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 
 #if ENABLE(EXTENSION_CAPABILITIES)
     std::optional<MediaCapability> mediaCapability;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    HardwareKeyboardState hardwareKeyboardState;
 #endif
 
 #if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
@@ -334,6 +342,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
     const String& paymentCoordinatorSourceApplicationSecondaryIdentifier(const WebPaymentCoordinatorProxy&) final;
     void paymentCoordinatorAddMessageReceiver(WebPaymentCoordinatorProxy&, IPC::ReceiverName, IPC::MessageReceiver&) final;
     void paymentCoordinatorRemoveMessageReceiver(WebPaymentCoordinatorProxy&, IPC::ReceiverName) final;
+    void getPaymentCoordinatorEmbeddingUserAgent(WebPageProxyIdentifier, CompletionHandler<void(const String&)>&&) final;
 #endif
 #if ENABLE(APPLE_PAY) && PLATFORM(IOS_FAMILY)
     UIViewController *paymentCoordinatorPresentingViewController(const WebPaymentCoordinatorProxy&) final;
@@ -354,7 +363,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 #endif
 
 #if PLATFORM(MACCATALYST)
-    // EndowmentStateTracker::Client
+    // EndowmentStateTrackerClient
     void isUserFacingChanged(bool) final;
 #endif
 

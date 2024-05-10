@@ -63,7 +63,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> throwExceptionFromWasmThunkGenerator(const
 
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
     linkBuffer.link<OperationPtrTag>(call, operationWasmToJSException);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "Throw exception from Wasm");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "throwExceptionFromWasmThunk"_s, "Throw exception from Wasm");
 }
 
 // This is just here to give us a unique backtrace if we ever actually hit this.
@@ -77,7 +77,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> crashDueToBBQStackOverflowGenerator(const 
 
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
     linkBuffer.link<OperationPtrTag>(call, operationCrashDueToBBQStackOverflow);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "crashDueToBBQStackOverflow");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "crashDueToBBQStackOverflow"_s, "Throw stack overflow from Wasm");
 }
 
 MacroAssemblerCodeRef<JITThunkPtrTag> crashDueToOMGStackOverflowGenerator(const AbstractLocker&)
@@ -90,7 +90,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> crashDueToOMGStackOverflowGenerator(const 
 
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
     linkBuffer.link<OperationPtrTag>(call, operationCrashDueToOMGStackOverflow);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "crashDueToBBQStackOverflow");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "crashDueToBBQStackOverflow"_s, "Throw stack overflow from Wasm");
 }
 
 MacroAssemblerCodeRef<JITThunkPtrTag> throwStackOverflowFromWasmThunkGenerator(const AbstractLocker& locker)
@@ -104,7 +104,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> throwStackOverflowFromWasmThunkGenerator(c
     jit.move(CCallHelpers::TrustedImm32(static_cast<uint32_t>(ExceptionType::StackOverflow)), GPRInfo::argumentGPR1);
     jit.jumpThunk(CodeLocationLabel<JITThunkPtrTag> { Thunks::singleton().stub(locker, throwExceptionFromWasmThunkGenerator).code() });
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "Throw stack overflow from Wasm");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "throwStackOverflowFromWasmThunk"_s, "Throw stack overflow from Wasm");
 }
 
 #if USE(JSVALUE64)
@@ -119,7 +119,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> catchInWasmThunkGenerator(const AbstractLo
     auto isWasmCallee = jit.branch64(CCallHelpers::Equal, GPRInfo::regT3, CCallHelpers::TrustedImm32(JSValue::NativeCalleeTag));
     CCallHelpers::JumpList doneCases;
     {
-        // FIXME: Handling precise allocations in WasmB3IRGenerator catch entrypoints might be unnecessary
+        // FIXME: Handling precise allocations in WasmOMGIRGenerator catch entrypoints might be unnecessary
         // https://bugs.webkit.org/show_bug.cgi?id=231213
         auto preciseAllocationCase = jit.branchTestPtr(CCallHelpers::NonZero, GPRInfo::regT0, CCallHelpers::TrustedImm32(PreciseAllocation::halfAlignment));
         jit.andPtr(CCallHelpers::TrustedImmPtr(MarkedBlock::blockMask), GPRInfo::regT0);
@@ -154,7 +154,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> catchInWasmThunkGenerator(const AbstractLo
     jit.farJump(GPRInfo::returnValueGPR2, ExceptionHandlerPtrTag);
 
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "Wasm catch runway");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "catchInWasmThunk"_s, "Wasm catch runway");
 }
 #elif USE(JSVALUE32_64)
 // Same as JSVALUE64 version, except operationWasmRetrieveAndClearExceptionIfCatchable returns exception on stack.
@@ -167,7 +167,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> catchInWasmThunkGenerator(const AbstractLo
     auto isWasmCallee = jit.branch32(CCallHelpers::Equal, GPRInfo::regT3, CCallHelpers::TrustedImm32(JSValue::NativeCalleeTag));
     CCallHelpers::JumpList isJSCallee;
     {
-        // FIXME: Handling precise allocations in WasmB3IRGenerator catch entrypoints might be unnecessary
+        // FIXME: Handling precise allocations in WasmOMGIRGenerator catch entrypoints might be unnecessary
         // https://bugs.webkit.org/show_bug.cgi?id=231213
         auto preciseAllocationCase = jit.branchTestPtr(CCallHelpers::NonZero, GPRInfo::regT0, CCallHelpers::TrustedImm32(PreciseAllocation::halfAlignment));
         jit.andPtr(CCallHelpers::TrustedImmPtr(MarkedBlock::blockMask), GPRInfo::regT0);
@@ -214,7 +214,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> catchInWasmThunkGenerator(const AbstractLo
     jit.farJump(GPRInfo::regT3, ExceptionHandlerPtrTag);
 
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "Wasm catch runway");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "catchInWasmThunk"_s, "Wasm catch runway");
 }
 #endif
 
@@ -243,7 +243,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> triggerOMGEntryTierUpThunkGeneratorImpl(co
     jit.emitFunctionEpilogue();
     jit.ret();
     LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::WasmThunk);
-    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "Trigger OMG entry tier up");
+    return FINALIZE_WASM_CODE(linkBuffer, JITThunkPtrTag, "triggerOMGEntryTierUpThunk"_s, "Trigger OMG entry tier up");
 }
 
 MacroAssemblerCodeRef<JITThunkPtrTag> triggerOMGEntryTierUpThunkGeneratorSIMD(const AbstractLocker& locker)

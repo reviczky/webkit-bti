@@ -29,7 +29,7 @@
 #if ENABLE(WEB_AUTHN)
 
 #include "AuthenticatorCoordinator.h"
-#include "DigitalIdentity.h"
+#include "DigitalCredential.h"
 #include <wtf/RefCounted.h>
 #include <wtf/WeakPtr.h>
 
@@ -39,33 +39,38 @@ enum class Scope;
 
 namespace WebCore {
 
-class DigitalIdentity;
 class Document;
 class WeakPtrImplWithEventTargetData;
 struct CredentialCreationOptions;
 struct CredentialRequestOptions;
-struct DigitalCredentialRequestOptions;
 
 class CredentialsContainer : public RefCounted<CredentialsContainer> {
 public:
-    static Ref<CredentialsContainer> create(WeakPtr<Document, WeakPtrImplWithEventTargetData>&& document) { return adoptRef(*new CredentialsContainer(WTFMove(document))); }
+    static Ref<CredentialsContainer> create(WeakPtr<Document, WeakPtrImplWithEventTargetData>&& document)
+    {
+        return adoptRef(*new CredentialsContainer(WTFMove(document)));
+    }
 
-    void get(CredentialRequestOptions&&, CredentialPromise&&);
+    virtual void get(CredentialRequestOptions&&, CredentialPromise&&);
 
     void store(const BasicCredential&, CredentialPromise&&);
 
-    void isCreate(CredentialCreationOptions&&, CredentialPromise&&);
+    virtual void isCreate(CredentialCreationOptions&&, CredentialPromise&&);
 
     void preventSilentAccess(DOMPromiseDeferred<void>&&) const;
 
-    void requestIdentity(DigitalCredentialRequestOptions&&, DigitalIdentityPromise&&);
-
-private:
     CredentialsContainer(WeakPtr<Document, WeakPtrImplWithEventTargetData>&&);
 
+    virtual ~CredentialsContainer() = default;
+
+private:
     ScopeAndCrossOriginParent scopeAndCrossOriginParent() const;
 
     WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
+
+protected:
+    template<typename Options>
+    bool performCommonChecks(const Options&, CredentialPromise&);
 };
 
 } // namespace WebCore

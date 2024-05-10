@@ -33,10 +33,11 @@
 
 namespace WebKit::WebGPU {
 
-RemoteBufferProxy::RemoteBufferProxy(RemoteDeviceProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
+RemoteBufferProxy::RemoteBufferProxy(RemoteDeviceProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier, bool mappedAtCreation)
     : m_backing(identifier)
     , m_convertToBackingContext(convertToBackingContext)
     , m_parent(parent)
+    , m_mapModeFlags(mappedAtCreation ? WebCore::WebGPU::MapModeFlags(WebCore::WebGPU::MapMode::Write) : WebCore::WebGPU::MapModeFlags())
 {
 }
 
@@ -48,15 +49,9 @@ RemoteBufferProxy::~RemoteBufferProxy()
 
 void RemoteBufferProxy::mapAsync(WebCore::WebGPU::MapModeFlags mapModeFlags, WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> size, CompletionHandler<void(bool)>&& callback)
 {
-    auto sendResult = sendWithAsyncReply(Messages::RemoteBuffer::MapAsync(mapModeFlags, offset, size), [callback = WTFMove(callback), mapModeFlags, protectedThis = Ref { *this }](auto data) mutable {
-
-        if (!data) {
-            // FIXME: Implement error handling.
-            callback(false);
-            return;
-        }
-
-        protectedThis->m_data = WTFMove(data);
+    auto sendResult = sendWithAsyncReply(Messages::RemoteBuffer::MapAsync(mapModeFlags, offset, size), [callback = WTFMove(callback), mapModeFlags, protectedThis = Ref { *this }](auto success) mutable {
+        if (!success)
+            return callback(false);
         protectedThis->m_mapModeFlags = mapModeFlags;
         callback(true);
     });
@@ -68,36 +63,39 @@ static bool offsetOrSizeExceedsBounds(size_t dataSize, WebCore::WebGPU::Size64 o
     return offset >= dataSize || (requestedSize.has_value() && requestedSize.value() + offset > dataSize);
 }
 
-auto RemoteBufferProxy::getMappedRange(WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> size) -> MappedRange
+void RemoteBufferProxy::getMappedRange(WebCore::WebGPU::Size64 offset, std::optional<WebCore::WebGPU::Size64> size, Function<void(MappedRange)>&& callback)
 {
-    if (m_data.has_value() && m_data->data()) {
-        if (offsetOrSizeExceedsBounds(m_data->size(), offset, size))
-            return { };
-
-        return { m_data->data() + offset, static_cast<size_t>(size.value_or(m_data->size() - offset)) };
-    }
-
     // FIXME: Implement error handling.
     auto sendResult = sendSync(Messages::RemoteBuffer::GetMappedRange(offset, size));
     auto [data] = sendResult.takeReplyOr(std::nullopt);
 
-    if (!data || !data->data() || offsetOrSizeExceedsBounds(data->size(), offset, size))
-        return { };
+    if (!data || !data->data() || offsetOrSizeExceedsBounds(data->size(), offset, size)) {
+        callback({ });
+        return;
+    }
 
-    m_data = WTFMove(data);
-    m_mapModeFlags = { WebCore::WebGPU::MapMode::Write };
-    return { m_data->data() + offset, static_cast<size_t>(size.value_or(m_data->size() - offset)) };
+    callback({ data->data() + offset, static_cast<size_t>(size.value_or(data->size() - offset)) });
+}
+
+auto RemoteBufferProxy::getBufferContents() -> MappedRange
+{
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
+void RemoteBufferProxy::copy(Vector<uint8_t>&& data, size_t offset)
+{
+    if (!m_mapModeFlags.contains(WebCore::WebGPU::MapMode::Write))
+        return;
+
+    auto sendResult = send(Messages::RemoteBuffer::Copy(WTFMove(data), offset));
+    UNUSED_VARIABLE(sendResult);
 }
 
 void RemoteBufferProxy::unmap()
 {
-    Vector<uint8_t> data;
-    if (m_data && m_mapModeFlags.contains(WebCore::WebGPU::MapMode::Write))
-        data = WTFMove(*m_data);
-    auto sendResult = send(Messages::RemoteBuffer::Unmap(WTFMove(data)));
+    auto sendResult = send(Messages::RemoteBuffer::Unmap());
     UNUSED_VARIABLE(sendResult);
 
-    m_data = std::nullopt;
     m_mapModeFlags = { };
 }
 

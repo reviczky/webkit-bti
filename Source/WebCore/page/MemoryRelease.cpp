@@ -58,6 +58,7 @@
 #include "StyleScope.h"
 #include "StyleSheetContentsCache.h"
 #include "StyledElement.h"
+#include "TextBreakingPositionCache.h"
 #include "TextPainter.h"
 #include "WorkerGlobalScope.h"
 #include "WorkerThread.h"
@@ -83,8 +84,10 @@ static void releaseNoncriticalMemory(MaintainMemoryCache maintainMemoryCache)
     SelectorQueryCache::singleton().clear();
 
     for (auto& document : Document::allDocuments()) {
-        if (CheckedPtr renderView = document->renderView())
+        if (CheckedPtr renderView = document->renderView()) {
             LayoutIntegration::LineLayout::releaseCaches(*renderView);
+            Layout::TextBreakingPositionCache::singleton().clear();
+        }
     }
 
     if (maintainMemoryCache == MaintainMemoryCache::No)
@@ -136,8 +139,8 @@ static void releaseCriticalMemory(Synchronous synchronous, MaintainBackForwardCa
         GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
 
 #if ENABLE(VIDEO)
-    for (auto* mediaElement : HTMLMediaElement::allMediaElements())
-        mediaElement->purgeBufferedDataIfPossible();
+    for (auto& mediaElement : HTMLMediaElement::allMediaElements())
+        Ref { mediaElement.get() }->purgeBufferedDataIfPossible();
 #endif
 
     if (synchronous == Synchronous::Yes) {
@@ -156,6 +159,11 @@ static void releaseCriticalMemory(Synchronous synchronous, MaintainBackForwardCa
 void releaseMemory(Critical critical, Synchronous synchronous, MaintainBackForwardCache maintainBackForwardCache, MaintainMemoryCache maintainMemoryCache)
 {
     TraceScope scope(MemoryPressureHandlerStart, MemoryPressureHandlerEnd, static_cast<uint64_t>(critical), static_cast<uint64_t>(synchronous));
+
+#if PLATFORM(IOS_FAMILY)
+    if (critical == Critical::No)
+        GCController::singleton().garbageCollectNowIfNotDoneRecently();
+#endif
 
     if (critical == Critical::Yes) {
         // Return unused pages back to the OS now as this will likely give us a little memory to work with.
@@ -195,36 +203,36 @@ void releaseGraphicsMemory(Critical critical, Synchronous synchronous)
 #if RELEASE_LOG_DISABLED
 void logMemoryStatistics(LogMemoryStatisticsReason) { }
 #else
-static const char* logMemoryStatisticsReasonDescription(LogMemoryStatisticsReason reason)
+static ASCIILiteral logMemoryStatisticsReasonDescription(LogMemoryStatisticsReason reason)
 {
     switch (reason) {
     case LogMemoryStatisticsReason::DebugNotification:
-        return "debug notification";
+        return "debug notification"_s;
     case LogMemoryStatisticsReason::WarningMemoryPressureNotification:
-        return "warning memory pressure notification";
+        return "warning memory pressure notification"_s;
     case LogMemoryStatisticsReason::CriticalMemoryPressureNotification:
-        return "critical memory pressure notification";
+        return "critical memory pressure notification"_s;
     case LogMemoryStatisticsReason::OutOfMemoryDeath:
-        return "out of memory death";
+        return "out of memory death"_s;
     };
     RELEASE_ASSERT_NOT_REACHED();
 }
 
 void logMemoryStatistics(LogMemoryStatisticsReason reason)
 {
-    const char* description = logMemoryStatisticsReasonDescription(reason);
+    const auto description = logMemoryStatisticsReasonDescription(reason);
 
-    RELEASE_LOG(MemoryPressure, "WebKit memory usage statistics at time of %" PUBLIC_LOG_STRING ":", description);
+    RELEASE_LOG(MemoryPressure, "WebKit memory usage statistics at time of %" PUBLIC_LOG_STRING ":", description.characters());
     RELEASE_LOG(MemoryPressure, "Websam state: %" PUBLIC_LOG_STRING, MemoryPressureHandler::processStateDescription().characters());
     auto stats = PerformanceLogging::memoryUsageStatistics(ShouldIncludeExpensiveComputations::Yes);
     for (auto& [key, val] : stats)
-        RELEASE_LOG(MemoryPressure, "%" PUBLIC_LOG_STRING ": %zu", key, val);
+        RELEASE_LOG(MemoryPressure, "%" PUBLIC_LOG_STRING ": %zu", key.characters(), val);
 
 #if PLATFORM(COCOA)
     auto pageSize = vmPageSize();
     auto pages = pagesPerVMTag();
 
-    RELEASE_LOG(MemoryPressure, "Dirty memory per VM tag at time of %" PUBLIC_LOG_STRING ":", description);
+    RELEASE_LOG(MemoryPressure, "Dirty memory per VM tag at time of %" PUBLIC_LOG_STRING ":", description.characters());
     for (unsigned i = 0; i < 256; ++i) {
         size_t dirty = pages[i].dirty * pageSize;
         if (!dirty)
@@ -242,7 +250,7 @@ void logMemoryStatistics(LogMemoryStatisticsReason reason)
 
     auto& vm = commonVM();
     JSC::JSLockHolder locker(vm);
-    RELEASE_LOG(MemoryPressure, "Live JavaScript objects at time of %" PUBLIC_LOG_STRING ":", description);
+    RELEASE_LOG(MemoryPressure, "Live JavaScript objects at time of %" PUBLIC_LOG_STRING ":", description.characters());
     auto typeCounts = vm.heap.objectTypeCounts();
     for (auto& it : *typeCounts)
         RELEASE_LOG(MemoryPressure, "  %" PUBLIC_LOG_STRING ": %d", it.key, it.value);
@@ -250,7 +258,9 @@ void logMemoryStatistics(LogMemoryStatisticsReason reason)
 #endif
 
 #if !PLATFORM(COCOA)
+#if !USE(SKIA)
 void platformReleaseMemory(Critical) { }
+#endif
 void platformReleaseGraphicsMemory(Critical) { }
 void jettisonExpensiveObjectsOnTopLevelNavigation() { }
 void registerMemoryReleaseNotifyCallbacks() { }

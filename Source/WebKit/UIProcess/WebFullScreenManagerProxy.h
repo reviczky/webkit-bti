@@ -27,6 +27,7 @@
 
 #if ENABLE(FULLSCREEN_API)
 
+#include "FullScreenMediaDetails.h"
 #include "MessageReceiver.h"
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/HTMLMediaElementEnums.h>
@@ -35,6 +36,15 @@
 #include <wtf/RefPtr.h>
 #include <wtf/Seconds.h>
 #include <wtf/Vector.h>
+
+namespace WebKit {
+class WebFullScreenManagerProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebFullScreenManagerProxy> : std::true_type { };
+}
 
 namespace WebCore {
 class FloatSize;
@@ -78,7 +88,11 @@ public:
     bool isFullScreen();
     bool blocksReturnToFullscreenFromPictureInPicture() const;
 #if PLATFORM(VISION)
-    bool isVideoElement() const;
+    bool isVideoElement() const { return m_isVideoElement; }
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    bool isImageElement() const { return m_imageBuffer; }
+    void prepareQuickLookImageURL(CompletionHandler<void(URL&&)>&&) const;
+#endif // QUICKLOOK_FULLSCREEN
 #endif
     void close();
 
@@ -106,7 +120,7 @@ public:
 
 private:
     void supportsFullScreen(bool withKeyboard, CompletionHandler<void(bool)>&&);
-    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, bool isVideoElement, WebCore::FloatSize videoDimensions);
+    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&&);
     void exitFullScreen();
     void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
@@ -118,7 +132,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "WebFullScreenManagerProxy"; }
+    ASCIILiteral logClassName() const { return "WebFullScreenManagerProxy"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 
@@ -128,6 +142,10 @@ private:
     bool m_blocksReturnToFullscreenFromPictureInPicture { false };
 #if PLATFORM(VISION)
     bool m_isVideoElement { false };
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    String m_imageMIMEType;
+    RefPtr<WebCore::SharedBuffer> m_imageBuffer;
+#endif // QUICKLOOK_FULLSCREEN
 #endif
     Vector<CompletionHandler<void()>> m_closeCompletionHandlers;
 

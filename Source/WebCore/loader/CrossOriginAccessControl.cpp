@@ -65,9 +65,9 @@ bool isSimpleCrossOriginAccessRequest(const String& method, const HTTPHeaderMap&
     return true;
 }
 
-void updateRequestReferrer(ResourceRequest& request, ReferrerPolicy referrerPolicy, const String& outgoingReferrer, const OriginAccessPatterns& patterns)
+void updateRequestReferrer(ResourceRequest& request, ReferrerPolicy referrerPolicy, const URL& outgoingReferrerURL, const OriginAccessPatterns& patterns)
 {
-    String newOutgoingReferrer = SecurityPolicy::generateReferrerHeader(referrerPolicy, request.url(), outgoingReferrer, patterns);
+    String newOutgoingReferrer = SecurityPolicy::generateReferrerHeader(referrerPolicy, request.url(), outgoingReferrerURL, patterns);
     if (newOutgoingReferrer.isEmpty())
         request.clearHTTPReferrer();
     else
@@ -335,10 +335,8 @@ static inline bool shouldCrossOriginResourcePolicyCancelLoad(CrossOriginEmbedder
     if (policy == CrossOriginResourcePolicy::SameSite) {
         if (origin.isOpaque())
             return true;
-#if ENABLE(PUBLIC_SUFFIX_LIST)
         if (!RegistrableDomain::uncheckedCreateFromHost(origin.host()).matches(responseURL))
             return true;
-#endif
         if (origin.protocol() == "http"_s && responseURL.protocol() == "https"_s)
             return true;
     }

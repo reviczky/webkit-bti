@@ -41,6 +41,7 @@
 #include <wtf/ProcessID.h>
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
+#include <wtf/WallTime.h>
 
 #if PLATFORM(WIN)
 #include "AccessibilityObjectWrapperWin.h"
@@ -96,6 +97,8 @@ struct AccessibilityText;
 struct CharacterRange;
 struct ScrollRectToVisibleOptions;
 
+enum class DateComponentsType : uint8_t;
+
 enum class AXIDType { };
 using AXID = ObjectIdentifier<AXIDType>;
 
@@ -113,16 +116,14 @@ enum class AXAncestorFlag : uint8_t {
     // Bit 7 is free.
 };
 
-enum class AccessibilityRole {
-    Application = 1,
+enum class AccessibilityRole : uint8_t {
+    Application,
     ApplicationAlert,
     ApplicationAlertDialog,
     ApplicationDialog,
-    ApplicationGroup,
     ApplicationLog,
     ApplicationMarquee,
     ApplicationStatus,
-    ApplicationTextGroup,
     ApplicationTimer,
     Audio,
     Blockquote,
@@ -148,6 +149,7 @@ enum class AccessibilityRole {
     DocumentArticle,
     DocumentMath,
     DocumentNote,
+    Emphasis,
     Feed,
     Figure,
     Footer,
@@ -205,6 +207,7 @@ enum class AccessibilityRole {
     ProgressIndicator,
     RadioButton,
     RadioGroup,
+    RemoteFrame,
     RowHeader,
     Row,
     RowGroup,
@@ -222,6 +225,7 @@ enum class AccessibilityRole {
     SpinButtonPart,
     Splitter,
     StaticText,
+    Strong,
     Subscript,
     Suggestion,
     Summary,
@@ -268,16 +272,12 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "ApplicationAlertDialog"_s;
     case AccessibilityRole::ApplicationDialog:
         return "ApplicationDialog"_s;
-    case AccessibilityRole::ApplicationGroup:
-        return "ApplicationGroup"_s;
     case AccessibilityRole::ApplicationLog:
         return "ApplicationLog"_s;
     case AccessibilityRole::ApplicationMarquee:
         return "ApplicationMarquee"_s;
     case AccessibilityRole::ApplicationStatus:
         return "ApplicationStatus"_s;
-    case AccessibilityRole::ApplicationTextGroup:
-        return "ApplicationTextGroup"_s;
     case AccessibilityRole::ApplicationTimer:
         return "ApplicationTimer"_s;
     case AccessibilityRole::Audio:
@@ -328,6 +328,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "DocumentMath"_s;
     case AccessibilityRole::DocumentNote:
         return "DocumentNote"_s;
+    case AccessibilityRole::Emphasis:
+        return "Emphasis"_s;
     case AccessibilityRole::Feed:
         return "Feed"_s;
     case AccessibilityRole::Figure:
@@ -442,6 +444,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "RadioButton"_s;
     case AccessibilityRole::RadioGroup:
         return "RadioGroup"_s;
+    case AccessibilityRole::RemoteFrame:
+        return "RemoteFrame"_s;
     case AccessibilityRole::RowHeader:
         return "RowHeader"_s;
     case AccessibilityRole::Row:
@@ -476,6 +480,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "Splitter"_s;
     case AccessibilityRole::StaticText:
         return "StaticText"_s;
+    case AccessibilityRole::Strong:
+        return "Strong"_s;
     case AccessibilityRole::Subscript:
         return "Subscript"_s;
     case AccessibilityRole::Suggestion:
@@ -581,9 +587,6 @@ enum class AccessibilitySearchKey {
     FontColorChange,
     Frame,
     Graphic,
-#if ENABLE(AX_THREAD_TEXT_APIS)
-    HasTextRuns,
-#endif
     HeadingLevel1,
     HeadingLevel2,
     HeadingLevel3,
@@ -619,7 +622,6 @@ using AXEditingStyleValueVariant = std::variant<String, bool, int>;
 struct AccessibilitySearchCriteria {
     AXCoreObject* anchorObject { nullptr };
     AXCoreObject* startObject;
-    AXID stopAtID;
     AccessibilitySearchDirection searchDirection;
     Vector<AccessibilitySearchKey> searchKeys;
     String searchText;
@@ -637,7 +639,7 @@ struct AccessibilitySearchCriteria {
     { }
 };
 
-enum class AccessibilityObjectInclusion {
+enum class AccessibilityObjectInclusion : uint8_t {
     IncludeObject,
     IgnoreObject,
     DefaultBehavior,
@@ -719,22 +721,29 @@ enum class AccessibilityOrientation {
     Undefined,
 };
 
-struct AccessibilityTextUnderElementMode {
-    enum ChildrenInclusion {
-        TextUnderElementModeSkipIgnoredChildren,
-        TextUnderElementModeIncludeAllChildren,
-        TextUnderElementModeIncludeNameFromContentsChildren, // This corresponds to ARIA concept: nameFrom
+enum class TrimWhitespace : bool { No, Yes };
+
+struct TextUnderElementMode {
+    enum class Children : uint8_t {
+        SkipIgnoredChildren,
+        IncludeAllChildren,
+        IncludeNameFromContentsChildren, // This corresponds to ARIA concept: nameFrom
     };
 
-    ChildrenInclusion childrenInclusion;
+    Children childrenInclusion;
     bool includeFocusableContent;
+    bool considerHiddenState { true };
+    bool inHiddenSubtree { false };
+    TrimWhitespace trimWhitespace { TrimWhitespace::Yes };
     Node* ignoredChildNode;
 
-    AccessibilityTextUnderElementMode(ChildrenInclusion c = TextUnderElementModeSkipIgnoredChildren, bool i = false, Node* ignored = nullptr)
-        : childrenInclusion(c)
-        , includeFocusableContent(i)
-        , ignoredChildNode(ignored)
+    TextUnderElementMode(Children childrenInclusion = Children::SkipIgnoredChildren, bool includeFocusable = false, Node* ignoredChild = nullptr)
+        : childrenInclusion(childrenInclusion)
+        , includeFocusableContent(includeFocusable)
+        , ignoredChildNode(ignoredChild)
     { }
+
+    bool isHidden() { return considerHiddenState && inHiddenSubtree; }
 };
 
 enum class AccessibilityVisiblePositionForBounds {
@@ -815,10 +824,10 @@ public:
     virtual bool isAccessibilityObject() const = 0;
     virtual bool isAccessibilityRenderObject() const = 0;
     virtual bool isAccessibilityTableInstance() const = 0;
-    virtual bool isAccessibilityARIAGridInstance() const = 0;
     virtual bool isAccessibilityARIAGridRowInstance() const = 0;
     virtual bool isAccessibilityARIAGridCellInstance() const = 0;
     virtual bool isAXIsolatedObjectInstance() const = 0;
+    virtual bool isAXRemoteFrame() const = 0;
 
     bool isHeading() const { return roleValue() == AccessibilityRole::Heading; }
     virtual bool isLink() const = 0;
@@ -832,7 +841,7 @@ public:
     bool isCheckbox() const { return roleValue() == AccessibilityRole::Checkbox; }
     bool isRadioButton() const { return roleValue() == AccessibilityRole::RadioButton; }
     bool isListBox() const { return roleValue() == AccessibilityRole::ListBox; }
-    virtual bool isListBoxOption() const = 0;
+    bool isListBoxOption() const { return roleValue() == AccessibilityRole::ListBoxOption; }
     virtual bool isAttachment() const = 0;
     bool isMenuRelated() const;
     bool isMenu() const { return roleValue() == AccessibilityRole::Menu; }
@@ -919,10 +928,17 @@ public:
     bool isRadioGroup() const { return roleValue() == AccessibilityRole::RadioGroup; }
     bool isComboBox() const { return roleValue() == AccessibilityRole::ComboBox; }
     bool isDateTime() const { return roleValue() == AccessibilityRole::DateTime; }
+    bool isGrid() const { return roleValue() == AccessibilityRole::Grid; }
     bool isTree() const { return roleValue() == AccessibilityRole::Tree; }
     bool isTreeGrid() const { return roleValue() == AccessibilityRole::TreeGrid; }
     bool isTreeItem() const { return roleValue() == AccessibilityRole::TreeItem; }
     bool isScrollbar() const { return roleValue() == AccessibilityRole::ScrollBar; }
+    bool isRemoteFrame() const { return roleValue() == AccessibilityRole::RemoteFrame; }
+#if PLATFORM(COCOA)
+    virtual RetainPtr<id> remoteFramePlatformElement() const = 0;
+#endif
+    virtual bool hasRemoteFrameChild() const = 0;
+
     bool isButton() const;
     virtual bool isMeter() const = 0;
 
@@ -983,6 +999,8 @@ public:
     virtual bool hasHighlighting() const = 0;
     virtual AXTextMarkerRange textInputMarkedTextMarkerRange() const = 0;
 
+    virtual WallTime dateTimeValue() const = 0;
+    virtual DateComponentsType dateTimeComponentsType() const = 0;
     virtual bool supportsDatetimeAttribute() const = 0;
     virtual String datetimeAttributeValue() const = 0;
 
@@ -1017,6 +1035,7 @@ public:
     virtual std::optional<AccessibilityChildrenVector> imageOverlayElements() = 0;
     virtual String extendedDescription() const = 0;
 
+    bool supportsActiveDescendant() const;
     virtual bool supportsARIAOwns() const = 0;
 
     // Retrieval of related objects.
@@ -1037,6 +1056,7 @@ public:
     AccessibilityChildrenVector ownedObjects() const { return relatedObjects(AXRelationType::OwnerFor); }
     AccessibilityChildrenVector owners() const { return relatedObjects(AXRelationType::OwnedBy); }
     virtual AccessibilityChildrenVector relatedObjects(AXRelationType) const = 0;
+    bool canBeControlledBy(AccessibilityRole) const;
 
     virtual AXCoreObject* internalLinkElement() const = 0;
     void appendRadioButtonGroupMembers(AccessibilityChildrenVector& linkedUIElements) const;
@@ -1105,7 +1125,7 @@ public:
 
     virtual bool inheritsPresentationalRole() const = 0;
 
-    using AXValue = std::variant<bool, unsigned, float, String, AccessibilityButtonState, AXCoreObject*>;
+    using AXValue = std::variant<bool, unsigned, float, String, WallTime, AccessibilityButtonState, AXCoreObject*>;
     AXValue value();
 
     // Accessibility Text
@@ -1119,11 +1139,12 @@ public:
     virtual std::optional<String> textContent() const = 0;
 #if ENABLE(AX_THREAD_TEXT_APIS)
     virtual bool hasTextRuns() = 0;
+    virtual bool shouldEmitNewlinesBeforeAndAfterNode() const = 0;
 #endif
 
     // Methods for determining accessibility text.
     virtual String stringValue() const = 0;
-    virtual String textUnderElement(AccessibilityTextUnderElementMode = AccessibilityTextUnderElementMode()) const = 0;
+    virtual String textUnderElement(TextUnderElementMode = TextUnderElementMode()) const = 0;
     virtual String text() const = 0;
     virtual unsigned textLength() const = 0;
 #if PLATFORM(COCOA)
@@ -1162,6 +1183,8 @@ public:
     // Viewport-relative means that when the page scrolls, the portion of the page in the viewport changes, and thus
     // any viewport-relative rects do too (since they are either closer to or farther from the viewport origin after the scroll).
     virtual FloatPoint screenRelativePosition() const = 0;
+    // This is the amount that the RemoteFrame is offset from its containing parent.
+    virtual IntPoint remoteFrameOffset() const = 0;
 
     virtual FloatRect convertFrameToSpace(const FloatRect&, AccessibilityConversionSpace) const = 0;
 #if PLATFORM(COCOA)
@@ -1238,8 +1261,7 @@ public:
     virtual void detachFromParent() = 0;
     virtual bool isDetachedFromParent() = 0;
 
-    bool canHaveSelectedChildren() const;
-    virtual AccessibilityChildrenVector selectedChildren() = 0;
+    virtual std::optional<AccessibilityChildrenVector> selectedChildren() = 0;
     virtual void setSelectedChildren(const AccessibilityChildrenVector&) = 0;
     virtual AccessibilityChildrenVector visibleChildren() = 0;
     AccessibilityChildrenVector tabChildren();
@@ -1247,7 +1269,6 @@ public:
     bool isAncestorOfObject(const AXCoreObject*) const;
 
     virtual String nameAttribute() const = 0;
-    virtual AtomString tagName() const = 0;
 
     virtual std::optional<SimpleRange> simpleRange() const = 0;
     virtual VisiblePositionRange visiblePositionRange() const = 0;
@@ -1255,14 +1276,9 @@ public:
 
     virtual VisiblePositionRange visiblePositionRangeForLine(unsigned) const = 0;
     virtual VisiblePositionRange visiblePositionRangeForUnorderedPositions(const VisiblePosition&, const VisiblePosition&) const = 0;
-    virtual VisiblePositionRange positionOfLeftWord(const VisiblePosition&) const = 0;
-    virtual VisiblePositionRange positionOfRightWord(const VisiblePosition&) const = 0;
     virtual VisiblePositionRange leftLineVisiblePositionRange(const VisiblePosition&) const = 0;
     virtual VisiblePositionRange rightLineVisiblePositionRange(const VisiblePosition&) const = 0;
-    virtual VisiblePositionRange sentenceForPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePositionRange paragraphForPosition(const VisiblePosition&) const = 0;
     virtual VisiblePositionRange styleRangeForPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePositionRange visiblePositionRangeForRange(const CharacterRange&) const = 0;
     virtual VisiblePositionRange lineRangeForPosition(const VisiblePosition&) const = 0;
 
     virtual std::optional<SimpleRange> rangeForCharacterRange(const CharacterRange&) const = 0;
@@ -1278,13 +1294,9 @@ public:
     virtual void setSelectedVisiblePositionRange(const VisiblePositionRange&) const = 0;
 
     virtual VisiblePosition visiblePositionForPoint(const IntPoint&) const = 0;
+    virtual VisiblePosition visiblePositionForIndex(unsigned, bool /* lastIndexOK */) const = 0;
     virtual VisiblePosition nextLineEndPosition(const VisiblePosition&) const = 0;
     virtual VisiblePosition previousLineStartPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePosition nextSentenceEndPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePosition previousSentenceStartPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePosition nextParagraphEndPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePosition previousParagraphStartPosition(const VisiblePosition&) const = 0;
-    virtual VisiblePosition visiblePositionForIndex(unsigned, bool /*lastIndexOK */) const = 0;
 
     virtual VisiblePosition visiblePositionForIndex(int) const = 0;
     virtual int indexForVisiblePosition(const VisiblePosition&) const = 0;
@@ -1308,7 +1320,8 @@ public:
     virtual AutoFillButtonType valueAutofillButtonType() const = 0;
 
     // Used by an ARIA tree to get all its rows.
-    virtual void ariaTreeRows(AccessibilityChildrenVector&) = 0;
+    // FIXME: this should be folded into rows().
+    virtual AccessibilityChildrenVector ariaTreeRows() = 0;
     // Used by an ARIA tree item to get only its content, and not its child tree items and groups.
     AccessibilityChildrenVector ariaTreeItemContent();
 
@@ -1380,7 +1393,7 @@ public:
     void detachWrapper(AccessibilityDetachmentType);
 
 #if PLATFORM(IOS_FAMILY)
-    virtual int accessibilitySecureFieldLength() = 0;
+    virtual unsigned accessibilitySecureFieldLength() = 0;
     virtual bool hasTouchEventListener() const = 0;
 #endif
 
@@ -1398,7 +1411,7 @@ public:
     String helpTextAttributeValue() const;
     // This should be the visible text that's actually on the screen if possible.
     // If there's alternative text, that can override the title.
-    String titleAttributeValue() const;
+    virtual String titleAttributeValue() const;
     bool shouldComputeTitleAttributeValue() const;
 
     virtual bool hasApplePDFAnnotationAttribute() const = 0;
@@ -1579,9 +1592,9 @@ template<typename T>
 T* findRelatedObjectInAncestry(const T& object, AXRelationType relationType, const T& descendant)
 {
     auto relatedObjects = object.relatedObjects(relationType);
-    for (const auto& object : relatedObjects) {
-        auto* ancestor = findAncestor(descendant, false, [&object] (const auto& ancestor) {
-            return object.get() == &ancestor;
+    for (const auto& relatedObject : relatedObjects) {
+        auto* ancestor = findAncestor(descendant, false, [&relatedObject] (const auto& ancestor) {
+            return relatedObject.get() == &ancestor;
         });
         if (ancestor)
             return ancestor;
@@ -1609,10 +1622,8 @@ template<typename T, typename F>
 T* findChild(T& object, F&& matches)
 {
     for (auto child : object.children()) {
-        if (matches(child)) {
-            RELEASE_ASSERT(is<T>(child.get()));
+        if (matches(child))
             return downcast<T>(child.get());
-        }
     }
     return nullptr;
 }
@@ -1705,7 +1716,9 @@ WTF::TextStream& operator<<(WTF::TextStream&, AccessibilitySearchKey);
 WTF::TextStream& operator<<(WTF::TextStream&, const AccessibilitySearchCriteria&);
 WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityObjectInclusion);
 WTF::TextStream& operator<<(WTF::TextStream&, const AXCoreObject&);
+WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityText);
 WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityTextSource);
 WTF::TextStream& operator<<(WTF::TextStream&, AXRelationType);
+WTF::TextStream& operator<<(WTF::TextStream&, const TextUnderElementMode&);
 
 } // namespace WebCore

@@ -77,7 +77,7 @@ RefPtr<TextIndicator> TextIndicator::createWithRange(const SimpleRange& range, O
             Ref indicatorNode = *commonAncestor;
 
             for (auto& ancestorElement : ancestorsOfType<Element>(*commonAncestor)) {
-                if (auto* renderer = ancestorElement.renderer(); renderer && renderer->style().effectiveUserSelect() == UserSelect::All)
+                if (auto* renderer = ancestorElement.renderer(); renderer && renderer->style().usedUserSelect() == UserSelect::All)
                     indicatorNode = ancestorElement;
             }
 
@@ -249,7 +249,7 @@ static bool containsOnlyWhiteSpaceText(const SimpleRange& range)
 
 static bool initializeIndicator(TextIndicatorData& data, LocalFrame& frame, const SimpleRange& range, FloatSize margin, bool indicatesCurrentSelection)
 {
-    if (auto* document = frame.document())
+    if (RefPtr document = frame.document())
         document->updateLayoutIgnorePendingStylesheets();
 
     bool treatRangeAsComplexDueToIllegibleTextColors = false;
