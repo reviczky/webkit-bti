@@ -16,6 +16,8 @@ webkit2gtk (2.45.1-1) UNRELEASED; urgency=medium
     - prefer-pthread.patch: this should not be needed anymore.
     - fix-ftbfs-riscv64.patch: Use -DENABLE_JIT=OFF instead.
     - reduce-memory-overheads.patch: Override LDFLAGS instead.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 May 2024 10:55:37 +0200
 
