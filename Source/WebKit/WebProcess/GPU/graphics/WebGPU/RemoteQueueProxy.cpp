@@ -71,8 +71,7 @@ void RemoteQueueProxy::onSubmittedWorkDone(CompletionHandler<void()>&& callback)
 void RemoteQueueProxy::writeBuffer(
     const WebCore::WebGPU::Buffer& buffer,
     WebCore::WebGPU::Size64 bufferOffset,
-    const void* source,
-    size_t byteLength,
+    std::span<const uint8_t> source,
     WebCore::WebGPU::Size64 dataOffset,
     std::optional<WebCore::WebGPU::Size64> size)
 {
@@ -81,7 +80,7 @@ void RemoteQueueProxy::writeBuffer(
     if (!convertedBuffer)
         return;
 
-    auto sendResult = send(Messages::RemoteQueue::WriteBuffer(convertedBuffer, bufferOffset, Vector<uint8_t>(static_cast<const uint8_t*>(source) + dataOffset, size.value_or(byteLength - dataOffset))));
+    auto sendResult = send(Messages::RemoteQueue::WriteBuffer(convertedBuffer, bufferOffset, source.subspan(dataOffset, static_cast<size_t>(size.value_or(source.size() - dataOffset)))));
     UNUSED_VARIABLE(sendResult);
 }
 
@@ -101,15 +100,14 @@ void RemoteQueueProxy::writeTexture(
     if (!convertedDestination || !convertedDataLayout || !convertedSize)
         return;
 
-    auto sendResult = send(Messages::RemoteQueue::WriteTexture(*convertedDestination, Vector<uint8_t>(static_cast<const uint8_t*>(source), byteLength), *convertedDataLayout, *convertedSize));
+    auto sendResult = send(Messages::RemoteQueue::WriteTexture(*convertedDestination, Vector(std::span { static_cast<const uint8_t*>(source), byteLength }), *convertedDataLayout, *convertedSize));
     UNUSED_VARIABLE(sendResult);
 }
 
-void RemoteQueueProxy::writeBuffer(
+void RemoteQueueProxy::writeBufferNoCopy(
     const WebCore::WebGPU::Buffer&,
     WebCore::WebGPU::Size64,
-    void*,
-    size_t,
+    std::span<uint8_t>,
     WebCore::WebGPU::Size64,
     std::optional<WebCore::WebGPU::Size64>)
 {

@@ -268,7 +268,12 @@ void TextTrackCue::didChange(bool affectOrder)
 
 TextTrack* TextTrackCue::track() const
 {
-    return m_track;
+    return m_track.get();
+}
+
+RefPtr<TextTrack> TextTrackCue::protectedTrack() const
+{
+    return m_track.get();
 }
 
 void TextTrackCue::setTrack(TextTrack* track)
@@ -531,11 +536,6 @@ void TextTrackCue::rebuildDisplayTree()
     }
 
     m_displayTreeNeedsUpdate = false;
-}
-
-const char* TextTrackCue::activeDOMObjectName() const
-{
-    return "TextTrackCue";
 }
 
 } // namespace WebCore

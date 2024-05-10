@@ -44,6 +44,7 @@ class FlexLayout;
     
 class RenderFlexibleBox : public RenderBlock {
     WTF_MAKE_ISO_ALLOCATED(RenderFlexibleBox);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderFlexibleBox);
 public:
     RenderFlexibleBox(Type, Element&, RenderStyle&&);
     RenderFlexibleBox(Type, Document&, RenderStyle&&);
@@ -99,7 +100,7 @@ public:
 
     virtual bool isFlexibleBoxImpl() const { return false; };
     
-    bool useChildOverridingLogicalHeightForPercentageResolution(const RenderBox&);
+    std::optional<LayoutUnit> usedChildOverridingLogicalHeightForPercentageResolution(const RenderBox&);
     
     void clearCachedMainSizeForChild(const RenderBox& child);
     
@@ -208,8 +209,8 @@ private:
     Overflow mainAxisOverflowForChild(const RenderBox& child) const;
     Overflow crossAxisOverflowForChild(const RenderBox& child) const;
     void cacheChildMainSize(const RenderBox& child);
-    bool useChildOverridingCrossSizeForPercentageResolution(const RenderBox&);
-    bool useChildOverridingMainSizeForPercentageResolution(const RenderBox&);
+    std::optional<LayoutUnit> usedChildOverridingCrossSizeForPercentageResolution(const RenderBox&);
+    std::optional<LayoutUnit> usedChildOverridingMainSizeForPercentageResolution(const RenderBox&);
 
     void layoutFlexItems(bool relayoutChildren);
     LayoutUnit autoMarginOffsetInMainAxis(const FlexItems&, LayoutUnit& availableFreeSpace);

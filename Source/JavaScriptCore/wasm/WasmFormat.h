@@ -89,21 +89,6 @@ inline bool isValueType(Type type)
     return false;
 }
 
-inline JSString* typeToString(VM& vm, TypeKind type)
-{
-#define TYPE_CASE(macroName, value, b3, inc, wasmName, ...) \
-    case TypeKind::macroName: \
-        return jsNontrivialString(vm, #wasmName""_s); \
-
-    switch (type) {
-        FOR_EACH_WASM_TYPE(TYPE_CASE)
-    }
-
-#undef TYPE_CASE
-
-    RELEASE_ASSERT_NOT_REACHED();
-}
-
 inline bool isRefType(Type type)
 {
     if (Options::useWebAssemblyTypedFunctionReferences())
@@ -207,6 +192,31 @@ inline bool isStructref(Type type)
     if (!Options::useWebAssemblyGC())
         return false;
     return isRefType(type) && type.index == static_cast<TypeIndex>(TypeKind::Structref);
+}
+
+inline JSString* typeToJSAPIString(VM& vm, Type type)
+{
+    switch (type.kind) {
+    case TypeKind::I32:
+        return jsNontrivialString(vm, "i32"_s);
+    case TypeKind::I64:
+        return jsNontrivialString(vm, "i64"_s);
+    case TypeKind::F32:
+        return jsNontrivialString(vm, "f32"_s);
+    case TypeKind::F64:
+        return jsNontrivialString(vm, "f64"_s);
+    case TypeKind::V128:
+        return jsNontrivialString(vm, "v128"_s);
+    default: {
+        if (isFuncref(type) && type.isNullable())
+            return jsNontrivialString(vm, "funcref"_s);
+        if (isExternref(type) && type.isNullable())
+            return jsNontrivialString(vm, "externref"_s);
+        // Some Wasm reference types are currently unrepresentable for the JS API.
+        return nullptr;
+    }
+    }
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 inline Type funcrefType()
@@ -461,17 +471,17 @@ static_assert(static_cast<int>(ExternalKind::Memory)   == 2, "Wasm needs Memory 
 static_assert(static_cast<int>(ExternalKind::Global)   == 3, "Wasm needs Global to have the value 3");
 static_assert(static_cast<int>(ExternalKind::Exception)   == 4, "Wasm needs Exception to have the value 4");
 
-inline const char* makeString(ExternalKind kind)
+inline ASCIILiteral makeString(ExternalKind kind)
 {
     switch (kind) {
-    case ExternalKind::Function: return "function";
-    case ExternalKind::Table: return "table";
-    case ExternalKind::Memory: return "memory";
-    case ExternalKind::Global: return "global";
-    case ExternalKind::Exception: return "tag";
+    case ExternalKind::Function: return "function"_s;
+    case ExternalKind::Table: return "table"_s;
+    case ExternalKind::Memory: return "memory"_s;
+    case ExternalKind::Global: return "global"_s;
+    case ExternalKind::Exception: return "tag"_s;
     }
     RELEASE_ASSERT_NOT_REACHED();
-    return "?";
+    return "?"_s;
 }
 
 struct Import {
@@ -754,11 +764,14 @@ struct WasmToWasmImportableFunction {
     static ptrdiff_t offsetOfSignatureIndex() { return OBJECT_OFFSETOF(WasmToWasmImportableFunction, typeIndex); }
     static ptrdiff_t offsetOfEntrypointLoadLocation() { return OBJECT_OFFSETOF(WasmToWasmImportableFunction, entrypointLoadLocation); }
     static ptrdiff_t offsetOfBoxedWasmCalleeLoadLocation() { return OBJECT_OFFSETOF(WasmToWasmImportableFunction, boxedWasmCalleeLoadLocation); }
+    static ptrdiff_t offsetOfRTT() { return OBJECT_OFFSETOF(WasmToWasmImportableFunction, rtt); }
 
     // FIXME: Pack type index and code pointer into one 64-bit value. See <https://bugs.webkit.org/show_bug.cgi?id=165511>.
     TypeIndex typeIndex { TypeDefinition::invalidIndex };
     LoadLocation entrypointLoadLocation { };
     const uintptr_t* boxedWasmCalleeLoadLocation { &NullWasmCallee };
+    // Used when GC proposal is enabled, otherwise can be null.
+    const RTT* rtt;
 };
 using FunctionIndexSpace = Vector<WasmToWasmImportableFunction>;
 

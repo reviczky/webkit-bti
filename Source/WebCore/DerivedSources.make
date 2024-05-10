@@ -149,6 +149,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/WebGPU/GPUQuerySetDescriptor.idl \
     $(WebCore)/Modules/WebGPU/GPUQueryType.idl \
     $(WebCore)/Modules/WebGPU/GPUQueue.idl \
+    $(WebCore)/Modules/WebGPU/GPUQueueDescriptor.idl \
     $(WebCore)/Modules/WebGPU/GPURenderBundle.idl \
     $(WebCore)/Modules/WebGPU/GPURenderBundleDescriptor.idl \
     $(WebCore)/Modules/WebGPU/GPURenderBundleEncoder.idl \
@@ -198,6 +199,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/WebGPU/GPUVertexState.idl \
     $(WebCore)/Modules/WebGPU/GPUVertexStepMode.idl \
     $(WebCore)/Modules/WebGPU/NavigatorGPU.idl \
+    $(WebCore)/Modules/WebGPU/WGSLLanguageFeatures.idl \
     $(WebCore)/Modules/ShapeDetection/BarcodeDetector.idl \
     $(WebCore)/Modules/ShapeDetection/BarcodeDetectorOptions.idl \
     $(WebCore)/Modules/ShapeDetection/BarcodeFormat.idl \
@@ -220,6 +222,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/applepay/ApplePayDateComponents.idl \
     $(WebCore)/Modules/applepay/ApplePayDateComponentsRange.idl \
     $(WebCore)/Modules/applepay/ApplePayDeferredPaymentRequest.idl \
+    $(WebCore)/Modules/applepay/ApplePayDisbursementPaymentRequest.idl \
     $(WebCore)/Modules/applepay/ApplePayDetailsUpdateBase.idl \
     $(WebCore)/Modules/applepay/ApplePayError.idl \
     $(WebCore)/Modules/applepay/ApplePayErrorCode.idl \
@@ -299,18 +302,14 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/cookie-store/CookieStoreGetOptions.idl \
     $(WebCore)/Modules/cookie-store/CookieStoreDeleteOptions.idl \
     $(WebCore)/Modules/cookie-store/CookieStoreManager.idl \
+    $(WebCore)/Modules/cookie-store/DOMWindow+CookieStore.idl \
     $(WebCore)/Modules/cookie-store/ExtendableCookieChangeEvent.idl \
     $(WebCore)/Modules/cookie-store/ExtendableCookieChangeEventInit.idl \
-    $(WebCore)/Modules/cookie-store/LocalDOMWindow+CookieStore.idl \
     $(WebCore)/Modules/credentialmanagement/BasicCredential.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialCreationOptions.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialMediationRequirement.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialRequestOptions.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialsContainer.idl \
-    $(WebCore)/Modules/credentialmanagement/DigitalIdentity.idl \
-    $(WebCore)/Modules/credentialmanagement/DigitalCredentialRequestOptions.idl \
-    $(WebCore)/Modules/credentialmanagement/IdentityRequestProvider.idl \
-    $(WebCore)/Modules/credentialmanagement/IdentityCredentialProtocol.idl \
     $(WebCore)/Modules/credentialmanagement/Navigator+Credentials.idl \
     $(WebCore)/Modules/encryptedmedia/MediaKeyEncryptionScheme.idl \
     $(WebCore)/Modules/encryptedmedia/MediaKeyMessageEventInit.idl \
@@ -375,6 +374,11 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/geolocation/PositionOptions.idl \
     $(WebCore)/Modules/highlight/HighlightRegistry.idl \
     $(WebCore)/Modules/highlight/Highlight.idl \
+    $(WebCore)/Modules/identity/DigitalCredential.idl \
+    $(WebCore)/Modules/identity/DigitalCredentialRequestOptions.idl \
+    $(WebCore)/Modules/identity/IdentityRequestProvider.idl \
+    $(WebCore)/Modules/identity/IdentityCredentialProtocol.idl \
+    $(WebCore)/Modules/identity/Navigator+Identity.idl \
     $(WebCore)/Modules/indexeddb/IDBCursor.idl \
     $(WebCore)/Modules/indexeddb/IDBCursorDirection.idl \
     $(WebCore)/Modules/indexeddb/IDBCursorWithValue.idl \
@@ -416,6 +420,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/mediasource/ManagedMediaSource.idl \
     $(WebCore)/Modules/mediasource/ManagedSourceBuffer.idl \
     $(WebCore)/Modules/mediasource/MediaSource.idl \
+    $(WebCore)/Modules/mediasource/MediaSourceHandle.idl \
     $(WebCore)/Modules/mediasource/SourceBuffer.idl \
     $(WebCore)/Modules/mediasource/SourceBufferList.idl \
     $(WebCore)/Modules/mediasource/TextTrack+MediaSource.idl \
@@ -603,7 +608,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/screen-wake-lock/WakeLock.idl \
     $(WebCore)/Modules/screen-wake-lock/WakeLockSentinel.idl \
     $(WebCore)/Modules/screen-wake-lock/WakeLockType.idl \
-    $(WebCore)/Modules/speech/LocalDOMWindow+SpeechSynthesis.idl \
+    $(WebCore)/Modules/speech/DOMWindow+SpeechSynthesis.idl \
     $(WebCore)/Modules/speech/SpeechSynthesis.idl \
     $(WebCore)/Modules/speech/SpeechSynthesisErrorCode.idl \
     $(WebCore)/Modules/speech/SpeechSynthesisErrorEvent.idl \
@@ -778,9 +783,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoEncoderSupport.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoFrame.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoFrameOutputCallback.idl \
+    $(WebCore)/Modules/webdatabase/DOMWindow+WebDatabase.idl \
     $(WebCore)/Modules/webdatabase/Database.idl \
     $(WebCore)/Modules/webdatabase/DatabaseCallback.idl \
-    $(WebCore)/Modules/webdatabase/LocalDOMWindow+WebDatabase.idl \
     $(WebCore)/Modules/webdatabase/SQLError.idl \
     $(WebCore)/Modules/webdatabase/SQLResultSet.idl \
     $(WebCore)/Modules/webdatabase/SQLResultSetRowList.idl \
@@ -1094,6 +1099,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/FocusOptions.idl \
     $(WebCore)/dom/FormDataEvent.idl \
     $(WebCore)/dom/FullscreenOptions.idl \
+    $(WebCore)/dom/GetHTMLOptions.idl \
     $(WebCore)/dom/GlobalEventHandlers+PointerEvents.idl \
     $(WebCore)/dom/GlobalEventHandlers+Selection.idl \
     $(WebCore)/dom/GlobalEventHandlers.idl \
@@ -1126,6 +1132,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/PageTransitionEvent.idl \
     $(WebCore)/dom/ParentNode.idl \
     $(WebCore)/dom/PointerEvent.idl \
+    $(WebCore)/dom/PointerLockOptions.idl \
     $(WebCore)/dom/PopStateEvent.idl \
     $(WebCore)/dom/ProcessingInstruction.idl \
     $(WebCore)/dom/ProgressEvent.idl \
@@ -1416,6 +1423,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/inspector/InspectorAuditDOMObject.idl \
     $(WebCore)/inspector/InspectorAuditResourcesObject.idl \
     $(WebCore)/inspector/InspectorFrontendHost.idl \
+    $(WebCore)/inspector/RTCLogsCallback.idl \
     $(WebCore)/loader/COEPInheritenceViolationReportBody.idl \
     $(WebCore)/loader/CORPViolationReportBody.idl \
     $(WebCore)/loader/appcache/DOMApplicationCache.idl \
@@ -1423,20 +1431,19 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/Crypto.idl \
     $(WebCore)/page/DOMSelection.idl \
     $(WebCore)/page/DOMWindow.idl \
+    $(WebCore)/page/DOMWindow+CSSOM.idl \
+    $(WebCore)/page/DOMWindow+CSSOMView.idl \
+    $(WebCore)/page/DOMWindow+Compat.idl \
+    $(WebCore)/page/DOMWindow+DeviceMotion.idl \
+    $(WebCore)/page/DOMWindow+DeviceOrientation.idl \
+    $(WebCore)/page/DOMWindow+RequestIdleCallback.idl \
+    $(WebCore)/page/DOMWindow+Selection.idl \
+    $(WebCore)/page/DOMWindow+VisualViewport.idl \
     $(WebCore)/page/EventSource.idl \
     $(WebCore)/page/History.idl \
     $(WebCore)/page/IntersectionObserver.idl \
     $(WebCore)/page/IntersectionObserverCallback.idl \
     $(WebCore)/page/IntersectionObserverEntry.idl \
-    $(WebCore)/page/LocalDOMWindow.idl \
-    $(WebCore)/page/LocalDOMWindow+CSSOM.idl \
-    $(WebCore)/page/LocalDOMWindow+CSSOMView.idl \
-    $(WebCore)/page/LocalDOMWindow+Compat.idl \
-    $(WebCore)/page/LocalDOMWindow+DeviceMotion.idl \
-    $(WebCore)/page/LocalDOMWindow+DeviceOrientation.idl \
-    $(WebCore)/page/LocalDOMWindow+RequestIdleCallback.idl \
-    $(WebCore)/page/LocalDOMWindow+Selection.idl \
-    $(WebCore)/page/LocalDOMWindow+VisualViewport.idl \
     $(WebCore)/page/Location.idl \
     $(WebCore)/page/NavigateEvent.idl \
     $(WebCore)/page/Navigation.idl \
@@ -1476,7 +1483,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/PerformanceResourceTiming.idl \
     $(WebCore)/page/PerformanceServerTiming.idl \
     $(WebCore)/page/PerformanceTiming.idl \
-    $(WebCore)/page/RemoteDOMWindow.idl \
     $(WebCore)/page/ResizeObserver.idl \
     $(WebCore)/page/ResizeObserverBoxOptions.idl \
     $(WebCore)/page/ResizeObserverCallback.idl \
@@ -1518,7 +1524,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/svg/Document+SVG.idl \
     $(WebCore)/svg/SVGAElement.idl \
     $(WebCore)/svg/SVGAngle.idl \
-    $(WebCore)/svg/SVGAnimateColorElement.idl \
     $(WebCore)/svg/SVGAnimateElement.idl \
     $(WebCore)/svg/SVGAnimateMotionElement.idl \
     $(WebCore)/svg/SVGAnimateTransformElement.idl \
@@ -2030,7 +2035,6 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/plugIns.css \
     $(WebCore)/css/popover.css \
     $(WebCore)/css/quirks.css \
-    $(WebCore)/css/ruby.css \
     $(WebCore)/css/svg.css \
     $(WebCore)/css/viewTransitions.css \
     $(WebCore)/html/shadow/mac/imageControlsMac.css \
@@ -2415,7 +2419,7 @@ SUPPLEMENTAL_MAKEFILE_DEPS = SupplementalDependencies.dep
 ISO_SUBSPACES_HEADER_FILE = DOMIsoSubspaces.h
 CLIENT_ISO_SUBSPACES_HEADER_FILE = DOMClientIsoSubspaces.h
 CONSTRUCTORS_HEADER_FILE = DOMConstructors.h
-WINDOW_CONSTRUCTORS_FILE = LocalDOMWindowConstructors.idl
+WINDOW_CONSTRUCTORS_FILE = DOMWindowConstructors.idl
 WORKERGLOBALSCOPE_CONSTRUCTORS_FILE = WorkerGlobalScopeConstructors.idl
 SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE = ShadowRealmGlobalScopeConstructors.idl
 DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE = DedicatedWorkerGlobalScopeConstructors.idl

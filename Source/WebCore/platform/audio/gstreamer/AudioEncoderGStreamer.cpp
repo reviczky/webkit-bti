@@ -38,7 +38,7 @@ GST_DEBUG_CATEGORY(webkit_audio_encoder_debug);
 
 static WorkQueue& gstEncoderWorkQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("GStreamer AudioEncoder Queue"));
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("GStreamer AudioEncoder Queue"_s));
     return queue.get();
 }
 
@@ -185,7 +185,7 @@ GStreamerInternalAudioEncoder::GStreamerInternalAudioEncoder(AudioEncoder::Descr
     , m_encoder(WTFMove(encoderElement))
 {
     static Atomic<uint64_t> counter = 0;
-    auto binName = makeString("audio-encoder-"_s, GST_OBJECT_NAME(m_encoder.get()), '-', counter.exchangeAdd(1));
+    auto binName = makeString("audio-encoder-"_s, span(GST_OBJECT_NAME(m_encoder.get())), '-', counter.exchangeAdd(1));
 
     GRefPtr<GstElement> harnessedElement = gst_bin_new(binName.ascii().data());
     auto audioconvert = gst_element_factory_make("audioconvert", nullptr);
@@ -263,7 +263,7 @@ GStreamerInternalAudioEncoder::GStreamerInternalAudioEncoder(AudioEncoder::Descr
 
         static std::once_flag onceFlag;
         std::call_once(onceFlag, [this] {
-            m_harness->dumpGraph("audio-encoder");
+            m_harness->dumpGraph("audio-encoder"_s);
         });
 
         bool isKeyFrame = !GST_BUFFER_FLAG_IS_SET(outputBuffer, GST_BUFFER_FLAG_DELTA_UNIT);
@@ -319,11 +319,8 @@ String GStreamerInternalAudioEncoder::initialize(const String& codecName, const 
                 gst_util_set_object_arg(G_OBJECT(m_encoder.get()), "frame-size", frameSize.ascii().data());
             }
         }
-        m_outputCaps = adoptGRef(gst_caps_new_empty_simple("audio/x-opus"));
-        if (config.numberOfChannels) {
-            int channelMappingFamily = *config.numberOfChannels <= 2 ? 0 : 1;
-            gst_caps_set_simple(m_outputCaps.get(), "channel-mapping-family", G_TYPE_INT, channelMappingFamily, nullptr);
-        }
+        int channelMappingFamily = config.numberOfChannels <= 2 ? 0 : 1;
+        m_outputCaps = adoptGRef(gst_caps_new_simple("audio/x-opus", "channel-mapping-family", G_TYPE_INT, channelMappingFamily, nullptr));
     } else if (codecName == "alaw"_s)
         m_outputCaps = adoptGRef(gst_caps_new_empty_simple("audio/x-alaw"));
     else if (codecName == "ulaw"_s)
@@ -365,13 +362,9 @@ String GStreamerInternalAudioEncoder::initialize(const String& codecName, const 
     // imported/w3c/web-platform-tests/webcodecs/audio-encoder.https.any.html make use of values
     // that would not be accepted by the Opus encoder. So we instead let caps negotiation figure out
     // the most suitable value.
-    m_inputCaps = adoptGRef(gst_caps_new_empty_simple("audio/x-raw"));
-
-    if (config.numberOfChannels)
-        gst_caps_set_simple(m_inputCaps.get(), "channels", G_TYPE_INT, *config.numberOfChannels, nullptr);
+    m_inputCaps = adoptGRef(gst_caps_new_simple("audio/x-raw", "channels", G_TYPE_INT, config.numberOfChannels, nullptr));
 
     g_object_set(m_inputCapsFilter.get(), "caps", m_inputCaps.get(), nullptr);
-
     g_object_set(m_outputCapsFilter.get(), "caps", m_outputCaps.get(), nullptr);
     return emptyString();
 }

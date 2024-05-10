@@ -37,12 +37,19 @@
 #include "VisibleUnits.h"
 #include <stdio.h>
 #include <wtf/Assertions.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
 #include <wtf/unicode/CharacterNames.h>
 
 namespace WebCore {
+
+const VisibleSelection& VisibleSelection::emptySelection()
+{
+    static NeverDestroyed<VisibleSelection> selection;
+    return selection.get();
+}
 
 VisibleSelection::VisibleSelection()
     : m_anchorIsFirst(true)
@@ -685,6 +692,24 @@ bool VisibleSelection::isInPasswordField() const
 {
     RefPtr textControl = dynamicDowncast<HTMLInputElement>(enclosingTextFormControl(start()));
     return textControl && textControl->isPasswordField();
+}
+
+bool VisibleSelection::canEnableWritingSuggestions() const
+{
+    if (RefPtr formControl = enclosingTextFormControl(start()))
+        return formControl->isWritingSuggestionsEnabled();
+
+    RefPtr containerNode = start().containerNode();
+    if (!containerNode)
+        return false;
+
+    if (RefPtr element = dynamicDowncast<Element>(containerNode.get()))
+        return element->isWritingSuggestionsEnabled();
+
+    if (RefPtr element = containerNode->parentElement())
+        return element->isWritingSuggestionsEnabled();
+
+    return false;
 }
 
 bool VisibleSelection::isInAutoFilledAndViewableField() const

@@ -260,12 +260,12 @@ FontPlatformData::Attributes FontPlatformData::attributes() const
     return result;
 }
 
-std::optional<FontPlatformData> FontPlatformData::tryMakeFontPlatformData(float size, WebCore::FontOrientation&& orientation, WebCore::FontWidthVariant&& widthVariant, WebCore::TextRenderingMode&& textRenderingMode, bool syntheticBold, bool syntheticOblique, FontPlatformData::PlatformDataVariant&& platformSerializationData)
+std::optional<FontPlatformData> FontPlatformData::fromIPCData(float size, WebCore::FontOrientation&& orientation, WebCore::FontWidthVariant&& widthVariant, WebCore::TextRenderingMode&& textRenderingMode, bool syntheticBold, bool syntheticOblique, FontPlatformData::IPCData&& toIPCData)
 {
     RetainPtr<CTFontRef> font;
     RefPtr<FontCustomPlatformData> customPlatformData;
 
-    bool dataError = WTF::switchOn(platformSerializationData,
+    bool dataError = WTF::switchOn(toIPCData,
         [&] (const FontPlatformSerializedData& d) {
             font = WebCore::createCTFont(d.attributes.get(), size, d.options, d.referenceURL.get(), d.postScriptName.get());
             if (!font)
@@ -274,7 +274,7 @@ std::optional<FontPlatformData> FontPlatformData::tryMakeFontPlatformData(float 
         },
         [&] (FontPlatformSerializedCreationData& d) {
             auto fontFaceData = SharedBuffer::create(WTFMove(d.fontFaceData));
-            auto fontCustomPlatformData = createFontCustomPlatformData(fontFaceData, d.itemInCollection);
+            RefPtr fontCustomPlatformData = FontCustomPlatformData::create(fontFaceData, d.itemInCollection);
             if (!fontCustomPlatformData)
                 return true;
             auto baseFontDescriptor = fontCustomPlatformData->fontDescriptor.get();
@@ -312,7 +312,7 @@ FontPlatformData::FontPlatformData(float size, WebCore::FontOrientation&& orient
 #endif
 }
 
-FontPlatformData::PlatformDataVariant FontPlatformData::platformSerializationData() const
+FontPlatformData::IPCData FontPlatformData::toIPCData() const
 {
     auto ctFont = font();
     auto fontDescriptor = adoptCF(CTFontCopyFontDescriptor(ctFont));
@@ -320,7 +320,7 @@ FontPlatformData::PlatformDataVariant FontPlatformData::platformSerializationDat
 
     const auto& data = creationData();
     if (data)
-        return FontPlatformSerializedCreationData { { data->fontFaceData->dataAsSpanForContiguousData() }, attributes, data->itemInCollection };
+        return FontPlatformSerializedCreationData { { data->fontFaceData->span() }, attributes, data->itemInCollection };
 
     auto options = CTFontDescriptorGetOptions(fontDescriptor.get());
     auto referenceURL = adoptCF(static_cast<CFURLRef>(CTFontCopyAttribute(ctFont, kCTFontReferenceURLAttribute)));

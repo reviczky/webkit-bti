@@ -77,12 +77,12 @@ CanvasRenderingContext::~CanvasRenderingContext()
     instances().remove(this);
 }
 
-void CanvasRenderingContext::ref()
+void CanvasRenderingContext::ref() const
 {
     m_canvas.refCanvasBase();
 }
 
-void CanvasRenderingContext::deref()
+void CanvasRenderingContext::deref() const
 {
     m_canvas.derefCanvasBase();
 }
@@ -105,6 +105,11 @@ PixelFormat CanvasRenderingContext::pixelFormat() const
 DestinationColorSpace CanvasRenderingContext::colorSpace() const
 {
     return DestinationColorSpace::SRGB();
+}
+
+bool CanvasRenderingContext::willReadFrequently() const
+{
+    return false;
 }
 
 bool CanvasRenderingContext::taintsOrigin(const CanvasPattern* pattern)

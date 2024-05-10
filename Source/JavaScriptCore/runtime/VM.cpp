@@ -104,6 +104,7 @@
 #include "SamplingProfiler.h"
 #include "ScopedArguments.h"
 #include "ShadowChicken.h"
+#include "SharedJITStubSet.h"
 #include "SideDataRepository.h"
 #include "SimpleTypedArrayController.h"
 #include "SourceProviderCache.h"
@@ -226,7 +227,7 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
     , emptyList(new ArgList)
     , machineCodeBytesPerBytecodeWordForBaselineJIT(makeUnique<SimpleStats>())
     , symbolImplToSymbolMap(*this)
-    , m_regExpCache(new RegExpCache(this))
+    , m_regExpCache(makeUnique<RegExpCache>())
     , m_compactVariableMap(adoptRef(*new CompactTDZEnvironmentMap))
     , m_codeCache(makeUnique<CodeCache>())
     , m_intlCache(makeUnique<IntlCache>())
@@ -433,8 +434,7 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
         jitSizeStatistics = makeUnique<JITSizeStatistics>();
 #endif
 
-    if (!g_jscConfig.disabledFreezingForTesting)
-        Config::permanentlyFreeze();
+    Config::finalize();
 
     // We must set this at the end only after the VM is fully initialized.
     WTF::storeStoreFence();
@@ -506,7 +506,7 @@ VM::~VM()
         delete m_atomStringTable;
 
     delete clientData;
-    delete m_regExpCache;
+    m_regExpCache.reset();
 
 #if ENABLE(DFG_JIT)
     for (unsigned i = 0; i < m_scratchBuffers.size(); ++i)
@@ -681,6 +681,10 @@ static ThunkGenerator thunkGeneratorForIntrinsic(Intrinsic intrinsic)
         return imulThunkGenerator;
     case RandomIntrinsic:
         return randomThunkGenerator;
+#if USE(JSVALUE64)
+    case ObjectIsIntrinsic:
+        return objectIsThunkGenerator;
+#endif
 #if !OS(WINDOWS)
     case BoundFunctionCallIntrinsic:
         return boundFunctionCallGenerator;
@@ -870,6 +874,7 @@ void VM::deleteAllCode(DeleteAllCodeEffort effort)
 {
     whenIdle([=, this] () {
         m_codeCache->clear();
+        m_builtinExecutables->clear();
         m_regExpCache->deleteAllCode();
         heap.deleteAllCodeBlocks(effort);
         heap.deleteAllUnlinkedCodeBlocks(effort);
@@ -1175,15 +1180,15 @@ void VM::addRegExpToTrace(RegExp* regExp)
 
 void VM::dumpRegExpTrace()
 {
+    if (m_rtTraceList.size() <= 1)
+        return;
+
     // The first RegExp object is ignored. It is created by the RegExpPrototype ctor and not used.
     RTTraceList::iterator iter = ++m_rtTraceList.begin();
     
     if (iter != m_rtTraceList.end()) {
-        dataLogF("\nRegExp Tracing\n");
-        dataLogF("Regular Expression                              8 Bit          16 Bit        match()    Matches    Average\n");
-        dataLogF(" <Match only / Match>                         JIT Addr      JIT Address       calls      found   String len\n");
-        dataLogF("----------------------------------------+----------------+----------------+----------+----------+-----------\n");
-    
+        RegExp::printTraceHeader();
+
         unsigned reCount = 0;
     
         for (; iter != m_rtTraceList.end(); ++iter, ++reCount) {
@@ -1620,6 +1625,8 @@ void VM::visitAggregateImpl(Visitor& visitor)
 {
     m_microtaskQueue.visitAggregate(visitor);
     numericStrings.visitAggregate(visitor);
+    m_builtinExecutables->visitAggregate(visitor);
+    m_regExpCache->visitAggregate(visitor);
 
     visitor.append(structureStructure);
     visitor.append(structureRareDataStructure);

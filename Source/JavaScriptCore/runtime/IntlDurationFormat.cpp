@@ -304,7 +304,7 @@ static String retrieveSeparator(const CString& locale, const String& numberingSy
     if (U_FAILURE(status))
         return fallbackTimeSeparator;
 
-    return String(data, length);
+    return String({ data, static_cast<size_t>(length) });
 }
 
 enum class ElementType : uint8_t {
@@ -336,7 +336,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
         double value = duration[unit];
 
         StringBuilder skeletonBuilder;
-        skeletonBuilder.append("rounding-mode-half-up");
+        skeletonBuilder.append("rounding-mode-half-up"_s);
 
         switch (unit) {
         // 3.j. If unit is "seconds", "milliseconds", or "microseconds", then
@@ -362,7 +362,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
                     value = value + duration[TemporalUnit::Nanosecond] / 1000.0;
                 }
                 // https://github.com/unicode-org/icu/blob/master/docs/userguide/format_parse/numbers/skeletons.md#fraction-precision
-                skeletonBuilder.append(" .");
+                skeletonBuilder.append(" ."_s);
                 for (unsigned i = 0; i < durationFormat->fractionalDigits(); ++i)
                     skeletonBuilder.append('0');
                 done = true;
@@ -375,9 +375,9 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
 
         // 3.k. If style is "2-digit", then
         //     i. Perform ! CreateDataPropertyOrThrow(nfOpts, "minimumIntegerDigits", 2F).
-        skeletonBuilder.append(" integer-width/", WTF::ICU::majorVersion() >= 67 ? '*' : '+'); // Prior to ICU 67, use the symbol + instead of *.
+        skeletonBuilder.append(" integer-width/"_s, WTF::ICU::majorVersion() >= 67 ? '*' : '+'); // Prior to ICU 67, use the symbol + instead of *.
         if (unitData.style() == IntlDurationFormat::UnitStyle::TwoDigit)
-            skeletonBuilder.append("00");
+            skeletonBuilder.append("00"_s);
         else
             skeletonBuilder.append('0');
 
@@ -463,15 +463,15 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
             case IntlDurationFormat::UnitStyle::Long:
             case IntlDurationFormat::UnitStyle::Short:
             case IntlDurationFormat::UnitStyle::Narrow: {
-                skeletonBuilder.append(" measure-unit/duration-");
+                skeletonBuilder.append(" measure-unit/duration-"_s);
                 skeletonBuilder.append(String(temporalUnitSingularPropertyName(vm, unit).uid()));
                 if (unitData.style() == IntlDurationFormat::UnitStyle::Long)
-                    skeletonBuilder.append(" unit-width-full-name");
+                    skeletonBuilder.append(" unit-width-full-name"_s);
                 else if (unitData.style() == IntlDurationFormat::UnitStyle::Short)
-                    skeletonBuilder.append(" unit-width-short");
+                    skeletonBuilder.append(" unit-width-short"_s);
                 else {
                     ASSERT(unitData.style() == IntlDurationFormat::UnitStyle::Narrow);
-                    skeletonBuilder.append(" unit-width-narrow");
+                    skeletonBuilder.append(" unit-width-narrow"_s);
                 }
 
                 auto formattedNumber = formatDouble(skeletonBuilder.toString());
@@ -609,7 +609,7 @@ JSValue IntlDurationFormat::formatToParts(JSGlobalObject* globalObject, ISO8601:
     const UChar* formattedStringPointer = ufmtval_getString(formattedValue, &formattedStringLength, &status);
     if (U_FAILURE(status))
         return throwTypeError(globalObject, scope, "failed to format list of strings"_s);
-    StringView resultStringView(formattedStringPointer, formattedStringLength);
+    StringView resultStringView(std::span(formattedStringPointer, formattedStringLength));
 
     auto iterator = std::unique_ptr<UConstrainedFieldPosition, ICUDeleter<ucfpos_close>>(ucfpos_open(&status));
     if (U_FAILURE(status))

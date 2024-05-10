@@ -76,9 +76,9 @@ void JSString::dumpToStream(const JSCell* cell, PrintStream& out)
     } else {
         if (WTF::StringImpl* ourImpl = bitwise_cast<StringImpl*>(pointer)) {
             if (ourImpl->is8Bit())
-                out.printf("[8 %p]", ourImpl->characters8());
+                out.printf("[8 %p]", ourImpl->span8().data());
             else
-                out.printf("[16 %p]", ourImpl->characters16());
+                out.printf("[16 %p]", ourImpl->span16().data());
         }
     }
     out.printf(">");
@@ -168,11 +168,11 @@ AtomString JSRopeString::resolveRopeToAtomString(JSGlobalObject* globalObject) c
         if (is8Bit()) {
             LChar buffer[maxLengthForOnStackResolve];
             resolveRopeInternalNoSubstring(buffer, stackLimit);
-            atomString = AtomString(buffer, length());
+            atomString = std::span<const LChar> { buffer, length() };
         } else {
             UChar buffer[maxLengthForOnStackResolve];
             resolveRopeInternalNoSubstring(buffer, stackLimit);
-            atomString = AtomString(buffer, length());
+            atomString = std::span<const UChar> { buffer, length() };
         }
     } else
         atomString = StringView { substringBase()->valueInternal() }.substring(substringOffset(), length()).toAtomString();
@@ -207,11 +207,11 @@ RefPtr<AtomStringImpl> JSRopeString::resolveRopeToExistingAtomString(JSGlobalObj
         if (is8Bit()) {
             LChar buffer[maxLengthForOnStackResolve];
             resolveRopeInternalNoSubstring(buffer, stackLimit);
-            existingAtomString = AtomStringImpl::lookUp(buffer, length());
+            existingAtomString = AtomStringImpl::lookUp(std::span { buffer, length() });
         } else {
             UChar buffer[maxLengthForOnStackResolve];
             resolveRopeInternalNoSubstring(buffer, stackLimit);
-            existingAtomString = AtomStringImpl::lookUp(buffer, length());
+            existingAtomString = AtomStringImpl::lookUp(std::span { buffer, length() });
         }
     } else
         existingAtomString = StringView { substringBase()->valueInternal() }.substring(substringOffset(), length()).toExistingAtomString().releaseImpl();

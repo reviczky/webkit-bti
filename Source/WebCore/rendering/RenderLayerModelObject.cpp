@@ -101,15 +101,6 @@ void RenderLayerModelObject::willBeDestroyed()
     RenderElement::willBeDestroyed();
 }
 
-void RenderLayerModelObject::willBeRemovedFromTree(IsInternalMove isInternalMove)
-{
-    bool shouldNotRepaint = is<RenderMultiColumnSet>(this->previousSibling());
-    if (auto* layer = this->layer(); layer && layer->needsFullRepaint() && isInternalMove == IsInternalMove::No && !shouldNotRepaint && containingBlock())
-        issueRepaint(std::nullopt, ClipRepaintToLayer::No, ForceRepaint::Yes);
-
-    RenderElement::willBeRemovedFromTree(isInternalMove);
-}
-
 void RenderLayerModelObject::destroyLayer()
 {
     ASSERT(!hasLayer());
@@ -179,9 +170,7 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
         if (oldStyle && oldStyle->hasBlendMode())
             layer()->willRemoveChildWithBlendMode();
         setHasTransformRelatedProperty(false); // All transform-related properties force layers, so we know we don't have one or the object doesn't support them.
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
         setHasSVGTransform(false); // Same reason as for setHasTransformRelatedProperty().
-#endif
         setHasReflection(false);
 
         // Repaint the about to be destroyed self-painting layer when style change also triggers repaint.
@@ -308,7 +297,6 @@ void RenderLayerModelObject::updateLayerTransform()
         layer()->updateTransform();
 }
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
 bool RenderLayerModelObject::shouldPaintSVGRenderer(const PaintInfo& paintInfo, const OptionSet<PaintPhase> relevantPaintPhases) const
 {
     if (paintInfo.context().paintingDisabled())
@@ -320,7 +308,7 @@ bool RenderLayerModelObject::shouldPaintSVGRenderer(const PaintInfo& paintInfo, 
     if (!paintInfo.shouldPaintWithinRoot(*this))
         return false;
 
-    if (style().visibility() == Visibility::Hidden || style().display() == DisplayType::None)
+    if (style().usedVisibility() == Visibility::Hidden || style().display() == DisplayType::None)
         return false;
 
     return true;
@@ -496,7 +484,7 @@ RenderSVGResourceMasker* RenderLayerModelObject::svgMaskerResourceFromStyle() co
     if (reresolvedURL.isEmpty())
         return nullptr;
 
-    auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(reresolvedURL.string(), document());
+    auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(reresolvedURL.string(), protectedDocument());
 
     if (RefPtr referencedMaskElement = ReferencedSVGResources::referencedMaskElement(treeScopeForSVGReferences(), *maskImage)) {
         if (auto* referencedMaskerRenderer = dynamicDowncast<RenderSVGResourceMasker>(referencedMaskElement->renderer()))
@@ -579,35 +567,94 @@ RenderSVGResourcePaintServer* RenderLayerModelObject::svgStrokePaintServerResour
 
     return nullptr;
 }
-#endif // ENABLE(LAYER_BASED_SVG_ENGINE)
+
+bool RenderLayerModelObject::pointInSVGClippingArea(const FloatPoint& point) const
+{
+    auto* clipPathOperation = style().clipPath();
+
+    auto clipPathReferenceBox = [&](CSSBoxType boxType) -> FloatRect {
+        FloatRect referenceBox;
+        switch (boxType) {
+        case CSSBoxType::BorderBox:
+        case CSSBoxType::MarginBox:
+        case CSSBoxType::StrokeBox:
+        case CSSBoxType::BoxMissing:
+            // FIXME: strokeBoundingBox() takes dasharray into account but shouldn't.
+            referenceBox = strokeBoundingBox();
+            break;
+        case CSSBoxType::ViewBox:
+            if (element()) {
+                // FIXME: [LBSE] This should not need to use SVGLengthContext, RenderSVGRoot holds that information.
+                auto viewportSize = SVGLengthContext(downcast<SVGElement>(element())).viewportSize();
+                if (viewportSize)
+                    referenceBox.setSize(*viewportSize);
+                break;
+            }
+            FALLTHROUGH;
+        case CSSBoxType::ContentBox:
+        case CSSBoxType::FillBox:
+        case CSSBoxType::PaddingBox:
+            referenceBox = objectBoundingBox();
+            break;
+        }
+        return referenceBox;
+    };
+
+    if (auto* clipPath = dynamicDowncast<ShapePathOperation>(clipPathOperation)) {
+        auto referenceBox = clipPathReferenceBox(clipPath->referenceBox());
+        if (!referenceBox.contains(point))
+            return false;
+        return clipPath->pathForReferenceRect(referenceBox).contains(point, clipPath->windRule());
+    }
+
+    if (auto* clipPath = dynamicDowncast<BoxPathOperation>(clipPathOperation)) {
+        auto referenceBox = clipPathReferenceBox(clipPath->referenceBox());
+        if (!referenceBox.contains(point))
+            return false;
+        return clipPath->pathForReferenceRect(FloatRoundedRect { referenceBox }).contains(point);
+    }
+
+    if (auto* referencedClipperRenderer = svgClipperResourceFromStyle())
+        return referencedClipperRenderer->hitTestClipContent(objectBoundingBox(), LayoutPoint(point));
+
+    return true;
+}
 
 CheckedPtr<RenderLayer> RenderLayerModelObject::checkedLayer() const
 {
     return m_layer.get();
 }
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
 void RenderLayerModelObject::repaintOrRelayoutAfterSVGTransformChange()
 {
     ASSERT(document().settings().layerBasedSVGEngineEnabled());
 
+    updateHasSVGTransformFlags();
+
+    // LBSE shares the text rendering code with the legacy SVG engine, largely unmodified.
+    // At present text layout depends on transformations ('screen font scaling factor' is used to
+    // determine which font to use for layout / painting). Therefore if the x/y scaling factors
+    // of the transformation matrix changes due to the transform update, we have to recompute the text metrics
+    // of all RenderSVGText descendants of the renderer in the ancestor chain, that will receive the transform
+    // update.
+    //
+    // There is no intrinsic reason for that, besides historical ones. If we decouple
+    // the 'font size screen scaling factor' from layout and only use it during painting
+    // we can optimize transformations for text, simply by avoid the need for layout.
+    auto previousTransform = layerTransform() ? layerTransform()->toAffineTransform() : identity;
+    updateLayerTransform();
+
+    auto currentTransform = layerTransform() ? layerTransform()->toAffineTransform() : identity;
+
+    // We have to force a stacking context if we did not have a transform before. Normally
+    // RenderLayer::styleChanged does this for us but repaintOrRelayoutAfterSVGTransformChange
+    // does not end up calling it.
+    if (previousTransform.isIdentity() && !currentTransform.isIdentity()) {
+        if (hasLayer())
+            layer()->forceStackingContextIfNeeded();
+    }
+
     auto determineIfLayerTransformChangeModifiesScale = [&]() -> bool {
-        updateHasSVGTransformFlags();
-
-        // LBSE shares the text rendering code with the legacy SVG engine, largely unmodified.
-        // At present text layout depends on transformations ('screen font scaling factor' is used to
-        // determine which font to use for layout / painting). Therefore if the x/y scaling factors
-        // of the transformation matrix changes due to the transform update, we have to recompute the text metrics
-        // of all RenderSVGText descendants of the renderer in the ancestor chain, that will receive the transform
-        // update.
-        //
-        // There is no intrinsic reason for that, besides historical ones. If we decouple
-        // the 'font size screen scaling factor' from layout and only use it during painting
-        // we can optimize transformations for text, simply by avoid the need for layout.
-        auto previousTransform = layerTransform() ? layerTransform()->toAffineTransform() : identity;
-        updateLayerTransform();
-
-        auto currentTransform = layerTransform() ? layerTransform()->toAffineTransform() : identity;
         if (previousTransform == currentTransform)
             return false;
 
@@ -620,9 +667,9 @@ void RenderLayerModelObject::repaintOrRelayoutAfterSVGTransformChange()
             return true;
 
         return false;
-    };
+    }();
 
-    if (determineIfLayerTransformChangeModifiesScale()) {
+    if (determineIfLayerTransformChangeModifiesScale) {
         if (auto* textAffectedByTransformChange = dynamicDowncast<RenderSVGText>(this)) {
             // Mark text metrics for update, and only trigger a relayout and not an explicit repaint.
             textAffectedByTransformChange->setNeedsTextMetricsUpdate();
@@ -646,7 +693,6 @@ void RenderLayerModelObject::repaintOrRelayoutAfterSVGTransformChange()
 
     // Instead of performing a full-fledged layout (issuing repaints), just recompute the layer transform, and repaint.
     // In LBSE transformations do not affect the layout (except for text, where it still does!) -- SVG follows closely the CSS/HTML route, to avoid costly layouts.
-    updateLayerTransform();
     repaintRendererOrClientsOfReferencedSVGResources();
 }
 
@@ -654,7 +700,7 @@ void RenderLayerModelObject::paintSVGClippingMask(PaintInfo& paintInfo, const Fl
 {
     ASSERT(paintInfo.phase == PaintPhase::ClippingMask);
     auto& context = paintInfo.context();
-    if (!paintInfo.shouldPaintWithinRoot(*this) || style().visibility() != Visibility::Visible || context.paintingDisabled())
+    if (!paintInfo.shouldPaintWithinRoot(*this) || style().usedVisibility() != Visibility::Visible || context.paintingDisabled())
         return;
 
     ASSERT(document().settings().layerBasedSVGEngineEnabled());
@@ -674,17 +720,10 @@ void RenderLayerModelObject::paintSVGMask(PaintInfo& paintInfo, const LayoutPoin
         referencedMaskerRenderer->applyMask(paintInfo, *this, adjustedPaintOffset);
 }
 
-#endif
-
 bool rendererNeedsPixelSnapping(const RenderLayerModelObject& renderer)
 {
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (renderer.document().settings().layerBasedSVGEngineEnabled() && renderer.isSVGLayerAwareRenderer() && !renderer.isRenderSVGRoot())
         return false;
-#else
-    UNUSED_PARAM(renderer);
-#endif
-
     return true;
 }
 

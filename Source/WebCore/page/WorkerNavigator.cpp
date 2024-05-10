@@ -30,6 +30,7 @@
 #include "Chrome.h"
 #include "GPU.h"
 #include "JSDOMPromiseDeferred.h"
+#include "Page.h"
 #include "PushNotificationEvent.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "WorkerBadgeProxy.h"
@@ -65,17 +66,17 @@ GPU* WorkerNavigator::gpu()
             if (!workerGlobalScope.graphicsClient())
                 return nullptr;
 
-            auto gpu = workerGlobalScope.graphicsClient()->createGPUForWebGPU();
+            RefPtr gpu = workerGlobalScope.graphicsClient()->createGPUForWebGPU();
             if (!gpu)
                 return nullptr;
 
             m_gpuForWebGPU = GPU::create(*gpu);
         } else if (scriptExecutionContext->isDocument()) {
-            auto& document = downcast<Document>(*scriptExecutionContext);
-            auto* page = document.page();
+            Ref document = downcast<Document>(*scriptExecutionContext);
+            RefPtr page = document->page();
             if (!page)
                 return nullptr;
-            auto gpu = page->chrome().createGPUForWebGPU();
+            RefPtr gpu = page->chrome().createGPUForWebGPU();
             if (!gpu)
                 return nullptr;
 

@@ -35,10 +35,20 @@
 #include <WebCore/IntSize.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <stdint.h>
+#include <wtf/Identified.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
 #include <wtf/TypeCasts.h>
 #include <wtf/WeakRef.h>
+
+namespace WebKit {
+class DrawingAreaProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::DrawingAreaProxy> : std::true_type { };
+}
 
 #if PLATFORM(COCOA)
 namespace WTF {
@@ -63,7 +73,7 @@ class WebProcessProxy;
 struct UpdateInfo;
 #endif
 
-class DrawingAreaProxy : public IPC::MessageReceiver, public IPC::MessageSender {
+class DrawingAreaProxy : public IPC::MessageReceiver, public IPC::MessageSender, public Identified<DrawingAreaIdentifier> {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(DrawingAreaProxy);
 
@@ -71,7 +81,6 @@ public:
     virtual ~DrawingAreaProxy();
 
     DrawingAreaType type() const { return m_type; }
-    DrawingAreaIdentifier identifier() const { return m_identifier; }
 
     void startReceivingMessages(WebProcessProxy&);
     void stopReceivingMessages(WebProcessProxy&);
@@ -149,7 +158,6 @@ protected:
     Ref<WebPageProxy> protectedWebPageProxy() const;
 
     DrawingAreaType m_type;
-    DrawingAreaIdentifier m_identifier;
     WeakRef<WebPageProxy> m_webPageProxy;
     Ref<WebProcessProxy> m_webProcessProxy;
 

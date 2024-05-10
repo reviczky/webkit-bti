@@ -122,16 +122,14 @@ private:
 
 static bool isInterchangeNewlineNode(const Node& node)
 {
-    static NeverDestroyed<String> interchangeNewlineClassString = AppleInterchangeNewline ""_s;
     RefPtr br = dynamicDowncast<HTMLBRElement>(node);
-    return br && br->attributeWithoutSynchronization(classAttr) == interchangeNewlineClassString;
+    return br && br->attributeWithoutSynchronization(classAttr) == AppleInterchangeNewline;
 }
 
 static bool isInterchangeConvertedSpaceSpan(const Node& node)
 {
-    static NeverDestroyed<String> convertedSpaceSpanClassString = AppleConvertedSpace ""_s;
     RefPtr element = dynamicDowncast<HTMLElement>(node);
-    return element && element->attributeWithoutSynchronization(classAttr) == convertedSpaceSpanClassString;
+    return element && element->attributeWithoutSynchronization(classAttr) == AppleConvertedSpace;
 }
 
 static Position positionAvoidingPrecedingNodes(Position position)
@@ -1086,7 +1084,7 @@ static bool isInlineNodeWithStyle(const Node& node)
     // one of our internal classes.
     const AtomString& classAttributeValue = element->attributeWithoutSynchronization(classAttr);
     if (classAttributeValue == AppleTabSpanClass
-        || classAttributeValue == AppleConvertedSpace ""_s
+        || classAttributeValue == AppleConvertedSpace
         || classAttributeValue == ApplePasteAsQuotation)
         return true;
 
@@ -1138,8 +1136,8 @@ void ReplaceSelectionCommand::doApply()
         return;
     
     // We can skip matching the style if the selection is plain text.
-    if ((selection.start().deprecatedNode()->renderer() && selection.start().deprecatedNode()->renderer()->style().effectiveUserModify() == UserModify::ReadWritePlaintextOnly)
-        && (selection.end().deprecatedNode()->renderer() && selection.end().deprecatedNode()->renderer()->style().effectiveUserModify() == UserModify::ReadWritePlaintextOnly))
+    if ((selection.start().deprecatedNode()->renderer() && selection.start().deprecatedNode()->renderer()->style().usedUserModify() == UserModify::ReadWritePlaintextOnly)
+        && (selection.end().deprecatedNode()->renderer() && selection.end().deprecatedNode()->renderer()->style().usedUserModify() == UserModify::ReadWritePlaintextOnly))
         m_matchStyle = false;
     
     if (m_matchStyle) {
@@ -1240,8 +1238,7 @@ void ReplaceSelectionCommand::doApply()
     
     // Adjust insertionPos to prevent nesting.
     // If the start was in a Mail blockquote, we will have already handled adjusting insertionPos above.
-    if (m_preventNesting && insertionBlock && !isTableCell(*insertionBlock) && !shouldHandleMailBlockquote) {
-        ASSERT(insertionBlock != currentRoot);
+    if (m_preventNesting && insertionBlock && insertionBlock != currentRoot && !isTableCell(*insertionBlock) && !shouldHandleMailBlockquote) {
         VisiblePosition visibleInsertionPos(insertionPos);
         if (isEndOfBlock(visibleInsertionPos) && !(isStartOfBlock(visibleInsertionPos) && fragment.hasInterchangeNewlineAtEnd()))
             insertionPos = positionInParentAfterNode(insertionBlock.get());

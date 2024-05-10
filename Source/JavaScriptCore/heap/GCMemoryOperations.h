@@ -40,7 +40,7 @@ constexpr size_t mediumCutoff = 4 * 1024;
 
 // This is a forwards loop so gcSafeMemmove can rely on the direction. 
 template <typename T>
-ALWAYS_INLINE void gcSafeMemcpy(T* dst, T* src, size_t bytes)
+ALWAYS_INLINE void gcSafeMemcpy(T* dst, const T* src, size_t bytes)
 {
     static_assert(sizeof(T) == sizeof(JSValue));
     RELEASE_ASSERT(bytes % 8 == 0);
@@ -118,7 +118,7 @@ ALWAYS_INLINE void gcSafeMemcpy(T* dst, T* src, size_t bytes)
 
             : [end] "+r" (end), [alignedEnd] "+r" (alignedEnd), [dstPtr] "+r" (dstPtr), [srcPtr] "+r" (srcPtr)
             :
-            : "d0", "d1", "memory"
+            : "d0", "d1", "memory", "cc"
         );
 #endif // CPU(X86_64)
     } else {
@@ -143,7 +143,7 @@ ALWAYS_INLINE void gcSafeMemcpy(T* dst, T* src, size_t bytes)
 }
 
 template <typename T>
-ALWAYS_INLINE void gcSafeMemmove(T* dst, T* src, size_t bytes)
+ALWAYS_INLINE void gcSafeMemmove(T* dst, const T* src, size_t bytes)
 {
     static_assert(sizeof(T) == sizeof(JSValue));
     RELEASE_ASSERT(bytes % 8 == 0);
@@ -233,7 +233,7 @@ ALWAYS_INLINE void gcSafeMemmove(T* dst, T* src, size_t bytes)
 
             : [alignedEnd] "+r" (alignedEnd), [end] "+r" (end), [dstPtr] "+r" (dstPtr), [srcPtr] "+r" (srcPtr)
             :
-            : "d0", "d1", "memory"
+            : "d0", "d1", "memory", "cc"
         );
 #endif // CPU(X86_64)
     }
@@ -289,7 +289,7 @@ ALWAYS_INLINE void gcSafeZeroMemory(T* dst, size_t bytes)
 
         : [alignedBytes] "+r" (alignedBytes), [bytes] "+r" (bytes), [dstPtr] "+r" (dstPtr), [end] "+r" (end), [alignedEnd] "+r" (alignedEnd)
         :
-        : "d0", "d1", "memory"
+        : "d0", "d1", "memory", "cc"
     );
 #endif // CPU(X86_64)
 #else

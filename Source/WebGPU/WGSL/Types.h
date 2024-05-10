@@ -213,12 +213,14 @@ public:
 struct Function {
     WTF::Vector<const Type*> parameters;
     const Type* result;
+    bool mustUse;
 };
 
 struct Reference {
     AddressSpace addressSpace;
     AccessMode accessMode;
     const Type* element;
+    bool isVectorComponent;
 };
 
 struct Pointer {
@@ -287,6 +289,8 @@ struct Type : public std::variant<
     bool hasCreationFixedFootprint() const;
     bool containsRuntimeArray() const;
     bool containsOverrideArray() const;
+    bool isSampler() const;
+    bool isTexture() const;
 };
 
 using ConversionRank = Markable<unsigned, IntegralMarkableTraits<unsigned, std::numeric_limits<unsigned>::max()>>;

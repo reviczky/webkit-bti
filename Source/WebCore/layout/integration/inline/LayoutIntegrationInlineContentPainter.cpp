@@ -50,7 +50,7 @@ InlineContentPainter::InlineContentPainter(PaintInfo& paintInfo, const LayoutPoi
 
 void InlineContentPainter::paintEllipsis(size_t lineIndex)
 {
-    if (m_paintInfo.phase != PaintPhase::Foreground || root().style().visibility() != Visibility::Visible)
+    if (m_paintInfo.phase != PaintPhase::Foreground || root().style().usedVisibility() != Visibility::Visible)
         return;
 
     auto lineBox = InlineIterator::LineBox { InlineIterator::LineBoxIteratorModernPath { m_inlineContent, lineIndex } };
@@ -89,7 +89,7 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
     }
 
     if (box.isText()) {
-        auto hasVisibleDamage = box.text().length() && box.isVisible() && hasDamage(box); 
+        auto hasVisibleDamage = box.text().length() && box.isVisible() && hasDamage(box);
         if (!hasVisibleDamage)
             return;
 
@@ -97,7 +97,7 @@ void InlineContentPainter::paintDisplayBox(const InlineDisplay::Box& box)
         return;
     }
 
-    if (auto* renderer = dynamicDowncast<RenderBox>(m_boxTree.rendererForLayoutBox(box.layoutBox())); renderer && renderer->isReplacedOrInlineBlock()) {
+    if (auto* renderer = dynamicDowncast<RenderBox>(box.layoutBox().rendererForIntegration()); renderer && renderer->isReplacedOrInlineBlock()) {
         if (m_paintInfo.shouldPaintWithinRoot(*renderer)) {
             // FIXME: Painting should not require a non-const renderer.
             const_cast<RenderBox*>(renderer)->paintAsInlineBlock(m_paintInfo, flippedContentOffsetIfNeeded(*renderer));
@@ -153,7 +153,7 @@ LayoutPoint InlineContentPainter::flippedContentOffsetIfNeeded(const RenderBox& 
 
 LayerPaintScope::LayerPaintScope(const BoxTree& boxTree, const RenderInline* layerRenderer)
     : m_boxTree(boxTree)
-    , m_layerInlineBox(layerRenderer ? &boxTree.layoutBoxForRenderer(*layerRenderer) : nullptr)
+    , m_layerInlineBox(layerRenderer ? layerRenderer->layoutBox() : nullptr)
 {
 }
 
@@ -185,7 +185,7 @@ bool LayerPaintScope::includes(const InlineDisplay::Box& box)
     if (box.isRootInlineBox() || box.isText() || box.isLineBreak())
         return true;
 
-    auto* renderer = dynamicDowncast<RenderLayerModelObject>(m_boxTree.rendererForLayoutBox(box.layoutBox()));
+    auto* renderer = dynamicDowncast<RenderLayerModelObject>(box.layoutBox().rendererForIntegration());
     bool hasSelfPaintingLayer = renderer && renderer->hasSelfPaintingLayer();
 
     if (hasSelfPaintingLayer && box.isNonRootInlineBox())

@@ -29,16 +29,19 @@ GST_DEBUG_CATEGORY(webkit_webrtc_incoming_track_processor_debug);
 
 namespace WebCore {
 
-GStreamerIncomingTrackProcessor::GStreamerIncomingTrackProcessor(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&& endPoint, GRefPtr<GstPad>&& pad)
-    : m_endPoint(WTFMove(endPoint))
-    , m_pad(WTFMove(pad))
+GStreamerIncomingTrackProcessor::GStreamerIncomingTrackProcessor()
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkit_webrtc_incoming_track_processor_debug, "webkitwebrtcincomingtrackprocessor", 0, "WebKit WebRTC Incoming Track Processor");
     });
+}
 
-    m_data.mediaStreamBinName = makeString(GST_OBJECT_NAME(m_pad.get()));
+void GStreamerIncomingTrackProcessor::configure(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&& endPoint, GRefPtr<GstPad>&& pad)
+{
+    m_endPoint = WTFMove(endPoint);
+    m_pad = WTFMove(pad);
+    m_data.mediaStreamBinName = span(GST_OBJECT_NAME(m_pad.get()));
     m_bin = gst_bin_new(m_data.mediaStreamBinName.ascii().data());
 
     auto caps = adoptGRef(gst_pad_get_current_caps(m_pad.get()));
@@ -125,6 +128,9 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::incomingTrackProcessor()
 {
     if (m_data.type == RealtimeMediaSource::Type::Audio)
         return createParser();
+
+    GST_DEBUG_OBJECT(m_bin.get(), "Requesting a key-frame");
+    gst_pad_send_event(m_pad.get(), gst_video_event_new_upstream_force_key_unit(GST_CLOCK_TIME_NONE, TRUE, 1));
 
     bool forceEarlyVideoDecoding = !g_strcmp0(g_getenv("WEBKIT_GST_WEBRTC_FORCE_EARLY_VIDEO_DECODING"), "1");
     GST_DEBUG_OBJECT(m_bin.get(), "Configuring for input caps: %" GST_PTR_FORMAT "%s", m_data.caps.get(), forceEarlyVideoDecoding ? " and early decoding" : "");

@@ -315,7 +315,7 @@ public:
     double toIntegerOrInfinity(JSGlobalObject*) const;
     int32_t toInt32(JSGlobalObject*) const;
     uint32_t toUInt32(JSGlobalObject*) const;
-    uint32_t toIndex(JSGlobalObject*, const char* errorName) const;
+    uint32_t toIndex(JSGlobalObject*, ASCIILiteral errorName) const;
     size_t toTypedArrayIndex(JSGlobalObject*, ASCIILiteral) const;
     uint64_t toLength(JSGlobalObject*) const;
 
@@ -423,7 +423,7 @@ public:
      * ranges to encode other values (however there are also other ranges of NaN space that
      * could have been selected).
      *
-     * This range of NaN space is represented by 64-bit numbers begining with the 15-bit
+     * This range of NaN space is represented by 64-bit numbers beginning with the 15-bit
      * hex patterns 0xFFFC and 0xFFFE - we rely on the fact that no valid double-precision
      * numbers will fall in these ranges.
      *
@@ -452,9 +452,9 @@ public:
      *     Null:      0x02
      *
      * These values have the following properties:
-     * - Bit 1 (OtherTag) is set for all four values, allowing real pointers to be
+     * - Bit 1 (0-indexed) is set (OtherTag) for all four values, allowing real pointers to be
      *   quickly distinguished from all immediate values, including these invalid pointers.
-     * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
+     * - With bit 3 (0-indexed) masked out (UndefinedTag), Undefined and Null share the
      *   same value, allowing null & undefined to be quickly detected.
      *
      * No valid JSValue will have the bit pattern 0x0, this is used to represent array
@@ -482,7 +482,7 @@ public:
     static_assert(LowestOfHighBits & NumberTag);
     static_assert(!((LowestOfHighBits>>1) & NumberTag));
 
-    // All non-numeric (bool, null, undefined) immediates have bit 2 set.
+    // All non-numeric (bool, null, undefined) immediates have bit 1 (0-indexed) set.
     static constexpr int32_t OtherTag       = 0x2;
     static constexpr int32_t BoolTag        = 0x4;
     static constexpr int32_t UndefinedTag   = 0x8;
@@ -704,7 +704,6 @@ bool isThisValueAltered(const PutPropertySlot&, JSObject* baseObject);
 // See section 7.2.9: https://tc39.github.io/ecma262/#sec-samevalue
 bool sameValue(JSGlobalObject*, JSValue a, JSValue b);
 
-#if COMPILER(GCC_COMPATIBLE)
 ALWAYS_INLINE void ensureStillAliveHere(JSValue value)
 {
 #if USE(JSVALUE64)
@@ -713,9 +712,6 @@ ALWAYS_INLINE void ensureStillAliveHere(JSValue value)
     asm volatile ("" : : "g"(value.payload()) : "memory");
 #endif
 }
-#else
-JS_EXPORT_PRIVATE void ensureStillAliveHere(JSValue);
-#endif
 
 // Use EnsureStillAliveScope when you have a data structure that includes GC pointers, and you need
 // to remove it from the DOM and then use it in the same scope. For example, a 'once' event listener

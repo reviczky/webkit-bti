@@ -100,6 +100,20 @@ private:
     }
 };
 
+static Vector<RefPtr<MediaSourceTrackGStreamer>> filterOutRepeatingTracks(const Vector<RefPtr<MediaSourceTrackGStreamer>>& tracks)
+{
+    Vector<RefPtr<MediaSourceTrackGStreamer>> uniqueTracks;
+    uniqueTracks.reserveInitialCapacity(tracks.size());
+
+    for (const auto& track : tracks) {
+        if (!uniqueTracks.containsIf([&track](const auto& current) { return track->stringId() == current->stringId(); }))
+            uniqueTracks.append(track);
+    }
+
+    uniqueTracks.shrinkToFit();
+    return uniqueTracks;
+}
+
 void MediaPlayerPrivateGStreamerMSE::registerMediaEngine(MediaEngineRegistrar registrar)
 {
     GST_DEBUG_CATEGORY_INIT(webkit_mse_debug, "webkitmse", 0, "WebKit MSE media player");
@@ -153,7 +167,7 @@ void MediaPlayerPrivateGStreamerMSE::pause()
     updateStates();
 }
 
-MediaTime MediaPlayerPrivateGStreamerMSE::durationMediaTime() const
+MediaTime MediaPlayerPrivateGStreamerMSE::duration() const
 {
     if (UNLIKELY(!m_pipeline || m_didErrorOccur))
         return MediaTime();
@@ -197,8 +211,9 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const SeekTarget& target, float rate
     // This will also add support for fastSeek once done (see webkit.org/b/260607)
     if (!m_mediaSourcePrivate)
         return false;
-    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::current(), [this, weakThis = WeakPtr { *this }](auto&& result) {
-        if (!weakThis || !result)
+    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::current(), [this, weakThis = ThreadSafeWeakPtr { *this }](auto&& result) {
+        RefPtr self = weakThis.get();
+        if (!self || !result)
             return;
 
         if (m_mediaSourcePrivate)
@@ -211,7 +226,14 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const SeekTarget& target, float rate
             if (!audioSinkPerformsAsyncStateChanges) {
                 // If audio-only pipeline's sink is not performing async state changes
                 // we must simulate preroll right away as otherwise nothing will trigger it.
+                bool mustPreventPositionReset = m_isWaitingForPreroll && m_isSeeking;
+                if (mustPreventPositionReset)
+                    m_cachedPosition = currentTime();
                 didPreroll();
+                if (mustPreventPositionReset) {
+                    propagateReadyStateToPlayer();
+                    invalidateCachedPosition();
+                }
             }
         }
     });
@@ -264,7 +286,7 @@ void MediaPlayerPrivateGStreamerMSE::propagateReadyStateToPlayer()
 
     // The readyState change may be a result of monitorSourceBuffers() finding that currentTime == duration, which
     // should cause the video to be marked as ended. Let's have the player check that.
-    if (player && (!m_isWaitingForPreroll || currentMediaTime() == durationMediaTime()))
+    if (player && (!m_isWaitingForPreroll || currentTime() == duration()))
         player->timeChanged();
 }
 
@@ -277,7 +299,7 @@ void MediaPlayerPrivateGStreamerMSE::didPreroll()
     // c) At the end of a flush (forced quality change). These should not produce either of these outcomes.
     // We identify (a) and (b) by setting m_isWaitingForPreroll = true at the initialization of the player and
     // at the beginning of a seek.
-    GST_DEBUG("Pipeline prerolled. currentMediaTime = %s", currentMediaTime().toString().utf8().data());
+    GST_DEBUG("Pipeline prerolled. currentMediaTime = %s", currentTime().toString().utf8().data());
     if (!m_isWaitingForPreroll) {
         GST_DEBUG("Preroll was consequence of a flush, nothing to do at this level.");
         return;
@@ -290,9 +312,9 @@ void MediaPlayerPrivateGStreamerMSE::didPreroll()
 
     if (m_isSeeking) {
         m_isSeeking = false;
-        GST_DEBUG("Seek complete because of preroll. currentMediaTime = %s", currentMediaTime().toString().utf8().data());
+        GST_DEBUG("Seek complete because of preroll. currentMediaTime = %s", currentTime().toString().utf8().data());
         // By calling timeChanged(), m_isSeeking will be checked an a "seeked" event will be emitted.
-        timeChanged(currentMediaTime());
+        timeChanged(currentTime());
     }
 
     propagateReadyStateToPlayer();
@@ -300,8 +322,12 @@ void MediaPlayerPrivateGStreamerMSE::didPreroll()
 
 const PlatformTimeRanges& MediaPlayerPrivateGStreamerMSE::buffered() const
 {
-    if (m_mediaSourcePrivate)
-        return m_mediaSourcePrivate->buffered();
+    if (!m_source)
+        return PlatformTimeRanges::emptyRanges();
+
+    // When a MediaSource object is in use, the HTMLMediaElement retrieves the buffered ranges
+    // directly from it rather than from the MediaPlayer / MediaPlayerPrivate.
+    ASSERT_NOT_REACHED();
     return PlatformTimeRanges::emptyRanges();
 }
 
@@ -309,27 +335,34 @@ void MediaPlayerPrivateGStreamerMSE::sourceSetup(GstElement* sourceElement)
 {
     ASSERT(WEBKIT_IS_MEDIA_SRC(sourceElement));
     GST_DEBUG_OBJECT(pipeline(), "Source %p setup (old was: %p)", sourceElement, m_source.get());
-    webKitMediaSrcSetPlayer(WEBKIT_MEDIA_SRC(sourceElement), WeakPtr { *this });
+    webKitMediaSrcSetPlayer(WEBKIT_MEDIA_SRC(sourceElement), ThreadSafeWeakPtr { *this });
     m_source = sourceElement;
 
-    if (m_mediaSourcePrivate && m_mediaSourcePrivate->hasAllTracks())
+    if (m_mediaSourcePrivate && m_mediaSourcePrivate->hasAllTracks()) {
+        m_tracks = filterOutRepeatingTracks(m_tracks);
         webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), m_tracks);
+    }
+}
+
+size_t MediaPlayerPrivateGStreamerMSE::extraMemoryCost() const
+{
+    return 0;
 }
 
 void MediaPlayerPrivateGStreamerMSE::updateStates()
 {
-    bool isSeeking = isPipelineSeeking();
+    bool isWaitingPreroll = isPipelineWaitingPreroll();
     bool shouldBePlaying = (!m_isPaused && readyState() >= MediaPlayer::ReadyState::HaveFutureData && m_playbackRatePausedState != PlaybackRatePausedState::RatePaused)
         || m_playbackRatePausedState == PlaybackRatePausedState::ShouldMoveToPlaying;
     GST_DEBUG_OBJECT(pipeline(), "shouldBePlaying = %s, m_isPipelinePlaying = %s, is seeking %s", boolForPrinting(shouldBePlaying),
-        boolForPrinting(m_isPipelinePlaying), boolForPrinting(isSeeking));
-    if (!isSeeking && shouldBePlaying && !m_isPipelinePlaying) {
+        boolForPrinting(m_isPipelinePlaying), boolForPrinting(isWaitingPreroll));
+    if (!isWaitingPreroll && shouldBePlaying && !m_isPipelinePlaying) {
         auto result = changePipelineState(GST_STATE_PLAYING);
         if (result == ChangePipelineStateResult::Failed)
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PLAYING failed");
         else if (result == ChangePipelineStateResult::Ok)
             m_playbackRatePausedState = PlaybackRatePausedState::Playing;
-    } else if (!isSeeking && !shouldBePlaying && m_isPipelinePlaying) {
+    } else if (!isWaitingPreroll && !shouldBePlaying && m_isPipelinePlaying) {
         if (changePipelineState(GST_STATE_PAUSED) == ChangePipelineStateResult::Failed)
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PAUSED failed");
     }
@@ -378,8 +411,8 @@ void MediaPlayerPrivateGStreamerMSE::setInitialVideoSize(const FloatSize& videoS
 
 void MediaPlayerPrivateGStreamerMSE::startSource(const Vector<RefPtr<MediaSourceTrackGStreamer>>& tracks)
 {
-    m_tracks = tracks;
-    webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), tracks);
+    m_tracks = filterOutRepeatingTracks(tracks);
+    webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), m_tracks);
 }
 
 void MediaPlayerPrivateGStreamerMSE::getSupportedTypes(HashSet<String>& types)
@@ -415,13 +448,13 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamerMSE::supportsType(const Med
     return result;
 }
 
-MediaTime MediaPlayerPrivateGStreamerMSE::maxMediaTimeSeekable() const
+MediaTime MediaPlayerPrivateGStreamerMSE::maxTimeSeekable() const
 {
     if (UNLIKELY(m_didErrorOccur))
         return MediaTime::zeroTime();
 
-    GST_DEBUG("maxMediaTimeSeekable");
-    MediaTime result = durationMediaTime();
+    GST_DEBUG("maxTimeSeekable");
+    MediaTime result = duration();
     // Infinite duration means live stream.
     if (result.isPositiveInfinite()) {
         MediaTime maxBufferedTime = buffered().maximumBufferedTime();
@@ -432,11 +465,11 @@ MediaTime MediaPlayerPrivateGStreamerMSE::maxMediaTimeSeekable() const
     return result;
 }
 
-bool MediaPlayerPrivateGStreamerMSE::currentMediaTimeMayProgress() const
+bool MediaPlayerPrivateGStreamerMSE::timeIsProgressing() const
 {
     if (!m_mediaSourcePrivate)
         return false;
-    return m_mediaSourcePrivate->hasFutureTime(currentMediaTime());
+    return !paused() && m_mediaSourcePrivate->hasFutureTime(currentTime());
 }
 
 void MediaPlayerPrivateGStreamerMSE::notifyActiveSourceBuffersChanged()

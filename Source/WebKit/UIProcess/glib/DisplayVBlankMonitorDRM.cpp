@@ -50,6 +50,9 @@
 
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
 #include <wpe/wpe-platform.h>
+#ifdef WPE_PLATFORM_DRM
+#include <wpe/drm/wpe-drm.h>
+#endif
 #endif
 
 namespace WebKit {
@@ -216,7 +219,7 @@ std::unique_ptr<DisplayVBlankMonitor> DisplayVBlankMonitorDRM::create(PlatformDi
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
     String filename;
     if (usingWPEPlatformAPI)
-        filename = String::fromUTF8(wpe_render_device());
+        filename = String::fromUTF8(wpe_display_get_drm_device(wpe_display_get_primary()));
     else
         filename = WebCore::PlatformDisplay::sharedDisplay().drmDeviceFile();
 #else
@@ -237,7 +240,16 @@ std::unique_ptr<DisplayVBlankMonitor> DisplayVBlankMonitorDRM::create(PlatformDi
     auto crtcInfo = findCrtc(fd.value(), monitor);
 #elif PLATFORM(WPE)
 #if ENABLE(WPE_PLATFORM)
-    auto crtcInfo = monitor ? findCrtc(fd.value(), monitor) : findCrtc(fd.value());
+    std::optional<std::pair<uint32_t, uint32_t>> crtcInfo;
+    if (usingWPEPlatformAPI) {
+#ifdef WPE_PLATFORM_DRM
+        if (WPE_IS_MONITOR_DRM(monitor))
+            crtcInfo = { wpe_monitor_drm_get_crtc_index(WPE_MONITOR_DRM(monitor)), wpe_monitor_get_refresh_rate(monitor) };
+        else
+#endif
+            crtcInfo = findCrtc(fd.value(), monitor);
+    } else
+        crtcInfo = findCrtc(fd.value());
 #else
     auto crtcInfo = findCrtc(fd.value());
 #endif

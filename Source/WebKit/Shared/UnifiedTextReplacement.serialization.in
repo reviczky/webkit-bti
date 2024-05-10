@@ -25,21 +25,31 @@ header: "WebTextReplacementData.h"
 [CustomHeader] enum class WebKit::WebTextReplacementDataState : uint8_t {
     Pending,
     Active,
-    Committed,
     Reverted,
     Invalid
+};
+
+header: "WebTextReplacementData.h"
+[CustomHeader] enum class WebKit::WebTextReplacementDataEditAction : uint8_t {
+    Undo,
+    Redo,
+    UndoAll,
 };
 
 header: "WebTextReplacementData.h"
 [CustomHeader] struct WebKit::WebTextReplacementData {
     WTF::UUID uuid;
     WebCore::CharacterRange originalRange;
-    WTF::String replacement;
-    WTF::String description;
-    WebKit::WebTextReplacementData::State state;
-
-    WebCore::AttributedString originalString;
+    String replacement;
+    String description;
+    WebKit::WebTextReplacementDataState state;
 };
+
+header: "WebUnifiedTextReplacementContextData.h"
+[CustomHeader] enum class WebKit::WebUnifiedTextReplacementType : uint8_t {
+    PlainText,
+    RichText,
+}
 
 struct WebKit::WebUnifiedTextReplacementContextData {
     WTF::UUID uuid;

@@ -683,6 +683,9 @@ struct Extensions
     // GL_ANGLE_program_binary
     bool programBinaryANGLE = false;
 
+    // GL_ANGLE_program_binary_readiness_query
+    bool programBinaryReadinessQueryANGLE = false;
+
     // GL_ANGLE_program_cache_control
     bool programCacheControlANGLE = false;
 
@@ -745,6 +748,9 @@ struct Extensions
 
     // GL_ANGLE_texture_rectangle
     bool textureRectangleANGLE = false;
+
+    // GL_ANGLE_variable_rasterization_rate_metal
+    bool variableRasterizationRateMetalANGLE = false;
 
     // GL_ANGLE_vulkan_image
     bool vulkanImageANGLE = false;

@@ -29,7 +29,7 @@
 #include "HTTPHeaderNames.h"
 #include "HTTPStatusCodes.h"
 #include "Logging.h"
-#include "PublicSuffix.h"
+#include "PublicSuffixStore.h"
 #include "RegistrableDomain.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
@@ -418,7 +418,7 @@ void ResourceRequestBase::setExistingHTTPReferrerToOriginString()
     if (!hasHTTPReferrer())
         return;
 
-    setHTTPHeaderField(HTTPHeaderName::Referer, SecurityPolicy::referrerToOriginString(httpReferrer()));
+    setHTTPHeaderField(HTTPHeaderName::Referer, SecurityPolicy::referrerToOriginString(URL { httpReferrer() }));
 }
     
 void ResourceRequestBase::clearHTTPReferrer()
@@ -827,20 +827,12 @@ void ResourceRequestBase::setCachePartition(const String& cachePartition)
 
 String ResourceRequestBase::partitionName(const String& domain)
 {
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     if (domain.isNull())
         return emptyString();
-    String highLevel = topPrivatelyControlledDomain(domain);
+    auto highLevel = PublicSuffixStore::singleton().topPrivatelyControlledDomain(domain);
     if (highLevel.isNull())
         return emptyString();
     return highLevel;
-#else
-    UNUSED_PARAM(domain);
-#if ENABLE(CACHE_PARTITIONING)
-#error Cache partitioning requires PUBLIC_SUFFIX_LIST
-#endif
-    return emptyString();
-#endif
 }
 
 bool ResourceRequestBase::isThirdParty() const

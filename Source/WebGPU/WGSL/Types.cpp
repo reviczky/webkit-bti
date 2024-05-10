@@ -497,8 +497,9 @@ bool Type::isConstructible() const
             return true;
         },
         [&](const PrimitiveStruct&) -> bool {
-            return false;
+            return true;
         },
+
         [&](const Function&) -> bool {
             return false;
         },
@@ -840,6 +841,22 @@ bool Type::containsOverrideArray() const
     if (auto* reference = std::get_if<Types::Reference>(this))
         return reference->element->containsOverrideArray();
     return false;
+}
+
+bool Type::isTexture() const
+{
+    auto* primitive = std::get_if<Types::Primitive>(this);
+    if (primitive)
+        return primitive->kind == Types::Primitive::TextureExternal;
+    return std::holds_alternative<Types::Texture>(*this) || std::holds_alternative<Types::TextureStorage>(*this) || std::holds_alternative<Types::TextureDepth>(*this);
+}
+
+bool Type::isSampler() const
+{
+    auto* primitive = std::get_if<Types::Primitive>(this);
+    if (!primitive)
+        return false;
+    return primitive->kind == Types::Primitive::Sampler || primitive->kind == Types::Primitive::SamplerComparison;
 }
 
 bool isPrimitive(const Type* type, Primitive::Kind kind)

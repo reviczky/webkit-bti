@@ -48,6 +48,7 @@ class ThreadableLoader;
 
 class EventSource final : public RefCounted<EventSource>, public EventTarget, private ThreadableLoaderClient, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(EventSource);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(EventSource);
 public:
     struct Init {
         bool withCredentials;
@@ -71,13 +72,14 @@ public:
 
     void close();
 
-    using RefCounted::ref;
-    using RefCounted::deref;
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
 private:
     EventSource(ScriptExecutionContext&, const URL&, const Init&);
 
-    EventTargetInterface eventTargetInterface() const final { return EventSourceEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::EventSource; }
     ScriptExecutionContext* scriptExecutionContext() const final { return ActiveDOMObject::scriptExecutionContext(); }
 
     void refEventTarget() final { ref(); }
@@ -94,7 +96,6 @@ private:
 
     // ActiveDOMObject
     void stop() final;
-    const char* activeDOMObjectName() const final;
     void suspend(ReasonForSuspension) final;
     void resume() final;
     bool virtualHasPendingActivity() const final;

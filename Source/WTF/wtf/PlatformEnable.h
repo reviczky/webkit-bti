@@ -104,12 +104,12 @@
 
 /* Do not use PLATFORM() tests in this section ! */
 
-#if !defined(ENABLE_3D_TRANSFORMS)
-#define ENABLE_3D_TRANSFORMS 0
-#endif
-
 #if !defined(ENABLE_ACCESSIBILITY_ANIMATION_CONTROL)
 #define ENABLE_ACCESSIBILITY_ANIMATION_CONTROL 0
+#endif
+
+#if !defined(ENABLE_ACCESSIBILITY_NON_BLINKING_CURSOR)
+#define ENABLE_ACCESSIBILITY_NON_BLINKING_CURSOR 0
 #endif
 
 #if !defined(ENABLE_ADVANCED_PRIVACY_PROTECTIONS)
@@ -206,10 +206,6 @@
 
 #if !defined(ENABLE_DESTINATION_COLOR_SPACE_DISPLAY_P3)
 #define ENABLE_DESTINATION_COLOR_SPACE_DISPLAY_P3 0
-#endif
-
-#if !defined(ENABLE_DESTINATION_COLOR_SPACE_LINEAR_SRGB)
-#define ENABLE_DESTINATION_COLOR_SPACE_LINEAR_SRGB 1
 #endif
 
 #if !defined(ENABLE_DRAG_SUPPORT)
@@ -323,10 +319,6 @@
 #define ENABLE_KINETIC_SCROLLING 0
 #endif
 
-#if !defined(ENABLE_LAYER_BASED_SVG_ENGINE)
-#define ENABLE_LAYER_BASED_SVG_ENGINE 0
-#endif
-
 #if !defined(ENABLE_LLVM_PROFILE_GENERATION)
 #define ENABLE_LLVM_PROFILE_GENERATION 0
 #endif
@@ -349,6 +341,10 @@
 
 #if !defined(ENABLE_MEDIA_SOURCE)
 #define ENABLE_MEDIA_SOURCE 0
+#endif
+
+#if !defined(ENABLE_MEDIA_SOURCE_IN_WORKERS)
+#define ENABLE_MEDIA_SOURCE_IN_WORKERS 0
 #endif
 
 #if !defined(ENABLE_MEDIA_STATISTICS)
@@ -603,6 +599,11 @@
 #endif
 #endif
 
+/* wyhash-based StringHasher */
+#if !defined(ENABLE_WYHASH_STRING_HASHER) && PLATFORM(MAC)
+#define ENABLE_WYHASH_STRING_HASHER 1
+#endif
+
 /* The JIT is enabled by default on all x86-64 & ARM64 platforms. */
 #if !defined(ENABLE_JIT) && (CPU(X86_64) || (CPU(ARM64) && CPU(ADDRESS64)))
 #define ENABLE_JIT 1
@@ -739,6 +740,10 @@
 #define ENABLE_WEBASSEMBLY_BBQJIT 1
 #endif
 
+#if !defined(ENABLE_WEBASSEMBLY) && CPU(ADDRESS64) && PLATFORM(COCOA) && !ENABLE(C_LOOP)
+#define ENABLE_WEBASSEMBLY 1
+#endif
+
 /* The SamplingProfiler is the probabilistic and low-overhead profiler used by
  * JSC to measure where time is spent inside a JavaScript program.
  * In configurations other than Windows and Darwin, because layout of mcontext_t depends on standard libraries (like glibc),
@@ -778,7 +783,8 @@
     || (PLATFORM(MACCATALYST) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000) \
     || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000) \
     || (PLATFORM(APPLETV) && __TV_OS_VERSION_MAX_ALLOWED >= 180000) \
-    || (PLATFORM(WATCHOS) && __WATCH_OS_VERSION_MAX_ALLOWED >= 110000)
+    || (PLATFORM(WATCHOS) && __WATCH_OS_VERSION_MAX_ALLOWED >= 110000) \
+    || (PLATFORM(VISION) && __VISION_OS_VERSION_MAX_ALLOWED >= 20000)
 // Linkers from older SDKs causes wrong linking. ref: rdar://96556827
 #define ENABLE_OFFLINE_ASM_ALT_ENTRY 1
 #endif
@@ -804,9 +810,14 @@
 #define ENABLE_YARR_JIT_REGEXP_TEST_INLINE 1
 #endif
 
-/* Enable JIT'ing Regular Expressions that have nested back references. */
+/* Enable JIT'ing Regular Expressions that have back references. */
 #if ENABLE(YARR_JIT) && (CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS)) || CPU(RISCV64))
 #define ENABLE_YARR_JIT_BACKREFERENCES 1
+#if CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS))
+#define ENABLE_YARR_JIT_BACKREFERENCES_FOR_16BIT_EXPRS 1
+#else
+#define ENABLE_YARR_JIT_BACKREFERENCES_FOR_16BIT_EXPRS 0
+#endif
 #endif
 
 #if ENABLE(YARR_JIT) && (CPU(ARM64) || CPU(X86_64) || CPU(RISCV64))
@@ -861,7 +872,7 @@
 #endif
 
 /* CSS Selector JIT Compiler */
-#if !defined(ENABLE_CSS_SELECTOR_JIT) && ((CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && OS(DARWIN))) && ENABLE(JIT) && (OS(DARWIN) || OS(WINDOWS) || PLATFORM(GTK) || PLATFORM(WPE)))
+#if !defined(ENABLE_CSS_SELECTOR_JIT) && ((CPU(X86_64) || CPU(ARM64)) && ENABLE(JIT) && (OS(DARWIN) || OS(WINDOWS) || PLATFORM(GTK) || PLATFORM(WPE)))
 #define ENABLE_CSS_SELECTOR_JIT 1
 #endif
 
@@ -947,10 +958,6 @@
 #error "ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3) requires HAVE(CORE_GRAPHICS_DISPLAY_P3_COLOR_SPACE) on platforms using CoreGraphics"
 #endif
 
-#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB) && !HAVE(CORE_GRAPHICS_LINEAR_SRGB_COLOR_SPACE)
-#error "ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB) requires HAVE(CORE_GRAPHICS_LINEAR_SRGB_COLOR_SPACE) on platforms using CoreGraphics"
-#endif
-
 #endif
 
 #if ENABLE(PREDEFINED_COLOR_SPACE_DISPLAY_P3) && !ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3)
@@ -975,4 +982,14 @@
 #if !defined(ENABLE_EXTENSION_CAPABILITIES) \
     && USE(EXTENSIONKIT)
 #define ENABLE_EXTENSION_CAPABILITIES 1
+#endif
+
+#if !defined(ENABLE_LINEAR_MEDIA_PLAYER) \
+    && USE(LINEARMEDIAKIT)
+#define ENABLE_LINEAR_MEDIA_PLAYER 1
+#endif
+
+#if !defined(ENABLE_WRITING_SUGGESTIONS) \
+    && (PLATFORM(COCOA) && HAVE(INLINE_PREDICTIONS))
+#define ENABLE_WRITING_SUGGESTIONS 1
 #endif

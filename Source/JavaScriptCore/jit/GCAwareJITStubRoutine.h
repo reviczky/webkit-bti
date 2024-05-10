@@ -41,6 +41,7 @@ class AccessCase;
 class CallLinkInfo;
 class JITStubRoutineSet;
 class OptimizingCallLinkInfo;
+class WatchpointsOnStructureStubInfo;
 
 // Use this stub routine if you know that your code might be on stack when
 // either GC or other kinds of stub deletion happen. Basicaly, if your stub
@@ -55,6 +56,7 @@ class OptimizingCallLinkInfo;
 // list which does not get reclaimed all at once).
 class GCAwareJITStubRoutine : public JITStubRoutine {
 public:
+    using Base = JITStubRoutine;
     friend class JITStubRoutine;
     GCAwareJITStubRoutine(Type, const MacroAssemblerCodeRef<JITStubRoutinePtrTag>&, JSCell* owner);
 
@@ -71,11 +73,12 @@ public:
     void makeGCAware(VM&, bool isCodeImmutable);
 
     JSCell* owner() const { return m_owner; }
+
+    bool removeDeadOwners(VM&);
     
 protected:
     void observeZeroRefCountImpl();
 
-private:
     friend class JITStubRoutineSet;
 
     JSCell* m_owner { nullptr };
@@ -84,14 +87,17 @@ private:
     bool m_ownerIsDead : 1 { false };
     bool m_isGCAware : 1 { false };
     bool m_isCodeImmutable : 1 { false };
+    bool m_isInSharedJITStubSet : 1 { false };
 };
 
 class PolymorphicAccessJITStubRoutine : public GCAwareJITStubRoutine {
 public:
     using Base = GCAwareJITStubRoutine;
     friend class JITStubRoutine;
+    friend class GCAwareJITStubRoutine;
 
     PolymorphicAccessJITStubRoutine(Type, const MacroAssemblerCodeRef<JITStubRoutinePtrTag>&, VM&, FixedVector<RefPtr<AccessCase>>&&, FixedVector<StructureID>&&, JSCell* owner);
+    ~PolymorphicAccessJITStubRoutine();
 
     const FixedVector<RefPtr<AccessCase>>& cases() const { return m_cases; }
     const FixedVector<StructureID>& weakStructures() const { return m_weakStructures; }
@@ -99,11 +105,40 @@ public:
     unsigned hash() const
     {
         if (!m_hash)
-            m_hash = computeHash(m_cases, m_weakStructures);
+            m_hash = computeHash(m_cases);
         return m_hash;
     }
 
-    static unsigned computeHash(const FixedVector<RefPtr<AccessCase>>&, const FixedVector<StructureID>&);
+    static unsigned computeHash(std::span<const RefPtr<AccessCase>>);
+
+    void addedToSharedJITStubSet();
+
+
+    const WatchpointsOnStructureStubInfo* watchpoints() const { return m_watchpoints.get(); }
+    void setWatchpoints(std::unique_ptr<WatchpointsOnStructureStubInfo>&&);
+    WatchpointSet& watchpointSet() { return *m_watchpointSet.get(); }
+    void invalidate();
+
+    bool isStillValid() const
+    {
+        if (!m_watchpointSet)
+            return false;
+        if (!m_watchpointSet->isStillValid())
+            return false;
+        return !m_ownerIsDead;
+    }
+
+    void addOwner(CodeBlock* codeBlock)
+    {
+        if (m_isInSharedJITStubSet)
+            m_owners.add(codeBlock);
+    }
+
+    void removeOwner(CodeBlock* codeBlock)
+    {
+        if (m_isInSharedJITStubSet)
+            m_owners.remove(codeBlock);
+    }
 
 protected:
     void observeZeroRefCountImpl();
@@ -112,6 +147,9 @@ private:
     VM& m_vm;
     FixedVector<RefPtr<AccessCase>> m_cases;
     FixedVector<StructureID> m_weakStructures;
+    RefPtr<WatchpointSet> m_watchpointSet;
+    HashCountedSet<CodeBlock*> m_owners;
+    std::unique_ptr<WatchpointsOnStructureStubInfo> m_watchpoints;
 };
 
 // Use this if you want to mark one additional object during GC if your stub

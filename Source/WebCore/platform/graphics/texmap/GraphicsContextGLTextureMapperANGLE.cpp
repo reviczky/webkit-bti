@@ -54,6 +54,10 @@
 #include "GraphicsContextGLGBMTextureMapper.h"
 #endif
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "GLFence.h"
+#endif
+
 namespace WebCore {
 
 GraphicsContextGLANGLE::~GraphicsContextGLANGLE()
@@ -95,7 +99,16 @@ GraphicsContextGLANGLE::~GraphicsContextGLANGLE()
 
 bool GraphicsContextGLANGLE::makeContextCurrent()
 {
-    return !!EGL_MakeCurrent(m_displayObj, m_surfaceObj, m_surfaceObj, m_contextObj);
+    auto* texmapContext = static_cast<GraphicsContextGLTextureMapperANGLE*>(this);
+    if (texmapContext->isCurrent())
+        return true;
+
+    if (EGL_MakeCurrent(m_displayObj, m_surfaceObj, m_surfaceObj, m_contextObj)) {
+        texmapContext->didMakeContextCurrent();
+        return true;
+    }
+
+    return false;
 }
 
 void GraphicsContextGLANGLE::checkGPUStatus()
@@ -351,7 +364,41 @@ void GraphicsContextGLTextureMapperANGLE::prepareForDisplay()
 
     prepareTexture();
     swapCompositorTexture();
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    m_frameFence = GLFence::create();
+#endif
 }
+
+GLContextWrapper::Type GraphicsContextGLTextureMapperANGLE::type() const
+{
+    return GLContextWrapper::Type::Angle;
+}
+
+bool GraphicsContextGLTextureMapperANGLE::makeCurrentImpl()
+{
+    return !!EGL_MakeCurrent(m_displayObj, m_surfaceObj, m_surfaceObj, m_contextObj);
+}
+
+bool GraphicsContextGLTextureMapperANGLE::unmakeCurrentImpl()
+{
+    return !!EGL_MakeCurrent(m_displayObj, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+}
+
+#if ENABLE(WEBXR)
+bool GraphicsContextGLTextureMapperANGLE::addFoveation(IntSize, IntSize, IntSize, std::span<const GCGLfloat>, std::span<const GCGLfloat>, std::span<const GCGLfloat>)
+{
+    return false;
+}
+
+void GraphicsContextGLTextureMapperANGLE::enableFoveation(GCGLuint)
+{
+}
+
+void GraphicsContextGLTextureMapperANGLE::disableFoveation()
+{
+}
+#endif
 
 } // namespace WebCore
 

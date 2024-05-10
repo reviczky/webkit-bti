@@ -40,8 +40,9 @@ cocoa/TestNavigationDelegate.mm
 cocoa/TestProtocol.mm
 cocoa/TestResourceLoadDelegate.mm
 cocoa/TestUIDelegate.mm
-cocoa/TestWKWebView.mm
 cocoa/TestWebExtensionsDelegate.mm
+cocoa/TestWKWebView.mm
+cocoa/TestWKWebViewConfiguration.mm
 cocoa/UserMediaCaptureUIDelegate.mm
 
 Tests/WebKitCocoa/AVFoundationPreference.mm
@@ -107,6 +108,7 @@ Tests/WebKitCocoa/DownloadProgress.mm
 Tests/WebKitCocoa/DragAndDropTests.mm
 Tests/WebKitCocoa/DuplicateCompletionHandlerCalls.mm
 Tests/WebKitCocoa/EditorStateTests.mm
+Tests/WebKitCocoa/ElementTargetingTests.mm
 Tests/WebKitCocoa/EventAttribution.mm
 Tests/WebKitCocoa/ExitFullscreenOnEnterPiP.mm
 Tests/WebKitCocoa/ExitPiPOnSuspendVideoElement.mm
@@ -156,6 +158,7 @@ Tests/WebKitCocoa/InteractionDeadlockAfterCrash.mm
 Tests/WebKitCocoa/JITEnabled.mm
 Tests/WebKitCocoa/JavaScriptDuringNavigation.mm
 Tests/WebKitCocoa/LoadAlternateHTMLString.mm
+Tests/WebKitCocoa/LoadAndDecodeImage.mm
 Tests/WebKitCocoa/LoadDataWithNilMIMEType.mm
 Tests/WebKitCocoa/LoadFileThenReload.mm
 Tests/WebKitCocoa/LoadFileURL.mm
@@ -167,10 +170,11 @@ Tests/WebKitCocoa/LocalStoragePersistence.mm
 Tests/WebKitCocoa/LocalStorageQuirkTest.mm
 Tests/WebKitCocoa/MediaBufferingPolicy.mm
 Tests/WebKitCocoa/MediaDocument.mm
-Tests/WebKitCocoa/MediaLoading.mm
+Tests/WebKitCocoa/MediaLoading.mm @no-unify
 Tests/WebKitCocoa/MediaMutedState.mm
 Tests/WebKitCocoa/MediaSession.mm
 Tests/WebKitCocoa/MediaType.mm
+Tests/WebKitCocoa/MemoryFootprintThreshold.mm
 Tests/WebKitCocoa/MessagePortProviders.mm
 Tests/WebKitCocoa/ModalAlerts.mm
 Tests/WebKitCocoa/NSAttributedStringWebKitAdditions.mm
@@ -203,6 +207,7 @@ Tests/WebKitCocoa/Preferences.mm
 Tests/WebKitCocoa/PreferredAudioBufferSize.mm
 Tests/WebKitCocoa/PrepareForMoveToWindow.mm
 Tests/WebKitCocoa/PrivateClickMeasurement.mm
+Tests/WebKitCocoa/ProcessInfo.mm
 Tests/WebKitCocoa/ProcessPreWarming.mm
 Tests/WebKitCocoa/ProcessSuspendMediaBuffering.mm
 Tests/WebKitCocoa/ProcessSuspension.mm
@@ -242,6 +247,7 @@ Tests/WebKitCocoa/StorageQuota.mm
 Tests/WebKitCocoa/StoreBlobThenDelete.mm
 Tests/WebKitCocoa/SystemColors.mm
 Tests/WebKitCocoa/SystemPreview.mm
+Tests/WebKitCocoa/TextPlaceholderTests.mm
 Tests/WebKitCocoa/TLSDeprecation.mm
 Tests/WebKitCocoa/TabOutOfWebView.mm
 Tests/WebKitCocoa/TestAwakener.mm
@@ -254,6 +260,7 @@ Tests/WebKitCocoa/TextWidth.mm
 Tests/WebKitCocoa/TimeZoneOverride.mm
 Tests/WebKitCocoa/TopContentInset.mm
 Tests/WebKitCocoa/UIDelegate.mm
+Tests/WebKitCocoa/UnifiedPDFTests.mm
 Tests/WebKitCocoa/UploadDirectory.mm
 Tests/WebKitCocoa/UseSelectionAsFindString.mm
 Tests/WebKitCocoa/UserContentController.mm
@@ -295,6 +302,7 @@ Tests/WebKitCocoa/WKWebExtensionAPIAlarms.mm
 Tests/WebKitCocoa/WKWebExtensionAPICommands.mm
 Tests/WebKitCocoa/WKWebExtensionAPICookies.mm
 Tests/WebKitCocoa/WKWebExtensionAPIDeclarativeNetRequest.mm
+Tests/WebKitCocoa/WKWebExtensionAPIDevTools.mm
 Tests/WebKitCocoa/WKWebExtensionAPIEvent.mm
 Tests/WebKitCocoa/WKWebExtensionAPIExtension.mm
 Tests/WebKitCocoa/WKWebExtensionAPIMenus.mm
@@ -310,6 +318,7 @@ Tests/WebKitCocoa/WKWebExtensionAPIWindows.mm
 Tests/WebKitCocoa/WKWebExtensionContext.mm
 Tests/WebKitCocoa/WKWebExtensionController.mm
 Tests/WebKitCocoa/WKWebExtensionControllerConfiguration.mm
+Tests/WebKitCocoa/WKWebExtensionDataRecord.mm
 Tests/WebKitCocoa/WKWebExtensionMatchPattern.mm
 Tests/WebKitCocoa/WKWebExtensionTab.mm
 Tests/WebKitCocoa/WKWebExtensionWindow.mm
@@ -324,6 +333,7 @@ Tests/WebKitCocoa/WKWebViewDoesNotLogDuringInitialization.mm
 Tests/WebKitCocoa/WKWebViewEditActions.mm
 Tests/WebKitCocoa/WKWebViewEvaluateJavaScript.mm
 Tests/WebKitCocoa/WKWebViewFindString.mm
+Tests/WebKitCocoa/WKWebViewFindStringFindDelegate.mm
 Tests/WebKitCocoa/WKWebViewFirstResponderTests.mm
 Tests/WebKitCocoa/WKWebViewGetContents.mm
 Tests/WebKitCocoa/WKWebViewInspection.mm
@@ -348,6 +358,7 @@ Tests/WebKitCocoa/WebSQLBasics.mm
 Tests/WebKitCocoa/WebSocket.mm
 Tests/WebKitCocoa/WebsiteDataStoreCustomPaths.mm
 Tests/WebKitCocoa/WebsitePolicies.mm
+Tests/WebKitCocoa/WritingSuggestions.mm
 Tests/WebKitCocoa/YoutubeReplacementPlugin.mm
 Tests/WebKitCocoa/_WKInputDelegate.mm
 Tests/WebKitCocoa/_WKWebAuthenticationPanel.mm

@@ -386,7 +386,7 @@ void WebResourceLoadObserver::logUserInteractionWithReducedTimeResolution(const 
     }
 
     if (RefPtr frame = document.frame()) {
-        if (RefPtr opener = dynamicDowncast<LocalFrame>(frame->loader().opener())) {
+        if (RefPtr opener = dynamicDowncast<LocalFrame>(frame->opener())) {
             if (RefPtr openerDocument = opener->document()) {
                 if (auto* openerPage = openerDocument->page())
                     requestStorageAccessUnderOpener(topFrameDomain, Ref { *WebPage::fromCorePage(*openerPage) }, *openerDocument);
@@ -447,18 +447,20 @@ bool WebResourceLoadObserver::hasCrossPageStorageAccess(const SubFrameDomain& su
     return false;
 }
 
-void WebResourceLoadObserver::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubFrameDomain>&& domains, CompletionHandler<void()>&& completionHandler)
+void WebResourceLoadObserver::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, Vector<SubFrameDomain>>&& domains, CompletionHandler<void()>&& completionHandler)
 {
-    for (auto& topDomain : domains.keys()) {
-        m_domainsWithCrossPageStorageAccess.ensure(topDomain, [] {
-            return HashSet<RegistrableDomain> { };
-        }).iterator->value.add(domains.get(topDomain));
-
-        // Some sites have quirks where multiple login domains require storage access.
-        if (auto additionalLoginDomain = WebCore::NetworkStorageSession::findAdditionalLoginDomain(topDomain, domains.get(topDomain))) {
+    for (const auto& [topDomain, subResourceDomains] : domains) {
+        for (auto& subResourceDomain : subResourceDomains) {
             m_domainsWithCrossPageStorageAccess.ensure(topDomain, [] {
                 return HashSet<RegistrableDomain> { };
-            }).iterator->value.add(*additionalLoginDomain);
+            }).iterator->value.add(subResourceDomain);
+
+            // Some sites have quirks where multiple login domains require storage access.
+            if (auto additionalLoginDomain = WebCore::NetworkStorageSession::findAdditionalLoginDomain(topDomain, subResourceDomain)) {
+                m_domainsWithCrossPageStorageAccess.ensure(topDomain, [] {
+                    return HashSet<RegistrableDomain> { };
+                }).iterator->value.add(*additionalLoginDomain);
+            }
         }
     }
     completionHandler();

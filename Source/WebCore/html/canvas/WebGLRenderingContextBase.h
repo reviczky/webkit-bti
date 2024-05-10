@@ -66,6 +66,15 @@
 
 #include "GCGLSpan.h"
 
+namespace WebCore {
+class WebGLRenderingContextBase;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::WebGLRenderingContextBase> : std::true_type { };
+}
+
 namespace JSC {
 class AbstractSlotVisitor;
 }
@@ -244,7 +253,7 @@ public:
 
     RefPtr<WebGLActiveInfo> getActiveAttrib(WebGLProgram&, GCGLuint index);
     RefPtr<WebGLActiveInfo> getActiveUniform(WebGLProgram&, GCGLuint index);
-    std::optional<Vector<RefPtr<WebGLShader>>> getAttachedShaders(WebGLProgram&);
+    std::optional<Vector<Ref<WebGLShader>>> getAttachedShaders(WebGLProgram&);
     GCGLint getAttribLocation(WebGLProgram&, const String& name);
     WebGLAny getBufferParameter(GCGLenum target, GCGLenum pname);
     WEBCORE_EXPORT std::optional<WebGLContextAttributes> getContextAttributes();
@@ -428,7 +437,7 @@ public:
 
     RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() override;
 
-    void reshape(int width, int height) override;
+    void reshape(int width, int height, int oldWidth, int oldHeight) override;
 
     void drawBufferToCanvas(SurfaceBuffer) final;
 
@@ -525,7 +534,6 @@ protected:
 
     // ActiveDOMObject
     void stop() override;
-    const char* activeDOMObjectName() const override;
     void suspend(ReasonForSuspension) override;
     void resume() override;
 

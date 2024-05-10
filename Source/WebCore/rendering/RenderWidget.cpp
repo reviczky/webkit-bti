@@ -195,14 +195,14 @@ void RenderWidget::setWidget(RefPtr<Widget>&& widget)
                     return;
             }
 
-            if (style().visibility() != Visibility::Visible)
+            if (style().usedVisibility() != Visibility::Visible)
                 m_widget->hide();
             else {
                 m_widget->show();
                 repaint();
             }
             if (auto* cache = document().existingAXObjectCache())
-                cache->onWidgetVisibilityChanged(this);
+                cache->onWidgetVisibilityChanged(*this);
         }
         moveWidgetToParentSoon(*m_widget, &view().frameView());
     }
@@ -223,13 +223,13 @@ void RenderWidget::styleDidChange(StyleDifference diff, const RenderStyle* oldSt
 {
     RenderReplaced::styleDidChange(diff, oldStyle);
     if (m_widget) {
-        if (style().visibility() != Visibility::Visible)
+        if (style().usedVisibility() != Visibility::Visible)
             m_widget->hide();
         else
             m_widget->show();
 
         if (auto* cache = document().existingAXObjectCache())
-            cache->onWidgetVisibilityChanged(this);
+            cache->onWidgetVisibilityChanged(*this);
     }
 }
 

@@ -70,6 +70,7 @@ Ref<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, Cache
     switch (type) {
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case InHit:
     case InMiss:
     case DeleteNonConfigurable:
@@ -88,6 +89,7 @@ Ref<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, Cache
     case IndexedProxyObjectLoad:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -282,76 +284,40 @@ RefPtr<AccessCase> AccessCase::fromStructureStubInfo(
 
     case CacheType::ArrayLength:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
-        return AccessCase::create(vm, owner, AccessCase::ArrayLength, identifier);
+        return AccessCase::create(vm, owner, AccessCase::ArrayLength, CacheableIdentifier::createFromImmortalIdentifier(vm.propertyNames->length.impl()));
 
     case CacheType::StringLength:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
-        return AccessCase::create(vm, owner, AccessCase::StringLength, identifier);
+        return AccessCase::create(vm, owner, AccessCase::StringLength, CacheableIdentifier::createFromImmortalIdentifier(vm.propertyNames->length.impl()));
 
     default:
         return nullptr;
     }
 }
 
-bool AccessCase::hasAlternateBaseImpl() const
+JSObject* AccessCase::tryGetAlternateBaseImpl() const
 {
-    return !conditionSet().isEmpty();
-}
-
-JSObject* AccessCase::alternateBaseImpl() const
-{
-    return conditionSet().slotBaseCondition().object();
+    switch (m_type) {
+    case AccessCase::Getter:
+    case AccessCase::Setter:
+    case AccessCase::CustomValueGetter:
+    case AccessCase::CustomAccessorGetter:
+    case AccessCase::CustomValueSetter:
+    case AccessCase::CustomAccessorSetter:
+    case AccessCase::IntrinsicGetter:
+    case AccessCase::Load:
+    case AccessCase::GetGetter:
+        if (!conditionSet().isEmpty())
+            return conditionSet().slotBaseCondition().object();
+        return nullptr;
+    default:
+        return nullptr;
+    }
 }
 
 Ref<AccessCase> AccessCase::cloneImpl() const
 {
-    auto result = adoptRef(*new AccessCase(*this));
-    result->resetState();
-    return result;
-}
-
-Vector<WatchpointSet*, 2> AccessCase::commit(VM& vm)
-{
-    // It's fine to commit something that is already committed. That arises when we switch to using
-    // newly allocated watchpoints. When it happens, it's not efficient - but we think that's OK
-    // because most AccessCases have no extra watchpoints anyway.
-    RELEASE_ASSERT(m_state == Primordial || m_state == Committed);
-
-    Vector<WatchpointSet*, 2> result;
-    Structure* structure = this->structure();
-    auto append = [&] (auto* set) {
-        ASSERT(set->isStillValid());
-        result.append(set);
-    };
-
-    if (m_identifier) {
-        if ((structure && structure->needImpurePropertyWatchpoint())
-            || m_conditionSet.needImpurePropertyWatchpoint()
-            || (m_polyProtoAccessChain && m_polyProtoAccessChain->needImpurePropertyWatchpoint(vm)))
-            append(vm.ensureWatchpointSetForImpureProperty(m_identifier.uid()));
-    }
-
-    if (additionalSet())
-        append(additionalSet());
-
-    if (structure
-        && structure->hasRareData()
-        && structure->rareData()->hasSharedPolyProtoWatchpoint()
-        && structure->rareData()->sharedPolyProtoWatchpoint()->isStillValid()) {
-        WatchpointSet* set = structure->rareData()->sharedPolyProtoWatchpoint()->inflate();
-        append(set);
-    }
-
-    m_state = Committed;
-
-    return result;
-}
-
-bool AccessCase::guardedByStructureCheck(const StructureStubInfo& stubInfo) const
-{
-    if (!stubInfo.hasConstantIdentifier)
-        return false;
-    return guardedByStructureCheckSkippingConstantIdentifierCheck(); 
+    return adoptRef(*new AccessCase(*this));
 }
 
 bool AccessCase::guardedByStructureCheckSkippingConstantIdentifierCheck() const
@@ -365,6 +331,7 @@ bool AccessCase::guardedByStructureCheckSkippingConstantIdentifierCheck() const
     switch (m_type) {
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case ArrayLength:
     case StringLength:
     case DirectArgumentsLength:
@@ -379,6 +346,7 @@ bool AccessCase::guardedByStructureCheckSkippingConstantIdentifierCheck() const
     case IndexedProxyObjectLoad:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -484,6 +452,7 @@ bool AccessCase::requiresIdentifierNameMatch() const
     case Load:
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     // We don't currently have a by_val for these puts, but we do care about the identifier.
     case Transition:
     case Delete:
@@ -518,6 +487,7 @@ bool AccessCase::requiresIdentifierNameMatch() const
     case IndexedProxyObjectLoad:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -603,6 +573,7 @@ bool AccessCase::requiresInt32PropertyCheck() const
     case Load:
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case Transition:
     case Delete:
     case DeleteNonConfigurable:
@@ -635,6 +606,7 @@ bool AccessCase::requiresInt32PropertyCheck() const
     case IndexedProxyObjectLoad:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
         return false;
     case IndexedInt32Load:
     case IndexedDoubleLoad:
@@ -774,6 +746,7 @@ void AccessCase::forEachDependentCell(VM&, const Functor& functor) const
     case Load:
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case Transition:
     case Delete:
     case DeleteNonConfigurable:
@@ -792,6 +765,7 @@ void AccessCase::forEachDependentCell(VM&, const Functor& functor) const
     case InstanceOfGeneric:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -887,6 +861,8 @@ bool AccessCase::doesCalls(VM& vm, Vector<JSCell*>* cellsToMarkIfDoesCalls) cons
     case ProxyObjectLoad:
     case ProxyObjectStore:
     case IndexedProxyObjectLoad:
+    case StoreMegamorphic:
+    case IndexedMegamorphicStore:
         doesCalls = true;
         break;
     case IntrinsicGetter: {
@@ -898,7 +874,7 @@ bool AccessCase::doesCalls(VM& vm, Vector<JSCell*>* cellsToMarkIfDoesCalls) cons
     case DeleteMiss:
     case Load:
     case LoadMegamorphic:
-    case StoreMegamorphic:
+    case InMegamorphic:
     case Miss:
     case GetGetter:
     case InHit:
@@ -914,7 +890,7 @@ bool AccessCase::doesCalls(VM& vm, Vector<JSCell*>* cellsToMarkIfDoesCalls) cons
     case InstanceOfMiss:
     case InstanceOfGeneric:
     case IndexedMegamorphicLoad:
-    case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -1008,7 +984,7 @@ bool AccessCase::couldStillSucceed() const
 {
     for (const ObjectPropertyCondition& condition : m_conditionSet) {
         if (condition.condition().kind() == PropertyCondition::Equivalence) {
-            if (!condition.isWatchableAssumingImpurePropertyWatchpoint(PropertyCondition::WatchabilityEffort::EnsureWatchability))
+            if (!condition.isWatchableAssumingImpurePropertyWatchpoint(PropertyCondition::WatchabilityEffort::EnsureWatchability, Concurrency::MainThread))
                 return false;
         } else {
             if (!condition.structureEnsuresValidityAssumingImpurePropertyWatchpoint(Concurrency::MainThread))
@@ -1052,8 +1028,10 @@ bool AccessCase::canReplace(const AccessCase& other) const
     switch (type()) {
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -1201,46 +1179,163 @@ bool AccessCase::canReplace(const AccessCase& other) const
 
 void AccessCase::dump(PrintStream& out) const
 {
-    out.print("\n", m_type, ": {");
+    out.print("\n"_s, m_type, ": {"_s);
 
     Indenter indent;
     CommaPrinter comma;
 
-    out.print(comma, m_state);
-
-    out.print(comma, "ident = '", m_identifier, "'");
+    out.print(comma, "ident = '"_s, m_identifier, "'"_s);
     if (isValidOffset(m_offset))
-        out.print(comma, "offset = ", m_offset);
+        out.print(comma, "offset = "_s, m_offset);
 
     ++indent;
 
     if (m_polyProtoAccessChain) {
-        out.print("\n", indent, "prototype access chain = ");
+        out.print("\n"_s, indent, "prototype access chain = "_s);
         m_polyProtoAccessChain->dump(structure(), out);
     } else {
         if (m_type == Transition || m_type == Delete || m_type == SetPrivateBrand)
-            out.print("\n", indent, "from structure = ", pointerDump(structure()),
-                "\n", indent, "to structure = ", pointerDump(newStructure()));
+            out.print("\n"_s, indent, "from structure = "_s, pointerDump(structure()),
+                "\n"_s, indent, "to structure = "_s, pointerDump(newStructure()));
         else if (m_structureID)
-            out.print("\n", indent, "structure = ", pointerDump(m_structureID.get()));
+            out.print("\n"_s, indent, "structure = "_s, pointerDump(m_structureID.get()));
     }
 
     if (!m_conditionSet.isEmpty())
-        out.print("\n", indent, "conditions = ", m_conditionSet);
+        out.print("\n"_s, indent, "conditions = "_s, m_conditionSet);
 
     const_cast<AccessCase*>(this)->runWithDowncast([&](auto* accessCase) {
         accessCase->dumpImpl(out, comma, indent);
     });
 
-    out.print("}");
+    out.print("}"_s);
 }
 
 bool AccessCase::visitWeak(VM& vm) const
 {
-    if (isAccessor()) {
+    switch (type()) {
+    case Getter:
+    case Setter: {
         auto& accessor = this->as<GetterSetterAccessCase>();
         if (accessor.callLinkInfo())
             accessor.callLinkInfo()->visitWeak(vm);
+        break;
+    }
+    case ProxyObjectHas:
+    case ProxyObjectLoad:
+    case ProxyObjectStore:
+    case IndexedProxyObjectLoad: {
+        auto& accessor = this->as<ProxyObjectAccessCase>();
+        if (accessor.callLinkInfo())
+            accessor.callLinkInfo()->visitWeak(vm);
+        break;
+    }
+    case CustomValueGetter:
+    case CustomValueSetter:
+    case IntrinsicGetter:
+    case ModuleNamespaceLoad:
+    case InstanceOfHit:
+    case InstanceOfMiss:
+    case CustomAccessorGetter:
+    case CustomAccessorSetter:
+    case Load:
+    case LoadMegamorphic:
+    case StoreMegamorphic:
+    case InMegamorphic:
+    case Transition:
+    case Delete:
+    case DeleteNonConfigurable:
+    case DeleteMiss:
+    case Replace:
+    case Miss:
+    case GetGetter:
+    case InHit:
+    case InMiss:
+    case CheckPrivateBrand:
+    case SetPrivateBrand:
+    case ArrayLength:
+    case StringLength:
+    case DirectArgumentsLength:
+    case ScopedArgumentsLength:
+    case InstanceOfGeneric:
+    case IndexedMegamorphicLoad:
+    case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
+    case IndexedInt32Load:
+    case IndexedDoubleLoad:
+    case IndexedContiguousLoad:
+    case IndexedArrayStorageLoad:
+    case IndexedScopedArgumentsLoad:
+    case IndexedDirectArgumentsLoad:
+    case IndexedTypedArrayInt8Load:
+    case IndexedTypedArrayUint8Load:
+    case IndexedTypedArrayUint8ClampedLoad:
+    case IndexedTypedArrayInt16Load:
+    case IndexedTypedArrayUint16Load:
+    case IndexedTypedArrayInt32Load:
+    case IndexedTypedArrayUint32Load:
+    case IndexedTypedArrayFloat32Load:
+    case IndexedTypedArrayFloat64Load:
+    case IndexedResizableTypedArrayInt8Load:
+    case IndexedResizableTypedArrayUint8Load:
+    case IndexedResizableTypedArrayUint8ClampedLoad:
+    case IndexedResizableTypedArrayInt16Load:
+    case IndexedResizableTypedArrayUint16Load:
+    case IndexedResizableTypedArrayInt32Load:
+    case IndexedResizableTypedArrayUint32Load:
+    case IndexedResizableTypedArrayFloat32Load:
+    case IndexedResizableTypedArrayFloat64Load:
+    case IndexedStringLoad:
+    case IndexedNoIndexingMiss:
+    case IndexedInt32Store:
+    case IndexedDoubleStore:
+    case IndexedContiguousStore:
+    case IndexedArrayStorageStore:
+    case IndexedTypedArrayInt8Store:
+    case IndexedTypedArrayUint8Store:
+    case IndexedTypedArrayUint8ClampedStore:
+    case IndexedTypedArrayInt16Store:
+    case IndexedTypedArrayUint16Store:
+    case IndexedTypedArrayInt32Store:
+    case IndexedTypedArrayUint32Store:
+    case IndexedTypedArrayFloat32Store:
+    case IndexedTypedArrayFloat64Store:
+    case IndexedResizableTypedArrayInt8Store:
+    case IndexedResizableTypedArrayUint8Store:
+    case IndexedResizableTypedArrayUint8ClampedStore:
+    case IndexedResizableTypedArrayInt16Store:
+    case IndexedResizableTypedArrayUint16Store:
+    case IndexedResizableTypedArrayInt32Store:
+    case IndexedResizableTypedArrayUint32Store:
+    case IndexedResizableTypedArrayFloat32Store:
+    case IndexedResizableTypedArrayFloat64Store:
+    case IndexedInt32InHit:
+    case IndexedDoubleInHit:
+    case IndexedContiguousInHit:
+    case IndexedArrayStorageInHit:
+    case IndexedScopedArgumentsInHit:
+    case IndexedDirectArgumentsInHit:
+    case IndexedTypedArrayInt8InHit:
+    case IndexedTypedArrayUint8InHit:
+    case IndexedTypedArrayUint8ClampedInHit:
+    case IndexedTypedArrayInt16InHit:
+    case IndexedTypedArrayUint16InHit:
+    case IndexedTypedArrayInt32InHit:
+    case IndexedTypedArrayUint32InHit:
+    case IndexedTypedArrayFloat32InHit:
+    case IndexedTypedArrayFloat64InHit:
+    case IndexedResizableTypedArrayInt8InHit:
+    case IndexedResizableTypedArrayUint8InHit:
+    case IndexedResizableTypedArrayUint8ClampedInHit:
+    case IndexedResizableTypedArrayInt16InHit:
+    case IndexedResizableTypedArrayUint16InHit:
+    case IndexedResizableTypedArrayInt32InHit:
+    case IndexedResizableTypedArrayUint32InHit:
+    case IndexedResizableTypedArrayFloat32InHit:
+    case IndexedResizableTypedArrayFloat64InHit:
+    case IndexedStringInHit:
+    case IndexedNoIndexingInMiss:
+        break;
     }
 
     bool isValid = true;
@@ -1290,6 +1385,7 @@ inline void AccessCase::runWithDowncast(const Func& func)
     switch (m_type) {
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case Transition:
     case Delete:
     case DeleteNonConfigurable:
@@ -1305,6 +1401,7 @@ inline void AccessCase::runWithDowncast(const Func& func)
     case SetPrivateBrand:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -1434,13 +1531,6 @@ void AccessCase::checkConsistency(StructureStubInfo& stubInfo)
 
 bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
 {
-    // We do not care m_state.
-    // And we say "false" if either of them have m_polyProtoAccessChain.
-    if (lhs.m_polyProtoAccessChain || rhs.m_polyProtoAccessChain)
-        return false;
-    if (lhs.additionalSet() || rhs.additionalSet())
-        return false;
-
     if (lhs.m_type != rhs.m_type)
         return false;
     if (lhs.m_offset != rhs.m_offset)
@@ -1453,11 +1543,23 @@ bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
         return false;
     if (lhs.m_conditionSet != rhs.m_conditionSet)
         return false;
+    if (lhs.additionalSet() != rhs.additionalSet())
+        return false;
+    if (lhs.m_polyProtoAccessChain || rhs.m_polyProtoAccessChain) {
+        if (!lhs.m_polyProtoAccessChain || !rhs.m_polyProtoAccessChain)
+            return false;
+        if (*lhs.m_polyProtoAccessChain != *rhs.m_polyProtoAccessChain)
+            return false;
+    }
+
+    if (lhs.tryGetAlternateBase() != rhs.tryGetAlternateBase())
+        return false;
 
     switch (lhs.m_type) {
     case Load:
     case LoadMegamorphic:
     case StoreMegamorphic:
+    case InMegamorphic:
     case Transition:
     case Delete:
     case DeleteNonConfigurable:
@@ -1475,6 +1577,7 @@ bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
     case SetPrivateBrand:
     case IndexedMegamorphicLoad:
     case IndexedMegamorphicStore:
+    case IndexedMegamorphicIn:
     case IndexedInt32Load:
     case IndexedDoubleLoad:
     case IndexedContiguousLoad:
@@ -1552,6 +1655,15 @@ bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
     case InstanceOfGeneric:
         return true;
 
+    case CustomValueGetter:
+    case CustomAccessorGetter:
+    case CustomValueSetter:
+    case CustomAccessorSetter: {
+        auto& lhsd = lhs.as<GetterSetterAccessCase>();
+        auto& rhsd = rhs.as<GetterSetterAccessCase>();
+        return lhsd.m_customAccessor == rhsd.m_customAccessor;
+    }
+
     case Getter:
     case Setter:
     case ProxyObjectHas:
@@ -1559,14 +1671,6 @@ bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
     case ProxyObjectStore:
     case IndexedProxyObjectLoad: {
         // Getter / Setter / ProxyObjectHas / ProxyObjectLoad / ProxyObjectStore / IndexedProxyObjectLoad rely on CodeBlock, which makes sharing impossible.
-        return false;
-    }
-
-    case CustomValueGetter:
-    case CustomAccessorGetter:
-    case CustomValueSetter:
-    case CustomAccessorSetter: {
-        // They are embedding JSGlobalObject that are not tied to sharing JITStubRoutine.
         return false;
     }
 
@@ -1621,20 +1725,11 @@ WatchpointSet* AccessCase::additionalSet() const
     return result;
 }
 
-bool AccessCase::hasAlternateBase() const
-{
-    bool result = false;
-    const_cast<AccessCase*>(this)->runWithDowncast([&](auto* accessCase) {
-        result = accessCase->hasAlternateBaseImpl();
-    });
-    return result;
-}
-
-JSObject* AccessCase::alternateBase() const
+JSObject* AccessCase::tryGetAlternateBase() const
 {
     JSObject* result = nullptr;
     const_cast<AccessCase*>(this)->runWithDowncast([&](auto* accessCase) {
-        result = accessCase->alternateBaseImpl();
+        result = accessCase->tryGetAlternateBaseImpl();
     });
     return result;
 }

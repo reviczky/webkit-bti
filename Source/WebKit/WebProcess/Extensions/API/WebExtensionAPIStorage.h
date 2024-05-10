@@ -37,7 +37,7 @@ namespace WebKit {
 class WebExtensionAPIStorageArea;
 
 class WebExtensionAPIStorage : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIStorage, storage);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIStorage, storage, storage);
 
 public:
 #if PLATFORM(COCOA)
@@ -52,7 +52,7 @@ public:
 private:
     friend class WebExtensionContextProxy;
 
-    WebExtensionAPIStorageArea& storageAreaForType(WebExtensionStorageType);
+    WebExtensionAPIStorageArea& storageAreaForType(WebExtensionDataType);
 
     RefPtr<WebExtensionAPIStorageArea> m_local;
     RefPtr<WebExtensionAPIStorageArea> m_session;

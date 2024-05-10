@@ -332,6 +332,11 @@ static ExceptionOr<ApplePaySessionPaymentRequest> convertAndValidate(Document& d
     }
 #endif
 
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    if (paymentRequest.disbursementPaymentRequest)
+        result.setDisbursementPaymentRequest(WTFMove(*paymentRequest.disbursementPaymentRequest));
+#endif
+
     // FIXME: Merge this validation into the validation we are doing above.
     constexpr OptionSet fieldsToValidate = {
         PaymentRequestValidator::Field::MerchantCapabilities,
@@ -372,17 +377,17 @@ static ExceptionOr<ApplePayPaymentAuthorizationResult> convertAndValidate(AppleP
 
     case ApplePayPaymentAuthorizationResult::InvalidBillingPostalAddress:
         result.status = ApplePayPaymentAuthorizationResult::Failure;
-        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::BillingContactInvalid, std::nullopt, nullString()));
+        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::BillingContactInvalid, std::nullopt, nullString(), { }));
         break;
 
     case ApplePayPaymentAuthorizationResult::InvalidShippingPostalAddress:
         result.status = ApplePayPaymentAuthorizationResult::Failure;
-        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::ShippingContactInvalid, ApplePayErrorContactField::PostalAddress, nullString()));
+        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::ShippingContactInvalid, ApplePayErrorContactField::PostalAddress, nullString(), { }));
         break;
 
     case ApplePayPaymentAuthorizationResult::InvalidShippingContact:
         result.status = ApplePayPaymentAuthorizationResult::Failure;
-        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::ShippingContactInvalid, std::nullopt, nullString()));
+        result.errors.insert(0, ApplePayError::create(ApplePayErrorCode::ShippingContactInvalid, std::nullopt, nullString(), { }));
         break;
 
     default:
@@ -810,7 +815,7 @@ ExceptionOr<void> ApplePaySession::completeShippingContactSelection(unsigned sho
     }
 
     if (errorCode)
-        update.errors = { ApplePayError::create(*errorCode, contactField, { }) };
+        update.errors = { ApplePayError::create(*errorCode, contactField, { }, { }) };
 
     update.newShippingMethods = WTFMove(newShippingMethods);
     update.newTotal = WTFMove(newTotal);
@@ -942,11 +947,6 @@ void ApplePaySession::didCancelPaymentSession(PaymentSessionError&& error)
 
     auto event = ApplePayCancelEvent::create(eventNames().cancelEvent, WTFMove(error));
     dispatchEvent(event.get());
-}
-
-const char* ApplePaySession::activeDOMObjectName() const
-{
-    return "ApplePaySession";
 }
 
 bool ApplePaySession::canSuspendWithoutCanceling() const

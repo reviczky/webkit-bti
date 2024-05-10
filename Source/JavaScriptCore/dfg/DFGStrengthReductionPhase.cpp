@@ -53,7 +53,7 @@ class StrengthReductionPhase : public Phase {
     
 public:
     StrengthReductionPhase(Graph& graph)
-        : Phase(graph, "strength reduction")
+        : Phase(graph, "strength reduction"_s)
         , m_insertionSet(graph)
     {
     }
@@ -110,6 +110,11 @@ private:
                 && m_node->child1()->child2()->isInt32Constant()
                 && (m_node->child1()->child2()->asInt32() & 0x1f)
                 && m_node->arithMode() != Arith::DoOverflow) {
+                m_node->convertToIdentity();
+                m_changed = true;
+                break;
+            }
+            if (bytecodeCanTruncateInteger(m_node->arithNodeFlags())) {
                 m_node->convertToIdentity();
                 m_changed = true;
                 break;
@@ -443,6 +448,23 @@ private:
                         if (!result.isNull()) {
                             convertToLazyJSValue(m_node, LazyJSValue::newString(m_graph, result));
                             m_changed = true;
+                        }
+                    }
+                }
+                break;
+            }
+            case StringOrOtherUse: {
+                if (child1->hasConstant()) {
+                    if (JSValue value = child1->constant()->value()) {
+                        if (value.isUndefinedOrNull()) {
+                            m_graph.convertToConstant(m_node, value.isUndefined() ? vm().smallStrings.undefinedString() : vm().smallStrings.nullString());
+                            m_changed = true;
+                            break;
+                        }
+                        if (value.isString()) {
+                            m_graph.convertToConstant(m_node, value);
+                            m_changed = true;
+                            break;
                         }
                     }
                 }
@@ -1174,7 +1196,8 @@ private:
             break;
         }
 
-        case InByVal: {
+        case InByVal:
+        case InByValMegamorphic: {
             Edge& baseEdge = m_graph.child(m_node, 0);
             Edge& keyEdge = m_graph.child(m_node, 1);
             if (baseEdge.useKind() == CellUse) {

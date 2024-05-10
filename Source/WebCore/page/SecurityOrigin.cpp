@@ -32,7 +32,7 @@
 #include "BlobURL.h"
 #include "LegacySchemeRegistry.h"
 #include "OriginAccessEntry.h"
-#include "PublicSuffix.h"
+#include "PublicSuffixStore.h"
 #include "RuntimeApplicationChecks.h"
 #include "SecurityPolicy.h"
 #include <pal/text/TextEncoding.h>
@@ -206,6 +206,12 @@ Ref<SecurityOrigin> SecurityOrigin::createOpaque()
     Ref<SecurityOrigin> origin(adoptRef(*new SecurityOrigin));
     ASSERT(origin.get().isOpaque());
     return origin;
+}
+
+SecurityOrigin& SecurityOrigin::opaqueOrigin()
+{
+    static NeverDestroyed<Ref<SecurityOrigin>> origin { createOpaque() };
+    return origin.get();
 }
 
 Ref<SecurityOrigin> SecurityOrigin::createNonLocalWithAllowedFilePath(const URL& url, const String& filePath)
@@ -414,7 +420,6 @@ bool SecurityOrigin::isSameOriginAs(const SecurityOrigin& other) const
 
 bool SecurityOrigin::isSameSiteAs(const SecurityOrigin& other) const
 {
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     // https://html.spec.whatwg.org/#same-site
     if (isOpaque() != other.isOpaque())
         return false;
@@ -424,14 +429,11 @@ bool SecurityOrigin::isSameSiteAs(const SecurityOrigin& other) const
     if (isOpaque())
         return isSameOriginAs(other);
 
-    auto topDomain = topPrivatelyControlledDomain(domain());
+    auto topDomain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(domain());
     if (topDomain.isEmpty())
         return host() == other.host();
 
-    return topDomain == topPrivatelyControlledDomain(other.domain());
-#else
-    return isSameOriginAs(other);
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
+    return topDomain == PublicSuffixStore::singleton().topPrivatelyControlledDomain(other.domain());
 }
 
 bool SecurityOrigin::isMatchingRegistrableDomainSuffix(const String& domainSuffix, bool treatIPAddressAsDomain) const
@@ -448,11 +450,7 @@ bool SecurityOrigin::isMatchingRegistrableDomainSuffix(const String& domainSuffi
     if (domainSuffix.length() == host().length())
         return true;
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
-    return !isPublicSuffix(domainSuffix);
-#else
-    return true;
-#endif
+    return !PublicSuffixStore::singleton().isPublicSuffix(domainSuffix);
 }
 
 bool SecurityOrigin::isPotentiallyTrustworthy() const
@@ -621,13 +619,18 @@ bool SecurityOrigin::isSameSchemeHostPort(const SecurityOrigin& other) const
     return true;
 }
 
+bool SecurityOrigin::isLocalhostAddress(StringView host)
+{
+    // FIXME: Ensure that localhost resolves to the loopback address.
+    return equalLettersIgnoringASCIICase(host, "localhost"_s) || host.endsWithIgnoringASCIICase(".localhost"_s);
+}
+
 bool SecurityOrigin::isLocalHostOrLoopbackIPAddress(StringView host)
 {
     if (isLoopbackIPAddress(host))
         return true;
 
-    // FIXME: Ensure that localhost resolves to the loopback address.
-    if (equalLettersIgnoringASCIICase(host, "localhost"_s) || host.endsWithIgnoringASCIICase(".localhost"_s))
+    if (isLocalhostAddress(host))
         return true;
 
     return false;

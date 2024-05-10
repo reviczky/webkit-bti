@@ -92,7 +92,7 @@ private:
 
     ImageDocument& document() const;
 
-    void appendBytes(DocumentWriter&, const uint8_t*, size_t) override;
+    void appendBytes(DocumentWriter&, std::span<const uint8_t>) override;
     void finish() override;
 };
 
@@ -147,6 +147,9 @@ void ImageDocument::updateDuringParsing()
     if (!m_imageElement)
         createDocumentStructure();
 
+    if (!frame())
+        return;
+
     if (RefPtr<FragmentedSharedBuffer> buffer = loader()->mainResourceData()) {
         if (auto* cachedImage = m_imageElement->cachedImage())
             cachedImage->updateBuffer(*buffer);
@@ -195,7 +198,7 @@ inline ImageDocument& ImageDocumentParser::document() const
     return downcast<ImageDocument>(*RawDataDocumentParser::document());
 }
 
-void ImageDocumentParser::appendBytes(DocumentWriter&, const uint8_t*, size_t)
+void ImageDocumentParser::appendBytes(DocumentWriter&, std::span<const uint8_t>)
 {
     document().updateDuringParsing();
 }
@@ -230,15 +233,17 @@ void ImageDocument::createDocumentStructure()
     rootElement->insertedByParser();
     rootElement->setInlineStyleProperty(CSSPropertyHeight, 100, CSSUnitType::CSS_PERCENTAGE);
 
-    frame()->injectUserScripts(UserScriptInjectionTime::DocumentStart);
+    if (RefPtr localFrame = frame())
+        localFrame->injectUserScripts(UserScriptInjectionTime::DocumentStart);
 
     // We need a <head> so that the call to setTitle() later on actually has an <head> to append to <title> to.
     auto head = HTMLHeadElement::create(*this);
     rootElement->appendChild(head);
 
+    RefPtr documentLoader = loader();
     auto body = HTMLBodyElement::create(*this);
     body->setAttribute(styleAttr, "margin: 0px; height: 100%"_s);
-    if (MIMETypeRegistry::isPDFMIMEType(document().loader()->responseMIMEType()))
+    if (documentLoader && MIMETypeRegistry::isPDFMIMEType(documentLoader->responseMIMEType()))
         body->setInlineStyleProperty(CSSPropertyBackgroundColor, "white"_s);
     rootElement->appendChild(body);
     
@@ -249,8 +254,8 @@ void ImageDocument::createDocumentStructure()
         imageElement->setAttribute(styleAttr, "-webkit-user-select:none; display:block; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);"_s);
     imageElement->setLoadManually(true);
     imageElement->setSrc(AtomString { url().string() });
-    if (auto* cachedImage = imageElement->cachedImage())
-        cachedImage->setResponse(loader()->response());
+    if (auto* cachedImage = imageElement->cachedImage(); documentLoader && cachedImage)
+        cachedImage->setResponse(documentLoader->response());
     body->appendChild(imageElement);
     imageElement->setLoadManually(false);
     

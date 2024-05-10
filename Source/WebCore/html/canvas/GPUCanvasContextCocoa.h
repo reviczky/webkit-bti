@@ -63,20 +63,17 @@ public:
     bool needsPreparationForDisplay() const override { return true; }
     void prepareForDisplay() override;
     PixelFormat pixelFormat() const override;
-    void reshape(int width, int height) override;
+    void reshape(int width, int height, int oldWidth, int oldHeight) override;
 
     void drawBufferToCanvas(SurfaceBuffer) override;
     // GPUCanvasContext methods:
     CanvasType canvas() override;
     ExceptionOr<void> configure(GPUCanvasConfiguration&&) override;
     void unconfigure() override;
-    RefPtr<GPUTexture> getCurrentTexture() override;
+    ExceptionOr<RefPtr<GPUTexture>> getCurrentTexture() override;
+    ExceptionOr<RefPtr<ImageBitmap>> getCurrentTextureAsImageBitmap(ImageBuffer&, bool originClean) override;
 
     bool isWebGPU() const override { return true; }
-    const char* activeDOMObjectName() const override
-    {
-        return "GPUCanvasElement";
-    }
 
 private:
     explicit GPUCanvasContextCocoa(CanvasBase&, GPU&);
@@ -89,6 +86,8 @@ private:
     }
 
     CanvasType htmlOrOffscreenCanvas() const;
+    ExceptionOr<void> configure(GPUCanvasConfiguration&&, bool);
+    void present();
 
     struct Configuration {
         Ref<GPUDevice> device;
@@ -103,12 +102,12 @@ private:
     std::optional<Configuration> m_configuration;
 
     Ref<GPUDisplayBufferDisplayDelegate> m_layerContentsDisplayDelegate;
-    Ref<GPUCompositorIntegration> m_compositorIntegration;
-    Ref<GPUPresentationContext> m_presentationContext;
+    RefPtr<GPUCompositorIntegration> m_compositorIntegration;
+    RefPtr<GPUPresentationContext> m_presentationContext;
     RefPtr<GPUTexture> m_currentTexture;
 
-    int m_width { 0 };
-    int m_height { 0 };
+    GPUIntegerCoordinate m_width { 0 };
+    GPUIntegerCoordinate m_height { 0 };
     bool m_compositingResultsNeedsUpdating { false };
 };
 

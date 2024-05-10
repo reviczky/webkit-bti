@@ -306,7 +306,7 @@ WASM_SLOW_PATH_DECL(loop_osr)
             size_t osrEntryScratchBufferSize = osrEntryCallee->osrEntryScratchBufferSize();
             RELEASE_ASSERT(osrEntryScratchBufferSize == osrEntryData.values.size());
 
-            if (osrEntryCallee->stackCheckSize()) {
+            if (osrEntryCallee->stackCheckSize() != Wasm::stackCheckNotNeeded) {
                 uintptr_t stackPointer = reinterpret_cast<uintptr_t>(currentStackPointer());
                 uintptr_t stackExtent = stackPointer - osrEntryCallee->stackCheckSize();
                 uintptr_t stackLimit = reinterpret_cast<uintptr_t>(instance->softStackLimit());
@@ -552,7 +552,10 @@ WASM_SLOW_PATH_DECL(struct_new)
     ASSERT(instruction.m_typeIndex < instance->module().moduleInformation().typeCount());
 
     ASSERT(!instruction.m_firstValue.isConstant());
-    WASM_RETURN(Wasm::structNew(instance, instruction.m_typeIndex, instruction.m_useDefault, instruction.m_useDefault ? nullptr : reinterpret_cast<uint64_t*>(&callFrame->r(instruction.m_firstValue))));
+    EncodedJSValue result = Wasm::structNew(instance, instruction.m_typeIndex, instruction.m_useDefault, instruction.m_useDefault ? nullptr : reinterpret_cast<uint64_t*>(&callFrame->r(instruction.m_firstValue)));
+    if (JSValue::decode(result).isNull())
+        WASM_THROW(Wasm::ExceptionType::BadStructNew);
+    WASM_RETURN(result);
 }
 
 WASM_SLOW_PATH_DECL(struct_get)
@@ -694,8 +697,7 @@ static inline UGPRPair doWasmCallIndirect(Register* partiallyConstructedCalleeFr
         WASM_THROW(Wasm::ExceptionType::NullTableEntry);
 
     const auto& callSignature = CALLEE()->signature(typeIndex);
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=260820
-    if (callSignature.index() != function.m_function.typeIndex)
+    if (!Wasm::isSubtypeIndex(function.m_function.typeIndex, callSignature.index()))
         WASM_THROW(Wasm::ExceptionType::BadSignature);
 
     Register& calleeStackSlot = partiallyConstructedCalleeFrame[static_cast<int>(CallFrameSlot::callee)];
@@ -888,9 +890,9 @@ WASM_SLOW_PATH_DECL(call_builtin)
         uint32_t offset = takeGPR().unboxedUInt32();
 
         EncodedJSValue result = Wasm::arrayNewData(instance, typeIndex, dataSegmentIndex, arraySize, offset);
-        // arrayNewData returns false iff the segment access is out of bounds
+        // arrayNewData returns false iff the segment access is out of bounds or allocation failed
         if (JSValue::decode(result).isNull())
-            WASM_THROW(Wasm::ExceptionType::OutOfBoundsDataSegmentAccess);
+            WASM_THROW(Wasm::ExceptionType::BadArrayNewInitData);
         gprStart[0] = static_cast<EncodedJSValue>(result);
         WASM_END();
     }
@@ -901,9 +903,9 @@ WASM_SLOW_PATH_DECL(call_builtin)
         uint32_t offset = takeGPR().unboxedUInt32();
 
         EncodedJSValue result = Wasm::arrayNewElem(instance, typeIndex, elemSegmentIndex, arraySize, offset);
-        // arrayNewElem returns null iff the segment access is out of bounds
+        // arrayNewElem returns null iff the segment access is out of bounds or allocation failed
         if (JSValue::decode(result).isNull())
-            WASM_THROW(Wasm::ExceptionType::OutOfBoundsElementSegmentAccess);
+            WASM_THROW(Wasm::ExceptionType::BadArrayNewInitElem);
         gprStart[0] = static_cast<EncodedJSValue>(result);
         WASM_END();
     }

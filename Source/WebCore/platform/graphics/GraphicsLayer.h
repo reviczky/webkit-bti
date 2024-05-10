@@ -77,7 +77,10 @@ class TransformationMatrix;
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 struct AcceleratedEffectValues;
+String acceleratedEffectPropertyIDAsString(AcceleratedEffectProperty);
 #endif
+
+String animatedPropertyIDAsString(AnimatedProperty);
 
 namespace DisplayList {
 enum class AsTextFlag : uint8_t;
@@ -539,6 +542,7 @@ public:
         BackgroundColor,
         Plugin,
         Model,
+        HostedModel,
         Host,
     };
 
@@ -546,6 +550,7 @@ public:
     virtual void setContentsToSolidColor(const Color&) { }
     virtual void setContentsToPlatformLayer(PlatformLayer*, ContentsLayerPurpose) { }
     virtual void setContentsToPlatformLayerHost(LayerHostingContextIdentifier) { }
+    virtual void setContentsToRemotePlatformContext(LayerHostingContextIdentifier, ContentsLayerPurpose) { }
     virtual void setContentsToVideoElement(HTMLVideoElement&, ContentsLayerPurpose) { }
     virtual void setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&&, ContentsLayerPurpose);
     WEBCORE_EXPORT virtual RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> createAsyncContentsDisplayDelegate(GraphicsLayerAsyncContentsDisplayDelegate* existing);
@@ -623,7 +628,7 @@ public:
 
     WEBCORE_EXPORT void noteDeviceOrPageScaleFactorChangedIncludingDescendants();
 
-    void setIsInWindow(bool);
+    WEBCORE_EXPORT void setIsInWindow(bool);
 
     // Some compositing systems may do internal batching to synchronize compositing updates
     // with updates drawn into the window. These methods flush internal batched state on this layer
@@ -762,7 +767,7 @@ protected:
     FilterOperations m_backdropFilters;
     
 #if ENABLE(SCROLLING_THREAD)
-    ScrollingNodeID m_scrollingNodeID { 0 };
+    ScrollingNodeID m_scrollingNodeID;
 #endif
 
     BlendMode m_blendMode { BlendMode::Normal };

@@ -179,8 +179,8 @@ enum ExtendedDirtyBitType
     EXTENDED_DIRTY_BIT_SHADING_RATE,                  // QCOM_shading_rate
     EXTENDED_DIRTY_BIT_LOGIC_OP_ENABLED,              // ANGLE_logic_op
     EXTENDED_DIRTY_BIT_LOGIC_OP,                      // ANGLE_logic_op
-    EXTENDED_DIRTY_BIT_FOVEATED_RENDERING,  // QCOM_framebuffer_foveated/QCOM_texture_foveated
-
+    EXTENDED_DIRTY_BIT_FOVEATED_RENDERING,            // QCOM_framebuffer_foveated/QCOM_texture_foveated
+    EXTENDED_DIRTY_BIT_VARIABLE_RASTERIZATION_RATE,   // ANGLE_variable_rasterization_rate_metal
     EXTENDED_DIRTY_BIT_INVALID,
     EXTENDED_DIRTY_BIT_MAX = EXTENDED_DIRTY_BIT_INVALID,
 };
@@ -201,7 +201,6 @@ enum DirtyObjectType
     DIRTY_OBJECT_TEXTURES,  // Top-level dirty bit. Also see mDirtyTextures.
     DIRTY_OBJECT_IMAGES,    // Top-level dirty bit. Also see mDirtyImages.
     DIRTY_OBJECT_SAMPLERS,  // Top-level dirty bit. Also see mDirtySamplers.
-    DIRTY_OBJECT_PROGRAM,
     DIRTY_OBJECT_PROGRAM_PIPELINE_OBJECT,
 
     DIRTY_OBJECT_INVALID,
@@ -472,6 +471,15 @@ class PrivateState : angle::NonCopyable
     void setPixelLocalStorageActivePlanes(GLsizei n);
     GLsizei getPixelLocalStorageActivePlanes() const { return mPixelLocalStorageActivePlanes; }
 
+    // GL_ANGLE_variable_rasterization_rate_metal
+    void setVariableRasterizationRateEnabled(bool enabled);
+    bool isVariableRasterizationRateEnabled() const { return mVariableRasterizationRateEnabled; }
+    void setVariableRasterizationRateMap(GLMTLRasterizationRateMapANGLE map);
+    GLMTLRasterizationRateMapANGLE getVariableRasterizationRateMap() const
+    {
+        return mVariableRasterizationRateMap;
+    }
+
     // Line width state setter
     void setLineWidth(GLfloat width);
     float getLineWidth() const { return mLineWidth; }
@@ -688,6 +696,10 @@ class PrivateState : angle::NonCopyable
 
     // GL_ANGLE_shader_pixel_local_storage
     GLsizei mPixelLocalStorageActivePlanes;
+
+    // GL_ANGLE_variable_rasterization_rate_metal
+    bool mVariableRasterizationRateEnabled;
+    GLMTLRasterizationRateMapANGLE mVariableRasterizationRateMap;
 
     // GLES1 emulation: state specific to GLES1
     GLES1State mGLES1State;
@@ -1446,25 +1458,48 @@ class State : angle::NonCopyable
     angle::Result syncTextures(const Context *context, Command command);
     angle::Result syncImages(const Context *context, Command command);
     angle::Result syncSamplers(const Context *context, Command command);
-    angle::Result syncProgram(const Context *context, Command command);
     angle::Result syncProgramPipelineObject(const Context *context, Command command);
 
     using DirtyObjectHandler = angle::Result (State::*)(const Context *context, Command command);
 
-    static constexpr DirtyObjectHandler kDirtyObjectHandlers[state::DIRTY_OBJECT_MAX] = {
-        &State::syncActiveTextures,
-        &State::syncTexturesInit,
-        &State::syncImagesInit,
-        &State::syncReadAttachments,
-        &State::syncDrawAttachments,
-        &State::syncReadFramebuffer,
-        &State::syncDrawFramebuffer,
-        &State::syncVertexArray,
-        &State::syncTextures,
-        &State::syncImages,
-        &State::syncSamplers,
-        &State::syncProgram,
-        &State::syncProgramPipelineObject};
+    static constexpr std::array<DirtyObjectHandler, state::DIRTY_OBJECT_MAX> kDirtyObjectHandlers =
+        []() {
+            // Work around C++'s lack of array element support in designated initializers
+            std::array<DirtyObjectHandler, state::DIRTY_OBJECT_MAX> handlers{};
+
+            handlers[state::DIRTY_OBJECT_ACTIVE_TEXTURES]  = &State::syncActiveTextures;
+            handlers[state::DIRTY_OBJECT_TEXTURES_INIT]    = &State::syncTexturesInit;
+            handlers[state::DIRTY_OBJECT_IMAGES_INIT]      = &State::syncImagesInit;
+            handlers[state::DIRTY_OBJECT_READ_ATTACHMENTS] = &State::syncReadAttachments;
+            handlers[state::DIRTY_OBJECT_DRAW_ATTACHMENTS] = &State::syncDrawAttachments;
+            handlers[state::DIRTY_OBJECT_READ_FRAMEBUFFER] = &State::syncReadFramebuffer;
+            handlers[state::DIRTY_OBJECT_DRAW_FRAMEBUFFER] = &State::syncDrawFramebuffer;
+            handlers[state::DIRTY_OBJECT_VERTEX_ARRAY]     = &State::syncVertexArray;
+            handlers[state::DIRTY_OBJECT_TEXTURES]         = &State::syncTextures;
+            handlers[state::DIRTY_OBJECT_IMAGES]           = &State::syncImages;
+            handlers[state::DIRTY_OBJECT_SAMPLERS]         = &State::syncSamplers;
+            handlers[state::DIRTY_OBJECT_PROGRAM_PIPELINE_OBJECT] =
+                &State::syncProgramPipelineObject;
+
+            return handlers;
+        }();
+
+    // FIXME(djg): On our GCC builds, handler is not a constant expression and
+    // the static_assert fails to compile.
+#if 0
+    static_assert(
+        []() {
+            for (auto handler : kDirtyObjectHandlers)
+            {
+                if (handler == nullptr)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }(),
+        "kDirtyObjectHandlers missing a handler");
+#endif
 
     // Robust init must happen before Framebuffer init for the Vulkan back-end.
     static_assert(state::DIRTY_OBJECT_ACTIVE_TEXTURES < state::DIRTY_OBJECT_TEXTURES_INIT,
@@ -1477,26 +1512,6 @@ class State : angle::NonCopyable
                   "init order");
     static_assert(state::DIRTY_OBJECT_READ_ATTACHMENTS < state::DIRTY_OBJECT_READ_FRAMEBUFFER,
                   "init order");
-
-    static_assert(state::DIRTY_OBJECT_ACTIVE_TEXTURES == 0,
-                  "check DIRTY_OBJECT_ACTIVE_TEXTURES index");
-    static_assert(state::DIRTY_OBJECT_TEXTURES_INIT == 1, "check DIRTY_OBJECT_TEXTURES_INIT index");
-    static_assert(state::DIRTY_OBJECT_IMAGES_INIT == 2, "check DIRTY_OBJECT_IMAGES_INIT index");
-    static_assert(state::DIRTY_OBJECT_READ_ATTACHMENTS == 3,
-                  "check DIRTY_OBJECT_READ_ATTACHMENTS index");
-    static_assert(state::DIRTY_OBJECT_DRAW_ATTACHMENTS == 4,
-                  "check DIRTY_OBJECT_DRAW_ATTACHMENTS index");
-    static_assert(state::DIRTY_OBJECT_READ_FRAMEBUFFER == 5,
-                  "check DIRTY_OBJECT_READ_FRAMEBUFFER index");
-    static_assert(state::DIRTY_OBJECT_DRAW_FRAMEBUFFER == 6,
-                  "check DIRTY_OBJECT_DRAW_FRAMEBUFFER index");
-    static_assert(state::DIRTY_OBJECT_VERTEX_ARRAY == 7, "check DIRTY_OBJECT_VERTEX_ARRAY index");
-    static_assert(state::DIRTY_OBJECT_TEXTURES == 8, "check DIRTY_OBJECT_TEXTURES index");
-    static_assert(state::DIRTY_OBJECT_IMAGES == 9, "check DIRTY_OBJECT_IMAGES index");
-    static_assert(state::DIRTY_OBJECT_SAMPLERS == 10, "check DIRTY_OBJECT_SAMPLERS index");
-    static_assert(state::DIRTY_OBJECT_PROGRAM == 11, "check DIRTY_OBJECT_PROGRAM index");
-    static_assert(state::DIRTY_OBJECT_PROGRAM_PIPELINE_OBJECT == 12,
-                  "check DIRTY_OBJECT_PROGRAM_PIPELINE_OBJECT index");
 
     // Dispatch table for buffer update functions.
     static const angle::PackedEnumMap<BufferBinding, BufferBindingSetter> kBufferSetters;

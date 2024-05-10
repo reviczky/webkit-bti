@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -210,10 +210,11 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         // If we generated some code then we don't want to attempt to repatch in the future until we
         // gather enough cases.
         bufferingCountdown = Options::repatchBufferingCountdown();
-        m_handler = result.handler();
-        m_codePtr = m_handler->callTarget();
         return result;
     })();
+    if (result.generatedSomeCode())
+        rewireStubAsJumpInAccess(codeBlock, *result.handler());
+
     vm.writeBarrier(codeBlock);
     return result;
 }
@@ -335,12 +336,17 @@ void StructureStubInfo::reset(const ConcurrentJSLockerBase& locker, CodeBlock* c
 template<typename Visitor>
 void StructureStubInfo::visitAggregateImpl(Visitor& visitor)
 {
-    {
+    if (!m_identifier) {
         Locker locker { m_bufferedStructuresLock };
-        for (auto& bufferedStructure : m_bufferedStructures)
-            bufferedStructure.byValId().visitAggregate(visitor);
-    }
-    m_identifier.visitAggregate(visitor);
+        WTF::switchOn(m_bufferedStructures,
+            [&](std::monostate) { },
+            [&](Vector<StructureID>&) { },
+            [&](Vector<std::tuple<StructureID, CacheableIdentifier>>& structures) {
+                for (auto& [bufferedStructureID, bufferedCacheableIdentifier] : structures)
+                    bufferedCacheableIdentifier.visitAggregate(visitor);
+            });
+    } else
+        m_identifier.visitAggregate(visitor);
     switch (m_cacheType) {
     case CacheType::Unset:
     case CacheType::ArrayLength:
@@ -365,9 +371,17 @@ void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker
     VM& vm = codeBlock->vm();
     {
         Locker locker { m_bufferedStructuresLock };
-        m_bufferedStructures.removeIf(
-            [&] (auto& entry) -> bool {
-                return !vm.heap.isMarked(entry.structure());
+        WTF::switchOn(m_bufferedStructures,
+            [&](std::monostate) { },
+            [&](Vector<StructureID>& structures) {
+                structures.removeAllMatching([&](StructureID structureID) {
+                    return !vm.heap.isMarked(structureID.decode());
+                });
+            },
+            [&](Vector<std::tuple<StructureID, CacheableIdentifier>>& structures) {
+                structures.removeAllMatching([&](auto& tuple) {
+                    return !vm.heap.isMarked(std::get<0>(tuple).decode());
+                });
             });
     }
 
@@ -421,6 +435,8 @@ StubInfoSummary StructureStubInfo::summary(VM& vm) const
             case AccessCase::IndexedMegamorphicLoad:
             case AccessCase::StoreMegamorphic:
             case AccessCase::IndexedMegamorphicStore:
+            case AccessCase::InMegamorphic:
+            case AccessCase::IndexedMegamorphicIn:
                 return StubInfoSummary::Megamorphic;
             default:
                 break;
@@ -528,7 +544,7 @@ static CodePtr<OperationPtrTag> slowOperationFromUnlinkedStructureStubInfo(const
     return { };
 }
 
-void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
+void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, CodeBlock* codeBlock, const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
 {
     ASSERT(!isCompilationThread());
     accessType = unlinkedStubInfo.accessType;
@@ -537,11 +553,9 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, const Ba
     callSiteIndex = CallSiteIndex(BytecodeIndex(unlinkedStubInfo.bytecodeIndex.offset()));
     codeOrigin = CodeOrigin(unlinkedStubInfo.bytecodeIndex);
     if (Options::useHandlerIC()) {
-        m_handler = InlineCacheCompiler::generateSlowPathHandler(vm, accessType);
-        m_codePtr = m_handler->callTarget();
+        replaceHandler(codeBlock, InlineCacheCompiler::generateSlowPathHandler(vm, accessType));
     } else {
-        m_handler = InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation);
-        m_codePtr = m_handler->callTarget();
+        replaceHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
         slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
     }
     propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
@@ -733,7 +747,7 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, const Ba
 }
 
 #if ENABLE(DFG_JIT)
-void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(const DFG::UnlinkedStructureStubInfo& unlinkedStubInfo)
+void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(CodeBlock* codeBlock, const DFG::UnlinkedStructureStubInfo& unlinkedStubInfo)
 {
     ASSERT(!isCompilationThread());
     accessType = unlinkedStubInfo.accessType;
@@ -741,8 +755,7 @@ void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(const DFG::Un
     m_identifier = unlinkedStubInfo.m_identifier;
     callSiteIndex = unlinkedStubInfo.callSiteIndex;
     codeOrigin = unlinkedStubInfo.codeOrigin;
-    m_handler = InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation);
-    m_codePtr = m_handler->callTarget();
+    replaceHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
     slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
 
     propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
@@ -769,6 +782,40 @@ void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(const DFG::Un
 }
 #endif
 
+void StructureStubInfo::replaceHandler(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler)
+{
+    if (JITCode::isBaselineCode(codeBlock->jitType()) && Options::useHandlerIC()) {
+        if (m_handler)
+            m_handler->removeOwner(codeBlock);
+        m_handler = WTFMove(handler);
+        m_handler->addOwner(codeBlock);
+    } else
+        m_handler = WTFMove(handler);
+
+    m_codePtr = m_handler->callTarget();
+}
+
+void StructureStubInfo::rewireStubAsJumpInAccess(CodeBlock* codeBlock, InlineCacheHandler& handler)
+{
+    replaceHandler(codeBlock, Ref { handler });
+    if (codeBlock->useDataIC()) {
+        m_inlineAccessBaseStructureID.clear(); // Clear out the inline access code.
+        return;
+    }
+
+    CCallHelpers::replaceWithJump(startLocation.retagged<JSInternalPtrTag>(), CodeLocationLabel { handler.callTarget() });
+}
+
+void StructureStubInfo::resetStubAsJumpInAccess(CodeBlock* codeBlock)
+{
+    if (JITCode::isBaselineCode(codeBlock->jitType()) && Options::useHandlerIC()) {
+        auto handler = InlineCacheCompiler::generateSlowPathHandler(codeBlock->vm(), accessType);
+        rewireStubAsJumpInAccess(codeBlock, handler.get());
+        return;
+    }
+    auto handler = InlineCacheHandler::createNonHandlerSlowPath(slowPathStartLocation);
+    rewireStubAsJumpInAccess(codeBlock, handler.get());
+}
 
 #if ASSERT_ENABLED
 void StructureStubInfo::checkConsistency()
@@ -785,49 +832,6 @@ void StructureStubInfo::checkConsistency()
     }
 }
 #endif // ASSERT_ENABLED
-
-RefPtr<PolymorphicAccessJITStubRoutine> SharedJITStubSet::getMegamorphic(AccessType type) const
-{
-    switch (type) {
-    case AccessType::GetByVal:
-        return m_getByValMegamorphic;
-    case AccessType::GetByValWithThis:
-        return m_getByValWithThisMegamorphic;
-    case AccessType::PutByValStrict:
-    case AccessType::PutByValSloppy:
-        return m_putByValMegamorphic;
-    default:
-        return nullptr;
-    }
-}
-
-void SharedJITStubSet::setMegamorphic(AccessType type, Ref<PolymorphicAccessJITStubRoutine> stub)
-{
-    switch (type) {
-    case AccessType::GetByVal:
-        m_getByValMegamorphic = WTFMove(stub);
-        break;
-    case AccessType::GetByValWithThis:
-        m_getByValWithThisMegamorphic = WTFMove(stub);
-        break;
-    case AccessType::PutByValStrict:
-    case AccessType::PutByValSloppy:
-        m_putByValMegamorphic = WTFMove(stub);
-        break;
-    default:
-        break;
-    }
-}
-
-RefPtr<InlineCacheHandler> SharedJITStubSet::getSlowPathHandler(AccessType type) const
-{
-    return m_slowPathHandlers[static_cast<unsigned>(type)];
-}
-
-void SharedJITStubSet::setSlowPathHandler(AccessType type, Ref<InlineCacheHandler> handler)
-{
-    m_slowPathHandlers[static_cast<unsigned>(type)] = WTFMove(handler);
-}
 
 #endif // ENABLE(JIT)
 

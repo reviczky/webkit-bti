@@ -23,10 +23,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PDFPluginPasswordField_h
-#define PDFPluginPasswordField_h
+#pragma once
 
-#if ENABLE(LEGACY_PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN) && PLATFORM(MAC)
 
 #include "PDFPluginTextAnnotation.h"
 
@@ -39,9 +38,11 @@ public:
 
     void updateGeometry() override;
 
+    void resetField();
+
 private:
     PDFPluginPasswordField(PDFPluginBase* plugin)
-        : PDFPluginTextAnnotation(0, plugin)
+        : PDFPluginTextAnnotation(nullptr, plugin)
     {
     }
 
@@ -52,6 +53,4 @@ private:
 
 } // namespace WebKit
 
-#endif // ENABLE(LEGACY_PDFKIT_PLUGIN)
-
-#endif // PDFPluginTextAnnotation_h
+#endif // ENABLE(PDF_PLUGIN) && PLATFORM(MAC)

@@ -65,6 +65,9 @@ public:
 
     static uint32_t texelBlockWidth(WGPUTextureFormat); // Texels
     static uint32_t texelBlockHeight(WGPUTextureFormat); // Texels
+    static NSUInteger bytesPerRow(WGPUTextureFormat, uint32_t textureWidth, uint32_t sampleCount);
+    static WGPUExtent3D physicalTextureExtent(WGPUTextureDimension, WGPUTextureFormat, WGPUExtent3D logicalExtent);
+
     // For depth-stencil textures, the input value to texelBlockSize()
     // needs to be the output of aspectSpecificFormat().
     static uint32_t texelBlockSize(WGPUTextureFormat); // Bytes
@@ -73,7 +76,7 @@ public:
     static bool isDepthOrStencilFormat(WGPUTextureFormat);
     static WGPUTextureFormat aspectSpecificFormat(WGPUTextureFormat, WGPUTextureAspect);
     static NSString* errorValidatingImageCopyTexture(const WGPUImageCopyTexture&, const WGPUExtent3D&);
-    static bool validateTextureCopyRange(const WGPUImageCopyTexture&, const WGPUExtent3D&);
+    static NSString* errorValidatingTextureCopyRange(const WGPUImageCopyTexture&, const WGPUExtent3D&);
     static bool refersToSingleAspect(WGPUTextureFormat, WGPUTextureAspect);
     static bool isValidDepthStencilCopySource(WGPUTextureFormat, WGPUTextureAspect);
     static bool isValidDepthStencilCopyDestination(WGPUTextureFormat, WGPUTextureAspect);
@@ -108,7 +111,7 @@ public:
     Device& device() const { return m_device; }
 
     bool previouslyCleared(uint32_t mipLevel, uint32_t slice) const;
-    void setPreviouslyCleared(uint32_t mipLevel, uint32_t slice);
+    void setPreviouslyCleared(uint32_t mipLevel, uint32_t slice, bool = true);
     bool isDestroyed() const;
     static bool hasStorageBindingCapability(WGPUTextureFormat, const Device&, WGPUStorageTextureAccess = WGPUStorageTextureAccess_Undefined);
     static bool supportsMultisampling(WGPUTextureFormat, const Device&);
@@ -117,6 +120,9 @@ public:
     void recreateIfNeeded();
     void makeCanvasBacking();
     void setCommandEncoder(CommandEncoder&) const;
+    static ASCIILiteral formatToString(WGPUTextureFormat);
+    bool isCanvasBacking() const;
+    void waitForCommandBufferCompletion();
 
 private:
     Texture(id<MTLTexture>, const WGPUTextureDescriptor&, Vector<WGPUTextureFormat>&& viewFormats, Device&);

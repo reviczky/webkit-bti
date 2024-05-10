@@ -396,9 +396,8 @@
             "contextsAllowed": ["type"],
             "values": ["*"]
         },
-        "PassContext": {
-            "contextsAllowed": ["operation"],
-            "notes" : "Only used by WebKitTestRunner and DumpRenderTree"
+        "BypassDocumentFullyActiveCheck": {
+            "contextsAllowed": ["type"]
         },
         "Plugin": {
             "contextsAllowed": ["interface"],
@@ -490,6 +489,10 @@
         },
         "SkipVTableValidation": {
             "contextsAllowed": ["interface"]
+        },
+        "StringContext": {
+            "contextsAllowed": ["type"],
+            "values": ["TrustedHTML", "TrustedScript", "TrustedScriptURL"]
         },
         "SuppressToJSObject": {
             "contextsAllowed": ["interface"]

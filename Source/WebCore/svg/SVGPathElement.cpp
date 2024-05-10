@@ -112,13 +112,13 @@ void SVGPathElement::attributeChanged(const QualifiedName& name, const AtomStrin
     if (name == SVGNames::dAttr) {
         auto& cache = PathSegListCache::singleton();
         if (newValue.isEmpty())
-            m_pathSegList->baseVal()->updateByteStreamData({ });
+            Ref { m_pathSegList }->baseVal()->updateByteStreamData({ });
         else if (auto* data = cache.get(newValue))
-            m_pathSegList->baseVal()->updateByteStreamData(*data);
-        else if (m_pathSegList->baseVal()->parse(newValue))
+            Ref { m_pathSegList }->baseVal()->updateByteStreamData(*data);
+        else if (Ref { m_pathSegList }->baseVal()->parse(newValue))
             cache.add(newValue, m_pathSegList->baseVal()->existingPathByteStream().data());
         else
-            document().accessSVGExtensions().reportError("Problem parsing d=\"" + newValue + "\"");
+            protectedDocument()->checkedSVGExtensions()->reportError("Problem parsing d=\"" + newValue + "\"");
     }
 
     SVGGeometryElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
@@ -136,14 +136,14 @@ void SVGPathElement::svgAttributeChanged(const QualifiedName& attrName)
         InstanceInvalidationGuard guard(*this);
         invalidateMPathDependencies();
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-        if (auto* path = dynamicDowncast<RenderSVGPath>(renderer()))
+        if (CheckedPtr path = dynamicDowncast<RenderSVGPath>(renderer()))
             path->setNeedsShapeUpdate();
-#endif
-        if (auto* path = dynamicDowncast<LegacyRenderSVGPath>(renderer()))
+
+        if (CheckedPtr path = dynamicDowncast<LegacyRenderSVGPath>(renderer()))
             path->setNeedsShapeUpdate();
 
         updateSVGRendererForElementChange();
+        invalidateResourceImageBuffersIfNeeded();
         return;
     }
 
@@ -155,7 +155,7 @@ void SVGPathElement::invalidateMPathDependencies()
     // <mpath> can only reference <path> but this dependency is not handled in
     // markForLayoutAndParentResourceInvalidation so we update any mpath dependencies manually.
     for (auto& element : referencingElements()) {
-        if (auto* mpathElement = dynamicDowncast<SVGMPathElement>(element.get()))
+        if (RefPtr mpathElement = dynamicDowncast<SVGMPathElement>(element.get()))
             mpathElement->targetPathChanged();
     }
 }
@@ -195,28 +195,25 @@ unsigned SVGPathElement::getPathSegAtLength(float length) const
 FloatRect SVGPathElement::getBBox(StyleUpdateStrategy styleUpdateStrategy)
 {
     if (styleUpdateStrategy == AllowStyleUpdate)
-        document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+        protectedDocument()->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
 
     // FIXME: Eventually we should support getBBox for detached elements.
     // FIXME: If the path is null it means we're calling getBBox() before laying out this element,
     // which is an error.
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-        if (auto* path = dynamicDowncast<RenderSVGPath>(renderer()); path && path->hasPath())
-            return path->path().boundingRect();
-#endif
-        if (auto* path = dynamicDowncast<LegacyRenderSVGPath>(renderer()); path && path->hasPath())
-            return path->path().boundingRect();
+    if (CheckedPtr path = dynamicDowncast<RenderSVGPath>(renderer()); path && path->hasPath())
+        return path->path().boundingRect();
+
+    if (CheckedPtr path = dynamicDowncast<LegacyRenderSVGPath>(renderer()); path && path->hasPath())
+        return path->path().boundingRect();
 
     return { };
 }
 
 RenderPtr<RenderElement> SVGPathElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
 {
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (document().settings().layerBasedSVGEngineEnabled())
         return createRenderer<RenderSVGPath>(*this, WTFMove(style));
-#endif
     return createRenderer<LegacyRenderSVGPath>(*this, WTFMove(style));
 }
 

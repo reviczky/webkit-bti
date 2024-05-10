@@ -34,12 +34,12 @@
 #include "AuthenticatorCoordinatorClient.h"
 #include "AuthenticatorResponseData.h"
 #include "Document.h"
-#include "FeaturePolicy.h"
 #include "FrameDestructionObserverInlines.h"
 #include "JSBasicCredential.h"
 #include "JSCredentialCreationOptions.h"
 #include "JSCredentialRequestOptions.h"
 #include "JSDOMPromiseDeferred.h"
+#include "PermissionsPolicy.h"
 #include "PublicKeyCredential.h"
 #include "PublicKeyCredentialCreationOptions.h"
 #include "PublicKeyCredentialRequestOptions.h"
@@ -131,10 +131,6 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
     // Step 8.
     if (!options.rp.id)
         options.rp.id = callerOrigin.domain();
-    else if (!callerOrigin.isMatchingRegistrableDomainSuffix(*options.rp.id)) {
-        promise.reject(Exception { ExceptionCode::SecurityError, "The provided RP ID is not a registrable domain suffix of the effective domain of the document."_s });
-        return;
-    }
 
     // Step 9-11.
     // Most of the jobs are done by bindings.
@@ -157,15 +153,23 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
     AuthenticationExtensionsClientInputs extensionInputs = {
         String(),
         false,
+        std::nullopt,
         std::nullopt
     };
 
     if (auto extensions = options.extensions) {
         extensionInputs.credProps = extensions->credProps;
         extensionInputs.largeBlob = extensions->largeBlob;
+        extensionInputs.prf = extensions->prf;
     }
 
     options.extensions = extensionInputs;
+    if (options.extensions && options.extensions->largeBlob) {
+        if (options.extensions->largeBlob->read || options.extensions->largeBlob->write) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Read and write may not be present in largeBlob for registration."_s });
+            return;
+        }
+    }
 
     // Step 4, 18-22.
     if (!m_client) {
@@ -181,10 +185,9 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
             weakThis->m_client->cancel([weakThis = WTFMove(weakThis)] () mutable {
                 if (!weakThis)
                     return;
-                if (auto queuedRequest = WTFMove(weakThis->m_queuedRequest)) {
-                    weakThis->m_isCancelling = false;
+                weakThis->m_isCancelling = false;
+                if (auto queuedRequest = WTFMove(weakThis->m_queuedRequest))
                     queuedRequest();
-                }
             });
         });
     }
@@ -231,7 +234,7 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
     // Step 1, 3, 13 are handled by the caller.
     // Step 2.
     // This implements https://www.w3.org/TR/webauthn-2/#sctn-permissions-policy
-    if (scopeAndCrossOriginParent.first != WebAuthn::Scope::SameOrigin && !isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::PublickeyCredentialsGetRule, document, LogFeaturePolicyFailure::No)) {
+    if (scopeAndCrossOriginParent.first != WebAuthn::Scope::SameOrigin && !isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Type::PublickeyCredentialsGetRule, document, LogPermissionsPolicyFailure::No)) {
         promise.reject(Exception { ExceptionCode::NotAllowedError, "The origin of the document is not the same as its ancestors."_s });
         return;
     }
@@ -245,10 +248,6 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
     }
 
     // Step 7.
-    if (!options.rpId.isEmpty() && !callerOrigin.isMatchingRegistrableDomainSuffix(options.rpId)) {
-        promise.reject(Exception { ExceptionCode::SecurityError, "The provided RP ID is not a registrable domain suffix of the effective domain of the document."_s });
-        return;
-    }
     if (options.rpId.isEmpty())
         options.rpId = callerOrigin.domain();
 
@@ -262,6 +261,17 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
             return;
         }
         options.extensions->appid = appid;
+    }
+
+    if (options.extensions && options.extensions->largeBlob) {
+        if (!options.extensions->largeBlob->support.isEmpty()) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Support should not be present in largeBlob for assertion."_s });
+            return;
+        }
+        if (options.extensions->largeBlob->read && options.extensions->largeBlob->write) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Both read and write may not be present together in largeBlob."_s });
+            return;
+        }
     }
 
     // Step 4, 14-19.
@@ -278,10 +288,9 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
             weakThis->m_client->cancel([weakThis = WTFMove(weakThis)] () mutable {
                 if (!weakThis)
                     return;
-                if (auto queuedRequest = WTFMove(weakThis->m_queuedRequest)) {
-                    weakThis->m_isCancelling = false;
+                weakThis->m_isCancelling = false;
+                if (auto queuedRequest = WTFMove(weakThis->m_queuedRequest))
                     queuedRequest();
-                }
             });
         });
     }

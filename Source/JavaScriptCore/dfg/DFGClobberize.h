@@ -154,11 +154,13 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         case EnumeratorHasOwnProperty:
         case GetIndexedPropertyStorage:
         case GetArrayLength:
+        case GetUndetachedTypeArrayLength:
         case GetTypedArrayLengthAsInt52:
         case GetTypedArrayByteOffset:
         case GetTypedArrayByteOffsetAsInt52:
         case GetVectorLength:
         case InByVal:
+        case InByValMegamorphic:
         case PutByValDirect:
         case PutByVal:
         case PutByValAlias:
@@ -772,10 +774,13 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case CallCustomAccessorSetter:
     case ToPrimitive:
     case ToPropertyKey:
+    case ToPropertyKeyOrNumber:
     case InByVal:
+    case InByValMegamorphic:
     case EnumeratorInByVal:
     case EnumeratorHasOwnProperty:
     case InById:
+    case InByIdMegamorphic:
     case HasPrivateName:
     case HasPrivateBrand:
     case HasOwnProperty:
@@ -1095,6 +1100,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         case Array::Uint32Array:
         case Array::Float32Array:
         case Array::Float64Array:
+            // Even if we hit out-of-bounds, this is fine. TypedArray does not propagate access to its [[Prototype]] when out-of-bounds access happens.
             read(TypedArrayProperties);
             read(MiscFields);
             if (mode.mayBeResizableOrGrowableSharedTypedArray()) {
@@ -1593,6 +1599,14 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         }
     }
 
+    case GetUndetachedTypeArrayLength: {
+        ArrayMode mode = node->arrayMode();
+        DFG_ASSERT(graph, node, mode.isSomeTypedArrayView());
+        DFG_ASSERT(graph, node, !mode.mayBeResizableOrGrowableSharedTypedArray());
+        def(PureValue(node, mode.asWord()));
+        return;
+    }
+
     case GetTypedArrayLengthAsInt52: {
         ArrayMode mode = node->arrayMode();
         DFG_ASSERT(graph, node, mode.isSomeTypedArrayView() || mode.type() == Array::ForceExit);
@@ -2028,6 +2042,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             // original String or StringObject structure. Therefore, we don't have an overridden
             // valueOf, etc.
 
+        case StringOrOtherUse:
         case Int32Use:
         case Int52RepUse:
         case DoubleRepUse:

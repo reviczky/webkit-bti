@@ -55,7 +55,7 @@ class WebExtensionAPIExtension;
 class WebExtensionAPIRuntime;
 
 class WebExtensionAPINamespace : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPINamespace, namespace);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPINamespace, namespace, browser);
 
 public:
 #if PLATFORM(COCOA)
@@ -77,7 +77,7 @@ public:
     WebExtensionAPINotifications& notifications();
     WebExtensionAPIAction& pageAction() { return action(); }
     WebExtensionAPIPermissions& permissions();
-    WebExtensionAPIRuntime& runtime() final;
+    WebExtensionAPIRuntime& runtime() const final;
     WebExtensionAPIScripting& scripting();
     WebExtensionAPIStorage& storage();
     WebExtensionAPITabs& tabs();
@@ -101,7 +101,7 @@ private:
     RefPtr<WebExtensionAPIMenus> m_menus;
     RefPtr<WebExtensionAPINotifications> m_notifications;
     RefPtr<WebExtensionAPIPermissions> m_permissions;
-    RefPtr<WebExtensionAPIRuntime> m_runtime;
+    mutable RefPtr<WebExtensionAPIRuntime> m_runtime;
     RefPtr<WebExtensionAPIScripting> m_scripting;
     RefPtr<WebExtensionAPIStorage> m_storage;
     RefPtr<WebExtensionAPITabs> m_tabs;

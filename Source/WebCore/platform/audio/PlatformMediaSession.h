@@ -38,6 +38,17 @@
 #include "MediaPlaybackTargetClient.h"
 #endif
 
+namespace WebCore {
+class PlatformMediaSession;
+class AudioCaptureSource;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::PlatformMediaSession> : std::true_type { };
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::AudioCaptureSource> : std::true_type { };
+}
+
 namespace WTF {
 class MediaTime;
 }
@@ -108,6 +119,13 @@ struct PlatformMediaSessionRemoteCommandArgument {
     std::optional<bool> fastSeek;
 };
 
+class AudioCaptureSource : public CanMakeWeakPtr<AudioCaptureSource> {
+public:
+    virtual ~AudioCaptureSource() = default;
+    virtual bool isCapturingAudio() const = 0;
+    virtual bool wantsToCaptureAudio() const = 0;
+};
+
 class PlatformMediaSession
     : public CanMakeWeakPtr<PlatformMediaSession>
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -126,6 +144,7 @@ public:
     void setActive(bool);
 
     using MediaType = WebCore::PlatformMediaSessionMediaType;
+    enum class PlaybackControlsPurpose { ControlsManager, NowPlaying, MediaSession };
 
     MediaType mediaType() const;
     MediaType presentationType() const;
@@ -139,7 +158,7 @@ public:
 
     using InterruptionType = PlatformMediaSessionInterruptionType;
 
-    InterruptionType interruptionType() const { return m_interruptionType; }
+    InterruptionType interruptionType() const;
 
     using EndInterruptionFlags = PlatformMediaSessionEndInterruptionFlags;
 
@@ -198,6 +217,7 @@ public:
     virtual bool requiresPlaybackTargetRouteMonitoring() const { return false; }
 #endif
 
+    bool blockedBySystemInterruption() const;
     bool activeAudioSessionRequired() const;
     bool canProduceAudio() const;
     bool hasMediaStreamSource() const;
@@ -214,21 +234,17 @@ public:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
     const void* logIdentifier() const override { return m_logIdentifier; }
-    const char* logClassName() const override { return "PlatformMediaSession"; }
+    ASCIILiteral logClassName() const override { return "PlatformMediaSession"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
 
     bool canPlayConcurrently(const PlatformMediaSession&) const;
     bool shouldOverridePauseDuringRouteChange() const;
 
-    class AudioCaptureSource : public CanMakeWeakPtr<AudioCaptureSource> {
-    public:
-        virtual ~AudioCaptureSource() = default;
-        virtual bool isCapturingAudio() const = 0;
-        virtual bool wantsToCaptureAudio() const = 0;
-    };
+    std::optional<NowPlayingInfo> nowPlayingInfo() const;
+    bool isNowPlayingEligible() const;
+    WeakPtr<PlatformMediaSession> selectBestMediaSession(const Vector<WeakPtr<PlatformMediaSession>>&, PlaybackControlsPurpose);
 
-    virtual std::optional<NowPlayingInfo> nowPlayingInfo() const;
     virtual void updateMediaUsageIfChanged() { }
 
     virtual bool isLongEnoughForMainContent() const { return false; }
@@ -241,12 +257,13 @@ protected:
 
 private:
     bool processClientWillPausePlayback(DelayCallingUpdateNowPlaying);
+    size_t interruptionCount() const { return m_interruptionStack.size(); }
 
     PlatformMediaSessionClient& m_client;
     MediaSessionIdentifier m_mediaSessionIdentifier;
     State m_state { State::Idle };
     State m_stateToRestore { State::Idle };
-    InterruptionType m_interruptionType { InterruptionType::NoInterruption };
+    Vector<InterruptionType> m_interruptionStack;
     int m_interruptionCount { 0 };
     bool m_active { false };
     bool m_notifyingClient { false };
@@ -304,6 +321,10 @@ public:
     virtual void processIsSuspendedChanged() { }
 
     virtual bool shouldOverridePauseDuringRouteChange() const { return false; }
+
+    virtual bool isNowPlayingEligible() const { return false; }
+    virtual std::optional<NowPlayingInfo> nowPlayingInfo() const;
+    virtual WeakPtr<PlatformMediaSession> selectBestMediaSession(const Vector<WeakPtr<PlatformMediaSession>>&, PlatformMediaSession::PlaybackControlsPurpose) { return nullptr; }
 
 #if !RELEASE_LOG_DISABLED
     virtual const Logger& logger() const = 0;

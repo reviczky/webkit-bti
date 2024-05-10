@@ -195,7 +195,6 @@ void GStreamerPeerConnectionBackend::close()
 void GStreamerPeerConnectionBackend::doStop()
 {
     m_endpoint->stop();
-    m_pendingReceivers.clear();
 }
 
 void GStreamerPeerConnectionBackend::doAddIceCandidate(RTCIceCandidate& candidate, AddIceCandidateCallback&& callback)
@@ -333,7 +332,7 @@ void GStreamerPeerConnectionBackend::dispatchPendingTrackEvents(MediaStream& med
 {
     auto events = WTFMove(m_pendingTrackEvents);
     for (auto& event : events) {
-        event.streams = Vector<RefPtr<MediaStream>>({ &mediaStream });
+        event.streams = Vector<Ref<MediaStream>>({ mediaStream });
         dispatchTrackEvent(event);
     }
 }

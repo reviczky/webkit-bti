@@ -131,6 +131,9 @@ public:
     WEBCORE_EXPORT void setStateObject(RefPtr<SerializedScriptValue>&&);
     SerializedScriptValue* stateObject() const { return m_stateObject.get(); }
 
+    void setNavigationAPIStateObject(RefPtr<SerializedScriptValue>&&);
+    SerializedScriptValue* navigationAPIStateObject() const { return m_navigationAPIStateObject.get(); }
+
     void setItemSequenceNumber(long long number) { m_itemSequenceNumber = number; }
     long long itemSequenceNumber() const { return m_itemSequenceNumber; }
 
@@ -148,11 +151,9 @@ public:
     WEBCORE_EXPORT HistoryItem* childItemWithTarget(const AtomString&);
     HistoryItem* childItemWithDocumentSequenceNumber(long long number);
     WEBCORE_EXPORT const Vector<Ref<HistoryItem>>& children() const;
-    WEBCORE_EXPORT bool hasChildren() const;
     void clearChildren();
     
     bool shouldDoSameDocumentNavigationTo(HistoryItem& otherItem) const;
-    bool hasSameFrames(HistoryItem& otherItem) const;
 
     bool isCurrentDocument(Document&) const;
     
@@ -204,7 +205,7 @@ public:
     bool wasCreatedByJSWithoutUserInteraction() const { return m_wasCreatedByJSWithoutUserInteraction; }
 
 #if !LOG_DISABLED
-    const char* logString() const;
+    String logString() const;
 #endif
 
     const std::optional<PolicyContainer>& policyContainer() const { return m_policyContainer; }
@@ -255,6 +256,9 @@ private:
     // Support for HTML5 History
     RefPtr<SerializedScriptValue> m_stateObject;
     
+    // Navigation API
+    RefPtr<SerializedScriptValue> m_navigationAPIStateObject;
+
     // info used to repost form data
     RefPtr<FormData> m_formData;
     String m_formContentType;

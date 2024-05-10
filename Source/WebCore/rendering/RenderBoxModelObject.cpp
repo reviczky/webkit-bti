@@ -201,7 +201,7 @@ void RenderBoxModelObject::willBeDestroyed()
 
 bool RenderBoxModelObject::hasVisibleBoxDecorationStyle() const
 {
-    return hasBackground() || style().hasVisibleBorderDecoration() || style().hasEffectiveAppearance() || style().boxShadow();
+    return hasBackground() || style().hasVisibleBorderDecoration() || style().hasUsedAppearance() || style().boxShadow();
 }
 
 void RenderBoxModelObject::updateFromStyle()
@@ -253,7 +253,7 @@ RenderBlock* RenderBoxModelObject::containingBlockForAutoHeightDetection(Length 
     // Anonymous block boxes are ignored when resolving percentage values that
     // would refer to it: the closest non-anonymous ancestor box is used instead.
     auto* cb = containingBlock();
-    while (cb && cb->isAnonymous() && !is<RenderView>(cb))
+    while (cb && cb->isAnonymousForPercentageResolution() && !is<RenderView>(cb))
         cb = cb->containingBlock();
     if (!cb)
         return nullptr;
@@ -285,7 +285,7 @@ bool RenderBoxModelObject::hasAutoHeightOrContainingBlockWithAutoHeight() const
     if (logicalHeightLength.isPercentOrCalculated() && cb && thisBox)
         cb->addPercentHeightDescendant(*const_cast<RenderBox*>(thisBox));
 
-    if (thisBox && thisBox->isFlexItem() && downcast<RenderFlexibleBox>(*parent()).useChildOverridingLogicalHeightForPercentageResolution(*thisBox))
+    if (thisBox && thisBox->isFlexItem() && downcast<RenderFlexibleBox>(*parent()).usedChildOverridingLogicalHeightForPercentageResolution(*thisBox))
         return false;
     
     if (thisBox && thisBox->isGridItem() && thisBox->hasOverridingContainingBlockContentLogicalHeight())
@@ -305,6 +305,12 @@ bool RenderBoxModelObject::hasAutoHeightOrContainingBlockWithAutoHeight() const
 
 DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, const PaintInfo& paintInfo) const
 {
+    // Some document types force synchronous decoding.
+#if PLATFORM(IOS_FAMILY)
+    if (IOSApplication::isIBooksStorytime())
+        return DecodingMode::Synchronous;
+#endif
+
     if (document().isImageDocument())
         return DecodingMode::Synchronous;
 
@@ -312,10 +318,6 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
     if (paintInfo.paintBehavior.contains(PaintBehavior::Snapshotting))
         return DecodingMode::Synchronous;
 
-#if PLATFORM(IOS_FAMILY)
-    if (IOSApplication::isIBooksStorytime())
-        return DecodingMode::Synchronous;
-#endif
 
     auto* bitmapImage = dynamicDowncast<BitmapImage>(image);
     if (!bitmapImage)
@@ -327,8 +329,10 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
 
         // First tile paint.
         if (paintInfo.paintBehavior.contains(PaintBehavior::DefaultAsynchronousImageDecode)) {
-            // And the images has not been painted in this element yet.
-            if (element() && !element()->hasEverPaintedImages())
+            // No image has been painted in this element yet and it should not flicker with previous painting.
+            auto observer = bitmapImage->imageObserver();
+            bool mayOverlapOtherClients = observer && observer->numberOfClients() > 1 && bitmapImage->currentFrameDecodingOptions().decodingMode() == DecodingMode::Asynchronous;
+            if (element() && !element()->hasEverPaintedImages() && !mayOverlapOtherClients)
                 return DecodingMode::Asynchronous;
         }
 
@@ -344,7 +348,6 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
         // <img decoding="async"> forces asynchronous decoding but make sure this
         // will not cause flickering.
         if (imgElement->decodingMode() == DecodingMode::Asynchronous) {
-            // isAsyncDecodingEnabledForTesting() forces async image decoding regardless whether it is in the viewport or not.
             if (bitmapImage->isAsyncDecodingEnabledForTesting())
                 return DecodingMode::Asynchronous;
 
@@ -358,19 +361,18 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
         return DecodingMode::Asynchronous;
 
     // Animated image case.
-    if (bitmapImage->canAnimate()) {
-        if (!(bitmapImage->shouldUseAsyncDecodingForAnimatedImages() && settings().animatedImageAsyncDecodingEnabled()))
+    if (bitmapImage->isAnimated()) {
+        if (!(bitmapImage->isLargeForDecoding() && settings().animatedImageAsyncDecodingEnabled()))
             return DecodingMode::Synchronous;
 
-        // First frame should be decoded according to its state in the viewport.
-        if (bitmapImage->currentFrameIndex())
+        if (bitmapImage->hasEverAnimated())
             return DecodingMode::Asynchronous;
 
         return defaultDecodingMode();
     }
 
     // Large image case.
-    if (!(bitmapImage->canUseAsyncDecodingForLargeImages() && settings().largeImageAsyncDecodingEnabled()))
+    if (!(bitmapImage->isLargeForDecoding() && settings().largeImageAsyncDecodingEnabled()))
         return DecodingMode::Synchronous;
 
     // Choose a decodingMode such that the image does not flicker.
@@ -383,6 +385,12 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
     // where all values are either auto or fixed.
 
     LayoutSize offset = accumulateInFlowPositionOffsets(this);
+    auto& style = this->style();
+    if (!containingBlock()) {
+        ASSERT_NOT_REACHED();
+        return { };
+    }
+    auto& containingBlock = *(this->containingBlock());
 
     // Objects that shrink to avoid floats normally use available line width when computing containing block width.  However
     // in the case of relative positioning using percentages, we can't do this.  The offset should always be resolved using the
@@ -390,16 +398,22 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
     // call availableWidth on our containing block.
     // However for grid items the containing block is the grid area, so offsets should be resolved against that:
     // https://drafts.csswg.org/css-grid/#grid-item-sizing
-    if (!style().left().isAuto() || !style().right().isAuto()) {
-        LayoutUnit availableWidth = hasOverridingContainingBlockContentWidth()
-            ? valueOrDefault(overridingContainingBlockContentWidth()) : containingBlock()->availableWidth();
-        if (!style().left().isAuto()) {
-            if (!style().right().isAuto() && !containingBlock()->style().isLeftToRightDirection())
-                offset.setWidth(-valueForLength(style().right(), !style().right().isFixed() ? availableWidth : 0_lu));
+    auto& left = style.left();
+    auto& right = style.right();
+    if (!left.isAuto() || !right.isAuto()) {
+        auto availableWidth = [&] {
+            auto* renderBox = dynamicDowncast<RenderBox>(*this);
+            if (!renderBox)
+                return containingBlock.availableWidth();
+            return renderBox->hasOverridingContainingBlockContentWidth() ? renderBox->overridingContainingBlockContentWidth().value_or(0_lu) : containingBlock.availableWidth();
+        };
+        if (!left.isAuto()) {
+            if (!right.isAuto() && !containingBlock.style().isLeftToRightDirection())
+                offset.setWidth(-valueForLength(right, availableWidth()));
             else
-                offset.expand(valueForLength(style().left(), !style().left().isFixed() ? availableWidth : 0_lu), 0_lu);
-        } else if (!style().right().isAuto())
-            offset.expand(-valueForLength(style().right(), !style().right().isFixed() ? availableWidth : 0_lu), 0_lu);
+                offset.expand(valueForLength(left, availableWidth()), 0_lu);
+        } else if (!right.isAuto())
+            offset.expand(-valueForLength(right, availableWidth()), 0_lu);
     }
 
     // If the containing block of a relatively positioned element does not
@@ -410,28 +424,28 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
     // See <https://bugs.webkit.org/show_bug.cgi?id=26396>.
     // Another exception is a grid item, as the containing block is the grid area:
     // https://drafts.csswg.org/css-grid/#grid-item-sizing
-    if (!style().top().isAuto()
-        && (!style().top().isPercentOrCalculated()
-            || !containingBlock()->hasAutoHeightOrContainingBlockWithAutoHeight()
-            || containingBlock()->stretchesToViewport()
-            || hasOverridingContainingBlockContentHeight())) {
+    auto& top = style.top();
+    auto& bottom = style.bottom();
+    if (top.isAuto() && bottom.isAuto())
+        return offset;
+
+    auto hasOverridingContainingBlockContentHeight = [&] {
+        auto* renderBox = dynamicDowncast<RenderBox>(*this);
+        return renderBox && renderBox->hasOverridingContainingBlockContentHeight();
+    }();
+    auto containingBlockHasDefiniteHeight = !containingBlock.hasAutoHeightOrContainingBlockWithAutoHeight() || containingBlock.stretchesToViewport() || hasOverridingContainingBlockContentHeight;
+    auto containingBlockContentHeight = [&] {
+        return hasOverridingContainingBlockContentHeight ? downcast<RenderBox>(*this).overridingContainingBlockContentHeight().value_or(0_lu) : containingBlock.availableHeight();
+    };
+    if (!top.isAuto() && (!top.isPercentOrCalculated() || containingBlockHasDefiniteHeight)) {
         // FIXME: The computation of the available height is repeated later for "bottom".
         // We could refactor this and move it to some common code for both ifs, however moving it outside of the ifs
         // is not possible as it'd cause performance regressions.
-        offset.expand(0_lu, valueForLength(style().top(), !style().top().isFixed()
-            ? (hasOverridingContainingBlockContentHeight() ? overridingContainingBlockContentHeight().value_or(0_lu) : containingBlock()->availableHeight())
-            : LayoutUnit()));
-    } else if (!style().bottom().isAuto()
-        && (!style().bottom().isPercentOrCalculated()
-            || !containingBlock()->hasAutoHeightOrContainingBlockWithAutoHeight()
-            || containingBlock()->stretchesToViewport()
-            || hasOverridingContainingBlockContentHeight())) {
+        offset.expand(0_lu, valueForLength(top, containingBlockContentHeight()));
+    } else if (!bottom.isAuto() && (!bottom.isPercentOrCalculated() || containingBlockHasDefiniteHeight)) {
         // FIXME: Check comment above for "top", it applies here too.
-        offset.expand(0_lu, -valueForLength(style().bottom(), !style().bottom().isFixed()
-            ? (hasOverridingContainingBlockContentHeight() ? overridingContainingBlockContentHeight().value_or(0_lu) : containingBlock()->availableHeight())
-            : LayoutUnit()));
+        offset.expand(0_lu, -valueForLength(bottom, containingBlockContentHeight()));
     }
-
     return offset;
 }
 
@@ -742,7 +756,7 @@ static inline LayoutSize resolveAgainstIntrinsicRatio(const LayoutSize& size, co
     return LayoutSize(size.width(), solutionHeight);
 }
 
-LayoutSize RenderBoxModelObject::calculateImageIntrinsicDimensions(StyleImage* image, const LayoutSize& positioningAreaSize, ScaleByEffectiveZoomOrNot shouldScaleOrNot) const
+LayoutSize RenderBoxModelObject::calculateImageIntrinsicDimensions(StyleImage* image, const LayoutSize& positioningAreaSize, ScaleByUsedZoom scaleByUsedZoom) const
 {
     // A generated image without a fixed size, will always return the container size as intrinsic size.
     if (!image->imageHasNaturalDimensions())
@@ -759,8 +773,8 @@ LayoutSize RenderBoxModelObject::calculateImageIntrinsicDimensions(StyleImage* i
     LayoutSize resolvedSize(intrinsicWidth.value(), intrinsicHeight.value());
     LayoutSize minimumSize(resolvedSize.width() > 0 ? 1 : 0, resolvedSize.height() > 0 ? 1 : 0);
 
-    if (shouldScaleOrNot == ScaleByEffectiveZoom)
-        resolvedSize.scale(style().effectiveZoom());
+    if (scaleByUsedZoom == ScaleByUsedZoom::Yes)
+        resolvedSize.scale(style().usedZoom());
     resolvedSize.clampToMinimumSize(minimumSize);
 
     if (!resolvedSize.isEmpty())
@@ -941,7 +955,7 @@ void RenderBoxModelObject::mapAbsoluteToLocalPoint(OptionSet<MapCoordinatesMode>
 bool RenderBoxModelObject::hasRunningAcceleratedAnimations() const
 {
     if (auto styleable = Styleable::fromRenderer(*this))
-        return styleable->runningAnimationsAreAllAccelerated();
+        return styleable->hasRunningAcceleratedAnimations();
     return false;
 }
 
@@ -970,7 +984,7 @@ void RenderBoxModelObject::applyTransform(TransformationMatrix&, const RenderSty
 
 bool RenderBoxModelObject::requiresLayer() const
 {
-    return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection();
+    return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection() || requiresRenderingConsolidationForViewTransition() || isRenderViewTransitionCapture();
 }
 
 } // namespace WebCore

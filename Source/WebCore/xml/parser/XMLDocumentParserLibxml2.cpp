@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2000 Peter Kelly <pmk@post.com>
- * Copyright (C) 2005-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2005-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Alexey Proskuryakov <ap@webkit.org>
  * Copyright (C) 2007 Samuel Weinig <sam@webkit.org>
  * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
@@ -142,12 +142,12 @@ public:
         m_callbacks.append(makeUnique<PendingEndElementNSCallback>());
     }
 
-    void appendCharactersCallback(const xmlChar* s, int len)
+    void appendCharactersCallback(std::span<const xmlChar> s)
     {
         auto callback = makeUnique<PendingCharactersCallback>();
 
-        callback->s = xmlStrndup(s, len);
-        callback->len = len;
+        callback->s = xmlStrndup(s.data(), s.size());
+        callback->len = s.size();
 
         m_callbacks.append(WTFMove(callback));
     }
@@ -265,7 +265,7 @@ private:
 
         void call(XMLDocumentParser* parser) override
         {
-            parser->characters(s, len);
+            parser->characters(std::span { s, static_cast<size_t>(len) });
         }
 
         xmlChar* s;
@@ -363,7 +363,7 @@ static int matchFunc(const char*)
 {
     // Only match loads initiated due to uses of libxml2 from within XMLDocumentParser to avoid
     // interfering with client applications that also use libxml2.  http://bugs.webkit.org/show_bug.cgi?id=17353
-    return XMLDocumentParserScope::currentCachedResourceLoader && libxmlLoaderThread == &Thread::current();
+    return XMLDocumentParserScope::currentCachedResourceLoader() && libxmlLoaderThread == &Thread::current();
 }
 
 class OffsetBuffer {
@@ -444,16 +444,21 @@ static bool shouldAllowExternalLoad(const URL& url)
     if (startsWithLettersIgnoringASCIICase(urlString, "http://www.w3.org/graphics/svg"_s))
         return false;
 
+    // This will crash due a missing XMLDocumentParserScope object in WebKit, or when
+    // a non-WebKit, in-process framework/library uses libxml2 off the main thread.
+    ASSERT(!!XMLDocumentParserScope::currentCachedResourceLoader());
+
     // The libxml doesn't give us a lot of context for deciding whether to
     // allow this request.  In the worst case, this load could be for an
     // external entity and the resulting document could simply read the
     // retrieved content.  If we had more context, we could potentially allow
     // the parser to load a DTD.  As things stand, we take the conservative
     // route and allow same-origin requests only.
-    if (!XMLDocumentParserScope::currentCachedResourceLoader || !XMLDocumentParserScope::currentCachedResourceLoader->document())
+    RefPtr currentCachedResourceLoader = XMLDocumentParserScope::currentCachedResourceLoader().get();
+    if (!currentCachedResourceLoader || !currentCachedResourceLoader->document())
         return false;
-    if (!XMLDocumentParserScope::currentCachedResourceLoader->document()->securityOrigin().canRequest(url, OriginAccessPatternsForWebProcess::singleton())) {
-        XMLDocumentParserScope::currentCachedResourceLoader->printAccessDeniedMessage(url);
+    if (!currentCachedResourceLoader->document()->securityOrigin().canRequest(url, OriginAccessPatternsForWebProcess::singleton())) {
+        currentCachedResourceLoader->printAccessDeniedMessage(url);
         return false;
     }
 
@@ -462,11 +467,14 @@ static bool shouldAllowExternalLoad(const URL& url)
 
 static void* openFunc(const char* uri)
 {
-    ASSERT(XMLDocumentParserScope::currentCachedResourceLoader);
+    ASSERT(XMLDocumentParserScope::currentCachedResourceLoader());
     ASSERT(libxmlLoaderThread == &Thread::current());
 
-    CachedResourceLoader& cachedResourceLoader = *XMLDocumentParserScope::currentCachedResourceLoader;
-    Document* document = cachedResourceLoader.document();
+    RefPtr cachedResourceLoader = XMLDocumentParserScope::currentCachedResourceLoader().get();
+    if (!cachedResourceLoader)
+        return &globalDescriptor;
+
+    RefPtr document = cachedResourceLoader->document();
     // Same logic as Document::completeURL(). Keep them in sync.
     auto* encoding = (document && document->decoder()) ? document->decoder()->encodingForURLParsing() : nullptr;
     URL url(document ? document->fallbackBaseURL() : URL(), String::fromLatin1(uri), encoding);
@@ -482,11 +490,11 @@ static void* openFunc(const char* uri)
         XMLDocumentParserScope scope(nullptr);
         // FIXME: We should restore the original global error handler as well.
 
-        if (cachedResourceLoader.frame()) {
+        if (cachedResourceLoader->frame()) {
             FetchOptions options;
             options.mode = FetchOptions::Mode::SameOrigin;
             options.credentials = FetchOptions::Credentials::Include;
-            cachedResourceLoader.frame()->loader().loadResourceSynchronously(url, ClientCredentialPolicy::MayAskClientForCredentials, options, { }, error, response, data);
+            cachedResourceLoader->frame()->loader().loadResourceSynchronously(url, ClientCredentialPolicy::MayAskClientForCredentials, options, { }, error, response, data);
 
             if (response.url().isEmpty()) {
                 if (Page* page = document ? document->page() : nullptr)
@@ -504,7 +512,7 @@ static void* openFunc(const char* uri)
     if (!data)
         return &globalDescriptor;
 
-    return new OffsetBuffer({ data->data(), data->size() });
+    return new OffsetBuffer(Vector(data->span()));
 }
 
 static int readFunc(void* context, char* buffer, int len)
@@ -541,14 +549,15 @@ static void errorFunc(void*, const char*, ...)
 
 static xmlExternalEntityLoader defaultEntityLoader { nullptr };
 
-static xmlParserInputPtr entityLoader(const char* url, const char* id, xmlParserCtxtPtr context)
+xmlParserInputPtr externalEntityLoader(const char* url, const char* id, xmlParserCtxtPtr context)
 {
     if (!shouldAllowExternalLoad(URL(String::fromUTF8(url))))
         return nullptr;
+    RELEASE_ASSERT_WITH_MESSAGE(!!defaultEntityLoader, "Missing call to initializeXMLParser()");
     return defaultEntityLoader(url, id, context);
 }
 
-static void initializeXMLParser()
+void initializeXMLParser()
 {
     static std::once_flag flag;
     std::call_once(flag, [&] {
@@ -556,7 +565,7 @@ static void initializeXMLParser()
         xmlRegisterInputCallbacks(matchFunc, openFunc, readFunc, closeFunc);
         xmlRegisterOutputCallbacks(matchFunc, openFunc, writeFunc, closeFunc);
         defaultEntityLoader = xmlGetExternalEntityLoader();
-        xmlSetExternalEntityLoader(entityLoader);
+        RELEASE_ASSERT_WITH_MESSAGE(defaultEntityLoader != WebCore::externalEntityLoader, "XMLDocumentParserScope was created too early");
         libxmlLoaderThread = &Thread::current();
     });
 }
@@ -689,7 +698,7 @@ void XMLDocumentParser::doWrite(const String& parseString)
 
 static inline String toString(const xmlChar* string, size_t size)
 {
-    return String::fromUTF8(reinterpret_cast<const char*>(string), size);
+    return String::fromUTF8({ reinterpret_cast<const char*>(string), size });
 }
 
 static inline String toString(const xmlChar* string)
@@ -699,7 +708,7 @@ static inline String toString(const xmlChar* string)
 
 static inline AtomString toAtomString(const xmlChar* string, size_t size)
 {
-    return AtomString::fromUTF8(reinterpret_cast<const char*>(string), size);
+    return AtomString::fromUTF8({ reinterpret_cast<const char*>(string), size });
 }
 
 static inline AtomString toAtomString(const xmlChar* string)
@@ -923,19 +932,19 @@ void XMLDocumentParser::endElementNs()
     popCurrentNode();
 }
 
-void XMLDocumentParser::characters(const xmlChar* characters, int length)
+void XMLDocumentParser::characters(std::span<const xmlChar> characters)
 {
     if (isStopped())
         return;
 
     if (m_parserPaused) {
-        m_pendingCallbacks->appendCharactersCallback(characters, length);
+        m_pendingCallbacks->appendCharactersCallback(characters);
         return;
     }
 
     if (!m_leafTextNode)
         createLeafTextNode();
-    m_bufferedText.append(characters, length);
+    m_bufferedText.append(characters);
 }
 
 void XMLDocumentParser::error(XMLErrors::ErrorType type, const char* message, va_list args)
@@ -1085,7 +1094,7 @@ static void endElementNsHandler(void* closure, const xmlChar*, const xmlChar*, c
 
 static void charactersHandler(void* closure, const xmlChar* s, int len)
 {
-    getParser(closure)->characters(s, len);
+    getParser(closure)->characters(std::span { s, static_cast<size_t>(len) });
 }
 
 static void processingInstructionHandler(void* closure, const xmlChar* target, const xmlChar* data)
@@ -1149,17 +1158,14 @@ static xmlEntityPtr sharedXHTMLEntity()
 
 static size_t convertUTF16EntityToUTF8(std::span<const UChar> utf16Entity, char* target, size_t targetSize)
 {
-    const char* originalTarget = target;
-    auto start = utf16Entity.data();
-    auto end = start + utf16Entity.size();
-    auto conversionResult = WTF::Unicode::convertUTF16ToUTF8(&start, end, &target, target + targetSize);
-    if (conversionResult != WTF::Unicode::ConversionResult::Success)
+    auto result = WTF::Unicode::convert(utf16Entity, { reinterpret_cast<char8_t*>(target), targetSize });
+    if (result.code != WTF::Unicode::ConversionResultCode::Success)
         return 0;
 
     // Even though we must pass the length, libxml expects the entity string to be null terminated.
-    ASSERT(target >= originalTarget + 1);
-    *target = '\0';
-    return target - originalTarget;
+    ASSERT(!result.buffer.empty());
+    target[result.buffer.size()] = '\0';
+    return result.buffer.size();
 }
 
 static xmlEntityPtr getXHTMLEntity(const xmlChar* name)
@@ -1306,7 +1312,6 @@ void XMLDocumentParser::initializeParserContext(const CString& chunk)
     m_sawXSLTransform = false;
     m_sawFirstElement = false;
 
-    XMLDocumentParserScope scope(&document()->cachedResourceLoader());
     if (m_parsingFragment)
         m_context = XMLParserContext::createMemoryParser(&sax, this, chunk);
     else {
@@ -1322,7 +1327,7 @@ void XMLDocumentParser::doEnd()
             // Tell libxml we're done.
             {
                 XMLDocumentParserScope scope(&document()->cachedResourceLoader());
-                xmlParseChunk(context(), 0, 0, 1);
+                xmlParseChunk(context(), nullptr, 0, 1);
             }
 
             m_context = nullptr;
@@ -1372,12 +1377,12 @@ xmlDocPtr xmlDocPtrForString(CachedResourceLoader& cachedResourceLoader, const S
     // good error messages.
 
     const bool is8Bit = source.is8Bit();
-    const char* characters = is8Bit ? reinterpret_cast<const char*>(source.characters8()) : reinterpret_cast<const char*>(source.characters16());
+    auto characters = is8Bit ? spanReinterpretCast<const char>(source.span8()) : spanReinterpretCast<const char>(source.span16());
     size_t sizeInBytes = source.length() * (is8Bit ? sizeof(LChar) : sizeof(UChar));
     const char* encoding = is8Bit ? "iso-8859-1" : nativeEndianUTF16Encoding();
 
     XMLDocumentParserScope scope(&cachedResourceLoader, errorFunc);
-    return xmlReadMemory(characters, sizeInBytes, url.latin1().data(), encoding, XSLT_PARSE_OPTIONS);
+    return xmlReadMemory(characters.data(), sizeInBytes, url.latin1().data(), encoding, XSLT_PARSE_OPTIONS);
 }
 #endif
 
@@ -1446,6 +1451,7 @@ bool XMLDocumentParser::appendFragmentSource(const String& chunk)
         return false;
 
     initializeParserContext(chunkAsUTF8);
+    XMLDocumentParserScope scope(&document()->cachedResourceLoader());
     xmlParseContent(context());
     endDocument(); // Close any open text nodes.
 
@@ -1489,7 +1495,7 @@ static void attributesStartElementNsHandler(void* closure, const xmlChar* xmlLoc
     }
 }
 
-std::optional<HashMap<String, String>> parseAttributes(const String& string)
+std::optional<HashMap<String, String>> parseAttributes(CachedResourceLoader& cachedResourceLoader, const String& string)
 {
     String parseString = "<?xml version=\"1.0\"?><attrs " + string + " />";
 
@@ -1502,6 +1508,7 @@ std::optional<HashMap<String, String>> parseAttributes(const String& string)
 
     auto parser = XMLParserContext::createStringParser(&sax, &attributes);
 
+    XMLDocumentParserScope scope(&cachedResourceLoader);
     // FIXME: Can we parse 8-bit strings directly as Latin-1 instead of upconverting to UTF-16?
     xmlParseChunk(parser->context(), reinterpret_cast<const char*>(StringView(parseString).upconvertedCharacters().get()), parseString.length() * sizeof(UChar), 1);
 

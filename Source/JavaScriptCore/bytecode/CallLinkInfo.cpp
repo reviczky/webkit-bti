@@ -96,10 +96,16 @@ void CallLinkInfo::unlinkOrUpgradeImpl(VM& vm, CodeBlock* oldCodeBlock, CodeBloc
 {
     // We could be called even if we're not linked anymore because of how polymorphic calls
     // work. Each callsite within the polymorphic call stub may separately ask us to unlink().
-    if (isLinked()) {
-        if (newCodeBlock && isDataIC() && mode() == Mode::Monomorphic && oldCodeBlock == u.dataIC.m_codeBlock) {
+    if (isOnList())
+        remove();
+
+    dataLogLnIf(Options::dumpDisassembly(), "Unlinking CallLinkInfo: ", RawPointer(this));
+
+    Mode mode = this->mode();
+    switch (mode) {
+    case Mode::Monomorphic: {
+        if (newCodeBlock && isDataIC() && oldCodeBlock == u.dataIC.m_codeBlock) {
             // Upgrading Monomorphic DataIC with newCodeBlock.
-            remove();
             ArityCheckMode arityCheck = oldCodeBlock->jitCode()->addressForCall(ArityCheckNotRequired) == u.dataIC.m_monomorphicCallDestination ? ArityCheckNotRequired : MustCheckArity;
             auto target = newCodeBlock->jitCode()->addressForCall(arityCheck);
             u.dataIC.m_codeBlock = newCodeBlock;
@@ -107,18 +113,37 @@ void CallLinkInfo::unlinkOrUpgradeImpl(VM& vm, CodeBlock* oldCodeBlock, CodeBloc
             newCodeBlock->linkIncomingCall(nullptr, this); // This is just relinking. So owner and caller frame can be nullptr.
             return;
         }
-        dataLogLnIf(Options::dumpDisassembly(), "Unlinking CallLinkInfo: ", RawPointer(this));
         revertCall(vm);
+        break;
+    }
+    case Mode::Polymorphic: {
+        revertCall(vm);
+        break;
+    }
+    case Mode::Init:
+    case Mode::Virtual: {
+        break;
+    }
     }
 
     // Either we were unlinked, in which case we should not have been on any list, or we unlinked
     // ourselves so that we're not on any list anymore.
-    RELEASE_ASSERT(!isOnList());
+    RELEASE_ASSERT(!isOnList(), static_cast<unsigned>(mode));
 }
 
-CodeLocationLabel<JSInternalPtrTag> CallLinkInfo::doneLocation()
+CodeLocationLabel<JSInternalPtrTag> CallLinkInfo::doneLocationIfExists()
 {
-    return m_doneLocation;
+    switch (type()) {
+    case Type::Baseline:
+        return { };
+    case Type::Optimizing:
+#if ENABLE(JIT)
+        return static_cast<const OptimizingCallLinkInfo*>(this)->doneLocation();
+#else
+        return { };
+#endif
+    }
+    return { };
 }
 
 void CallLinkInfo::setMonomorphicCallee(VM& vm, JSCell* owner, JSObject* callee, CodeBlock* codeBlock, CodePtr<JSEntryPtrTag> codePtr)
@@ -442,6 +467,11 @@ void CallLinkInfo::setStub(Ref<PolymorphicCallStubRoutine>&& newStub)
             MacroAssembler::startOfBranchPtrWithPatchOnRegister(u.codeIC.m_calleeLocation),
             CodeLocationLabel<JITStubRoutinePtrTag>(m_stub->code().code()));
     }
+
+    // The call link info no longer has a call cache apart from the jump to the polymorphic call stub.
+    if (isOnList())
+        remove();
+
     m_mode = static_cast<unsigned>(Mode::Polymorphic);
 }
 
@@ -687,27 +717,28 @@ void DirectCallLinkInfo::setMaxArgumentCountIncludingThis(unsigned value)
     m_maxArgumentCountIncludingThis = value;
 }
 
-std::tuple<CodeBlock*, CodePtr<JSEntryPtrTag>> DirectCallLinkInfo::retrieveCallInfo(FunctionExecutable* functionExecutable)
+CodeBlock* DirectCallLinkInfo::retrieveCodeBlock(FunctionExecutable* functionExecutable)
 {
     CodeSpecializationKind kind = specializationKind();
     CodeBlock* codeBlock = functionExecutable->codeBlockFor(kind);
     if (!codeBlock)
-        return { };
+        return nullptr;
 
     CodeBlock* ownerCodeBlock = jsDynamicCast<CodeBlock*>(owner());
     if (!ownerCodeBlock)
-        return { };
+        return nullptr;
 
     if (ownerCodeBlock->alternative() == codeBlock)
-        return { };
+        return nullptr;
 
+    return codeBlock;
+}
+
+CodePtr<JSEntryPtrTag> DirectCallLinkInfo::retrieveCodePtr(const ConcurrentJSLocker& locker, CodeBlock* codeBlock)
+{
     unsigned argumentStackSlots = maxArgumentCountIncludingThis();
     ArityCheckMode arityCheckMode = (argumentStackSlots < static_cast<size_t>(codeBlock->numParameters())) ? MustCheckArity : ArityCheckNotRequired;
-    CodePtr<JSEntryPtrTag> codePtr = codeBlock->addressForCallConcurrently(arityCheckMode);
-    if (!codePtr)
-        return { };
-
-    return std::tuple { codeBlock, codePtr };
+    return codeBlock->addressForCallConcurrently(locker, arityCheckMode);
 }
 
 void DirectCallLinkInfo::repatchSpeculatively()
@@ -732,13 +763,16 @@ void DirectCallLinkInfo::repatchSpeculatively()
         return;
     }
 
-    auto [codeBlock, codePtr] = retrieveCallInfo(functionExecutable);
-    if (codeBlock && codePtr) {
-        m_codeBlock = codeBlock;
-        m_target = codePtr;
-        // Do not chain |this| to the calle codeBlock concurrently. It will be done in the main thread if the speculatively repatched one is still valid.
-        setCallTarget(codeBlock, CodeLocationLabel { codePtr });
-        return;
+    auto* codeBlock = retrieveCodeBlock(functionExecutable);
+    if (codeBlock) {
+        auto codePtr = retrieveCodePtr(ConcurrentJSLocker { codeBlock->m_lock }, codeBlock);
+        if (codePtr) {
+            m_codeBlock = codeBlock;
+            m_target = codePtr;
+            // Do not chain |this| to the calle codeBlock concurrently. It will be done in the main thread if the speculatively repatched one is still valid.
+            setCallTarget(codeBlock, CodeLocationLabel { codePtr });
+            return;
+        }
     }
 
     initialize();
@@ -751,9 +785,12 @@ void DirectCallLinkInfo::validateSpeculativeRepatchOnMainThread(VM&)
     if (!functionExecutable)
         return;
 
-    auto [codeBlock, codePtr] = retrieveCallInfo(functionExecutable);
+    auto* codeBlock = retrieveCodeBlock(functionExecutable);
+    CodePtr<JSEntryPtrTag> codePtr = nullptr;
+    if (codeBlock)
+        codePtr = retrieveCodePtr(ConcurrentJSLocker { NoLockingNecessary }, codeBlock);
+
     if (m_codeBlock != codeBlock || m_target != codePtr) {
-        dataLogLnIf(verbose, "Speculative repatching failed ", RawPointer(m_codeBlock), " ", m_target, " => ", RawPointer(codeBlock), " ", codePtr);
         if (codeBlock && codePtr)
             setCallTarget(codeBlock, CodeLocationLabel { codePtr });
         else

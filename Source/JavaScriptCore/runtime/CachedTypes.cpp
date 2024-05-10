@@ -723,9 +723,9 @@ public:
         unsigned size = m_length;
         const void* payload;
         if (m_is8Bit)
-            payload = impl->characters8();
+            payload = impl->span8().data();
         else {
-            payload = impl->characters16();
+            payload = impl->span16().data();
             size *= 2;
         }
 
@@ -735,22 +735,22 @@ public:
 
     UniquedStringImpl* decode(Decoder& decoder) const
     {
-        auto create = [&](const auto* buffer) -> UniquedStringImpl* {
+        auto create = [&](auto buffer) -> UniquedStringImpl* {
             if (!m_isSymbol)
-                return AtomStringImpl::add(buffer, m_length).leakRef();
+                return AtomStringImpl::add(buffer).leakRef();
 
             SymbolImpl* symbol;
             VM& vm = decoder.vm();
             if (m_isRegistered) {
-                String str(buffer, m_length);
+                String str(buffer);
                 if (m_isPrivate)
                     symbol = static_cast<SymbolImpl*>(&vm.privateSymbolRegistry().symbolForKey(str).leakRef());
                 else
                     symbol = static_cast<SymbolImpl*>(&vm.symbolRegistry().symbolForKey(str).leakRef());
             } else if (m_isWellKnownSymbol)
-                symbol = vm.propertyNames->builtinNames().lookUpWellKnownSymbol(buffer, m_length);
+                symbol = vm.propertyNames->builtinNames().lookUpWellKnownSymbol(buffer);
             else
-                symbol = vm.propertyNames->builtinNames().lookUpPrivateName(buffer, m_length);
+                symbol = vm.propertyNames->builtinNames().lookUpPrivateName(buffer);
             RELEASE_ASSERT(symbol);
             String str = symbol;
             StringImpl* impl = str.releaseImpl().get();
@@ -768,10 +768,11 @@ public:
             return RefPtr { emptyAtom().impl() }.leakRef();
         }
 
-        if (m_is8Bit)
-            return create(this->template buffer<LChar>());
-        return create(this->template buffer<UChar>());
+        return m_is8Bit ? create(span8()) : create(span16());
     }
+
+    std::span<const LChar> span8() const { return { this->template buffer<LChar>(), m_length }; }
+    std::span<const UChar> span16() const { return { this->template buffer<UChar>(), m_length }; }
 
 private:
     bool m_is8Bit : 1;
@@ -2462,7 +2463,8 @@ public:
 
 protected:
     GenericCacheEntry(Encoder& encoder, CachedCodeBlockTag tag)
-        : m_tag(tag)
+        : m_cacheVersion(computeJSCBytecodeCacheVersion())
+        , m_tag(tag)
     {
         m_bootSessionUUID.encode(encoder, bootSessionUUIDString());
     }
@@ -2471,7 +2473,7 @@ protected:
 
     bool isUpToDate(Decoder& decoder) const
     {
-        if (m_cacheVersion != JSCBytecodeCacheVersion)
+        if (m_cacheVersion != computeJSCBytecodeCacheVersion())
             return false;
         if (m_bootSessionUUID.decode(decoder) != bootSessionUUIDString())
             return false;
@@ -2479,7 +2481,7 @@ protected:
     }
 
 private:
-    uint32_t m_cacheVersion { JSCBytecodeCacheVersion };
+    uint32_t m_cacheVersion;
     CachedString m_bootSessionUUID;
     CachedCodeBlockTag m_tag;
 };

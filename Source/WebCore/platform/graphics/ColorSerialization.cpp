@@ -41,7 +41,7 @@ static String numericComponent(float value)
     if (std::isnan(value))
         return "none"_s;
     if (std::isfinite(value))
-        return makeString(value);
+        return makeString(FormattedCSSNumber::create(value));
     return makeString(
         "calc("_s,
         FormattedCSSNumber::create(value),
@@ -378,7 +378,14 @@ String serializationForRenderTreeAsText(const ExtendedSRGBA<float>& color, bool)
 
 String serializationForCSS(const HSLA<float>& color, bool useColorFunctionSerialization)
 {
-    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), useColorFunctionSerialization);
+    // FIXME: The spec is not completely clear on whether missing components should be
+    // carried forward here, but it seems like people are leaning toward thinking they
+    // should be. See https://github.com/w3c/csswg-drafts/issues/10254.
+
+    if (useColorFunctionSerialization)
+        return serializationForCSS(convertColorCarryingForwardMissing<ExtendedSRGBA<float>>(color), true);
+
+    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), false);
 }
 
 String serializationForHTML(const HSLA<float>& color, bool useColorFunctionSerialization)
@@ -395,7 +402,14 @@ String serializationForRenderTreeAsText(const HSLA<float>& color, bool useColorF
 
 String serializationForCSS(const HWBA<float>& color, bool useColorFunctionSerialization)
 {
-    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), useColorFunctionSerialization);
+    // FIXME: The spec is not completely clear on whether missing components should be
+    // carried forward here, but it seems like people are leaning toward thinking they
+    // should be. See https://github.com/w3c/csswg-drafts/issues/10254.
+
+    if (useColorFunctionSerialization)
+        return serializationForCSS(convertColorCarryingForwardMissing<ExtendedSRGBA<float>>(color), true);
+
+    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), false);
 }
 
 String serializationForHTML(const HWBA<float>& color, bool useColorFunctionSerialization)
@@ -534,7 +548,7 @@ String serializationForCSS(const SRGBA<float>& color, bool useColorFunctionSeria
     if (useColorFunctionSerialization)
         return serializationUsingColorFunction(color);
 
-    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), useColorFunctionSerialization);
+    return serializationForCSS(convertColor<SRGBA<uint8_t>>(color), false);
 }
 
 String serializationForHTML(const SRGBA<float>& color, bool useColorFunctionSerialization)
@@ -574,11 +588,11 @@ String serializationForCSS(SRGBA<uint8_t> color, bool useColorFunctionSerializat
     auto [red, green, blue, alpha] = color.resolved();
     switch (alpha) {
     case 0:
-        return makeString("rgba(", red, ", ", green, ", ", blue, ", 0)");
+        return makeString("rgba("_s, red, ", "_s, green, ", "_s, blue, ", 0)"_s);
     case 0xFF:
-        return makeString("rgb(", red, ", ", green, ", ", blue, ')');
+        return makeString("rgb("_s, red, ", "_s, green, ", "_s, blue, ')');
     default:
-        return makeString("rgba(", red, ", ", green, ", ", blue, ", 0.", fractionDigitsForFractionalAlphaValue(alpha).data(), ')');
+        return makeString("rgba("_s, red, ", "_s, green, ", "_s, blue, ", 0."_s, span(fractionDigitsForFractionalAlphaValue(alpha).data()), ')');
     }
 }
 

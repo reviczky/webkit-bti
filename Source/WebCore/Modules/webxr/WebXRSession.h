@@ -64,8 +64,9 @@ public:
     static Ref<WebXRSession> create(Document&, WebXRSystem&, XRSessionMode, PlatformXR::Device&, FeatureList&&);
     virtual ~WebXRSession();
 
-    using RefCounted<WebXRSession>::ref;
-    using RefCounted<WebXRSession>::deref;
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     using PlatformXR::TrackingAndRenderingClient::weakPtrFactory;
     using PlatformXR::TrackingAndRenderingClient::WeakValueType;
@@ -110,12 +111,11 @@ private:
     WebXRSession(Document&, WebXRSystem&, XRSessionMode, PlatformXR::Device&, FeatureList&&);
 
     // EventTarget
-    EventTargetInterface eventTargetInterface() const override { return WebXRSessionEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const override { return EventTargetInterfaceType::WebXRSession; }
     void refEventTarget() override { ref(); }
     void derefEventTarget() override { deref(); }
 
-    // ActiveDOMObject
-    const char* activeDOMObjectName() const override;
+    // ActiveDOMObject.
     void stop() override;
 
     // PlatformXR::TrackingAndRenderingClient

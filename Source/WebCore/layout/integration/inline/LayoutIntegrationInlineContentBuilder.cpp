@@ -80,9 +80,9 @@ FloatRect InlineContentBuilder::build(Layout::InlineLayoutResult&& layoutResult,
 
         auto firstDamagedLineIndex = [&]() -> std::optional<size_t> {
             auto& displayContentFromPreviousLayout = inlineContent.displayContent();
-            if (!lineDamage || !lineDamage->start() || !displayContentFromPreviousLayout.lines.size())
+            if (!lineDamage || !lineDamage->layoutStartPosition() || !displayContentFromPreviousLayout.lines.size())
                 return { };
-            auto canidateLineIndex = lineDamage->start()->lineIndex;
+            auto canidateLineIndex = lineDamage->layoutStartPosition()->lineIndex;
             if (canidateLineIndex >= displayContentFromPreviousLayout.lines.size()) {
                 ASSERT_NOT_REACHED();
                 return { };
@@ -236,7 +236,7 @@ void InlineContentBuilder::adjustDisplayLines(InlineContent& inlineContent, size
             }
 
             if (box.isAtomicInlineLevelBox()) {
-                auto& renderer = downcast<RenderBox>(m_boxTree.rendererForLayoutBox(box.layoutBox()));
+                auto& renderer = downcast<RenderBox>(*box.layoutBox().rendererForIntegration());
                 if (!renderer.hasSelfPaintingLayer()) {
                     auto childInkOverflow = renderer.logicalVisualOverflowRectForPropagation(&renderer.parent()->style());
                     childInkOverflow.move(box.left(), box.top());
@@ -249,7 +249,7 @@ void InlineContentBuilder::adjustDisplayLines(InlineContent& inlineContent, size
             }
 
             if (box.isInlineBox()) {
-                if (!downcast<RenderElement>(m_boxTree.rendererForLayoutBox(box.layoutBox())).hasSelfPaintingLayer())
+                if (!downcast<RenderElement>(*box.layoutBox().rendererForIntegration()).hasSelfPaintingLayer())
                     inkOverflowRect.unite(box.inkOverflow());
             }
         }
@@ -291,7 +291,7 @@ void InlineContentBuilder::computeIsFirstIsLastBoxAndBidiReorderingForInlineCont
         }
         auto& layoutBox = displayBox.layoutBox();
         if (is<Layout::InlineTextBox>(layoutBox) && displayBox.bidiLevel() != UBIDI_DEFAULT_LTR)
-            downcast<RenderText>(m_boxTree.rendererForLayoutBox(layoutBox)).setNeedsVisualReordering();
+            downcast<RenderText>(*layoutBox.rendererForIntegration()).setNeedsVisualReordering();
 
         if (lastDisplayBoxForLayoutBoxIndexes.set(&layoutBox, index).isNewEntry)
             displayBox.setIsFirstForLayoutBox(true);

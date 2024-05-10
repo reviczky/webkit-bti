@@ -32,12 +32,12 @@
 #include "AbortSignal.h"
 #include "CredentialCreationOptions.h"
 #include "CredentialRequestOptions.h"
+#include "DigitalCredential.h"
 #include "DigitalCredentialRequestOptions.h"
-#include "DigitalIdentity.h"
 #include "Document.h"
 #include "ExceptionOr.h"
 #include "JSDOMPromiseDeferred.h"
-#include "JSDigitalIdentity.h"
+#include "JSDigitalCredential.h"
 #include "Page.h"
 #include "SecurityOrigin.h"
 #include "WebAuthenticationConstants.h"
@@ -76,16 +76,9 @@ void CredentialsContainer::get(CredentialRequestOptions&& options, CredentialPro
 {
     // The following implements https://www.w3.org/TR/credential-management-1/#algorithm-request as of 4 August 2017
     // with enhancement from 14 November 2017 Editor's Draft.
-    if (!m_document || !m_document->page()) {
-        promise.reject(Exception { ExceptionCode::NotSupportedError });
+    if (!performCommonChecks(options, promise)) {
         return;
     }
-    if (options.signal && options.signal->aborted()) {
-        promise.reject(Exception { ExceptionCode::AbortError, "Aborted by AbortSignal."_s });
-        return;
-    }
-    // Step 1-2.
-    ASSERT(m_document->isSecureContext());
 
     // Step 3 is enhanced with doesHaveSameOriginAsItsAncestors.
     // Step 4-6. Shortcut as we only support PublicKeyCredential which can only
@@ -113,16 +106,8 @@ void CredentialsContainer::isCreate(CredentialCreationOptions&& options, Credent
 {
     // The following implements https://www.w3.org/TR/credential-management-1/#algorithm-create as of 4 August 2017
     // with enhancement from 14 November 2017 Editor's Draft.
-    if (!m_document || !m_document->page()) {
-        promise.reject(Exception { ExceptionCode::NotSupportedError });
+    if (!performCommonChecks(options, promise))
         return;
-    }
-    if (options.signal && options.signal->aborted()) {
-        promise.reject(Exception { ExceptionCode::AbortError, "Aborted by AbortSignal."_s });
-        return;
-    }
-    // Step 1-2.
-    ASSERT(m_document->isSecureContext());
 
     // Step 3-7. Shortcut as we only support one kind of credentials.
     if (!options.publicKey) {
@@ -144,15 +129,20 @@ void CredentialsContainer::preventSilentAccess(DOMPromiseDeferred<void>&& promis
     promise.resolve();
 }
 
-void CredentialsContainer::requestIdentity(DigitalCredentialRequestOptions&& options, DigitalIdentityPromise&& promise)
+template<typename Options>
+bool CredentialsContainer::performCommonChecks(const Options& options, CredentialPromise& promise)
 {
+    if (!m_document || !m_document->page()) {
+        promise.reject(Exception { ExceptionCode::NotSupportedError });
+        return false;
+    }
     if (options.signal && options.signal->aborted()) {
         promise.reject(Exception { ExceptionCode::AbortError, "Aborted by AbortSignal."_s });
-        return;
+        return false;
     }
-    std::span<uint8_t> emptySpan;
-    Ref<ArrayBuffer> emptyArrayBuffer = ArrayBuffer::create(emptySpan);
-    promise.resolve(DigitalIdentity::create(WTFMove(emptyArrayBuffer)));
+    // Step 1-2.
+    ASSERT(m_document->isSecureContext());
+    return true;
 }
 
 } // namespace WebCore

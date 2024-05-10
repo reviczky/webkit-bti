@@ -385,8 +385,10 @@ scrolldelay
 scrolling
 select
 selected
-shadowrootmode
+shadowrootclonable
 shadowrootdelegatesfocus
+shadowrootmode
+shadowrootserializable
 shape
 size
 sizes
@@ -430,6 +432,7 @@ webkitdirectory
 webkitdropzone
 width
 wrap
+writingsuggestions
 x-apple-data-detectors
 x-apple-data-detectors-result
 x-apple-data-detectors-type

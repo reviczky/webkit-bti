@@ -27,6 +27,7 @@
 
 #include "AffineTransform.h"
 #include "FloatRoundedRect.h"
+#include "IntRect.h"
 #include "IntRectHash.h"
 #include "InteractionRegion.h"
 #include "Node.h"
@@ -46,7 +47,9 @@ class Path;
 class RenderObject;
 class RenderStyle;
 
-class EventRegionContext : public RegionContext {
+class EventRegionContext final : public RegionContext {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(EventRegionContext);
 public:
     WEBCORE_EXPORT explicit EventRegionContext(EventRegion&);
     WEBCORE_EXPORT virtual ~EventRegionContext();
@@ -57,8 +60,8 @@ public:
     bool contains(const IntRect&) const;
 
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
-    void uniteInteractionRegions(RenderObject&, const FloatRect&);
-    bool shouldConsolidateInteractionRegion(RenderObject&, const IntRect&);
+    void uniteInteractionRegions(RenderObject&, const FloatRect&, const FloatSize&, const std::optional<AffineTransform>&);
+    bool shouldConsolidateInteractionRegion(RenderObject&, const IntRect&, const ElementIdentifier&);
     void removeSuperfluousInteractionRegions();
     void shrinkWrapInteractionRegions();
     void copyInteractionRegionsToEventRegion();
@@ -69,11 +72,12 @@ private:
 
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     Vector<InteractionRegion> m_interactionRegions;
-    HashSet<IntRect> m_interactionRects;
+    HashMap<IntRect, InteractionRegion::ContentHint> m_interactionRectsAndContentHints;
     HashSet<IntRect> m_occlusionRects;
+    HashSet<IntRect> m_elementGuardRects;
     HashSet<ElementIdentifier> m_containerRemovalCandidates;
     HashSet<ElementIdentifier> m_containersToRemove;
-    HashMap<ElementIdentifier, Vector<FloatRect>> m_discoveredRectsByElement;
+    HashMap<ElementIdentifier, Vector<InteractionRegion>> m_discoveredRegionsByElement;
 #endif
 };
 

@@ -535,40 +535,40 @@ private:
         initializeFiber2(nullptr);
     }
 
-    JSRopeString(VM& vm, JSString* s1, JSString* s2)
+    JSRopeString(VM& vm, unsigned length, bool is8Bit, JSString* s1, JSString* s2)
         : JSString(vm)
     {
         ASSERT(!sumOverflows<int32_t>(s1->length(), s2->length()));
         initializeIsSubstring(false);
-        initializeLength(s1->length() + s2->length());
-        initializeIs8Bit(s1->is8Bit() && s2->is8Bit());
+        initializeLength(length);
+        initializeIs8Bit(is8Bit);
         initializeFiber0(s1);
         initializeFiber1(s2);
         initializeFiber2(nullptr);
-        ASSERT((s1->length() + s2->length()) == length());
+        ASSERT((s1->length() + s2->length()) == this->length());
     }
 
-    JSRopeString(VM& vm, JSString* s1, JSString* s2, JSString* s3)
+    JSRopeString(VM& vm, unsigned length, bool is8Bit, JSString* s1, JSString* s2, JSString* s3)
         : JSString(vm)
     {
         ASSERT(!sumOverflows<int32_t>(s1->length(), s2->length(), s3->length()));
         initializeIsSubstring(false);
-        initializeLength(s1->length() + s2->length() + s3->length());
-        initializeIs8Bit(s1->is8Bit() && s2->is8Bit() &&  s3->is8Bit());
+        initializeLength(length);
+        initializeIs8Bit(is8Bit);
         initializeFiber0(s1);
         initializeFiber1(s2);
         initializeFiber2(s3);
-        ASSERT((s1->length() + s2->length() + s3->length()) == length());
+        ASSERT((s1->length() + s2->length() + s3->length()) == this->length());
     }
 
-    JSRopeString(VM& vm, JSString* base, unsigned offset, unsigned length)
+    JSRopeString(VM& vm, unsigned length, bool is8Bit, JSString* base, unsigned offset)
         : JSString(vm)
     {
-        RELEASE_ASSERT(!sumOverflows<int32_t>(offset, length));
-        RELEASE_ASSERT(offset + length <= base->length());
+        ASSERT(!sumOverflows<int32_t>(offset, length));
+        ASSERT(offset + length <= base->length());
         initializeIsSubstring(true);
         initializeLength(length);
-        initializeIs8Bit(base->is8Bit());
+        initializeIs8Bit(is8Bit);
         initializeSubstringBase(base);
         initializeSubstringOffset(offset);
         ASSERT(length == this->length());
@@ -602,7 +602,9 @@ private:
 
     static JSRopeString* create(VM& vm, JSString* s1, JSString* s2)
     {
-        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm)) JSRopeString(vm, s1, s2);
+        unsigned length = s1->length() + s2->length();
+        bool is8Bit = !!(static_cast<unsigned>(!!s1->is8Bit()) & static_cast<unsigned>(!!s2->is8Bit()));
+        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm)) JSRopeString(vm, length, is8Bit, s1, s2);
         newString->finishCreation(vm);
         ASSERT(newString->length());
         ASSERT(newString->isRope());
@@ -610,16 +612,18 @@ private:
     }
     static JSRopeString* create(VM& vm, JSString* s1, JSString* s2, JSString* s3)
     {
-        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm)) JSRopeString(vm, s1, s2, s3);
+        unsigned length = s1->length() + s2->length() + s3->length();
+        bool is8Bit = !!(static_cast<unsigned>(!!s1->is8Bit()) & static_cast<unsigned>(!!s2->is8Bit()) & static_cast<unsigned>(!!s3->is8Bit()));
+        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm)) JSRopeString(vm, length, is8Bit, s1, s2, s3);
         newString->finishCreation(vm);
         ASSERT(newString->length());
         ASSERT(newString->isRope());
         return newString;
     }
 
-    ALWAYS_INLINE static JSRopeString* createSubstringOfResolved(VM& vm, GCDeferralContext* deferralContext, JSString* base, unsigned offset, unsigned length)
+    ALWAYS_INLINE static JSRopeString* createSubstringOfResolved(VM& vm, GCDeferralContext* deferralContext, JSString* base, unsigned offset, unsigned length, bool is8Bit)
     {
-        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm, deferralContext)) JSRopeString(vm, base, offset, length);
+        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm, deferralContext)) JSRopeString(vm, length, is8Bit, base, offset);
         newString->finishCreationSubstringOfResolved(vm);
         ASSERT(newString->length());
         ASSERT(newString->isRope());
@@ -776,7 +780,7 @@ ALWAYS_INLINE JSString* jsSingleCharacterString(VM& vm, UChar c)
         vm.verifyCanGC();
     if (c <= maxSingleCharacterString)
         return vm.smallStrings.singleCharacterString(c);
-    return JSString::create(vm, StringImpl::create(&c, 1));
+    return JSString::create(vm, StringImpl::create(std::span { &c, 1 }));
 }
 
 ALWAYS_INLINE JSString* jsSingleCharacterString(VM& vm, LChar c)
@@ -942,7 +946,7 @@ inline JSString* jsString(VM& vm, StringView s)
         if (auto c = s.characterAt(0); c <= maxSingleCharacterString)
             return vm.smallStrings.singleCharacterString(c);
     }
-    auto impl = s.is8Bit() ? StringImpl::create(s.characters8(), s.length()) : StringImpl::create(s.characters16(), s.length());
+    auto impl = s.is8Bit() ? StringImpl::create(s.span8()) : StringImpl::create(s.span16());
     return JSString::create(vm, WTFMove(impl));
 }
 
@@ -1097,12 +1101,8 @@ ALWAYS_INLINE StringView JSRopeString::unsafeView(JSGlobalObject* globalObject) 
 {
     if constexpr (validateDFGDoesGC)
         vm().verifyCanGC();
-    if (isSubstring()) {
-        auto& base = substringBase()->valueInternal();
-        if (base.is8Bit())
-            return StringView(base.characters8() + substringOffset(), length());
-        return StringView(base.characters16() + substringOffset(), length());
-    }
+    if (isSubstring())
+        return StringView { substringBase()->valueInternal() }.substring(substringOffset(), length());
     return resolveRope(globalObject);
 }
 
@@ -1112,9 +1112,7 @@ ALWAYS_INLINE StringViewWithUnderlyingString JSRopeString::viewWithUnderlyingStr
         vm().verifyCanGC();
     if (isSubstring()) {
         auto& base = substringBase()->valueInternal();
-        if (base.is8Bit())
-            return { { base.characters8() + substringOffset(), length() }, base };
-        return { { base.characters16() + substringOffset(), length() }, base };
+        return { StringView { base }.substring(substringOffset(), length()), base };
     }
     auto& string = resolveRope(globalObject);
     return { string, string };

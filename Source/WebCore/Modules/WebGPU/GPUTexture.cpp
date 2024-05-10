@@ -102,14 +102,23 @@ ExceptionOr<Ref<GPUTextureView>> GPUTexture::createView(const std::optional<GPUT
 {
     if (textureViewDescriptor.has_value() && textureViewDescriptor->format.has_value()) {
         if (!m_device->isSupportedFormat(*textureViewDescriptor->format))
-            return Exception { ExceptionCode::TypeError, "Unsupported texture format."_s };
+            return Exception { ExceptionCode::TypeError, "GPUTexture.createView: Unsupported texture format."_s };
     }
-    return GPUTextureView::create(m_backing->createView(convertToBacking(textureViewDescriptor)));
+    RefPtr view = m_backing->createView(convertToBacking(textureViewDescriptor));
+    if (!view)
+        return Exception { ExceptionCode::InvalidStateError, "GPUTexture.createView: Unable to create view."_s };
+    return GPUTextureView::create(view.releaseNonNull());
 }
 
 void GPUTexture::destroy()
 {
+    m_isDestroyed = true;
     m_backing->destroy();
+}
+
+bool GPUTexture::isDestroyed() const
+{
+    return m_isDestroyed;
 }
 
 GPUIntegerCoordinateOut GPUTexture::width() const

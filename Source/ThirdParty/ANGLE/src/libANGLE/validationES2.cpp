@@ -474,6 +474,7 @@ bool ValidateES2CopyTexImageParameters(const Context *context,
                 break;
             case GL_LUMINANCE_ALPHA:
             case GL_RGBA:
+            case GL_BGRA_EXT:
                 if (colorbufferFormat != GL_RGBA4 && colorbufferFormat != GL_RGB5_A1 &&
                     colorbufferFormat != GL_RGBA8_OES && colorbufferFormat != GL_RGBA32F &&
                     colorbufferFormat != GL_BGRA8_EXT && colorbufferFormat != GL_BGR5_A1_ANGLEX &&
@@ -548,6 +549,7 @@ bool ValidateES2CopyTexImageParameters(const Context *context,
                 break;
             case GL_LUMINANCE_ALPHA:
             case GL_RGBA:
+            case GL_BGRA_EXT:
                 if (colorbufferFormat != GL_RGBA4 && colorbufferFormat != GL_RGB5_A1 &&
                     colorbufferFormat != GL_BGRA8_EXT && colorbufferFormat != GL_RGBA8_OES &&
                     colorbufferFormat != GL_BGR5_A1_ANGLEX && colorbufferFormat != GL_RGBA16F &&
@@ -682,6 +684,10 @@ bool ValidCap(const PrivateState &state, ErrorSet *errors, GLenum cap, bool quer
 
         case GL_FRAGMENT_SHADER_FRAMEBUFFER_FETCH_MRT_ARM:
             return queryOnly && state.getExtensions().shaderFramebufferFetchARM;
+
+        // GL_ANGLE_variable_rasterization_rate_metal
+        case GL_VARIABLE_RASTERIZATION_RATE_ANGLE:
+            return state.getExtensions().variableRasterizationRateMetalANGLE;
 
         default:
             break;
@@ -2613,18 +2619,10 @@ bool ValidateClear(const Context *context, angle::EntryPoint entryPoint, GLbitfi
 
     if (extensions.webglCompatibilityANGLE && (mask & GL_COLOR_BUFFER_BIT) != 0)
     {
-        constexpr GLenum validComponentTypes[] = {GL_FLOAT, GL_UNSIGNED_NORMALIZED,
-                                                  GL_SIGNED_NORMALIZED};
-
-        for (GLuint drawBufferIdx = 0; drawBufferIdx < fbo->getDrawbufferStateCount();
-             drawBufferIdx++)
+        if (GetIntOrUnsignedIntDrawBufferMask(fbo->getDrawBufferTypeMask()).any())
         {
-            if (!ValidateWebGLFramebufferAttachmentClearType(context, entryPoint, drawBufferIdx,
-                                                             validComponentTypes,
-                                                             ArraySize(validComponentTypes)))
-            {
-                return false;
-            }
+            ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kNoDefinedClearConversion);
+            return false;
         }
     }
 
@@ -6337,6 +6335,18 @@ bool ValidateMaxShaderCompilerThreadsKHR(const Context *context,
                                          GLuint count)
 {
     if (!context->getExtensions().parallelShaderCompileKHR)
+    {
+        ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
+        return false;
+    }
+    return true;
+}
+
+bool ValidateBindMetalRasterizationRateMapANGLE(const Context *context,
+                                                angle::EntryPoint entryPoint,
+                                                GLMTLRasterizationRateMapANGLE map)
+{
+    if (!context->getExtensions().variableRasterizationRateMetalANGLE)
     {
         ANGLE_VALIDATION_ERROR(GL_INVALID_OPERATION, kExtensionNotEnabled);
         return false;

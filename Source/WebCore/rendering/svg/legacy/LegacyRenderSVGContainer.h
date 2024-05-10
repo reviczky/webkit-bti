@@ -30,12 +30,12 @@ class SVGElement;
 
 class LegacyRenderSVGContainer : public LegacyRenderSVGModelObject {
     WTF_MAKE_ISO_ALLOCATED(LegacyRenderSVGContainer);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LegacyRenderSVGContainer);
 public:
     virtual ~LegacyRenderSVGContainer();
 
     void paint(PaintInfo&, const LayoutPoint&) override;
     void setNeedsBoundariesUpdate() final { m_needsBoundariesUpdate = true; }
-    bool needsBoundariesUpdate() final { return m_needsBoundariesUpdate; }
     virtual bool didTransformToRootUpdate() { return false; }
     bool isObjectBoundingBoxValid() const { return m_objectBoundingBoxValid; }
 

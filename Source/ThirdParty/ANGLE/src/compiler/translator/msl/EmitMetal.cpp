@@ -10,6 +10,7 @@
 #include "common/system_utils.h"
 #include "compiler/translator/BaseTypes.h"
 #include "compiler/translator/ImmutableStringBuilder.h"
+#include "compiler/translator/OutputTree.h"
 #include "compiler/translator/SymbolTable.h"
 #include "compiler/translator/msl/AstHelpers.h"
 #include "compiler/translator/msl/DebugSink.h"
@@ -2576,8 +2577,6 @@ bool GenMetalTraverser::visitForLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(bodyNode);
 
     mOut << "for (";
 
@@ -2606,7 +2605,7 @@ bool GenMetalTraverser::visitForLoop(TIntermLoop *loopNode)
 
     mOut << ")\n";
 
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
 
     return false;
 }
@@ -2618,15 +2617,14 @@ bool GenMetalTraverser::visitWhileLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(condNode && bodyNode);
+    ASSERT(condNode);
     ASSERT(!initNode && !exprNode);
 
     emitIndentation();
     mOut << "while (";
     condNode->traverse(this);
     mOut << ")\n";
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
 
     return false;
 }
@@ -2638,13 +2636,12 @@ bool GenMetalTraverser::visitDoWhileLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(condNode && bodyNode);
+    ASSERT(condNode);
     ASSERT(!initNode && !exprNode);
 
     emitIndentation();
     mOut << "do\n";
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
     mOut << "\n";
     emitIndentation();
     mOut << "while (";

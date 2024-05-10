@@ -497,7 +497,7 @@ ExceptionOr<void> RTCPeerConnection::setConfiguration(RTCConfiguration&& configu
 
         for (auto& certificate : configuration.certificates) {
             bool isThere = m_configuration.certificates.findIf([&certificate](const auto& item) {
-                return item.get() == certificate.get();
+                return item == certificate;
             }) != notFound;
             if (!isThere)
                 return Exception { ExceptionCode::InvalidModificationError, "A certificate given in constructor is not present"_s };
@@ -630,11 +630,6 @@ void RTCPeerConnection::unregisterFromController()
 {
     if (m_controller)
         m_controller->remove(*this);
-}
-
-const char* RTCPeerConnection::activeDOMObjectName() const
-{
-    return "RTCPeerConnection";
 }
 
 void RTCPeerConnection::suspend(ReasonForSuspension reason)
@@ -1089,6 +1084,16 @@ WTFLogChannel& RTCPeerConnection::logChannel() const
     return LogWebRTC;
 }
 #endif
+
+void RTCPeerConnection::startGatheringStatLogs(Function<void(String&&)>&& callback)
+{
+    m_backend->startGatheringStatLogs(WTFMove(callback));
+}
+
+void RTCPeerConnection::stopGatheringStatLogs()
+{
+    m_backend->stopGatheringStatLogs();
+}
 
 } // namespace WebCore
 

@@ -124,19 +124,14 @@ void SVGRenderingContext::prepareToRenderSVGContent(RenderElement& renderer, Pai
         }
     }
 
-    PathOperation* clipPathOperation = style.clipPath();
-    bool hasCSSClipping = is<ShapePathOperation>(clipPathOperation) || is<BoxPathOperation>(clipPathOperation);
+    bool hasCSSClipping = is<ShapePathOperation>(style.clipPath()) || is<BoxPathOperation>(style.clipPath());
     if (hasCSSClipping)
         SVGRenderSupport::clipContextToCSSClippingArea(m_paintInfo->context(), renderer);
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     // FIXME: Text painting under LBSE reaches this code path, since all text painting code is shared between legacy / LBSE.
     SVGResources* resources = nullptr;
     if (!renderer.document().settings().layerBasedSVGEngineEnabled())
         resources = SVGResourcesCache::cachedResourcesForRenderer(*m_renderer);
-#else
-    auto* resources = SVGResourcesCache::cachedResourcesForRenderer(*m_renderer);
-#endif
 
     if (!resources) {
         if (style.hasReferenceFilterOnly())
@@ -165,9 +160,7 @@ void SVGRenderingContext::prepareToRenderSVGContent(RenderElement& renderer, Pai
             return;
     }
 
-    // SVG roots with filters specified (using CSS or SVG presentation attributes) are applied
-    // as CSSFilter by RenderLayer, so don't reapply the filter here.
-    if (!isRenderingMask && !renderer.isRenderOrLegacyRenderSVGRoot()) {
+    if (!isRenderingMask) {
         m_filter = resources->filter();
         if (m_filter && !m_filter->isIdentity()) {
             m_savedContext = &m_paintInfo->context();

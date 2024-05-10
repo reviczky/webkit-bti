@@ -37,21 +37,26 @@ namespace WebKit {
 enum class WebTextReplacementDataState : uint8_t {
     Pending,
     Active,
-    Committed,
     Reverted,
     Invalid,
 };
 
+enum class WebTextReplacementDataEditAction : uint8_t {
+    Undo,
+    Redo,
+    UndoAll,
+};
+
 struct WebTextReplacementData {
     using State = WebTextReplacementDataState;
+
+    using EditAction = WebTextReplacementDataEditAction;
 
     WTF::UUID uuid;
     WebCore::CharacterRange originalRange;
     String replacement;
     String description;
     State state;
-
-    WebCore::AttributedString originalString;
 };
 
 }

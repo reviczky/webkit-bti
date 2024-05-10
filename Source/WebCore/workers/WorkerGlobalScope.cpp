@@ -37,11 +37,13 @@
 #include "DocumentInlines.h"
 #include "FontCustomPlatformData.h"
 #include "FontFaceSet.h"
+#include "GCController.h"
 #include "IDBConnectionProxy.h"
 #include "ImageBitmapOptions.h"
 #include "InspectorInstrumentation.h"
 #include "JSDOMExceptionHandling.h"
 #include "NotImplemented.h"
+#include "PageConsoleClient.h"
 #include "Performance.h"
 #include "RTCDataChannelRemoteHandlerConnection.h"
 #include "ReportingScope.h"
@@ -55,6 +57,7 @@
 #include "SocketProvider.h"
 #include "URLKeepingBlobAlive.h"
 #include "ViolationReportType.h"
+#include "WindowOrWorkerGlobalScopeTrustedTypes.h"
 #include "WorkerCacheStorageConnection.h"
 #include "WorkerClient.h"
 #include "WorkerFileSystemStorageConnection.h"
@@ -90,7 +93,7 @@ static HashSet<ScriptExecutionContextIdentifier>& allWorkerGlobalScopeIdentifier
 
 static WorkQueue& sharedFileSystemStorageQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared File System Storage Queue",  WorkQueue::QOS::Default));
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared File System Storage Queue"_s,  WorkQueue::QOS::Default));
     return queue.get();
 }
 
@@ -156,6 +159,8 @@ String WorkerGlobalScope::origin() const
 void WorkerGlobalScope::prepareForDestruction()
 {
     WorkerOrWorkletGlobalScope::prepareForDestruction();
+
+    removeSupplement(WindowOrWorkerGlobalScopeTrustedTypes::workerGlobalSupplementName());
 
     if (settingsValues().serviceWorkersEnabled)
         swClientConnection().unregisterServiceWorkerClient(identifier());
@@ -384,12 +389,10 @@ ExceptionOr<void> WorkerGlobalScope::importScripts(const FixedVector<String>& ur
 
     FetchOptions::Cache cachePolicy = FetchOptions::Cache::Default;
 
-    bool isServiceWorkerGlobalScope = is<ServiceWorkerGlobalScope>(*this);
-    if (isServiceWorkerGlobalScope) {
+    if (auto* serviceWorkerGlobalScope = dynamicDowncast<ServiceWorkerGlobalScope>(*this)) {
         // FIXME: We need to add support for the 'imported scripts updated' flag as per:
         // https://w3c.github.io/ServiceWorker/#importscripts
-        auto& serviceWorkerGlobalScope = downcast<ServiceWorkerGlobalScope>(*this);
-        auto& registration = serviceWorkerGlobalScope.registration();
+        auto& registration = serviceWorkerGlobalScope->registration();
         if (registration.updateViaCache() == ServiceWorkerUpdateViaCache::None || registration.needsUpdate())
             cachePolicy = FetchOptions::Cache::NoCache;
     }
@@ -448,6 +451,10 @@ void WorkerGlobalScope::addConsoleMessage(std::unique_ptr<Inspector::ConsoleMess
         return;
     }
 
+    auto sessionID = this->sessionID();
+    if (UNLIKELY(settingsValues().logsPageMessagesToSystemConsoleEnabled && sessionID && !sessionID->isEphemeral()))
+        PageConsoleClient::logMessageToSystemConsole(*message);
+
     InspectorInstrumentation::addMessageToConsole(*this, WTFMove(message));
 }
 
@@ -471,38 +478,38 @@ void WorkerGlobalScope::addMessage(MessageSource source, MessageLevel level, con
     InspectorInstrumentation::addMessageToConsole(*this, WTFMove(message));
 }
 
-bool WorkerGlobalScope::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
+std::optional<Vector<uint8_t>> WorkerGlobalScope::wrapCryptoKey(const Vector<uint8_t>& key)
 {
     Ref protectedThis { *this };
     auto* workerLoaderProxy = thread().workerLoaderProxy();
     if (!workerLoaderProxy)
-        return false;
+        return std::nullopt;
 
-    bool success = false;
     BinarySemaphore semaphore;
-    workerLoaderProxy->postTaskToLoader([&semaphore, &success, &key, &wrappedKey](auto& context) {
-        success = context.wrapCryptoKey(key, wrappedKey);
+    std::optional<Vector<uint8_t>> wrappedKey;
+    workerLoaderProxy->postTaskToLoader([&semaphore, &key, &wrappedKey](auto& context) {
+        wrappedKey = context.wrapCryptoKey(key);
         semaphore.signal();
     });
     semaphore.wait();
-    return success;
+    return wrappedKey;
 }
 
-bool WorkerGlobalScope::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key)
+std::optional<Vector<uint8_t>> WorkerGlobalScope::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey)
 {
     Ref protectedThis { *this };
     auto* workerLoaderProxy = thread().workerLoaderProxy();
     if (!workerLoaderProxy)
-        return false;
+        return std::nullopt;
 
-    bool success = false;
     BinarySemaphore semaphore;
-    workerLoaderProxy->postTaskToLoader([&semaphore, &success, &key, &wrappedKey](auto& context) {
-        success = context.unwrapCryptoKey(wrappedKey, key);
+    std::optional<Vector<uint8_t>> key;
+    workerLoaderProxy->postTaskToLoader([&semaphore, &key, &wrappedKey](auto& context) {
+        key = context.unwrapCryptoKey(wrappedKey);
         semaphore.signal();
     });
     semaphore.wait();
-    return success;
+    return key;
 }
 
 Crypto& WorkerGlobalScope::crypto()
@@ -580,7 +587,6 @@ std::unique_ptr<FontLoadRequest> WorkerGlobalScope::fontLoadRequest(const String
 
 void WorkerGlobalScope::beginLoadingFontSoon(FontLoadRequest& request)
 {
-    ASSERT(is<WorkerFontLoadRequest>(request));
     downcast<WorkerFontLoadRequest>(request).load(*this);
 }
 
@@ -629,6 +635,16 @@ void WorkerGlobalScope::releaseMemoryInWorkers(Synchronous synchronous)
     for (auto& globalScopeIdentifier : allWorkerGlobalScopeIdentifiers()) {
         postTaskTo(globalScopeIdentifier, [synchronous](auto& context) {
             downcast<WorkerGlobalScope>(context).releaseMemory(synchronous);
+        });
+    }
+}
+
+void WorkerGlobalScope::dumpGCHeapForWorkers()
+{
+    Locker locker { allWorkerGlobalScopeIdentifiersLock };
+    for (auto& globalScopeIdentifier : allWorkerGlobalScopeIdentifiers()) {
+        postTaskTo(globalScopeIdentifier, [](auto& context) {
+            GCController::dumpHeapForVM(downcast<WorkerGlobalScope>(context).vm());
         });
     }
 }

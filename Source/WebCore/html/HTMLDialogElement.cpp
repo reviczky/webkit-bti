@@ -34,6 +34,7 @@
 #include "HTMLNames.h"
 #include "PopoverData.h"
 #include "PseudoClassChangeInvalidation.h"
+#include "RenderBlock.h"
 #include "RenderElement.h"
 #include "ScopedEventQueue.h"
 #include "TypedElementDescendantIteratorInlines.h"
@@ -92,8 +93,14 @@ ExceptionOr<void> HTMLDialogElement::showModal()
 
     setIsModal(true);
 
+    auto containingBlockBeforeStyleResolution = SingleThreadWeakPtr<RenderBlock> { };
+    if (auto* renderer = this->renderer())
+        containingBlockBeforeStyleResolution = renderer->containingBlock();
+
     if (!isInTopLayer())
         addToTopLayer();
+
+    RenderElement::markRendererDirtyAfterTopLayerChange(this->checkedRenderer().get(), containingBlockBeforeStyleResolution.get());
 
     m_previouslyFocusedElement = document().focusedElement();
 

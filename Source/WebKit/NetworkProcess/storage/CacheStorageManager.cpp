@@ -117,7 +117,7 @@ static bool writeCachesList(const String& cachesListDirectoryPath, const Vector<
         encoder << caches[index]->uniqueName();
     }
 
-    FileSystem::overwriteEntireFile(cachesListFilePath, std::span(const_cast<uint8_t*>(encoder.buffer()), encoder.bufferSize()));
+    FileSystem::overwriteEntireFile(cachesListFilePath, encoder.span());
     return true;
 }
 
@@ -134,7 +134,7 @@ static std::optional<uint64_t> readSizeFile(const String& sizeDirectoryPath)
     if (!buffer)
         return std::nullopt;
 
-    return parseInteger<uint64_t>({ buffer->data(), static_cast<unsigned>(buffer->size()) });
+    return parseInteger<uint64_t>(buffer->span());
 }
 
 static bool writeSizeFile(const String& sizeDirectoryPath, uint64_t size)
@@ -144,7 +144,7 @@ static bool writeSizeFile(const String& sizeDirectoryPath, uint64_t size)
 
     auto sizeFilePath = FileSystem::pathByAppendingComponent(sizeDirectoryPath, sizeFileName);
     auto value = String::number(size).utf8();
-    return FileSystem::overwriteEntireFile(sizeFilePath, std::span(reinterpret_cast<uint8_t*>(const_cast<char*>(value.data())), value.length())) != -1;
+    return FileSystem::overwriteEntireFile(sizeFilePath, value.span()) != -1;
 }
 
 static String saltFilePath(const String& saltDirectory)
@@ -519,29 +519,25 @@ bool CacheStorageManager::isActive()
 String CacheStorageManager::representationString()
 {
     StringBuilder builder;
-    builder.append("{ \"persistent\": [");
+    builder.append("{ \"persistent\": ["_s);
 
     bool isFirst = true;
     for (auto& cache : m_caches) {
         if (!isFirst)
-            builder.append(", ");
+            builder.append(", "_s);
         isFirst = false;
-        builder.append("\"");
-        builder.append(cache->name());
-        builder.append("\"");
+        builder.append('"', cache->name(), '"');
     }
 
-    builder.append("], \"removed\": [");
+    builder.append("], \"removed\": ["_s);
     isFirst = true;
     for (auto& cache : m_removedCaches.values()) {
         if (!isFirst)
-            builder.append(", ");
+            builder.append(", "_s);
         isFirst = false;
-        builder.append("\"");
-        builder.append(cache->name());
-        builder.append("\"");
+        builder.append('"', cache->name(), '"');
     }
-    builder.append("]}\n");
+    builder.append("]}\n"_s);
     return builder.toString();
 }
 

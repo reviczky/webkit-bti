@@ -423,7 +423,7 @@ void HTMLElement::attributeChanged(const QualifiedName& name, const AtomString& 
         }
         return;
     case AttributeNames::popoverAttr:
-        if (document().settings().popoverAttributeEnabled() && !document().quirks().shouldDisablePopoverAttributeQuirk())
+        if (document().settings().popoverAttributeEnabled())
             popoverAttributeChanged(newValue);
         return;
     case AttributeNames::spellcheckAttr: {
@@ -731,6 +731,16 @@ void HTMLElement::setSpellcheck(bool enable)
     setAttributeWithoutSynchronization(spellcheckAttr, enable ? trueAtom() : falseAtom());
 }
 
+bool HTMLElement::writingsuggestions() const
+{
+    return isWritingSuggestionsEnabled();
+}
+
+void HTMLElement::setWritingsuggestions(bool enable)
+{
+    setAttributeWithoutSynchronization(writingsuggestionsAttr, enable ? trueAtom() : falseAtom());
+}
+
 void HTMLElement::effectiveSpellcheckAttributeChanged(bool newValue)
 {
     for (auto it = descendantsOfType<HTMLElement>(*this).begin(); it;) {
@@ -781,7 +791,7 @@ String HTMLElement::accessKeyLabel() const
 #else
     // Currently accessKeyModifier in non-cocoa platforms is hardcoded to Alt, so no reason to do extra work here.
     // If this ever becomes configurable, make this code use EventHandler::accessKeyModifiers().
-    result.append("Alt+");
+    result.append("Alt+"_s);
 #endif
 
     result.append(accessKey);
@@ -809,16 +819,6 @@ bool HTMLElement::translate() const
 void HTMLElement::setTranslate(bool enable)
 {
     setAttributeWithoutSynchronization(translateAttr, enable ? "yes"_s : "no"_s);
-}
-
-bool HTMLElement::rendererIsEverNeeded()
-{
-    if (hasTagName(noembedTag)) {
-        RefPtr frame { document().frame() };
-        if (frame && frame->arePluginsEnabled())
-            return false;
-    }
-    return StyledElement::rendererIsEverNeeded();
 }
 
 FormAssociatedElement* HTMLElement::asFormAssociatedElement()
@@ -1571,6 +1571,37 @@ void HTMLElement::popoverAttributeChanged(const AtomString& value)
         clearPopoverData();
     else
         ensurePopoverData().setPopoverState(newPopoverState);
+}
+
+bool HTMLElement::isValidInvokeAction(const InvokeAction action)
+{
+    return Element::isValidInvokeAction(action) || action == InvokeAction::TogglePopover || action == InvokeAction::ShowPopover || action == InvokeAction::HidePopover;
+}
+
+bool HTMLElement::handleInvokeInternal(const HTMLFormControlElement& invoker, const InvokeAction& action)
+{
+    if (popoverState() == PopoverState::None)
+        return false;
+
+    if (isPopoverShowing()) {
+        bool shouldHide = action == InvokeAction::Auto
+            || action == InvokeAction::TogglePopover
+            || action == InvokeAction::HidePopover;
+        if (shouldHide) {
+            hidePopover();
+            return true;
+        }
+    } else {
+        bool shouldShow = action == InvokeAction::Auto
+            || action == InvokeAction::TogglePopover
+            || action == InvokeAction::ShowPopover;
+        if (shouldShow) {
+            showPopover(&invoker);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 const AtomString& HTMLElement::popover() const

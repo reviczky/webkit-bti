@@ -45,7 +45,7 @@
 // The tester API.
 extern "C" {
 // Returns 0 if driver should continue.
-typedef int (*WKMessageTestSendMessageFunc)(IPC::DataReference buffer, void* context);
+typedef int (*WKMessageTestSendMessageFunc)(std::span<const uint8_t> buffer, void* context);
 typedef void (*WKMessageTestDriverFunc)(WKMessageTestSendMessageFunc sendMessageFunc, void* context);
 }
 
@@ -62,15 +62,14 @@ extern "C" {
 static void defaultTestDriver(WKMessageTestSendMessageFunc sendMessageFunc, void* context)
 {
     Vector<uint8_t> data(1000);
-    for (int i = 0; i < 1000; i++) {
-        cryptographicallyRandomValues(data.data(), data.size());
-        int ret = sendMessageFunc(data.span(), context);
-        if (ret)
+    for (unsigned i = 0; i < 1000; ++i) {
+        cryptographicallyRandomValues(data.mutableSpan());
+        if (sendMessageFunc(data.span(), context))
             return;
     }
 }
 
-static int sendTestMessage(IPC::DataReference buffer, void* context)
+static int sendTestMessage(std::span<const uint8_t> buffer, void* context)
 {
     auto messageContext = reinterpret_cast<SendMessageContext*>(context);
     if (messageContext->shouldStop)
@@ -79,7 +78,7 @@ static int sendTestMessage(IPC::DataReference buffer, void* context)
     if (!testedConnection->isValid())
         return 1;
     BinarySemaphore semaphore;
-    auto decoder = IPC::Decoder::create(buffer, [&semaphore] (IPC::DataReference) { semaphore.signal(); }, { }); // NOLINT
+    auto decoder = IPC::Decoder::create(buffer, [&semaphore] (std::span<const uint8_t>) { semaphore.signal(); }, { }); // NOLINT
     if (decoder) {
         testedConnection->dispatchIncomingMessageForTesting(makeUniqueRefFromNonNullUniquePtr(WTFMove(decoder)));
         semaphore.wait();
@@ -120,7 +119,7 @@ IPCTester::~IPCTester()
 void IPCTester::startMessageTesting(IPC::Connection& connection, String&& driverName)
 {
     if (!m_testQueue)
-        m_testQueue = WorkQueue::create("IPC testing work queue");
+        m_testQueue = WorkQueue::create("IPC testing work queue"_s);
     m_testQueue->dispatch([connection = Ref { connection }, &shouldStop = m_shouldStop, driverName = WTFMove(driverName)]() mutable {
         IPC::startTestingIPC();
         runMessageTesting(connection, shouldStop, WTFMove(driverName));
@@ -203,7 +202,7 @@ void IPCTester::releaseConnectionTester(IPCConnectionTesterIdentifier identifier
     completionHandler();
 }
 
-void IPCTester::asyncPing(IPC::Connection&, uint32_t value, CompletionHandler<void(uint32_t)>&& completionHandler)
+void IPCTester::asyncPing(uint32_t value, CompletionHandler<void(uint32_t)>&& completionHandler)
 {
     completionHandler(value + 1);
 }

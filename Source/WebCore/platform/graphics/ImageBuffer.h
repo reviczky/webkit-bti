@@ -38,6 +38,14 @@
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+#include "DynamicContentScalingResourceCache.h"
+#endif
+
+#if HAVE(IOSURFACE)
+#include "IOSurface.h"
+#endif
+
 namespace WTF {
 class TextStream;
 }
@@ -49,7 +57,6 @@ class DynamicContentScalingDisplayList;
 class Filter;
 class GraphicsClient;
 #if HAVE(IOSURFACE)
-class IOSurface;
 class IOSurfacePool;
 #endif
 class ScriptExecutionContext;
@@ -66,9 +73,12 @@ struct ImageBufferCreationContext {
     IOSurfacePool* surfacePool { nullptr };
     PlatformDisplayID displayID { 0 };
 #endif
-    WebCore::ProcessIdentity resourceOwner;
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    DynamicContentScalingResourceCache dynamicContentScalingResourceCache;
+#endif
+    ProcessIdentity resourceOwner;
 
-    ImageBufferCreationContext() = default; // To guarantee order in presence of ifdefs, use individual .property to initialize them.
+    ImageBufferCreationContext() = default;
 };
 
 struct ImageBufferParameters {
@@ -107,8 +117,7 @@ public:
     {
         return {
             BackendType::renderingMode,
-            BackendType::canMapBackingStore,
-            BackendType::calculateBaseTransform(parameters, BackendType::isOriginAtBottomLeftCorner),
+            ImageBufferBackend::calculateBaseTransform(parameters),
             BackendType::calculateMemoryCost(parameters),
             BackendType::calculateExternalMemoryCost(parameters)
         };
@@ -152,7 +161,6 @@ public:
     const Parameters& parameters() const { return m_parameters; }
 
     RenderingMode renderingMode() const { return m_backendInfo.renderingMode; }
-    bool canMapBackingStore() const { return m_backendInfo.canMapBackingStore; }
     AffineTransform baseTransform() const { return m_backendInfo.baseTransform; }
     size_t memoryCost() const { return m_backendInfo.memoryCost; }
     size_t externalMemoryCost() const { return m_backendInfo.externalMemoryCost; }
@@ -188,7 +196,7 @@ public:
     //     auto nativeImage = buffer.copyNativeImage();
     //     buffer = nullptr;
     WEBCORE_EXPORT static RefPtr<NativeImage> sinkIntoNativeImage(RefPtr<ImageBuffer>);
-    static RefPtr<ImageBuffer> sinkIntoBufferForDifferentThread(RefPtr<ImageBuffer>);
+    WEBCORE_EXPORT static RefPtr<ImageBuffer> sinkIntoBufferForDifferentThread(RefPtr<ImageBuffer>);
     static std::unique_ptr<SerializedImageBuffer> sinkIntoSerializedImageBuffer(RefPtr<ImageBuffer>&&);
 
     WEBCORE_EXPORT virtual void convertToLuminanceMask();

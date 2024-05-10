@@ -33,6 +33,7 @@
 #include "VideoFrameGStreamer.h"
 #include "VideoFrameMetadataGStreamer.h"
 #include "VideoTrackPrivateMediaStream.h"
+#include <wtf/CheckedRef.h>
 
 #if USE(GSTREAMER_WEBRTC)
 #include "RealtimeIncomingAudioSourceGStreamer.h"
@@ -94,7 +95,7 @@ GstStream* webkitMediaStreamNew(const MediaStreamTrackPrivate& track)
 
 static void webkitMediaStreamSrcCharacteristicsChanged(WebKitMediaStreamSrc*);
 
-class WebKitMediaStreamObserver : public MediaStreamPrivate::Observer {
+class WebKitMediaStreamObserver : public MediaStreamPrivateObserver {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     virtual ~WebKitMediaStreamObserver() { };
@@ -132,11 +133,13 @@ struct InternalSourcePadProbeData {
 WEBKIT_DEFINE_ASYNC_DATA_STRUCT(InternalSourcePadProbeData)
 #endif
 
-class InternalSource final : public MediaStreamTrackPrivate::Observer,
-    public RealtimeMediaSource::Observer,
+class InternalSource final : public MediaStreamTrackPrivateObserver,
+    public RealtimeMediaSourceObserver,
     public RealtimeMediaSource::AudioSampleObserver,
-    public RealtimeMediaSource::VideoFrameObserver {
+    public RealtimeMediaSource::VideoFrameObserver,
+    public CanMakeCheckedPtr<InternalSource> {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(InternalSource);
 public:
     InternalSource(GstElement* parent, MediaStreamTrackPrivate& track, const String& padName, bool consumerIsVideoPlayer)
         : m_parent(parent)
@@ -241,7 +244,6 @@ public:
             if (GST_IS_QUERY(info->data)) {
                 switch (GST_QUERY_TYPE(GST_PAD_PROBE_INFO_QUERY(info))) {
                 case GST_QUERY_CAPS:
-                case GST_QUERY_LATENCY:
                     return GST_PAD_PROBE_OK;
                 default:
                     break;
@@ -523,6 +525,12 @@ public:
     GstStream* stream() const { return m_stream.get(); }
 
 private:
+    // CheckedPtr interface
+    uint32_t ptrCount() const final { return CanMakeCheckedPtr::ptrCount(); }
+    uint32_t ptrCountWithoutThreadCheck() const final { return CanMakeCheckedPtr::ptrCountWithoutThreadCheck(); }
+    void incrementPtrCount() const final { CanMakeCheckedPtr::incrementPtrCount(); }
+    void decrementPtrCount() const final { CanMakeCheckedPtr::decrementPtrCount(); }
+
     void flush()
     {
         GST_DEBUG_OBJECT(m_src.get(), "Flushing");
@@ -965,7 +973,10 @@ static void webkitMediaStreamSrcEnsureStreamCollectionPosted(WebKitMediaStreamSr
 
 static void webkitMediaStreamSrcAddPad(WebKitMediaStreamSrc* self, GstPad* target, GstStaticPadTemplate* padTemplate, GRefPtr<GstTagList>&& tags, const String& padName)
 {
-    GST_DEBUG_OBJECT(self, "%s Ghosting %" GST_PTR_FORMAT, gst_object_get_path_string(GST_OBJECT_CAST(self)), target);
+#ifndef GST_DISABLE_GST_DEBUG
+    GUniquePtr<char> objectPath(gst_object_get_path_string(GST_OBJECT_CAST(self)));
+    GST_DEBUG_OBJECT(self, "%s Ghosting %" GST_PTR_FORMAT, objectPath.get(), target);
+#endif
 
     auto* ghostPad = webkitGstGhostPadFromStaticTemplate(padTemplate, padName.ascii().data(), target);
     gst_pad_set_active(ghostPad, TRUE);
@@ -1023,6 +1034,11 @@ static GstPadProbeReturn webkitMediaStreamSrcPadProbeCb(GstPad* pad, GstPadProbe
         if (!g_strcmp0(streamId, data->trackId.get())) {
             GST_INFO_OBJECT(pad, "Event has been sticked already");
             return GST_PAD_PROBE_REMOVE;
+        }
+
+        if (data->sourceType == RealtimeMediaSource::Type::Video) {
+            GST_DEBUG_OBJECT(self, "Requesting a key-frame");
+            gst_pad_send_event(pad, gst_video_event_new_upstream_force_key_unit(GST_CLOCK_TIME_NONE, TRUE, 1));
         }
 
         auto* streamStart = gst_event_new_stream_start(data->trackId.get());

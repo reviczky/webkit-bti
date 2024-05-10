@@ -29,15 +29,28 @@
 
 #include "WebTextReplacementData.h"
 
+#include <WebCore/DocumentFragment.h>
+#include <WebCore/Node.h>
 #include <WebCore/Range.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakPtr.h>
 
+namespace WebCore {
+struct TextIndicatorData;
+enum class TextIndicatorOption : uint16_t;
+class DocumentMarker;
+class Editor;
+}
+
 namespace WebKit {
 
+enum class WebUnifiedTextReplacementType : uint8_t;
+
 class WebPage;
+
+struct WebUnifiedTextReplacementContextData;
 
 class UnifiedTextReplacementController final {
     WTF_MAKE_FAST_ALLOCATED;
@@ -46,20 +59,50 @@ class UnifiedTextReplacementController final {
 public:
     explicit UnifiedTextReplacementController(WebPage&);
 
-    void willBeginTextReplacementSession(const WTF::UUID&, CompletionHandler<void(const Vector<WebKit::WebUnifiedTextReplacementContextData>&)>&&);
+    void willBeginTextReplacementSession(const WTF::UUID&, WebUnifiedTextReplacementType, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&&);
 
-    void didBeginTextReplacementSession(const WTF::UUID&, const Vector<WebKit::WebUnifiedTextReplacementContextData>&);
+    void didBeginTextReplacementSession(const WTF::UUID&, const Vector<WebUnifiedTextReplacementContextData>&);
 
-    void textReplacementSessionDidReceiveReplacements(const WTF::UUID&, const Vector<WebKit::WebTextReplacementData>&, const WebKit::WebUnifiedTextReplacementContextData&, bool finished);
+    void textReplacementSessionDidReceiveReplacements(const WTF::UUID&, const Vector<WebTextReplacementData>&, const WebUnifiedTextReplacementContextData&, bool finished);
 
-    void textReplacementSessionDidUpdateStateForReplacement(const WTF::UUID&, WebKit::WebTextReplacementData::State, const WebKit::WebTextReplacementData&, const WebKit::WebUnifiedTextReplacementContextData&);
+    void textReplacementSessionDidUpdateStateForReplacement(const WTF::UUID&, WebTextReplacementData::State, const WebTextReplacementData&, const WebUnifiedTextReplacementContextData&);
 
     void didEndTextReplacementSession(const WTF::UUID&, bool accepted);
 
+    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebUnifiedTextReplacementContextData&);
+
+    void textReplacementSessionDidReceiveEditAction(const WTF::UUID&, WebTextReplacementData::EditAction);
+
+    void updateStateForSelectedReplacementIfNeeded();
+
+    std::optional<WebCore::SimpleRange> contextRangeForSessionWithUUID(const WTF::UUID&) const;
+
+    void removeTransparentMarkersForSession(const WTF::UUID&, WebCore::SimpleRange&);
+
 private:
+    std::optional<std::tuple<WebCore::Node&, WebCore::DocumentMarker&>> findReplacementMarkerContainingRange(const WebCore::SimpleRange&) const;
+    std::optional<std::tuple<WebCore::Node&, WebCore::DocumentMarker&>> findReplacementMarkerByUUID(const WebCore::SimpleRange& outerRange, const WTF::UUID& replacementUUID) const;
+
+    void replaceContentsOfRangeInSessionInternal(const WTF::UUID&, const WebCore::SimpleRange&, WTF::Function<void(WebCore::Editor&)>&&);
+    void replaceContentsOfRangeInSession(const WTF::UUID&, const WebCore::SimpleRange&, const String&);
+    void replaceContentsOfRangeInSession(const WTF::UUID&, const WebCore::SimpleRange&, WebCore::DocumentFragment&);
+
+    void textReplacementSessionPerformEditActionForPlainText(WebCore::Document&, const WTF::UUID&, WebTextReplacementData::EditAction);
+    void textReplacementSessionPerformEditActionForRichText(WebCore::Document&, const WTF::UUID&, WebTextReplacementData::EditAction);
+
+    template<WebUnifiedTextReplacementType Type>
+    void didEndTextReplacementSession(const WTF::UUID&, bool accepted);
+
+    RefPtr<WebCore::Document> document() const;
+
     WeakPtr<WebPage> m_webPage;
 
+    // FIXME: Unify these states into a single `State` struct.
     HashMap<WTF::UUID, Ref<WebCore::Range>> m_contextRanges;
+    HashMap<WTF::UUID, WebUnifiedTextReplacementType> m_replacementTypes;
+    HashMap<WTF::UUID, int> m_replacementLocationOffsets;
+    HashMap<WTF::UUID, Ref<WebCore::DocumentFragment>> m_originalDocumentNodes;
+    HashMap<WTF::UUID, Ref<WebCore::DocumentFragment>> m_replacedDocumentNodes;
 };
 
 } // namespace WebKit

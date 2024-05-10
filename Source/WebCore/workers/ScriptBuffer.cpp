@@ -31,6 +31,7 @@
 #include "config.h"
 #include "ScriptBuffer.h"
 
+#include <wtf/StdLibExtras.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
@@ -70,8 +71,8 @@ String ScriptBuffer::toString() const
         return String();
 
     StringBuilder builder;
-    m_buffer.get()->forEachSegment([&](auto& segment) {
-        builder.append(String::fromUTF8(segment.data(), segment.size()));
+    m_buffer.get()->forEachSegment([&](auto segment) {
+        builder.append(spanReinterpretCast<const char8_t>(segment));
     });
     return builder.toString();
 }
@@ -86,7 +87,7 @@ void ScriptBuffer::append(const String& string)
     if (string.isEmpty())
         return;
     auto result = string.tryGetUTF8([&](std::span<const char> span) -> bool {
-        m_buffer.append(span.data(), span.size());
+        m_buffer.append(spanReinterpretCast<const uint8_t>(span));
         return true;
     });
     RELEASE_ASSERT(result);

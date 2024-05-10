@@ -1,7 +1,3 @@
-list(APPEND WTF_PUBLIC_HEADERS
-    unix/UnixFileDescriptor.h
-)
-
 list(APPEND WTF_SOURCES
     generic/MainThreadGeneric.cpp
     generic/MemoryFootprintGeneric.cpp
@@ -21,6 +17,10 @@ list(APPEND WTF_SOURCES
 
     unix/LoggingUnix.cpp
     unix/MemoryPressureHandlerUnix.cpp
+)
+
+list(APPEND WTF_PUBLIC_HEADERS
+    unix/UnixFileDescriptor.h
 )
 
 list(APPEND WTF_LIBRARIES

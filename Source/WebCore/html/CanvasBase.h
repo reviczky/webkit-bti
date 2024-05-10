@@ -35,6 +35,15 @@
 #include <wtf/WeakHashSet.h>
 
 namespace WebCore {
+class CanvasDisplayBufferObserver;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::CanvasDisplayBufferObserver> : std::true_type { };
+}
+
+namespace WebCore {
 
 class AffineTransform;
 class CanvasBase;
@@ -51,6 +60,8 @@ class ScriptExecutionContext;
 class SecurityOrigin;
 class WebCoreOpaqueRoot;
 
+struct CSSParserContext;
+
 enum class ShouldApplyPostProcessingToDirtyRect : bool { No, Yes };
 
 class CanvasDisplayBufferObserver : public CanMakeWeakPtr<CanvasDisplayBufferObserver> {
@@ -64,10 +75,10 @@ class CanvasBase {
 public:
     virtual ~CanvasBase();
 
-    virtual void refCanvasBase() = 0;
-    virtual void derefCanvasBase() = 0;
-    void ref() { refCanvasBase(); }
-    void deref() { derefCanvasBase(); }
+    virtual void refCanvasBase() const = 0;
+    virtual void derefCanvasBase() const = 0;
+    void ref() const { refCanvasBase(); }
+    void deref() const { derefCanvasBase(); }
 
     virtual bool isHTMLCanvasElement() const { return false; }
     virtual bool isOffscreenCanvas() const { return false; }
@@ -96,6 +107,8 @@ public:
     ScriptExecutionContext* scriptExecutionContext() const { return canvasBaseScriptExecutionContext();  }
 
     virtual CanvasRenderingContext* renderingContext() const = 0;
+
+    virtual const CSSParserContext& cssParserContext() const = 0;
 
     void addObserver(CanvasObserver&);
     void removeObserver(CanvasObserver&);

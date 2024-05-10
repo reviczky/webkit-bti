@@ -107,7 +107,7 @@ static inline Color getSystemAccentColor()
 static inline Color getAccentColor(const RenderObject& renderObject)
 {
     if (!renderObject.style().hasAutoAccentColor())
-        return renderObject.style().effectiveAccentColor();
+        return renderObject.style().usedAccentColor();
 
     return getSystemAccentColor();
 }
@@ -118,9 +118,11 @@ RenderTheme& RenderTheme::singleton()
     return theme;
 }
 
+RenderThemeAdwaita::~RenderThemeAdwaita() = default;
+
 bool RenderThemeAdwaita::supportsFocusRing(const RenderStyle& style) const
 {
-    switch (style.effectiveAppearance()) {
+    switch (style.usedAppearance()) {
     case StyleAppearance::PushButton:
     case StyleAppearance::Button:
     case StyleAppearance::TextField:
@@ -200,7 +202,7 @@ void RenderThemeAdwaita::platformColorsDidChange()
 
 String RenderThemeAdwaita::extraDefaultStyleSheet()
 {
-    return StringImpl::createWithoutCopying(themeAdwaitaUserAgentStyleSheet, sizeof(themeAdwaitaUserAgentStyleSheet));
+    return StringImpl::createWithoutCopying(themeAdwaitaUserAgentStyleSheet);
 }
 
 #if ENABLE(VIDEO)
@@ -208,7 +210,7 @@ String RenderThemeAdwaita::extraDefaultStyleSheet()
 Vector<String, 2> RenderThemeAdwaita::mediaControlsScripts()
 {
 #if ENABLE(MODERN_MEDIA_CONTROLS)
-    return { StringImpl::createWithoutCopying(ModernMediaControlsJavaScript, sizeof(ModernMediaControlsJavaScript)) };
+    return { StringImpl::createWithoutCopying(ModernMediaControlsJavaScript) };
 #else
     return { };
 #endif
@@ -218,7 +220,7 @@ String RenderThemeAdwaita::mediaControlsStyleSheet()
 {
 #if ENABLE(MODERN_MEDIA_CONTROLS)
     if (m_mediaControlsStyleSheet.isEmpty())
-        m_mediaControlsStyleSheet = StringImpl::createWithoutCopying(ModernMediaControlsUserAgentStyleSheet, sizeof(ModernMediaControlsUserAgentStyleSheet));
+        m_mediaControlsStyleSheet = StringImpl::createWithoutCopying(ModernMediaControlsUserAgentStyleSheet);
     return m_mediaControlsStyleSheet;
 #else
     return emptyString();
@@ -338,7 +340,7 @@ bool RenderThemeAdwaita::paintTextField(const RenderObject& renderObject, const 
 
 #if ENABLE(DATALIST_ELEMENT)
     if (is<HTMLInputElement>(renderObject.generatingNode()) && downcast<HTMLInputElement>(*(renderObject.generatingNode())).list()) {
-        auto zoomedArrowSize = menuListButtonArrowSize * renderObject.style().effectiveZoom();
+        auto zoomedArrowSize = menuListButtonArrowSize * renderObject.style().usedZoom();
         FloatRect arrowRect = rect;
         if (renderObject.style().direction() == TextDirection::LTR)
             arrowRect.move(arrowRect.width() - (zoomedArrowSize + textFieldBorderSize * 2), 0);
@@ -394,10 +396,10 @@ void RenderThemeAdwaita::adjustMenuListButtonStyle(RenderStyle& style, const Ele
 
 LengthBox RenderThemeAdwaita::popupInternalPaddingBox(const RenderStyle& style) const
 {
-    if (style.effectiveAppearance() == StyleAppearance::None)
+    if (style.usedAppearance() == StyleAppearance::None)
         return { };
 
-    auto zoomedArrowSize = menuListButtonArrowSize * style.effectiveZoom();
+    auto zoomedArrowSize = menuListButtonArrowSize * style.usedZoom();
     int leftPadding = menuListButtonPadding + (style.direction() == TextDirection::RTL ? zoomedArrowSize : 0);
     int rightPadding = menuListButtonPadding + (style.direction() == TextDirection::LTR ? zoomedArrowSize : 0);
 
@@ -416,9 +418,9 @@ bool RenderThemeAdwaita::paintMenuList(const RenderObject& renderObject, const P
         states.add(ControlStyle::State::Pressed);
     if (isHovered(renderObject))
         states.add(ControlStyle::State::Hovered);
-    Theme::singleton().paint(StyleAppearance::Button, states, graphicsContext, rect, renderObject.useDarkAppearance(), renderObject.style().effectiveAccentColor());
+    Theme::singleton().paint(StyleAppearance::Button, states, graphicsContext, rect, renderObject.useDarkAppearance(), renderObject.style().usedAccentColor());
 
-    auto zoomedArrowSize = menuListButtonArrowSize * renderObject.style().effectiveZoom();
+    auto zoomedArrowSize = menuListButtonArrowSize * renderObject.style().usedZoom();
     FloatRect fieldRect = rect;
     fieldRect.inflate(menuListButtonBorderSize);
     if (renderObject.style().direction() == TextDirection::LTR)
@@ -517,7 +519,7 @@ bool RenderThemeAdwaita::paintSliderTrack(const RenderObject& renderObject, cons
     auto& graphicsContext = paintInfo.context();
     GraphicsContextStateSaver stateSaver(graphicsContext);
 
-    auto appearance = renderObject.style().effectiveAppearance();
+    auto appearance = renderObject.style().usedAppearance();
     ASSERT(appearance == StyleAppearance::SliderHorizontal || appearance == StyleAppearance::SliderVertical);
 
     FloatRect fieldRect = rect;
@@ -596,7 +598,7 @@ bool RenderThemeAdwaita::paintSliderTrack(const RenderObject& renderObject, cons
 
 void RenderThemeAdwaita::adjustSliderThumbSize(RenderStyle& style, const Element*) const
 {
-    auto appearance = style.effectiveAppearance();
+    auto appearance = style.usedAppearance();
     if (appearance != StyleAppearance::SliderThumbHorizontal && appearance != StyleAppearance::SliderThumbVertical)
         return;
 
@@ -609,7 +611,7 @@ bool RenderThemeAdwaita::paintSliderThumb(const RenderObject& renderObject, cons
     auto& graphicsContext = paintInfo.context();
     GraphicsContextStateSaver stateSaver(graphicsContext);
 
-    ASSERT(renderObject.style().effectiveAppearance() == StyleAppearance::SliderThumbHorizontal || renderObject.style().effectiveAppearance() == StyleAppearance::SliderThumbVertical);
+    ASSERT(renderObject.style().usedAppearance() == StyleAppearance::SliderThumbHorizontal || renderObject.style().usedAppearance() == StyleAppearance::SliderThumbVertical);
 
     SRGBA<uint8_t> sliderThumbBackgroundColor;
     SRGBA<uint8_t> sliderThumbBackgroundHoveredColor;

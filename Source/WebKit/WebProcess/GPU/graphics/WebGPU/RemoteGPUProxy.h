@@ -63,6 +63,7 @@ public:
     void deref() const final { return ThreadSafeRefCounted<RemoteGPUProxy>::deref(); }
 
     void paintToCanvas(WebCore::NativeImage&, const WebCore::IntSize&, WebCore::GraphicsContext&) final;
+    WebGPUIdentifier backing() const { return m_backing; }
 
 private:
     friend class WebGPU::DowncastConvertToBackingContext;
@@ -85,8 +86,6 @@ private:
 
     void waitUntilInitialized();
 
-    WebGPUIdentifier backing() const { return m_backing; }
-    
     static inline constexpr Seconds defaultSendTimeout = 30_s;
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
@@ -101,9 +100,32 @@ private:
 
     void requestAdapter(const WebCore::WebGPU::RequestAdapterOptions&, CompletionHandler<void(RefPtr<WebCore::WebGPU::Adapter>&&)>&&) final;
 
-    Ref<WebCore::WebGPU::PresentationContext> createPresentationContext(const WebCore::WebGPU::PresentationContextDescriptor&) final;
+    RefPtr<WebCore::WebGPU::PresentationContext> createPresentationContext(const WebCore::WebGPU::PresentationContextDescriptor&) final;
 
-    Ref<WebCore::WebGPU::CompositorIntegration> createCompositorIntegration() final;
+    RefPtr<WebCore::WebGPU::CompositorIntegration> createCompositorIntegration() final;
+    bool isValid(const WebCore::WebGPU::CompositorIntegration&) const final;
+    bool isValid(const WebCore::WebGPU::Buffer&) const final;
+    bool isValid(const WebCore::WebGPU::Adapter&) const final;
+    bool isValid(const WebCore::WebGPU::BindGroup&) const final;
+    bool isValid(const WebCore::WebGPU::BindGroupLayout&) const final;
+    bool isValid(const WebCore::WebGPU::CommandBuffer&) const final;
+    bool isValid(const WebCore::WebGPU::CommandEncoder&) const final;
+    bool isValid(const WebCore::WebGPU::ComputePassEncoder&) const final;
+    bool isValid(const WebCore::WebGPU::ComputePipeline&) const final;
+    bool isValid(const WebCore::WebGPU::Device&) const final;
+    bool isValid(const WebCore::WebGPU::ExternalTexture&) const final;
+    bool isValid(const WebCore::WebGPU::PipelineLayout&) const final;
+    bool isValid(const WebCore::WebGPU::PresentationContext&) const final;
+    bool isValid(const WebCore::WebGPU::QuerySet&) const final;
+    bool isValid(const WebCore::WebGPU::Queue&) const final;
+    bool isValid(const WebCore::WebGPU::RenderBundleEncoder&) const final;
+    bool isValid(const WebCore::WebGPU::RenderBundle&) const final;
+    bool isValid(const WebCore::WebGPU::RenderPassEncoder&) const final;
+    bool isValid(const WebCore::WebGPU::RenderPipeline&) const final;
+    bool isValid(const WebCore::WebGPU::Sampler&) const final;
+    bool isValid(const WebCore::WebGPU::ShaderModule&) const final;
+    bool isValid(const WebCore::WebGPU::Texture&) const final;
+    bool isValid(const WebCore::WebGPU::TextureView&) const final;
 
     void abandonGPUProcess();
     void disconnectGpuProcessIfNeeded();

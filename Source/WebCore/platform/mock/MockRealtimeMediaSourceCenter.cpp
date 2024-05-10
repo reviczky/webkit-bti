@@ -58,6 +58,15 @@
 #endif
 
 namespace WebCore {
+class MockDisplayCapturer;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::MockDisplayCapturer> : std::true_type { };
+}
+
+namespace WebCore {
 
 static inline Vector<MockMediaDevice> defaultDevices()
 {
@@ -82,6 +91,7 @@ static inline Vector<MockMediaDevice> defaultDevices()
                 Color::black,
                 { }, // whiteBalanceModes
                 false, // supportsTorch
+                false, // background blur enabled
             } },
 
         MockMediaDevice { "239c24b3-2b15-11e3-8224-0800200c9a66"_s, "Mock video device 2"_s, { },
@@ -100,6 +110,7 @@ static inline Vector<MockMediaDevice> defaultDevices()
                 Color::darkGray,
                 { MeteringMode::Manual, MeteringMode::SingleShot, MeteringMode::Continuous },
                 true,
+                true, // background blur enabled
             } },
 
         MockMediaDevice { "SCREEN-1"_s, "Mock screen device 1"_s, { }, MockDisplayProperties { CaptureDevice::DeviceType::Screen, Color::lightGray, { 1920, 1080 } } },
@@ -148,7 +159,7 @@ private:
     CaptureDevice::DeviceType deviceType() const final { return CaptureDevice::DeviceType::Screen; }
     IntSize intrinsicSize() const final;
 #if !RELEASE_LOG_DISABLED
-    const char* logClassName() const final { return "MockDisplayCapturer"; }
+    ASCIILiteral logClassName() const final { return "MockDisplayCapturer"_s; }
 #endif
     Ref<MockRealtimeVideoSource> m_source;
     RealtimeMediaSourceSettings m_settings;

@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(CSS_PAINTING_API)
-
 #include "AffineTransform.h"
 #include "CanvasBase.h"
 #include "ContextDestructionObserver.h"
@@ -74,22 +72,25 @@ public:
     void queueTaskKeepingObjectAlive(TaskSource, Function<void()>&&) final { };
     void dispatchEvent(Event&) final { }
 
+    const CSSParserContext& cssParserContext() const final;
+
     using RefCounted::ref;
     using RefCounted::deref;
 
 private:
     CustomPaintCanvas(ScriptExecutionContext&, unsigned width, unsigned height);
 
-    void refCanvasBase() final { ref(); }
-    void derefCanvasBase() final { deref(); }
+    void refCanvasBase() const final { ref(); }
+    void derefCanvasBase() const final { deref(); }
     ScriptExecutionContext* canvasBaseScriptExecutionContext() const final { return ContextDestructionObserver::scriptExecutionContext(); }
     void replayDisplayListImpl(GraphicsContext& target) const;
 
     std::unique_ptr<CanvasRenderingContext> m_context;
     mutable std::unique_ptr<DisplayList::DrawingContext> m_recordingContext;
     mutable RefPtr<Image> m_copiedImage;
+
+    mutable std::unique_ptr<CSSParserContext> m_cssParserContext;
 };
 
 }
 SPECIALIZE_TYPE_TRAITS_CANVAS(WebCore::CustomPaintCanvas, isCustomPaintCanvas())
-#endif

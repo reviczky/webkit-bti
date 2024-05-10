@@ -27,7 +27,6 @@
 
 #include "APIObject.h"
 #include "APIWebsitePolicies.h"
-#include "DataReference.h"
 #include "FrameInfoData.h"
 #include "NavigationActionData.h"
 #include "ProcessThrottler.h"
@@ -154,7 +153,7 @@ public:
     WebKit::WebContentMode effectiveContentMode() const { return m_effectiveContentMode; }
 
 #if !LOG_DISABLED
-    const char* loggingString() const;
+    WTF::String loggingString() const;
 #endif
 
     const std::unique_ptr<SubstituteData>& substituteData() const { return m_substituteData; }

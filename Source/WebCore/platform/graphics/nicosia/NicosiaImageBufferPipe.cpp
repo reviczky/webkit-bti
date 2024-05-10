@@ -38,6 +38,12 @@
 #include <cairo.h>
 #endif
 
+#if USE(SKIA)
+IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
+#include <skia/core/SkPixmap.h>
+IGNORE_CLANG_WARNINGS_END
+#endif
+
 #if USE(NICOSIA)
 
 namespace Nicosia {
@@ -46,7 +52,7 @@ using namespace WebCore;
 
 NicosiaImageBufferPipeSource::NicosiaImageBufferPipeSource()
 {
-    m_nicosiaLayer = Nicosia::ContentLayer::create(*this);
+    m_nicosiaLayer = Nicosia::ContentLayer::create(*this, adoptRef(*new TextureMapperPlatformLayerProxyGL(TextureMapperPlatformLayerProxy::ContentType::OffscreenCanvas)));
 }
 
 NicosiaImageBufferPipeSource::~NicosiaImageBufferPipeSource()
@@ -91,8 +97,13 @@ void NicosiaImageBufferPipeSource::handle(ImageBuffer& buffer)
                     auto* surface = nativeImage->platformImage().get();
                     auto* imageData = cairo_image_surface_get_data(surface);
                     texture->updateContents(imageData, IntRect(IntPoint(), size), IntPoint(), cairo_image_surface_get_stride(surface));
-#else
-                    notImplemented();
+#elif USE(SKIA)
+                    auto* image = nativeImage->platformImage().get();
+                    // FIXME: support accelerated offscreen canvas.
+                    RELEASE_ASSERT(!image->isTextureBacked());
+                    SkPixmap pixmap;
+                    if (image->peekPixels(&pixmap))
+                        texture->updateContents(pixmap.addr(), IntRect(IntPoint(), size), IntPoint(), image->imageInfo().minRowBytes());
 #endif
                 }
 

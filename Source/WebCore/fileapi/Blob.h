@@ -111,6 +111,10 @@ public:
     static bool isNormalizedContentType(const CString&);
 #endif
 
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     // URLRegistrable
     URLRegistry& registry() const override;
 
@@ -144,9 +148,6 @@ protected:
 
 private:
     void loadBlob(FileReaderLoader::ReadType, CompletionHandler<void(BlobLoader&)>&&);
-
-    // ActiveDOMObject.
-    const char* activeDOMObjectName() const override;
 
     String m_type;
     mutable std::optional<unsigned long long> m_size;

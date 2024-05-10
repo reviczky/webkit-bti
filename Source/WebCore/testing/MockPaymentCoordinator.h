@@ -104,6 +104,10 @@ public:
     const std::optional<ApplePayDeferredPaymentRequest>& deferredPaymentRequest() const { return m_deferredPaymentRequest; }
 #endif
 
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    const std::optional<ApplePayDisbursementPaymentRequest>& disbursementPaymentRequest() const { return m_disbursementPaymentRequest; }
+#endif
+
 #if ENABLE(APPLE_PAY_LATER_AVAILABILITY)
     const std::optional<ApplePayLaterAvailability> applePayLaterAvailability() const { return m_applePayLaterAvailability; }
 #endif
@@ -133,7 +137,7 @@ private:
     bool isMockPaymentCoordinator() const final { return true; }
 
     void getSetupFeatures(const ApplePaySetupConfiguration&, const URL&, CompletionHandler<void(Vector<Ref<ApplePaySetupFeature>>&&)>&&) final;
-    void beginApplePaySetup(const ApplePaySetupConfiguration&, const URL&, Vector<RefPtr<ApplePaySetupFeature>>&&, CompletionHandler<void(bool)>&&) final;
+    void beginApplePaySetup(const ApplePaySetupConfiguration&, const URL&, Vector<Ref<ApplePaySetupFeature>>&&, CompletionHandler<void(bool)>&&) final;
 
     void dispatchIfShowing(Function<void()>&&);
 
@@ -176,6 +180,10 @@ private:
 
 #if ENABLE(APPLE_PAY_DEFERRED_PAYMENTS)
     std::optional<ApplePayDeferredPaymentRequest> m_deferredPaymentRequest;
+#endif
+
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    std::optional<ApplePayDisbursementPaymentRequest> m_disbursementPaymentRequest;
 #endif
 
 #if ENABLE(APPLE_PAY_LATER_AVAILABILITY)

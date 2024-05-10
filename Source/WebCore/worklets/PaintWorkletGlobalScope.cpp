@@ -26,8 +26,6 @@
 #include "config.h"
 #include "PaintWorkletGlobalScope.h"
 
-#if ENABLE(CSS_PAINTING_API)
-
 #include "Document.h"
 #include "JSCSSPaintCallback.h"
 #include "JSDOMConvert.h"
@@ -63,7 +61,7 @@ double PaintWorkletGlobalScope::devicePixelRatio() const
     return responsibleDocument()->domWindow()->devicePixelRatio();
 }
 
-PaintWorkletGlobalScope::PaintDefinition::PaintDefinition(const AtomString& name, JSC::JSObject* paintConstructor, Ref<CSSPaintCallback>&& paintCallback, Vector<AtomString>&& inputProperties, Vector<String>&& inputArguments)
+PaintDefinition::PaintDefinition(const AtomString& name, JSC::JSObject* paintConstructor, Ref<CSSPaintCallback>&& paintCallback, Vector<AtomString>&& inputProperties, Vector<String>&& inputArguments)
     : name(name)
     , paintConstructor(paintConstructor)
     , paintCallback(WTFMove(paintCallback))
@@ -155,5 +153,3 @@ ExceptionOr<void> PaintWorkletGlobalScope::registerPaint(JSC::JSGlobalObject& gl
 }
 
 } // namespace WebCore
-
-#endif

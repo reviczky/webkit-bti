@@ -48,7 +48,7 @@ struct TemplateTypes {
 
     static void appendNameTo(StringBuilder& builder)
     {
-        builder.append(toString(TT), ", ");
+        builder.append(toString(TT), ", "_s);
         TemplateTypes<TTs...>::appendNameTo(builder);
     }
 };
@@ -100,12 +100,11 @@ struct TemplateTypes<TT> {
 #define CONSUME_TYPE_NAMED(name, type) \
     auto name##Expected = consumeType(TokenType::type); \
     if (!name##Expected) { \
-        StringBuilder builder; \
-        builder.append("Expected a "); \
-        builder.append(toString(TokenType::type)); \
-        builder.append(", but got a "); \
-        builder.append(toString(name##Expected.error())); \
-        FAIL(builder.toString()); \
+        auto error = makeString("Expected a "_s, \
+            toString(TokenType::type), \
+            ", but got a "_s, \
+            toString(name##Expected.error())); \
+        FAIL(WTFMove(error)); \
     } \
     auto& name = *name##Expected;
 
@@ -113,12 +112,11 @@ struct TemplateTypes<TT> {
     do { \
         auto expectedToken = consumeType(TokenType::type); \
         if (!expectedToken) { \
-            StringBuilder builder; \
-            builder.append("Expected a "); \
-            builder.append(toString(TokenType::type)); \
-            builder.append(", but got a "); \
-            builder.append(toString(expectedToken.error())); \
-            FAIL(builder.toString()); \
+            auto error = makeString("Expected a "_s, \
+                toString(TokenType::type), \
+                ", but got a "_s, \
+                toString(expectedToken.error())); \
+            FAIL(WTFMove(error)); \
         } \
     } while (false)
 
@@ -126,10 +124,9 @@ struct TemplateTypes<TT> {
     auto name##Expected = consumeTypes<__VA_ARGS__>(); \
     if (!name##Expected) { \
         StringBuilder builder; \
-        builder.append("Expected one of ["); \
+        builder.append("Expected one of ["_s); \
         TemplateTypes<__VA_ARGS__>::appendNameTo(builder); \
-        builder.append("], but got a "); \
-        builder.append(toString(name##Expected.error())); \
+        builder.append("], but got a "_s, toString(name##Expected.error())); \
         FAIL(builder.toString()); \
     } \
     auto& name = *name##Expected;
@@ -373,6 +370,7 @@ Result<void> Parser<Lexer>::parseShader()
         case TokenType::KeywordDiagnostic: {
             consume();
             PARSE(diagnostic, Diagnostic);
+            CONSUME_TYPE(Semicolon);
             auto& directive = MAKE_ARENA_NODE(DiagnosticDirective, WTFMove(diagnostic));
             m_shaderModule.directives().append(directive);
             break;
@@ -425,7 +423,7 @@ Result<void> Parser<Lexer>::parseRequireDirective()
         CONSUME_TYPE_NAMED(identifier, Identifier);
         auto* languageFeature = parseLanguageFeature(identifier.ident);
         if (!languageFeature)
-            FAIL("Expected 'readonly_and_readwrite_storage_textures'"_s);
+            FAIL("Expected 'readonly_and_readwrite_storage_textures', 'packed_4x8_integer_dot_product', 'unrestricted_pointer_parameters' or 'pointer_composite_access'"_s);
         m_shaderModule.requiredFeatures().add(*languageFeature);
 
         if (current().type != TokenType::Comma)
@@ -607,6 +605,7 @@ Result<AST::ConstAssert::Ref> Parser<Lexer>::parseConstAssert()
     START_PARSE();
     CONSUME_TYPE(KeywordConstAssert);
     PARSE(test, Expression);
+    CONSUME_TYPE(Semicolon);
     RETURN_ARENA_NODE(ConstAssert, WTFMove(test));
 }
 
@@ -634,6 +633,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "group"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(group, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(GroupAttribute, WTFMove(group));
     }
@@ -641,6 +642,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "binding"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(binding, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(BindingAttribute, WTFMove(binding));
     }
@@ -648,6 +651,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "location"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(location, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(LocationAttribute, WTFMove(location));
     }
@@ -675,6 +680,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
             break;
         }
 
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(BuiltinAttribute, *builtin);
     }
@@ -709,6 +716,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "align"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(alignment, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(AlignAttribute, WTFMove(alignment));
     }
@@ -737,6 +746,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "size"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(size, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(SizeAttribute, WTFMove(size));
     }
@@ -744,6 +755,8 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "id"_s) {
         CONSUME_TYPE(ParenLeft);
         PARSE(size, Expression);
+        if (current().type  == TokenType::Comma)
+            consume();
         CONSUME_TYPE(ParenRight);
         RETURN_ARENA_NODE(IdAttribute, WTFMove(size));
     }
@@ -812,7 +825,7 @@ Result<AST::Structure::Ref> Parser<Lexer>::parseStructure(AST::Attribute::List&&
         PARSE(member, StructureMember);
         auto result = seenMembers.add(member.get().name());
         if (!result.isNewEntry)
-            FAIL(makeString("duplicate member '", member.get().name(), "' in struct '", name, "'"));
+            FAIL(makeString("duplicate member '"_s, member.get().name(), "' in struct '"_s, name, '\''));
         members.append(member);
         if (current().type == TokenType::Comma)
             consume();
@@ -821,7 +834,7 @@ Result<AST::Structure::Ref> Parser<Lexer>::parseStructure(AST::Attribute::List&&
     }
 
     if (members.isEmpty())
-        FAIL(makeString("structures must have at least one member"));
+        FAIL("structures must have at least one member"_str);
 
     CONSUME_TYPE(BraceRight);
 
@@ -1725,27 +1738,27 @@ Result<AST::Expression::Ref> Parser<Lexer>::parsePrimaryExpression()
         RETURN_ARENA_NODE(BoolLiteral, false);
     case TokenType::IntegerLiteral: {
         CONSUME_TYPE_NAMED(lit, IntegerLiteral);
-        RETURN_ARENA_NODE(AbstractIntegerLiteral, lit.literalValue);
+        RETURN_ARENA_NODE(AbstractIntegerLiteral, lit.integerValue);
     }
     case TokenType::IntegerLiteralSigned: {
         CONSUME_TYPE_NAMED(lit, IntegerLiteralSigned);
-        RETURN_ARENA_NODE(Signed32Literal, lit.literalValue);
+        RETURN_ARENA_NODE(Signed32Literal, lit.integerValue);
     }
     case TokenType::IntegerLiteralUnsigned: {
         CONSUME_TYPE_NAMED(lit, IntegerLiteralUnsigned);
-        RETURN_ARENA_NODE(Unsigned32Literal, lit.literalValue);
+        RETURN_ARENA_NODE(Unsigned32Literal, lit.integerValue);
     }
     case TokenType::AbstractFloatLiteral: {
         CONSUME_TYPE_NAMED(lit, AbstractFloatLiteral);
-        RETURN_ARENA_NODE(AbstractFloatLiteral, lit.literalValue);
+        RETURN_ARENA_NODE(AbstractFloatLiteral, lit.floatValue);
     }
     case TokenType::FloatLiteral: {
         CONSUME_TYPE_NAMED(lit, FloatLiteral);
-        RETURN_ARENA_NODE(Float32Literal, lit.literalValue);
+        RETURN_ARENA_NODE(Float32Literal, lit.floatValue);
     }
     case TokenType::HalfLiteral: {
         CONSUME_TYPE_NAMED(lit, HalfLiteral);
-        RETURN_ARENA_NODE(Float16Literal, lit.literalValue);
+        RETURN_ARENA_NODE(Float16Literal, lit.floatValue);
     }
     // TODO: bitcast expression
 
@@ -1777,10 +1790,9 @@ template<typename Lexer>
 Result<AST::Expression::Ref> Parser<Lexer>::parseLHSExpression()
 {
     START_PARSE();
+    CHECK_RECURSION();
 
     if (current().type == TokenType::And || current().type == TokenType::Star) {
-        CHECK_RECURSION();
-
         auto op = toUnaryOperation(current());
         consume();
         PARSE(expression, LHSExpression);

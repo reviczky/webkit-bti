@@ -988,6 +988,7 @@ FORMAT_DICT = {
     "GLfloat": "%f",
     "GLint": "%d",
     "GLintptr": UNSIGNED_LONG_LONG_FORMAT,
+    "GLMTLRasterizationRateMapANGLE": POINTER_FORMAT,
     "GLshort": "%d",
     "GLsizei": "%d",
     "GLsizeiptr": UNSIGNED_LONG_LONG_FORMAT,
@@ -1607,7 +1608,9 @@ def is_context_private_state_command(api, name):
 
 
 def is_lockless_egl_entry_point(cmd_name):
-    if cmd_name in ["eglGetError"]:
+    if cmd_name in [
+            "eglGetError", "eglGetCurrentContext", "eglGetCurrentSurface", "eglGetCurrentDisplay"
+    ]:
         return True
     return False
 
@@ -3068,6 +3071,7 @@ def get_prepare_swap_buffers_call(api, cmd_name, params):
             "eglSwapBuffersWithDamageKHR",
             "eglSwapBuffersWithFrameTokenANGLE",
             "eglQuerySurface",
+            "eglQuerySurface64KHR",
     ]:
         return ""
 
@@ -3084,7 +3088,7 @@ def get_prepare_swap_buffers_call(api, cmd_name, params):
         [just_the_name(param) for param in passed_params]))
 
     # For eglQuerySurface, the prepare call is only needed for EGL_BUFFER_AGE
-    if cmd_name == "eglQuerySurface":
+    if cmd_name in ["eglQuerySurface", "eglQuerySurface64KHR"]:
         prepareCall = "if (attribute == EGL_BUFFER_AGE_EXT) {" + prepareCall + "}"
 
     return prepareCall

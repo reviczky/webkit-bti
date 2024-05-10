@@ -32,7 +32,6 @@
 
 #include "Document.h"
 #include "EventLoop.h"
-#include "FeaturePolicy.h"
 #include "GeoNotifier.h"
 #include "GeolocationController.h"
 #include "GeolocationCoordinates.h"
@@ -42,6 +41,7 @@
 #include "LocalFrame.h"
 #include "Navigator.h"
 #include "Page.h"
+#include "PermissionsPolicy.h"
 #include "RuntimeApplicationChecks.h"
 #include "SecurityOrigin.h"
 #include <wtf/IsoMallocInlines.h>
@@ -282,11 +282,6 @@ void Geolocation::stop()
     m_pendingForPermissionNotifiers.clear();
 }
 
-const char* Geolocation::activeDOMObjectName() const
-{
-    return "Geolocation";
-}
-
 GeolocationPosition* Geolocation::lastPosition()
 {
     Page* page = this->page();
@@ -339,24 +334,18 @@ int Geolocation::watchPosition(Ref<PositionCallback>&& successCallback, RefPtr<P
 
 static void logError(const String& target, const bool isSecure, const bool isMixedContent, Document* document)
 {
-    StringBuilder message;
-    message.append("[blocked] Access to geolocation was blocked over");
-    
-    if (!isSecure)
-        message.append(" insecure connection to ");
-    else if (isMixedContent)
-        message.append(" secure connection with mixed content to ");
-    else
+    if (isSecure && !isMixedContent)
         return;
-    
-    message.append(target);
-    message.append(".\n");
-    document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message.toString());
+
+    auto message = makeString("[blocked] Access to geolocation was blocked over"_s,
+        isSecure ? " secure connection with mixed content to "_s : " insecure connection to "_s,
+        target, ".\n"_s);
+    document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, WTFMove(message));
 }
     
 bool Geolocation::shouldBlockGeolocationRequests()
 {
-    if (!isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::Geolocation, *document(), LogFeaturePolicyFailure::Yes))
+    if (!isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Type::Geolocation, *document(), LogPermissionsPolicyFailure::Yes))
         return true;
 
     bool isSecure = SecurityOrigin::isSecure(document()->url()) || document()->isSecureContext();

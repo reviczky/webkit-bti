@@ -72,6 +72,8 @@ public:
         SessionState,
         SerializedScriptValue,
         String,
+        TargetedElementInfo,
+        TargetedElementRequest,
         URL,
         URLRequest,
         URLResponse,
@@ -181,6 +183,7 @@ public:
         WebExtensionContext,
         WebExtensionController,
         WebExtensionControllerConfiguration,
+        WebExtensionDataRecord,
         WebExtensionMatchPattern,
         WebExtensionMessagePort,
 #endif
@@ -300,7 +303,7 @@ inline API::Object* Object::unwrap(void* object)
 }
 #endif
 
-} // namespace Object
+} // namespace API
 
 #undef DELEGATE_REF_COUNTING_TO_COCOA
 
