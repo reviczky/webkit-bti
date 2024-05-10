@@ -5,6 +5,17 @@ webkit2gtk (2.45.1-1) UNRELEASED; urgency=medium
     - Branch for 2.45.x in experimental.
   * debian/upstream/signing-key.asc:
     - Replace Carlos Garcia's DSA key with the new RSA one.
+  * debian/rules:
+    - Build with -DENABLE_JIT=OFF in riscv64. This replaces
+      fix-ftbfs-riscv64.patch.
+    - Add -Wl,--reduce-memory-overheads to LDFLAGS. This replaces
+      reduce-memory-overheads.patch.
+  * Remove the following patches:
+    - disable-dmabuf-nvidia.patch: all Nvidia-related bugs are supposed to
+      be fixed upstream.
+    - prefer-pthread.patch: this should not be needed anymore.
+    - fix-ftbfs-riscv64.patch: Use -DENABLE_JIT=OFF instead.
+    - reduce-memory-overheads.patch: Override LDFLAGS instead.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 May 2024 10:55:37 +0200
 

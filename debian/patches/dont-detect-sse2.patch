@@ -6,20 +6,20 @@ Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
 ===================================================================
 --- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/platform.h
 +++ webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
-@@ -112,7 +112,7 @@
+@@ -109,7 +109,7 @@
  #if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
  #    include <intrin.h>
  #    define ANGLE_USE_SSE
 -#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
 +#elif defined(__GNUC__) && defined(__x86_64__)
  #    include <x86intrin.h>
- #    define ANGLE_USE_SSE
- #endif
+ #    if __SSE__
+ #        define ANGLE_USE_SSE
 Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -174,15 +174,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+@@ -209,15 +209,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
          WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fmax-errors=20)
      endif ()
  

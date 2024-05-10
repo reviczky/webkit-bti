@@ -48,6 +48,9 @@ endif
 CFLAGS := $(CFLAGS:-g=-g1)
 CXXFLAGS := $(CXXFLAGS:-g=-g1)
 
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=949621
+LDFLAGS += -Wl,--reduce-memory-overheads
+
 # Don't build with -gsplit-dwarf (see #1016936)
 EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
 
@@ -55,6 +58,11 @@ EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
 # slow but it is the most compatible solution for old (non-SSE2) CPUs.
 ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
+endif
+
+# https://bugs.webkit.org/show_bug.cgi?id=271371
+ifneq (,$(filter $(DEB_HOST_ARCH),riscv64))
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
 endif
 
 # These are not available in the Hurd (#1033999)
