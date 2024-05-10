@@ -1,4 +1,4 @@
-webkit2gtk (2.45.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.45.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/watch, debian/gbp.conf:
@@ -21,7 +21,7 @@ webkit2gtk (2.45.1-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 10 May 2024 10:55:37 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 10 May 2024 13:49:26 +0200
 
 webkit2gtk (2.44.1-1) unstable; urgency=medium
 
