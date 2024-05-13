@@ -1,4 +1,4 @@
-webkit2gtk (2.45.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.45.1-2) experimental; urgency=medium
 
   * debian/patches/disable-skia-big-endian.patch:
     - Don't use Skia on big-endian machines since it's not supported
@@ -11,7 +11,7 @@ webkit2gtk (2.45.1-2) UNRELEASED; urgency=medium
     - Disable dh_dwz since it causes several build failures with clang
       (see e.g. #1016936 or #946255).
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 13 May 2024 10:05:44 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 13 May 2024 15:55:34 +0200
 
 webkit2gtk (2.45.1-1) experimental; urgency=medium
 
