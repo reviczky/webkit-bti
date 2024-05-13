@@ -1,0 +1,16 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Fix typo in riscv64 header
+Origin: https://commits.webkit.org/278680@main
+Index: webkitgtk/Source/JavaScriptCore/assembler/MacroAssemblerRISCV64.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/assembler/MacroAssemblerRISCV64.cpp
++++ webkitgtk/Source/JavaScriptCore/assembler/MacroAssemblerRISCV64.cpp
+@@ -28,7 +28,7 @@
+ 
+ #if ENABLE(ASSEMBLER) && CPU(RISCV64)
+ 
+-#include "OperaitonResult.h"
++#include "OperationResult.h"
+ #include "ProbeContext.h"
+ #include <wtf/InlineASM.h>
+ 

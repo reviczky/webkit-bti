@@ -3,6 +3,8 @@ webkit2gtk (2.45.1-2) UNRELEASED; urgency=medium
   * debian/patches/disable-skia-big-endian.patch:
     - Don't use Skia on big-endian machines since it's not supported
       (Closes: #1070865)
+  * debian/patches/fix-riscv-include.patch:
+    - Fix typo in header name.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 13 May 2024 10:05:44 +0200
 
