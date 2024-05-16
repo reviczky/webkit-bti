@@ -1,3 +1,10 @@
+webkit2gtk (2.44.1-2) UNRELEASED; urgency=medium
+
+  * debian/upstream/signing-key.asc:
+    - Replace Carlos Garcia's DSA key with the new RSA one.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 16 May 2024 14:09:54 +0200
+
 webkit2gtk (2.44.1-1) unstable; urgency=medium
 
   * New upstream release.
