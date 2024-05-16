@@ -1,3 +1,10 @@
+wpewebkit (2.44.2-2) UNRELEASED; urgency=medium
+
+  * debian/control:
+    - Put the transitional package libwpewebkit-1.0-doc in oldlibs.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 16 May 2024 15:08:47 +0200
+
 wpewebkit (2.44.2-1) unstable; urgency=medium
 
   * New upstream release.

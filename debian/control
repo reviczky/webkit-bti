@@ -137,7 +137,7 @@ Description: Web content engine for embedded devices - documentation
 
 Package: libwpewebkit-1.0-doc
 Build-Profiles: <!nodoc>
-Section: doc
+Section: oldlibs
 Architecture: all
 Multi-Arch: foreign
 Depends: libwpewebkit-doc, ${misc:Depends}
