@@ -135,13 +135,6 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
 
-# Lower max parallel jobs on some builders
-ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
-ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
-	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
-endif
-endif
-
 # set the distributor agent for Ubuntu
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSER_AGENT_BRANDING="Ubuntu"
