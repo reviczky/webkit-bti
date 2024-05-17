@@ -76,13 +76,6 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
 
-# Lower max parallel jobs on some of Ubuntu's builders
-ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
-ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
-	EXTRA_DH_ARGUMENTS += --max-parallel=2
-endif
-endif
-
 %:
 	dh $@ --buildsystem=cmake+ninja $(EXTRA_DH_ARGUMENTS)
 

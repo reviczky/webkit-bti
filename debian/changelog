@@ -18,6 +18,7 @@ wpewebkit (2.46.0-1) UNRELEASED; urgency=medium
     - Update source-is-missing overrides.
   * debian/rules:
     - Remove compiler overrides for sh4 (see #1082305).
+    - Stop limiting parallel builds on Ubuntu.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Sep 2024 09:06:35 +0200
 
