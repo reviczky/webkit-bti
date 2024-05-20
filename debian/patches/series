@@ -2,5 +2,3 @@ fix-ftbfs-sparc64.patch
 fix-ftbfs-x32.patch
 dont-detect-sse2.patch
 fix-ftbfs-hurd.patch
-disable-skia-big-endian.patch
-fix-riscv-include.patch
