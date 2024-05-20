@@ -2,6 +2,8 @@ webkit2gtk (2.45.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Remove disable-skia-big-endian.patch and fix-riscv-include.patch.
+  * debian/patches/fix-clang-build.patch:
+    - Fix build with clang in (at least) i386 and s390x.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 May 2024 16:54:42 +0200
 
