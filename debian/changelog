@@ -1,4 +1,4 @@
-webkit2gtk (2.45.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.45.2-1) experimental; urgency=medium
 
   * New upstream development release.
   * Remove disable-skia-big-endian.patch and fix-riscv-include.patch.
@@ -10,7 +10,7 @@ webkit2gtk (2.45.2-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 20 May 2024 16:54:42 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 20 May 2024 19:29:04 +0200
 
 webkit2gtk (2.45.1-2) experimental; urgency=medium
 
