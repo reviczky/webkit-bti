@@ -1781,6 +1781,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_security_origin_ref@Base 2.15.3
  webkit_security_origin_to_string@Base 2.15.3
  webkit_security_origin_unref@Base 2.15.3
+ webkit_settings_apply_from_key_file@Base 2.45.2
  webkit_settings_font_size_to_pixels@Base 2.19.2
  webkit_settings_font_size_to_points@Base 2.19.2
  webkit_settings_get_all_features@Base 2.41.4
