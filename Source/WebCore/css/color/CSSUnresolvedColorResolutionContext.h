@@ -26,22 +26,38 @@
 #pragma once
 
 #include "Color.h"
-#include "ColorInterpolationMethod.h"
-#include <optional>
+#include "StyleColor.h"
+#include <wtf/Forward.h>
+#include <wtf/OptionSet.h>
 
 namespace WebCore {
 
-struct CSSResolvedColorMix {
-    struct Component {
-        Color color;
-        std::optional<double> percentage;
-    };
+namespace Style {
+enum class ForVisitedLink : bool;
+}
 
-    ColorInterpolationMethod colorInterpolationMethod;
-    Component mixComponents1;
-    Component mixComponents2;
+enum class CSSUnresolvedLightDarkAppearance : bool;
+
+struct CSSUnresolvedColorResolutionContext {
+    CSSUnresolvedColorResolutionContext();
+    ~CSSUnresolvedColorResolutionContext();
+
+    Style::ForVisitedLink forVisitedLink;
+
+    // Colors to use that usually get resolved dynamically using Document & RenderStyle.
+    Color currentColor;              // For CSSValueCurrentcolor
+    Color internalDocumentTextColor; // For CSSValueInternalDocumentTextColor
+    Color webkitLink;                // For CSSValueWebkitLink [Style::ForVisitedLink::No]
+    Color webkitLinkVisited;         // For CSSValueWebkitLink [Style::ForVisitedLink::Yes]
+    Color webkitActiveLink;          // For CSSValueWebkitActivelink
+    Color webkitFocusRingColor;      // For CSSValueWebkitFocusRingColor
+
+    // Options to pass when resolving any other keyword with StyleColor::colorFromKeyword()
+    OptionSet<StyleColorOptions> keywordOptions;
+
+    // Appearance used to select from a light-dark() color function.
+    // If unset, light-dark() colors will return the invalid Color.
+    std::optional<CSSUnresolvedLightDarkAppearance> appearance;
 };
-
-Color mix(const CSSResolvedColorMix&);
 
 } // namespace WebCore
