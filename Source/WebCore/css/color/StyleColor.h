@@ -31,14 +31,17 @@
 
 #pragma once
 
+#include "CSSColorDescriptors.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSValueKeywords.h"
-#include "Color.h"
-#include "ColorInterpolationMethod.h"
+#include "StyleAbsoluteColor.h"
+#include "StyleCurrentColor.h"
 #include <wtf/OptionSet.h>
 #include <wtf/UniqueRef.h>
 
 namespace WebCore {
+
+class Color;
 
 enum class StyleColorOptions : uint8_t {
     ForVisitedLink = 1 << 0,
@@ -47,52 +50,51 @@ enum class StyleColorOptions : uint8_t {
     UseElevatedUserInterfaceLevel = 1 << 3
 };
 
+// StyleColorMix and StyleRelativeColor are forward declared and stored in
+// UniqueRefs to avoid unnecessarily growing the size of StyleColor for the
+// uncommon case of un-resolvability due to currentColor.
 struct StyleColorMix;
-struct StyleCurrentColor {
-    friend constexpr bool operator==(const StyleCurrentColor&, const StyleCurrentColor&) = default;
-};
+template<typename Descriptor>
+struct StyleRelativeColor;
 
 class StyleColor {
 public:
-    // The default constructor initializes to currentcolor to preserve old behavior,
+    // The default constructor initializes to StyleCurrentColor to preserve old behavior,
     // we might want to change it to invalid color at some point.
-    StyleColor()
-        : m_color { StyleCurrentColor { } }
-    {
-    }
+    StyleColor();
 
-    StyleColor(const Color& color)
-        : m_color { Color { color } }
-    {
-    }
+    // Convenience constructors that create StyleAbsoluteColor.
+    StyleColor(Color);
+    StyleColor(SRGBA<uint8_t>);
 
-    StyleColor(const SRGBA<uint8_t>& color)
-        : m_color { Color { color } }
-    {
-    }
+    StyleColor(StyleAbsoluteColor&&);
+    StyleColor(StyleCurrentColor&&);
+    StyleColor(StyleColorMix&&);
+    StyleColor(StyleRelativeColor<RGBFunctionModernRelative>&&);
+    StyleColor(StyleRelativeColor<HSLFunctionModern>&&);
+    StyleColor(StyleRelativeColor<HWBFunction>&&);
+    StyleColor(StyleRelativeColor<LabFunction>&&);
+    StyleColor(StyleRelativeColor<LCHFunction>&&);
+    StyleColor(StyleRelativeColor<OKLabFunction>&&);
+    StyleColor(StyleRelativeColor<OKLCHFunction>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedA98RGB<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedDisplayP3<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedProPhotoRGB<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedRec2020<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedSRGBA<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorRGBFunction<ExtendedLinearSRGBA<float>>>&&);
+    StyleColor(StyleRelativeColor<ColorXYZFunction<XYZA<float, WhitePoint::D50>>>&&);
+    StyleColor(StyleRelativeColor<ColorXYZFunction<XYZA<float, WhitePoint::D65>>>&&);
 
-    StyleColor(StyleColorMix&& colorMix)
-        : m_color { resolveAbsoluteComponents(WTFMove(colorMix)) }
-    {
-    }
+    WEBCORE_EXPORT StyleColor(const StyleColor&);
+    StyleColor& operator=(const StyleColor&);
 
-    StyleColor(const StyleColor& other)
-        : m_color { copy(other.m_color) }
-    {
-    }
-
-    StyleColor& operator=(const StyleColor& other)
-    {
-        m_color = copy(other.m_color);
-        return *this;
-    }
-
-    StyleColor(StyleColor&&) = default;
-    StyleColor& operator=(StyleColor&&) = default;
+    StyleColor(StyleColor&&);
+    StyleColor& operator=(StyleColor&&);
 
     WEBCORE_EXPORT ~StyleColor();
 
-    static StyleColor currentColor() { return StyleColor { StyleCurrentColor { } }; }
+    static StyleColor currentColor();
 
     static Color colorFromKeyword(CSSValueID, OptionSet<StyleColorOptions>);
     static Color colorFromAbsoluteKeyword(CSSValueID);
@@ -119,63 +121,55 @@ public:
     bool containsCurrentColor() const;
     bool isCurrentColor() const;
     bool isColorMix() const;
+    bool isRelativeColor() const;
     bool isAbsoluteColor() const;
     const Color& absoluteColor() const;
 
-    WEBCORE_EXPORT Color resolveColor(const Color& colorPropertyValue) const;
+    WEBCORE_EXPORT Color resolveColor(const Color& currentColor) const;
 
-    friend bool operator==(const StyleColor&, const StyleColor&) = default;
+    bool operator==(const StyleColor&) const;
     friend WEBCORE_EXPORT String serializationForCSS(const StyleColor&);
     friend void serializationForCSS(StringBuilder&, const StyleColor&);
     friend WTF::TextStream& operator<<(WTF::TextStream&, const StyleColor&);
     String debugDescription() const;
 
 private:
-    using ColorKind = std::variant<Color, StyleCurrentColor, UniqueRef<StyleColorMix>>;
+    using ColorKind = std::variant<
+        StyleAbsoluteColor,
+        StyleCurrentColor,
+        UniqueRef<StyleColorMix>,
+        UniqueRef<StyleRelativeColor<RGBFunctionModernRelative>>,
+        UniqueRef<StyleRelativeColor<HSLFunctionModern>>,
+        UniqueRef<StyleRelativeColor<HWBFunction>>,
+        UniqueRef<StyleRelativeColor<LabFunction>>,
+        UniqueRef<StyleRelativeColor<LCHFunction>>,
+        UniqueRef<StyleRelativeColor<OKLabFunction>>,
+        UniqueRef<StyleRelativeColor<OKLCHFunction>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedA98RGB<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedDisplayP3<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedProPhotoRGB<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedRec2020<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedSRGBA<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorRGBFunction<ExtendedLinearSRGBA<float>>>>,
+        UniqueRef<StyleRelativeColor<ColorXYZFunction<XYZA<float, WhitePoint::D50>>>>,
+        UniqueRef<StyleRelativeColor<ColorXYZFunction<XYZA<float, WhitePoint::D65>>>>
+    >;
+    StyleColor(ColorKind&&);
 
-    StyleColor(ColorKind&& color)
-        : m_color { WTFMove(color) }
-    {
-    }
+    template<typename... F>
+    static decltype(auto) visit(const ColorKind&, F&&...);
 
-    static ColorKind resolveAbsoluteComponents(StyleColorMix&&);
-    WEBCORE_EXPORT static ColorKind copy(const ColorKind&);
+    template<typename StyleColorType>
+    static ColorKind resolveAbsoluteComponents(StyleColorType&&);
+
+    static ColorKind copy(const ColorKind&);
 
     ColorKind m_color;
 };
 
-struct StyleColorMix {
-    WTF_MAKE_STRUCT_FAST_ALLOCATED;
-
-    struct Component {
-        StyleColor color;
-        std::optional<double> percentage;
-
-        friend bool operator==(const Component&, const Component&) = default;
-    };
-
-    friend bool operator==(const StyleColorMix&, const StyleColorMix&) = default;
-
-    ColorInterpolationMethod colorInterpolationMethod;
-    Component mixComponents1;
-    Component mixComponents2;
-};
-
-inline bool operator==(const UniqueRef<StyleColorMix>& a, const UniqueRef<StyleColorMix>& b)
-{
-    return a.get() == b.get();
-}
-
-WTF::TextStream& operator<<(WTF::TextStream&, const StyleColorMix&);
-WTF::TextStream& operator<<(WTF::TextStream&, const StyleCurrentColor&);
-WTF::TextStream& operator<<(WTF::TextStream&, const StyleColor&);
-
-void serializationForCSS(StringBuilder&, const StyleColorMix&);
-void serializationForCSS(StringBuilder&, const StyleCurrentColor&);
 void serializationForCSS(StringBuilder&, const StyleColor&);
-
-WEBCORE_EXPORT String serializationForCSS(const StyleColorMix&);
-WEBCORE_EXPORT String serializationForCSS(const StyleCurrentColor&);
 WEBCORE_EXPORT String serializationForCSS(const StyleColor&);
+
+WTF::TextStream& operator<<(WTF::TextStream&, const StyleColor&);
 
 } // namespace WebCore

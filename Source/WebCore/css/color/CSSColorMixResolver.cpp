@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "CSSResolvedColorMix.h"
+#include "CSSColorMixResolver.h"
 
 #include "ColorInterpolation.h"
 
@@ -40,7 +40,7 @@ struct ColorMixPercentages {
 
 }
 
-static std::optional<ColorMixPercentages> normalizedMixPercentages(std::optional<double> mixComponents1Percentage, std::optional<double> mixComponents2Percentage)
+static std::optional<ColorMixPercentages> normalizedMixPercentages(std::optional<PercentRaw> mixComponents1Percentage, std::optional<PercentRaw> mixComponents2Percentage)
 {
     // The percentages are normalized as follows:
 
@@ -54,15 +54,15 @@ static std::optional<ColorMixPercentages> normalizedMixPercentages(std::optional
 
     if (!mixComponents2Percentage) {
         // 3. Otherwise, if p2 is omitted, it becomes 100% - p1
-        result.p1 = *mixComponents1Percentage;
+        result.p1 = mixComponents1Percentage->value;
         result.p2 = 100.0 - result.p1;
     } else if (!mixComponents1Percentage) {
         // 4. Otherwise, if p1 is omitted, it becomes 100% - p2
-        result.p2 = *mixComponents2Percentage;
+        result.p2 = mixComponents2Percentage->value;
         result.p1 = 100.0 - result.p2;
     } else {
-        result.p1 = *mixComponents1Percentage;
-        result.p2 = *mixComponents2Percentage;
+        result.p1 = mixComponents1Percentage->value;
+        result.p2 = mixComponents2Percentage->value;
     }
 
     auto sum = result.p1 + result.p2;
@@ -107,14 +107,14 @@ template<typename InterpolationMethod> static Color mixColorComponentsUsingColor
     return { mixedColor, Color::Flags::UseColorFunctionSerialization };
 }
 
-Color mix(const CSSResolvedColorMix& colorMix)
+Color mix(const CSSColorMixResolver& colorMix)
 {
     auto mixPercentages = normalizedMixPercentages(colorMix.mixComponents1.percentage, colorMix.mixComponents2.percentage);
     if (!mixPercentages)
         return { };
 
     return WTF::switchOn(colorMix.colorInterpolationMethod.colorSpace,
-        [&] (const auto& methodColorSpace) {
+        [&](const auto& methodColorSpace) {
             return mixColorComponentsUsingColorInterpolationMethod(
                 methodColorSpace,
                 *mixPercentages,
