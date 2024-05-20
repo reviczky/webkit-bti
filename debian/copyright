@@ -953,10 +953,10 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/css/CSSVariableData.h
        Source/WebCore/css/CSSVariableReferenceValue.cpp
        Source/WebCore/css/CSSVariableReferenceValue.h
-       Source/WebCore/css/StyleColor.cpp
-       Source/WebCore/css/StyleColor.h
        Source/WebCore/css/calc/CSSCalcValue.cpp
        Source/WebCore/css/calc/CSSCalcValue.h
+       Source/WebCore/css/color/StyleColor.cpp
+       Source/WebCore/css/color/StyleColor.h
        Source/WebCore/css/parser/CSSAtRuleID.cpp
        Source/WebCore/css/parser/CSSAtRuleID.h
        Source/WebCore/css/parser/CSSParserEnum.h
