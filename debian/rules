@@ -36,9 +36,10 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
-# Skia strongly recommends using clang
+# Skia strongly recommends using clang, so enable it in the arches
+# where it's known to work.
 # https://skia.org/docs/user/build/#supported-and-preferred-compilers
-ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x))
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64 i386 s390x))
 	EXTRA_CMAKE_ARGUMENTS += \
 	   -DCMAKE_C_COMPILER=clang \
 	   -DCMAKE_CXX_COMPILER=clang++
