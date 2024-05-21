@@ -1,3 +1,32 @@
+webkit2gtk (2.44.2-1~deb11u1) bullseye-security; urgency=medium
+
+  * Rebuild for bullseye-security.
+  * gcc 10 segfaults when building webkit in amd64 (see #1008098) so use
+    clang instead. Keep using gcc in other architectures because clang has
+    problems in at least i386, arm64 and mipsel (see #1010329 and
+    #1016811).
+    - debian/rules: Tell CMake to use clang.
+    - debian/control.in: Build depend on clang.
+  * Build libsoup2 packages only.
+    - debian/rules: Set ENABLE_SOUP3=NO, ENABLE_GTK4=NO and
+      USE_PREBUILT_DOCS=YES.
+    - debian/control.in: Remove build dependency on ccache.
+  * debian/rules:
+    - Disable USE_AVI, USE_GBM, USE_GSTREAMER_TRANSCODER and USE_JPEGXL
+      due to missing or additional build dependencies.
+    - Enable USE_OLD_DOC_PKG and USE_OLD_JSCBIN_PKG to keep using the old
+      package names.
+  * debian/control.in:
+    - Remove build dependencies on libgstreamer-plugins-bad1.0-dev,
+      libjxl-dev and libavif-dev.
+    - Make the -dev packages depend on the gir packages.
+    - Replace gobject-introspection-bin with gobject-introspection.
+  * debian/patches/disable-dmabuf.patch:
+    - Disable the DMABuf renderer in all cases in bullseye
+      (see #1054101).
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 May 2024 16:05:47 +0200
+
 webkit2gtk (2.44.2-1) unstable; urgency=high
 
   * New upstream release.
