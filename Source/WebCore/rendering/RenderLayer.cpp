@@ -875,7 +875,7 @@ String RenderLayer::name() const
 {
     if (!isReflection())
         return renderer().debugDescription();
-    return makeString(renderer().debugDescription(), " (reflection)");
+    return makeString(renderer().debugDescription(), " (reflection)"_s);
 }
 
 RenderLayerCompositor& RenderLayer::compositor() const
@@ -2171,11 +2171,11 @@ bool RenderLayer::cannotBlitToWindow() const
 
 RenderLayer* RenderLayer::transparentPaintingAncestor(const LayerPaintingInfo& info)
 {
-    if (this == info.rootLayer || isComposited())
+    if (this == info.rootLayer || isComposited() || paintsIntoProvidedBacking())
         return nullptr;
     for (auto* ancestor = parent(); ancestor; ancestor = ancestor->parent()) {
         if (ancestor->isStackingContext()) {
-            if (ancestor->isComposited())
+            if (ancestor->isComposited() || ancestor->paintsIntoProvidedBacking())
                 return nullptr;
             if (ancestor->isTransparent())
                 return ancestor;
@@ -3515,7 +3515,7 @@ void RenderLayer::paintList(LayerList layerIterator, GraphicsContext& context, c
 
     for (auto* childLayer : layerIterator) {
         if (paintFlags.contains(PaintLayerFlag::PaintingSkipDescendantViewTransition)) {
-            if (childLayer->renderer().capturedInViewTransition() && !childLayer->renderer().isDocumentElementRenderer())
+            if (childLayer->renderer().effectiveCapturedInViewTransition())
                 continue;
             if (childLayer->renderer().isViewTransitionPseudo())
                 continue;

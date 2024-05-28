@@ -413,22 +413,19 @@ JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalOb
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
-    if (constructor->type() == JSFunctionType && jsCast<JSFunction*>(constructor)->canUseAllocationProfile()) {
-        JSObject* result;
-        {
-            DeferTermination deferScope(vm);
-            auto rareData = jsCast<JSFunction*>(constructor)->ensureRareDataAndAllocationProfile(globalObject, inlineCapacity);
-            scope.releaseAssertNoException();
-            ObjectAllocationProfileWithPrototype* allocationProfile = rareData->objectAllocationProfile();
-            Structure* structure = allocationProfile->structure();
-                result = constructEmptyObject(vm, structure);
-            if (structure->hasPolyProto()) {
-                JSObject* prototype = allocationProfile->prototype();
-                ASSERT(prototype == jsCast<JSFunction*>(constructor)->prototypeForConstruction(vm, globalObject));
-                result->putDirectOffset(vm, knownPolyProtoOffset, prototype);
-                prototype->didBecomePrototype(vm);
-                ASSERT_WITH_MESSAGE(!hasIndexedProperties(result->indexingType()), "We rely on JSFinalObject not starting out with an indexing type otherwise we would potentially need to convert to slow put storage");
-            }
+    if (constructor->type() == JSFunctionType && jsCast<JSFunction*>(constructor)->canUseAllocationProfiles()) {
+        DeferTermination deferScope(vm);
+        auto rareData = jsCast<JSFunction*>(constructor)->ensureRareDataAndObjectAllocationProfile(globalObject, inlineCapacity);
+        scope.releaseAssertNoException();
+        ObjectAllocationProfileWithPrototype* allocationProfile = rareData->objectAllocationProfile();
+        Structure* structure = allocationProfile->structure();
+        JSObject* result = constructEmptyObject(vm, structure);
+        if (structure->hasPolyProto()) {
+            JSObject* prototype = allocationProfile->prototype();
+            ASSERT(prototype == jsCast<JSFunction*>(constructor)->prototypeForConstruction(vm, globalObject));
+            result->putDirectOffset(vm, knownPolyProtoOffset, prototype);
+            prototype->didBecomePrototype(vm);
+            ASSERT_WITH_MESSAGE(!hasIndexedProperties(result->indexingType()), "We rely on JSFinalObject not starting out with an indexing type otherwise we would potentially need to convert to slow put storage");
         }
         OPERATION_RETURN(scope, result);
     }
@@ -1585,6 +1582,7 @@ JSC_DEFINE_JIT_OPERATION(operationRegExpTest, size_t, (JSGlobalObject* globalObj
     JSValue argument = JSValue::decode(encodedArgument);
 
     JSString* input = argument.toStringOrNull(globalObject);
+    EXCEPTION_ASSERT(!!scope.exception() == !input);
     if (!input)
         OPERATION_RETURN(scope, false);
     OPERATION_RETURN(scope, regExpObject->testInline(globalObject, input));
@@ -2302,8 +2300,9 @@ JSC_DEFINE_JIT_OPERATION(operationCreateClonedArgumentsDuringExit, JSCell*, (VM*
     
     unsigned length = argumentCount - 1;
     JSGlobalObject* globalObject = codeBlock->globalObject();
-    ClonedArguments* result = ClonedArguments::createEmpty(vm, globalObject->clonedArgumentsStructure(), callee, length, nullptr);
-    
+    ClonedArguments* result = ClonedArguments::createEmpty(globalObject, globalObject->clonedArgumentsStructure(), callee, length, nullptr);
+    RELEASE_ASSERT(!scope.exception() && result);
+
     Register* arguments =
         callFrame->registers() + (inlineCallFrame ? inlineCallFrame->stackOffset : 0) +
         CallFrame::argumentOffset(0);

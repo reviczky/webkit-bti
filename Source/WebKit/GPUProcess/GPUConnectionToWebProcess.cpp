@@ -152,6 +152,10 @@
 #include "LocalAudioSessionRoutingArbitrator.h"
 #endif
 
+#if PLATFORM(MAC) && ENABLE(MEDIA_STREAM)
+#include <WebCore/CoreAudioSharedUnit.h>
+#endif
+
 #if ENABLE(MEDIA_STREAM)
 #include <WebCore/SecurityOrigin.h>
 #endif
@@ -366,7 +370,7 @@ Ref<LibWebRTCCodecsProxy> GPUConnectionToWebProcess::protectedLibWebRTCCodecsPro
 Ref<RemoteSharedResourceCache> GPUConnectionToWebProcess::sharedResourceCache()
 {
     if (!m_sharedResourceCache)
-        m_sharedResourceCache = RemoteSharedResourceCache::create();
+        m_sharedResourceCache = RemoteSharedResourceCache::create(*this);
     return *m_sharedResourceCache;
 }
 
@@ -382,7 +386,7 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
 
 #if USE(AUDIO_SESSION)
     if (m_audioSessionProxy) {
-        gpuProcess().audioSessionManager().removeProxy(*m_audioSessionProxy);
+        protectedGPUProcess()->audioSessionManager().removeProxy(*m_audioSessionProxy);
         m_audioSessionProxy = nullptr;
     }
 #endif
@@ -552,8 +556,8 @@ void GPUConnectionToWebProcess::terminateWebProcess()
 
 void GPUConnectionToWebProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
 {
-    for (auto& remoteRenderingBackend : m_remoteRenderingBackendMap.values())
-        remoteRenderingBackend->lowMemoryHandler(critical, synchronous);
+    if (m_sharedResourceCache)
+        m_sharedResourceCache->lowMemoryHandler();
 #if ENABLE(VIDEO)
     protectedVideoFrameObjectHeap()->lowMemoryHandler();
 #endif
@@ -745,7 +749,7 @@ void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, Ren
     auto it = m_remoteRenderingBackendMap.find(renderingBackendIdentifier);
     if (it == m_remoteRenderingBackendMap.end())
         return;
-    auto* renderingBackend = it->value.get();
+    RefPtr renderingBackend = it->value.get();
 
     IPC::StreamServerConnectionParameters params;
 #if ENABLE(IPC_TESTING_API)
@@ -1107,6 +1111,11 @@ void GPUConnectionToWebProcess::setOrientationForMediaCapture(IntDegrees orienta
 
 void GPUConnectionToWebProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture)
 {
+#if PLATFORM(MAC) && ENABLE(MEDIA_STREAM)
+    if (allowAudioCapture)
+        CoreAudioSharedUnit::singleton().prewarmAudioUnitCreation([] { });
+#endif
+
     m_allowsAudioCapture |= allowAudioCapture;
     m_allowsVideoCapture |= allowVideoCapture;
     m_allowsDisplayCapture |= allowDisplayCapture;

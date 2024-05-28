@@ -222,7 +222,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/applepay/ApplePayDateComponents.idl \
     $(WebCore)/Modules/applepay/ApplePayDateComponentsRange.idl \
     $(WebCore)/Modules/applepay/ApplePayDeferredPaymentRequest.idl \
-    $(WebCore)/Modules/applepay/ApplePayDisbursementPaymentRequest.idl \
+    $(WebCore)/Modules/applepay/ApplePayDisbursementRequest.idl \
     $(WebCore)/Modules/applepay/ApplePayDetailsUpdateBase.idl \
     $(WebCore)/Modules/applepay/ApplePayError.idl \
     $(WebCore)/Modules/applepay/ApplePayErrorCode.idl \
@@ -1440,6 +1440,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/DOMWindow+Selection.idl \
     $(WebCore)/page/DOMWindow+VisualViewport.idl \
     $(WebCore)/page/EventSource.idl \
+    $(WebCore)/page/FragmentDirective.idl \
     $(WebCore)/page/History.idl \
     $(WebCore)/page/IntersectionObserver.idl \
     $(WebCore)/page/IntersectionObserverCallback.idl \
@@ -2102,6 +2103,7 @@ MODERN_MEDIA_CONTROLS_SCRIPTS = \
     $(WebCore)/Modules/modern-media-controls/controls/airplay-placard.js \
     $(WebCore)/Modules/modern-media-controls/controls/invalid-placard.js \
     $(WebCore)/Modules/modern-media-controls/controls/pip-placard.js \
+    $(WebCore)/Modules/modern-media-controls/controls/tvos-layout-traits.js \
     $(WebCore)/Modules/modern-media-controls/controls/vision-slider.js \
     $(WebCore)/Modules/modern-media-controls/controls/vision-volume-container.js \
     $(WebCore)/Modules/modern-media-controls/controls/vision-media-controls.js \

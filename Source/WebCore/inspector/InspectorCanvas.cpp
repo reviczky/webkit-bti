@@ -112,7 +112,7 @@ Ref<InspectorCanvas> InspectorCanvas::create(CanvasRenderingContext& context)
 }
 
 InspectorCanvas::InspectorCanvas(CanvasRenderingContext& context)
-    : m_identifier("canvas:" + IdentifiersFactory::createIdentifier())
+    : m_identifier(makeString("canvas:"_s, IdentifiersFactory::createIdentifier()))
     , m_context(context)
 {
 }
@@ -364,6 +364,16 @@ std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::pro
 std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(RefPtr<ImageData>& argument)
 {
     return processArgument(argument.get());
+}
+
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Ref<JSC::ArrayBuffer>&)
+{
+    return {{ JSON::Value::create(0), RecordingSwizzleType::TypedArray }};
+}
+
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Ref<JSC::ArrayBufferView>&)
+{
+    return {{ JSON::Value::create(0), RecordingSwizzleType::TypedArray }};
 }
 
 std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(RefPtr<JSC::ArrayBuffer>& argument)
