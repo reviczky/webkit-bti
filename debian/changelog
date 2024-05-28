@@ -1,5 +1,6 @@
-webkit2gtk (2.45.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.45.3-1) UNRELEASED; urgency=medium
 
+  * New upstream development release.
   * Building with clang failed in armel, armhf, mips64el, ppc64el and
     riscv64, so use gcc again in those.
 
