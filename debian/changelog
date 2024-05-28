@@ -1,4 +1,4 @@
-webkit2gtk (2.45.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.45.3-1) experimental; urgency=medium
 
   * New upstream development release.
   * Building with clang failed in armel, armhf, mips64el, ppc64el and
@@ -7,7 +7,7 @@ webkit2gtk (2.45.3-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 21 May 2024 11:24:57 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 28 May 2024 17:04:16 +0200
 
 webkit2gtk (2.45.2-1) experimental; urgency=medium
 
