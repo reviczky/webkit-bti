@@ -71,7 +71,7 @@ constexpr double sqrtOfTwoDouble = M_SQRT2;
 constexpr float sqrtOfTwoFloat = static_cast<float>(M_SQRT2);
 #endif
 
-#if COMPILER(MSVC)
+#if OS(WINDOWS)
 
 // Work around a bug in Win, where atan2(+-infinity, +-infinity) yields NaN instead of specific values.
 extern "C" inline double wtf_atan2(double x, double y)
@@ -98,7 +98,7 @@ extern "C" inline double wtf_atan2(double x, double y)
 
 #define atan2(x, y) wtf_atan2(x, y)
 
-#endif // COMPILER(MSVC)
+#endif // OS(WINDOWS)
 
 constexpr double radiansPerDegreeDouble = piDouble / 180.0;
 constexpr double degreesPerRadianDouble = 180.0 / piDouble;
@@ -612,16 +612,10 @@ inline unsigned clz(T value)
     using UT = typename std::make_unsigned<T>::type;
     UT uValue = value;
 
-#if COMPILER(GCC_COMPATIBLE)
     constexpr unsigned bitSize64 = sizeof(uint64_t) * CHAR_BIT;
     if (uValue)
         return __builtin_clzll(uValue) - (bitSize64 - bitSize);
     return bitSize;
-#else
-    UNUSED_PARAM(bitSize);
-    UNUSED_PARAM(uValue);
-    return clzConstexpr(value);
-#endif
 }
 
 template <typename T>
@@ -651,15 +645,9 @@ inline unsigned ctz(T value)
     using UT = typename std::make_unsigned<T>::type;
     UT uValue = value;
 
-#if COMPILER(GCC_COMPATIBLE)
     if (uValue)
         return __builtin_ctzll(uValue);
     return bitSize;
-#else
-    UNUSED_PARAM(bitSize);
-    UNUSED_PARAM(uValue);
-    return ctzConstexpr(value);
-#endif
 }
 
 template<typename T>
@@ -694,7 +682,7 @@ constexpr unsigned getMSBSetConstexpr(T t)
 
 inline uint32_t reverseBits32(uint32_t value)
 {
-#if COMPILER(GCC_COMPATIBLE) && CPU(ARM64)
+#if CPU(ARM64)
     uint32_t result;
     asm ("rbit %w0, %w1"
         : "=r"(result)

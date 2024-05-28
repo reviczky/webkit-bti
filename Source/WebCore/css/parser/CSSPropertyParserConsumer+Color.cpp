@@ -436,12 +436,12 @@ static std::optional<CSSUnresolvedColor> consumeColorFunction(CSSParserTokenRang
         if (!originColor)
             return { };
 
-        return consumeColorSpace(args, [&]<typename Descriptor> {
+        return consumeColorSpace(args, [&]<typename Descriptor>() {
             return makeCSSUnresolvedColor(consumeRelativeFunctionParameters<Descriptor>(args, state, WTFMove(*originColor)));
         });
     }
 
-    return consumeColorSpace(args, [&]<typename Descriptor> {
+    return consumeColorSpace(args, [&]<typename Descriptor>() {
         return makeCSSUnresolvedColor(consumeAbsoluteFunctionParameters<Descriptor>(args, state));
     });
 }
@@ -777,7 +777,7 @@ static std::optional<SRGBA<uint8_t>> consumeHexColor(CSSParserTokenRange& range,
             else
                 string = makeString(integerValue, token.unitString()); // e.g. 0001FF
             if (string.length() < 6)
-                string = makeString(&"000000"[string.length()], string);
+                string = makeString("000000"_span.subspan(string.length()), string);
 
             if (string.length() != 3 && string.length() != 6)
                 return std::nullopt;

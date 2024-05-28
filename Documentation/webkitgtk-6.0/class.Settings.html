@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WebKit</a></h3>
         <p>API Version: 6.0</p>
         
-        <p>Library Version: 2.45.2</p>
+        <p>Library Version: 2.45.3</p>
         
       </div>
       
@@ -138,6 +138,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.Settings.get_disable_web_security.html">get_disable_web_security</a>
   
     <a class="method" href="method.Settings.get_draw_compositing_indicators.html">get_draw_compositing_indicators</a>
+  
+    <a class="method" href="method.Settings.get_enable_2d_canvas_acceleration.html">get_enable_2d_canvas_acceleration</a>
   
     <a class="method" href="method.Settings.get_enable_back_forward_navigation_gestures.html">get_enable_back_forward_navigation_gestures</a>
   
@@ -250,6 +252,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.Settings.set_disable_web_security.html">set_disable_web_security</a>
   
     <a class="method" href="method.Settings.set_draw_compositing_indicators.html">set_draw_compositing_indicators</a>
+  
+    <a class="method" href="method.Settings.set_enable_2d_canvas_acceleration.html">set_enable_2d_canvas_acceleration</a>
   
     <a class="method" href="method.Settings.set_enable_back_forward_navigation_gestures.html">set_enable_back_forward_navigation_gestures</a>
   
@@ -374,6 +378,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="property" href="property.Settings.disable-web-security.html">disable-web-security</a>
   
     <a class="property" href="property.Settings.draw-compositing-indicators.html">draw-compositing-indicators</a>
+  
+    <a class="property" href="property.Settings.enable-2d-canvas-acceleration.html">enable-2d-canvas-acceleration</a>
   
     <a class="property" href="property.Settings.enable-back-forward-navigation-gestures.html">enable-back-forward-navigation-gestures</a>
   
@@ -835,6 +841,16 @@ each key/value to the corresponding property on the <code>settings</code>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.Settings.get_enable_2d_canvas_acceleration.html">webkit_settings_get_enable_2d_canvas_acceleration</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WebKitSettings:enable-2d-canvas-acceleration</code> property.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available-next" title="This method will be available in the next stable release">unstable</span>&nbsp;<span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       
@@ -1395,6 +1411,16 @@ each key/value to the corresponding property on the <code>settings</code>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.Settings.set_enable_2d_canvas_acceleration.html">webkit_settings_set_enable_2d_canvas_acceleration</a></h6>
+          <div class="docblock">
+            <p>Set the <code>WebKitSettings:enable-2d-canvas-acceleration</code> property.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available-next" title="This method will be available in the next stable release">unstable</span>&nbsp;<span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       
@@ -2018,6 +2044,19 @@ to web content that is composited with the <span class="caps">GPU</span>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="property.Settings.enable-2d-canvas-acceleration.html">WebKit.Settings:enable-2d-canvas-acceleration</a></h6>
+          <div class="docblock">
+            <p>Enable or disable 2D canvas acceleration.
+If this setting is enabled, the 2D canvas will be accelerated even if Skia <span class="caps">CPU</span>
+is used for rendering. However, the canvas can be unaccelerated even when this setting
+is enabled, for other reasons like its size or when willReadFrequently property is&nbsp;used.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available-next" title="This property will be available in the next stable release">unstable</span>&nbsp;<span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       

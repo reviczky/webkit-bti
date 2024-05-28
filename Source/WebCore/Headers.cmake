@@ -374,6 +374,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/gamepad/GamepadEffectParameters.h
     Modules/gamepad/GamepadHapticEffectType.h
+    Modules/gamepad/NavigatorGamepad.h
 
     Modules/geolocation/Geolocation.h
     Modules/geolocation/GeolocationClient.h
@@ -728,6 +729,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     bindings/js/JSDOMConvertNumbers.h
     bindings/js/JSDOMConvertObject.h
     bindings/js/JSDOMConvertRecord.h
+    bindings/js/JSDOMConvertResult.h
     bindings/js/JSDOMConvertSequences.h
     bindings/js/JSDOMConvertSerializedScriptValue.h
     bindings/js/JSDOMConvertStrings.h
@@ -1521,6 +1523,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/EventHandler.h
     page/FocusController.h
     page/FocusDirection.h
+    page/FragmentDirective.h
     page/Frame.h
     page/FrameDestructionObserver.h
     page/FrameDestructionObserverInlines.h
@@ -1758,6 +1761,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/ProcessIdentity.h
     platform/ProcessQualified.h
     platform/PromisedAttachmentInfo.h
+    platform/PublicSuffix.h
     platform/PublicSuffixStore.h
     platform/RectEdges.h
     platform/ReferrerPolicy.h
@@ -2067,6 +2071,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/TabSize.h
     platform/graphics/TextRun.h
     platform/graphics/TextTrackRepresentation.h
+    platform/graphics/TileGridIdentifier.h
     platform/graphics/TiledBacking.h
     platform/graphics/TrackBuffer.h
     platform/graphics/TrackPrivateBase.h

@@ -63,7 +63,7 @@ public:
     void append(const char*) = delete; // Pass ASCIILiteral or span instead.
     void append(UChar);
     void append(LChar);
-    void append(char character) { append(static_cast<LChar>(character)); }
+    void append(char character) { append(byteCast<LChar>(character)); }
 
     // FIXME: Add a StringTypeAdapter so we can append one string builder to another with variadic append.
     void append(const StringBuilder&);
@@ -83,9 +83,8 @@ public:
     UChar operator[](unsigned i) const;
 
     bool is8Bit() const;
-    template<typename CharacterType> const CharacterType* characters() const;
-    const LChar* characters8() const { return characters<LChar>(); }
-    const UChar* characters16() const { return characters<UChar>(); }
+    std::span<const LChar> span8() const { return { characters<LChar>(), length() }; }
+    std::span<const UChar> span16() const { return { characters<UChar>(), length() }; }
     template<typename CharacterType> std::span<const CharacterType> span() const { return std::span(characters<CharacterType>(), length()); }
     
     unsigned capacity() const;
@@ -99,6 +98,7 @@ public:
 
 private:
     static unsigned expandedCapacity(unsigned capacity, unsigned requiredCapacity);
+    template<typename CharacterType> const CharacterType* characters() const;
 
     template<typename AllocationCharacterType, typename CurrentCharacterType> void allocateBuffer(const CurrentCharacterType* currentCharacters, unsigned requiredCapacity);
     template<typename CharacterType> void reallocateBuffer(unsigned requiredCapacity);

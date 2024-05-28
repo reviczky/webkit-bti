@@ -140,7 +140,7 @@
 #undef Function
 #endif
 
-#if COMPILER(MSVC)
+#if OS(WINDOWS)
 #include <crtdbg.h>
 #include <mmsystem.h>
 #include <windows.h>
@@ -943,7 +943,8 @@ const GlobalObjectMethodTable GlobalObject::s_globalObjectMethodTable = {
     nullptr, // defaultLanguage
     nullptr, // compileStreaming
     nullptr, // instantinateStreaming
-    &deriveShadowRealmGlobalObject
+    &deriveShadowRealmGlobalObject,
+    &codeForEval
 };
 
 GlobalObject::GlobalObject(VM& vm, Structure* structure)
@@ -1312,11 +1313,11 @@ public:
         if (!FileSystem::truncateFile(fd, m_cachedBytecode->sizeForUpdate()))
             return;
 
-        m_cachedBytecode->commitUpdates([&] (off_t offset, const void* data, size_t size) {
+        m_cachedBytecode->commitUpdates([&] (off_t offset, std::span<const uint8_t> data) {
             long long result = FileSystem::seekFile(fd, offset, FileSystem::FileSeekOrigin::Beginning);
             ASSERT_UNUSED(result, result != -1);
-            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, data, size));
-            ASSERT_UNUSED(bytesWritten, bytesWritten == size);
+            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, data));
+            ASSERT_UNUSED(bytesWritten, bytesWritten == data.size());
         });
     }
 
@@ -1395,7 +1396,7 @@ static bool fetchModuleFromLocalFileSystem(const URL& fileURL, Vector& buffer)
     // These also appear to turn off handling forward slashes as
     // directory separators as it disables all string parsing on names.
     fileName = makeStringByReplacingAll(fileName, '/', '\\');
-    auto pathName = makeString("\\\\?\\", fileName).wideCharacters();
+    auto pathName = makeString("\\\\?\\"_s, fileName).wideCharacters();
     struct _stat status { };
     if (_wstat(pathName.data(), &status))
         return false;
@@ -2057,9 +2058,9 @@ JSC_DEFINE_HOST_FUNCTION(functionWriteFile, (JSGlobalObject* globalObject, CallF
 
     int size = std::visit(WTF::makeVisitor([&](const String& string) {
         CString utf8 = string.utf8();
-        return FileSystem::writeToFile(handle, utf8.data(), utf8.length());
+        return FileSystem::writeToFile(handle, utf8.span());
     }, [&] (const std::span<const uint8_t>& data) {
-        return FileSystem::writeToFile(handle, data.data(), data.size());
+        return FileSystem::writeToFile(handle, data);
     }), data);
 
     FileSystem::closeFile(handle);
@@ -2813,11 +2814,6 @@ JSC_DEFINE_HOST_FUNCTION(functionQuit, (JSGlobalObject* globalObject, CallFrame*
     vm.codeCache()->write();
 
     jscExit(EXIT_SUCCESS);
-
-#if COMPILER(MSVC) && !COMPILER(CLANG)
-    // Without this, Visual Studio will complain that this method does not return a value.
-    return JSValue::encode(jsUndefined());
-#endif
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionFalse, (JSGlobalObject*, CallFrame*))
@@ -4366,7 +4362,7 @@ int jscmain(int argc, char** argv)
         enableSuperSampler();
 
     bool gigacageDisableRequested = false;
-#if GIGACAGE_ENABLED && !COMPILER(MSVC)
+#if GIGACAGE_ENABLED && !OS(WINDOWS)
     if (char* gigacageEnabled = getenv("GIGACAGE_ENABLED")) {
         if (!strcasecmp(gigacageEnabled, "no") || !strcasecmp(gigacageEnabled, "false") || !strcasecmp(gigacageEnabled, "0"))
             gigacageDisableRequested = true;

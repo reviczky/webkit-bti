@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WebKit</a></h3>
         <p>API Version: 6.0</p>
         
-        <p>Library Version: 2.45.2</p>
+        <p>Library Version: 2.45.3</p>
         
       </div>
       
@@ -107,7 +107,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
 
   <section>
     <div class="docblock">
-      <p><span class="emblem deprecated">deprecated: 2.46.</span>&nbsp;</p>
+      <p></p>
     </div>
 
     <div class="declaration toggle-wrapper">
@@ -148,13 +148,16 @@ and the print job will be sent to the default printer.
 The <code>WebKitPrintOperation::finished</code> signal is emitted when the printing
 operation finishes. If an error occurs while printing the signal
 <code>WebKitPrintOperation::failed</code> is emitted before <code>WebKitPrintOperation::finished</code>.</p>
+<p>If the app is running in a sandbox, this function only works if printing to
+a file that is in a location accessible to the sandbox, usually acquired
+through the File Chooser portal. This function will not work for physical
+printers when running in a&nbsp;sandbox.</p>
       </div>
 
       <div class="docblock">
         
         
-        <div><p>Deprecated since: 2.46.</p>
-          <p>This function does nothing if the app is&nbsp;sandboxed.</p></div>
+        
         
         
         

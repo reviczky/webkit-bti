@@ -506,6 +506,8 @@ static bool markerTypeFrom(const String& markerType, DocumentMarker::Type& resul
     else if (equalLettersIgnoringASCIICase(markerType, "unifiedtextreplacement"_s))
         result = DocumentMarker::Type::UnifiedTextReplacement;
 #endif
+    else if (equalLettersIgnoringASCIICase(markerType, "transparentcontent"_s))
+        result = DocumentMarker::Type::TransparentContent;
     else
         return false;
 
@@ -4211,14 +4213,14 @@ ExceptionOr<String> Internals::getCurrentCursorInfo()
     Cursor cursor = document->frame()->eventHandler().currentMouseCursor();
 
     StringBuilder result;
-    result.append("type=", cursorTypeToString(cursor.type()), " hotSpot=", cursor.hotSpot().x(), ',', cursor.hotSpot().y());
+    result.append("type="_s, cursorTypeToString(cursor.type()), " hotSpot="_s, cursor.hotSpot().x(), ',', cursor.hotSpot().y());
     if (cursor.image()) {
         FloatSize size = cursor.image()->size();
-        result.append(" image=", size.width(), 'x', size.height());
+        result.append(" image="_s, size.width(), 'x', size.height());
     }
 #if ENABLE(MOUSE_CURSOR_SCALE)
     if (cursor.imageScaleFactor() != 1)
-        result.append(" scale=", cursor.imageScaleFactor());
+        result.append(" scale="_s, cursor.imageScaleFactor());
 #endif
     return result.toString();
 #else
@@ -4431,6 +4433,27 @@ String Internals::elementBufferingPolicy(HTMLMediaElement& element)
 
     ASSERT_NOT_REACHED();
     return "UNKNOWN"_s;
+}
+
+void Internals::setMediaElementBufferingPolicy(HTMLMediaElement& element, const String& policy)
+{
+    if (policy == "Default"_s) {
+        element.setBufferingPolicy(MediaPlayer::BufferingPolicy::Default);
+        return;
+    }
+    if (policy == "LimitReadAhead"_s) {
+        element.setBufferingPolicy(MediaPlayer::BufferingPolicy::LimitReadAhead);
+        return;
+    }
+    if (policy == "MakeResourcesPurgeable"_s) {
+        element.setBufferingPolicy(MediaPlayer::BufferingPolicy::MakeResourcesPurgeable);
+        return;
+    }
+    if (policy == "PurgeResources"_s) {
+        element.setBufferingPolicy(MediaPlayer::BufferingPolicy::PurgeResources);
+        return;
+    }
+    ASSERT_NOT_REACHED();
 }
 
 ExceptionOr<void> Internals::setOverridePreferredDynamicRangeMode(HTMLMediaElement& element, const String& modeString)
@@ -5332,7 +5355,7 @@ String Internals::createTemporaryFile(const String& name, const String& contents
         return nullString();
 
     auto contentsUTF8 = contents.utf8();
-    FileSystem::writeToFile(file, contentsUTF8.data(), contentsUTF8.length());
+    FileSystem::writeToFile(file, contentsUTF8.span());
 
     FileSystem::closeFile(file);
 
@@ -6484,7 +6507,7 @@ String Internals::ongoingLoadsDescriptions() const
         builder.append('[');
 
         for (auto& info : platformStrategies()->loaderStrategy()->intermediateLoadInformationFromResourceLoadIdentifier(identifier))
-            builder.append('[', (int)info.type, ",\"", info.request.url().string(), "\",\"", info.request.httpMethod(), "\",", info.response.httpStatusCode(), ']');
+            builder.append('[', (int)info.type, ",\""_s, info.request.url().string(), "\",\""_s, info.request.httpMethod(), "\","_s, info.response.httpStatusCode(), ']');
 
         builder.append(']');
     }

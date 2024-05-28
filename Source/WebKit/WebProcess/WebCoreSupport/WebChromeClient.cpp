@@ -1490,16 +1490,6 @@ void WebChromeClient::handleAutoplayEvent(AutoplayEvent event, OptionSet<Autopla
     protectedPage()->send(Messages::WebPageProxy::HandleAutoplayEvent(event, flags));
 }
 
-#if ENABLE(APP_HIGHLIGHTS)
-void WebChromeClient::storeAppHighlight(WebCore::AppHighlight&& highlight) const
-{
-    auto page = protectedPage();
-    highlight.isNewGroup = page->highlightIsNewGroup();
-    highlight.requestOriginatedInApp = page->highlightRequestOriginatedInApp();
-    page->send(Messages::WebPageProxy::StoreAppHighlight(highlight));
-}
-#endif
-
 void WebChromeClient::setTextIndicator(const WebCore::TextIndicatorData& indicatorData) const
 {
     protectedPage()->setTextIndicator(indicatorData);
@@ -1822,5 +1812,12 @@ void WebChromeClient::didAdjustVisibilityWithSelectors(Vector<String>&& selector
 {
     return protectedPage()->didAdjustVisibilityWithSelectors(WTFMove(selectors));
 }
+
+#if ENABLE(GAMEPAD)
+void WebChromeClient::gamepadsRecentlyAccessed()
+{
+    protectedPage()->gamepadsRecentlyAccessed();
+}
+#endif
 
 } // namespace WebKit
