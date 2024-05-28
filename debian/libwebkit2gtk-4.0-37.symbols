@@ -1798,6 +1798,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_development_features@Base 2.41.4
  webkit_settings_get_disable_web_security@Base 2.39.4
  webkit_settings_get_draw_compositing_indicators@Base 2.5.3
+ webkit_settings_get_enable_2d_canvas_acceleration@Base 2.45.3
  (gtk3-only)webkit_settings_get_enable_accelerated_2d_canvas@Base 2.5.3
  webkit_settings_get_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_get_enable_caret_browsing@Base 2.5.3
@@ -1864,6 +1865,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_default_monospace_font_size@Base 2.5.3
  webkit_settings_set_disable_web_security@Base 2.39.4
  webkit_settings_set_draw_compositing_indicators@Base 2.5.3
+ webkit_settings_set_enable_2d_canvas_acceleration@Base 2.45.3
  (gtk3-only)webkit_settings_set_enable_accelerated_2d_canvas@Base 2.5.3
  webkit_settings_set_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_set_enable_caret_browsing@Base 2.5.3

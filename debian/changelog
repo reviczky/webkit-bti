@@ -4,6 +4,8 @@ webkit2gtk (2.45.3-1) UNRELEASED; urgency=medium
   * Building with clang failed in armel, armhf, mips64el, ppc64el and
     riscv64, so use gcc again in those.
   * Refresh all patches and remove fix-riscv-include.patch.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 May 2024 11:24:57 +0200
 
