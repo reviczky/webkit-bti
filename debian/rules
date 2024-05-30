@@ -69,11 +69,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
 endif
 
-# https://bugs.webkit.org/show_bug.cgi?id=271371
-ifneq (,$(filter $(DEB_HOST_ARCH),riscv64))
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
-endif
-
 # These are not available in the Hurd (#1033999)
 ifneq (,$(filter $(DEB_HOST_ARCH),hurd-i386))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_GBM=OFF -DUSE_LIBDRM=OFF
