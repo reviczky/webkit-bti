@@ -1900,8 +1900,7 @@ angle::Result FramebufferVk::updateFoveationState(ContextVk *contextVk,
                                                   const gl::FoveationState &newFoveationState,
                                                   const gl::Extents &foveatedAttachmentSize)
 {
-    mFoveationState                               = newFoveationState;
-    const bool isFoveationEnabled                 = mFoveationState.isFoveated();
+    const bool isFoveationEnabled                 = newFoveationState.isFoveated();
     vk::ImageOrBufferViewSubresourceSerial serial = vk::kInvalidImageOrBufferViewSubresourceSerial;
     if (isFoveationEnabled)
     {
@@ -1914,8 +1913,11 @@ angle::Result FramebufferVk::updateFoveationState(ContextVk *contextVk,
             gl::SrgbOverride::Default);
     }
 
+    // Update state after the possible failure point.
+    mFoveationState = newFoveationState;
     mCurrentFramebufferDesc.updateFragmentShadingRate(serial);
-    mRenderPassDesc.setFragmentShadingAttachment(isFoveationEnabled);
+    // mRenderPassDesc will be updated later in updateRenderPassDesc() in case if
+    // mCurrentFramebufferDesc was changed.
     return angle::Result::Continue;
 }
 
@@ -2471,7 +2473,8 @@ angle::Result FramebufferVk::syncState(const gl::Context *context,
         // descriptor to reflect the new state.
         gl::SrgbWriteControlMode newSrgbWriteControlMode = mState.getWriteControlMode();
         mCurrentFramebufferDesc.setWriteControlMode(newSrgbWriteControlMode);
-        mRenderPassDesc.setWriteControlMode(newSrgbWriteControlMode);
+        // mRenderPassDesc will be updated later in updateRenderPassDesc() in case if
+        // mCurrentFramebufferDesc was changed.
     }
 
     if (shouldUpdateColorMaskAndBlend)
@@ -2861,7 +2864,7 @@ angle::Result FramebufferVk::createNewFramebuffer(
                                      ? &info.renderTarget->getResolveImageForRenderPass()
                                      : &info.renderTarget->getImageForRenderPass();
 
-        const gl::LevelIndex level = info.renderTarget->getLevelIndex();
+        const gl::LevelIndex level = info.renderTarget->getLevelIndexForImage(*image);
         const uint32_t layerCount  = info.renderTarget->getLayerCount();
         const gl::Extents extents  = image->getLevelExtents2D(image->toVkLevel(level));
 
@@ -3041,7 +3044,7 @@ angle::Result FramebufferVk::clearWithDraw(
         // TODO: implement clear of layered framebuffers.  UtilsVk::clearFramebuffer should add a
         // geometry shader that is instanced layerCount times (or loops layerCount times), each time
         // selecting a different layer.
-        // http://anglebug.com/5453
+        // http://anglebug.com/42263992
         ASSERT(mCurrentFramebufferDesc.isMultiview() || colorRenderTarget->getLayerCount() == 1);
 
         ANGLE_TRY(contextVk->getUtils().clearFramebuffer(contextVk, this, params));
@@ -3341,6 +3344,12 @@ angle::Result FramebufferVk::startNewRenderPass(ContextVk *contextVk,
     // Make sure render pass and framebuffer are in agreement w.r.t unresolve attachments.
     ASSERT(mCurrentFramebufferDesc.getUnresolveAttachmentMask() ==
            MakeUnresolveAttachmentMask(mRenderPassDesc));
+    // ... w.r.t sRGB write control.
+    ASSERT(mCurrentFramebufferDesc.getWriteControlMode() ==
+           mRenderPassDesc.getSRGBWriteControlMode());
+    // ... w.r.t foveation.
+    ASSERT(mCurrentFramebufferDesc.hasFragmentShadingRateAttachment() ==
+           mRenderPassDesc.hasFragmentShadingAttachment());
 
     // Color attachments.
     const auto &colorRenderTargets = mRenderTargetCache.getColors();

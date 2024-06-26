@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(JIT)
-
 #include "DFGCodeOriginPool.h"
 #include "JITStubRoutine.h"
 #include "JSObject.h"
@@ -92,6 +90,8 @@ protected:
     bool m_isInSharedJITStubSet : 1 { false };
 };
 
+#if ENABLE(JIT)
+
 class PolymorphicAccessJITStubRoutine : public GCAwareJITStubRoutine {
 public:
     using Base = GCAwareJITStubRoutine;
@@ -109,7 +109,7 @@ public:
     unsigned hash() const
     {
         if (!m_hash)
-            m_hash = computeHash(m_cases);
+            m_hash = computeHash(m_cases.span());
         return m_hash;
     }
 
@@ -232,6 +232,8 @@ Ref<PolymorphicAccessJITStubRoutine> createICJITStubRoutine(
     const Vector<JSCell*>&, Vector<std::unique_ptr<OptimizingCallLinkInfo>, 16>&& callLinkInfos,
     CodeBlock* codeBlockForExceptionHandlers, DisposableCallSiteIndex exceptionHandlingCallSiteIndex);
 
-} // namespace JSC
+Ref<PolymorphicAccessJITStubRoutine> createPreCompiledICJITStubRoutine(const MacroAssemblerCodeRef<JITStubRoutinePtrTag>&, VM&);
 
 #endif // ENABLE(JIT)
+
+} // namespace JSC
