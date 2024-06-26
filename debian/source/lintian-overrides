@@ -43,6 +43,7 @@ webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/elem
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/element-targeting-3.html]
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/element-targeting-6.html]
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/element-targeting-7.html]
+webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/element-targeting-9.html]
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/significant-text-milestone-article.html]
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/significant-text-milestone.html]
 webkit2gtk source: source-is-missing [Tools/TestWebKitAPI/Tests/WebKitCocoa/text-with-async-script.html]
