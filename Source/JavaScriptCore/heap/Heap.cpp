@@ -969,7 +969,8 @@ size_t Heap::extraMemorySize()
     checkedTotal += m_arrayBuffers.size();
     size_t total = UNLIKELY(checkedTotal.hasOverflowed()) ? std::numeric_limits<size_t>::max() : checkedTotal.value();
 
-    ASSERT(m_objectSpace.capacity() >= m_objectSpace.size());
+    // It would be nice to have `ASSERT(m_objectSpace.capacity() >= m_objectSpace.size());` here but `m_objectSpace.size()`
+    // requires having heap access which thread might not. Specifically, we might be called from the resource usage thread.
     return std::min(total, std::numeric_limits<size_t>::max() - m_objectSpace.capacity());
 }
 
@@ -2889,18 +2890,16 @@ void Heap::addCoreConstraints()
                     m_verifierSlotVisitor->append(conservativeRoots);
                 }
             }
-            if (Options::useJIT()) {
-                // JITStubRoutines must be visited after scanning ConservativeRoots since JITStubRoutines depend on the hook executed during gathering ConservativeRoots.
-                SetRootMarkReasonScope rootScope(visitor, RootMarkReason::JITStubRoutines);
+
+            // JITStubRoutines must be visited after scanning ConservativeRoots since JITStubRoutines depend on the hook executed during gathering ConservativeRoots.
+            SetRootMarkReasonScope rootScope(visitor, RootMarkReason::JITStubRoutines);
+            m_jitStubRoutines->traceMarkedStubRoutines(visitor);
+            if (UNLIKELY(m_verifierSlotVisitor)) {
+                // It's important to cast m_verifierSlotVisitor to an AbstractSlotVisitor here
+                // so that we'll call the AbstractSlotVisitor version of traceMarkedStubRoutines().
+                AbstractSlotVisitor& visitor = *m_verifierSlotVisitor;
                 m_jitStubRoutines->traceMarkedStubRoutines(visitor);
-                if (UNLIKELY(m_verifierSlotVisitor)) {
-                    // It's important to cast m_verifierSlotVisitor to an AbstractSlotVisitor here
-                    // so that we'll call the AbstractSlotVisitor version of traceMarkedStubRoutines().
-                    AbstractSlotVisitor& visitor = *m_verifierSlotVisitor;
-                    m_jitStubRoutines->traceMarkedStubRoutines(visitor);
-                }
             }
-            
             lastVersion = m_phaseVersion;
         })),
         ConstraintVolatility::GreyedByExecution);

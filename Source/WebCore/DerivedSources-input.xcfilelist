@@ -730,6 +730,8 @@ $(PROJECT_DIR)/Modules/modern-media-controls/controls/time-label.css
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/time-label.js
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/tracks-button.js
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/tvos-layout-traits.js
+$(PROJECT_DIR)/Modules/modern-media-controls/controls/tvos-media-controls.css
+$(PROJECT_DIR)/Modules/modern-media-controls/controls/tvos-media-controls.js
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/vision-layout-traits.js
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/vision-media-controls.css
 $(PROJECT_DIR)/Modules/modern-media-controls/controls/vision-media-controls.js
@@ -1620,6 +1622,7 @@ $(PROJECT_DIR)/html/canvas/CanvasFilters.idl
 $(PROJECT_DIR)/html/canvas/CanvasGradient.idl
 $(PROJECT_DIR)/html/canvas/CanvasImageData.idl
 $(PROJECT_DIR)/html/canvas/CanvasImageSmoothing.idl
+$(PROJECT_DIR)/html/canvas/CanvasLayers.idl
 $(PROJECT_DIR)/html/canvas/CanvasLineCap.idl
 $(PROJECT_DIR)/html/canvas/CanvasLineJoin.idl
 $(PROJECT_DIR)/html/canvas/CanvasPath.idl

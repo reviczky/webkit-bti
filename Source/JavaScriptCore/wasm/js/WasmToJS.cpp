@@ -124,7 +124,7 @@ Expected<MacroAssemblerCodeRef<WasmEntryPtrTag>, BindingFailure> wasmToJS(TypeIn
     ASSERT(!(numberOfRegsForCall % stackAlignmentRegisters()));
     const unsigned numberOfBytesForCall = numberOfRegsForCall * sizeof(Register) - sizeof(CallerFrameAndPC);
     const unsigned numberOfBytesForSavedResults = savedResultRegisters.sizeOfAreaInBytes();
-    const unsigned stackOffset = WTF::roundUpToMultipleOf(stackAlignmentBytes(), std::max(numberOfBytesForCall, numberOfBytesForSavedResults));
+    const unsigned stackOffset = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(std::max(numberOfBytesForCall, numberOfBytesForSavedResults));
     jit.subPtr(MacroAssembler::TrustedImm32(stackOffset), MacroAssembler::stackPointerRegister);
     JIT::Address calleeFrame = CCallHelpers::Address(MacroAssembler::stackPointerRegister, -static_cast<ptrdiff_t>(sizeof(CallerFrameAndPC)));
 
@@ -337,8 +337,7 @@ Expected<MacroAssemblerCodeRef<WasmEntryPtrTag>, BindingFailure> wasmToJS(TypeIn
     jit.move(CCallHelpers::TrustedImm32(JSValue::CellTag), BaselineJITRegisters::Call::calleeJSR.tagGPR());
 #endif
     jit.addPtr(JIT::TrustedImm32(Instance::offsetOfCallLinkInfo(importIndex)), GPRInfo::wasmContextInstancePointer, BaselineJITRegisters::Call::callLinkInfoGPR);
-    auto [slowPaths, dispatchLabel] = CallLinkInfo::emitDataICFastPath(jit);
-    ASSERT(slowPaths.empty());
+    CallLinkInfo::emitDataICFastPath(jit);
 
     if (signature.returnCount() == 1) {
         const auto& returnType = signature.returnType(0);

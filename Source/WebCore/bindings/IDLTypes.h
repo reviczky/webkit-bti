@@ -160,39 +160,7 @@ template<typename T> struct IDLLegacyNullToEmptyStringAdaptor : IDLString<String
     using InnerType = T;
 };
 
-template<typename T> struct IDLStringContextTrustedHTMLAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
 template<typename T> struct IDLStringContextTrustedScriptAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLStringContextTrustedScriptURLAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLLegacyNullToEmptyStringStringContextTrustedHTMLAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLLegacyNullToEmptyStringStringContextTrustedScriptAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLLegacyNullToEmptyStringStringContextTrustedScriptURLAdaptor : IDLString<String> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLAtomStringStringContextTrustedHTMLAdaptor : IDLString<AtomString> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLAtomStringStringContextTrustedScriptAdaptor : IDLString<AtomString> {
-    using InnerType = T;
-};
-
-template<typename T> struct IDLAtomStringStringContextTrustedScriptURLAdaptor : IDLString<AtomString> {
     using InnerType = T;
 };
 
@@ -298,12 +266,12 @@ template<typename T> struct IDLFrozenArray : IDLType<Vector<typename T::InnerPar
     using NullableParameterType = const std::optional<Vector<typename T::InnerParameterType>>&;
 };
 
-template<typename K, typename V> struct IDLRecord : IDLType<Vector<KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>> {
+template<typename K, typename V> struct IDLRecord : IDLType<Vector<KeyValuePair<typename K::InnerParameterType, typename V::InnerParameterType>>> {
     using KeyType = K;
     using ValueType = V;
 
-    using ParameterType = const Vector<KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>&;
-    using NullableParameterType = const std::optional<Vector<KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>>&;
+    using ParameterType = const Vector<KeyValuePair<typename K::InnerParameterType, typename V::InnerParameterType>>&;
+    using NullableParameterType = const std::optional<Vector<KeyValuePair<typename K::InnerParameterType, typename V::InnerParameterType>>>&;
 };
 
 template<typename T> struct IDLPromise : IDLWrapper<DOMPromise> {

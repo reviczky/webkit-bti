@@ -441,7 +441,7 @@ static UGPRPair entryOSR(CodeBlock* codeBlock, const char*, EntryKind)
 #endif // ENABLE(JIT)
 
 #if LLINT_TRACING
-extern "C" void logWasmPrologue(uint64_t i, uint64_t* fp, uint64_t* sp)
+extern "C" void SYSV_ABI logWasmPrologue(uint64_t i, uint64_t* fp, uint64_t* sp)
 {
     if (!Options::traceLLIntExecution())
         return;
@@ -553,17 +553,10 @@ LLINT_SLOW_PATH_DECL(replace)
 
 LLINT_SLOW_PATH_DECL(stack_check)
 {
-    CodeBlock* codeBlock = callFrame->codeBlock();
-    JSGlobalObject* globalObject = codeBlock->globalObject();
-    VM& vm = codeBlock->vm();
-    auto throwScope = DECLARE_THROW_SCOPE(vm);
-
     // It's ok to create the SlowPathFrameTracer here before we
     // convertToStackOverflowFrame() because this function is always called
     // after the frame has been propulated with a proper CodeBlock and callee.
-    SlowPathFrameTracer tracer(vm, callFrame);
-
-    LLINT_SET_PC_FOR_STUBS();
+    LLINT_BEGIN();
 
     slowPathLogF("Checking stack height with callFrame = %p.\n", callFrame);
     slowPathLog("CodeBlock = ", codeBlock, "\n");
@@ -624,6 +617,25 @@ extern "C" UGPRPair SYSV_ABI llint_virtual_call(CallFrame* calleeFrame, CallLink
     JSCell* calleeAsFunctionCellIgnored;
     calleeFrame->setCodeBlock(nullptr);
     void* callTarget = virtualForWithFunction(vm, owner, calleeFrame, callLinkInfo, calleeAsFunctionCellIgnored);
+    ensureStillAliveHere(owner);
+    if (UNLIKELY(scope.exception()))
+        return encodeResult(callTarget, bitwise_cast<void*>(&vm));
+    return encodeResult(callTarget, nullptr);
+}
+
+extern "C" UGPRPair SYSV_ABI llint_polymorphic_call(CallFrame* calleeFrame, CallLinkInfo* callLinkInfo)
+{
+    JSCell* owner = callLinkInfo->ownerForSlowPath(calleeFrame);
+    VM& vm = owner->vm();
+    NativeCallFrameTracer tracer(vm, calleeFrame);
+    sanitizeStackForVM(vm);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    JSCell* calleeAsFunctionCell;
+    calleeFrame->setCodeBlock(nullptr);
+    void* callTarget = virtualForWithFunction(vm, owner, calleeFrame, callLinkInfo, calleeAsFunctionCell);
+    if (UNLIKELY(scope.exception()))
+        return encodeResult(callTarget, bitwise_cast<void*>(&vm));
+    linkPolymorphicCall(vm, owner, calleeFrame, *callLinkInfo, CallVariant(calleeAsFunctionCell));
     ensureStillAliveHere(owner);
     if (UNLIKELY(scope.exception()))
         return encodeResult(callTarget, bitwise_cast<void*>(&vm));
@@ -2573,17 +2585,13 @@ static inline UGPRPair dispatchToNextInstructionDuringExit(ThrowScope& scope, Co
 extern "C" UGPRPair SYSV_ABI llint_slow_path_checkpoint_osr_exit_from_inlined_call(CallFrame* callFrame, EncodedJSValue result)
 {
     // Since all our calling checkpoints do right now is move result into our dest we can just do that here and return.
-    CodeBlock* codeBlock = callFrame->codeBlock();
-    VM& vm = codeBlock->vm();
-    SlowPathFrameTracer tracer(vm, callFrame);
-    auto scope = DECLARE_THROW_SCOPE(vm);
+    LLINT_BEGIN_NO_SET_PC();
 
     std::unique_ptr<CheckpointOSRExitSideState> sideState = vm.popCheckpointOSRSideState(callFrame);
     BytecodeIndex bytecodeIndex = sideState->bytecodeIndex;
     ASSERT(bytecodeIndex.checkpoint());
 
     auto pc = codeBlock->instructions().at(bytecodeIndex);
-    JSGlobalObject* globalObject = codeBlock->globalObject();
 
     auto opcode = pc->opcodeID();
     switch (opcode) {
@@ -2631,17 +2639,12 @@ extern "C" UGPRPair SYSV_ABI llint_slow_path_checkpoint_osr_exit_from_inlined_ca
         break;
     }
 
-    return dispatchToNextInstructionDuringExit(scope, codeBlock, pc);
+    return dispatchToNextInstructionDuringExit(throwScope, codeBlock, pc);
 }
 
 extern "C" UGPRPair SYSV_ABI llint_slow_path_checkpoint_osr_exit(CallFrame* callFrame, EncodedJSValue /* needed for cCall2 in CLoop */)
 {
-    CodeBlock* codeBlock = callFrame->codeBlock();
-    VM& vm = codeBlock->vm();
-    SlowPathFrameTracer tracer(vm, callFrame);
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    JSGlobalObject* globalObject = codeBlock->globalObject();
+    LLINT_BEGIN_NO_SET_PC();
 
     std::unique_ptr<CheckpointOSRExitSideState> sideState = vm.popCheckpointOSRSideState(callFrame);
     BytecodeIndex bytecodeIndex = sideState->bytecodeIndex;
@@ -2676,7 +2679,7 @@ extern "C" UGPRPair SYSV_ABI llint_slow_path_checkpoint_osr_exit(CallFrame* call
         break;
     }
 
-    return dispatchToNextInstructionDuringExit(scope, codeBlock, pc);
+    return dispatchToNextInstructionDuringExit(throwScope, codeBlock, pc);
 }
 
 extern "C" UGPRPair SYSV_ABI llint_throw_stack_overflow_error(VM* vm, ProtoCallFrame* protoFrame)
@@ -2700,7 +2703,7 @@ extern "C" UGPRPair SYSV_ABI llint_stack_check_at_vm_entry(VM* vm, Register* new
 }
 #endif
 
-extern "C" void llint_write_barrier_slow(CallFrame* callFrame, JSCell* cell)
+extern "C" void SYSV_ABI llint_write_barrier_slow(CallFrame* callFrame, JSCell* cell)
 {
     VM& vm = callFrame->codeBlock()->vm();
     vm.writeBarrier(cell);

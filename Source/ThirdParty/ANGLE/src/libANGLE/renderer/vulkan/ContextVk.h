@@ -381,7 +381,11 @@ class ContextVk : public ContextImpl, public vk::Context, public MultisampleText
                                   gl::TextureBarrierVector *textureBarriers) override;
 
     // Sets effective Context Priority. Changed by ShareGroupVk.
-    void setPriority(egl::ContextPriority newPriority) { mContextPriority = newPriority; }
+    void setPriority(egl::ContextPriority newPriority)
+    {
+        mContextPriority  = newPriority;
+        mDeviceQueueIndex = mRenderer->getDeviceQueueIndex(mContextPriority);
+    }
 
     VkDevice getDevice() const;
     // Effective Context Priority
@@ -744,7 +748,7 @@ class ContextVk : public ContextImpl, public vk::Context, public MultisampleText
     angle::Result initializeMultisampleTextureToBlack(const gl::Context *context,
                                                       gl::Texture *glTexture) override;
 
-    // TODO(http://anglebug.com/5624): rework updateActiveTextures(), createPipelineLayout(),
+    // TODO(http://anglebug.com/42264159): rework updateActiveTextures(), createPipelineLayout(),
     // handleDirtyGraphicsPipeline(), and ProgramPipelineVk::link().
     void resetCurrentGraphicsPipeline()
     {
@@ -785,8 +789,6 @@ class ContextVk : public ContextImpl, public vk::Context, public MultisampleText
     angle::Result switchToFramebufferFetchMode(bool hasFramebufferFetch);
     bool isInFramebufferFetchMode() const { return mIsInFramebufferFetchMode; }
 
-    void updateFoveatedRendering();
-
     const angle::PerfMonitorCounterGroups &getPerfMonitorCounters() override;
 
     void resetPerFramePerfCounters();
@@ -814,8 +816,6 @@ class ContextVk : public ContextImpl, public vk::Context, public MultisampleText
                    ? vk::PipelineProtectedAccess::Protected
                    : vk::PipelineProtectedAccess::Unprotected;
     }
-
-    vk::ComputePipelineFlags getComputePipelineFlags() const;
 
     const angle::ImageLoadContext &getImageLoadContext() const { return mImageLoadContext; }
 
@@ -1294,7 +1294,8 @@ class ContextVk : public ContextImpl, public vk::Context, public MultisampleText
     angle::Result handleDirtyComputeUniforms(DirtyBits::Iterator *dirtyBitsIterator);
 
     // Common parts of the common dirty bit handlers.
-    angle::Result handleDirtyUniformsImpl(vk::CommandBufferHelperCommon *commandBufferHelper);
+    angle::Result handleDirtyUniformsImpl(DirtyBits::Iterator *dirtyBitsIterator,
+                                          vk::CommandBufferHelperCommon *commandBufferHelper);
     angle::Result handleDirtyMemoryBarrierImpl(DirtyBits::Iterator *dirtyBitsIterator,
                                                DirtyBits dirtyBitMask);
     template <typename CommandBufferT>
