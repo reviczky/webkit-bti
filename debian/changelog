@@ -4,6 +4,8 @@ webkit2gtk (2.45.4-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
 
   [ Jeremy Bicha ]
   * Treat riscv64 as an unknown CPU (again!) to fix a FTBFS (see webkit
