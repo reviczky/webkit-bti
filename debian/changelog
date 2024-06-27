@@ -6,6 +6,8 @@ webkit2gtk (2.45.4-1) UNRELEASED; urgency=medium
     - Update source-is-missing overrides.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
+  * Disable clang in all architectures since it fails to build this
+    release (WebKit bug #275872).
 
   [ Jeremy Bicha ]
   * Treat riscv64 as an unknown CPU (again!) to fix a FTBFS (see webkit
