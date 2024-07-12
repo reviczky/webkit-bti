@@ -1,0 +1,7 @@
+Package: webkit2gtk-driver
+Section: oldlibs
+Architecture: all
+Depends: webkitgtk-webdriver, ${misc:Depends}
+Description: WebKitGTK WebDriver support (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+

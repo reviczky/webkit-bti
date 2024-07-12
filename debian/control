@@ -101,12 +101,15 @@ Description: Web content engine library for GTK - documentation
  .
  This package contains the documentation.
 
-Package: webkit2gtk-driver
+Package: webkitgtk-webdriver
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
+Conflicts: ${wkwebdriver:Conflicts}
+Breaks: ${wkwebdriver:Replaces}
+Replaces: ${wkwebdriver:Replaces}
 Description: WebKitGTK WebDriver support
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -134,6 +137,13 @@ Section: oldlibs
 Architecture: all
 Depends: libjavascriptcoregtk-bin, ${misc:Depends}
 Description: WebKitGTK JavaScript command-line interpreter (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+
+Package: webkit2gtk-driver
+Section: oldlibs
+Architecture: all
+Depends: webkitgtk-webdriver, ${misc:Depends}
+Description: WebKitGTK WebDriver support (transitional dummy package)
  This is a transitional dummy package, it can be safely removed.
 
 Package: libjavascriptcoregtk-4.1-0
