@@ -856,7 +856,7 @@ BuiltInNotificationsEnabled:
   humanReadableName: "Built-In Web Notifications"
   humanReadableDescription: "Enable built-in WebKit managed notifications"
   webcoreBinding: DeprecatedGlobalSettings
-  condition: ENABLE(BUILT_IN_NOTIFICATIONS)
+  condition: ENABLE(WEB_PUSH_NOTIFICATIONS)
   defaultValue:
     WebCore:
       default: false
@@ -2382,6 +2382,7 @@ EncryptedMediaAPIEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(GTK) || PLATFORM(WPE)": false
       default: true
     WebCore:
       default: false
@@ -2682,8 +2683,10 @@ FullScreenEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 FullScreenKeyboardLock:
@@ -3460,21 +3463,6 @@ IsFirstPartyWebsiteDataRemovalReproTestingEnabled:
       default: false
 
 # FIXME: The 'Is' prefix is inconsistent with most other preferences and should be removed.
-IsLoggedInAPIEnabled:
-  type: bool
-  status: testable
-  category: dom
-  humanReadableName: "IsLoggedIn web API"
-  humanReadableDescription: "Enable the proposed IsLoggedIn web API"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
-
-# FIXME: The 'Is' prefix is inconsistent with most other preferences and should be removed.
 IsSameSiteStrictEnforcementEnabled:
   type: bool
   status: unstable
@@ -3538,7 +3526,7 @@ JavaScriptCanOpenWindowsAutomatically:
       "PLATFORM(IOS_FAMILY)": WebKit::defaultJavaScriptCanOpenWindowsAutomatically()
       default: true
     WebKit:
-      "PLATFORM(IOS_FAMILY)": false
+      "PLATFORM(IOS_FAMILY) || PLATFORM(GTK) || PLATFORM(WPE)": false
       default: true
     WebCore:
       default: false
@@ -3931,6 +3919,20 @@ LockdownFontParserEnabled:
     WebCore:
       default: false
 
+LoginStatusAPIEnabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Login Status API"
+  humanReadableDescription: "Enable the proposed Login Status API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 LogsPageMessagesToSystemConsoleEnabled:
   type: bool
   status: internal
@@ -4097,6 +4099,7 @@ MediaCapabilitiesEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(GTK) || PLATFORM(WPE)": false
       default: true
     WebCore:
       default: false
@@ -4238,8 +4241,10 @@ MediaDevicesEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 MediaEnabled:
@@ -6139,6 +6144,7 @@ ShouldPrintBackgrounds:
       default: false
     WebKit:
       "PLATFORM(IOS_FAMILY)": WebKit::defaultShouldPrintBackgrounds()
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
       default: false
@@ -6151,10 +6157,10 @@ ShouldRespectImageOrientation:
       "PLATFORM(IOS_FAMILY)": true
       default: false
     WebKit:
-      "PLATFORM(IOS_FAMILY)": true
+      "PLATFORM(IOS_FAMILY) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(IOS_FAMILY)": true
+      "PLATFORM(IOS_FAMILY) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 ShouldRestrictBaseURLSchemes:
@@ -6530,7 +6536,7 @@ TabsToLinks:
     WebKitLegacy:
       default: false
     WebKit:
-      "PLATFORM(GTK)": true
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 TelephoneNumberParsingEnabled:

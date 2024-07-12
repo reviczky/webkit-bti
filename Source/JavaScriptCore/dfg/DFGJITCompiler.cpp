@@ -159,12 +159,14 @@ void JITCompiler::compileEntry()
 void JITCompiler::compileSetupRegistersForEntry()
 {
     emitSaveCalleeSaves();
-    emitMaterializeTagCheckRegisters();    
 #if USE(JSVALUE64)
-    if (m_graph.m_plan.isUnlinked()) {
-        emitGetFromCallFrameHeaderPtr(CallFrameSlot::codeBlock, GPRInfo::jitDataRegister);
-        loadPtr(Address(GPRInfo::jitDataRegister, CodeBlock::offsetOfJITData()), GPRInfo::jitDataRegister);
-    }
+    // Use numberTagRegister as a scratch since it is recovered after this.
+    jitAssertCodeBlockOnCallFrameWithType(GPRInfo::numberTagRegister, JITType::DFGJIT);
+#endif
+    emitMaterializeTagCheckRegisters();
+#if USE(JSVALUE64)
+    emitGetFromCallFrameHeaderPtr(CallFrameSlot::codeBlock, GPRInfo::jitDataRegister);
+    loadPtr(Address(GPRInfo::jitDataRegister, CodeBlock::offsetOfJITData()), GPRInfo::jitDataRegister);
 #endif
 }
 
@@ -597,7 +599,7 @@ std::tuple<CompileTimeCallLinkInfo, JITCompiler::LinkableConstant> JITCompiler::
         LinkerIR::Constant callLinkInfoIndex = addToConstantPool(LinkerIR::Type::CallLinkInfo, unlinkedCallLinkInfoIndex);
         return std::tuple { callLinkInfo, LinkableConstant(callLinkInfoIndex) };
     }
-    auto* callLinkInfo = jitCode()->common.m_callLinkInfos.add(codeOrigin, CallLinkInfo::UseDataIC::Yes, m_graph.m_codeBlock);
+    auto* callLinkInfo = jitCode()->common.m_callLinkInfos.add(codeOrigin, m_graph.m_codeBlock);
     return std::tuple { callLinkInfo, LinkableConstant::nonCellPointer(*this, callLinkInfo) };
 }
 

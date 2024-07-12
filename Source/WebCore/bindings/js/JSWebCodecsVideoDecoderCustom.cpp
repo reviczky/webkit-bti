@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2024 Apple, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,31 +23,27 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
 
-#if ENABLE(JIT)
+#if ENABLE(WEB_CODECS)
+#include "JSWebCodecsVideoDecoder.h"
 
-#include "AccessCase.h"
+#include "WebCodecsErrorCallback.h"
+#include "WebCodecsVideoFrameOutputCallback.h"
 
-namespace JSC {
+#include <JavaScriptCore/JSCInlines.h>
 
-class ProxyObjectAccessCase final : public AccessCase {
-public:
-    using Base = AccessCase;
-    friend class AccessCase;
-    friend class InlineCacheCompiler;
+namespace WebCore {
 
-    static Ref<AccessCase> create(VM&, JSCell* owner, AccessType, CacheableIdentifier);
+template <typename Visitor>
+void JSWebCodecsVideoDecoder::visitAdditionalChildren(Visitor& visitor)
+{
+    wrapped().outputCallbackConcurrently().visitJSFunction(visitor);
+    wrapped().errorCallbackConcurrently().visitJSFunction(visitor);
+}
 
-    void emit(InlineCacheCompiler&, MacroAssembler::JumpList& fallThrough);
+DEFINE_VISIT_ADDITIONAL_CHILDREN(JSWebCodecsVideoDecoder);
 
-private:
-    ProxyObjectAccessCase(VM&, JSCell* owner, AccessType, CacheableIdentifier);
-    ProxyObjectAccessCase(const ProxyObjectAccessCase&);
+}
 
-    void dumpImpl(PrintStream&, CommaPrinter&, Indenter&) const;
-};
-
-} // namespace JSC
-
-#endif // ENABLE(JIT)
+#endif

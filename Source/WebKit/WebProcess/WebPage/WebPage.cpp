@@ -137,6 +137,7 @@
 #include "WebPageMessages.h"
 #include "WebPageOverlay.h"
 #include "WebPageProxyMessages.h"
+#include "WebPageTesting.h"
 #include "WebPaymentCoordinator.h"
 #include "WebPerformanceLoggingClient.h"
 #include "WebPluginInfoProvider.h"
@@ -310,6 +311,7 @@
 #include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
 #if ENABLE(APP_HIGHLIGHTS)
@@ -463,6 +465,7 @@ static const Seconds maximumLayerVolatilityTimerInterval { 2_s };
 
 #if PLATFORM(IOS_FAMILY)
 static constexpr Seconds updateFocusedElementInformationDebounceInterval { 100_ms };
+static constexpr Seconds updateLayoutViewportHeightExpansionTimerInterval { 25_ms };
 #endif
 
 #define WEBPAGE_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
@@ -534,6 +537,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_viewSize(parameters.viewSize)
     , m_layerHostingMode(parameters.layerHostingMode)
     , m_drawingArea(DrawingArea::create(*this, parameters))
+    , m_webPageTesting(makeUnique<WebPageTesting>(*this))
     , m_mainFrame(WebFrame::create(*this, parameters.remotePageParameters ? parameters.remotePageParameters->frameTreeParameters.frameID : (parameters.mainFrameIdentifier ? *parameters.mainFrameIdentifier : WebCore::FrameIdentifier::generate())))
     , m_drawingAreaType(parameters.drawingAreaType)
     , m_alwaysShowsHorizontalScroller { parameters.alwaysShowsHorizontalScroller }
@@ -598,7 +602,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_overrideAvailableScreenSize(parameters.overrideAvailableScreenSize)
     , m_deviceOrientation(parameters.deviceOrientation)
     , m_keyboardIsAttached(parameters.hardwareKeyboardState.isAttached)
-    , m_canShowWhileLocked(parameters.canShowWhileLocked)
     , m_updateFocusedElementInformationTimer(*this, &WebPage::updateFocusedElementInformation, updateFocusedElementInformationDebounceInterval)
 #endif
     , m_layerVolatilityTimer(*this, &WebPage::layerVolatilityTimerFired)
@@ -623,6 +626,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_limitsNavigationsToAppBoundDomains(parameters.limitsNavigationsToAppBoundDomains)
 #endif
     , m_lastNavigationWasAppInitiated(parameters.lastNavigationWasAppInitiated)
+#if PLATFORM(IOS_FAMILY)
+    , m_updateLayoutViewportHeightExpansionTimer(*this, &WebPage::updateLayoutViewportHeightExpansionTimerFired, updateLayoutViewportHeightExpansionTimerInterval)
+#endif
 #if ENABLE(APP_HIGHLIGHTS)
     , m_appHighlightsVisible(parameters.appHighlightsVisible)
 #endif
@@ -777,7 +783,11 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     if (parameters.fontMachExtensionHandles.size())
         WebProcess::singleton().switchFromStaticFontRegistryToUserFontRegistry(WTFMove(parameters.fontMachExtensionHandles));
 #endif
-    
+
+#if PLATFORM(IOS_FAMILY)
+    pageConfiguration.canShowWhileLocked = parameters.canShowWhileLocked;
+#endif
+
     m_page = Page::create(WTFMove(pageConfiguration));
 
     updateAfterDrawingAreaCreation(parameters);
@@ -1013,7 +1023,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW) && !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
     m_contextForVisibilityPropagation = LayerHostingContext::createForExternalHostingProcess({
-        m_canShowWhileLocked
+        canShowWhileLocked()
     });
     WEBPAGE_RELEASE_LOG(Process, "WebPage: Created context with ID %u for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
     send(Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation(m_contextForVisibilityPropagation->cachedContextID()));
@@ -1093,9 +1103,8 @@ void WebPage::getFrameInfo(WebCore::FrameIdentifier frameID, CompletionHandler<v
     RefPtr frame = WebProcess::singleton().webFrame(frameID);
     if (!frame)
         return completionHandler(std::nullopt);
-    frame->getFrameInfo([completionHandler = WTFMove(completionHandler)](auto&& frameInfo) mutable {
-        completionHandler(WTFMove(frameInfo));
-    });
+
+    completionHandler(frame->info());
 }
 
 void WebPage::getFrameTree(CompletionHandler<void(FrameTreeNodeData&&)>&& completionHandler)
@@ -1770,21 +1779,6 @@ void WebPage::setBaseWritingDirection(WritingDirection direction)
 
     frame->editor().setBaseWritingDirection(direction);
 }
-
-void WebPage::isEditingCommandEnabled(const String& commandName, CompletionHandler<void(bool)>&& completionHandler)
-{
-    RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
-    if (!frame)
-        return completionHandler(false);
-
-#if ENABLE(PDF_PLUGIN)
-    if (auto* pluginView = focusedPluginViewForFrame(*frame))
-        return completionHandler(pluginView->isEditingCommandEnabled(commandName));
-#endif
-
-    Editor::Command command = frame->editor().command(commandName);
-    completionHandler(command.isSupported() && command.isEnabled());
-}
     
 void WebPage::clearMainFrameName()
 {
@@ -1887,6 +1881,7 @@ void WebPage::close()
 #endif
 
     m_drawingArea = nullptr;
+    m_webPageTesting = nullptr;
     m_page = nullptr;
 
     bool isRunningModal = m_isRunningModal;
@@ -2207,11 +2202,6 @@ void WebPage::stopLoadingDueToProcessSwap()
 bool WebPage::defersLoading() const
 {
     return m_page->defersLoading();
-}
-
-void WebPage::setDefersLoading(bool defersLoading)
-{
-    m_page->setDefersLoading(defersLoading);
 }
 
 void WebPage::reload(uint64_t navigationID, OptionSet<WebCore::ReloadOption> reloadOptions, SandboxExtension::Handle&& sandboxExtensionHandle)
@@ -3223,10 +3213,8 @@ void WebPage::pageDidScroll()
 
     m_pageScrolledHysteresis.impulse();
 
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame())) {
-        auto scrollPosition = localMainFrame->view()->scrollPosition();
-        send(Messages::WebPageProxy::PageDidScroll(scrollPosition));
-    }
+    if (RefPtr view = m_page->protectedMainFrame()->virtualView())
+        send(Messages::WebPageProxy::PageDidScroll(view->scrollPosition()));
 }
 
 void WebPage::pageStoppedScrolling()
@@ -3301,11 +3289,6 @@ void WebPage::unfreezeLayerTree(LayerTreeFreezeReason reason)
     m_layerTreeFreezeReasons.remove(reason);
     WEBPAGE_RELEASE_LOG(ProcessSuspension, "unfreezeLayerTree: Removing a reason to freeze layer tree (reason=%d, new=%d, old=%d)", static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw(), oldReasons);
     updateDrawingAreaLayerTreeFreezeState();
-}
-
-void WebPage::isLayerTreeFrozen(CompletionHandler<void(bool)>&& completionHandler)
-{
-    completionHandler(!!m_layerTreeFreezeReasons);
 }
 
 void WebPage::updateDrawingAreaLayerTreeFreezeState()
@@ -3469,6 +3452,14 @@ void WebPage::didDismissContextMenu()
     corePage()->contextMenuController().didDismissContextMenu();
 }
 
+void WebPage::showContextMenuFromFrame(const WebCore::FrameIdentifier& frameID, const ContextMenuContextData& contextMenuContextData, const UserData& userData)
+{
+    flushPendingEditorStateUpdate();
+    send(Messages::WebPageProxy::ShowContextMenuFromFrame(frameID, contextMenuContextData, userData));
+    m_hasEverDisplayedContextMenu = true;
+    scheduleFullEditorStateUpdate();
+}
+
 #endif // ENABLE(CONTEXT_MENUS)
 
 #if ENABLE(CONTEXT_MENU_EVENT)
@@ -3492,7 +3483,7 @@ void WebPage::contextMenuForKeyEvent()
 }
 #endif
 
-void WebPage::mouseEvent(FrameIdentifier frameID, const WebMouseEvent& mouseEvent, std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensions, CompletionHandler<void(std::optional<WebEventType>, bool, std::optional<RemoteUserInputEventData>)>&& completionHandler)
+void WebPage::mouseEvent(FrameIdentifier frameID, const WebMouseEvent& mouseEvent, std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensions)
 {
     SetForScope userIsInteractingChange { m_userIsInteracting, true };
 
@@ -3504,8 +3495,10 @@ void WebPage::mouseEvent(FrameIdentifier frameID, const WebMouseEvent& mouseEven
         shouldHandleEvent = false;
 #endif
 
-    if (!shouldHandleEvent)
-        return completionHandler(mouseEvent.type(), false, std::nullopt);
+    if (!shouldHandleEvent) {
+        send(Messages::WebPageProxy::DidReceiveEvent(mouseEvent.type(), false, std::nullopt));
+        return;
+    }
 
     Vector<Ref<SandboxExtension>> mouseEventSandboxExtensions;
     if (sandboxExtensions)
@@ -3525,7 +3518,8 @@ void WebPage::mouseEvent(FrameIdentifier frameID, const WebMouseEvent& mouseEven
         auto mouseEventResult = frame->handleMouseEvent(mouseEvent);
         if (auto remoteMouseEventData = mouseEventResult.remoteUserInputEventData()) {
             revokeSandboxExtensions(mouseEventSandboxExtensions);
-            return completionHandler(mouseEvent.type(), false, *remoteMouseEventData);
+            send(Messages::WebPageProxy::DidReceiveEvent(mouseEvent.type(), false, *remoteMouseEventData));
+            return;
         }
         handled = mouseEventResult.wasHandled();
     }
@@ -3557,11 +3551,11 @@ void WebPage::mouseEvent(FrameIdentifier frameID, const WebMouseEvent& mouseEven
         // This logic works in tandem with the mouse event queue in the UI process, which
         // coalesces mousemove events until the DidReceiveEvent() message is received after
         // the rendering update.
-        m_deferredMouseEventCompletionHandler = { { mouseEvent.type(), handled, WTFMove(completionHandler) } };
+        m_deferredDidReceiveMouseEvent = { { mouseEvent.type(), handled } };
         return;
     }
 
-    completionHandler(mouseEvent.type(), handled, std::nullopt);
+    send(Messages::WebPageProxy::DidReceiveEvent(mouseEvent.type(), handled, std::nullopt));
 }
 
 void WebPage::setLastKnownMousePosition(WebCore::FrameIdentifier frameID, IntPoint eventPoint, IntPoint globalPoint)
@@ -3575,8 +3569,8 @@ void WebPage::setLastKnownMousePosition(WebCore::FrameIdentifier frameID, IntPoi
 
 void WebPage::flushDeferredDidReceiveMouseEvent()
 {
-    if (auto info = std::exchange(m_deferredMouseEventCompletionHandler, std::nullopt))
-        info->completionHandler(info->type, info->handled, std::nullopt);
+    if (auto info = std::exchange(m_deferredDidReceiveMouseEvent, std::nullopt))
+        send(Messages::WebPageProxy::DidReceiveEvent(*info->type, info->handled, std::nullopt));
 }
 
 void WebPage::performHitTestForMouseEvent(const WebMouseEvent& event, CompletionHandler<void(WebHitTestResultData&&, OptionSet<WebEventModifier>, UserData&&)>&& completionHandler)
@@ -3658,7 +3652,7 @@ void WebPage::dispatchWheelEventWithoutScrolling(FrameIdentifier frameID, const 
 }
 #endif
 
-void WebPage::keyEvent(FrameIdentifier frameID, const WebKeyboardEvent& keyboardEvent, CompletionHandler<void(std::optional<WebEventType>, bool)>&& completionHandler)
+void WebPage::keyEvent(FrameIdentifier frameID, const WebKeyboardEvent& keyboardEvent)
 {
     SetForScope userIsInteractingChange { m_userIsInteracting, true };
 
@@ -3672,7 +3666,7 @@ void WebPage::keyEvent(FrameIdentifier frameID, const WebKeyboardEvent& keyboard
     if (WebFrame* frame = WebProcess::singleton().webFrame(frameID))
         handled = frame->handleKeyEvent(keyboardEvent);
 
-    completionHandler(keyboardEvent.type(), handled);
+    send(Messages::WebPageProxy::DidReceiveEvent(keyboardEvent.type(), handled, std::nullopt));
 }
 
 bool WebPage::handleKeyEventByRelinquishingFocusToChrome(const KeyboardEvent& event)
@@ -4154,9 +4148,9 @@ void WebPage::didStartPageTransition()
 #endif
 
 #if HAVE(TOUCH_BAR)
-    if (m_isTouchBarUpdateSupressedForHiddenContentEditable) {
-        m_isTouchBarUpdateSupressedForHiddenContentEditable = false;
-        send(Messages::WebPageProxy::SetIsTouchBarUpdateSupressedForHiddenContentEditable(m_isTouchBarUpdateSupressedForHiddenContentEditable));
+    if (m_isTouchBarUpdateSuppressedForHiddenContentEditable) {
+        m_isTouchBarUpdateSuppressedForHiddenContentEditable = false;
+        send(Messages::WebPageProxy::SetIsTouchBarUpdateSuppressedForHiddenContentEditable(m_isTouchBarUpdateSuppressedForHiddenContentEditable));
     }
 
     if (m_isNeverRichlyEditableForTouchBar) {
@@ -5191,7 +5185,79 @@ void WebPage::videoControlsManagerDidChange()
 #endif
 }
 
-#endif
+void WebPage::startPlayingPredominantVideo(CompletionHandler<void(bool)>&& completion)
+{
+    RefPtr mainFrame = m_mainFrame->coreLocalFrame();
+    if (!mainFrame) {
+        completion(false);
+        return;
+    }
+
+    RefPtr view = mainFrame->view();
+    if (!view) {
+        completion(false);
+        return;
+    }
+
+    RefPtr document = mainFrame->document();
+    if (!document) {
+        completion(false);
+        return;
+    }
+
+    Vector<Ref<HTMLMediaElement>> candidates;
+    document->updateLayoutIgnorePendingStylesheets();
+    document->forEachMediaElement([&candidates](auto& element) {
+        if (!element.canPlay())
+            return;
+
+        if (!element.isVisibleInViewport())
+            return;
+
+        candidates.append(element);
+    });
+
+    RefPtr<HTMLMediaElement> largestElement;
+    float largestArea = 0;
+    auto unobscuredContentRect = view->unobscuredContentRect();
+    auto unobscuredArea = unobscuredContentRect.area<RecordOverflow>();
+    if (unobscuredArea.hasOverflowed()) {
+        completion(false);
+        return;
+    }
+
+    constexpr auto minimumViewportRatioForLargestMediaElement = 0.25;
+    float minimumAreaForLargestElement = minimumViewportRatioForLargestMediaElement * unobscuredArea.value();
+    for (auto& candidate : candidates) {
+        auto intersectionRect = intersection(unobscuredContentRect, candidate->boundingBoxInRootViewCoordinates());
+        if (intersectionRect.isEmpty())
+            continue;
+
+        auto area = intersectionRect.area<RecordOverflow>();
+        if (area.hasOverflowed())
+            continue;
+
+        if (area <= largestArea)
+            continue;
+
+        if (area < minimumAreaForLargestElement)
+            continue;
+
+        largestArea = area;
+        largestElement = candidate.ptr();
+    }
+
+    if (!largestElement) {
+        completion(false);
+        return;
+    }
+
+    UserGestureIndicator userGesture { IsProcessingUserGesture::Yes, document.get() };
+    largestElement->play();
+    completion(true);
+}
+
+#endif // ENABLE(VIDEO_PRESENTATION_MODE)
 
 #if PLATFORM(IOS_FAMILY)
 void WebPage::setSceneIdentifier(String&& sceneIdentifier)
@@ -5225,7 +5291,24 @@ void WebPage::isInFullscreenChanged(IsInFullscreenMode isInFullscreenMode)
 #endif
 }
 
-#endif
+void WebPage::closeFullScreen()
+{
+    removeReasonsToDisallowLayoutViewportHeightExpansion(DisallowLayoutViewportHeightExpansionReason::ElementFullScreen);
+
+    injectedBundleFullScreenClient().closeFullScreen(this);
+}
+
+void WebPage::prepareToEnterElementFullScreen()
+{
+    addReasonsToDisallowLayoutViewportHeightExpansion(DisallowLayoutViewportHeightExpansionReason::ElementFullScreen);
+}
+
+void WebPage::prepareToExitElementFullScreen()
+{
+    removeReasonsToDisallowLayoutViewportHeightExpansion(DisallowLayoutViewportHeightExpansionReason::ElementFullScreen);
+}
+
+#endif // ENABLE(FULLSCREEN_API)
 
 void WebPage::addConsoleMessage(FrameIdentifier frameID, MessageSource messageSource, MessageLevel messageLevel, const String& message, std::optional<WebCore::ResourceLoaderIdentifier> requestID)
 {
@@ -5474,6 +5557,16 @@ void WebPage::reapplyEditCommand(WebUndoStepID stepID)
 void WebPage::didRemoveEditCommand(WebUndoStepID commandID)
 {
     removeWebEditCommand(commandID);
+}
+
+void WebPage::closeCurrentTypingCommand()
+{
+    RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
+    if (!frame)
+        return;
+
+    if (RefPtr document = frame->document())
+        document->editor().closeTyping();
 }
 
 void WebPage::setActivePopupMenu(WebPopupMenu* menu)
@@ -7092,9 +7185,9 @@ void WebPage::didChangeSelectionOrOverflowScrollPosition()
         m_hasEverFocusedElementDueToUserInteractionSincePageTransition = true;
 
     if (!hasPreviouslyFocusedDueToUserInteraction && m_hasEverFocusedElementDueToUserInteractionSincePageTransition) {
-        if (frame->document()->quirks().isTouchBarUpdateSupressedForHiddenContentEditable()) {
-            m_isTouchBarUpdateSupressedForHiddenContentEditable = true;
-            send(Messages::WebPageProxy::SetIsTouchBarUpdateSupressedForHiddenContentEditable(m_isTouchBarUpdateSupressedForHiddenContentEditable));
+        if (frame->document()->quirks().isTouchBarUpdateSuppressedForHiddenContentEditable()) {
+            m_isTouchBarUpdateSuppressedForHiddenContentEditable = true;
+            send(Messages::WebPageProxy::SetIsTouchBarUpdateSuppressedForHiddenContentEditable(m_isTouchBarUpdateSuppressedForHiddenContentEditable));
         }
 
         if (frame->document()->quirks().isNeverRichlyEditableForTouchBar()) {
@@ -7618,6 +7711,11 @@ void WebPage::didCommitLoad(WebFrame* frame)
     m_loadCommitTime = WallTime::now();
 #endif
 
+#if PLATFORM(IOS_FAMILY)
+    m_updateLayoutViewportHeightExpansionTimer.stop();
+#endif
+    removeReasonsToDisallowLayoutViewportHeightExpansion(m_disallowLayoutViewportHeightExpansionReasons);
+
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     if (coreFrame->isMainFrame() && !usesEphemeralSession()) {
         if (RefPtr loader = coreFrame->document()->loader(); loader
@@ -7747,26 +7845,37 @@ void WebPage::scheduleFullEditorStateUpdate()
     m_page->scheduleRenderingUpdate(RenderingUpdateStep::LayerFlush);
 }
 
-void WebPage::loadAndDecodeImage(WebCore::ResourceRequest&& request, std::optional<WebCore::FloatSize> sizeConstraint, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&& completionHandler)
+void WebPage::loadAndDecodeImage(WebCore::ResourceRequest&& request, std::optional<WebCore::FloatSize> sizeConstraint, size_t maximumBytesFromNetwork, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&& completionHandler)
 {
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::LoadImageForDecoding(WTFMove(request), m_webPageProxyIdentifier), [completionHandler = WTFMove(completionHandler), sizeConstraint] (std::variant<WebCore::ResourceError, Ref<WebCore::SharedBuffer>>&& result) mutable {
-        WTF::switchOn(result, [&] (const WebCore::ResourceError& error) {
-            completionHandler(error);
-        }, [&] (const Ref<WebCore::SharedBuffer>& buffer) {
-            RefPtr bitmapImage = WebCore::BitmapImage::create(nullptr);
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::LoadImageForDecoding(WTFMove(request), m_webPageProxyIdentifier, maximumBytesFromNetwork), [completionHandler = WTFMove(completionHandler), sizeConstraint] (std::variant<WebCore::ResourceError, Ref<WebCore::FragmentedSharedBuffer>>&& result) mutable {
+        WTF::switchOn(WTFMove(result), [&] (WebCore::ResourceError&& error) {
+            completionHandler(WTFMove(error));
+        }, [&] (Ref<WebCore::FragmentedSharedBuffer>&& buffer) {
+            Ref bitmapImage = WebCore::BitmapImage::create(nullptr);
             bitmapImage->setData(buffer.ptr(), true);
             RefPtr nativeImage = bitmapImage->primaryNativeImage();
             if (!nativeImage)
                 return completionHandler({ });
-            RefPtr<ShareableBitmap> result;
-            if (sizeConstraint) {
-                FloatRect rect = largestRectWithAspectRatioInsideRect(nativeImage->size().aspectRatio(), FloatRect({ }, *sizeConstraint));
-                result = ShareableBitmap::createFromImageDraw(*nativeImage, nativeImage->colorSpace(), flooredIntSize(rect.size()));
-            } else
-                result = ShareableBitmap::createFromImageDraw(*nativeImage);
-            if (!result)
+
+            FloatSize sourceSize = nativeImage->size();
+            FloatSize destinationSize = sourceSize;
+            if (sizeConstraint)
+                destinationSize = largestRectWithAspectRatioInsideRect(sourceSize.aspectRatio(), FloatRect({ }, sizeConstraint->shrunkTo(sourceSize))).size();
+
+            IntSize roundedDestinationSize = flooredIntSize(destinationSize);
+            auto sourceColorSpace = nativeImage->colorSpace();
+            auto destinationColorSpace = sourceColorSpace.supportsOutput() ? sourceColorSpace : DestinationColorSpace::SRGB();
+            auto bitmap = ShareableBitmap::create({ roundedDestinationSize, destinationColorSpace });
+            if (!bitmap)
                 return completionHandler({ });
-            completionHandler(result.releaseNonNull());
+
+            auto context = bitmap->createGraphicsContext();
+            if (!context)
+                return completionHandler({ });
+
+            context->drawNativeImage(*nativeImage, FloatRect({ }, roundedDestinationSize), FloatRect({ }, sourceSize), { CompositeOperator::Copy });
+
+            completionHandler(bitmap.releaseNonNull());
         });
     });
 }
@@ -7989,14 +8098,6 @@ void WebPage::postSynchronousMessageForTesting(const String& messageName, API::O
         returnData = webProcess.transformHandlesToObjects(returnUserData.object());
     } else
         returnData = nullptr;
-}
-
-void WebPage::clearWheelEventTestMonitor()
-{
-    if (!m_page)
-        return;
-
-    m_page->clearWheelEventTestMonitor();
 }
 
 void WebPage::setShouldScaleViewToFitDocument(bool shouldScaleViewToFitDocument)
@@ -9152,9 +9253,9 @@ void WebPage::lastNavigationWasAppInitiated(CompletionHandler<void(bool)>&& comp
 
 #if ENABLE(WRITING_TOOLS_UI)
 
-void WebPage::addTextAnimationForAnimationID(const WTF::UUID& uuid, const WebKit::TextAnimationData& styleData, const WebCore::TextIndicatorData& indicatorData)
+void WebPage::addTextAnimationForAnimationID(const WTF::UUID& uuid, const WebKit::TextAnimationData& styleData, const WebCore::TextIndicatorData& indicatorData, CompletionHandler<void()>&& completionHandler)
 {
-    send(Messages::WebPageProxy::AddTextAnimationForAnimationID(uuid, styleData, indicatorData));
+    sendWithAsyncReply(Messages::WebPageProxy::AddTextAnimationForAnimationID(uuid, styleData, indicatorData), WTFMove(completionHandler));
 }
 
 void WebPage::removeTextAnimationForAnimationID(const WTF::UUID& uuid)
@@ -9178,14 +9279,19 @@ void WebPage::addInitialTextAnimation(const WTF::UUID& uuid)
 }
 
 
-void WebPage::addSourceTextAnimation(const WTF::UUID& uuid, const CharacterRange& range)
+void WebPage::addSourceTextAnimation(const WTF::UUID& uuid, const CharacterRange& range, const String string, WTF::CompletionHandler<void(void)>&& completionHandler)
 {
-    m_textAnimationController->addSourceTextAnimation(uuid, range);
+    m_textAnimationController->addSourceTextAnimation(uuid, range, string, WTFMove(completionHandler));
 }
 
-void WebPage::addDestinationTextAnimation(const WTF::UUID& uuid, const CharacterRange& range)
+void WebPage::addDestinationTextAnimation(const WTF::UUID& uuid, const CharacterRange& range, const String string)
 {
-    m_textAnimationController->addDestinationTextAnimation(uuid, range);
+    m_textAnimationController->addDestinationTextAnimation(uuid, range, string);
+}
+
+void WebPage::clearAnimationsForSessionID(const WTF::UUID& uuid)
+{
+    m_textAnimationController->clearAnimationsForSessionID(uuid);
 }
 
 #endif
@@ -9199,9 +9305,9 @@ void WebPage::handleContextMenuTranslation(const TranslationContextMenuInfo& inf
 #endif
 
 #if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
-void WebPage::handleContextMenuWritingTools(WebCore::IntRect selectionBoundsInRootView)
+void WebPage::handleContextMenuWritingToolsDeprecated(WebCore::IntRect selectionBoundsInRootView)
 {
-    send(Messages::WebPageProxy::HandleContextMenuWritingTools(selectionBoundsInRootView));
+    send(Messages::WebPageProxy::HandleContextMenuWritingToolsDeprecated(selectionBoundsInRootView));
 }
 #endif
 
@@ -9317,13 +9423,6 @@ void WebPage::removeTextPlaceholder(const ElementContext& placeholder, Completio
             frame->editor().removeTextPlaceholder(downcast<TextPlaceholderElement>(*element));
     }
     completionHandler();
-}
-#endif
-
-#if ENABLE(NOTIFICATIONS)
-void WebPage::clearNotificationPermissionState()
-{
-    static_cast<WebNotificationClient&>(WebCore::NotificationController::from(m_page.get())->client()).clearNotificationPermissionState();
 }
 #endif
 
@@ -9722,14 +9821,38 @@ void WebPage::updateLastNodeBeforeWritingSuggestions(const KeyboardEvent& event)
         m_lastNodeBeforeWritingSuggestions = frame->editor().nodeBeforeWritingSuggestions();
 }
 
-void WebPage::setPermissionLevelForTesting(const String& origin, bool allowed)
+void WebPage::didAddOrRemoveViewportConstrainedObjects()
 {
-#if ENABLE(NOTIFICATIONS)
-    notificationPermissionRequestManager()->setPermissionLevelForTesting(origin, allowed);
-#else
-    UNUSED_PARAM(origin);
-    UNUSED_PARAM(allowed);
+    if (!m_page->settings().layoutViewportHeightExpansionFactor())
+        return;
+
+#if PLATFORM(IOS_FAMILY)
+    m_updateLayoutViewportHeightExpansionTimer.restart();
 #endif
+}
+
+void WebPage::addReasonsToDisallowLayoutViewportHeightExpansion(OptionSet<DisallowLayoutViewportHeightExpansionReason> reasons)
+{
+    bool wasEmpty = m_disallowLayoutViewportHeightExpansionReasons.isEmpty();
+    m_disallowLayoutViewportHeightExpansionReasons.add(reasons);
+
+    if (!m_page->settings().layoutViewportHeightExpansionFactor())
+        return;
+
+    if (wasEmpty && !m_disallowLayoutViewportHeightExpansionReasons.isEmpty())
+        send(Messages::WebPageProxy::SetAllowsLayoutViewportHeightExpansion(false));
+}
+
+void WebPage::removeReasonsToDisallowLayoutViewportHeightExpansion(OptionSet<DisallowLayoutViewportHeightExpansionReason> reasons)
+{
+    bool wasEmpty = m_disallowLayoutViewportHeightExpansionReasons.isEmpty();
+    m_disallowLayoutViewportHeightExpansionReasons.remove(reasons);
+
+    if (!m_page->settings().layoutViewportHeightExpansionFactor())
+        return;
+
+    if (!wasEmpty && m_disallowLayoutViewportHeightExpansionReasons.isEmpty())
+        send(Messages::WebPageProxy::SetAllowsLayoutViewportHeightExpansion(true));
 }
 
 void WebPage::hasActiveNowPlayingSessionChanged(bool hasActiveNowPlayingSession)

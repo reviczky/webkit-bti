@@ -147,6 +147,7 @@
 #include <wtf/NativePromise.h>
 #include <wtf/Ref.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 
 #if USE(AUDIO_SESSION)
 #include "AudioSession.h"
@@ -7195,7 +7196,7 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
         if (isContextStopped())
             return;
 
-        if (document().hidden()) {
+        if (document().hidden() && mode != HTMLMediaElementEnums::VideoFullscreenModePictureInPicture) {
             ALWAYS_LOG(logIdentifier, " returning because document is hidden");
             m_changingVideoFullscreenMode = false;
             return;
@@ -8794,7 +8795,7 @@ void HTMLMediaElement::resumeAutoplaying()
 void HTMLMediaElement::mayResumePlayback(bool shouldResume)
 {
     ALWAYS_LOG(LOGIDENTIFIER, "paused = ", paused());
-    if (paused() && shouldResume)
+    if (!ended() && paused() && shouldResume)
         play();
 }
 
@@ -9633,7 +9634,8 @@ void HTMLMediaElement::setSpatialTrackingLabel(const String& spatialTrackingLabe
         return;
     m_spatialTrackingLabel = spatialTrackingLabel;
 
-    m_player->setSpatialTrackingLabel(spatialTrackingLabel);
+    if (m_player)
+        m_player->setSpatialTrackingLabel(spatialTrackingLabel);
 }
 
 void HTMLMediaElement::defaultSpatialTrackingLabelChanged(const String& defaultSpatialTrackingLabel)

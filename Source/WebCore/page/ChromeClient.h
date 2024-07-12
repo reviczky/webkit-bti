@@ -647,6 +647,8 @@ public:
     virtual void beginSystemPreview(const URL&, const SecurityOriginData&, const SystemPreviewInfo&, CompletionHandler<void()>&&) { }
 #endif
 
+    virtual void didAddOrRemoveViewportConstrainedObjects() { }
+
     virtual void requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&&) = 0;
 
     virtual bool isUsingUISideCompositing() const { return false; }
@@ -676,9 +678,11 @@ public:
 
     virtual void addInitialTextAnimation(const WritingTools::SessionID&) { }
 
-    virtual void addSourceTextAnimation(const WritingTools::SessionID&, const CharacterRange&) { }
+    virtual void addSourceTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String, WTF::CompletionHandler<void(void)>&&) { }
 
-    virtual void addDestinationTextAnimation(const WritingTools::SessionID&, const CharacterRange&) { }
+    virtual void addDestinationTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String) { }
+
+    virtual void clearAnimationsForSessionID(const WritingTools::SessionID&) { };
 #endif
 
     virtual void hasActiveNowPlayingSessionChanged(bool) { }

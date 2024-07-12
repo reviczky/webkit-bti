@@ -41,6 +41,7 @@
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/ScreenOrientationType.h>
 #include <wtf/LoggerHelper.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -193,8 +194,9 @@ void WebFullScreenManagerProxy::enterFullScreen(bool blocksReturnToFullscreenFro
     m_blocksReturnToFullscreenFromPictureInPicture = blocksReturnToFullscreenFromPictureInPicture;
 #if PLATFORM(IOS_FAMILY)
 
-#if PLATFORM(VISION)
+#if ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
     m_isVideoElement = mediaDetails.type == FullScreenMediaDetails::Type::Video;
+#endif
 #if ENABLE(QUICKLOOK_FULLSCREEN)
     if (mediaDetails.imageHandle) {
         auto sharedMemoryBuffer = SharedMemory::map(WTFMove(*mediaDetails.imageHandle), WebCore::SharedMemory::Protection::ReadOnly);
@@ -203,7 +205,6 @@ void WebFullScreenManagerProxy::enterFullScreen(bool blocksReturnToFullscreenFro
     }
     m_imageMIMEType = mediaDetails.mimeType;
 #endif // QUICKLOOK_FULLSCREEN
-#endif
 
     auto mediaDimensions = mediaDetails.mediaDimensions;
     m_client.enterFullScreen(mediaDimensions);

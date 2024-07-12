@@ -112,7 +112,9 @@ RegisterSet RegisterSetBuilder::macroClobberedGPRs()
 RegisterSet RegisterSetBuilder::macroClobberedFPRs()
 {
 #if CPU(X86_64)
-    return { };
+    RegisterSetBuilder builder;
+    builder.add(MacroAssembler::fpTempRegister, IgnoreVectors);
+    return builder.buildAndValidate();
 #elif CPU(ARM64)
     RegisterSetBuilder builder;
     builder.add(MacroAssembler::fpTempRegister, IgnoreVectors);
@@ -274,7 +276,7 @@ RegisterSet RegisterSetBuilder::ftlCalleeSaveRegisters()
 {
     RegisterSet result;
 #if ENABLE(FTL_JIT)
-#if CPU(X86_64) && !OS(WINDOWS)
+#if CPU(X86_64)
     result.add(GPRInfo::regCS0, IgnoreVectors);
     result.add(GPRInfo::regCS1, IgnoreVectors);
     static_assert(GPRInfo::regCS2 == GPRInfo::jitDataRegister);

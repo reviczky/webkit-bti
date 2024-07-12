@@ -44,6 +44,7 @@
 #include <gst/base/gstflowcombiner.h>
 #include <wtf/UUID.h>
 #include <wtf/glib/WTFGType.h>
+#include <wtf/text/MakeString.h>
 
 using namespace WebCore;
 
@@ -348,13 +349,13 @@ public:
         trackEnded(m_track);
     }
 
-    void pushSample(GRefPtr<GstSample>&& sample, const char* logMessage)
+    void pushSample(GRefPtr<GstSample>&& sample, const ASCIILiteral logMessage)
     {
         ASSERT(m_src);
         if (!m_src || !m_isObserving)
             return;
 
-        GST_TRACE_OBJECT(m_src.get(), "%s", logMessage);
+        GST_TRACE_OBJECT(m_src.get(), "%s", logMessage.characters());
 
         bool drop = m_enoughData;
         auto* buffer = gst_sample_get_buffer(sample.get());
@@ -474,7 +475,7 @@ public:
         }
 
         if (m_track.enabled()) {
-            pushSample(WTFMove(sample), "Pushing video frame from enabled track");
+            pushSample(WTFMove(sample), "Pushing video frame from enabled track"_s);
             return;
         }
 
@@ -489,7 +490,7 @@ public:
         const auto& data = static_cast<const GStreamerAudioData&>(audioData);
         if (m_track.enabled()) {
             GRefPtr<GstSample> sample = data.getSample();
-            pushSample(WTFMove(sample), "Pushing audio sample from enabled track");
+            pushSample(WTFMove(sample), "Pushing audio sample from enabled track"_s);
             return;
         }
 
@@ -543,14 +544,17 @@ private:
         auto width = m_lastKnownSize.width() ? m_lastKnownSize.width() : 320;
         auto height = m_lastKnownSize.height() ? m_lastKnownSize.height() : 240;
 
+        int frameRateNumerator, frameRateDenominator;
+        gst_util_double_to_fraction(m_track.settings().frameRate(), &frameRateNumerator, &frameRateDenominator);
+
         if (!m_blackFrameCaps)
-            m_blackFrameCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", "width", G_TYPE_INT, width, "height", G_TYPE_INT, height, nullptr));
+            m_blackFrameCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", "width", G_TYPE_INT, width, "height", G_TYPE_INT, height, "framerate", GST_TYPE_FRACTION, frameRateNumerator, frameRateDenominator, nullptr));
         else {
             auto* structure = gst_caps_get_structure(m_blackFrameCaps.get(), 0);
             int currentWidth, currentHeight;
             gst_structure_get(structure, "width", G_TYPE_INT, &currentWidth, "height", G_TYPE_INT, &currentHeight, nullptr);
             if (currentWidth != width || currentHeight != height)
-                m_blackFrameCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", "width", G_TYPE_INT, width, "height", G_TYPE_INT, height, nullptr));
+                m_blackFrameCaps = adoptGRef(gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "I420", "width", G_TYPE_INT, width, "height", G_TYPE_INT, height, "framerate", GST_TYPE_FRACTION, frameRateNumerator, frameRateDenominator, nullptr));
         }
 
         GstVideoInfo info;
@@ -565,10 +569,11 @@ private:
             memset(data.data(), 0, yOffset);
             memset(data.data() + yOffset, 128, data.size() - yOffset);
         }
-        gst_buffer_add_video_meta_full(buffer.get(), GST_VIDEO_FRAME_FLAG_NONE, GST_VIDEO_FORMAT_I420, width, height, 3, info.offset, info.stride);
+        gst_buffer_add_video_meta_full(buffer.get(), GST_VIDEO_FRAME_FLAG_NONE, GST_VIDEO_INFO_FORMAT(&info), GST_VIDEO_INFO_WIDTH(&info),
+            GST_VIDEO_INFO_HEIGHT(&info), GST_VIDEO_INFO_N_PLANES(&info), info.offset, info.stride);
         GST_BUFFER_DTS(buffer.get()) = GST_BUFFER_PTS(buffer.get()) = gst_element_get_current_running_time(m_parent);
         auto sample = adoptGRef(gst_sample_new(buffer.get(), m_blackFrameCaps.get(), nullptr, nullptr));
-        pushSample(WTFMove(sample), "Pushing black video frame");
+        pushSample(WTFMove(sample), "Pushing black video frame"_s);
     }
 
     void pushSilentSample()
@@ -589,7 +594,7 @@ private:
             webkitGstAudioFormatFillSilence(info.finfo, map.data(), map.size());
         }
         auto sample = adoptGRef(gst_sample_new(buffer.get(), m_silentSampleCaps.get(), nullptr, nullptr));
-        pushSample(WTFMove(sample), "Pushing audio silence from disabled track");
+        pushSample(WTFMove(sample), "Pushing audio silence from disabled track"_s);
     }
 
     void createGstStream()
@@ -632,6 +637,7 @@ struct _WebKitMediaStreamSrcPrivate {
     GUniquePtr<GstFlowCombiner> flowCombiner;
     Atomic<unsigned> audioPadCounter;
     Atomic<unsigned> videoPadCounter;
+    unsigned groupId;
 };
 
 enum {
@@ -766,6 +772,7 @@ static void webkitMediaStreamSrcConstructed(GObject* object)
 
     priv->mediaStreamObserver = makeUnique<WebKitMediaStreamObserver>(GST_ELEMENT_CAST(self));
     priv->flowCombiner = GUniquePtr<GstFlowCombiner>(gst_flow_combiner_new());
+    priv->groupId = gst_util_group_id_next();
 
     // https://bugs.webkit.org/show_bug.cgi?id=214150
     ASSERT(GST_OBJECT_REFCOUNT(self) == 1);
@@ -1038,7 +1045,7 @@ void webkitMediaStreamSrcAddTrack(WebKitMediaStreamSrc* self, MediaStreamTrackPr
     data->sourceType = track->source().type();
     data->collection = webkitMediaStreamSrcCreateStreamCollection(self);
     data->streamStartEvent = adoptGRef(gst_event_new_stream_start(gst_stream_get_stream_id(stream)));
-    gst_event_set_group_id(data->streamStartEvent.get(), 1);
+    gst_event_set_group_id(data->streamStartEvent.get(), self->priv->groupId);
     gst_event_set_stream(data->streamStartEvent.get(), stream);
 
     GRefPtr stickyStreamStartEvent = data->streamStartEvent;

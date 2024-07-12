@@ -268,14 +268,14 @@ void WebInspectorUIProxy::showResources()
     m_inspectedPage->legacyMainFrameProcess().send(Messages::WebInspector::ShowResources(), m_inspectedPage->webPageIDInMainFrameProcess());
 }
 
-void WebInspectorUIProxy::showMainResourceForFrame(WebFrameProxy* frame)
+void WebInspectorUIProxy::showMainResourceForFrame(WebCore::FrameIdentifier frameID)
 {
     if (!m_inspectedPage)
         return;
 
     createFrontendPage();
 
-    m_inspectedPage->legacyMainFrameProcess().send(Messages::WebInspector::ShowMainResourceForFrame(frame->frameID()), m_inspectedPage->webPageIDInMainFrameProcess());
+    m_inspectedPage->sendToProcessContainingFrame(frameID, Messages::WebInspector::ShowMainResourceForFrame(frameID));
 }
 
 void WebInspectorUIProxy::attachBottom()
@@ -816,7 +816,7 @@ void WebInspectorUIProxy::evaluateInFrontendForTesting(const String& expression)
 
 // Unsupported configurations can use the stubs provided here.
 
-#if !PLATFORM(MAC) && !PLATFORM(GTK) && !PLATFORM(WIN)
+#if !PLATFORM(MAC) && !PLATFORM(GTK) && !PLATFORM(WIN) && !ENABLE(WPE_PLATFORM)
 
 WebPageProxy* WebInspectorUIProxy::platformCreateFrontendPage()
 {

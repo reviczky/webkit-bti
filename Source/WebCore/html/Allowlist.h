@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,12 +23,49 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-[
-    SecureContext,
-    EnabledBySetting=IsLoggedInAPIEnabled,
-    ImplementedBy=NavigatorIsLoggedIn
-] partial interface Navigator {
-    Promise<undefined> setLoggedIn();
-    Promise<undefined> setLoggedOut();
-    Promise<boolean> isLoggedIn();
+#pragma once
+
+#include "SecurityOriginData.h"
+
+namespace WebCore {
+
+// https://w3c.github.io/webappsec-permissions-policy/#allowlists
+class Allowlist {
+public:
+    Allowlist() = default;
+    struct AllowAllOrigins { };
+    Allowlist(AllowAllOrigins allow)
+        : m_origins(allow)
+    {
+    }
+    explicit Allowlist(const SecurityOriginData& origin)
+        : m_origins(HashSet<SecurityOriginData> { origin })
+    {
+    }
+    explicit Allowlist(HashSet<SecurityOriginData>&& origins)
+        : m_origins(WTFMove(origins))
+    {
+    }
+
+    using OriginsVariant = std::variant<HashSet<SecurityOriginData>, AllowAllOrigins>;
+    explicit Allowlist(OriginsVariant&& origins)
+        : m_origins(WTFMove(origins))
+    {
+    }
+    const OriginsVariant& origins() const { return m_origins; }
+
+    // This is simplified version of https://w3c.github.io/webappsec-permissions-policy/#matches.
+    bool matches(const SecurityOriginData& origin) const
+    {
+        return std::visit(WTF::makeVisitor([&origin](const HashSet<SecurityOriginData>& origins) -> bool {
+            return origins.contains(origin);
+        }, [&] (const auto&) {
+            return true;
+        }), m_origins);
+    }
+
+private:
+    OriginsVariant m_origins;
 };
+
+} // namespace WebCore

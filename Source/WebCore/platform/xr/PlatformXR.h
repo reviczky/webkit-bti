@@ -260,7 +260,7 @@ struct FrameData {
 
 #if PLATFORM(COCOA)
     struct RateMapDescription {
-        WebCore::IntSize screenSize;
+        WebCore::IntSize screenSize = { 0, 0 };
         Vector<float> horizontalSamplesLeft;
         Vector<float> horizontalSamplesRight;
         // Vertical samples is shared by both horizontalSamples
@@ -380,6 +380,7 @@ public:
 
     virtual void initializeTrackingAndRendering(const WebCore::SecurityOriginData&, SessionMode, const FeatureList&) = 0;
     virtual void shutDownTrackingAndRendering() = 0;
+    virtual void didCompleteShutdownTriggeredBySystem() { }
     TrackingAndRenderingClient* trackingAndRenderingClient() const { return m_trackingAndRenderingClient.get(); }
     void setTrackingAndRenderingClient(WeakPtr<TrackingAndRenderingClient>&& client) { m_trackingAndRenderingClient = WTFMove(client); }
 

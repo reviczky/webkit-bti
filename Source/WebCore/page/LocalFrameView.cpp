@@ -130,6 +130,7 @@
 #include <wtf/Ref.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
 #if USE(COORDINATED_GRAPHICS)
@@ -1602,6 +1603,9 @@ void LocalFrameView::addViewportConstrainedObject(RenderLayerModelObject& object
 
         if (auto scrollingCoordinator = this->scrollingCoordinator())
             scrollingCoordinator->frameViewFixedObjectsDidChange(*this);
+
+        if (RefPtr page = m_frame->page())
+            page->chrome().client().didAddOrRemoveViewportConstrainedObjects();
     }
 }
 
@@ -1614,6 +1618,9 @@ void LocalFrameView::removeViewportConstrainedObject(RenderLayerModelObject& obj
         // FIXME: In addFixedObject() we only call this if there's a platform widget,
         // why isn't the same check being made here?
         updateCanBlitOnScrollRecursively();
+
+        if (RefPtrAllowingPartiallyDestroyed<Page> page = m_frame->page())
+            page->chrome().client().didAddOrRemoveViewportConstrainedObjects();
     }
 }
 

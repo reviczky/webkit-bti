@@ -35,6 +35,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SortedArrayMap.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WGSL {
@@ -1177,7 +1178,9 @@ Result<AST::Statement::Ref> Parser<Lexer>::parseStatement()
     case TokenType::ParenLeft:
     case TokenType::And:
     case TokenType::Star: {
-        return parseVariableUpdatingStatement();
+        PARSE(variableUpdatingStatement, VariableUpdatingStatement);
+        CONSUME_TYPE(Semicolon);
+        return { variableUpdatingStatement };
     }
     case TokenType::KeywordFor: {
         // FIXME: Handle attributes attached to statement.

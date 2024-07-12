@@ -145,6 +145,7 @@
 #include <wtf/SystemTracing.h>
 #include <wtf/URL.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/WTFString.h>
 
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
@@ -816,14 +817,14 @@ void FrameLoader::didBeginDocument(bool dispatch)
     if (dispatch)
         dispatchDidClearWindowObjectsInAllWorlds();
 
-    updateNavigationAPIEntries();
-
     updateFirstPartyForCookies();
     document->initContentSecurityPolicy();
 
     Ref settings = frame->settings();
     document->cachedResourceLoader().setImagesEnabled(settings->areImagesEnabled());
     document->cachedResourceLoader().setAutoLoadImages(settings->loadsImagesAutomatically());
+
+    std::optional<NavigationNavigationType> navigationType;
 
     if (RefPtr documentLoader = m_documentLoader) {
         String dnsPrefetchControl = documentLoader->response().httpHeaderField(HTTPHeaderName::XDNSPrefetchControl);
@@ -862,7 +863,11 @@ void FrameLoader::didBeginDocument(bool dispatch)
             if (auto crossOriginOpenerPolicy = documentLoader->crossOriginOpenerPolicy())
                 document->setCrossOriginOpenerPolicy(WTFMove(*crossOriginOpenerPolicy));
         }
+
+        navigationType = m_documentLoader->triggeringAction().navigationAPIType();
     }
+
+    updateNavigationAPIEntries(navigationType);
 
     frame->checkedHistory()->restoreDocumentState();
 }
@@ -1521,6 +1526,7 @@ void FrameLoader::loadURL(FrameLoadRequest&& frameLoadRequest, const String& ref
     action.setShouldReplaceDocumentIfJavaScriptURL(frameLoadRequest.shouldReplaceDocumentIfJavaScriptURL());
     action.setIsInitialFrameSrcLoad(frameLoadRequest.isInitialFrameSrcLoad());
     action.setNewFrameOpenerPolicy(frameLoadRequest.newFrameOpenerPolicy());
+    action.setNavigationAPIType(determineNavigationType(newLoadType, frameLoadRequest.navigationHistoryBehavior()));
     if (privateClickMeasurement && frame->isMainFrame())
         action.setPrivateClickMeasurement(WTFMove(*privateClickMeasurement));
 
@@ -1778,11 +1784,9 @@ void FrameLoader::loadWithDocumentLoader(DocumentLoader* loader, FrameLoadType t
 
     if (shouldPerformFragmentNavigation(isFormSubmission, httpMethod, policyChecker().loadType(), newURL)) {
 
-        if (!dispatchNavigateEvent(newURL, type, loader->triggeringAction(), NavigationHistoryBehavior::Auto, true, formState.get()))
-            return;
-
         RefPtr oldDocumentLoader = m_documentLoader;
         NavigationAction action { frame->protectedDocument().releaseNonNull(), loader->request(), InitiatedByMainFrame::Unknown, loader->isRequestFromClientOrUserInput(), policyChecker().loadType(), isFormSubmission };
+        action.setNavigationAPIType(determineNavigationType(type, NavigationHistoryBehavior::Auto));
         oldDocumentLoader->setTriggeringAction(WTFMove(action));
         oldDocumentLoader->setLastCheckedRequest(ResourceRequest());
         policyChecker().stopCheck();
@@ -1796,12 +1800,6 @@ void FrameLoader::loadWithDocumentLoader(DocumentLoader* loader, FrameLoadType t
         return;
     }
 
-    auto& action = loader->triggeringAction();
-    if (m_frame->document() && action.requester() && m_frame->document()->securityOrigin().isSameOriginDomain(action.requester()->securityOrigin)) {
-        if (!dispatchNavigateEvent(newURL, type, action, NavigationHistoryBehavior::Auto, false, formState.get()))
-            return;
-    }
-
     if (RefPtr parent = dynamicDowncast<LocalFrame>(frame->tree().parent()))
         loader->setOverrideEncoding(parent->loader().documentLoader()->overrideEncoding());
 
@@ -1809,6 +1807,7 @@ void FrameLoader::loadWithDocumentLoader(DocumentLoader* loader, FrameLoadType t
     setPolicyDocumentLoader(loader);
     if (loader->triggeringAction().isEmpty()) {
         NavigationAction action { frame->protectedDocument().releaseNonNull(), loader->request(), InitiatedByMainFrame::Unknown, loader->isRequestFromClientOrUserInput(), policyChecker().loadType(), isFormSubmission };
+        action.setNavigationAPIType(determineNavigationType(type, NavigationHistoryBehavior::Auto));
         loader->setTriggeringAction(WTFMove(action));
     }
 
@@ -1976,7 +1975,7 @@ void FrameLoader::reload(OptionSet<ReloadOption> options)
             return FrameLoadType::ReloadExpiredOnly;
         return FrameLoadType::Reload;
     };
-    
+
     loadWithDocumentLoader(loader.ptr(), frameLoadTypeForReloadOptions(options), { }, AllowNavigationToInvalidURL::Yes);
 }
 
@@ -2011,6 +2010,11 @@ void FrameLoader::stopAllLoaders(ClearProvisionalItem clearProvisionalItem, Stop
     for (RefPtr child = frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
         if (RefPtr localChild = dynamicDowncast<LocalFrame>(child.get()))
             localChild->checkedLoader()->stopAllLoaders(clearProvisionalItem);
+    }
+
+    if (m_frame->document()->settings().navigationAPIEnabled()) {
+        RefPtr window = m_frame->document()->domWindow();
+        window->protectedNavigation()->abortOngoingNavigationIfNeeded();
     }
 
     FRAMELOADER_RELEASE_LOG(ResourceLoading, "stopAllLoaders: m_provisionalDocumentLoader=%p, m_documentLoader=%p", m_provisionalDocumentLoader.get(), m_documentLoader.get());
@@ -2756,8 +2760,7 @@ void FrameLoader::checkLoadCompleteForThisFrame(LoadWillContinueInAnotherProcess
         if (RefPtr page = m_frame->page()) {
             if (isBackForwardLoadType(loadType())) {
                 // Reset the back forward list to the last committed history item at the top level.
-                if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame()))
-                    item = localMainFrame->history().currentItem();
+                item = page->mainFrame().history().currentItem();
             }
         }
 
@@ -3280,8 +3283,10 @@ void FrameLoader::updateRequestAndAddExtraFields(Frame& targetFrame, ResourceReq
     }
 
     if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(targetFrame.mainFrame())) {
-        if (shouldUpdate == ShouldUpdateAppInitiatedValue::Yes && localMainFrame->loader().documentLoader())
-            request.setIsAppInitiated(localMainFrame->loader().documentLoader()->lastNavigationWasAppInitiated());
+        if (shouldUpdate == ShouldUpdateAppInitiatedValue::Yes) {
+            if (RefPtr documentLoader = localMainFrame->loader().documentLoader())
+                request.setIsAppInitiated(documentLoader->lastNavigationWasAppInitiated());
+        }
     }
 
     if (page && isMainResource) {
@@ -3438,7 +3443,7 @@ void FrameLoader::loadPostRequest(FrameLoadRequest&& request, const String& refe
 
     if (request.requesterSecurityOrigin().isSameOriginDomain(frame->document()->securityOrigin())) {
         if (!dispatchNavigateEvent(url, loadType, action, request.navigationHistoryBehavior(), false, formState.get()))
-            return;
+            return completionHandler();
     }
 
     // must grab this now, since this load may stop the previous load and clear this flag
@@ -3467,8 +3472,8 @@ ResourceLoaderIdentifier FrameLoader::loadResourceSynchronously(const ResourceRe
         initialRequest.setHTTPReferrer(referrer);
     addHTTPOriginIfNeeded(initialRequest, outgoingOrigin());
 
-    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame->mainFrame()))
-        initialRequest.setFirstPartyForCookies(localFrame->loader().documentLoader()->request().url());
+    if (auto* page = m_frame->page())
+        initialRequest.setFirstPartyForCookies(page->mainFrameURL());
     
     updateRequestAndAddExtraFields(initialRequest, IsMainResource::No);
 
@@ -3897,10 +3902,8 @@ void FrameLoader::continueLoadAfterNavigationPolicy(const ResourceRequest& reque
         // we only do this when punting a navigation for the target frame or top-level frame.  
         if ((isTargetItem || frame->isMainFrame()) && isBackForwardLoadType(policyChecker().loadType())) {
             if (RefPtr page = frame->page()) {
-                if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame->mainFrame())) {
-                    if (RefPtr resetItem = localFrame->history().currentItem())
-                        page->backForward().setCurrentItem(*resetItem);
-                }
+                if (RefPtr resetItem = frame->mainFrame().history().currentItem())
+                    page->backForward().setCurrentItem(*resetItem);
             }
         }
         return;
@@ -4238,6 +4241,7 @@ void FrameLoader::loadDifferentDocumentItem(HistoryItem& item, HistoryItem* from
         auto action = NavigationAction { frame->protectedDocument().releaseNonNull(), documentLoader->request(), initiatedByMainFrame, documentLoader->isRequestFromClientOrUserInput(), loadType, false };
         action.setTargetBackForwardItem(item);
         action.setSourceBackForwardItem(fromItem);
+        action.setNavigationAPIType(determineNavigationType(loadType, NavigationHistoryBehavior::Auto));
         documentLoader->setTriggeringAction(WTFMove(action));
 
         documentLoader->setLastCheckedRequest(ResourceRequest());
@@ -4249,8 +4253,8 @@ void FrameLoader::loadDifferentDocumentItem(HistoryItem& item, HistoryItem* from
     URL itemURL = item.url();
     URL itemOriginalURL = item.originalURL();
     URL currentURL;
-    if (documentLoader())
-        currentURL = documentLoader()->url();
+    if (auto* loader = documentLoader())
+        currentURL = loader->url();
     RefPtr formData = item.formData();
 
     ResourceRequest request(itemURL);
@@ -4329,6 +4333,7 @@ void FrameLoader::loadDifferentDocumentItem(HistoryItem& item, HistoryItem* from
 
     action.setTargetBackForwardItem(item);
     action.setSourceBackForwardItem(fromItem);
+    action.setNavigationAPIType(determineNavigationType(loadType, NavigationHistoryBehavior::Auto));
 
     loadWithNavigationAction(request, WTFMove(action), loadType, { }, AllowNavigationToInvalidURL::Yes, shouldTreatAsContinuingLoad);
 }
@@ -4772,7 +4777,7 @@ RefPtr<DocumentLoader> FrameLoader::loaderForWebsitePolicies(CanIncludeCurrentDo
     return loader;
 }
 
-void FrameLoader::updateNavigationAPIEntries()
+void FrameLoader::updateNavigationAPIEntries(std::optional<NavigationNavigationType> navigationType)
 {
     if (!m_frame->document() || !m_frame->document()->settings().navigationAPIEnabled())
         return;
@@ -4811,7 +4816,9 @@ void FrameLoader::updateNavigationAPIEntries()
         }
     }
 
-    domWindow->protectedNavigation()->initializeEntries(*currentItem, entriesForNavigationAPI);
+    RefPtr navigation = domWindow->protectedNavigation();
+    navigation->initializeEntries(*currentItem, entriesForNavigationAPI);
+    navigation->updateForActivation(m_frame->history().previousItem(), navigationType);
 }
 
 } // namespace WebCore

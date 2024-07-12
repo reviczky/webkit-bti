@@ -100,6 +100,7 @@ class BadgeClient;
 class BroadcastChannelRegistry;
 class CacheStorageProvider;
 class Chrome;
+class CompositeEditCommand;
 class ContextMenuController;
 class CookieJar;
 class CryptoClient;
@@ -110,6 +111,7 @@ class DiagnosticLoggingClient;
 class DragCaretController;
 class DragController;
 class EditorClient;
+class EditCommandComposition;
 class ElementTargetingController;
 class Element;
 class FocusController;
@@ -1164,12 +1166,19 @@ public:
 
     WEBCORE_EXPORT void updateStateForSelectedSuggestionIfNeeded();
 
+    void respondToUnappliedWritingToolsEditing(EditCommandComposition*);
+    void respondToReappliedWritingToolsEditing(EditCommandComposition*);
+
     WEBCORE_EXPORT std::optional<SimpleRange> contextRangeForSessionWithID(const WritingTools::SessionID&) const;
 #endif
 
     bool hasActiveNowPlayingSession() const { return m_hasActiveNowPlayingSession; }
     void hasActiveNowPlayingSessionChanged();
     void activeNowPlayingSessionUpdateTimerFired();
+
+#if PLATFORM(IOS_FAMILY)
+    bool canShowWhileLocked() const { return m_canShowWhileLocked; }
+#endif
 
 private:
     explicit Page(PageConfiguration&&);
@@ -1311,6 +1320,7 @@ private:
 
 #if PLATFORM(IOS_FAMILY)
     bool m_enclosedInScrollableAncestorView { false };
+    bool m_canShowWhileLocked { false };
 #endif
     
     bool m_useSystemAppearance { false };
