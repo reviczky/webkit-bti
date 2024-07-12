@@ -113,6 +113,7 @@ public:
     RTCRtpCapabilities videoRtpCapabilities(Configuration);
     Vector<RTCRtpCapabilities::HeaderExtensionCapability> audioRtpExtensions();
     Vector<RTCRtpCapabilities::HeaderExtensionCapability> videoRtpExtensions();
+    RegistryLookupResult isRtpPacketizerSupported(const String& encoding);
 #endif
 
 protected:
@@ -139,7 +140,7 @@ protected:
         GList* factory(Type) const;
 
         enum class CheckHardwareClassifier : bool { No, Yes };
-        RegistryLookupResult hasElementForMediaType(Type, const char* capsString, CheckHardwareClassifier = CheckHardwareClassifier::No, std::optional<Vector<String>> disallowedList = std::nullopt) const;
+        RegistryLookupResult hasElementForMediaType(Type, const ASCIILiteral& capsString, CheckHardwareClassifier = CheckHardwareClassifier::No, std::optional<Vector<String>> disallowedList = std::nullopt) const;
         RegistryLookupResult hasElementForCaps(Type, const GRefPtr<GstCaps>&, CheckHardwareClassifier = CheckHardwareClassifier::No, std::optional<Vector<String>> disallowedList = std::nullopt) const;
 
         GList* audioDecoderFactories { nullptr };
@@ -162,7 +163,7 @@ protected:
 
     struct GstCapsWebKitMapping {
         ElementFactories::Type elementType;
-        const char* capsString;
+        ASCIILiteral capsString;
         Vector<AtomString> webkitMimeTypes;
         Vector<AtomString> webkitCodecPatterns;
     };

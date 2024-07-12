@@ -69,6 +69,7 @@
 #include <wtf/PlatformRegisters.h>
 #include <wtf/SmallSet.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/MakeString.h>
 
 namespace JSC { namespace Wasm {
 
@@ -384,7 +385,9 @@ RegisterBinding RegisterBinding::fromValue(Value value)
 
 RegisterBinding RegisterBinding::none()
 {
-    return RegisterBinding();
+    RegisterBinding binding;
+    binding.m_kind = None;
+    return binding;
 }
 
 RegisterBinding RegisterBinding::scratch()
@@ -1398,7 +1401,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addArrayNewDefault(uint32_t typeIndex, 
     return { };
 }
 
-using arraySegmentOperation = EncodedJSValue (&)(JSC::Wasm::Instance*, uint32_t, uint32_t, uint32_t, uint32_t);
+using arraySegmentOperation = EncodedJSValue SYSV_ABI (&)(JSC::Wasm::Instance*, uint32_t, uint32_t, uint32_t, uint32_t);
 void BBQJIT::pushArrayNewFromSegment(arraySegmentOperation operation, uint32_t typeIndex, uint32_t segmentIndex, ExpressionType arraySize, ExpressionType offset, ExceptionType exceptionType, ExpressionType& result)
 {
     Vector<Value, 8> arguments = {
@@ -3209,7 +3212,7 @@ StackMap BBQJIT::makeStackMap(const ControlData& data, Stack& enclosingStack)
     for (unsigned i = 0; i < m_locals.size(); i ++)
         stackMap[stackMapIndex ++] = OSREntryValue(toB3Rep(m_locals[i]), toB3Type(m_localTypes[i]));
 
-    if (Options::useWasmIPInt()) {
+    if (Options::useWebAssemblyIPInt()) {
         // Do rethrow slots first because IPInt has them in a shadow stack.
         for (const ControlEntry& entry : m_parser->controlStack()) {
             for (unsigned i = 0; i < entry.controlData.implicitSlots(); i ++) {

@@ -70,6 +70,7 @@
 #include <JavaScriptCore/SourceCode.h>
 #include <JavaScriptCore/SourceProvider.h>
 #include <JavaScriptCore/StackVisitor.h>
+#include <wtf/text/MakeString.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include <pal/system/ios/UserInterfaceIdiom.h>
@@ -255,7 +256,7 @@ bool Quirks::shouldHideSearchFieldResultsButton() const
 }
 
 // docs.google.com https://bugs.webkit.org/show_bug.cgi?id=161984
-bool Quirks::isTouchBarUpdateSupressedForHiddenContentEditable() const
+bool Quirks::isTouchBarUpdateSuppressedForHiddenContentEditable() const
 {
 #if PLATFORM(MAC)
     if (!needsQuirks())
@@ -363,6 +364,16 @@ bool Quirks::shouldAvoidUsingIOS13ForGmail() const
 #else
     return false;
 #endif
+}
+
+// mail.google.com rdar://128360054
+// FIXME (rdar://130624461): Remove this quirk once Gmail adopts the `writingsuggestions` attribute.
+bool Quirks::shouldDisableWritingSuggestionsByDefault() const
+{
+    if (!needsQuirks())
+        return false;
+    auto& url = m_document->topDocument().url();
+    return url.host() == "mail.google.com"_s;
 }
 
 void Quirks::updateStorageAccessUserAgentStringQuirks(HashMap<RegistrableDomain, String>&& userAgentStringQuirks)

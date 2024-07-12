@@ -467,6 +467,8 @@ private:
     void textAutosizingUsesIdempotentModeChanged() final;
 #endif
 
+    void didAddOrRemoveViewportConstrainedObjects() final;
+
 #if ENABLE(META_VIEWPORT)
     double baseViewportLayoutSizeScaleFactor() const final;
 #endif
@@ -521,9 +523,12 @@ private:
 
     void removeTransparentMarkersForSessionID(const WebCore::WritingTools::SessionID&) final;
 
-    void addSourceTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&) final;
+    void addSourceTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&, const String, WTF::CompletionHandler<void(void)>&&) final;
 
-    void addDestinationTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&) final;
+    void addDestinationTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&, const String) final;
+
+    void clearAnimationsForSessionID(const WebCore::WritingTools::SessionID&) final;
+
 #endif
 
     void hasActiveNowPlayingSessionChanged(bool) final;

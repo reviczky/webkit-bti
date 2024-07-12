@@ -101,7 +101,8 @@
 #endif
 
 #if PLATFORM(WPE)
-#include "WPEWebView.h"
+#include "WPEWebViewLegacy.h"
+#include "WPEWebViewPlatform.h"
 #include "WebKitOptionMenuPrivate.h"
 #include "WebKitWebViewBackendPrivate.h"
 #include "WebKitWebViewClient.h"
@@ -337,7 +338,7 @@ struct _WebKitWebViewPrivate {
 #if ENABLE(WPE_PLATFORM)
     GRefPtr<WPEDisplay> display;
 #endif
-    std::unique_ptr<WKWPE::View> view;
+    RefPtr<WKWPE::View> view;
     Vector<FrameDisplayedCallback> frameDisplayedCallbacks;
     bool inFrameDisplayed;
     HashSet<unsigned> frameDisplayedCallbacksToRemove;
@@ -836,12 +837,14 @@ static void webkitWebViewCreatePage(WebKitWebView* webView, Ref<API::PageConfigu
     webkitWebViewBaseCreateWebPage(WEBKIT_WEB_VIEW_BASE(webView), WTFMove(configuration));
 #elif PLATFORM(WPE)
 #if ENABLE(WPE_PLATFORM)
-    webView->priv->view.reset(WKWPE::View::create(webView->priv->backend ? webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()) : nullptr, webkit_web_view_get_display(webView), configuration.get()));
-    if (auto* wpeView = webView->priv->view->wpeView())
-        g_signal_connect_object(wpeView, "closed", G_CALLBACK(webkitWebViewClosePage), webView, G_CONNECT_SWAPPED);
-#else
-    webView->priv->view.reset(WKWPE::View::create(webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()), configuration.get()));
+    if (!webView->priv->backend) {
+        webView->priv->view = WKWPE::ViewPlatform::create(webkit_web_view_get_display(webView), configuration.get());
+        if (auto* wpeView = webView->priv->view->wpeView())
+            g_signal_connect_object(wpeView, "closed", G_CALLBACK(webkitWebViewClosePage), webView, G_CONNECT_SWAPPED);
+        return;
+    }
 #endif
+    webView->priv->view = WKWPE::ViewLegacy::create(webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()), configuration.get());
 #endif
 }
 
@@ -902,8 +905,11 @@ static void webkitWebViewConstructed(GObject* object)
 
 #if ENABLE(2022_GLIB_API)
 #if ENABLE(REMOTE_INSPECTOR)
-    if (priv->isControlledByAutomation)
+    if (priv->isControlledByAutomation) {
+        if (!webkit_web_context_is_automation_allowed(priv->context.get()))
+            g_critical("WebKitWebView is-controlled-by-automation set but automation is not allowed in the context, falling back to default session.");
         priv->networkSession = webkit_web_context_get_network_session_for_automation(priv->context.get());
+    }
 #endif
     if (!priv->networkSession)
         priv->networkSession = webkit_network_session_get_default();
@@ -3098,7 +3104,7 @@ RendererBufferFormat webkitWebViewGetRendererBufferFormat(WebKitWebView* webView
 #if PLATFORM(GTK)
     return webkitWebViewBaseGetRendererBufferFormat(WEBKIT_WEB_VIEW_BASE(webView));
 #elif PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
-    return webView->priv->view->renderBufferFormat();
+    return static_cast<WKWPE::ViewPlatform*>(webView->priv->view.get())->renderBufferFormat();
 #endif
 }
 #endif

@@ -73,6 +73,7 @@
 #include "RenderTreeBuilderSVG.h"
 #include "RenderTreeBuilderTable.h"
 #include "RenderTreeMutationDisallowedScope.h"
+#include "RenderVideo.h"
 #include "RenderView.h"
 #include <wtf/SetForScope.h>
 
@@ -439,6 +440,12 @@ void RenderTreeBuilder::attachToRenderElementInternal(RenderElement& parent, Ren
     while (beforeChild && beforeChild->parent() && beforeChild->parent() != &parent)
         beforeChild = beforeChild->parent();
 
+    if (beforeChild && !beforeChild->parent()) {
+        // Should never let the RenderView be beforeChild (as who is the parent then)
+        ASSERT_NOT_REACHED();
+        beforeChild = nullptr;
+    }
+
     ASSERT(!beforeChild || beforeChild->parent() == &parent);
     ASSERT(!is<RenderText>(beforeChild) || !downcast<RenderText>(*beforeChild).inlineWrapperForDisplayContents());
 
@@ -471,7 +478,8 @@ void RenderTreeBuilder::attachToRenderElementInternal(RenderElement& parent, Ren
             // in order to compute static position for out of flow boxes, the parent has to run normal flow layout as well (as opposed to simplified)
             // FIXME: Introduce a dirty bit to bridge the gap between parent and containing block which would
             // not trigger layout but a simple traversal all the way to the direct parent and also expand it non-direct parent cases.
-            if (newChild->containingBlock() == &parent)
+            // FIXME: RenderVideo's setNeedsLayout pattern does not play well with this optimization: see webkit.org/b/276253
+            if (newChild->containingBlock() == &parent && !is<RenderVideo>(*newChild))
                 parent.setOutOfFlowChildNeedsStaticPositionLayout();
             else
                 parent.setChildNeedsLayout();

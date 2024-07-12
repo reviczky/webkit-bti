@@ -131,6 +131,7 @@
 #include <pal/text/KillRing.h>
 #include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/unicode/CharacterNames.h>
 
 #if PLATFORM(MAC)
@@ -1192,6 +1193,13 @@ static void dispatchInputEvents(RefPtr<Element> startRoot, RefPtr<Element> endRo
 
 bool Editor::willApplyEditing(CompositeEditCommand& command, Vector<RefPtr<StaticRange>>&& targetRanges)
 {
+#if ENABLE(WRITING_TOOLS)
+    if (suppressEditingForWritingTools()) {
+        RELEASE_LOG(Editing, "Editor %p suppressed editing for Writing Tools", this);
+        return false;
+    }
+#endif
+
     m_hasHandledAnyEditing = true;
 
     if (!command.shouldDispatchInputEvents())
@@ -1280,6 +1288,9 @@ void Editor::unappliedEditing(EditCommandComposition& composition)
     updateEditorUINowIfScheduled();
 
     m_alternativeTextController->respondToUnappliedEditing(&composition);
+#if ENABLE(WRITING_TOOLS)
+    protectedDocument()->page()->respondToUnappliedWritingToolsEditing(&composition);
+#endif
 
     m_lastEditCommand = nullptr;
     if (auto* client = this->client())
@@ -1303,6 +1314,10 @@ void Editor::reappliedEditing(EditCommandComposition& composition)
     dispatchInputEvents(composition.startingRootEditableElement(), composition.endingRootEditableElement(), "historyRedo"_s, IsInputMethodComposing::No);
     
     updateEditorUINowIfScheduled();
+
+#if ENABLE(WRITING_TOOLS)
+    protectedDocument()->page()->respondToReappliedWritingToolsEditing(&composition);
+#endif
 
     m_lastEditCommand = nullptr;
     if (auto* client = this->client())
@@ -2258,6 +2273,11 @@ void Editor::setComposition(const String& text, SetCompositionMode mode)
         // An open typing command that disagrees about current selection would cause issues with typing later on.
         TypingCommand::closeTyping(document);
     }
+}
+
+void Editor::closeTyping()
+{
+    TypingCommand::closeTyping(m_document);
 }
 
 RenderInline* Editor::writingSuggestionRenderer() const

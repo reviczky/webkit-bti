@@ -40,7 +40,6 @@
 #include <wtf/SetForScope.h>
 #include <wtf/SortedArrayMap.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringConcatenateNumbers.h>
 
 namespace WGSL {
 
@@ -76,6 +75,7 @@ public:
     void visit(AST::Function&) override;
     void visit(AST::Structure&) override;
     void visit(AST::Variable&) override;
+    void visit(AST::ConstAssert&) override;
 
     void visit(const Type*, AST::Expression&);
     void visit(const Type*, AST::CallExpression&);
@@ -741,6 +741,11 @@ void FunctionDefinitionWriter::visit(AST::Variable& variable)
     serializeVariable(variable);
 }
 
+void FunctionDefinitionWriter::visit(AST::ConstAssert&)
+{
+    // const_assert should not generate any code
+}
+
 void FunctionDefinitionWriter::visitGlobal(AST::Variable& variable)
 {
     if (variable.flavor() != AST::VariableFlavor::Override)
@@ -1044,7 +1049,7 @@ void FunctionDefinitionWriter::visit(const Type* type)
         },
         [&](const Struct& structure) {
             m_stringBuilder.append(structure.structure.name());
-            if (shouldPackType() && type->isConstructible() && structure.structure.role() == AST::StructureRole::UserDefinedResource)
+            if (shouldPackType() && structure.structure.role() == AST::StructureRole::UserDefinedResource)
                 m_stringBuilder.append("::PackedType"_s);
         },
         [&](const PrimitiveStruct& structure) {
@@ -2270,7 +2275,22 @@ void FunctionDefinitionWriter::visit(AST::CallStatement& statement)
 
 void FunctionDefinitionWriter::visit(AST::CompoundAssignmentStatement& statement)
 {
-    visit(statement.leftExpression());
+    bool serialized = false;
+    auto* leftExpression = &statement.leftExpression();
+    if (auto* identity = dynamicDowncast<AST::IdentityExpression>(*leftExpression))
+        leftExpression = &identity->expression();
+    if (auto* call = dynamicDowncast<AST::CallExpression>(*leftExpression)) {
+        auto& target = call->target();
+        if (auto* identifier = dynamicDowncast<AST::IdentifierExpression>(target)) {
+            if (identifier->identifier() == "__unpack"_s) {
+                serialized = true;
+                visit(call->arguments()[0]);
+            }
+        }
+    }
+    if (!serialized)
+        visit(statement.leftExpression());
+
     m_stringBuilder.append(" = "_s);
     serializeBinaryExpression(statement.leftExpression(), statement.operation(), statement.rightExpression());
 }

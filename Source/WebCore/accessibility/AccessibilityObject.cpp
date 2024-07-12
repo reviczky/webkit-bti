@@ -95,6 +95,7 @@
 #include "VisibleUnits.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringView.h>
 #include <wtf/text/WTFString.h>
@@ -1637,7 +1638,9 @@ std::optional<SimpleRange> AccessibilityObject::rangeForCharacterRange(const Cha
 
 VisiblePositionRange AccessibilityObject::lineRangeForPosition(const VisiblePosition& visiblePosition) const
 {
-    return { startOfLine(visiblePosition), endOfLine(visiblePosition) };
+    VisiblePosition startPosition = startOfLine(visiblePosition);
+    VisiblePosition endPosition = nextLineEndPosition(startPosition);
+    return { startPosition, endPosition };
 }
 
 #if PLATFORM(MAC)

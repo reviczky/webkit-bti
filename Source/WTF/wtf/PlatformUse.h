@@ -98,7 +98,7 @@
 #define USE_APPKIT 1
 #endif
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || PLATFORM(IOS) || PLATFORM(VISION)
 #define USE_PASSKIT 1
 #endif
 
@@ -145,26 +145,12 @@
 
 /* FIXME: This name should be more specific if it is only for use with CallFrame* */
 /* Use __builtin_frame_address(1) to get CallFrame* */
-/*
-Disabled on Windows as __builtin_frame_address(1) is unavailable, and cannot be recreated with 
-__builtin_frame_address(0) due to how the stack frame is grown. __builtin_frame_address(0) points at
-the current frame, and if the current function spills registers to the stack it's pointing at
-the first of four home spaces. Without knowing the size of the stack frame the compiler reserves 
-we can't walk back up to find the RBP at function entry.
-Could be implemented on Windows with __builtin_stack_address() once implemented in clang, as that
-returns the stack pointer at the time of function entry.
-https://bugs.webkit.org/show_bug.cgi?id=275567
-*/
-#if CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS))
+#if CPU(ARM64) || CPU(X86_64)
 #define USE_BUILTIN_FRAME_ADDRESS 1
 #endif
 
 #if OS(DARWIN) && CPU(ARM64) && HAVE(REMAP_JIT)
 #define USE_EXECUTE_ONLY_JIT_WRITE_FUNCTION 1
-#endif
-
-#if PLATFORM(IOS) || PLATFORM(VISION)
-#define USE_PASSKIT 1
 #endif
 
 #if PLATFORM(IOS) || PLATFORM(VISION)
@@ -289,11 +275,6 @@ https://bugs.webkit.org/show_bug.cgi?id=275567
 #define USE_NSIMAGE_FOR_SVG_SUPPORT 1
 #endif
 
-#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 130000) \
-    || PLATFORM(IOS_FAMILY)
-#define USE_CTFONTHASTABLE 1
-#endif
-
 // Use OS(MACOS) to pick up JSCOnly ports on Mac.
 #if OS(MACOS) || PLATFORM(MACCATALYST) || (PLATFORM(IOS_FAMILY) && TARGET_OS_SIMULATOR)
 #if USE(APPLE_INTERNAL_SDK)
@@ -384,17 +365,6 @@ https://bugs.webkit.org/show_bug.cgi?id=275567
 #define USE_CONCATENATED_IMPULSE_RESPONSES 1
 #endif
 
-#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 130000) \
-    || PLATFORM(IOS_FAMILY)
-// The header says "Before macOS 13.0 and iOS 16.0 this attribute is not accurate"
-#define USE_KCTFONTVARIATIONAXESATTRIBUTE 1
-#endif
-
-#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 130000) \
-    || PLATFORM(IOS_FAMILY)
-#define USE_VARIABLE_OPTICAL_SIZING 1
-#endif
-
 #if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED < 150000) \
     || (PLATFORM(IOS_FAMILY) && __IPHONE_OS_VERSION_MAX_ALLOWED < 180000) \
     || (PLATFORM(APPLETV) && __TV_OS_VERSION_MAX_ALLOWED < 180000) \
@@ -461,4 +431,8 @@ https://bugs.webkit.org/show_bug.cgi?id=275567
 
 #if !defined(USE_LEGACY_EXTENSIONKIT_SPI) && PLATFORM(IOS_SIMULATOR) && __IPHONE_OS_VERSION_MAX_ALLOWED <= 170400
 #define USE_LEGACY_EXTENSIONKIT_SPI 1
+#endif
+
+#if !USE(EXTENSIONKIT_PROCESS_TERMINATION) && PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000
+#define USE_EXTENSIONKIT_PROCESS_TERMINATION 1
 #endif

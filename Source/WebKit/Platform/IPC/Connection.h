@@ -422,10 +422,11 @@ public:
     void decrementDispatchMessageMarkedDispatchWhenWaitingForSyncReplyCount() { --m_inDispatchMessageMarkedDispatchWhenWaitingForSyncReplyCount; }
 
     bool inSendSync() const { return m_inSendSyncCount; }
+    unsigned inDispatchSyncMessageCount() const { return m_inDispatchSyncMessageCount; }
 
     Identifier identifier() const;
 
-#if PLATFORM(COCOA) && !USE(EXTENSIONKIT)
+#if PLATFORM(COCOA) && !USE(EXTENSIONKIT_PROCESS_TERMINATION)
     bool kill();
 #endif
 

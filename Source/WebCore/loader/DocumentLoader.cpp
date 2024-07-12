@@ -103,6 +103,7 @@
 #include <wtf/Ref.h>
 #include <wtf/Scope.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/WTFString.h>
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -1081,8 +1082,7 @@ bool DocumentLoader::disallowWebArchive() const
 
 #if ENABLE(WEB_ARCHIVE)
     // On purpose of maintaining existing tests.
-    auto* localFrame = dynamicDowncast<LocalFrame>(frame()->mainFrame());
-    bool alwaysAllowLocalWebArchive = localFrame && localFrame->settings().alwaysAllowLocalWebarchive();
+    bool alwaysAllowLocalWebArchive = frame()->mainFrame().settings().alwaysAllowLocalWebarchive();
 #else
     bool alwaysAllowLocalWebArchive { false };
 #endif
@@ -2057,7 +2057,8 @@ bool DocumentLoader::maybeLoadEmpty()
     String mimeType = shouldLoadEmpty ? textHTMLContentTypeAtom() : frameLoader()->client().generatedMIMETypeForURLScheme(m_request.url().protocol());
     m_response = ResourceResponse(m_request.url(), mimeType, 0, "UTF-8"_s);
 
-    if (!frameLoader()->stateMachine().isDisplayingInitialEmptyDocument()) {
+    bool isDisplayingInitialEmptyDocument = frameLoader()->stateMachine().isDisplayingInitialEmptyDocument();
+    if (!isDisplayingInitialEmptyDocument) {
         if (auto coopEnforcementResult = doCrossOriginOpenerHandlingOfResponse(m_response)) {
             m_responseCOOP = coopEnforcementResult->crossOriginOpenerPolicy;
             if (coopEnforcementResult->needsBrowsingContextGroupSwitch)
@@ -2066,6 +2067,7 @@ bool DocumentLoader::maybeLoadEmpty()
     }
 
     SetForScope isInFinishedLoadingOfEmptyDocument { m_isInFinishedLoadingOfEmptyDocument, true };
+    m_isInitialAboutBlank = isDisplayingInitialEmptyDocument;
     finishedLoading();
     return true;
 }
