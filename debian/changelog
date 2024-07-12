@@ -10,6 +10,8 @@ webkit2gtk (2.45.5-1) UNRELEASED; urgency=medium
       package.
     - debian/rules: Add USE_OLD_WEBDRIVER_PKG and the logic to decide
       which packages to build.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 12 Jul 2024 10:26:57 +0200
 
