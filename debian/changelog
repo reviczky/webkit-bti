@@ -1,11 +1,11 @@
-wpewebkit (2.44.2-2) UNRELEASED; urgency=medium
+wpewebkit (2.44.2-2) experimental; urgency=medium
 
   * debian/control:
     - Put the transitional package libwpewebkit-1.0-doc in oldlibs.
   * Rename wpewebkit-driver to wpewebkit-webdriver and add a transitional
     package.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 16 May 2024 15:08:47 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 15 Jul 2024 11:58:35 +0200
 
 wpewebkit (2.44.2-1) unstable; urgency=medium
 
