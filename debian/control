@@ -94,12 +94,14 @@ Description: Web content engine for embedded devices
  .
  This package contains the shared libraries.
 
-Package: wpewebkit-driver
+Package: wpewebkit-webdriver
 Architecture: linux-any
 Section: web
 Depends: libwpewebkit-2.0-1 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
+Breaks: wpewebkit-driver (<< 2.44.2-2~)
+Replaces: wpewebkit-driver (<< 2.44.2-2~)
 Description: WPE WebKit WebDriver support
  WebKit is a modern web engine that is able to display content such as
  HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
@@ -141,5 +143,13 @@ Section: oldlibs
 Architecture: all
 Multi-Arch: foreign
 Depends: libwpewebkit-doc, ${misc:Depends}
-Description: Transitional dummy package
+Description: WPE WebKit documentation - Transitional dummy package
+ This is a transitional dummy package, it can be safely removed.
+
+Package: wpewebkit-driver
+Section: oldlibs
+Architecture: all
+Multi-Arch: foreign
+Depends: wpewebkit-webdriver, ${misc:Depends}
+Description: WPE WebKit WebDriver support - transitional dummy package
  This is a transitional dummy package, it can be safely removed.
