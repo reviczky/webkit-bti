@@ -2499,8 +2499,10 @@ std::optional<LayoutUnit> RenderBlock::firstLineBaseline() const
         return std::optional<LayoutUnit>();
 
     for (RenderBox* child = firstInFlowChildBox(); child; child = child->nextInFlowSiblingBox()) {
+        if (child->isLegend() && child->isExcludedFromNormalLayout())
+            continue;
         if (auto baseline = child->firstLineBaseline())
-            return LayoutUnit { child->logicalTop() + baseline.value() };
+            return LayoutUnit { floorToInt(child->logicalTop() + baseline.value()) };
     }
     return std::optional<LayoutUnit>();
 }
@@ -2514,8 +2516,10 @@ std::optional<LayoutUnit> RenderBlock::lastLineBaseline() const
         return std::optional<LayoutUnit>();
 
     for (RenderBox* child = lastInFlowChildBox(); child; child = child->previousInFlowSiblingBox()) {
+        if (child->isLegend() && child->isExcludedFromNormalLayout())
+            continue;
         if (auto baseline = child->lastLineBaseline())
-            return LayoutUnit { baseline.value() + child->logicalTop() };
+            return LayoutUnit { floorToInt(child->logicalTop() + baseline.value()) };
     } 
     return std::optional<LayoutUnit>();
 }
@@ -3181,7 +3185,7 @@ std::optional<LayoutUnit> RenderBlock::availableLogicalHeightForPercentageComput
         return { };
 
     auto availableHeight = [&]() -> std::optional<LayoutUnit> {
-        if (auto overridingLogicalHeightForFlex = (isFlexItem() ? downcast<RenderFlexibleBox>(parent())->usedChildOverridingLogicalHeightForPercentageResolution(*this) : std::nullopt))
+        if (auto overridingLogicalHeightForFlex = (isFlexItem() ? downcast<RenderFlexibleBox>(parent())->usedFlexItemOverridingLogicalHeightForPercentageResolution(*this) : std::nullopt))
             return overridingContentLogicalHeight(*overridingLogicalHeightForFlex);
 
         if (auto overridingLogicalHeightForGrid = (isGridItem() ? overridingLogicalHeight() : std::nullopt))

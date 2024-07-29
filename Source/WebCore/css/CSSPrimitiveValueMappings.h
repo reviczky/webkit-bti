@@ -1238,13 +1238,6 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
 
-// FIXME: Implement support for 'under left' and 'under right' values.
-#define TYPE TextUnderlinePosition
-#define FOR_EACH(CASE) CASE(Auto) CASE(Under) CASE(FromFont) CASE(Left) CASE(Right)
-DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
-#undef TYPE
-#undef FOR_EACH
-
 #define TYPE TextSecurity
 #define FOR_EACH(CASE) CASE(None) CASE(Disc) CASE(Circle) CASE(Square)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
@@ -1535,6 +1528,12 @@ template<> constexpr TextCombine fromCSSValueID(CSSValueID valueID)
 
 #define TYPE RubyPosition
 #define FOR_EACH(CASE) CASE(Before) CASE(After) CASE(InterCharacter)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
+#define TYPE RubyAlign
+#define FOR_EACH(CASE) CASE(Start) CASE(Center) CASE(SpaceBetween) CASE(SpaceAround)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH

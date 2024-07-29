@@ -79,7 +79,7 @@ public:
     void insertDebugMarker(String&& markerLabel);
     void popDebugGroup();
     void pushDebugGroup(String&& groupLabel);
-    void resolveQuerySet(const QuerySet&, uint32_t firstQuery, uint32_t queryCount, const Buffer& destination, uint64_t destinationOffset);
+    void resolveQuerySet(const QuerySet&, uint32_t firstQuery, uint32_t queryCount, Buffer& destination, uint64_t destinationOffset);
     void writeTimestamp(QuerySet&, uint32_t queryIndex);
     void setLabel(String&&);
 
@@ -105,6 +105,8 @@ public:
     void waitForCommandBufferCompletion();
     bool encoderIsCurrent(id<MTLCommandEncoder>) const;
     bool submitWillBeInvalid() const;
+    void addBuffer(id<MTLBuffer>);
+    void addTexture(id<MTLTexture>);
 
 private:
     CommandEncoder(id<MTLCommandBuffer>, id<MTLSharedEvent>, Device&);
@@ -138,6 +140,10 @@ private:
     int m_bufferMapCount { 0 };
     bool m_makeSubmitInvalid { false };
 
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
+    NSMutableSet<id<MTLTexture>> *m_managedTextures { nil };
+    NSMutableSet<id<MTLBuffer>> *m_managedBuffers { nil };
+#endif
     const Ref<Device> m_device;
 };
 

@@ -1029,6 +1029,12 @@ std::optional<T> gstStructureGet(const GstStructure* structure, ASCIILiteral key
     } else if constexpr(std::is_same_v<T, double>) {
         if (gst_structure_get_double(structure, key.characters(), &value))
             return value;
+    } else if constexpr(std::is_same_v<T, bool>) {
+        gboolean gstValue;
+        if (gst_structure_get_boolean(structure, key.characters(), &gstValue)) {
+            value = gstValue;
+            return value;
+        }
     } else
         static_assert(!std::is_same_v<T, T>, "type not implemented for gstStructureGet");
     return std::nullopt;
@@ -1039,6 +1045,7 @@ template std::optional<int64_t> gstStructureGet(const GstStructure*, ASCIILitera
 template std::optional<unsigned> gstStructureGet(const GstStructure*, ASCIILiteral key);
 template std::optional<uint64_t> gstStructureGet(const GstStructure*, ASCIILiteral key);
 template std::optional<double> gstStructureGet(const GstStructure*, ASCIILiteral key);
+template std::optional<bool> gstStructureGet(const GstStructure*, ASCIILiteral key);
 
 static RefPtr<JSON::Value> gstStructureToJSON(const GstStructure*);
 
@@ -1489,6 +1496,16 @@ GRefPtr<GstBuffer> wrapSpanData(const std::span<const uint8_t>& span)
         delete static_cast<Vector<uint8_t>*>(data);
     }));
     return buffer;
+}
+
+std::optional<unsigned> gstGetAutoplugSelectResult(ASCIILiteral nick)
+{
+    static auto enumClass = static_cast<GEnumClass*>(g_type_class_ref(g_type_from_name("GstAutoplugSelectResult")));
+    RELEASE_ASSERT(enumClass);
+    auto enumValue = g_enum_get_value_by_nick(enumClass, nick.characters());
+    if (!enumValue)
+        return std::nullopt;
+    return enumValue->value;
 }
 
 #undef GST_CAT_DEFAULT
