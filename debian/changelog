@@ -5,6 +5,9 @@ webkit2gtk (2.45.6-1) UNRELEASED; urgency=medium
     - Update copyright information of all files.
   * debian/control.in:
     - Update Standards-Version to 4.7.0 (no changes).
+    - Replace gobject-introspection-bin with gobject-introspection. This
+      fixes a lintian error: missing-build-dependency-for-dh-addon gir
+      (does not satisfy gobject-introspection:any | dh-sequence-gir:any)
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 29 Jul 2024 12:02:49 +0200
 
