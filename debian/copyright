@@ -13,7 +13,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
            2005 Maksim Orlovich <maksim@kde.org>
-           2005, 2007-2023 Google Inc
+           2005, 2007-2024 Google Inc
            2005, 2008-2013 Nokia
            2005-2006 Alexey Proskuryakov
            2005-2008 Eric Seidel <eric@webkit.org>
@@ -68,7 +68,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2011 Peter Varga <pvarga@webkit.org>, University of Szeged
            2011 ProFUSION embedded systems
            2011 Renata Hodovan <reni@webkit.org>
-           2011, 2014-2017, 2022-2023 The Chromium Authors
+           2011, 2014-2017, 2022-2024 The Chromium Authors
            2011-2012, 2014-2015 Ericsson AB
            2011-2012, 2019 the V8 project authors
            2011-2013 Intel Corporation
@@ -140,10 +140,12 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2022 Jarred Sumner
            2022 Leaning Technologies Inc
            2022 Leonardo Taccari <leot@NetBSD.org>
+           2022 Noam Rosenthal
            2023 ChangSeok Oh <changseok@webkit.org>
            2023 Colin Vidal <colin@cvidal.org>
            2023 Devin Rousso <hi@devinrousso.com>
            2023 James Howard <jameshoward@mac.com>
+           2024 Keith Cirkel <webkit@keithcirkel.co.uk>
            2024 SONY Interactive Entertainment Inc
 License: BSD-2-clause
 Comment:
@@ -194,7 +196,7 @@ License: BSD-2-clause or BSL-1.0
 
 Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/RobinHoodHashTable.h
-Copyright: 2015-2023 Apple Inc
+Copyright: 2015-2024 Apple Inc
 License: BSD-2-clause or Expat
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
@@ -2456,6 +2458,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/freetype/FontSetCache.h
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.cpp
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.h
+       Source/WebCore/platform/graphics/gstreamer/DMABufUtilities.cpp
+       Source/WebCore/platform/graphics/gstreamer/DMABufUtilities.h
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
@@ -2724,8 +2728,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderImage.h
        Source/WebCore/rendering/RenderImageResource.cpp
        Source/WebCore/rendering/RenderImageResource.h
-       Source/WebCore/rendering/RenderImageResourceStyleImage.cpp
-       Source/WebCore/rendering/RenderImageResourceStyleImage.h
        Source/WebCore/rendering/RenderInline.cpp
        Source/WebCore/rendering/RenderInline.h
        Source/WebCore/rendering/RenderLayerModelObject.cpp
@@ -4073,7 +4075,7 @@ Copyright: 1998 Netscape Communications Corporation
            2001-2006 mozilla.org
            2003-2024 Apple Inc
            2007-2009 Torch Mobile Inc
-           2014 Google Inc
+           2013-2014 Google Inc
            2019 Adobe
            2020-2022 Igalia S.L.
 License: LGPL-2.1+ or MPL-1.1
