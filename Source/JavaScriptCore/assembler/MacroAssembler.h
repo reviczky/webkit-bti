@@ -1039,11 +1039,6 @@ public:
         lshift64(src, imm, dest);
     }
 
-    void lshiftPtr(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
-    {
-        lshift64(imm, shiftAmount, dest);
-    }
-
     void rshiftPtr(Imm32 imm, RegisterID srcDest)
     {
         rshift64(trustedImm32ForShift(imm), srcDest);
@@ -2328,11 +2323,6 @@ public:
     {
         lshift32(src, trustedImm32ForShift(amount), dest);
     }
-
-    void lshift32(Imm32 amount, RegisterID shiftAmount, RegisterID dest)
-    {
-        lshift32(trustedImm32ForShift(amount), shiftAmount, dest);
-    }
     
     void rshift32(Imm32 imm, RegisterID dest)
     {
@@ -2418,6 +2408,7 @@ public:
 
     // This leaks memory. Must not be used for production.
     JS_EXPORT_PRIVATE void probeDebug(Function<void(Probe::Context&)>);
+    JS_EXPORT_PRIVATE void probeDebugSIMD(Function<void(Probe::Context&)>);
 
     // Let's you print from your JIT generated code.
     // See comments in MacroAssemblerPrinter.h for examples of how to use this.

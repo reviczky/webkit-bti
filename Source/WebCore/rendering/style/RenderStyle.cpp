@@ -903,6 +903,7 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.hyphenationLimitAfter != second.hyphenationLimitAfter
         || first.hyphenationString != second.hyphenationString
         || first.rubyPosition != second.rubyPosition
+        || first.rubyAlign != second.rubyAlign
         || first.textCombine != second.textCombine
         || first.textEmphasisMark != second.textEmphasisMark
         || first.textEmphasisPosition != second.textEmphasisPosition
@@ -1964,6 +1965,7 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyTextAutospace);
             changingProperties.m_properties.set(CSSPropertyFontStyle);
 #if ENABLE(VARIATION_FONTS)
+            changingProperties.m_properties.set(CSSPropertyFontOpticalSizing);
             changingProperties.m_properties.set(CSSPropertyFontVariationSettings);
 #endif
             changingProperties.m_properties.set(CSSPropertyFontWeight);
@@ -2047,12 +2049,18 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyImageOrientation);
         if (first.textAlignLast != second.textAlignLast)
             changingProperties.m_properties.set(CSSPropertyTextAlignLast);
+        if (first.textBoxEdge != second.textBoxEdge)
+            changingProperties.m_properties.set(CSSPropertyTextBoxEdge);
         if (first.textJustify != second.textJustify)
             changingProperties.m_properties.set(CSSPropertyTextJustify);
         if (first.textDecorationSkipInk != second.textDecorationSkipInk)
             changingProperties.m_properties.set(CSSPropertyTextDecorationSkipInk);
+        if (first.textUnderlinePosition != second.textUnderlinePosition)
+            changingProperties.m_properties.set(CSSPropertyTextUnderlinePosition);
         if (first.rubyPosition != second.rubyPosition)
             changingProperties.m_properties.set(CSSPropertyWebkitRubyPosition);
+        if (first.rubyAlign != second.rubyAlign)
+            changingProperties.m_properties.set(CSSPropertyRubyAlign);
         if (first.paintOrder != second.paintOrder)
             changingProperties.m_properties.set(CSSPropertyPaintOrder);
         if (first.capStyle != second.capStyle)
@@ -2067,6 +2075,8 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyScrollbarColor);
         if (first.listStyleType != second.listStyleType)
             changingProperties.m_properties.set(CSSPropertyListStyleType);
+        if (first.hyphenationString != second.hyphenationString)
+            changingProperties.m_properties.set(CSSPropertyHyphenateCharacter);
 
         // customProperties is handled separately.
         // Non animated styles are followings.
@@ -2076,7 +2086,6 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // hyphenationLimitBefore
         // hyphenationLimitAfter
         // hyphenationLimitLines
-        // hyphenationString
         // tapHighlightColor
         // nbspMode
         // useTouchOverflowScrolling
@@ -2091,7 +2100,6 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // visitedLinkStrokeColor
         // hasSetStrokeColor
         // usedZoom
-        // textBoxEdge
         // textSecurity
         // userModify
         // speakAs
@@ -2101,7 +2109,6 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // touchCalloutEnabled
         // lineGrid
         // imageRendering
-        // textUnderlinePosition
         // textZoom
         // lineSnap
         // lineAlign
@@ -2167,12 +2174,12 @@ void RenderStyle::setCursorList(RefPtr<CursorList>&& list)
     m_rareInheritedData.access().cursorData = WTFMove(list);
 }
 
-void RenderStyle::setQuotes(RefPtr<QuotesData>&& q)
+void RenderStyle::setQuotes(RefPtr<QuotesData>&& quotes)
 {
-    if (m_rareInheritedData->quotes == q || (m_rareInheritedData->quotes && q && *m_rareInheritedData->quotes == *q))
+    if (arePointingToEqualData(m_rareInheritedData->quotes.get(), quotes.get()))
         return;
 
-    m_rareInheritedData.access().quotes = WTFMove(q);
+    m_rareInheritedData.access().quotes = WTFMove(quotes);
 }
 
 void RenderStyle::setWillChange(RefPtr<WillChangeData>&& willChangeData)
@@ -2881,6 +2888,16 @@ void RenderStyle::setFontSizeAdjust(FontSizeAdjust sizeAdjust)
     auto selector = fontCascade().fontSelector();
     auto description = fontDescription();
     description.setFontSizeAdjust(sizeAdjust);
+
+    setFontDescription(WTFMove(description));
+    fontCascade().update(selector);
+}
+
+void RenderStyle::setFontOpticalSizing(FontOpticalSizing opticalSizing)
+{
+    auto selector = fontCascade().fontSelector();
+    auto description = fontDescription();
+    description.setOpticalSizing(opticalSizing);
 
     setFontDescription(WTFMove(description));
     fontCascade().update(selector);

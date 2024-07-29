@@ -153,8 +153,10 @@
 #include <arm/arch.h>
 #endif
 
-#if OS(DARWIN) && PLATFORM(MAC)
+#if OS(DARWIN)
+#if __has_include(<libproc.h>)
 #include <libproc.h>
+#endif
 #endif
 
 #if OS(DARWIN)
@@ -2580,9 +2582,9 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentReceiveBroadcast, (JSGlobalObject* g
             auto handler = [&vm, jsMemory](Wasm::Memory::GrowSuccess, PageCount oldPageCount, PageCount newPageCount) { jsMemory->growSuccessCallback(vm, oldPageCount, newPageCount); };
             RefPtr<Wasm::Memory> memory;
             if (auto shared = std::get<RefPtr<SharedArrayBufferContents>>(WTFMove(content)))
-                memory = Wasm::Memory::create(shared.releaseNonNull(), WTFMove(handler));
+                memory = Wasm::Memory::create(vm, shared.releaseNonNull(), WTFMove(handler));
             else
-                memory = Wasm::Memory::createZeroSized(MemorySharingMode::Shared, WTFMove(handler));
+                memory = Wasm::Memory::createZeroSized(vm, MemorySharingMode::Shared, WTFMove(handler));
             jsMemory->adopt(memory.releaseNonNull());
             return jsMemory;
         }
@@ -3465,12 +3467,14 @@ int main(int argc, char** argv WTF_TZONE_EXTRA_MAIN_ARGS)
     WTF_TZONE_INIT(boothash);
 #endif
 
-#if OS(DARWIN) && PLATFORM(MAC)
+#if OS(DARWIN)
+#if __has_include(<libproc.h>)
     // Let the kernel kill us when OOM
     {
         int retval = proc_setpcontrol(PROC_SETPC_TERMINATE);
         ASSERT_UNUSED(retval, !retval);
     }
+#endif
 #endif
 
 #if OS(WINDOWS)

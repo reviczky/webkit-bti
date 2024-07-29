@@ -702,15 +702,6 @@ enum class TextGroupAlign : uint8_t {
     Center
 };
 
-enum class TextUnderlinePosition : uint8_t {
-    // FIXME: Implement support for 'under left' and 'under right' values.
-    Auto,
-    Under,
-    FromFont,
-    Left,
-    Right
-};
-
 enum class TextBoxTrim : uint8_t {
     None,
     Start,
@@ -952,6 +943,13 @@ enum class TextEmphasisPosition : uint8_t {
     Right = 1 << 3
 };
 
+enum class TextUnderlinePosition : uint8_t {
+    Under    = 1 << 0,
+    FromFont = 1 << 1,
+    Left     = 1 << 2,
+    Right    = 1 << 3
+};
+
 enum class TextOrientation : uint8_t {
     Mixed,
     Upright,
@@ -1024,6 +1022,13 @@ enum class RubyPosition : uint8_t {
     Before,
     After,
     InterCharacter
+};
+
+enum class RubyAlign : uint8_t {
+    Start,
+    Center,
+    SpaceBetween,
+    SpaceAround
 };
 
 #if ENABLE(DARK_MODE_CSS)
@@ -1282,6 +1287,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, QuoteType);
 WTF::TextStream& operator<<(WTF::TextStream&, ReflectionDirection);
 WTF::TextStream& operator<<(WTF::TextStream&, Resize);
 WTF::TextStream& operator<<(WTF::TextStream&, RubyPosition);
+WTF::TextStream& operator<<(WTF::TextStream&, RubyAlign);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxis);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxisAlignType);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStop);

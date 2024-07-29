@@ -199,7 +199,7 @@ public:
         }
 
         for (Variable* variable : m_procedure.variables()) {
-            auto addResult = m_variableToTmps.add(variable, Vector<Tmp, 1>(m_procedure.resultCount(variable->type())));
+            auto addResult = m_variableToTmps.add(variable, Vector<Tmp>(m_procedure.resultCount(variable->type())));
             ASSERT(addResult.isNewEntry);
             for (unsigned i = 0; i < m_procedure.resultCount(variable->type()); ++i)
                 addResult.iterator->value[i] = tmpForType(m_procedure.typeAtOffset(variable->type(), i));
@@ -1372,7 +1372,7 @@ private:
             }
             break;
         case Width128:
-            RELEASE_ASSERT(is64Bit() && Options::useWebAssemblySIMD());
+            RELEASE_ASSERT(is64Bit() && Options::useWasmSIMD());
             RELEASE_ASSERT(bank == FP);
             return MoveVector;
         }
@@ -1677,10 +1677,17 @@ private:
                 arg = dstTmp;
                 break;
             }
-            case ValueRep::StackArgument:
+            case ValueRep::StackArgument: {
                 arg = Arg::callArg(value.rep().offsetFromSP());
-                append(trappingInst(m_value, createStore(moveForType(value.value()->type()), value.value(), arg)));
+                auto from = someArg(value.value());
+                if (value.value()->type() == Int64) {
+                    Arg hiArg = Arg::callArg(value.rep().offsetFromSP() + 4);
+                    append(trappingInst(m_value, moveForType(Int32), m_value, from.tmpHi(), hiArg));
+                    append(trappingInst(m_value, moveForType(Int32), m_value, from.tmpLo(), arg));
+                } else
+                    append(trappingInst(m_value, createStore(moveForType(value.value()->type()), value.value(), arg)));
                 break;
+            }
             case ValueRep::SomeRegisterPair:
             case ValueRep::SomeLateRegisterPair: {
                 RELEASE_ASSERT(value.value()->type() == Int64);
@@ -3215,6 +3222,14 @@ private:
             Value* left = m_value->child(0);
             Value* right = m_value->child(1);
 
+            if (m_value->type() == Int64 && isValidForm(Sub64, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp, Arg::Tmp)) {
+                auto leftArg = someArg(left);
+                auto rightArg = someArg(right);
+                auto result = someArg(m_value);
+                append(Sub64, leftArg.tmpHi(), leftArg.tmpLo(), rightArg.tmpHi(), rightArg.tmpLo(), result.tmpHi(), result.tmpLo());
+                return;
+            }
+
             auto tryAppendMultiplySub = [&] () -> bool {
                 if (imm(right) && !m_valueToTmp[right])
                     return false;
@@ -3315,6 +3330,19 @@ private:
             Value* left = m_value->child(0);
             Value* right = m_value->child(1);
 
+            if ((left->type() == Int64) && (right->type() == Int64)) {
+                Tmp tmpHiLo = tmpForType(Int32);
+                Tmp tmpLoHi = tmpForType(Int32);
+                auto argLeft = someArg(left);
+                auto argRight = someArg(right);
+                auto result = someArg(m_value);
+                append(Air::Mul32, argLeft.tmpHi(), argRight.tmpLo(), tmpHiLo);
+                append(Air::Mul32, argLeft.tmpLo(), argRight.tmpHi(), tmpLoHi);
+                append(Air::UMull32, argLeft.tmpLo(), argRight.tmpLo(), result.tmpHi(), result.tmpLo());
+                append(Air::Add32, tmpHiLo, result.tmpHi());
+                append(Air::Add32, tmpLoHi, result.tmpHi());
+                return;
+            }
             auto tryAppendMultiplyWithExtend = [&] () -> bool {
                 auto tryAirOpcode = [&] () -> Air::Opcode {
                     if (m_value->type() != Int64)

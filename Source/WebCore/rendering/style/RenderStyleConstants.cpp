@@ -933,6 +933,17 @@ TextStream& operator<<(TextStream& ts, RubyPosition position)
     return ts;
 }
 
+TextStream& operator<<(TextStream& ts, RubyAlign alignment)
+{
+    switch (alignment) {
+    case RubyAlign::Start: ts << "start"; break;
+    case RubyAlign::Center: ts << "center"; break;
+    case RubyAlign::SpaceBetween: ts << "space-between"; break;
+    case RubyAlign::SpaceAround: ts << "space-around"; break;
+    }
+    return ts;
+}
+
 TextStream& operator<<(TextStream& ts, ScrollSnapAxis axis)
 {
     switch (axis) {
@@ -1186,14 +1197,13 @@ TextStream& operator<<(TextStream& ts, TextTransform textTransform)
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, TextUnderlinePosition underlinePosition)
+TextStream& operator<<(TextStream& ts, TextUnderlinePosition position)
 {
-    switch (underlinePosition) {
-    case TextUnderlinePosition::Auto: ts << "Auto"; break;
-    case TextUnderlinePosition::Under: ts << "Under"; break;
-    case TextUnderlinePosition::FromFont: ts << "FromFont"; break;
-    case TextUnderlinePosition::Left: ts << "Left"; break;
-    case TextUnderlinePosition::Right: ts << "Right"; break;
+    switch (position) {
+    case TextUnderlinePosition::FromFont: ts << "from-font"; break;
+    case TextUnderlinePosition::Under: ts << "under"; break;
+    case TextUnderlinePosition::Left: ts << "left"; break;
+    case TextUnderlinePosition::Right: ts << "right"; break;
     }
     return ts;
 }

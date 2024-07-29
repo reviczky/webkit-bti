@@ -118,7 +118,7 @@ public:
     //
     // Operations are typically two operand - operation(source, srcDst)
     // For many operations the source may be an TrustedImm32, the srcDst operand
-    // may often be a memory location (explictly described using an Address
+    // may often be a memory location (explicitly described using an Address
     // object).
 
     void add32(RegisterID src, RegisterID dest)
@@ -475,18 +475,6 @@ public:
     {
         move32IfNeeded(src, dest);
         lshift32(imm, dest);
-    }
-
-    void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
-    {
-        if (shiftAmount == dest) {
-            move(imm, scratchRegister());
-            lshift32(shiftAmount, scratchRegister());
-            move(scratchRegister(), dest);
-        } else {
-            move(imm, dest);
-            lshift32(shiftAmount, dest);
-        }
     }
 
     void lshift32(Address src, RegisterID shiftAmount, RegisterID dest)
