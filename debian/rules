@@ -39,6 +39,10 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
+ifneq ($(filter amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4,$(DEB_HOST_ARCH)),)
+EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=ON
+endif
+
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)

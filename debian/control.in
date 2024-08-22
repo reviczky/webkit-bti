@@ -23,6 +23,7 @@ Build-Depends: debhelper-compat (= 13),
                libjxl-dev,
                liblcms2-dev,
                libmanette-0.2-dev (>= 0.2.4) [linux-any],
+               libsysprof-capture-4-dev (>= 3.38.0) [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4],
                libxslt1-dev,
                libxml2-dev,
                @EXTRA_BUILD_DEPS@
