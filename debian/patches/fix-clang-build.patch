@@ -1,0 +1,21 @@
+From: Adrian Perez de Castro <aperez@igalia.com>
+Subject: Fix crash when compiled with Clang with LTO enabled
+Bug: https://bugs.webkit.org/show_bug.cgi?id=274780
+Origin: https://github.com/WebKit/WebKit/commit/4854b944b345990e4100319662777856fe8ea4aa
+Index: webkitgtk/Source/WebCore/rendering/TextDecorationPainter.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/rendering/TextDecorationPainter.cpp
++++ webkitgtk/Source/WebCore/rendering/TextDecorationPainter.cpp
+@@ -140,8 +140,10 @@ static DashArray translateIntersectionPo
+             else
+                 intermediateTuples.append(*i);
+         }
+-    } else
+-        intermediateTuples = tuples;
++    } else {
++        // XXX(274780): A plain assignment or move here makes Clang generate bad code in LTO builds.
++        intermediateTuples.swap(tuples);
++    }
+ 
+     // Step 3: Output the space between the ranges, but only if the space warrants an underline.
+     float previous = 0;

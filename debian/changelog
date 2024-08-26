@@ -23,6 +23,9 @@ wpewebkit (2.44.2-2) experimental; urgency=medium
 wpewebkit (2.44.2-1) unstable; urgency=medium
 
   * New upstream release.
+  * debian/patches/fix-clang-build.patch,
+    debian/patches/fix-webasm-crash.patch:
+    - Patches recommended by upstream after 2.44.3 was released.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 15 May 2024 11:05:32 +0200
 
