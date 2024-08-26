@@ -1,6 +1,9 @@
 webkit2gtk (2.44.3-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/fix-clang-build.patch,
+    debian/patches/fix-webasm-crash.patch:
+    - Patches recommended by upstream after 2.44.3 was released.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 12:15:26 +0200
 

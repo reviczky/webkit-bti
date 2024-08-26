@@ -6,3 +6,5 @@ reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
 disable-dmabuf-nvidia.patch
 fix-ftbfs-riscv64.patch
+fix-webasm-crash.patch
+fix-clang-build.patch
