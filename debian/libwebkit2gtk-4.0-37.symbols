@@ -66,6 +66,16 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_console_message_get_type@Base 2.12.0
  (gtk3-only)webkit_console_message_level_get_type@Base 2.19.4
  (gtk3-only)webkit_console_message_source_get_type@Base 2.19.4
+#(gtk4-only)webkit_console_message_copy@Base 2.44.3
+#(gtk4-only)webkit_console_message_free@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_level@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_line@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_source@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_source_id@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_text@Base 2.44.3
+#(gtk4-only)webkit_console_message_get_type@Base 2.44.3
+#(gtk4-only)webkit_console_message_level_get_type@Base 2.44.3
+#(gtk4-only)webkit_console_message_source_get_type@Base 2.44.3
  webkit_context_menu_action_get_type@Base 2.5.3
  webkit_context_menu_append@Base 2.5.3
  webkit_context_menu_first@Base 2.5.3
