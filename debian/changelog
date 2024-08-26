@@ -1,4 +1,4 @@
-webkit2gtk (2.44.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.44.3-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK security advisory WSA-2024-0004 lists the following
@@ -17,7 +17,7 @@ webkit2gtk (2.44.3-1) UNRELEASED; urgency=medium
       fixes a lintian error: missing-build-dependency-for-dh-addon gir
       (does not satisfy gobject-introspection:any | dh-sequence-gir:any)
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 12:15:26 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 15:24:02 +0200
 
 webkit2gtk (2.44.2-1) unstable; urgency=high
 
