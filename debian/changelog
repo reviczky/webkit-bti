@@ -1,3 +1,14 @@
+wpewebkit (2.44.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * The WPE WebKit security advisory WSA-2024-0004 lists the following
+    security fixes in the latest versions of WPE WebKit:
+    - CVE-2024-40776, CVE-2024-40779, CVE-2024-40780, CVE-2024-40782,
+      CVE-2024-40785, CVE-2024-40789, CVE-2024-40794, CVE-2024-4558
+      (fixed in 2.44.3).
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 15:34:38 +0200
+
 wpewebkit (2.44.2-2) experimental; urgency=medium
 
   * debian/control:
