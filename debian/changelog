@@ -1,4 +1,4 @@
-webkit2gtk (2.45.91-1) UNRELEASED; urgency=medium
+webkit2gtk (2.45.91-1) experimental; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream development release.
@@ -9,7 +9,7 @@ webkit2gtk (2.45.91-1) UNRELEASED; urgency=medium
   [ Jeremy Bícha ]
   * Enable sysprof profiling integration on available architectures.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 17:20:20 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 26 Aug 2024 19:32:05 +0200
 
 webkit2gtk (2.45.6-1) experimental; urgency=medium
 
