@@ -82,6 +82,15 @@ TextStream& operator<<(TextStream& ts, BackfaceVisibility visibility)
     return ts;
 }
 
+TextStream& operator<<(TextStream& ts, BlockStepInsert blockStepInsert)
+{
+    switch (blockStepInsert) {
+    case BlockStepInsert::Margin: ts << "margin"; break;
+    case BlockStepInsert::Padding: ts << "padding"; break;
+    }
+    return ts;
+}
+
 TextStream& operator<<(TextStream& ts, BorderCollapse collapse)
 {
     switch (collapse) {
@@ -480,9 +489,10 @@ TextStream& operator<<(TextStream& ts, FillAttachment attachment)
 TextStream& operator<<(TextStream& ts, FillBox fill)
 {
     switch (fill) {
-    case FillBox::Border: ts << "border"; break;
-    case FillBox::Padding: ts << "padding"; break;
-    case FillBox::Content: ts << "content"; break;
+    case FillBox::BorderBox: ts << "border-box"; break;
+    case FillBox::PaddingBox: ts << "padding-box"; break;
+    case FillBox::ContentBox: ts << "content-box"; break;
+    case FillBox::BorderArea: ts << "border-area"; break;
     case FillBox::Text: ts << "text"; break;
     case FillBox::NoClip: ts << "no-clip"; break;
     }
@@ -869,6 +879,7 @@ TextStream& operator<<(TextStream& ts, PseudoId pseudoId)
     case PseudoId::After: ts << "after"; break;
     case PseudoId::Selection: ts << "selection"; break;
     case PseudoId::SpellingError: ts << "spelling-error"; break;
+    case PseudoId::TargetText: ts << "target-text"; break;
     case PseudoId::ViewTransition: ts << "view-transition"; break;
     case PseudoId::ViewTransitionGroup: ts << "view-transition-group"; break;
     case PseudoId::ViewTransitionImagePair: ts << "view-transition-image-pair"; break;
@@ -926,8 +937,8 @@ TextStream& operator<<(TextStream& ts, Resize resize)
 TextStream& operator<<(TextStream& ts, RubyPosition position)
 {
     switch (position) {
-    case RubyPosition::Before: ts << "before"; break;
-    case RubyPosition::After: ts << "after"; break;
+    case RubyPosition::Over: ts << "over"; break;
+    case RubyPosition::Under: ts << "under"; break;
     case RubyPosition::InterCharacter: ts << "inter-character"; break;
     }
     return ts;
@@ -1232,23 +1243,24 @@ TextStream& operator<<(TextStream& ts, TextBoxTrim textBoxTrim)
 {
     switch (textBoxTrim) {
     case TextBoxTrim::None: ts << "None"; break;
-    case TextBoxTrim::Start: ts << "Start"; break;
-    case TextBoxTrim::End: ts << "End"; break;
-    case TextBoxTrim::Both: ts << "Both"; break;
+    case TextBoxTrim::TrimStart: ts << "trim-start"; break;
+    case TextBoxTrim::TrimEnd: ts << "trim-end"; break;
+    case TextBoxTrim::TrimBoth: ts << "trim-both"; break;
     }
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, TextBoxEdgeType textBoxEdgeType)
+TextStream& operator<<(TextStream& ts, TextEdgeType textEdgeType)
 {
-    switch (textBoxEdgeType) {
-    case TextBoxEdgeType::Leading: ts << "half-leading"; break;
-    case TextBoxEdgeType::Text: ts << "text-over/under baseline"; break;
-    case TextBoxEdgeType::CapHeight: ts << "cap-height baseline"; break;
-    case TextBoxEdgeType::ExHeight: ts << "x-height baseline"; break;
-    case TextBoxEdgeType::Alphabetic: ts << "alphabetic baseline"; break;
-    case TextBoxEdgeType::CJKIdeographic: ts << "ideographic-over baseline"; break;
-    case TextBoxEdgeType::CJKIdeographicInk: ts << "ideographic-ink-over/ink-under baseline"; break;
+    switch (textEdgeType) {
+    case TextEdgeType::Auto: ts << "auto"; break;
+    case TextEdgeType::Leading: ts << "half-leading"; break;
+    case TextEdgeType::Text: ts << "text-over/under baseline"; break;
+    case TextEdgeType::CapHeight: ts << "cap-height baseline"; break;
+    case TextEdgeType::ExHeight: ts << "x-height baseline"; break;
+    case TextEdgeType::Alphabetic: ts << "alphabetic baseline"; break;
+    case TextEdgeType::CJKIdeographic: ts << "ideographic-over baseline"; break;
+    case TextEdgeType::CJKIdeographicInk: ts << "ideographic-ink-over/ink-under baseline"; break;
     }
     return ts;
 }

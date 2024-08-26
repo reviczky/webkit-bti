@@ -1272,6 +1272,7 @@ void Editor::appliedEditing(CompositeEditCommand& command)
 
 bool Editor::willUnapplyEditing(const EditCommandComposition& composition) const
 {
+    TypingCommand::closeTyping(protectedDocument());
     return dispatchBeforeInputEvents(composition.startingRootEditableElement(), composition.endingRootEditableElement(), "historyUndo"_s, IsInputMethodComposing::No);
 }
 
@@ -4000,6 +4001,7 @@ void Editor::respondToChangedSelection(const VisibleSelection&, OptionSet<FrameS
 
     Ref document = protectedDocument();
 
+#if PLATFORM(IOS_FAMILY)
     auto continueDisplayingSuggestion = [&] {
         if (!m_writingSuggestionData)
             return false;
@@ -4031,6 +4033,7 @@ void Editor::respondToChangedSelection(const VisibleSelection&, OptionSet<FrameS
 
     if (m_writingSuggestionData && !continueDisplayingSuggestion)
         removeWritingSuggestionIfNeeded();
+#endif
 
     if (client())
         client()->respondToChangedSelection(document->frame());

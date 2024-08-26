@@ -42,6 +42,7 @@
 #include "AuxiliaryProcessProxy.h"
 #include "DownloadProxy.h"
 #include "DownloadProxyMessages.h"
+#include "FrameProcess.h"
 #include "GPUProcessConnectionParameters.h"
 #include "GamepadData.h"
 #include "LegacyGlobalSettings.h"
@@ -479,6 +480,11 @@ static bool shouldReportAuxiliaryProcessCrash(ProcessTerminationReason reason)
     case ProcessTerminationReason::NavigationSwap:
     case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::RequestedByGPUProcess:
+    case ProcessTerminationReason::RequestedByModelProcess:
+        return false;
+    case ProcessTerminationReason::GPUProcessCrashedTooManyTimes:
+    case ProcessTerminationReason::ModelProcessCrashedTooManyTimes:
+        ASSERT_NOT_REACHED();
         return false;
     }
 
@@ -543,7 +549,7 @@ void WebProcessPool::gpuProcessExited(ProcessID identifier, ProcessTerminationRe
             WEBPROCESSPOOL_RELEASE_LOG_ERROR(Process, "gpuProcessDidExit: GPU Process has crashed more than %u times in the last %g seconds, terminating all WebProcesses", maximumGPUProcessRelaunchAttemptsBeforeKillingWebProcesses, resetGPUProcessCrashCountDelay.seconds());
             m_resetGPUProcessCrashCountTimer.stop();
             m_recentGPUProcessCrashCount = 0;
-            terminateAllWebContentProcesses();
+            terminateAllWebContentProcesses(ProcessTerminationReason::GPUProcessCrashedTooManyTimes);
         } else if (!m_resetGPUProcessCrashCountTimer.isActive())
             m_resetGPUProcessCrashCountTimer.startOneShot(resetGPUProcessCrashCountDelay);
     }
@@ -596,7 +602,7 @@ void WebProcessPool::modelProcessExited(ProcessID identifier, ProcessTermination
             WEBPROCESSPOOL_RELEASE_LOG_ERROR(Process, "modelProcessDidExit: Model Process has crashed more than %u times in the last %g seconds, terminating all WebProcesses", maximumModelProcessRelaunchAttemptsBeforeKillingWebProcesses, resetModelProcessCrashCountDelay.seconds());
             m_resetModelProcessCrashCountTimer.stop();
             m_recentModelProcessCrashCount = 0;
-            terminateAllWebContentProcesses();
+            terminateAllWebContentProcesses(ProcessTerminationReason::ModelProcessCrashedTooManyTimes);
         } else if (!m_resetModelProcessCrashCountTimer.isActive())
             m_resetModelProcessCrashCountTimer.startOneShot(resetModelProcessCrashCountDelay);
     }
@@ -889,18 +895,6 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
 
 void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDataStore* websiteDataStore, WebProcessProxy::IsPrewarmed isPrewarmed)
 {
-#if PLATFORM(MAC)
-    auto initializationActivity = process.throttler().foregroundActivity("WebProcess initialization"_s);
-#else
-    auto initializationActivity = process.throttler().backgroundActivity("WebProcess initialization"_s);
-#endif
-    auto scopeExit = makeScopeExit([&process, initializationActivity = WTFMove(initializationActivity)]() mutable {
-        // Round-trip to the Web Content process before releasing the
-        // initialization activity, so that we're sure that all
-        // messages sent from this function have been handled.
-        process.isResponsive([initializationActivity = WTFMove(initializationActivity)] (bool) { });
-    });
-
     WebProcessCreationParameters parameters;
     parameters.auxiliaryProcessParameters = AuxiliaryProcessProxy::auxiliaryProcessParameters();
 
@@ -961,7 +955,6 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
     parameters.attrStyleEnabled = m_configuration->attrStyleEnabled();
     parameters.shouldThrowExceptionForGlobalConstantRedeclaration = m_configuration->shouldThrowExceptionForGlobalConstantRedeclaration();
     parameters.crossOriginMode = process.crossOriginMode();
-    parameters.isLockdownModeEnabled = process.lockdownMode() == WebProcessProxy::LockdownMode::Enabled;
 
 #if ENABLE(SERVICE_CONTROLS)
     auto& serviceController = ServicesController::singleton();
@@ -1205,10 +1198,9 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
     auto lockdownMode = pageConfiguration->lockdownModeEnabled() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
     RefPtr relatedPage = pageConfiguration->relatedPage();
 
-    if (pageConfiguration->openerProcess()) {
-        ASSERT(pageConfiguration->preferences().siteIsolationEnabled());
-        process = pageConfiguration->openerProcess();
-    } else if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
+    if (auto& openerInfo = pageConfiguration->openerInfo(); openerInfo && pageConfiguration->preferences().siteIsolationEnabled())
+        process = openerInfo->process.ptr();
+    else if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
         // Sharing processes, e.g. when creating the page via window.open().
         process = &relatedPage->ensureRunningProcess();
         // We do not support several WebsiteDataStores sharing a single process.
@@ -1619,12 +1611,12 @@ void WebProcessPool::stopMemorySampler()
     sendToAllProcesses(Messages::WebProcess::StopMemorySampler());
 }
 
-void WebProcessPool::terminateAllWebContentProcesses()
+void WebProcessPool::terminateAllWebContentProcesses(ProcessTerminationReason reason)
 {
     WEBPROCESSPOOL_RELEASE_LOG_ERROR(Process, "terminateAllWebContentProcesses");
     Vector<Ref<WebProcessProxy>> processes = m_processes;
     for (Ref process : processes)
-        process->terminate();
+        process->requestTermination(reason);
 }
 
 void WebProcessPool::terminateServiceWorkers()
@@ -1682,9 +1674,9 @@ bool WebProcessPool::httpPipeliningEnabled() const
 #endif
 }
 
-static WebProcessProxy* webProcessProxyFromConnection(IPC::Connection& connection, const Vector<Ref<WebProcessProxy>>& processes)
+WebProcessProxy* WebProcessPool::webProcessProxyFromConnection(const IPC::Connection& connection) const
 {
-    for (Ref process : processes) {
+    for (Ref process : m_processes) {
         if (process->hasConnection(connection))
             return process.ptr();
     }
@@ -1693,9 +1685,14 @@ static WebProcessProxy* webProcessProxyFromConnection(IPC::Connection& connectio
     return nullptr;
 }
 
+const SharedPreferencesForWebProcess& WebProcessPool::sharedPreferencesForWebProcess(const IPC::Connection& connection) const
+{
+    return webProcessProxyFromConnection(connection)->sharedPreferencesForWebProcess();
+}
+
 void WebProcessPool::handleMessage(IPC::Connection& connection, const String& messageName, const WebKit::UserData& messageBody)
 {
-    RefPtr webProcessProxy = webProcessProxyFromConnection(connection, m_processes);
+    RefPtr webProcessProxy = webProcessProxyFromConnection(connection);
     if (!webProcessProxy)
         return;
     m_injectedBundleClient->didReceiveMessageFromInjectedBundle(*this, messageName, webProcessProxy->transformHandlesToObjects(messageBody.protectedObject().get()).get());
@@ -1703,7 +1700,7 @@ void WebProcessPool::handleMessage(IPC::Connection& connection, const String& me
 
 void WebProcessPool::handleSynchronousMessage(IPC::Connection& connection, const String& messageName, const UserData& messageBody, CompletionHandler<void(UserData&&)>&& completionHandler)
 {
-    RefPtr webProcessProxy = webProcessProxyFromConnection(connection, m_processes);
+    RefPtr webProcessProxy = webProcessProxyFromConnection(connection);
     if (!webProcessProxy)
         return completionHandler({ });
 
@@ -1716,7 +1713,7 @@ void WebProcessPool::handleSynchronousMessage(IPC::Connection& connection, const
 
 void WebProcessPool::startedUsingGamepads(IPC::Connection& connection)
 {
-    RefPtr proxy = webProcessProxyFromConnection(connection, m_processes);
+    RefPtr proxy = webProcessProxyFromConnection(connection);
     if (!proxy)
         return;
 
@@ -1734,7 +1731,7 @@ void WebProcessPool::startedUsingGamepads(IPC::Connection& connection)
 void WebProcessPool::stoppedUsingGamepads(IPC::Connection& connection, CompletionHandler<void()>&& completionHandler)
 {
     CompletionHandlerCallingScope callCompletionHandlerOnExit(WTFMove(completionHandler));
-    RefPtr proxy = webProcessProxyFromConnection(connection, m_processes);
+    RefPtr proxy = webProcessProxyFromConnection(connection);
     if (!proxy)
         return;
 

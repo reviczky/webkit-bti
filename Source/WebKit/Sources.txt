@@ -63,6 +63,10 @@ GPUProcess/graphics/WebGPU/RemoteSampler.cpp
 GPUProcess/graphics/WebGPU/RemoteShaderModule.cpp
 GPUProcess/graphics/WebGPU/RemoteTexture.cpp
 GPUProcess/graphics/WebGPU/RemoteTextureView.cpp
+GPUProcess/graphics/WebGPU/RemoteXRBinding.cpp
+GPUProcess/graphics/WebGPU/RemoteXRProjectionLayer.cpp
+GPUProcess/graphics/WebGPU/RemoteXRSubImage.cpp
+GPUProcess/graphics/WebGPU/RemoteXRView.cpp
 GPUProcess/graphics/WebGPU/WebGPUObjectHeap.cpp
 GPUProcess/media/RemoteAudioHardwareListenerProxy.cpp
 GPUProcess/media/RemoteAudioSessionProxy.cpp
@@ -270,8 +274,8 @@ Shared/API/APIData.cpp
 Shared/API/APIDictionary.cpp
 Shared/API/APIError.cpp
 Shared/API/APIObject.cpp
+Shared/API/APISerializedScriptValue.cpp
 Shared/API/APIURLRequest.cpp
-Shared/API/RegisterTZoneTypes.cpp
 
 Shared/API/c/WKArray.cpp
 Shared/API/c/WKCertificateInfo.cpp
@@ -443,6 +447,7 @@ UIProcess/WebPageProxyTesting.cpp
 UIProcess/WebPasteboardProxy.cpp
 UIProcess/WebPermissionControllerProxy.cpp
 UIProcess/WebPreferences.cpp
+UIProcess/WebProcessActivityState.cpp
 UIProcess/WebProcessCache.cpp
 UIProcess/WebProcessPool.cpp
 UIProcess/WebProcessProxy.cpp
@@ -719,6 +724,10 @@ WebProcess/GPU/graphics/WebGPU/RemoteSamplerProxy.cpp
 WebProcess/GPU/graphics/WebGPU/RemoteShaderModuleProxy.cpp
 WebProcess/GPU/graphics/WebGPU/RemoteTextureProxy.cpp
 WebProcess/GPU/graphics/WebGPU/RemoteTextureViewProxy.cpp
+WebProcess/GPU/graphics/WebGPU/RemoteXRBindingProxy.cpp
+WebProcess/GPU/graphics/WebGPU/RemoteXRProjectionLayerProxy.cpp
+WebProcess/GPU/graphics/WebGPU/RemoteXRSubImageProxy.cpp
+WebProcess/GPU/graphics/WebGPU/RemoteXRViewProxy.cpp
 WebProcess/GPU/graphics/WebGPU/WebGPUDowncastConvertToBackingContext.cpp
 WebProcess/GPU/graphics/ImageBufferShareableBitmapBackend.cpp
 WebProcess/GPU/graphics/PrepareBackingStoreBuffersData.cpp
@@ -923,6 +932,10 @@ RemoteShaderModuleMessageReceiver.cpp
 RemoteTextDetectorMessageReceiver.cpp
 RemoteTextureMessageReceiver.cpp
 RemoteTextureViewMessageReceiver.cpp
+RemoteXRBindingMessageReceiver.cpp
+RemoteXRProjectionLayerMessageReceiver.cpp
+RemoteXRSubImageMessageReceiver.cpp
+RemoteXRViewMessageReceiver.cpp
 RemoteWebLockRegistryMessageReceiver.cpp
 ServiceWorkerDownloadTaskMessageReceiver.cpp
 WebBroadcastChannelRegistryMessageReceiver.cpp

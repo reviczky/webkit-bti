@@ -72,6 +72,7 @@
 #include "MIMETypeRegistry.h"
 #include "MemoryCache.h"
 #include "MixedContentChecker.h"
+#include "NavigationNavigationType.h"
 #include "NavigationRequester.h"
 #include "NavigationScheduler.h"
 #include "NetworkLoadMetrics.h"
@@ -1530,17 +1531,16 @@ void DocumentLoader::detachFromFrame(LoadWillContinueInAnotherProcess loadWillCo
     if (!m_frame)
         return;
 
-    if (auto navigationID = std::exchange(m_navigationID, 0))
-        m_frame->loader().client().documentLoaderDetached(navigationID, loadWillContinueInAnotherProcess);
+    if (auto navigationID = std::exchange(m_navigationID, { }))
+        m_frame->loader().client().documentLoaderDetached(*navigationID, loadWillContinueInAnotherProcess);
 
     InspectorInstrumentation::loaderDetachedFromFrame(*m_frame, *this);
 
     observeFrame(nullptr);
 }
 
-void DocumentLoader::setNavigationID(uint64_t navigationID)
+void DocumentLoader::setNavigationID(NavigationIdentifier navigationID)
 {
-    ASSERT(navigationID);
     m_navigationID = navigationID;
 }
 
@@ -2492,6 +2492,31 @@ ShouldOpenExternalURLsPolicy DocumentLoader::shouldOpenExternalURLsPolicyToPropa
     return ShouldOpenExternalURLsPolicy::ShouldNotAllow;
 }
 
+// https://www.w3.org/TR/css-view-transitions-2/#navigation-can-trigger-a-cross-document-view-transition
+bool DocumentLoader::navigationCanTriggerCrossDocumentViewTransition(Document& oldDocument)
+{
+    // FIXME: Consider adding implementation-defined navigation experience step.
+
+    if (std::holds_alternative<Document::SkipTransition>(oldDocument.resolveViewTransitionRule()))
+        return false;
+
+    if (!m_triggeringAction.navigationAPIType() || *m_triggeringAction.navigationAPIType() == NavigationNavigationType::Reload)
+        return false;
+
+    Ref newOrigin = SecurityOrigin::create(documentURL());
+    if (!newOrigin->isSameOriginAs(oldDocument.securityOrigin()))
+        return false;
+
+    // FIXME: If newDocument was created via cross-origin redirects, then return false.
+
+    if (*m_triggeringAction.navigationAPIType() == NavigationNavigationType::Traverse)
+        return true;
+
+    // FIXME: If isBrowserUINavigation is true, then return false.
+
+    return true;
+}
+
 void DocumentLoader::becomeMainResourceClient()
 {
 #if ENABLE(CONTENT_FILTERING)
@@ -2638,6 +2663,17 @@ bool DocumentLoader::allowsActiveContentRuleListActionsForURL(const String& cont
 bool DocumentLoader::fingerprintingProtectionsEnabled() const
 {
     return m_advancedPrivacyProtections.contains(AdvancedPrivacyProtections::FingerprintingProtections);
+}
+
+void DocumentLoader::setHTTPSByDefaultMode(HTTPSByDefaultMode mode)
+{
+    if (mode == HTTPSByDefaultMode::Disabled) {
+        if (m_advancedPrivacyProtections.contains(AdvancedPrivacyProtections::HTTPSOnly))
+            m_httpsByDefaultMode = HTTPSByDefaultMode::UpgradeAndFailClosed;
+        else if (m_advancedPrivacyProtections.contains(AdvancedPrivacyProtections::HTTPSFirst))
+            m_httpsByDefaultMode = HTTPSByDefaultMode::UpgradeWithHTTPFallback;
+    } else
+        m_httpsByDefaultMode = mode;
 }
 
 Ref<CachedResourceLoader> DocumentLoader::protectedCachedResourceLoader() const

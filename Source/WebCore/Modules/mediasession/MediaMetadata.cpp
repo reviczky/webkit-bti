@@ -99,6 +99,14 @@ ExceptionOr<Ref<MediaMetadata>> MediaMetadata::create(ScriptExecutionContext& co
     return metadata;
 }
 
+Ref<MediaMetadata> MediaMetadata::create(MediaSession& session, Vector<URL>&& images)
+{
+    auto metadata = adoptRef(*new MediaMetadata);
+    metadata->m_defaultImages = WTFMove(images);
+    metadata->setMediaSession(session);
+    return metadata;
+}
+
 MediaMetadata::MediaMetadata() = default;
 MediaMetadata::~MediaMetadata() = default;
 
@@ -144,6 +152,7 @@ void MediaMetadata::setAlbum(const String& album)
 
 ExceptionOr<void> MediaMetadata::setArtwork(ScriptExecutionContext& context, Vector<MediaImage>&& artwork)
 {
+    ASSERT(!m_defaultImages.size());
     Vector<MediaImage> resolvedArtwork;
     resolvedArtwork.reserveInitialCapacity(artwork.size());
     for (auto& image : artwork) {
@@ -154,7 +163,6 @@ ExceptionOr<void> MediaMetadata::setArtwork(ScriptExecutionContext& context, Vec
     }
 
     m_metadata.artwork = WTFMove(resolvedArtwork);
-
     refreshArtworkImage();
 
     metadataUpdated();
@@ -191,16 +199,22 @@ void MediaMetadata::refreshArtworkImage()
 {
     static_assert(s_minimumSize < s_idealSize);
 
+    m_artworkLoader = nullptr;
+
+    if (!m_session)
+        return;
+
     m_artworkImageSrc = String();
     m_artworkImage = nullptr;
-    m_artworkLoader = nullptr;
-    if (m_metadata.artwork.isEmpty())
-        return;
-    if (!m_session || !m_session->document())
+
+    size_t numArtworks = m_defaultImages.size() ? m_defaultImages.size() : m_metadata.artwork.size();
+    if (!numArtworks)
         return;
 
     // First look into the artwork's sizes attributes to attempt to determine the best score.
-    Vector<Pair> artworks(m_metadata.artwork.size(), [&](size_t index) -> Pair {
+    Vector<Pair> artworks(numArtworks, [&](size_t index) -> Pair {
+        if (m_defaultImages.size())
+            return { -1, m_defaultImages[index].string() };
         auto size = [&](const String& sizes) -> IntSize {
             if (sizes.isEmpty())
                 return { };
@@ -236,9 +250,15 @@ void MediaMetadata::refreshArtworkImage()
 
 void MediaMetadata::tryNextArtworkImage(uint32_t index, Vector<Pair>&& artworks)
 {
+    if (!m_session)
+        return;
+    RefPtr document = m_session->document();
+    if (!document)
+        return;
+
     String artworkImageSrc = artworks[index].src;
 
-    m_artworkLoader = makeUnique<ArtworkImageLoader>(*m_session->document(), artworkImageSrc, [this, index, artworkImageSrc, artworks = WTFMove(artworks)](Image* image) mutable {
+    m_artworkLoader = makeUnique<ArtworkImageLoader>(*document, artworkImageSrc, [this, index, artworkImageSrc, artworks = WTFMove(artworks)](Image* image) mutable {
         if (image && image->data() && image->width() && image->height()) {
             IntSize size { int(image->width()), int(image->height()) };
             float imageScore = imageDimensionsScore(size.width(), size.height(), s_minimumSize, s_idealSize);
@@ -277,7 +297,7 @@ void MediaMetadata::setTrackIdentifier(const String& identifier)
 void MediaMetadata::metadataUpdated()
 {
     if (m_session)
-        m_session->metadataUpdated();
+        m_session->metadataUpdated(*this);
 }
 
 }

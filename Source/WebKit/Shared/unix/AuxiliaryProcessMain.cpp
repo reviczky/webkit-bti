@@ -38,6 +38,10 @@
 #include "unix/BreakpadExceptionHandler.h"
 #endif
 
+#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX) && (!PLATFORM(PLAYSTATION) || USE(WPE_BACKEND_PLAYSTATION))
+#include "ProcessProviderLibWPE.h"
+#endif
+
 namespace WebKit {
 
 AuxiliaryProcessMainCommon::AuxiliaryProcessMainCommon()
@@ -56,7 +60,7 @@ bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
     int minimumNumArgs = 3;
 #endif
 
-#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX)
+#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX) && (!PLATFORM(PLAYSTATION) || USE(WPE_BACKEND_PLAYSTATION))
     if (ProcessProviderLibWPE::singleton().isEnabled())
         minimumNumArgs = 3;
 #endif
@@ -65,7 +69,7 @@ bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
         return false;
 
     if (auto processIdentifier = parseInteger<uint64_t>(span(argv[1])))
-        m_parameters.processIdentifier = ObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
+        m_parameters.processIdentifier = LegacyNullableObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
     else
         return false;
 

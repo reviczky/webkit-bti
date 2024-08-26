@@ -97,6 +97,7 @@ enum class PseudoId : uint32_t {
     Backdrop,
     WebKitScrollbar,
     SpellingError,
+    TargetText,
     ViewTransition,
     ViewTransitionGroup,
     ViewTransitionImagePair,
@@ -341,9 +342,10 @@ enum class FillAttachment : uint8_t {
 };
 
 enum class FillBox : uint8_t {
-    Border,
-    Padding,
-    Content,
+    BorderBox,
+    PaddingBox,
+    ContentBox,
+    BorderArea,
     Text,
     NoClip
 };
@@ -704,9 +706,9 @@ enum class TextGroupAlign : uint8_t {
 
 enum class TextBoxTrim : uint8_t {
     None,
-    Start,
-    End,
-    Both
+    TrimStart,
+    TrimEnd,
+    TrimBoth
 };
 
 enum class MarginTrimType : uint8_t {
@@ -716,7 +718,10 @@ enum class MarginTrimType : uint8_t {
     InlineEnd = 1 << 3
 };
 
-enum class TextBoxEdgeType : uint8_t {
+enum class TextEdgeType : uint8_t {
+    // Note that TextEdgeType is shared between text-box-edge and line-fit-edge,
+    // where text-box-edge's default value is auto, and line-fit-edge has leading.
+    Auto,
     Leading,
     Text,
     CapHeight,
@@ -1019,8 +1024,8 @@ enum class LineAlign : bool {
 };
 
 enum class RubyPosition : uint8_t {
-    Before,
-    After,
+    Over,
+    Under,
     InterCharacter
 };
 
@@ -1215,6 +1220,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, AnimationPlayState);
 WTF::TextStream& operator<<(WTF::TextStream&, AspectRatioType);
 WTF::TextStream& operator<<(WTF::TextStream&, AutoRepeatType);
 WTF::TextStream& operator<<(WTF::TextStream&, BackfaceVisibility);
+WTF::TextStream& operator<<(WTF::TextStream&, BlockStepInsert);
 WTF::TextStream& operator<<(WTF::TextStream&, BorderCollapse);
 WTF::TextStream& operator<<(WTF::TextStream&, BorderStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, BoxAlignment);
@@ -1314,7 +1320,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, TextUnderlinePosition);
 WTF::TextStream& operator<<(WTF::TextStream&, TextWrapMode);
 WTF::TextStream& operator<<(WTF::TextStream&, TextWrapStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, TextBoxTrim);
-WTF::TextStream& operator<<(WTF::TextStream&, TextBoxEdgeType);
+WTF::TextStream& operator<<(WTF::TextStream&, TextEdgeType);
 WTF::TextStream& operator<<(WTF::TextStream&, TextZoom);
 WTF::TextStream& operator<<(WTF::TextStream&, TransformBox);
 WTF::TextStream& operator<<(WTF::TextStream&, TransformStyle3D);

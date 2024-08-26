@@ -222,6 +222,9 @@ struct WebPageCreationParameters {
 #if HAVE(STATIC_FONT_REGISTRY)
     Vector<SandboxExtension::Handle> fontMachExtensionHandles;
 #endif
+#if HAVE(HOSTED_CORE_ANIMATION)
+    WTF::MachSendRight acceleratedCompositingPort;
+#endif
 #if HAVE(APP_ACCENT_COLORS)
     WebCore::Color accentColor;
 #if PLATFORM(MAC)
@@ -321,7 +324,7 @@ struct WebPageCreationParameters {
 
     std::optional<RemotePageParameters> remotePageParameters;
     std::optional<WebCore::FrameIdentifier> openerFrameIdentifier;
-    std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
+    WebCore::FrameIdentifier mainFrameIdentifier;
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     Vector<WebCore::LinkDecorationFilteringData> linkDecorationFilteringData;
@@ -332,8 +335,10 @@ struct WebPageCreationParameters {
     SandboxExtension::Handle machBootstrapHandle;
 #endif
 
-#if (PLATFORM(GTK) || PLATFORM(WPE)) && USE(GBM)
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#if USE(GBM)
     Vector<DMABufRendererBufferFormat> preferredBufferFormats;
+#endif
 #endif
 
 #if PLATFORM(VISION) && ENABLE(GAMEPAD)

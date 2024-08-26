@@ -57,6 +57,7 @@
 #include "CSSPropertyParserConsumer+Percent.h"
 #include "CSSPropertyParserConsumer+Position.h"
 #include "CSSPropertyParserConsumer+Resolution.h"
+#include "CSSPropertyParserConsumer+String.h"
 #include "CSSPropertyParserConsumer+Time.h"
 #include "CSSPropertyParserConsumer+URL.h"
 #include "CSSPropertyParsing.h"
@@ -212,18 +213,32 @@ bool CSSPropertyParser::parseValue(CSSPropertyID propertyID, bool important, con
     CSSPropertyParser parser(range, context, &parsedProperties);
 
     bool parseSuccess;
-    if (ruleType == StyleRuleType::FontFace)
-        parseSuccess = parser.parseFontFaceDescriptor(propertyID);
-    else if (ruleType == StyleRuleType::FontPaletteValues)
-        parseSuccess = parser.parseFontPaletteValuesDescriptor(propertyID);
-    else if (ruleType == StyleRuleType::CounterStyle)
+    switch (ruleType) {
+    case StyleRuleType::CounterStyle:
         parseSuccess = parser.parseCounterStyleDescriptor(propertyID);
-    else if (ruleType == StyleRuleType::Keyframe)
+        break;
+    case StyleRuleType::FontFace:
+        parseSuccess = parser.parseFontFaceDescriptor(propertyID);
+        break;
+    case StyleRuleType::FontPaletteValues:
+        parseSuccess = parser.parseFontPaletteValuesDescriptor(propertyID);
+        break;
+    case StyleRuleType::Keyframe:
         parseSuccess = parser.parseKeyframeDescriptor(propertyID, important);
-    else if (ruleType == StyleRuleType::Property)
+        break;
+    case StyleRuleType::Page:
+        parseSuccess = parser.parsePageDescriptor(propertyID, important);
+        break;
+    case StyleRuleType::Property:
         parseSuccess = parser.parsePropertyDescriptor(propertyID);
-    else
+        break;
+    case StyleRuleType::ViewTransition:
+        parseSuccess = parser.parseViewTransitionDescriptor(propertyID);
+        break;
+    default:
         parseSuccess = parser.parseValueStart(propertyID, important);
+        break;
+    }
 
     if (!parseSuccess)
         parsedProperties.shrink(parsedPropertiesSize);
@@ -388,6 +403,8 @@ std::pair<RefPtr<CSSValue>, CSSCustomPropertySyntax::Type> CSSPropertyParser::co
             return consumeImage(range, m_context, { AllowedImageType::URLFunction, AllowedImageType::GeneratedImage });
         case CSSCustomPropertySyntax::Type::URL:
             return consumeURL(range);
+        case CSSCustomPropertySyntax::Type::String:
+            return consumeString(range);
         case CSSCustomPropertySyntax::Type::TransformFunction:
             return consumeTransformFunction(m_range, m_context);
         case CSSCustomPropertySyntax::Type::TransformList:
@@ -492,7 +509,8 @@ RefPtr<CSSCustomPropertyValue> CSSPropertyParser::parseTypedCustomPropertyValue(
         }
         case CSSCustomPropertySyntax::Type::CustomIdent:
             return { downcast<CSSPrimitiveValue>(value).stringValue() };
-
+        case CSSCustomPropertySyntax::Type::String:
+            return { serializeString(downcast<CSSPrimitiveValue>(value).stringValue()) };
         case CSSCustomPropertySyntax::Type::TransformFunction:
         case CSSCustomPropertySyntax::Type::TransformList:
             if (RefPtr transform = transformForValue(value, builderState.cssToLengthConversionData()))
@@ -535,6 +553,18 @@ bool CSSPropertyParser::parseCounterStyleDescriptor(CSSPropertyID property)
     ASSERT(m_context.propertySettings.cssCounterStyleAtRulesEnabled);
 
     RefPtr parsedValue = CSSPropertyParsing::parseCounterStyleDescriptor(m_range, property, m_context);
+    if (!parsedValue || !m_range.atEnd())
+        return false;
+
+    addProperty(property, CSSPropertyInvalid, WTFMove(parsedValue), false);
+    return true;
+}
+
+bool CSSPropertyParser::parseViewTransitionDescriptor(CSSPropertyID property)
+{
+    ASSERT(m_context.propertySettings.crossDocumentViewTransitionsEnabled);
+
+    RefPtr parsedValue = CSSPropertyParsing::parseViewTransitionDescriptor(m_range, property, m_context);
     if (!parsedValue || !m_range.atEnd())
         return false;
 
@@ -602,6 +632,23 @@ bool CSSPropertyParser::parseFontPaletteValuesDescriptor(CSSPropertyID property)
 {
     RefPtr parsedValue = CSSPropertyParsing::parseFontPaletteValuesDescriptor(m_range, property, m_context);
     if (!parsedValue || !m_range.atEnd())
+        return false;
+
+    addProperty(property, CSSPropertyInvalid, WTFMove(parsedValue), false);
+    return true;
+}
+
+bool CSSPropertyParser::parsePageDescriptor(CSSPropertyID property, bool important)
+{
+    // Does not apply in @page per-spec.
+    if (property == CSSPropertyPage)
+        return false;
+
+    RefPtr parsedValue = CSSPropertyParsing::parsePageDescriptor(m_range, property, m_context);
+    if (!parsedValue)
+        return parseValueStart(property, important);
+
+    if (!m_range.atEnd())
         return false;
 
     addProperty(property, CSSPropertyInvalid, WTFMove(parsedValue), false);
@@ -724,9 +771,12 @@ bool CSSPropertyParser::consumeFontVariantShorthand(bool important)
     bool implicitLigatures = true;
     bool implicitNumeric = true;
     do {
+        if (m_range.peek().id() == CSSValueNormal)
+            return false;
+
         if (!capsValue && (capsValue = CSSPropertyParsing::consumeFontVariantCaps(m_range)))
             continue;
-        
+
         if (!positionValue && (positionValue = CSSPropertyParsing::consumeFontVariantPosition(m_range)))
             continue;
 
@@ -1172,6 +1222,8 @@ static constexpr InitialValue initialValueForLonghand(CSSPropertyID longhand)
         return CSSValueLegacy;
     case CSSPropertyLightingColor:
         return CSSValueWhite;
+    case CSSPropertyLineFitEdge:
+        return CSSValueLeading;
     case CSSPropertyListStylePosition:
         return CSSValueOutside;
     case CSSPropertyListStyleType:
@@ -1227,7 +1279,7 @@ static constexpr InitialValue initialValueForLonghand(CSSPropertyID longhand)
     case CSSPropertyTextDecorationStyle:
         return CSSValueSolid;
     case CSSPropertyTextBoxEdge:
-        return CSSValueLeading;
+        return CSSValueAuto;
     case CSSPropertyTextOrientation:
         return CSSValueMixed;
     case CSSPropertyTextOverflow:
@@ -1814,7 +1866,7 @@ static RefPtr<CSSValue> consumeBackgroundComponent(CSSPropertyID property, CSSPa
     switch (property) {
     // background-*
     case CSSPropertyBackgroundClip:
-        return CSSPropertyParsing::consumeSingleBackgroundClip(range);
+        return consumeSingleBackgroundClip(range, context);
     case CSSPropertyBackgroundBlendMode:
         return CSSPropertyParsing::consumeSingleBackgroundBlendMode(range);
     case CSSPropertyBackgroundAttachment:
@@ -2563,6 +2615,44 @@ bool CSSPropertyParser::consumeListStyleShorthand(bool important)
     return m_range.atEnd();
 }
 
+bool CSSPropertyParser::consumeTextBoxShorthand(bool important)
+{
+    if (m_range.peek().id() == CSSValueNormal) {
+        // if the single keyword normal is specified, it sets text-box-trim to none and text-box-edge to auto.
+        addProperty(CSSPropertyTextBoxTrim, CSSPropertyTextBox, CSSPrimitiveValue::create(CSSValueNone), important);
+        addProperty(CSSPropertyTextBoxEdge, CSSPropertyTextBox, CSSPrimitiveValue::create(CSSValueAuto), important);
+        consumeIdent(m_range);
+        return m_range.atEnd();
+    }
+
+    RefPtr<CSSValue> textBoxTrim;
+    RefPtr<CSSValue> textBoxEdge;
+
+    for (unsigned propertiesParsed = 0; propertiesParsed < 2 && !m_range.atEnd(); ++propertiesParsed) {
+        if (!textBoxTrim && (textBoxTrim = CSSPropertyParsing::consumeTextBoxTrim(m_range)))
+            continue;
+        if (!textBoxEdge && (textBoxEdge = consumeTextEdge(CSSPropertyTextBoxEdge, m_range)))
+            continue;
+        // There has to be at least one valid longhand.
+        return false;
+    }
+
+    if (!m_range.atEnd())
+        return false;
+
+    // Omitting the text-box-edge value sets it to auto (the initial value)
+    if (!textBoxEdge)
+        textBoxEdge = CSSPrimitiveValue::create(CSSValueAuto);
+
+    // Omitting the text-box-trim value sets it to both (not the initial value)
+    if (!textBoxTrim)
+        textBoxTrim = CSSPrimitiveValue::create(CSSValueTrimBoth);
+
+    addProperty(CSSPropertyTextBoxTrim, CSSPropertyTextBox, WTFMove(textBoxTrim), important);
+    addProperty(CSSPropertyTextBoxEdge, CSSPropertyTextBox, WTFMove(textBoxEdge), important);
+    return true;
+}
+
 bool CSSPropertyParser::consumeTextWrapShorthand(bool important)
 {
     RefPtr<CSSValue> mode;
@@ -2954,6 +3044,8 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
         return consumeContainIntrinsicSizeShorthand(important);
     case CSSPropertyScrollTimeline:
         return consumeScrollTimelineShorthand(important);
+    case CSSPropertyTextBox:
+        return consumeTextBoxShorthand(important);
     case CSSPropertyTextWrap:
         return consumeTextWrapShorthand(important);
     case CSSPropertyViewTimeline:

@@ -32,14 +32,15 @@
 #include "FormListedElement.h"
 #include "HTMLFormControlElement.h"
 #include "HTMLNames.h"
+#include "MouseEvent.h"
 #include "SelectionRestorationMode.h"
 #include "TypedElementDescendantIteratorInlines.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/SetForScope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLLabelElement);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLLabelElement);
 
 using namespace HTMLNames;
 

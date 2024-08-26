@@ -42,12 +42,15 @@
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/ScrollingStateTree.h>
 #include <WebCore/ScrollingTreeFrameScrollingNode.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-#define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, &connection, returnValue)
+#define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, connection, returnValue)
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteScrollingCoordinatorProxy);
 
 RemoteScrollingCoordinatorProxy::RemoteScrollingCoordinatorProxy(WebPageProxy& webPageProxy)
     : m_webPageProxy(webPageProxy)
@@ -261,6 +264,11 @@ bool RemoteScrollingCoordinatorProxy::hasScrollableMainFrame() const
     // FIXME: Locking
     auto* rootNode = m_scrollingTree->rootNode();
     return rootNode && rootNode->canHaveScrollbars();
+}
+
+WebCore::ScrollbarWidth RemoteScrollingCoordinatorProxy::mainFrameScrollbarWidth() const
+{
+    return m_scrollingTree->mainFrameScrollbarWidth();
 }
 
 OverscrollBehavior RemoteScrollingCoordinatorProxy::mainFrameHorizontalOverscrollBehavior() const

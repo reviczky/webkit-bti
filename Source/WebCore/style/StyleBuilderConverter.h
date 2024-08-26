@@ -72,7 +72,7 @@
 #include "StyleBuilderState.h"
 #include "StyleReflection.h"
 #include "StyleScrollSnapPoints.h"
-#include "StyleTextBoxEdge.h"
+#include "StyleTextEdge.h"
 #include "TabSize.h"
 #include "TextSpacing.h"
 #include "TouchAction.h"
@@ -136,7 +136,7 @@ public:
     static TextUnderlineOffset convertTextUnderlineOffset(BuilderState&, const CSSValue&);
     static TextDecorationThickness convertTextDecorationThickness(BuilderState&, const CSSValue&);
     static RefPtr<StyleReflection> convertReflection(BuilderState&, const CSSValue&);
-    static TextBoxEdge convertTextBoxEdge(BuilderState&, const CSSValue&);
+    static TextEdge convertTextEdge(BuilderState&, const CSSValue&);
     static IntSize convertInitialLetter(BuilderState&, const CSSValue&);
     static float convertTextStrokeWidth(BuilderState&, const CSSValue&);
     static OptionSet<LineBoxContain> convertLineBoxContain(BuilderState&, const CSSValue&);
@@ -216,6 +216,7 @@ public:
 
     static std::optional<Length> convertBlockStepSize(BuilderState&, const CSSValue&);
 
+    static Vector<Style::ScopedName> convertViewTransitionClass(BuilderState&, const CSSValue&);
     static std::optional<Style::ScopedName> convertViewTransitionName(BuilderState&, const CSSValue&);
     static RefPtr<WillChangeData> convertWillChange(BuilderState&, const CSSValue&);
     
@@ -266,7 +267,7 @@ inline Length BuilderConverter::convertLength(const BuilderState& builderState, 
         return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData));
 
     if (primitiveValue.isAnchor())
-        return AnchorPositionEvaluator::resolveAnchorValue(primitiveValue.cssAnchorValue(), builderState);
+        return AnchorPositionEvaluator::resolveAnchorValue(builderState, *primitiveValue.cssAnchorValue());
 
     ASSERT_NOT_REACHED();
     return Length(0, LengthType::Fixed);
@@ -760,10 +761,10 @@ inline RefPtr<PathOperation> BuilderConverter::convertRayPathOperation(BuilderSt
     return RayPathOperation::create(rayValue.angle()->computeDegrees(), size, rayValue.isContaining());
 }
 
-inline RefPtr<BasicShapePath> BuilderConverter::convertSVGPath(BuilderState&, const CSSValue& value)
+inline RefPtr<BasicShapePath> BuilderConverter::convertSVGPath(BuilderState& builderState, const CSSValue& value)
 {
     if (auto* pathValue = dynamicDowncast<CSSPathValue>(value))
-        return basicShapePathForValue(*pathValue);
+        return basicShapePathForValue(*pathValue, builderState, 1);
 
     ASSERT(is<CSSPrimitiveValue>(value));
     ASSERT(downcast<CSSPrimitiveValue>(value).valueID() == CSSValueNone);
@@ -799,7 +800,7 @@ inline RefPtr<PathOperation> BuilderConverter::convertPathOperation(BuilderState
         if (is<CSSRayValue>(singleValue))
             operation = convertRayPathOperation(builderState, singleValue);
         else if (!singleValue.isValueID())
-            operation = ShapePathOperation::create(basicShapeForValue(builderState.cssToLengthConversionData(), singleValue, builderState.style().usedZoom()));
+            operation = ShapePathOperation::create(basicShapeForValue(singleValue, builderState));
         else
             referenceBox = fromCSSValue<CSSBoxType>(singleValue);
     };
@@ -970,57 +971,65 @@ inline RefPtr<StyleReflection> BuilderConverter::convertReflection(BuilderState&
     return reflection;
 }
 
-inline TextBoxEdge BuilderConverter::convertTextBoxEdge(BuilderState&, const CSSValue& value)
+inline TextEdge BuilderConverter::convertTextEdge(BuilderState&, const CSSValue& value)
 {
-    auto& values = downcast<CSSValueList>(value);
-    auto& firstValue = downcast<CSSPrimitiveValue>(*values.item(0));
-
-    auto overValue = [&] {
-        switch (firstValue.valueID()) {
-        case CSSValueLeading:
-            return TextBoxEdgeType::Leading;
+    auto overValue = [&](CSSValueID valueID) {
+        switch (valueID) {
         case CSSValueText:
-            return TextBoxEdgeType::Text;
+            return TextEdgeType::Text;
         case CSSValueCap:
-            return TextBoxEdgeType::CapHeight;
+            return TextEdgeType::CapHeight;
         case CSSValueEx:
-            return TextBoxEdgeType::ExHeight;
+            return TextEdgeType::ExHeight;
         case CSSValueIdeographic:
-            return TextBoxEdgeType::CJKIdeographic;
+            return TextEdgeType::CJKIdeographic;
         case CSSValueIdeographicInk:
-            return TextBoxEdgeType::CJKIdeographicInk;
+            return TextEdgeType::CJKIdeographicInk;
         default:
             ASSERT_NOT_REACHED();
-            return TextBoxEdgeType::Leading;
+            return TextEdgeType::Auto;
         }
     };
 
-    auto underValue = [&] {
-        if (firstValue.valueID() == CSSValueLeading)
-            return TextBoxEdgeType::Leading;
-        if (values.length() == 1) {
-            // https://www.w3.org/TR/css-inline-3/#text-edges
-            // "If only one value is specified, both edges are assigned that same keyword if possible; else text is assumed as the missing value."
-            // FIXME: Figure out what "if possible" means here.
-            return TextBoxEdgeType::Text;
-        }
-
-        auto& secondValue = downcast<CSSPrimitiveValue>(*values.item(1));
-        switch (secondValue.valueID()) {
+    auto underValue = [&](CSSValueID valueID) {
+        switch (valueID) {
         case CSSValueText:
-            return TextBoxEdgeType::Text;
+            return TextEdgeType::Text;
         case CSSValueAlphabetic:
-            return TextBoxEdgeType::Alphabetic;
+            return TextEdgeType::Alphabetic;
         case CSSValueIdeographic:
-            return TextBoxEdgeType::CJKIdeographic;
+            return TextEdgeType::CJKIdeographic;
         case CSSValueIdeographicInk:
-            return TextBoxEdgeType::CJKIdeographicInk;
+            return TextEdgeType::CJKIdeographicInk;
         default:
             ASSERT_NOT_REACHED();
-            return TextBoxEdgeType::Leading;
+            return TextEdgeType::Auto;
         }
     };
-    return { overValue(), underValue() };
+
+    // One value was given.
+    if (is<CSSPrimitiveValue>(value)) {
+        switch (value.valueID()) {
+        case CSSValueAuto:
+            return { TextEdgeType::Auto, TextEdgeType::Auto };
+        case CSSValueLeading:
+            return { TextEdgeType::Leading, TextEdgeType::Leading };
+        // https://www.w3.org/TR/css-inline-3/#text-edges
+        // "If only one value is specified, both edges are assigned that same keyword if possible; else text is assumed as the missing value."
+        case CSSValueCap:
+        case CSSValueEx:
+            return { overValue(value.valueID()), TextEdgeType::Text };
+        default:
+            return { overValue(value.valueID()), underValue(value.valueID()) };
+        }
+    }
+
+    // Two values were given.
+    auto& pair = downcast<CSSValuePair>(value);
+    return {
+        overValue(downcast<CSSPrimitiveValue>(pair.first()).valueID()),
+        underValue(downcast<CSSPrimitiveValue>(pair.second()).valueID())
+    };
 }
 
 inline IntSize BuilderConverter::convertInitialLetter(BuilderState&, const CSSValue& value)
@@ -1084,7 +1093,7 @@ inline RefPtr<ShapeValue> BuilderConverter::convertShapeValue(BuilderState& buil
     auto referenceBox = CSSBoxType::BoxMissing;
     auto processSingleValue = [&](const CSSValue& currentValue) {
         if (!currentValue.isValueID())
-            shape = basicShapeForValue(builderState.cssToLengthConversionData(), currentValue);
+            shape = basicShapeForValue(currentValue, builderState, 1);
         else
             referenceBox = fromCSSValue<CSSBoxType>(currentValue);
     };
@@ -2029,10 +2038,30 @@ inline TextSpacingTrim BuilderConverter::convertTextSpacingTrim(BuilderState&, c
 inline TextAutospace BuilderConverter::convertTextAutospace(BuilderState&, const CSSValue& value)
 {
     if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
+        if (primitiveValue->valueID() == CSSValueNoAutospace)
+            return { };
         if (primitiveValue->valueID() == CSSValueAuto)
-            return { .m_autoSpace = TextAutospace::TextAutospaceType::Auto };
+            return { TextAutospace::Type::Auto };
+        if (primitiveValue->valueID() == CSSValueNormal)
+            return { TextAutospace::Type::Normal };
     }
-    return { };
+
+    TextAutospace::Options options;
+    for (auto& item : downcast<CSSValueList>(value)) {
+        auto& value = downcast<CSSPrimitiveValue>(item);
+        switch (value.valueID()) {
+        case CSSValueIdeographAlpha:
+            options.add(TextAutospace::Type::IdeographAlpha);
+            break;
+        case CSSValueIdeographNumeric:
+            options.add(TextAutospace::Type::IdeographNumeric);
+            break;
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+    return options;
 }
 
 inline std::optional<Length> BuilderConverter::convertBlockStepSize(BuilderState& builderState, const CSSValue& value)
@@ -2077,6 +2106,22 @@ inline OptionSet<Containment> BuilderConverter::convertContain(BuilderState&, co
         };
     }
     return containment;
+}
+
+inline Vector<Style::ScopedName> BuilderConverter::convertViewTransitionClass(BuilderState& state, const CSSValue& value)
+{
+    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
+        if (value.valueID() == CSSValueNone)
+            return { };
+        return { Style::ScopedName { AtomString { primitiveValue->stringValue() }, state.styleScopeOrdinal() } };
+    }
+
+    auto* list = dynamicDowncast<CSSValueList>(value);
+    if (!list)
+        return { };
+    return WTF::map(*list, [&](auto& item) {
+        return Style::ScopedName { AtomString { downcast<CSSPrimitiveValue>(item).stringValue() }, state.styleScopeOrdinal() };
+    });
 }
 
 inline std::optional<Style::ScopedName> BuilderConverter::convertViewTransitionName(BuilderState& state, const CSSValue& value)

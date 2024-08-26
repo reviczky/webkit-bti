@@ -71,10 +71,6 @@ OBJC_CLASS NSMutableDictionary;
 
 #endif
 
-#if PLATFORM(GTK)
-#include <WebCore/PlatformDisplay.h>
-#endif
-
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #include "DMABufRendererBufferMode.h"
 #endif
@@ -160,7 +156,7 @@ struct WebsiteDataStoreParameters;
 enum class RemoteWorkerType : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
-using WebTransportSessionIdentifier = ObjectIdentifier<WebTransportSessionIdentifierType>;
+using WebTransportSessionIdentifier = LegacyNullableObjectIdentifier<WebTransportSessionIdentifierType>;
 
 #if PLATFORM(IOS_FAMILY)
 class LayerHostingContext;
@@ -172,7 +168,7 @@ class SpeechRecognitionRealtimeMediaSourceManager;
 
 class WebProcess : public AuxiliaryProcess
 {
-    WTF_MAKE_WK_TZONE_ALLOCATED(WebProcess);
+    WTF_MAKE_TZONE_ALLOCATED(WebProcess);
 public:
     using TopFrameDomain = WebCore::RegistrableDomain;
     using SubResourceDomain = WebCore::RegistrableDomain;
@@ -205,8 +201,9 @@ public:
 
     WebCore::ThirdPartyCookieBlockingMode thirdPartyCookieBlockingMode() const { return m_thirdPartyCookieBlockingMode; }
 
-#if PLATFORM(COCOA)
+#if HAVE(HOSTED_CORE_ANIMATION)
     const WTF::MachSendRight& compositingRenderServerPort() const { return m_compositingRenderServerPort; }
+    void setCompositingRenderServerPort(WTF::MachSendRight&& port) { m_compositingRenderServerPort = WTFMove(port); }
 #endif
 
     bool fullKeyboardAccessEnabled() const { return m_fullKeyboardAccessEnabled; }
@@ -251,6 +248,8 @@ public:
 #if ENABLE(GPU_PROCESS)
     GPUProcessConnection& ensureGPUProcessConnection();
     GPUProcessConnection* existingGPUProcessConnection() { return m_gpuProcessConnection.get(); }
+    // Returns timeout duration for GPU process connections. Thread-safe.
+    Seconds gpuProcessTimeoutDuration() const;
     void gpuProcessConnectionClosed();
     void gpuProcessConnectionDidBecomeUnresponsive();
 
@@ -386,6 +385,8 @@ public:
     void updatePageScreenProperties();
 #endif
 
+    void setChildProcessDebuggabilityEnabled(bool);
+
 #if ENABLE(GPU_PROCESS)
     void setUseGPUProcessForCanvasRendering(bool);
     void setUseGPUProcessForDOMRendering(bool);
@@ -407,7 +408,7 @@ public:
     SpeechRecognitionRealtimeMediaSourceManager& ensureSpeechRecognitionRealtimeMediaSourceManager();
 #endif
 
-    bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
+    bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled.value(); }
     bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }
 #if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
     bool prefersNonBlinkingCursor() const { return m_prefersNonBlinkingCursor; }
@@ -430,6 +431,7 @@ public:
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     const OptionSet<DMABufRendererBufferMode>& dmaBufRendererBufferMode() const { return m_dmaBufRendererBufferMode; }
+    void initializePlatformDisplayIfNeeded() const;
 #endif
 
     String mediaKeysStorageDirectory() const { return m_mediaKeysStorageDirectory; }
@@ -600,7 +602,6 @@ private:
 
 #if PLATFORM(MAC)
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
-    void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
 #endif
 
 #if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
@@ -671,7 +672,7 @@ private:
     bool m_hasSetCacheModel { false };
     CacheModel m_cacheModel { CacheModel::DocumentViewer };
 
-#if PLATFORM(COCOA)
+#if HAVE(HOSTED_CORE_ANIMATION)
     WTF::MachSendRight m_compositingRenderServerPort;
 #endif
 
@@ -776,13 +777,9 @@ private:
     OptionSet<DMABufRendererBufferMode> m_dmaBufRendererBufferMode;
 #endif
 
-#if PLATFORM(GTK)
-    std::unique_ptr<WebCore::PlatformDisplay> m_displayForCompositing;
-#endif
-
     bool m_hasSuspendedPageProxy { false };
     bool m_allowExitOnMemoryPressure { true };
-    bool m_isLockdownModeEnabled { false };
+    std::optional<bool> m_isLockdownModeEnabled;
 
 #if ENABLE(MEDIA_STREAM) && ENABLE(SANDBOX_EXTENSIONS)
     HashMap<String, RefPtr<SandboxExtension>> m_mediaCaptureSandboxExtensions;
@@ -812,6 +809,8 @@ private:
     std::optional<audit_token_t> m_auditTokenForSelf;
     RetainPtr<NSMutableDictionary> m_accessibilityRemoteFrameTokenCache;
 #endif
+
+    bool m_childProcessDebuggabilityEnabled { false };
 
 #if ENABLE(GPU_PROCESS)
     bool m_useGPUProcessForCanvasRendering { false };

@@ -1256,7 +1256,6 @@ void InitGetMemoryRequirements2KHRFunctionsFromCore();
 void InitBindMemory2KHRFunctionsFromCore();
 
 GLenum CalculateGenerateMipmapFilter(ContextVk *contextVk, angle::FormatID formatID);
-size_t PackSampleCount(GLint sampleCount);
 
 namespace gl_vk
 {
@@ -1397,7 +1396,6 @@ enum class RenderPassClosureReason
     // common cases.
     XfbPause,
     FramebufferFetchEmulation,
-    ColorBufferInvalidate,
     GenerateMipmapOnCPU,
     CopyTextureOnCPU,
     TextureReformatToRenderable,

@@ -390,6 +390,12 @@ enum class WebCore::StorageBlockingPolicy : uint8_t {
     BlockAll
 };
 
+enum class WebCore::HTTPSByDefaultMode : uint8_t {
+    Disabled,
+    UpgradeWithHTTPFallback,
+    UpgradeAndFailClosed
+};
+
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 struct WebCore::TranslationContextMenuInfo {
     String text;
@@ -1971,7 +1977,7 @@ struct WebCore::ElementContext {
     WebCore::FloatRect boundingRect;
     WebCore::PageIdentifier webPageIdentifier;
     WebCore::ScriptExecutionContextIdentifier documentIdentifier;
-    WebCore::ElementIdentifier elementIdentifier;
+    Markable<WebCore::ElementIdentifier> elementIdentifier;
 };
 
 struct WebCore::ElementAnimationContext {
@@ -2933,11 +2939,8 @@ struct WebCore::GraphicsContextGLAttributes {
     bool preserveDrawingBuffer;
     WebCore::GraphicsContextGLPowerPreference powerPreference;
     bool isWebGL2;
-#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
+#if PLATFORM(MAC)
     uint64_t windowGPUID;
-#endif
-#if PLATFORM(COCOA)
-    bool useMetal;
 #endif
 #if ENABLE(WEBXR)
     bool xrCompatible;
@@ -2993,7 +2996,9 @@ header: <WebCore/BasicShapes.h>
 [Nested, CustomHeader] enum class WebCore::BasicShapeRadius::Type : uint8_t {
     Value,
     ClosestSide,
-    FarthestSide
+    FarthestSide,
+    ClosestCorner,
+    FarthestCorner
 };
 
 [CustomHeader] class WebCore::BasicShapeRadius {
@@ -3577,6 +3582,7 @@ enum class WebCore::ApplePayButtonStyle : uint8_t {
     WebCore::IntSize thumbSize();
     WebCore::IntRect trackBounds();
     Vector<double> tickRatios();
+    double thumbPosition();
 }
 
 [RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::SwitchThumbPart {
@@ -4148,7 +4154,7 @@ enum class WebCore::ScrollSnapStop : bool;
     float offset;
     WebCore::ScrollSnapStop stop;
     bool hasSnapAreaLargerThanViewport;
-    WebCore::ElementIdentifier snapTargetID;
+    Markable<WebCore::ElementIdentifier> snapTargetID;
     bool isFocused;
     Vector<size_t> snapAreaIndices;
 };
@@ -4441,6 +4447,14 @@ enum class WebCore::MediaPlayerPitchCorrectionAlgorithm : uint8_t {
     BestForMusic,
     BestForSpeech,
 };
+
+[OptionSet] enum class WebCore::MediaPlayerVideoPlaybackConfigurationOption : uint8_t {
+    Stereo,
+    StereoMultiview,
+    Spatial
+};
+using WebCore::MediaPlayerVideoPlaybackConfiguration = OptionSet<WebCore::MediaPlayerVideoPlaybackConfigurationOption>;
+using WebCore::MediaPlayer::VideoPlaybackConfiguration = WebCore::MediaPlayerVideoPlaybackConfiguration;
 
 class WebCore::GeolocationPositionData {
     double timestamp;
@@ -4872,7 +4886,7 @@ class WebCore::SocketStreamError {
 
 header: <WebCore/InbandGenericCue.h>
 [CustomHeader, AdditionalEncoder=StreamConnectionEncoder] struct WebCore::GenericCueData {
-    WebCore::InbandGenericCueIdentifier m_uniqueId;
+    Markable<WebCore::InbandGenericCueIdentifier> m_uniqueId;
     MediaTime m_startTime;
     MediaTime m_endTime;
     AtomString m_id;
@@ -6042,6 +6056,8 @@ header: <WebCore/ISOVTTCue.h>
     bool expectCancel;
     bool supportClientPin;
     bool supportInternalUV;
+    long maxCredentialCountInList;
+    long maxCredentialIdLength;
 };
 
 [Nested] enum class WebCore::MockWebAuthenticationConfiguration::NfcError : uint8_t {
@@ -8341,6 +8357,8 @@ struct WebCore::OwnerPermissionsPolicyData {
 class WebCore::PermissionsPolicy {
     WebCore::PermissionsPolicy::InheritedPolicy inheritedPolicy()
 };
+using WebCore::PermissionsPolicy::InheritedPolicy = HashSet<WebCore::PermissionsPolicy::Feature, IntHash<WebCore::PermissionsPolicy::Feature>, WTF::StrongEnumHashTraits<WebCore::PermissionsPolicy::Feature>>;
+using WebCore::OwnerPermissionsPolicyData::PolicyDirective = HashMap<WebCore::PermissionsPolicy::Feature, WebCore::Allowlist, IntHash<WebCore::PermissionsPolicy::Feature>, WTF::StrongEnumHashTraits<WebCore::PermissionsPolicy::Feature>>;
 
 header: <WebCore/ImageBufferResourceLimits.h>
 struct WebCore::ImageBufferResourceLimits {

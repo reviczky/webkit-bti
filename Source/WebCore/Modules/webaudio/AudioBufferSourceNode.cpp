@@ -37,11 +37,11 @@
 #include "FloatConversion.h"
 #include "ScriptExecutionContext.h"
 #include <JavaScriptCore/JSGenericTypedArrayViewInlines.h>
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(AudioBufferSourceNode);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(AudioBufferSourceNode);
 
 constexpr double DefaultGrainDuration = 0.020; // 20ms
 
@@ -328,9 +328,16 @@ bool AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destination
         virtualReadIndex = readIndex;
     } else if (!pitchRate) {
         unsigned readIndex = static_cast<unsigned>(virtualReadIndex);
+        int deltaFrames = static_cast<int>(virtualDeltaFrames);
+        maxFrame = static_cast<unsigned>(virtualMaxFrame);
+
+        if (readIndex >= maxFrame)
+            readIndex -= deltaFrames;
 
         for (unsigned i = 0; i < numberOfChannels; ++i)
             std::fill_n(destinationChannels[i] + writeIndex, framesToProcess, sourceChannels[i][readIndex]);
+
+        virtualReadIndex = readIndex;
     } else if (reverse) {
         unsigned maxFrame = static_cast<unsigned>(virtualMaxFrame);
         unsigned minFrame = static_cast<unsigned>(floorf(virtualMinFrame));
@@ -342,6 +349,12 @@ bool AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destination
             unsigned readIndex2 = readIndex + 1;
             if (readIndex2 >= maxFrame)
                 readIndex2 = m_isLooping ? minFrame : readIndex;
+
+            // Final sanity check on buffer access.
+            // FIXME: as an optimization, try to get rid of this inner-loop check and
+            // put assertions and guards before the loop.
+            if (readIndex >= bufferLength || readIndex2 >= bufferLength)
+                break;
 
             // Linear interpolation.
             for (unsigned i = 0; i < numberOfChannels; ++i) {

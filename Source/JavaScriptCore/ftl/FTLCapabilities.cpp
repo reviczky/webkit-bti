@@ -126,6 +126,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ArithTrunc:
     case ArithSqrt:
     case ArithFRound:
+    case ArithF16Round:
     case ArithNegate:
     case ArithUnary:
     case UInt32ToNumber:
@@ -311,6 +312,7 @@ inline CapabilityLevel canCompile(Node* node)
     case HasStructureWithFlags:
     case OverridesHasInstance:
     case InstanceOf:
+    case InstanceOfMegamorphic:
     case InstanceOfCustom:
     case DoubleRep:
     case ValueRep:

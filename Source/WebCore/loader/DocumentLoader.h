@@ -41,8 +41,10 @@
 #include "ElementTargetingTypes.h"
 #include "FrameDestructionObserver.h"
 #include "FrameLoaderTypes.h"
+#include "HTTPSByDefaultMode.h"
 #include "LinkIcon.h"
 #include "NavigationAction.h"
+#include "NavigationIdentifier.h"
 #include "ResourceError.h"
 #include "ResourceLoaderIdentifier.h"
 #include "ResourceLoaderOptions.h"
@@ -399,6 +401,9 @@ public:
     WEBCORE_EXPORT ColorSchemePreference colorSchemePreference() const;
     void setColorSchemePreference(ColorSchemePreference preference) { m_colorSchemePreference = preference; }
 
+    HTTPSByDefaultMode httpsByDefaultMode() { return m_httpsByDefaultMode; }
+    WEBCORE_EXPORT void setHTTPSByDefaultMode(HTTPSByDefaultMode);
+
     void addSubresourceLoader(SubresourceLoader&);
     void removeSubresourceLoader(LoadCompletionType, SubresourceLoader&);
     void addPlugInStreamLoader(ResourceLoader&);
@@ -505,10 +510,12 @@ public:
     void contentFilterHandleProvisionalLoadFailure(const ResourceError&);
 #endif
 
-    uint64_t navigationID() const { return m_navigationID; }
-    WEBCORE_EXPORT void setNavigationID(uint64_t);
+    std::optional<NavigationIdentifier> navigationID() const { return m_navigationID.asOptional(); }
+    WEBCORE_EXPORT void setNavigationID(NavigationIdentifier);
 
     bool isInitialAboutBlank() const { return m_isInitialAboutBlank; }
+
+    bool navigationCanTriggerCrossDocumentViewTransition(Document& oldDocument);
 
 protected:
     WEBCORE_EXPORT DocumentLoader(const ResourceRequest&, const SubstituteData&);
@@ -645,7 +652,7 @@ private:
     // benefit of the various policy handlers.
     NavigationAction m_triggeringAction;
 
-    uint64_t m_navigationID { 0 };
+    Markable<NavigationIdentifier> m_navigationID;
 
     // We retain all the received responses so we can play back the
     // WebResourceLoadDelegate messages if the item is loaded from the
@@ -732,6 +739,7 @@ private:
     MouseEventPolicy m_mouseEventPolicy { MouseEventPolicy::Default };
     ModalContainerObservationPolicy m_modalContainerObservationPolicy { ModalContainerObservationPolicy::Disabled };
     ColorSchemePreference m_colorSchemePreference { ColorSchemePreference::NoPreference };
+    HTTPSByDefaultMode m_httpsByDefaultMode { HTTPSByDefaultMode::Disabled };
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
 
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };

@@ -93,10 +93,6 @@ RefPtr<PixelBuffer> GraphicsContextGLGBM::readCompositedResults()
     return readRenderingResults();
 }
 
-void GraphicsContextGLGBM::setContextVisibility(bool)
-{
-}
-
 void GraphicsContextGLGBM::prepareForDisplay()
 {
     if (!makeContextCurrent())
@@ -108,7 +104,9 @@ void GraphicsContextGLGBM::prepareForDisplay()
     m_swapchain.displayBO = WTFMove(m_swapchain.drawBO);
     allocateDrawBufferObject();
 
+#if USE(ANGLE_GBM)
     m_frameFence = GLFence::create();
+#endif
 }
 
 bool GraphicsContextGLGBM::platformInitializeContext()

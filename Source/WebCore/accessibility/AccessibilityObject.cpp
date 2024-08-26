@@ -27,6 +27,7 @@
  */
 
 #include "config.h"
+
 #include "AccessibilityObject.h"
 
 #include "AXLogger.h"
@@ -65,6 +66,7 @@
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLSlotElement.h"
+#include "HTMLTableSectionElement.h"
 #include "HTMLTextAreaElement.h"
 #include "HitTestResult.h"
 #include "LocalFrame.h"
@@ -628,13 +630,20 @@ void AccessibilityObject::insertChild(AXCoreObject* newChild, unsigned index, De
         }
     }
 
-    auto* displayContentsParent = child->displayContentsParent();
+    RefPtr displayContentsParent = child->displayContentsParent();
     // To avoid double-inserting a child of a `display: contents` element, only insert if `this` is the rightful parent.
     if (displayContentsParent && displayContentsParent != this) {
         // Make sure the display:contents parent object knows it has a child it needs to add.
         displayContentsParent->setNeedsToUpdateChildren();
+
         // Don't exit early for certain table components, as they rely on inserting children for which they are not the rightful parent to behave correctly.
-        if (!isTableColumn() && roleValue() != AccessibilityRole::TableHeaderContainer)
+        bool allowInsert = isTableColumn() || roleValue() == AccessibilityRole::TableHeaderContainer;
+
+        // AccessibilityTable::addChildren never actually calls `insertChild` for table section elements
+        // (e.g. tbody, thead), so don't block this `insertChild` for display:contents section elements,
+        // or else the child elements of the section element will never be inserted into the tree.
+        allowInsert = allowInsert || (isAccessibilityTableInstance() && is<HTMLTableSectionElement>(displayContentsParent->element()));
+        if (!allowInsert)
             return;
     }
 
@@ -1612,7 +1621,18 @@ std::optional<SimpleRange> AccessibilityObject::rangeForCharacterRange(const Cha
 VisiblePositionRange AccessibilityObject::lineRangeForPosition(const VisiblePosition& visiblePosition) const
 {
     VisiblePosition startPosition = startOfLine(visiblePosition);
-    VisiblePosition endPosition = nextLineEndPosition(startPosition);
+    VisiblePosition endPosition = endOfLine(visiblePosition);
+
+    if (endPosition.isNull() || endPosition < startPosition) {
+        // When endOfLine fails to return a plausible result, try nextLineEndPosition, which is more robust, but ensure it doesn't return a result from a subsequent line.
+        VisiblePosition nextLineEnd = nextLineEndPosition(startPosition);
+        while (!nextLineEnd.isNull() && nextLineEnd > startPosition && !inSameLine(nextLineEnd, startPosition))
+            nextLineEnd = nextLineEnd.previous();
+
+        if (!nextLineEnd.isNull())
+            endPosition = nextLineEnd;
+    }
+
     return { startPosition, endPosition };
 }
 
@@ -1695,7 +1715,7 @@ StringView AccessibilityObject::listMarkerTextForNodeAndPosition(Node* node, Pos
 
 String AccessibilityObject::stringForRange(const SimpleRange& range) const
 {
-    TextIterator it(range);
+    TextIterator it = textIteratorIgnoringFullSizeKana(range);
     if (it.atEnd())
         return String();
 
@@ -1726,7 +1746,8 @@ String AccessibilityObject::stringForVisiblePositionRange(const VisiblePositionR
         return { };
 
     StringBuilder builder;
-    for (TextIterator it(*range); !it.atEnd(); it.advance()) {
+    TextIterator it = textIteratorIgnoringFullSizeKana(*range);
+    for (; !it.atEnd(); it.advance()) {
         // non-zero length means textual node, zero length means replaced node (AKA "attachments" in AX)
         if (it.text().length()) {
             // Add a textual representation for list marker text.
@@ -2090,22 +2111,16 @@ void AccessibilityObject::clearChildren()
     m_childrenInitialized = false;
 }
 
-AccessibilityObject* AccessibilityObject::anchorElementForNode(Node* node)
+AccessibilityObject* AccessibilityObject::anchorElementForNode(Node& node)
 {
-    RenderObject* obj = node->renderer();
-    if (!obj)
+    CheckedPtr renderer = node.renderer();
+    if (!renderer)
         return nullptr;
 
-    RefPtr<AccessibilityObject> axObj = obj->document().axObjectCache()->getOrCreate(*obj);
-    Element* anchor = axObj->anchorElement();
-    if (!anchor)
-        return nullptr;
-    
-    RenderObject* anchorRenderer = anchor->renderer();
-    if (!anchorRenderer)
-        return nullptr;
-    
-    return anchorRenderer->document().axObjectCache()->getOrCreate(*anchorRenderer);
+    WeakPtr cache = renderer->document().axObjectCache();
+    RefPtr axObject = cache ? cache->getOrCreate(renderer.get()) : nullptr;
+    auto* anchor = axObject ? axObject->anchorElement() : nullptr;
+    return anchor ? cache->getOrCreate(anchor->renderer()) : nullptr;
 }
 
 AccessibilityObject* AccessibilityObject::headingElementForNode(Node* node)
@@ -3845,7 +3860,7 @@ bool AccessibilityObject::pressedIsPresent() const
 
 TextIteratorBehaviors AccessibilityObject::textIteratorBehaviorForTextRange() const
 {
-    TextIteratorBehaviors behaviors { TextIteratorBehavior::IgnoresStyleVisibility };
+    TextIteratorBehaviors behaviors { TextIteratorBehavior::IgnoresStyleVisibility, TextIteratorBehavior::IgnoresFullSizeKana };
 
 #if USE(ATSPI)
     // We need to emit replaced elements for ATSPI, and present
@@ -3855,7 +3870,12 @@ TextIteratorBehaviors AccessibilityObject::textIteratorBehaviorForTextRange() co
     
     return behaviors;
 }
-    
+
+TextIterator AccessibilityObject::textIteratorIgnoringFullSizeKana(const SimpleRange& range)
+{
+    return TextIterator(range, { TextIteratorBehavior::IgnoresFullSizeKana });
+}
+
 AccessibilityRole AccessibilityObject::buttonRoleType() const
 {
     // If aria-pressed is present, then it should be exposed as a toggle button.

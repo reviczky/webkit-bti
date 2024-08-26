@@ -68,7 +68,7 @@ enum class AllowedFilterFunctions {
 };
 
 RefPtr<CSSValue> consumeFilter(CSSParserTokenRange&, const CSSParserContext&, AllowedFilterFunctions);
-RefPtr<CSSShadowValue> consumeSingleShadow(CSSParserTokenRange&, const CSSParserContext&, bool allowInset, bool allowSpread);
+RefPtr<CSSShadowValue> consumeSingleShadow(CSSParserTokenRange&, const CSSParserContext&, bool allowInset, bool allowSpread, bool isWebkitBoxShadow = false);
 
 struct FontStyleRaw {
     CSSValueID style;
@@ -167,7 +167,8 @@ RefPtr<CSSValue> consumeScrollSnapAlign(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeScrollSnapType(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeScrollbarColor(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeScrollbarGutter(CSSParserTokenRange&);
-RefPtr<CSSValue> consumeTextBoxEdge(CSSParserTokenRange&);
+RefPtr<CSSValue> consumeTextEdge(CSSPropertyID, CSSParserTokenRange&);
+RefPtr<CSSValue> consumeViewTransitionClass(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeViewTransitionName(CSSParserTokenRange&);
 RefPtr<CSSValue> consumeBorderRadiusCorner(CSSParserTokenRange&, CSSParserMode);
 bool consumeRadii(std::array<RefPtr<CSSValue>, 4>& horizontalRadii, std::array<RefPtr<CSSValue>, 4>& verticalRadii, CSSParserTokenRange&, CSSParserMode, bool useLegacyParsing);
@@ -184,6 +185,8 @@ RefPtr<CSSValue> consumeBorderImageWidth(CSSPropertyID, CSSParserTokenRange&);
 bool consumeBorderImageComponents(CSSPropertyID, CSSParserTokenRange&, const CSSParserContext&, RefPtr<CSSValue>&, RefPtr<CSSValue>&, RefPtr<CSSValue>&, RefPtr<CSSValue>&, RefPtr<CSSValue>&);
 RefPtr<CSSValue> consumeWebkitBorderImage(CSSPropertyID, CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeReflect(CSSParserTokenRange&, const CSSParserContext&);
+RefPtr<CSSValue> consumeSingleBackgroundClip(CSSParserTokenRange&, const CSSParserContext&);
+RefPtr<CSSValue> consumeBackgroundClip(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeBackgroundSize(CSSPropertyID, CSSParserTokenRange&, CSSParserMode);
 RefPtr<CSSValue> consumeGridAutoFlow(CSSParserTokenRange&);
 RefPtr<CSSValueList> consumeMasonryAutoFlow(CSSParserTokenRange&);
@@ -224,6 +227,7 @@ RefPtr<CSSValue> consumeAnimationTimelineView(CSSParserTokenRange&, const CSSPar
 RefPtr<CSSValue> consumeViewTimelineInsetListItem(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSValue> consumeViewTimelineInset(CSSParserTokenRange&, const CSSParserContext&);
 RefPtr<CSSPrimitiveValue> consumeAnchor(CSSParserTokenRange&, CSSParserMode);
+RefPtr<CSSValue> consumeViewTransitionTypes(CSSParserTokenRange&);
 
 RefPtr<CSSValue> consumeDeclarationValue(CSSParserTokenRange&, const CSSParserContext&);
 

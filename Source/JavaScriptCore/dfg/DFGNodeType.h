@@ -170,6 +170,7 @@ namespace JSC { namespace DFG {
     macro(ArithMin, NodeResultNumber | NodeHasVarArgs) \
     macro(ArithMax, NodeResultNumber | NodeHasVarArgs) \
     macro(ArithFRound, NodeResultDouble | NodeMustGenerate) \
+    macro(ArithF16Round, NodeResultDouble | NodeMustGenerate) \
     macro(ArithPow, NodeResultDouble) \
     macro(ArithRandom, NodeResultDouble | NodeMustGenerate) \
     macro(ArithRound, NodeResultNumber | NodeMustGenerate) \
@@ -428,6 +429,7 @@ namespace JSC { namespace DFG {
     /* Nodes for misc operations. */\
     macro(OverridesHasInstance, NodeMustGenerate | NodeResultBoolean) \
     macro(InstanceOf, NodeMustGenerate | NodeResultBoolean) \
+    macro(InstanceOfMegamorphic, NodeMustGenerate | NodeResultBoolean) \
     macro(InstanceOfCustom, NodeMustGenerate | NodeResultBoolean) \
     macro(MatchStructure, NodeMustGenerate | NodeResultBoolean) \
     \

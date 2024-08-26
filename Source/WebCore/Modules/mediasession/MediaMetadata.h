@@ -32,6 +32,7 @@
 #include "MediaMetadataInit.h"
 #include "MediaSession.h"
 #include <wtf/Function.h>
+#include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 
@@ -65,9 +66,10 @@ private:
     CachedResourceHandle<CachedImage> m_cachedImage;
 };
 
-class MediaMetadata : public RefCounted<MediaMetadata> {
+class MediaMetadata final : public RefCounted<MediaMetadata> {
 public:
     static ExceptionOr<Ref<MediaMetadata>> create(ScriptExecutionContext&, std::optional<MediaMetadataInit>&&);
+    static Ref<MediaMetadata> create(MediaSession&, Vector<URL>&&);
     ~MediaMetadata();
 
     void setMediaSession(MediaSession&);
@@ -115,6 +117,7 @@ private:
     std::unique_ptr<ArtworkImageLoader> m_artworkLoader;
     String m_artworkImageSrc;
     RefPtr<Image> m_artworkImage;
+    Vector<URL> m_defaultImages;
 };
 
 }

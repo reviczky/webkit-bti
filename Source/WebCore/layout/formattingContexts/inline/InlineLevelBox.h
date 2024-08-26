@@ -30,7 +30,7 @@
 #include "LayoutBox.h"
 #include "LayoutUnits.h"
 #include "LengthFunctions.h"
-#include "StyleTextBoxEdge.h"
+#include "StyleTextEdge.h"
 #include <wtf/OptionSet.h>
 
 namespace WebCore {
@@ -75,16 +75,14 @@ public:
     bool hasLineBoxRelativeAlignment() const;
 
     InlineLayoutUnit preferredLineHeight() const;
-    bool isPreferredLineHeightFontMetricsBased() const { return m_style.lineHeight.isNegative(); }
+    bool isPreferredLineHeightFontMetricsBased() const { return m_style.lineHeight.isNormal(); }
 
     inline bool mayStretchLineBox() const;
 
     const FontMetrics& primarymetricsOfPrimaryFont() const { return m_style.primaryFontMetrics; }
     InlineLayoutUnit fontSize() const { return m_style.primaryFontSize; }
 
-    // FIXME: Maybe it's time to subclass inline box types.
-    TextBoxEdge textBoxEdge() const { return m_style.textBoxEdge; }
-    TextBoxTrim textBoxTrim() const { return m_style.textBoxTrim; }
+    TextEdge lineFitEdge() const { return m_style.lineFitEdge; }
     InlineLayoutUnit inlineBoxContentOffsetForTextBoxTrim() const { return m_inlineBoxContentOffsetForTextBoxTrim; }
 
     bool hasTextEmphasis() const { return (hasContent() || isAtomicInlineLevelBox()) && m_textEmphasis.has_value(); };
@@ -166,8 +164,7 @@ private:
     struct Style {
         const FontMetrics& primaryFontMetrics;
         const Length& lineHeight;
-        TextBoxEdge textBoxEdge;
-        TextBoxTrim textBoxTrim;
+        TextEdge lineFitEdge;
         OptionSet<LineBoxContain> lineBoxContain;
         InlineLayoutUnit primaryFontSize { 0 };
         VerticalAlignment verticalAlignment { };

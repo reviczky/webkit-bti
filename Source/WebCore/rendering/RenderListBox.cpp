@@ -68,15 +68,15 @@
 #include "UnicodeBidi.h"
 #include "WheelEventTestMonitor.h"
 #include <math.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
 namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderListBox);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderListBox);
  
 const int itemBlockSpacing = 1;
 
@@ -496,7 +496,7 @@ void RenderListBox::paintItemForeground(PaintInfo& paintInfo, const LayoutPoint&
     const auto& listItems = selectElement().listItems();
     RefPtr listItemElement = listItems[listIndex].get();
 
-    auto itemStyle = listItemElement->computedStyle();
+    auto itemStyle = listItemElement->computedStyleForEditability();
     if (!itemStyle)
         return;
 
@@ -556,7 +556,7 @@ void RenderListBox::paintItemBackground(PaintInfo& paintInfo, const LayoutPoint&
 {
     const auto& listItems = selectElement().listItems();
     RefPtr listItemElement = listItems[listIndex].get();
-    auto itemStyle = listItemElement->computedStyle();
+    auto itemStyle = listItemElement->computedStyleForEditability();
     if (!itemStyle)
         return;
 

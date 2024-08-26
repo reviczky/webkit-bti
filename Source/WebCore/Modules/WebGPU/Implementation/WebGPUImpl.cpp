@@ -59,11 +59,16 @@ static void requestAdapterCallback(WGPURequestAdapterStatus status, WGPUAdapter 
 void GPUImpl::requestAdapter(const RequestAdapterOptions& options, CompletionHandler<void(RefPtr<Adapter>&&)>&& callback)
 {
     WGPURequestAdapterOptions backingOptions {
-        nullptr,
-        nullptr,
-        options.powerPreference ? m_convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined),
-        WGPUBackendType_Metal,
-        options.forceFallbackAdapter,
+        .nextInChain = nullptr,
+        .compatibleSurface = nullptr,
+#if CPU(X86_64)
+        .powerPreference = WGPUPowerPreference_HighPerformance,
+#else
+        .powerPreference = options.powerPreference ? m_convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined),
+#endif
+        .backendType = WGPUBackendType_Metal,
+        .forceFallbackAdapter = options.forceFallbackAdapter,
+        .xrCompatible = options.xrCompatible,
     };
 
     auto blockPtr = makeBlockPtr([convertToBackingContext = m_convertToBackingContext.copyRef(), callback = WTFMove(callback)](WGPURequestAdapterStatus status, WGPUAdapter adapter, const char*) mutable {
@@ -257,6 +262,30 @@ bool GPUImpl::isValid(const TextureView& textureView) const
 {
     WGPUTextureView wgpuTextureView = m_convertToBackingContext.get().convertToBacking(textureView);
     return wgpuTextureViewIsValid(wgpuTextureView);
+}
+
+bool GPUImpl::isValid(const XRBinding& binding) const
+{
+    WGPUXRBinding wgpuBinding = m_convertToBackingContext.get().convertToBacking(binding);
+    return wgpuXRBindingIsValid(wgpuBinding);
+}
+
+bool GPUImpl::isValid(const XRSubImage& subImage) const
+{
+    WGPUXRSubImage wgpuSubImage = m_convertToBackingContext.get().convertToBacking(subImage);
+    return wgpuXRSubImageIsValid(wgpuSubImage);
+}
+
+bool GPUImpl::isValid(const XRProjectionLayer& layer) const
+{
+    WGPUXRProjectionLayer wgpuLayer = m_convertToBackingContext.get().convertToBacking(layer);
+    return wgpuXRProjectionLayerIsValid(wgpuLayer);
+}
+
+bool GPUImpl::isValid(const XRView& view) const
+{
+    WGPUXRView wgpuView = m_convertToBackingContext.get().convertToBacking(view);
+    return wgpuXRViewIsValid(wgpuView);
 }
 
 } // namespace WebCore::WebGPU

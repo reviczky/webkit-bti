@@ -34,10 +34,13 @@
 #include "WebPageProxy.h"
 #include "WebProcessProxy.h"
 #include <WebCore/SecurityOriginData.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, m_page.legacyMainFrameProcess().connection())
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PlatformXRSystem);
 
 PlatformXRSystem::PlatformXRSystem(WebPageProxy& page)
     : m_page(page)
@@ -48,6 +51,11 @@ PlatformXRSystem::PlatformXRSystem(WebPageProxy& page)
 PlatformXRSystem::~PlatformXRSystem()
 {
     m_page.legacyMainFrameProcess().removeMessageReceiver(Messages::PlatformXRSystem::messageReceiverName(), m_page.webPageIDInMainFrameProcess());
+}
+
+const SharedPreferencesForWebProcess& PlatformXRSystem::sharedPreferencesForWebProcess() const
+{
+    return m_page.legacyMainFrameProcess().sharedPreferencesForWebProcess();
 }
 
 void PlatformXRSystem::invalidate()
@@ -246,10 +254,9 @@ void PlatformXRSystem::setImmersiveSessionState(ImmersiveSessionState state, Com
     case ImmersiveSessionState::PermissionsGranted:
         return GPUProcessProxy::getOrCreate()->webXRPromptAccepted(m_page.ensureRunningProcess().processIdentity(), WTFMove(completion));
     case ImmersiveSessionState::SessionRunning:
-        break;
     case ImmersiveSessionState::SessionEndingFromWebContent:
     case ImmersiveSessionState::SessionEndingFromSystem:
-        return GPUProcessProxy::getOrCreate()->webXRPromptAccepted(std::nullopt, WTFMove(completion));
+        break;
     }
 
     completion(true);

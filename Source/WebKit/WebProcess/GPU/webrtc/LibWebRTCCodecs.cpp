@@ -46,11 +46,12 @@
 #include <WebCore/VP9UtilitiesCocoa.h>
 #include <WebCore/VideoFrameCV.h>
 #include <wtf/MainThread.h>
+#include <wtf/TZoneMallocInlines.h>
 
 ALLOW_COMMA_BEGIN
 
-#include <webrtc/sdk/WebKit/WebKitDecoder.h>
-#include <webrtc/sdk/WebKit/WebKitEncoder.h>
+#include <webrtc/webkit_sdk/WebKit/WebKitDecoder.h>
+#include <webrtc/webkit_sdk/WebKit/WebKitEncoder.h>
 
 ALLOW_COMMA_END
 
@@ -86,6 +87,10 @@ static webrtc::WebKitVideoDecoder createVideoDecoder(const webrtc::SdpVideoForma
 
     return { };
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LibWebRTCCodecs);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(LibWebRTCCodecsDecoder, LibWebRTCCodecs::Decoder);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(LibWebRTCCodecsEncoder, LibWebRTCCodecs::Encoder);
 
 std::optional<VideoCodecType> LibWebRTCCodecs::videoCodecTypeFromWebCodec(const String& codec)
 {

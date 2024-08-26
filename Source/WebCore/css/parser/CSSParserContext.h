@@ -44,7 +44,7 @@ struct ResolvedURL {
     bool isLocalURL() const;
 };
 
-inline ResolvedURL makeResolvedURL(URL resolvedURL)
+inline ResolvedURL makeResolvedURL(URL&& resolvedURL)
 {
     auto string = resolvedURL.string();
     return { WTFMove(string), WTFMove(resolvedURL) };
@@ -88,6 +88,7 @@ struct CSSParserContext {
     bool cssStartingStyleAtRuleEnabled : 1 { false };
     bool cssStyleQueriesEnabled : 1 { false };
     bool cssTextUnderlinePositionLeftRightEnabled : 1 { false };
+    bool cssBackgroundClipBorderAreaEnabled : 1 { false };
     bool cssWordBreakAutoPhraseEnabled : 1 { false };
     bool popoverAttributeEnabled : 1 { false };
     bool sidewaysWritingModesEnabled : 1 { false };
@@ -99,7 +100,10 @@ struct CSSParserContext {
 #if ENABLE(SERVICE_CONTROLS)
     bool imageControlsEnabled : 1 { false };
 #endif
+    bool colorLayersEnabled : 1 { false };
     bool lightDarkEnabled : 1 { false };
+    bool targetTextPseudoElementEnabled : 1 { false };
+    bool viewTransitionTypesEnabled : 1 { false };
 
     // Settings, those affecting properties.
     CSSPropertySettings propertySettings;

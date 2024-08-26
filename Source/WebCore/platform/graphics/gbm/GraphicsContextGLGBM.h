@@ -61,7 +61,6 @@ public:
     RefPtr<PixelBuffer> readCompositedResults() final;
 
 
-    void setContextVisibility(bool) override;
     void prepareForDisplay() override;
 
     // GraphicsContextGLANGLE overrides
@@ -110,7 +109,10 @@ private:
 
     EGLExtensions m_eglExtensions;
     Swapchain m_swapchain;
+
+#if USE(ANGLE_GBM)
     std::unique_ptr<GLFence> m_frameFence;
+#endif
 
 #if USE(NICOSIA)
     friend class Nicosia::GCGLANGLELayer;

@@ -83,31 +83,19 @@ void StructureStubInfo::initInByIdSelf(const ConcurrentJSLockerBase& locker, Cod
 
 void StructureStubInfo::deref()
 {
-    switch (m_cacheType) {
-    case CacheType::Stub:
-        m_stub.reset();
-        return;
-    case CacheType::Unset:
-    case CacheType::GetByIdSelf:
-    case CacheType::PutByIdReplace:
-    case CacheType::InByIdSelf:
-    case CacheType::ArrayLength:
-    case CacheType::StringLength:
-        return;
-    }
-
-    RELEASE_ASSERT_NOT_REACHED();
+    m_stub.reset();
 }
 
 void StructureStubInfo::aboutToDie()
 {
-    if (m_cacheType != CacheType::Stub)
-        return;
+    if (m_inlinedHandler)
+        m_inlinedHandler->aboutToDie();
 
-    auto* cursor = m_handler.get();
-    while (cursor) {
-        cursor->aboutToDie();
-        cursor = cursor->next();
+    if (auto* cursor = m_handler.get()) {
+        while (cursor) {
+            cursor->aboutToDie();
+            cursor = cursor->next();
+        }
     }
 }
 
@@ -126,7 +114,14 @@ AccessGenerationResult StructureStubInfo::addAccessCase(const GCSafeConcurrentJS
 
         AccessGenerationResult result;
 
-        if (m_cacheType == CacheType::Stub) {
+        if (useHandlerIC()) {
+            if (!m_stub) {
+                setCacheType(locker, CacheType::Stub);
+                m_stub = makeUnique<PolymorphicAccess>();
+            }
+        }
+
+        if (m_stub) {
             result = m_stub->addCases(locker, vm, codeBlock, *this, nullptr, accessCase);
             dataLogLnIf(StructureStubInfoInternal::verbose, "Had stub, result: ", result);
 
@@ -212,7 +207,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(const GCSafeConcurrentJS
         if (useHandlerIC())
             prependHandler(codeBlock, Ref { *result.handler() }, result.generatedMegamorphicCode());
         else
-            rewireStubAsJumpInAccess(codeBlock, *result.handler());
+            rewireStubAsJumpInAccess(codeBlock, Ref { *result.handler() });
     }
 
     vm.writeBarrier(codeBlock);
@@ -223,6 +218,8 @@ void StructureStubInfo::reset(const ConcurrentJSLockerBase& locker, CodeBlock* c
 {
     clearBufferedStructures();
     m_inlineAccessBaseStructureID.clear();
+    if (m_inlinedHandler)
+        clearInlinedHandler(codeBlock);
 
     if (m_cacheType == CacheType::Unset)
         return;
@@ -345,21 +342,9 @@ void StructureStubInfo::visitAggregateImpl(Visitor& visitor)
             });
     } else
         m_identifier.visitAggregate(visitor);
-    switch (m_cacheType) {
-    case CacheType::Unset:
-    case CacheType::ArrayLength:
-    case CacheType::StringLength:
-    case CacheType::PutByIdReplace:
-    case CacheType::InByIdSelf:
-    case CacheType::GetByIdSelf:
-        return;
-    case CacheType::Stub:
+
+    if (m_stub)
         m_stub->visitAggregate(visitor);
-        return;
-    }
-    
-    RELEASE_ASSERT_NOT_REACHED();
-    return;
 }
 
 DEFINE_VISIT_AGGREGATE(StructureStubInfo);
@@ -386,15 +371,15 @@ void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker
     bool isValid = true;
     if (Structure* structure = inlineAccessBaseStructure())
         isValid &= vm.heap.isMarked(structure);
-    if (m_cacheType == CacheType::Stub) {
-        if (m_stub)
-            isValid &= m_stub->visitWeak(vm);
-        if (m_handler) {
-            RefPtr cursor = m_handler.get();
-            while (cursor) {
-                isValid &= cursor->visitWeak(vm);
-                cursor = cursor->next();
-            }
+    if (m_stub)
+        isValid &= m_stub->visitWeak(vm);
+    if (m_inlinedHandler)
+        isValid &= m_inlinedHandler->visitWeak(vm);
+    if (m_handler) {
+        RefPtr cursor = m_handler.get();
+        while (cursor) {
+            isValid &= cursor->visitWeak(vm);
+            cursor = cursor->next();
         }
     }
 
@@ -411,7 +396,7 @@ void StructureStubInfo::propagateTransitions(Visitor& visitor)
     if (Structure* structure = inlineAccessBaseStructure())
         structure->markIfCheap(visitor);
 
-    if (m_cacheType == CacheType::Stub)
+    if (m_stub)
         m_stub->propagateTransitions(visitor);
 }
 
@@ -420,17 +405,23 @@ template void StructureStubInfo::propagateTransitions(SlotVisitor&);
 
 CallLinkInfo* StructureStubInfo::callLinkInfoAt(const ConcurrentJSLocker& locker, unsigned index, const AccessCase& accessCase)
 {
-    if (!m_handler)
-        return nullptr;
-
-    if (!useDataIC)
+    if (!useDataIC) {
+        if (!m_handler)
+            return nullptr;
         return m_handler->callLinkInfoAt(locker, index);
+    }
 
-    auto* cursor = m_handler.get();
-    while (cursor) {
-        if (cursor->accessCase() == &accessCase)
-            return cursor->callLinkInfoAt(locker, 0);
-        cursor = cursor->next();
+    if (m_inlinedHandler) {
+        if (m_inlinedHandler->accessCase() == &accessCase)
+            return m_inlinedHandler->callLinkInfoAt(locker, 0);
+    }
+
+    if (auto* cursor = m_handler.get()) {
+        while (cursor) {
+            if (cursor->accessCase() == &accessCase)
+                return cursor->callLinkInfoAt(locker, 0);
+            cursor = cursor->next();
+        }
     }
     return nullptr;
 }
@@ -439,8 +430,7 @@ StubInfoSummary StructureStubInfo::summary(VM& vm) const
 {
     StubInfoSummary takesSlowPath = StubInfoSummary::TakesSlowPath;
     StubInfoSummary simple = StubInfoSummary::Simple;
-    if (m_cacheType == CacheType::Stub) {
-        PolymorphicAccess* list = m_stub.get();
+    if (auto* list = m_stub.get()) {
         for (unsigned i = 0; i < list->size(); ++i) {
             const AccessCase& access = list->at(i);
             if (access.doesCalls(vm)) {
@@ -483,7 +473,8 @@ StubInfoSummary StructureStubInfo::summary(VM& vm, const StructureStubInfo* stub
 
 bool StructureStubInfo::containsPC(void* pc) const
 {
-    if (m_cacheType != CacheType::Stub)
+    // m_inlinedHandler is not having special out-of-inline code, so we do not care.
+    if (!m_handler)
         return false;
 
     auto* cursor = m_handler.get();
@@ -569,32 +560,8 @@ static CodePtr<OperationPtrTag> slowOperationFromUnlinkedStructureStubInfo(const
     return { };
 }
 
-void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, CodeBlock* codeBlock, const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
+void StructureStubInfo::initializePredefinedRegisters()
 {
-    ASSERT(!isCompilationThread());
-    accessType = unlinkedStubInfo.accessType;
-    doneLocation = unlinkedStubInfo.doneLocation;
-    m_identifier = unlinkedStubInfo.m_identifier;
-    m_globalObject = codeBlock->globalObject();
-    callSiteIndex = CallSiteIndex(BytecodeIndex(unlinkedStubInfo.bytecodeIndex.offset()));
-    codeOrigin = CodeOrigin(unlinkedStubInfo.bytecodeIndex);
-    if (Options::useHandlerIC())
-        replaceHandler(codeBlock, InlineCacheCompiler::generateSlowPathHandler(vm, accessType));
-    else {
-        replaceHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
-        slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
-    }
-    propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
-    canBeMegamorphic = unlinkedStubInfo.canBeMegamorphic;
-    useDataIC = true;
-
-    if (unlinkedStubInfo.canBeMegamorphic)
-        bufferingCountdown = 1;
-
-    usedRegisters = RegisterSetBuilder::stubUnavailableRegisters().buildScalarRegisterSet();
-
-    m_slowOperation = slowOperationFromUnlinkedStructureStubInfo(unlinkedStubInfo);
-
     switch (accessType) {
     case AccessType::DeleteByValStrict:
     case AccessType::DeleteByValSloppy:
@@ -759,11 +726,55 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, CodeBloc
     }
 }
 
+void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, CodeBlock* codeBlock, const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
+{
+    ASSERT(!isCompilationThread());
+    accessType = unlinkedStubInfo.accessType;
+    preconfiguredCacheType = unlinkedStubInfo.preconfiguredCacheType;
+    switch (preconfiguredCacheType) {
+    case CacheType::ArrayLength:
+        m_cacheType = CacheType::ArrayLength;
+        break;
+    default:
+        break;
+    }
+    doneLocation = unlinkedStubInfo.doneLocation;
+    m_identifier = unlinkedStubInfo.m_identifier;
+    m_globalObject = codeBlock->globalObject();
+    callSiteIndex = CallSiteIndex(BytecodeIndex(unlinkedStubInfo.bytecodeIndex.offset()));
+    codeOrigin = CodeOrigin(unlinkedStubInfo.bytecodeIndex);
+    if (Options::useHandlerIC())
+        initializeWithUnitHandler(codeBlock, InlineCacheCompiler::generateSlowPathHandler(vm, accessType));
+    else {
+        initializeWithUnitHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
+        slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
+    }
+    propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
+    canBeMegamorphic = unlinkedStubInfo.canBeMegamorphic;
+    useDataIC = true;
+
+    if (unlinkedStubInfo.canBeMegamorphic)
+        bufferingCountdown = 1;
+
+    usedRegisters = RegisterSetBuilder::stubUnavailableRegisters().buildScalarRegisterSet();
+
+    m_slowOperation = slowOperationFromUnlinkedStructureStubInfo(unlinkedStubInfo);
+    initializePredefinedRegisters();
+}
+
 #if ENABLE(DFG_JIT)
 void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(CodeBlock* codeBlock, const DFG::UnlinkedStructureStubInfo& unlinkedStubInfo)
 {
     ASSERT(!isCompilationThread());
     accessType = unlinkedStubInfo.accessType;
+    preconfiguredCacheType = unlinkedStubInfo.preconfiguredCacheType;
+    switch (preconfiguredCacheType) {
+    case CacheType::ArrayLength:
+        m_cacheType = CacheType::ArrayLength;
+        break;
+    default:
+        break;
+    }
     doneLocation = unlinkedStubInfo.doneLocation;
     m_identifier = unlinkedStubInfo.m_identifier;
     callSiteIndex = unlinkedStubInfo.callSiteIndex;
@@ -772,8 +783,12 @@ void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(CodeBlock* co
         m_globalObject = baselineCodeBlockForInlineCallFrame(codeOrigin.inlineCallFrame())->globalObject();
     else
         m_globalObject = codeBlock->globalObject();
-    replaceHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
-    slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
+    if (Options::useHandlerIC())
+        initializeWithUnitHandler(codeBlock, InlineCacheCompiler::generateSlowPathHandler(codeBlock->vm(), accessType));
+    else {
+        initializeWithUnitHandler(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation));
+        slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
+    }
 
     propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
     propertyIsSymbol = unlinkedStubInfo.propertyIsSymbol;
@@ -785,53 +800,107 @@ void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(CodeBlock* co
     if (unlinkedStubInfo.canBeMegamorphic)
         bufferingCountdown = 1;
 
-    usedRegisters = unlinkedStubInfo.usedRegisters;
-
-    m_baseGPR = unlinkedStubInfo.m_baseGPR;
-    m_extraGPR = unlinkedStubInfo.m_extraGPR;
-    m_extra2GPR = unlinkedStubInfo.m_extra2GPR;
-    m_valueGPR = unlinkedStubInfo.m_valueGPR;
-    m_stubInfoGPR = unlinkedStubInfo.m_stubInfoGPR;
+    usedRegisters = RegisterSetBuilder::stubUnavailableRegisters().buildScalarRegisterSet();
 
     m_slowOperation = slowOperationFromUnlinkedStructureStubInfo(unlinkedStubInfo);
+    initializePredefinedRegisters();
 }
 #endif
 
-void StructureStubInfo::replaceHandler(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler)
+void StructureStubInfo::setInlinedHandler(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler)
+{
+    ASSERT(!m_inlinedHandler);
+    VM& vm = codeBlock->vm();
+    m_inlinedHandler = WTFMove(handler);
+    m_inlinedHandler->addOwner(codeBlock);
+    switch (m_inlinedHandler->cacheType()) {
+    case CacheType::GetByIdSelf: {
+        m_inlineAccessBaseStructureID.set(vm, codeBlock, m_inlinedHandler->structureID().decode());
+        byIdSelfOffset = m_inlinedHandler->offset();
+        break;
+    }
+    case CacheType::GetByIdPrototype: {
+        m_inlineAccessBaseStructureID.set(vm, codeBlock, m_inlinedHandler->structureID().decode());
+        byIdSelfOffset = m_inlinedHandler->offset();
+        m_inlineHolder = m_inlinedHandler->holder();
+        break;
+    }
+    case CacheType::PutByIdReplace: {
+        m_inlineAccessBaseStructureID.set(vm, codeBlock, m_inlinedHandler->structureID().decode());
+        byIdSelfOffset = m_inlinedHandler->offset();
+        break;
+    }
+    case CacheType::InByIdSelf: {
+        m_inlineAccessBaseStructureID.set(vm, codeBlock, m_inlinedHandler->structureID().decode());
+        byIdSelfOffset = m_inlinedHandler->offset();
+        break;
+    }
+    case CacheType::ArrayLength:
+    case CacheType::StringLength:
+    case CacheType::Unset:
+    case CacheType::Stub:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+}
+
+void StructureStubInfo::clearInlinedHandler(CodeBlock* codeBlock)
+{
+    ASSERT(useHandlerIC());
+    m_inlinedHandler->removeOwner(codeBlock);
+    m_inlinedHandler = nullptr;
+    m_inlineAccessBaseStructureID.clear();
+}
+
+void StructureStubInfo::initializeWithUnitHandler(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler)
 {
     if (useHandlerIC()) {
+        if (m_inlinedHandler)
+            clearInlinedHandler(codeBlock);
+        ASSERT(!m_inlinedHandler);
         if (m_handler)
             m_handler->removeOwner(codeBlock);
         m_handler = WTFMove(handler);
         m_handler->addOwner(codeBlock);
-    } else
+    } else {
+        ASSERT(!m_inlinedHandler);
         m_handler = WTFMove(handler);
+    }
 }
 
 void StructureStubInfo::prependHandler(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler, bool isMegamorphic)
 {
+    ASSERT(useHandlerIC());
     if (isMegamorphic) {
-        replaceHandler(codeBlock, WTFMove(handler));
+        initializeWithUnitHandler(codeBlock, WTFMove(handler));
         return;
     }
+
+    if (!m_inlinedHandler) {
+        if (preconfiguredCacheType != CacheType::Unset && preconfiguredCacheType == handler->cacheType()) {
+            setInlinedHandler(codeBlock, WTFMove(handler));
+            return;
+        }
+    }
+
     handler->setNext(WTFMove(m_handler));
     m_handler = WTFMove(handler);
     m_handler->addOwner(codeBlock);
 }
 
-void StructureStubInfo::rewireStubAsJumpInAccess(CodeBlock* codeBlock, InlineCacheHandler& handler)
+void StructureStubInfo::rewireStubAsJumpInAccess(CodeBlock* codeBlock, Ref<InlineCacheHandler>&& handler)
 {
-    replaceHandler(codeBlock, Ref { handler });
+    CodeLocationLabel label { handler->callTarget() };
+    initializeWithUnitHandler(codeBlock, WTFMove(handler));
     if (!useDataIC)
-        CCallHelpers::replaceWithJump(startLocation.retagged<JSInternalPtrTag>(), CodeLocationLabel { handler.callTarget() });
+        CCallHelpers::replaceWithJump(startLocation.retagged<JSInternalPtrTag>(), label);
 }
 
 void StructureStubInfo::resetStubAsJumpInAccess(CodeBlock* codeBlock)
 {
-    if (useDataIC)
-        m_inlineAccessBaseStructureID.clear(); // Clear out the inline access code.
-
     if (useHandlerIC()) {
+        if (m_inlinedHandler)
+            clearInlinedHandler(codeBlock);
         auto* cursor = m_handler.get();
         while (cursor) {
             cursor->removeOwner(codeBlock);
@@ -840,8 +909,10 @@ void StructureStubInfo::resetStubAsJumpInAccess(CodeBlock* codeBlock)
         m_handler = InlineCacheCompiler::generateSlowPathHandler(codeBlock->vm(), accessType);
         return;
     }
-    auto handler = InlineCacheHandler::createNonHandlerSlowPath(slowPathStartLocation);
-    rewireStubAsJumpInAccess(codeBlock, handler.get());
+
+    if (useDataIC)
+        m_inlineAccessBaseStructureID.clear(); // Clear out the inline access code.
+    rewireStubAsJumpInAccess(codeBlock, InlineCacheHandler::createNonHandlerSlowPath(slowPathStartLocation));
 }
 
 #if ASSERT_ENABLED
