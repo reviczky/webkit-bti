@@ -41,11 +41,11 @@
 #include "StyleFontSizeFunctions.h"
 #include "StyleResolver.h"
 #include "VisiblePosition.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderSVGInlineText);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderSVGInlineText);
 
 static String applySVGWhitespaceRules(const String& string, bool preserveWhiteSpace)
 {
@@ -225,16 +225,19 @@ bool RenderSVGInlineText::computeNewScaledFontForStyle(const RenderObject& rende
 {
     // Alter font-size to the right on-screen value to avoid scaling the glyphs themselves, except when GeometricPrecision is specified
     scalingFactor = computeScalingFactorForRenderer(renderer);
-    if (!scalingFactor || style.fontDescription().textRenderingMode() == TextRenderingMode::GeometricPrecision) {
+    if (!scalingFactor) {
         scalingFactor = 1;
         scaledFont = style.fontCascade();
         return false;
     }
 
+    if (style.fontDescription().textRenderingMode() == TextRenderingMode::GeometricPrecision)
+        scalingFactor = 1;
+
     auto fontDescription = style.fontDescription();
 
     // FIXME: We need to better handle the case when we compute very small fonts below (below 1pt).
-    fontDescription.setComputedSize(Style::computedFontSizeFromSpecifiedSizeForSVGInlineText(fontDescription.computedSize(), fontDescription.isAbsoluteSize(), scalingFactor, renderer.protectedDocument()));
+    fontDescription.setComputedSize(Style::computedFontSizeFromSpecifiedSizeForSVGInlineText(fontDescription.specifiedSize(), fontDescription.isAbsoluteSize(), scalingFactor, renderer.protectedDocument()));
 
     // SVG controls its own glyph orientation, so don't allow writing-mode
     // to affect it.

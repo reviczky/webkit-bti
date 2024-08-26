@@ -35,6 +35,7 @@
 #include <WebCore/TiledBacking.h>
 #include <wtf/HashMap.h>
 #include <wtf/ObjectIdentifier.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WorkQueue.h>
@@ -74,11 +75,10 @@ struct TileForGridHash {
 };
 
 template<> struct HashTraits<WebKit::TileForGrid> : GenericHashTraits<WebKit::TileForGrid> {
-    static const bool emptyValueIsZero = false;
-    static WebKit::TileForGrid emptyValue()  { return { WebCore::TileGridIdentifier { std::numeric_limits<uint64_t>::max() }, { -1, -1 } }; }
-    static WebKit::TileForGrid deletedValue() { return { WebCore::TileGridIdentifier { 0 }, { -1, -1 } }; }
-    static void constructDeletedValue(WebKit::TileForGrid& tileForGrid) { tileForGrid = deletedValue(); }
-    static bool isDeletedValue(const WebKit::TileForGrid& tileForGrid) { return tileForGrid == deletedValue(); }
+    static constexpr bool emptyValueIsZero = true;
+    static WebKit::TileForGrid emptyValue() { return { HashTraits<WebCore::TileGridIdentifier>::emptyValue(), { 0, 0 } }; }
+    static void constructDeletedValue(WebKit::TileForGrid& tileForGrid) { HashTraits<WebCore::TileGridIdentifier>::constructDeletedValue(tileForGrid.gridIdentifier); }
+    static bool isDeletedValue(const WebKit::TileForGrid& tileForGrid) { return tileForGrid.gridIdentifier.isHashTableDeletedValue(); }
 };
 template<> struct DefaultHash<WebKit::TileForGrid> : TileForGridHash { };
 
@@ -86,17 +86,17 @@ template<> struct DefaultHash<WebKit::TileForGrid> : TileForGridHash { };
 
 namespace WebKit {
 
-class UnifiedPDFPlugin;
+class PDFPresentationController;
 
 struct PDFTileRenderType;
-using PDFTileRenderIdentifier = ObjectIdentifier<PDFTileRenderType>;
+using PDFTileRenderIdentifier = LegacyNullableObjectIdentifier<PDFTileRenderType>;
 
 class AsyncPDFRenderer final : public WebCore::TiledBackingClient,
     public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<AsyncPDFRenderer> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AsyncPDFRenderer);
     WTF_MAKE_NONCOPYABLE(AsyncPDFRenderer);
 public:
-    static Ref<AsyncPDFRenderer> create(UnifiedPDFPlugin&);
+    static Ref<AsyncPDFRenderer> create(PDFPresentationController&);
 
     virtual ~AsyncPDFRenderer();
 
@@ -113,7 +113,7 @@ public:
     void invalidateTilesForPaintingRect(float pageScaleFactor, const WebCore::FloatRect& paintingRect);
 
     // Updates existing tiles. Can result in temporarily stale content.
-    void pdfContentChangedInRect(const WebCore::GraphicsLayer*, float pageScaleFactor, const WebCore::FloatRect& paintingRect);
+    void pdfContentChangedInRect(const WebCore::GraphicsLayer*, float pageScaleFactor, const WebCore::FloatRect& paintingRect, std::optional<PDFLayoutRow>);
 
     void generatePreviewImageForPage(PDFDocumentLayout::PageIndex, float scale);
     RefPtr<WebCore::ImageBuffer> previewImageForPage(PDFDocumentLayout::PageIndex) const;
@@ -122,7 +122,7 @@ public:
     void setShowDebugBorders(bool);
 
 private:
-    AsyncPDFRenderer(UnifiedPDFPlugin&);
+    AsyncPDFRenderer(PDFPresentationController&);
 
     WebCore::GraphicsLayer* layerForTileGrid(WebCore::TileGridIdentifier) const;
 
@@ -161,7 +161,7 @@ private:
     void paintPDFIntoBuffer(RetainPtr<PDFDocument>&&, Ref<WebCore::ImageBuffer>, const TileForGrid&, const TileRenderInfo&);
     void transferBufferToMainThread(RefPtr<WebCore::ImageBuffer>&&, const TileForGrid&, const TileRenderInfo&, PDFTileRenderIdentifier);
 
-    void didCompleteTileRender(RefPtr<WebCore::ImageBuffer>&&, const TileForGrid&, const TileRenderInfo&, PDFTileRenderIdentifier);
+    void didCompleteTileRender(RefPtr<WebCore::ImageBuffer>&&, const TileForGrid&, const TileRenderInfo&, PDFTileRenderIdentifier, const WebCore::GraphicsLayer* tileGridLayer);
 
     void clearRequestsAndCachedTiles();
 
@@ -173,7 +173,7 @@ private:
 
     void paintPagePreviewOnWorkQueue(RetainPtr<PDFDocument>&&, const PagePreviewRequest&);
     void didCompletePagePreviewRender(RefPtr<WebCore::ImageBuffer>&&, const PagePreviewRequest&);
-    void removePagePreviewsOutsideCoverageRect(const WebCore::FloatRect&);
+    void removePagePreviewsOutsideCoverageRect(const WebCore::FloatRect&, const std::optional<PDFLayoutRow>& = { });
 
     void paintPDFPageIntoBuffer(RetainPtr<PDFDocument>&&, Ref<WebCore::ImageBuffer>, PDFDocumentLayout::PageIndex, const WebCore::FloatRect& pageBounds);
 
@@ -181,8 +181,7 @@ private:
     static WebCore::AffineTransform tileToPaintingTransform(float tilingScaleFactor);
     static WebCore::AffineTransform paintingToTileTransform(float tilingScaleFactor);
 
-    // FIXME: <https://webkit.org/b/276981> Point to the presentation controller.
-    ThreadSafeWeakPtr<UnifiedPDFPlugin> m_plugin;
+    ThreadSafeWeakPtr<PDFPresentationController> m_presentationController;
 
     HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::GraphicsLayer>> m_layerIDtoLayerMap;
     HashMap<WebCore::TileGridIdentifier, WebCore::PlatformLayerIdentifier> m_tileGridToLayerIDMap;

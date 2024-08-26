@@ -162,6 +162,8 @@ private:
 
     std::optional<bool> isIceGatheringComplete(const String& currentLocalDescription);
 
+    void setTransceiverCodecPreferences(const GstSDPMedia&, guint transceiverIdx);
+
 #if !RELEASE_LOG_DISABLED
     void gatherStatsForLogging();
     void startLoggingStats();
@@ -198,12 +200,14 @@ private:
 
     UniqueRef<GStreamerDataChannelHandler> findOrCreateIncomingChannelHandler(GRefPtr<GstWebRTCDataChannel>&&);
 
-    using DataChannelHandlerIdentifier = ObjectIdentifier<GstWebRTCDataChannel>;
+    using DataChannelHandlerIdentifier = LegacyNullableObjectIdentifier<GstWebRTCDataChannel>;
     HashMap<DataChannelHandlerIdentifier, UniqueRef<GStreamerDataChannelHandler>> m_incomingDataChannels;
 
     RefPtr<UniqueSSRCGenerator> m_ssrcGenerator;
 
     HashMap<GRefPtr<GstWebRTCRTPTransceiver>, RefPtr<GStreamerIncomingTrackProcessor>> m_trackProcessors;
+
+    Vector<String> m_pendingIncomingMediaStreamIDs;
 };
 
 } // namespace WebCore

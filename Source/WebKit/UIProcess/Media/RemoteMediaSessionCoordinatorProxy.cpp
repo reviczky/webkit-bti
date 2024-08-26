@@ -39,6 +39,7 @@
 #include <wtf/LoggerHelper.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 extern WTFLogChannel LogMedia;
@@ -46,6 +47,8 @@ extern WTFLogChannel LogMedia;
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaSessionCoordinatorProxy);
 
 Ref<RemoteMediaSessionCoordinatorProxy> RemoteMediaSessionCoordinatorProxy::create(WebPageProxy& webPageProxy, Ref<MediaSessionCoordinatorProxyPrivate>&& privateCoordinator)
 {
@@ -67,6 +70,11 @@ RemoteMediaSessionCoordinatorProxy::RemoteMediaSessionCoordinatorProxy(WebPagePr
 RemoteMediaSessionCoordinatorProxy::~RemoteMediaSessionCoordinatorProxy()
 {
     m_webPageProxy.legacyMainFrameProcess().removeMessageReceiver(Messages::RemoteMediaSessionCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageIDInMainFrameProcess());
+}
+
+const SharedPreferencesForWebProcess& RemoteMediaSessionCoordinatorProxy::sharedPreferencesForWebProcess() const
+{
+    return m_webPageProxy.legacyMainFrameProcess().sharedPreferencesForWebProcess();
 }
 
 void RemoteMediaSessionCoordinatorProxy::join(MediaSessionCommandCompletionHandler&& completionHandler)

@@ -1303,6 +1303,7 @@ JSC_DEFINE_JIT_OPERATION(operationPutByMegamorphicReallocating, void, (VM* vmPoi
     baseObject->setStructure(vm, newStructure);
     ASSERT(newStructure == baseObject->structure());
     dataLogLnIf(verbose, JSValue(baseObject), " ", offset);
+
     ensureStillAliveHere(oldStructure);
     ensureStillAliveHere(newStructure);
     OPERATION_RETURN(scope);
@@ -4234,6 +4235,20 @@ JSC_DEFINE_JIT_OPERATION(operationInstanceOfGaveUp, EncodedJSValue, (EncodedJSVa
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     stubInfo->tookSlowPath = true;
+
+    JSValue value = JSValue::decode(encodedValue);
+    JSValue proto = JSValue::decode(encodedProto);
+
+    bool result = JSObject::defaultHasInstance(globalObject, value, proto);
+    OPERATION_RETURN(scope, JSValue::encode(jsBoolean(result)));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationInstanceOfGeneric, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue encodedValue, EncodedJSValue encodedProto))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
 
     JSValue value = JSValue::decode(encodedValue);
     JSValue proto = JSValue::decode(encodedProto);

@@ -140,6 +140,13 @@ static TypedArrayType toTypedArrayType(AccessCase::AccessType accessType)
     case AccessCase::IndexedResizableTypedArrayUint32Store:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
         return TypeUint32;
+    case AccessCase::IndexedTypedArrayFloat16Load:
+    case AccessCase::IndexedTypedArrayFloat16Store:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
+        return TypeFloat16;
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat32InHit:
@@ -169,6 +176,7 @@ static bool forResizableTypedArray(AccessCase::AccessType accessType)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -178,6 +186,7 @@ static bool forResizableTypedArray(AccessCase::AccessType accessType)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -187,6 +196,7 @@ static bool forResizableTypedArray(AccessCase::AccessType accessType)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
         return true;
@@ -291,24 +301,30 @@ static bool needsScratchFPR(AccessCase::AccessType type)
     case AccessCase::IndexedNoIndexingInMiss:
     // Indexed TypedArray InHit does not need FPR since it does not load a value.
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
         return false;
     case AccessCase::IndexedDoubleLoad:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
     case AccessCase::IndexedDoubleStore:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedDoubleInHit:
@@ -353,6 +369,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -362,6 +379,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedInt32Store:
@@ -375,6 +393,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -384,6 +403,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedStringLoad:
@@ -421,6 +441,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -430,6 +451,7 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -497,6 +519,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -506,6 +529,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedInt32Store:
@@ -519,6 +543,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -528,6 +553,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedStringLoad:
@@ -544,6 +570,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -553,6 +580,7 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -624,6 +652,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -633,6 +662,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedInt32Store:
@@ -646,6 +676,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -655,6 +686,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedStringLoad:
@@ -671,6 +703,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -680,6 +713,7 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -751,6 +785,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -760,6 +795,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedInt32Store:
@@ -773,6 +809,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -782,6 +819,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedStringLoad:
@@ -798,6 +836,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -807,6 +846,7 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -872,6 +912,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -881,6 +922,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedInt32Store:
@@ -894,6 +936,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -903,6 +946,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedStringLoad:
@@ -919,6 +963,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -928,6 +973,7 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -993,8 +1039,10 @@ const ScalarRegisterSet& InlineCacheCompiler::calculateLiveRegistersForCallAndEx
 
         m_liveRegistersToPreserveAtExceptionHandlingCallSite = m_jit->codeBlock()->jitCode()->liveRegistersToPreserveAtExceptionHandlingCallSite(m_jit->codeBlock(), m_stubInfo.callSiteIndex).buildScalarRegisterSet();
         m_needsToRestoreRegistersIfException = m_liveRegistersToPreserveAtExceptionHandlingCallSite.numberOfSetRegisters() > 0;
-        if (m_needsToRestoreRegistersIfException)
+        if (m_needsToRestoreRegistersIfException) {
             RELEASE_ASSERT(JSC::JITCode::isOptimizingJIT(m_jit->codeBlock()->jitType()));
+            ASSERT(!useHandlerIC());
+        }
 
         auto liveRegistersForCall = RegisterSetBuilder(m_liveRegistersToPreserveAtExceptionHandlingCallSite.toRegisterSet(), m_allocator->usedRegisters());
         if (m_stubInfo.useDataIC)
@@ -1627,19 +1675,20 @@ MacroAssemblerCodeRef<JITThunkPtrTag> InlineCacheCompiler::generateSlowPathCode(
     return { };
 }
 
-InlineCacheHandler::InlineCacheHandler(Ref<InlineCacheHandler>&& previous, Ref<PolymorphicAccessJITStubRoutine>&& stubRoutine, std::unique_ptr<StructureStubInfoClearingWatchpoint>&& watchpoint, unsigned callLinkInfoCount)
+InlineCacheHandler::InlineCacheHandler(Ref<InlineCacheHandler>&& previous, Ref<PolymorphicAccessJITStubRoutine>&& stubRoutine, std::unique_ptr<StructureStubInfoClearingWatchpoint>&& watchpoint, unsigned callLinkInfoCount, CacheType cacheType)
     : Base(callLinkInfoCount)
     , m_callTarget(stubRoutine->code().code().template retagged<JITStubRoutinePtrTag>())
     , m_jumpTarget(CodePtr<NoPtrTag> { m_callTarget.retagged<NoPtrTag>().dataLocation<uint8_t*>() + prologueSizeInBytesDataIC }.template retagged<JITStubRoutinePtrTag>())
+    , m_cacheType(cacheType)
+    , m_next(WTFMove(previous))
     , m_stubRoutine(WTFMove(stubRoutine))
     , m_watchpoint(WTFMove(watchpoint))
-    , m_next(WTFMove(previous))
 {
 }
 
 Ref<InlineCacheHandler> InlineCacheHandler::create(Ref<InlineCacheHandler>&& previous, CodeBlock* codeBlock, StructureStubInfo& stubInfo, Ref<PolymorphicAccessJITStubRoutine>&& stubRoutine, std::unique_ptr<StructureStubInfoClearingWatchpoint>&& watchpoint, unsigned callLinkInfoCount)
 {
-    auto result = adoptRef(*new (NotNull, fastMalloc(Base::allocationSize(callLinkInfoCount))) InlineCacheHandler(WTFMove(previous), WTFMove(stubRoutine), WTFMove(watchpoint), callLinkInfoCount));
+    auto result = adoptRef(*new (NotNull, fastMalloc(Base::allocationSize(callLinkInfoCount))) InlineCacheHandler(WTFMove(previous), WTFMove(stubRoutine), WTFMove(watchpoint), callLinkInfoCount, CacheType::Unset));
     VM& vm = codeBlock->vm();
     for (auto& callLinkInfo : result->span())
         callLinkInfo.initialize(vm, codeBlock, CallLinkInfo::CallType::Call, stubInfo.codeOrigin);
@@ -1647,10 +1696,10 @@ Ref<InlineCacheHandler> InlineCacheHandler::create(Ref<InlineCacheHandler>&& pre
     return result;
 }
 
-Ref<InlineCacheHandler> InlineCacheHandler::createPreCompiled(Ref<InlineCacheHandler>&& previous, CodeBlock* codeBlock, StructureStubInfo& stubInfo, Ref<PolymorphicAccessJITStubRoutine>&& stubRoutine, std::unique_ptr<StructureStubInfoClearingWatchpoint>&& watchpoint, AccessCase& accessCase)
+Ref<InlineCacheHandler> InlineCacheHandler::createPreCompiled(Ref<InlineCacheHandler>&& previous, CodeBlock* codeBlock, StructureStubInfo& stubInfo, Ref<PolymorphicAccessJITStubRoutine>&& stubRoutine, std::unique_ptr<StructureStubInfoClearingWatchpoint>&& watchpoint, AccessCase& accessCase, CacheType cacheType)
 {
     unsigned callLinkInfoCount = JSC::doesJSCalls(accessCase.m_type) ? 1 : 0;
-    auto result = adoptRef(*new (NotNull, fastMalloc(Base::allocationSize(callLinkInfoCount))) InlineCacheHandler(WTFMove(previous), WTFMove(stubRoutine), WTFMove(watchpoint), callLinkInfoCount));
+    auto result = adoptRef(*new (NotNull, fastMalloc(Base::allocationSize(callLinkInfoCount))) InlineCacheHandler(WTFMove(previous), WTFMove(stubRoutine), WTFMove(watchpoint), callLinkInfoCount, cacheType));
     VM& vm = codeBlock->vm();
     for (auto& callLinkInfo : result->span())
         callLinkInfo.initialize(vm, codeBlock, CallLinkInfo::CallType::Call, stubInfo.codeOrigin);
@@ -2030,6 +2079,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -2039,6 +2089,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedTypedArrayInt8InHit:
@@ -2048,6 +2099,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -2057,6 +2109,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit: {
         ASSERT(!accessCase.viaGlobalProxy());
@@ -2150,6 +2203,10 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
                 ASSERT(isFloat(type));
                 RELEASE_ASSERT(m_scratchFPR != InvalidFPRReg);
                 switch (elementSize(type)) {
+                case 2:
+                    jit.loadFloat16(CCallHelpers::BaseIndex(scratch2GPR, scratchGPR, CCallHelpers::TimesTwo), m_scratchFPR);
+                    jit.convertFloat16ToDouble(m_scratchFPR, m_scratchFPR);
+                    break;
                 case 4:
                     jit.loadFloat(CCallHelpers::BaseIndex(scratch2GPR, scratchGPR, CCallHelpers::TimesFour), m_scratchFPR);
                     jit.convertFloatToDouble(m_scratchFPR, m_scratchFPR);
@@ -2474,8 +2531,11 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
 
         if (accessCase.m_type == AccessCase::IndexedArrayStorageStore) {
             isOutOfBounds.link(&jit);
-            if (m_stubInfo.m_arrayProfileGPR != InvalidGPRReg)
+            if (m_stubInfo.m_arrayProfileGPR != InvalidGPRReg) {
+                auto skip = jit.branchTestPtr(CCallHelpers::Zero, m_stubInfo.m_arrayProfileGPR);
                 jit.or32(CCallHelpers::TrustedImm32(static_cast<uint32_t>(ArrayProfileFlag::MayStoreHole)), CCallHelpers::Address(m_stubInfo.m_arrayProfileGPR, ArrayProfile::offsetOfArrayProfileFlags()));
+                skip.link(&jit);
+            }
             jit.add32(CCallHelpers::TrustedImm32(1), CCallHelpers::Address(scratchGPR, ArrayStorage::numValuesInVectorOffset()));
             jit.branch32(CCallHelpers::Below, scratch2GPR, CCallHelpers::Address(scratchGPR, ArrayStorage::lengthOffset())).linkTo(storeResult, &jit);
 
@@ -2486,8 +2546,11 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
         } else {
             isOutOfBounds.link(&jit);
             failAndIgnore.append(jit.branch32(CCallHelpers::AboveOrEqual, propertyGPR, CCallHelpers::Address(scratchGPR, Butterfly::offsetOfVectorLength())));
-            if (m_stubInfo.m_arrayProfileGPR != InvalidGPRReg)
+            if (m_stubInfo.m_arrayProfileGPR != InvalidGPRReg) {
+                auto skip = jit.branchTestPtr(CCallHelpers::Zero, m_stubInfo.m_arrayProfileGPR);
                 jit.or32(CCallHelpers::TrustedImm32(static_cast<uint32_t>(ArrayProfileFlag::MayStoreHole)), CCallHelpers::Address(m_stubInfo.m_arrayProfileGPR, ArrayProfile::offsetOfArrayProfileFlags()));
+                skip.link(&jit);
+            }
             jit.add32(CCallHelpers::TrustedImm32(1), propertyGPR, scratch2GPR);
             jit.store32(scratch2GPR, CCallHelpers::Address(scratchGPR, Butterfly::offsetOfPublicLength()));
             jit.jump().linkTo(storeResult, &jit);
@@ -2519,6 +2582,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -2528,6 +2592,7 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store: {
         ASSERT(!accessCase.viaGlobalProxy());
@@ -2561,32 +2626,29 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
             ready.link(&jit);
         }
 
-        if (!isResizableOrGrowableShared) {
-            CCallHelpers::Address addressOfLength = CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfLength());
-            jit.signExtend32ToPtr(propertyGPR, scratchGPR);
-#if USE(LARGE_TYPED_ARRAYS)
-            // The length is a UCPURegister, so either 32 or 64 bits depending on the platform.
-            m_failAndRepatch.append(jit.branch64(CCallHelpers::AboveOrEqual, scratchGPR, addressOfLength));
-#else
-            m_failAndRepatch.append(jit.branch32(CCallHelpers::AboveOrEqual, propertyGPR, addressOfLength));
-#endif
-        }
-
         auto allocator = makeDefaultScratchAllocator(scratchGPR);
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
 
-        ScratchRegisterAllocator::PreservedState preservedState = allocator.preserveReusedRegistersByPushing(
-            jit, ScratchRegisterAllocator::ExtraStackSpace::NoExtraSpace);
+        ScratchRegisterAllocator::PreservedState preservedState = allocator.preserveReusedRegistersByPushing(jit, ScratchRegisterAllocator::ExtraStackSpace::NoExtraSpace);
 
-        CCallHelpers::JumpList failAndRepatchAfterRestore;
+        CCallHelpers::JumpList outOfBoundsAfterSave;
         if (isResizableOrGrowableShared) {
             jit.loadTypedArrayLength(baseGPR, scratch2GPR, scratchGPR, scratch2GPR, type);
             jit.signExtend32ToPtr(propertyGPR, scratchGPR);
 #if USE(LARGE_TYPED_ARRAYS)
             // The length is a size_t, so either 32 or 64 bits depending on the platform.
-            failAndRepatchAfterRestore.append(jit.branch64(CCallHelpers::AboveOrEqual, scratchGPR, scratch2GPR));
+            outOfBoundsAfterSave.append(jit.branch64(CCallHelpers::AboveOrEqual, scratchGPR, scratch2GPR));
 #else
-            failAndRepatchAfterRestore.append(jit.branch32(CCallHelpers::AboveOrEqual, propertyGPR, scratch2GPR));
+            outOfBoundsAfterSave.append(jit.branch32(CCallHelpers::AboveOrEqual, propertyGPR, scratch2GPR));
+#endif
+        } else {
+            CCallHelpers::Address addressOfLength = CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfLength());
+            jit.signExtend32ToPtr(propertyGPR, scratchGPR);
+#if USE(LARGE_TYPED_ARRAYS)
+            // The length is a UCPURegister, so either 32 or 64 bits depending on the platform.
+            outOfBoundsAfterSave.append(jit.branch64(CCallHelpers::AboveOrEqual, scratchGPR, addressOfLength));
+#else
+            outOfBoundsAfterSave.append(jit.branch32(CCallHelpers::AboveOrEqual, propertyGPR, addressOfLength));
 #endif
         }
 
@@ -2632,6 +2694,10 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
             ASSERT(isFloat(type));
             RELEASE_ASSERT(m_scratchFPR != InvalidFPRReg);
             switch (elementSize(type)) {
+            case 2:
+                jit.convertDoubleToFloat16(m_scratchFPR, m_scratchFPR);
+                jit.storeFloat16(m_scratchFPR, CCallHelpers::BaseIndex(scratch2GPR, scratchGPR, CCallHelpers::TimesTwo));
+                break;
             case 4:
                 jit.convertDoubleToFloat(m_scratchFPR, m_scratchFPR);
                 jit.storeFloat(m_scratchFPR, CCallHelpers::BaseIndex(scratch2GPR, scratchGPR, CCallHelpers::TimesFour));
@@ -2645,13 +2711,22 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
             }
         }
 
-        allocator.restoreReusedRegistersByPopping(jit, preservedState);
-        succeed();
+        switch (m_stubInfo.accessType) {
+        case AccessType::PutByValDirectStrict:
+        case AccessType::PutByValDirectSloppy: {
+            allocator.restoreReusedRegistersByPopping(jit, preservedState);
+            succeed();
 
-        if (isResizableOrGrowableShared) {
-            failAndRepatchAfterRestore.link(&jit);
+            outOfBoundsAfterSave.link(&jit);
             allocator.restoreReusedRegistersByPopping(jit, preservedState);
             m_failAndRepatch.append(jit.jump());
+            break;
+        }
+        default:
+            outOfBoundsAfterSave.link(&jit);
+            allocator.restoreReusedRegistersByPopping(jit, preservedState);
+            succeed();
+            break;
         }
         return;
     }
@@ -3717,6 +3792,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedTypedArrayUint16Load:
     case AccessCase::IndexedTypedArrayInt32Load:
     case AccessCase::IndexedTypedArrayUint32Load:
+    case AccessCase::IndexedTypedArrayFloat16Load:
     case AccessCase::IndexedTypedArrayFloat32Load:
     case AccessCase::IndexedTypedArrayFloat64Load:
     case AccessCase::IndexedResizableTypedArrayInt8Load:
@@ -3726,6 +3802,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedResizableTypedArrayUint16Load:
     case AccessCase::IndexedResizableTypedArrayInt32Load:
     case AccessCase::IndexedResizableTypedArrayUint32Load:
+    case AccessCase::IndexedResizableTypedArrayFloat16Load:
     case AccessCase::IndexedResizableTypedArrayFloat32Load:
     case AccessCase::IndexedResizableTypedArrayFloat64Load:
     case AccessCase::IndexedStringLoad:
@@ -3741,6 +3818,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedTypedArrayUint16Store:
     case AccessCase::IndexedTypedArrayInt32Store:
     case AccessCase::IndexedTypedArrayUint32Store:
+    case AccessCase::IndexedTypedArrayFloat16Store:
     case AccessCase::IndexedTypedArrayFloat32Store:
     case AccessCase::IndexedTypedArrayFloat64Store:
     case AccessCase::IndexedResizableTypedArrayInt8Store:
@@ -3750,6 +3828,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedResizableTypedArrayUint16Store:
     case AccessCase::IndexedResizableTypedArrayInt32Store:
     case AccessCase::IndexedResizableTypedArrayUint32Store:
+    case AccessCase::IndexedResizableTypedArrayFloat16Store:
     case AccessCase::IndexedResizableTypedArrayFloat32Store:
     case AccessCase::IndexedResizableTypedArrayFloat64Store:
     case AccessCase::IndexedInt32InHit:
@@ -3765,6 +3844,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedTypedArrayUint16InHit:
     case AccessCase::IndexedTypedArrayInt32InHit:
     case AccessCase::IndexedTypedArrayUint32InHit:
+    case AccessCase::IndexedTypedArrayFloat16InHit:
     case AccessCase::IndexedTypedArrayFloat32InHit:
     case AccessCase::IndexedTypedArrayFloat64InHit:
     case AccessCase::IndexedResizableTypedArrayInt8InHit:
@@ -3774,6 +3854,7 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
     case AccessCase::IndexedResizableTypedArrayUint16InHit:
     case AccessCase::IndexedResizableTypedArrayInt32InHit:
     case AccessCase::IndexedResizableTypedArrayUint32InHit:
+    case AccessCase::IndexedResizableTypedArrayFloat16InHit:
     case AccessCase::IndexedResizableTypedArrayFloat32InHit:
     case AccessCase::IndexedResizableTypedArrayFloat64InHit:
     case AccessCase::IndexedStringInHit:
@@ -5266,7 +5347,8 @@ MacroAssemblerCodeRef<JITThunkPtrTag> getByIdProxyObjectLoadHandler(VM&)
 
     CCallHelpers::JumpList fallThrough;
 
-    fallThrough.append(InlineCacheCompiler::emitDataICCheckStructure(jit, baseJSR.payloadGPR(), scratch1GPR));
+    jit.load8(CCallHelpers::Address(baseJSR.payloadGPR(), JSCell::typeInfoTypeOffset()), scratch1GPR);
+    fallThrough.append(jit.branch32(CCallHelpers::NotEqual, scratch1GPR, CCallHelpers::TrustedImm32(ProxyObjectType)));
 
     jit.transfer32(CCallHelpers::Address(stubInfoGPR, StructureStubInfo::offsetOfCallSiteIndex()), CCallHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
 
@@ -6664,14 +6746,14 @@ AccessGenerationResult InlineCacheCompiler::compileOneAccessCaseHandler(Polymorp
             ensureReferenceAndAddWatchpoint(vm, watchpoints, watchpointSet, *set);
     };
 
-    auto finishPreCompiledCodeGeneration = [&](Ref<PolymorphicAccessJITStubRoutine>&& stub) {
+    auto finishPreCompiledCodeGeneration = [&](Ref<PolymorphicAccessJITStubRoutine>&& stub, CacheType cacheType = CacheType::Unset) {
         std::unique_ptr<StructureStubInfoClearingWatchpoint> watchpoint;
         if (!stub->watchpoints().isEmpty()) {
             watchpoint = makeUnique<StructureStubInfoClearingWatchpoint>(codeBlock, m_stubInfo);
             stub->watchpointSet().add(watchpoint.get());
         }
 
-        auto handler = InlineCacheHandler::createPreCompiled(InlineCacheCompiler::generateSlowPathHandler(vm, m_stubInfo.accessType), codeBlock, m_stubInfo, WTFMove(stub), WTFMove(watchpoint), accessCase);
+        auto handler = InlineCacheHandler::createPreCompiled(InlineCacheCompiler::generateSlowPathHandler(vm, m_stubInfo.accessType), codeBlock, m_stubInfo, WTFMove(stub), WTFMove(watchpoint), accessCase, cacheType);
         handler->setAccessCase(Ref { accessCase });
         dataLogLnIf(InlineCacheCompilerInternal::verbose, "Returning: ", handler->callTarget());
 
@@ -6741,13 +6823,17 @@ AccessGenerationResult InlineCacheCompiler::compileOneAccessCaseHandler(Polymorp
                                 currStructure->startWatchingPropertyForReplacements(vm, accessCase.offset());
 
                             MacroAssemblerCodeRef<JITStubRoutinePtrTag> code;
-                            if (!accessCase.tryGetAlternateBase())
+                            CacheType cacheType = CacheType::Unset;
+                            if (!accessCase.tryGetAlternateBase()) {
+                                cacheType = CacheType::GetByIdSelf;
                                 code = vm.getCTIStub(CommonJITThunkID::GetByIdLoadOwnPropertyHandler).retagged<JITStubRoutinePtrTag>();
-                            else
+                            } else {
+                                cacheType = CacheType::GetByIdPrototype;
                                 code = vm.getCTIStub(CommonJITThunkID::GetByIdLoadPrototypePropertyHandler).retagged<JITStubRoutinePtrTag>();
+                            }
                             auto stub = createPreCompiledICJITStubRoutine(WTFMove(code), vm);
                             connectWatchpointSets(stub->watchpoints(), stub->watchpointSet(), WTFMove(watchedConditions), WTFMove(additionalWatchpointSets));
-                            return finishPreCompiledCodeGeneration(WTFMove(stub));
+                            return finishPreCompiledCodeGeneration(WTFMove(stub), cacheType);
                         }
                     }
                     break;
@@ -6861,7 +6947,7 @@ AccessGenerationResult InlineCacheCompiler::compileOneAccessCaseHandler(Polymorp
                         auto code = vm.getCTIStub(CommonJITThunkID::PutByIdReplaceHandler).retagged<JITStubRoutinePtrTag>();
                         auto stub = createPreCompiledICJITStubRoutine(WTFMove(code), vm);
                         connectWatchpointSets(stub->watchpoints(), stub->watchpointSet(), { }, { });
-                        return finishPreCompiledCodeGeneration(WTFMove(stub));
+                        return finishPreCompiledCodeGeneration(WTFMove(stub), CacheType::PutByIdReplace);
                     }
                     break;
                 }
@@ -6947,10 +7033,11 @@ AccessGenerationResult InlineCacheCompiler::compileOneAccessCaseHandler(Polymorp
                     ASSERT(!accessCase.viaGlobalProxy());
                     collectConditions(accessCase, watchedConditions, checkingConditions);
                     if (checkingConditions.isEmpty()) {
-                        auto code = vm.getCTIStub(accessCase.m_type == AccessCase::InHit ? CommonJITThunkID::InByIdHitHandler : CommonJITThunkID::InByIdMissHandler).retagged<JITStubRoutinePtrTag>();
+                        bool isHit = accessCase.m_type == AccessCase::InHit;
+                        auto code = vm.getCTIStub(isHit ? CommonJITThunkID::InByIdHitHandler : CommonJITThunkID::InByIdMissHandler).retagged<JITStubRoutinePtrTag>();
                         auto stub = createPreCompiledICJITStubRoutine(WTFMove(code), vm);
                         connectWatchpointSets(stub->watchpoints(), stub->watchpointSet(), WTFMove(watchedConditions), WTFMove(additionalWatchpointSets));
-                        return finishPreCompiledCodeGeneration(WTFMove(stub));
+                        return finishPreCompiledCodeGeneration(WTFMove(stub), isHit ? CacheType::InByIdSelf : CacheType::Unset);
                     }
                     break;
                 }

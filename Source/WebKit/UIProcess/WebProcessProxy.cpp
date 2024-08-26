@@ -39,6 +39,7 @@
 #include "ModelProcessConnectionParameters.h"
 #include "ModelProcessProxy.h"
 #include "NetworkProcessConnectionInfo.h"
+#include "NetworkProcessMessages.h"
 #include "NotificationManagerMessageHandlerMessages.h"
 #include "PageLoadState.h"
 #include "PlatformXRSystem.h"
@@ -72,6 +73,7 @@
 #include "WebPermissionControllerProxy.h"
 #include "WebPreferencesDefaultValues.h"
 #include "WebPreferencesKeys.h"
+#include "WebProcessActivityState.h"
 #include "WebProcessCache.h"
 #include "WebProcessDataStoreParameters.h"
 #include "WebProcessMessages.h"
@@ -102,6 +104,7 @@
 #include <wtf/RunLoop.h>
 #include <wtf/Scope.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakListHashSet.h>
@@ -113,10 +116,6 @@
 #if PLATFORM(COCOA)
 #include "UserMediaCaptureManagerProxy.h"
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
-#endif
-
-#if PLATFORM(MAC)
-#include "HighPerformanceGPUManager.h"
 #endif
 
 #if ENABLE(GPU_PROCESS)
@@ -153,6 +152,8 @@ static WeakListHashSet<WebProcessProxy>& liveProcessesLRU()
     static NeverDestroyed<WeakListHashSet<WebProcessProxy>> processes;
     return processes;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebProcessProxy);
 
 void WebProcessProxy::setProcessCountLimit(unsigned limit)
 {
@@ -275,7 +276,7 @@ Ref<WebProcessProxy> WebProcessProxy::createForRemoteWorkers(RemoteWorkerType wo
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
 class UIProxyForCapture final : public UserMediaCaptureManagerProxy::ConnectionProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(UIProxyForCapture);
 public:
     explicit UIProxyForCapture(WebProcessProxy& process)
         : m_process(process)
@@ -284,7 +285,7 @@ public:
 private:
     void addMessageReceiver(IPC::ReceiverName messageReceiverName, IPC::MessageReceiver& receiver) final { m_process->addMessageReceiver(messageReceiverName, receiver); }
     void removeMessageReceiver(IPC::ReceiverName messageReceiverName) final { m_process->removeMessageReceiver(messageReceiverName); }
-    IPC::Connection& connection() final { return *m_process->connection(); }
+    IPC::Connection& connection() final { return m_process->connection(); }
 
     Logger& logger() final
     {
@@ -330,6 +331,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore* 
 #if ENABLE(ROUTING_ARBITRATION)
     , m_routingArbitrator(makeUniqueRef<AudioSessionRoutingArbitratorProxy>(*this))
 #endif
+    , m_activityState(makeUniqueRef<WebProcessActivityState>(*this))
 {
     RELEASE_ASSERT(isMainThreadOrCheckDisabled());
     WEBPROCESSPROXY_RELEASE_LOG(Process, "constructor:");
@@ -383,10 +385,6 @@ WebProcessProxy::~WebProcessProxy()
 
     while (m_numberOfTimesSuddenTerminationWasDisabled-- > 0)
         WebCore::enableSuddenTermination();
-
-#if PLATFORM(MAC)
-    HighPerformanceGPUManager::singleton().removeProcessRequiringHighPerformance(*this);
-#endif
 
     platformDestroy();
 }
@@ -466,7 +464,7 @@ void WebProcessProxy::updateRegistrationWithDataStore()
 
 void WebProcessProxy::initializeWebProcess(WebProcessCreationParameters&& parameters)
 {
-    sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(WTFMove(parameters)), [weakThis = WeakPtr { *this }] (ProcessIdentity processIdentity) {
+    sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(WTFMove(parameters)), [weakThis = WeakPtr { *this }, initializationActivityAndGrant = initializationActivityAndGrant()] (ProcessIdentity processIdentity) {
         if (RefPtr protectedThis = weakThis.get())
             protectedThis->m_processIdentity = WTFMove(processIdentity);
     }, 0);
@@ -474,13 +472,13 @@ void WebProcessProxy::initializeWebProcess(WebProcessCreationParameters&& parame
 
 void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPageProxy& page)
 {
-    if (!m_sharedPreferencesForWebProcess) {
-        updateSharedPreferencesForWebProcess(page.preferences());
-        ASSERT(m_sharedPreferencesForWebProcess);
+    if (!m_sharedPreferencesForWebProcess.version) {
+        updateSharedPreferencesForWebProcess(page.preferences().store());
+        ASSERT(m_sharedPreferencesForWebProcess.version);
     } else {
 #if ASSERT_ENABLED
-        auto sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
-        ASSERT(!WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences()));
+        auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
+        ASSERT(!WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences().store()));
 #endif
     }
 
@@ -488,9 +486,9 @@ void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPa
 
 bool WebProcessProxy::hasSameGPUAndNetworkProcessPreferencesAs(const API::PageConfiguration& pageConfiguration) const
 {
-    if (m_sharedPreferencesForWebProcess) {
-        auto sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
-        if (WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences()))
+    if (m_sharedPreferencesForWebProcess.version) {
+        auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
+        if (WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences().store()))
             return false;
     }
     return true;
@@ -568,6 +566,9 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
         launchOptions.extraInitializationData.add<HashTranslatorASCIILiteral>("service-worker-process"_s, "1"_s);
         launchOptions.extraInitializationData.add<HashTranslatorASCIILiteral>("registrable-domain"_s, m_registrableDomain->string());
     }
+
+    if (shouldEnableLockdownMode())
+        launchOptions.extraInitializationData.add<HashTranslatorASCIILiteral>("enable-lockdown-mode"_s, "1"_s);
 }
 
 #if !PLATFORM(GTK) && !PLATFORM(WPE)
@@ -589,10 +590,17 @@ bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
         auto resourceDirectoryURL = decoder->decode<URL>();
         auto pageID = decoder->decode<WebPageProxyIdentifier>();
         auto checkAssumedReadAccessToResourceURL = decoder->decode<bool>();
+        auto destinationID = decoder->destinationID();
         if (loadParameters && resourceDirectoryURL && pageID && checkAssumedReadAccessToResourceURL) {
             if (RefPtr page = WebProcessProxy::webPage(*pageID)) {
-                page->maybeInitializeSandboxExtensionHandle(static_cast<WebProcessProxy&>(*this), loadParameters->request.url(), *resourceDirectoryURL, loadParameters->sandboxExtensionHandle, *checkAssumedReadAccessToResourceURL);
-                send(Messages::WebPage::LoadRequest(WTFMove(*loadParameters)), decoder->destinationID());
+                auto url = loadParameters->request.url();
+                page->maybeInitializeSandboxExtensionHandle(static_cast<WebProcessProxy&>(*this), url, *resourceDirectoryURL,  *checkAssumedReadAccessToResourceURL, [weakThis = WeakPtr { *this }, destinationID, loadParameters = WTFMove(loadParameters)] (std::optional<SandboxExtension::Handle> sandboxExtension) mutable {
+                    if (!weakThis)
+                        return;
+                    if (sandboxExtension)
+                        loadParameters->sandboxExtensionHandle = WTFMove(*sandboxExtension);
+                    weakThis->send(Messages::WebPage::LoadRequest(WTFMove(*loadParameters)), destinationID);
+                });
             }
         } else
             ASSERT_NOT_REACHED();
@@ -609,12 +617,20 @@ bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
         auto pageID = decoder->decode<WebPageProxyIdentifier>();
         if (!pageID)
             return false;
-
+        auto destinationID = decoder->destinationID();
+        auto backForwardItemID = parameters->backForwardItemID;
+        auto completionHandler = [weakThis = WeakPtr { *this }, parameters = WTFMove(parameters), destinationID] (std::optional<SandboxExtension::Handle> sandboxExtension) mutable {
+            if (!weakThis)
+                return;
+            if (sandboxExtension)
+                parameters->sandboxExtensionHandle = WTFMove(*sandboxExtension);
+            weakThis->send(Messages::WebPage::GoToBackForwardItem(WTFMove(*parameters)), destinationID);
+        };
         if (RefPtr page = WebProcessProxy::webPage(*pageID)) {
-            if (RefPtr item = WebBackForwardListItem::itemForID(parameters->backForwardItemID))
-                page->maybeInitializeSandboxExtensionHandle(static_cast<WebProcessProxy&>(*this), URL { item->url() }, item->resourceDirectoryURL(), parameters->sandboxExtensionHandle);
-        }
-        send(Messages::WebPage::GoToBackForwardItem(WTFMove(*parameters)), decoder->destinationID());
+            if (RefPtr item = WebBackForwardListItem::itemForID(backForwardItemID))
+                page->maybeInitializeSandboxExtensionHandle(static_cast<WebProcessProxy&>(*this), URL { item->url() }, item->resourceDirectoryURL(), true, WTFMove(completionHandler));
+        } else
+            completionHandler(std::nullopt);
         return false;
     }
     return true;
@@ -622,7 +638,7 @@ bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
 
 void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
 {
-    ASSERT(this->connection() == &connection);
+    ASSERT(&this->connection() == &connection);
 
     // Throttling IPC messages coming from the WebProcesses so that the UIProcess stays responsive, even
     // if one of the WebProcesses misbehaves.
@@ -641,7 +657,7 @@ void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
 void WebProcessProxy::processWillShutDown(IPC::Connection& connection)
 {
     WEBPROCESSPROXY_RELEASE_LOG(Process, "processWillShutDown:");
-    ASSERT_UNUSED(connection, this->connection() == &connection);
+    ASSERT_UNUSED(connection, &this->connection() == &connection);
 
 #if HAVE(DISPLAY_LINK)
     m_displayLinkClient.setConnection(nullptr);
@@ -692,6 +708,8 @@ void WebProcessProxy::shutDown()
     m_backgroundResponsivenessTimer.invalidate();
     m_audibleMediaActivity = std::nullopt;
     m_mediaStreamingActivity = std::nullopt;
+    m_foregroundToken = nullptr;
+    m_backgroundToken = nullptr;
 
     for (Ref page : mainPages())
         page->disconnectFramesFromPage();
@@ -913,22 +931,70 @@ void WebProcessProxy::didDestroyWebUserContentControllerProxy(WebUserContentCont
     m_webUserContentControllerProxies.remove(proxy);
 }
 
-void WebProcessProxy::assumeReadAccessToBaseURL(WebPageProxy& page, const String& urlString)
+void WebProcessProxy::assumeReadAccessToBaseURL(WebPageProxy& page, const String& urlString, CompletionHandler<void()>&& completionHandler, bool directoryOnly)
 {
     URL url { urlString };
     if (!url.protocolIsFile())
-        return;
+        return completionHandler();
 
     // There's a chance that urlString does not point to a directory.
     // Get url's base URL to add to m_localPathsWithAssumedReadAccess.
     auto path = url.truncatedForUseAsBase().fileSystemPath();
     if (path.isNull())
-        return;
+        return completionHandler();
 
-    // Client loads an alternate string. This doesn't grant universal file read, but the web process is assumed
-    // to have read access to this directory already.
-    m_localPathsWithAssumedReadAccess.add(path);
-    page.addPreviouslyVisitedPath(path);
+    RefPtr dataStore = websiteDataStore();
+    if (!dataStore)
+        return completionHandler();
+    auto afterAllowAccess = [weakThis = WeakPtr { *this }, weakPage = WeakPtr { page }, path, completionHandler = WTFMove(completionHandler)] mutable {
+        if (!weakThis || !weakPage)
+            return completionHandler();
+
+        // Client loads an alternate string. This doesn't grant universal file read, but the web process is assumed
+        // to have read access to this directory already.
+        weakThis->m_localPathsWithAssumedReadAccess.add(path);
+        weakPage->addPreviouslyVisitedPath(path);
+        completionHandler();
+    };
+    if (directoryOnly)
+        afterAllowAccess();
+    else
+        dataStore->networkProcess().sendWithAsyncReply(Messages::NetworkProcess::AllowFileAccessFromWebProcess(coreProcessIdentifier(), path), WTFMove(afterAllowAccess));
+}
+
+void WebProcessProxy::assumeReadAccessToBaseURLs(WebPageProxy& page, const Vector<String>& urls, CompletionHandler<void()>&& completionHandler)
+{
+    RefPtr dataStore = websiteDataStore();
+    if (!dataStore)
+        return completionHandler();
+    Vector<String> paths;
+    for (auto& urlString : urls) {
+        URL url { urlString };
+        if (!url.protocolIsFile())
+            continue;
+
+        // There's a chance that urlString does not point to a directory.
+        // Get url's base URL to add to m_localPathsWithAssumedReadAccess.
+        auto path = url.truncatedForUseAsBase().fileSystemPath();
+        if (path.isNull())
+            return completionHandler();
+        paths.append(path);
+    }
+    if (!paths.size())
+        return completionHandler();
+
+    dataStore->networkProcess().sendWithAsyncReply(Messages::NetworkProcess::AllowFilesAccessFromWebProcess(coreProcessIdentifier(), WTFMove(paths)), [weakThis = WeakPtr { *this }, weakPage = WeakPtr { page }, paths, completionHandler = WTFMove(completionHandler)] mutable {
+        if (!weakThis || !weakPage)
+            return completionHandler();
+
+        // Client loads an alternate string. This doesn't grant universal file read, but the web process is assumed
+        // to have read access to this directory already.
+        for (auto& path : paths) {
+            weakThis->m_localPathsWithAssumedReadAccess.add(path);
+            weakPage->addPreviouslyVisitedPath(path);
+        }
+        completionHandler();
+    });
 }
 
 bool WebProcessProxy::hasAssumedReadAccessToURL(const URL& url) const
@@ -1065,9 +1131,7 @@ void WebProcessProxy::createGPUProcessConnection(GPUProcessConnectionIdentifier 
     ASSERT(m_processIdentity);
 #endif
     parameters.webProcessIdentity = m_processIdentity;
-    ASSERT(m_sharedPreferencesForWebProcess);
-    if (m_sharedPreferencesForWebProcess)
-        parameters.sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
+    parameters.sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
 #if ENABLE(IPC_TESTING_API)
     parameters.ignoreInvalidMessageForTesting = ignoreInvalidMessageForTesting();
 #endif
@@ -1246,7 +1310,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReas
         remotePage.processDidTerminate(coreProcessIdentifier());
 }
 
-void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t indexOfObjectFailingDecoding)
 {
     logInvalidMessage(connection, messageName);
 
@@ -2181,15 +2245,10 @@ Ref<WebProcessPool> WebProcessProxy::protectedProcessPool() const
     return processPool();
 }
 
-std::optional<SharedPreferencesForWebProcess> WebProcessProxy::updateSharedPreferencesForWebProcess(const WebPreferences& preferences)
+std::optional<SharedPreferencesForWebProcess> WebProcessProxy::updateSharedPreferencesForWebProcess(const WebPreferencesStore& preferencesStore)
 {
-    if (!m_sharedPreferencesForWebProcess) {
-        m_sharedPreferencesForWebProcess = WebKit::sharedPreferencesForWebProcess(preferences);
-        m_sharedPreferencesForWebProcess->version = 1;
-        return m_sharedPreferencesForWebProcess;
-    }
-    if (WebKit::updateSharedPreferencesForWebProcess(*m_sharedPreferencesForWebProcess, preferences)) {
-        ++m_sharedPreferencesForWebProcess->version;
+    if (WebKit::updateSharedPreferencesForWebProcess(m_sharedPreferencesForWebProcess, preferencesStore)) {
+        ++m_sharedPreferencesForWebProcess.version;
         return m_sharedPreferencesForWebProcess;
     }
     return std::nullopt;
@@ -2280,9 +2339,9 @@ void WebProcessProxy::createSpeechRecognitionServer(SpeechRecognitionServerIdent
     auto createRealtimeMediaSource = [weakPage = WeakPtr { targetPage }]() {
         return weakPage ? weakPage->createRealtimeMediaSourceForSpeechRecognition() : CaptureSourceOrError { { "Page is invalid"_s, WebCore::MediaAccessDenialReason::InvalidAccess } };
     };
-    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(Ref { *connection() }, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled), WTFMove(createRealtimeMediaSource));
+    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(*this, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled), WTFMove(createRealtimeMediaSource));
 #else
-    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(Ref { *connection() }, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled));
+    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(*this, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled));
 #endif
 
     addMessageReceiver(Messages::SpeechRecognitionServer::messageReceiverName(), identifier, *speechRecognitionServer);
@@ -2299,7 +2358,7 @@ void WebProcessProxy::destroySpeechRecognitionServer(SpeechRecognitionServerIden
 SpeechRecognitionRemoteRealtimeMediaSourceManager& WebProcessProxy::ensureSpeechRecognitionRemoteRealtimeMediaSourceManager()
 {
     if (!m_speechRecognitionRemoteRealtimeMediaSourceManager) {
-        m_speechRecognitionRemoteRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRemoteRealtimeMediaSourceManager>(Ref { *connection() });
+        m_speechRecognitionRemoteRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRemoteRealtimeMediaSourceManager>(*this);
         addMessageReceiver(Messages::SpeechRecognitionRemoteRealtimeMediaSourceManager::messageReceiverName(), *m_speechRecognitionRemoteRealtimeMediaSourceManager);
     }
 
@@ -2365,6 +2424,7 @@ void WebProcessProxy::endBackgroundActivityForFullscreenInput()
 
 void WebProcessProxy::establishRemoteWorkerContext(RemoteWorkerType workerType, const WebPreferencesStore& store, const RegistrableDomain& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, CompletionHandler<void()>&& completionHandler)
 {
+    updateSharedPreferencesForWebProcess(store);
     WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishRemoteWorkerContext: Started (workerType=%" PUBLIC_LOG_STRING ")", workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared");
     markProcessAsRecentlyUsed();
     auto& remoteWorkerInformation = workerType == RemoteWorkerType::ServiceWorker ? m_serviceWorkerInformation : m_sharedWorkerInformation;

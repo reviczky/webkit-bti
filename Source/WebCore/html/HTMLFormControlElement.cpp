@@ -49,14 +49,14 @@
 #include "Settings.h"
 #include "StyleTreeResolver.h"
 #include "ValidationMessage.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/Ref.h>
 #include <wtf/SetForScope.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLFormControlElement);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLFormControlElement);
 
 using namespace HTMLNames;
 
@@ -253,7 +253,8 @@ bool HTMLFormControlElement::isMouseFocusable() const
 #if (PLATFORM(GTK) || PLATFORM(WPE))
     return HTMLElement::isMouseFocusable();
 #else
-    if (!!tabIndexSetExplicitly() || needsMouseFocusableQuirk())
+    // FIXME: We should remove the quirk once <rdar://problem/47334655> is fixed.
+    if (!!tabIndexSetExplicitly() || document().quirks().needsFormControlToBeMouseFocusable())
         return HTMLElement::isMouseFocusable();
     return false;
 #endif
@@ -486,12 +487,6 @@ void HTMLFormControlElement::handleCommand()
 
     if (!event->defaultPrevented() && command != CommandType::Custom)
         invokee->handleCommandInternal(*this, command);
-}
-
-// FIXME: We should remove the quirk once <rdar://problem/47334655> is fixed.
-bool HTMLFormControlElement::needsMouseFocusableQuirk() const
-{
-    return document().quirks().needsFormControlToBeMouseFocusable();
 }
 
 } // namespace Webcore

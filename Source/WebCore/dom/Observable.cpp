@@ -30,20 +30,23 @@
 #include "Document.h"
 #include "Exception.h"
 #include "ExceptionCode.h"
+#include "InternalObserverDrop.h"
 #include "InternalObserverFilter.h"
 #include "InternalObserverFromScript.h"
+#include "InternalObserverMap.h"
 #include "InternalObserverTake.h"
 #include "JSSubscriptionObserverCallback.h"
+#include "MapperCallback.h"
 #include "PredicateCallback.h"
 #include "SubscribeOptions.h"
 #include "Subscriber.h"
 #include "SubscriberCallback.h"
 #include "SubscriptionObserver.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(Observable);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Observable);
 
 Ref<Observable> Observable::create(Ref<SubscriberCallback> callback)
 {
@@ -96,15 +99,24 @@ void Observable::subscribeInternal(ScriptExecutionContext& context, Ref<Internal
     }
 }
 
+Ref<Observable> Observable::map(ScriptExecutionContext& context, MapperCallback& mapper)
+{
+    return create(createSubscriberCallbackMap(context, *this, mapper));
+}
+
 Ref<Observable> Observable::filter(ScriptExecutionContext& context, PredicateCallback& predicate)
 {
     return create(createSubscriberCallbackFilter(context, *this, predicate));
 }
 
-
 Ref<Observable> Observable::take(ScriptExecutionContext& context, uint64_t amount)
 {
     return create(createSubscriberCallbackTake(context, *this, amount));
+}
+
+Ref<Observable> Observable::drop(ScriptExecutionContext& context, uint64_t amount)
+{
+    return create(createSubscriberCallbackDrop(context, *this, amount));
 }
 
 Observable::Observable(Ref<SubscriberCallback> callback)

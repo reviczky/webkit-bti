@@ -95,6 +95,10 @@
 #include "HardwareKeyboardState.h"
 #endif
 
+#if PLATFORM(COCOA)
+#include "CocoaWindow.h"
+#endif
+
 namespace WebKit {
 
 class WebPageProxyFrameLoadStateObserver;
@@ -280,7 +284,6 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 #endif
 
     CompletionHandler<void(bool)> serviceWorkerLaunchCompletionHandler;
-    CompletionHandler<void(std::optional<WebCore::PageIdentifier>)> serviceWorkerOpenWindowCompletionCallback;
 
 #if ENABLE(SPEECH_SYNTHESIS)
     std::optional<SpeechSynthesisData> optionalSpeechSynthesisData;
@@ -365,8 +368,8 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 #if ENABLE(APPLE_PAY) && PLATFORM(IOS_FAMILY) && ENABLE(APPLE_PAY_REMOTE_UI_USES_SCENE)
     void getWindowSceneAndBundleIdentifierForPaymentPresentation(WebPageProxyIdentifier, CompletionHandler<void(const String&, const String&)>&&) final;
 #endif
-#if ENABLE(APPLE_PAY) && PLATFORM(MAC)
-    NSWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) final;
+#if ENABLE(APPLE_PAY)
+    CocoaWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) const final;
 #endif
 
 #if ENABLE(INPUT_TYPE_COLOR)

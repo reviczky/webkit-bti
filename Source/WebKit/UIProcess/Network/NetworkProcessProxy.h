@@ -42,6 +42,7 @@
 #include <WebCore/RegistrableDomain.h>
 #include <memory>
 #include <wtf/Deque.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashMap.h>
 
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
@@ -109,7 +110,7 @@ struct WebsiteData;
 struct WebsiteDataStoreParameters;
 
 class NetworkProcessProxy final : public AuxiliaryProcessProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NetworkProcessProxy);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(NetworkProcessProxy);
 public:
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -299,6 +300,7 @@ public:
     xpc_object_t xpcEndpointMessage() const { return m_endpointMessage.get(); }
 #endif
 
+    void getPendingPushMessage(PAL::SessionID, CompletionHandler<void(const std::optional<WebPushMessage>&)>&&);
     void getPendingPushMessages(PAL::SessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&&);
     void processPushMessage(PAL::SessionID, const WebPushMessage&, CompletionHandler<void(bool wasProcessed, std::optional<WebCore::NotificationPayload>&&)>&&);
     void processNotificationEvent(const WebCore::NotificationData&, WebCore::NotificationEventType, CompletionHandler<void(bool wasProcessed)>&&);
@@ -357,7 +359,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
     bool didReceiveSyncNetworkProcessProxyMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
 
     // ResponsivenessTimer::Client
@@ -398,7 +400,7 @@ private:
 
     void terminateWebProcess(WebCore::ProcessIdentifier);
 
-    void triggerBrowsingContextGroupSwitchForNavigation(WebPageProxyIdentifier, uint64_t navigationID, WebCore::BrowsingContextGroupSwitchDecision, const WebCore::RegistrableDomain& responseDomain, NetworkResourceLoadIdentifier existingNetworkResourceLoadIdentifierToResume, CompletionHandler<void(bool success)>&&);
+    void triggerBrowsingContextGroupSwitchForNavigation(WebPageProxyIdentifier, WebCore::NavigationIdentifier, WebCore::BrowsingContextGroupSwitchDecision, const WebCore::RegistrableDomain& responseDomain, NetworkResourceLoadIdentifier existingNetworkResourceLoadIdentifierToResume, CompletionHandler<void(bool success)>&&);
 
     void requestStorageSpace(PAL::SessionID, const WebCore::ClientOrigin&, uint64_t quota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(std::optional<uint64_t> quota)>&&);
     void increaseQuota(PAL::SessionID, const WebCore::ClientOrigin&, QuotaIncreaseRequestIdentifier, uint64_t currentQuota, uint64_t currentUsage, uint64_t spaceRequested);

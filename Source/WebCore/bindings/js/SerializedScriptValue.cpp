@@ -108,6 +108,7 @@
 #include <wtf/DataLog.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
+#include <wtf/StackCheck.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
 #include <wtf/threads/BinarySemaphore.h>
@@ -264,6 +265,7 @@ enum ArrayBufferViewSubtag {
     Float64ArrayTag = 9,
     BigInt64ArrayTag = 10,
     BigUint64ArrayTag = 11,
+    Float16ArrayTag = 12,
 };
 
 static ASCIILiteral name(SerializationTag tag)
@@ -513,6 +515,7 @@ static unsigned typedArrayElementSize(ArrayBufferViewSubtag tag)
         return 1;
     case Int16ArrayTag:
     case Uint16ArrayTag:
+    case Float16ArrayTag:
         return 2;
     case Int32ArrayTag:
     case Uint32ArrayTag:
@@ -945,6 +948,10 @@ protected:
 #else
     ALWAYS_INLINE void appendObjectPoolTag(SerializationTag) { }
 #endif
+    bool isSafeToRecurse()
+    {
+        return m_stackCheck.isSafeToRecurse();
+    }
 
     JSGlobalObject* const m_lexicalGlobalObject;
     bool m_failed;
@@ -953,6 +960,7 @@ protected:
 #if ASSERT_ENABLED
     Vector<SerializationTag> m_objectPoolTags;
 #endif
+    StackCheck m_stackCheck;
 };
 
 static std::optional<Vector<uint8_t>> wrapCryptoKey(JSGlobalObject* lexicalGlobalObject, const Vector<uint8_t>& key)
@@ -1442,6 +1450,8 @@ private:
             write(Int32ArrayTag);
         else if (obj->inherits<JSUint32Array>())
             write(Uint32ArrayTag);
+        else if (obj->inherits<JSFloat16Array>())
+            write(Float16ArrayTag);
         else if (obj->inherits<JSFloat32Array>())
             write(Float32ArrayTag);
         else if (obj->inherits<JSFloat64Array>())
@@ -2368,7 +2378,14 @@ private:
         write(file.url().string());
         write(file.type());
         write(file.name());
-        write(static_cast<double>(file.lastModifiedOverride().value_or(-1)));
+        if (m_forStorage == SerializationForStorage::No)
+            write(static_cast<double>(file.lastModifiedOverride().value_or(-1)));
+        else {
+            if (auto lastModifiedOverride = file.lastModifiedOverride())
+                write(static_cast<double>(*lastModifiedOverride));
+            else
+                write(static_cast<double>(file.lastModified()));
+        }
     }
 
     void write(PredefinedColorSpace colorSpace)
@@ -3723,6 +3740,8 @@ private:
     template <typename LengthType>
     bool readArrayBufferViewImpl(VM& vm, JSValue& arrayBufferView)
     {
+        if (!isSafeToRecurse())
+            return false;
         ArrayBufferViewSubtag arrayBufferViewSubtag;
         if (!readArrayBufferViewSubtag(arrayBufferViewSubtag))
             return false;
@@ -3787,6 +3806,8 @@ private:
             return makeArrayBufferView(Int32Array::wrappedAs(arrayBuffer.releaseNonNull(), byteOffset, length).get());
         case Uint32ArrayTag:
             return makeArrayBufferView(Uint32Array::wrappedAs(arrayBuffer.releaseNonNull(), byteOffset, length).get());
+        case Float16ArrayTag:
+            return makeArrayBufferView(Float16Array::wrappedAs(arrayBuffer.releaseNonNull(), byteOffset, length).get());
         case Float32ArrayTag:
             return makeArrayBufferView(Float32Array::wrappedAs(arrayBuffer.releaseNonNull(), byteOffset, length).get());
         case Float64ArrayTag:
@@ -3802,6 +3823,8 @@ private:
 
     bool readArrayBufferView(VM& vm, JSValue& arrayBufferView)
     {
+        if (!isSafeToRecurse())
+            return false;
         if (m_majorVersion < 10)
             return readArrayBufferViewImpl<uint32_t>(vm, arrayBufferView);
         return readArrayBufferViewImpl<uint64_t>(vm, arrayBufferView);
@@ -4839,6 +4862,8 @@ private:
 
     JSValue readTerminal()
     {
+        if (!isSafeToRecurse())
+            return JSValue();
         SerializationTag tag = readTag();
         if (!isTypeExposedToGlobalObject(*m_globalObject, tag)) {
             SERIALIZE_TRACE("FAIL deserialize");
@@ -4965,10 +4990,13 @@ private:
                     return JSValue();
             }
 
-            if (length && (IntSize(width, height).area() * 4) != length) {
-                SERIALIZE_TRACE("FAIL deserialize");
-                fail();
-                return JSValue();
+            if (length) {
+                auto area = IntSize(width, height).area<RecordOverflow>() * 4;
+                if (area.hasOverflowed() || area.value() != length) {
+                    SERIALIZE_TRACE("FAIL deserialize");
+                    fail();
+                    return JSValue();
+                }
             }
 
             if (!m_isDOMGlobalObject)
@@ -5034,7 +5062,8 @@ private:
             if (!readStringData(flags))
                 return JSValue();
             auto reFlags = Yarr::parseFlags(flags->string());
-            ASSERT(reFlags.has_value());
+            if (!reFlags.has_value())
+                return JSValue();
             VM& vm = m_lexicalGlobalObject->vm();
             RegExp* regExp = RegExp::create(vm, pattern->string(), reFlags.value());
             return RegExpObject::create(vm, m_globalObject->regExpStructure(), regExp);

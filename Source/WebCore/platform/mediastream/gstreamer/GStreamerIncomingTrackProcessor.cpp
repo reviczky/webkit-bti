@@ -24,6 +24,7 @@
 #include "GStreamerCommon.h"
 #include "GStreamerQuirks.h"
 #include "GStreamerRegistryScanner.h"
+#include "VideoFrameMetadataGStreamer.h"
 
 GST_DEBUG_CATEGORY(webkit_webrtc_incoming_track_processor_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_incoming_track_processor_debug
@@ -66,10 +67,11 @@ void GStreamerIncomingTrackProcessor::configure(ThreadSafeWeakPtr<GStreamerMedia
     auto structure = gst_caps_get_structure(m_data.caps.get(), 0);
     if (auto ssrc = gstStructureGet<unsigned>(structure, "ssrc"_s)) {
         auto msIdAttributeName = makeString("ssrc-"_s, *ssrc, "-msid"_s);
-        auto msIdAttribute = gst_structure_get_string(structure, msIdAttributeName.ascii().data());
-        auto components = String::fromUTF8(msIdAttribute).split(' ');
-        if (components.size() == 2)
-            m_sdpMsIdAndTrackId = { components[0], components[1] };
+        if (auto msIdAttribute = gstStructureGetString(structure, msIdAttributeName)) {
+            auto components = msIdAttribute.toStringWithoutCopying().split(' ');
+            if (components.size() == 2)
+                m_sdpMsIdAndTrackId = { components[0], components[1] };
+        }
     }
 
     if (m_sdpMsIdAndTrackId.second.isEmpty())
@@ -175,8 +177,8 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::incomingTrackProcessor()
     if (!forceEarlyVideoDecoding) {
         auto structure = gst_caps_get_structure(m_data.caps.get(), 0);
         ASSERT(gst_structure_has_name(structure, "application/x-rtp"));
-        String encodingNameValue = WTF::span(gst_structure_get_string(structure, "encoding-name"));
-        auto mediaType = makeString("video/x-"_s, encodingNameValue.convertToASCIILowercase());
+        auto encodingName = gstStructureGetString(structure, "encoding-name"_s);
+        auto mediaType = makeString("video/x-"_s, encodingName.convertToASCIILowercase());
         auto codecCaps = adoptGRef(gst_caps_new_empty_simple(mediaType.ascii().data()));
 
         auto& scanner = GStreamerRegistryScanner::singleton();
@@ -190,14 +192,17 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::incomingTrackProcessor()
     GRefPtr<GstElement> decodebin = makeGStreamerElement("decodebin3", nullptr);
     m_isDecoding = true;
 
-    g_signal_connect(decodebin.get(), "deep-element-added", G_CALLBACK(+[](GstBin*, GstBin*, GstElement* element, gpointer) {
+    g_signal_connect(decodebin.get(), "deep-element-added", G_CALLBACK(+[](GstBin*, GstBin*, GstElement* element, gpointer userData) {
         String elementClass = WTF::span(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
         auto classifiers = elementClass.split('/');
         if (!classifiers.contains("Depayloader"_s))
             return;
 
         configureVideoRTPDepayloader(element);
-    }), nullptr);
+        auto self = reinterpret_cast<GStreamerIncomingTrackProcessor*>(userData);
+        auto pad = adoptGRef(gst_element_get_static_pad(element, "sink"));
+        self->installRtpBufferPadProbe(WTFMove(pad));
+    }), this);
 
     g_signal_connect(decodebin.get(), "element-added", G_CALLBACK(+[](GstBin*, GstElement* element, gpointer userData) {
         String elementClass = WTF::span(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
@@ -236,14 +241,17 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::incomingTrackProcessor()
 GRefPtr<GstElement> GStreamerIncomingTrackProcessor::createParser()
 {
     GRefPtr<GstElement> parsebin = makeGStreamerElement("parsebin", nullptr);
-    g_signal_connect(parsebin.get(), "element-added", G_CALLBACK(+[](GstBin*, GstElement* element, gpointer) {
+    g_signal_connect(parsebin.get(), "element-added", G_CALLBACK(+[](GstBin*, GstElement* element, gpointer userData) {
         String elementClass = WTF::span(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
         auto classifiers = elementClass.split('/');
         if (!classifiers.contains("Depayloader"_s))
             return;
 
         configureVideoRTPDepayloader(element);
-    }), nullptr);
+        auto self = reinterpret_cast<GStreamerIncomingTrackProcessor*>(userData);
+        auto pad = adoptGRef(gst_element_get_static_pad(element, "sink"));
+        self->installRtpBufferPadProbe(WTFMove(pad));
+    }), this);
 
     auto& quirksManager = GStreamerQuirksManager::singleton();
     if (quirksManager.isEnabled()) {
@@ -268,6 +276,31 @@ GRefPtr<GstElement> GStreamerIncomingTrackProcessor::createParser()
         self->trackReady();
     }), this);
     return parsebin;
+}
+
+void GStreamerIncomingTrackProcessor::installRtpBufferPadProbe(GRefPtr<GstPad>&& pad)
+{
+    if (m_data.type == RealtimeMediaSource::Type::Audio)
+        return;
+
+    gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
+        VideoFrameTimeMetadata videoFrameTimeMetadata;
+        videoFrameTimeMetadata.receiveTime = MonotonicTime::now().secondsSinceEpoch();
+
+        auto buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+        {
+            GstMappedRtpBuffer rtpBuffer(buffer, GST_MAP_READ);
+            if (rtpBuffer)
+                videoFrameTimeMetadata.rtpTimestamp = gst_rtp_buffer_get_timestamp(rtpBuffer.mappedData());
+        }
+
+        if (auto referenceTimestampMeta = gst_buffer_get_reference_timestamp_meta(buffer, GST_CAPS_CAST(userData)))
+            videoFrameTimeMetadata.captureTime = Seconds::fromNanoseconds(static_cast<double>(referenceTimestampMeta->timestamp));
+
+        buffer = webkitGstBufferSetVideoFrameTimeMetadata(buffer, WTFMove(videoFrameTimeMetadata));
+        GST_PAD_PROBE_INFO_DATA(info) = buffer;
+        return GST_PAD_PROBE_OK;
+    }, gst_caps_new_empty_simple("timestamp/x-ntp"), reinterpret_cast<GDestroyNotify>(gst_caps_unref));
 }
 
 void GStreamerIncomingTrackProcessor::trackReady()

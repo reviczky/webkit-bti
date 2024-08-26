@@ -40,10 +40,13 @@
 #include <WebCore/ApplePayPaymentMethodUpdate.h>
 #include <WebCore/ApplePayShippingContactUpdate.h>
 #include <WebCore/ApplePayShippingMethodUpdate.h>
+#include <wtf/TZoneMallocInlines.h>
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, messageSenderConnection())
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, *messageSenderConnection())
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebPaymentCoordinatorProxy);
 
 static WeakPtr<WebPaymentCoordinatorProxy>& activePaymentCoordinatorProxy()
 {
@@ -266,6 +269,11 @@ void WebPaymentCoordinatorProxy::presenterDidSelectShippingContact(PaymentAuthor
 
     m_state = State::ShippingContactSelected;
     send(Messages::WebPaymentCoordinator::DidSelectShippingContact(shippingContact));
+}
+
+CocoaWindow* WebPaymentCoordinatorProxy::presentingWindowForPaymentAuthorization(PaymentAuthorizationPresenter&) const
+{
+    return m_client.paymentCoordinatorPresentingWindow(*this);
 }
 
 void WebPaymentCoordinatorProxy::presenterDidSelectPaymentMethod(PaymentAuthorizationPresenter&, const WebCore::PaymentMethod& paymentMethod)

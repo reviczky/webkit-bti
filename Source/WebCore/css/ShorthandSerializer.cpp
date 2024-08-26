@@ -126,6 +126,7 @@ private:
     String serializeGridTemplate() const;
     String serializeOffset() const;
     String serializePageBreak() const;
+    String serializeTextBox() const;
     String serializeTextWrap() const;
     String serializeWhiteSpace() const;
 
@@ -402,6 +403,8 @@ String ShorthandSerializer::serialize()
         return serializeLonghandsOmittingTrailingInitialValue();
     case CSSPropertyTextWrap:
         return serializeTextWrap();
+    case CSSPropertyTextBox:
+        return serializeTextBox();
     case CSSPropertyWebkitColumnBreakAfter:
     case CSSPropertyWebkitColumnBreakBefore:
         return serializeColumnBreak();
@@ -1170,16 +1173,15 @@ String ShorthandSerializer::serializeGridTemplate() const
         return hasAtLeastOneTrackSize;
     };
 
-    // For the rows we need to return early if the value of grid-template-rows is none because otherwise
-    // we will iteratively build up that portion of the shorthand and check to see if the value is a valid
-    // <track-size> at the appropriate position in the shorthand. For the columns we must check the entire
-    // value of grid-template-columns beforehand because we append the value as a whole to the shorthand
-    if (isLonghandValueNone(rowsIndex) || (!isLonghandValueNone(columnsIndex) && !isValidExplicitTrackList(longhandValue(columnsIndex))))
+    Ref rowTrackSizes = longhandValue(rowsIndex);
+
+    // Make sure the longhands can be expressed in this version of the shorthand.
+    if (!rowTrackSizes->isValueList() || (!isLonghandValueNone(columnsIndex) && !isValidExplicitTrackList(longhandValue(columnsIndex))))
         return String();
 
     StringBuilder result;
     unsigned row = 0;
-    for (auto& currentValue : downcast<CSSValueList>(longhandValue(rowsIndex))) {
+    for (auto& currentValue : downcast<CSSValueList>(rowTrackSizes).get()) {
         if (!result.isEmpty())
             result.append(' ');
         if (auto lineNames = dynamicDowncast<CSSGridLineNamesValue>(currentValue))
@@ -1252,6 +1254,28 @@ String ShorthandSerializer::serializePageBreak() const
     default:
         return String();
     }
+}
+
+String ShorthandSerializer::serializeTextBox() const
+{
+    auto textBoxTrim = longhandValueID(0);
+    auto& textBoxEdge = longhandValue(longhandIndex(1, CSSPropertyTextBoxEdge));
+    auto textBoxEdgeIsAuto = [&]() {
+        if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(textBoxEdge))
+            return primitiveValue->valueID() == CSSValueAuto;
+        return false;
+    }();
+
+    if (textBoxTrim == CSSValueNone && textBoxEdgeIsAuto)
+        return nameString(CSSValueNormal);
+
+    if (textBoxEdgeIsAuto)
+        return nameLiteral(textBoxTrim);
+
+    if (textBoxTrim == CSSValueTrimBoth)
+        return textBoxEdge.cssText();
+
+    return makeString(nameLiteral(textBoxTrim), ' ', textBoxEdge.cssText());
 }
 
 String ShorthandSerializer::serializeTextWrap() const

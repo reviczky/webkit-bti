@@ -310,25 +310,12 @@
 #endif
 
 #if !defined(USE_TZONE_MALLOC)
-#if CPU(ARM64) && OS(DARWIN)
+#if CPU(ARM64) && OS(DARWIN) && (__SIZEOF_POINTER__ == 8)
 // Only MacroAssemblerARM64 is known to build.
 // Building with TZONE_MALLOC currently disabled for all platforms.
 #define USE_TZONE_MALLOC 0
 #else
 #define USE_TZONE_MALLOC 0
-#endif
-#endif
-
-#if OS(DARWIN) && USE(APPLE_INTERNAL_SDK) && USE(TZONE_MALLOC)
-#define USE_DARWIN_TZONE_SEED 1
-#endif
-
-#if !defined(USE_WK_TZONE_MALLOC)
-#if USE(TZONE_MALLOC)
-// Separately control the use of TZone allocation in WebKit
-#define USE_WK_TZONE_MALLOC 1
-#else
-#define USE_WK_TZONE_MALLOC 0
 #endif
 #endif
 
@@ -363,6 +350,10 @@
 
 #if PLATFORM(COCOA) || USE(GSTREAMER)
 #define USE_CONCATENATED_IMPULSE_RESPONSES 1
+#endif
+
+#if PLATFORM(IOS_FAMILY) && !PLATFORM(APPLETV)
+#define USE_UITOOLBAR_FOR_DATE_PICKER_ACCESSORY_VIEW 1
 #endif
 
 #if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED < 150000) \
@@ -435,4 +426,8 @@
 
 #if !USE(EXTENSIONKIT_PROCESS_TERMINATION) && PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180000
 #define USE_EXTENSIONKIT_PROCESS_TERMINATION 1
+#endif
+
+#if !USE(EXIT_XPC_MESSAGE_WORKAROUND) && ((PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED < 180000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED < 150000))
+#define USE_EXIT_XPC_MESSAGE_WORKAROUND 1
 #endif

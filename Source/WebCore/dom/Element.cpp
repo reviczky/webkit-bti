@@ -66,6 +66,7 @@
 #include "FullscreenOptions.h"
 #include "GetAnimationsOptions.h"
 #include "GetHTMLOptions.h"
+#include "HTMLBDIElement.h"
 #include "HTMLBodyElement.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLDialogElement.h"
@@ -157,16 +158,16 @@
 #include "XMLNSNames.h"
 #include "XMLNames.h"
 #include "markup.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(Element);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Element);
 
 struct SameSizeAsElement : public ContainerNode {
     QualifiedName tagName;
@@ -489,11 +490,17 @@ Element::DispatchMouseEventResult Element::dispatchMouseEvent(const PlatformMous
 
     Vector<Ref<MouseEvent>> childMouseEvents;
     for (const auto& childPlatformEvent : platformEvent.coalescedEvents()) {
-        Ref childMouseEvent = MouseEvent::create(eventType, document().windowProxy(), childPlatformEvent, { }, detail, relatedTarget);
+        Ref childMouseEvent = MouseEvent::create(eventType, document().windowProxy(), childPlatformEvent, { }, { }, detail, relatedTarget);
         childMouseEvents.append(WTFMove(childMouseEvent));
     }
 
-    Ref mouseEvent = MouseEvent::create(eventType, document().windowProxy(), platformEvent, childMouseEvents, detail, relatedTarget);
+    Vector<Ref<MouseEvent>> predictedEvents;
+    for (const auto& childPlatformEvent : platformEvent.predictedEvents()) {
+        Ref childMouseEvent = MouseEvent::create(eventType, document().windowProxy(), childPlatformEvent, { }, { }, detail, relatedTarget);
+        predictedEvents.append(WTFMove(childMouseEvent));
+    }
+
+    Ref mouseEvent = MouseEvent::create(eventType, document().windowProxy(), platformEvent, childMouseEvents, predictedEvents, detail, relatedTarget);
 
     if (mouseEvent->type().isEmpty())
         return { Element::EventIsDispatched::Yes, eventIsDefaultPrevented }; // Shouldn't happen.
@@ -1072,7 +1079,7 @@ inline ScrollAlignment toScrollAlignmentForBlockDirection(std::optional<ScrollLo
     }
 }
 
-static std::optional<std::pair<CheckedRef<RenderElement>, LayoutRect>> listBoxElementScrollIntoView(const Element& element)
+static std::optional<std::pair<SingleThreadWeakPtr<RenderElement>, LayoutRect>> listBoxElementScrollIntoView(const Element& element)
 {
     auto owningSelectElement = [](const Element& element) -> HTMLSelectElement* {
         if (auto* optionElement = dynamicDowncast<HTMLOptionElement>(element))
@@ -1099,7 +1106,7 @@ static std::optional<std::pair<CheckedRef<RenderElement>, LayoutRect>> listBoxEl
         itemIndex = 0;
 
     auto itemLocalRect = renderListBox->itemBoundingBoxRect({ }, itemIndex);
-    return std::pair<CheckedRef<RenderElement>, LayoutRect> { renderListBox.releaseNonNull(), itemLocalRect };
+    return std::pair<SingleThreadWeakPtr<RenderElement>, LayoutRect> { renderListBox.releaseNonNull(), itemLocalRect };
 }
 
 void Element::scrollIntoView(std::optional<std::variant<bool, ScrollIntoViewOptions>>&& arg)
@@ -1109,7 +1116,7 @@ void Element::scrollIntoView(std::optional<std::variant<bool, ScrollIntoViewOpti
 
     document->updateLayoutIgnorePendingStylesheets(LayoutOptions::UpdateCompositingLayers);
 
-    CheckedPtr<RenderElement> renderer;
+    SingleThreadWeakPtr<RenderElement> renderer;
     bool insideFixed = false;
     LayoutRect absoluteBounds;
 
@@ -1912,8 +1919,7 @@ std::optional<std::pair<CheckedPtr<RenderObject>, FloatRect>> Element::boundingA
 FloatRect Element::boundingClientRect()
 {
     Ref document = this->document();
-    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout , LayoutOptions::CanDeferUpdateLayerPositions }, this);
-    LocalFrameView::AutoPreventLayerAccess preventAccess(*document->view());
+    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     auto pair = boundingAbsoluteRectWithoutLayout();
     if (!pair)
         return { };
@@ -2240,6 +2246,9 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
     case AttributeNames::accesskeyAttr:
         protectedDocument()->invalidateAccessKeyCache();
         break;
+    case AttributeNames::dirAttr:
+        dirAttributeChanged(newValue);
+        return;
     case AttributeNames::XML::langAttr:
     case AttributeNames::langAttr: {
         if (name == HTMLNames::langAttr)
@@ -2291,6 +2300,28 @@ ExplicitlySetAttrElementsMap* Element::explicitlySetAttrElementsMapIfExists() co
     return hasRareData() ? &elementRareData()->explicitlySetAttrElementsMap() : nullptr;
 }
 
+static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startElement, const AtomString& id)
+{
+    if (id.isEmpty())
+        return nullptr;
+
+    if (LIKELY(startElement.isInTreeScope()))
+        return startElement.treeScope().getElementById(id);
+
+    // https://html.spec.whatwg.org/#attr-associated-element
+    // Attr associated element lookup does not depend on whether the element
+    // is connected. However, the TreeScopeOrderedMap that is used for
+    // TreeScope::getElementById() only stores connected elements.
+    if (RefPtr root = startElement.rootElement()) {
+        for (auto& element : descendantsOfType<Element>(*root)) {
+            if (element.getIdAttribute() == id)
+                return const_cast<Element*>(&element);
+        }
+    }
+
+    return nullptr;
+}
+
 RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName) const
 {
     ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
@@ -2310,7 +2341,7 @@ RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName)
     if (id.isNull())
         return nullptr;
 
-    return treeScope().getElementById(id);
+    return getElementByIdIncludingDisconnected(*this, id);
 }
 
 void Element::setElementAttribute(const QualifiedName& attributeName, Element* element)
@@ -2356,7 +2387,7 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
 
     SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
     return WTF::compactMap(ids, [&](auto& id) {
-        return treeScope().getElementById(id);
+        return getElementByIdIncludingDisconnected(*this, id);
     });
 }
 
@@ -2472,10 +2503,10 @@ bool Element::allowsDoubleTapGesture() const
 
 Style::Resolver& Element::styleResolver()
 {
-    if (auto* shadowRoot = containingShadowRoot())
-        return shadowRoot->styleScope().resolver();
+    if (RefPtr shadowRoot = containingShadowRoot())
+        return shadowRoot->checkedStyleScope()->resolver();
 
-    return document().styleScope().resolver();
+    return document().checkedStyleScope()->resolver();
 }
 
 Style::ResolvedStyle Element::resolveStyle(const Style::ResolutionContext& resolutionContext)
@@ -2485,14 +2516,14 @@ Style::ResolvedStyle Element::resolveStyle(const Style::ResolutionContext& resol
 
 void invalidateForSiblingCombinators(Element* sibling)
 {
-    for (; sibling; sibling = sibling->nextElementSibling()) {
-        if (sibling->styleIsAffectedByPreviousSibling())
-            sibling->invalidateStyleInternal();
-        if (sibling->descendantsAffectedByPreviousSibling()) {
-            for (RefPtr siblingChild = sibling->firstElementChild(); siblingChild; siblingChild = siblingChild->nextElementSibling())
+    for (RefPtr element = sibling; element; element = element->nextElementSibling()) {
+        if (element->styleIsAffectedByPreviousSibling())
+            element->invalidateStyleInternal();
+        if (element->descendantsAffectedByPreviousSibling()) {
+            for (RefPtr siblingChild = element->firstElementChild(); siblingChild; siblingChild = siblingChild->nextElementSibling())
                 siblingChild->invalidateStyleForSubtreeInternal();
         }
-        if (!sibling->affectsNextSiblingElementStyle())
+        if (!element->affectsNextSiblingElementStyle())
             return;
     }
 }
@@ -2559,11 +2590,6 @@ void Element::invalidateForQueryContainerSizeChange()
 }
 
 void Element::invalidateForResumingQueryContainerResolution()
-{
-    markAncestorsForInvalidatedStyle();
-}
-
-void Element::invalidateAncestorsForAnchor()
 {
     markAncestorsForInvalidatedStyle();
 }
@@ -2704,6 +2730,232 @@ void Element::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
     updateEffectiveLangState();
 }
 
+enum class TextDirectionDirective {
+    Invalid,
+    LTR,
+    RTL,
+    Auto,
+};
+
+static inline TextDirectionDirective parseTextDirection(const AtomString& value)
+{
+    if (equalLettersIgnoringASCIICase(value, "ltr"_s))
+        return TextDirectionDirective::LTR;
+    if (equalLettersIgnoringASCIICase(value, "rtl"_s))
+        return TextDirectionDirective::RTL;
+    if (equalLettersIgnoringASCIICase(value, "auto"_s))
+        return TextDirectionDirective::Auto;
+    return TextDirectionDirective::Invalid;
+}
+
+static bool isValidDirValue(const AtomString& value)
+{
+    return parseTextDirection(value) != TextDirectionDirective::Invalid;
+}
+
+static bool elementAffectsDirectionality(const Element& element)
+{
+    return is<HTMLBDIElement>(element) || isValidDirValue(element.attributeWithoutSynchronization(dirAttr));
+}
+
+static bool elementAffectsDirectionality(const Node& node)
+{
+    auto* element = dynamicDowncast<Element>(node);
+    return element && elementAffectsDirectionality(*element);
+}
+
+static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
+{
+    firstNode->setSelfOrPrecedingNodesAffectDirAuto(flag);
+
+    RefPtr node = firstNode->firstChild();
+
+    while (node) {
+        if (elementAffectsDirectionality(*node)) {
+            if (node == lastNode)
+                return;
+            node = NodeTraversal::nextSkippingChildren(*node, firstNode);
+            continue;
+        }
+        node->setSelfOrPrecedingNodesAffectDirAuto(flag);
+        if (node == lastNode)
+            return;
+        node = NodeTraversal::next(*node, firstNode);
+    }
+}
+
+bool Element::hasDirectionAuto() const
+{
+    const AtomString& direction = attributeWithoutSynchronization(dirAttr);
+    return (hasTagName(bdiTag) && !isValidDirValue(direction)) || equalLettersIgnoringASCIICase(direction, "auto"_s);
+}
+
+std::optional<TextDirection> Element::directionalityIfDirIsAuto() const
+{
+    if (!(selfOrPrecedingNodesAffectDirAuto() && hasDirectionAuto()))
+        return std::nullopt;
+    return computeDirectionalityFromText().direction;
+}
+
+void Element::dirAttributeChanged(const AtomString& value)
+{
+    RefPtr parent = parentOrShadowHostElement();
+    bool isValid = true;
+
+    protectedDocument()->setIsDirAttributeDirty();
+
+    auto direction = parseTextDirection(value);
+    switch (direction) {
+    case TextDirectionDirective::Invalid:
+        isValid = false;
+        if (selfOrPrecedingNodesAffectDirAuto() && (!parent || !parent->selfOrPrecedingNodesAffectDirAuto()) && !is<HTMLBDIElement>(*this))
+            setHasDirAutoFlagRecursively(this, false);
+        if (auto* input = dynamicDowncast<HTMLInputElement>(*this); parent && parent->usesEffectiveTextDirection() && !(input && input->isTelephoneField()))
+            updateEffectiveDirectionality(parent->effectiveTextDirection());
+        else
+            updateEffectiveDirectionality(std::nullopt);
+        break;
+    case TextDirectionDirective::LTR:
+        if (selfOrPrecedingNodesAffectDirAuto())
+            setHasDirAutoFlagRecursively(this, false);
+        updateEffectiveDirectionality(TextDirection::LTR);
+        break;
+    case TextDirectionDirective::RTL:
+        if (selfOrPrecedingNodesAffectDirAuto())
+            setHasDirAutoFlagRecursively(this, false);
+        updateEffectiveDirectionality(TextDirection::RTL);
+        break;
+    case TextDirectionDirective::Auto:
+        setUsesEffectiveTextDirection(true);
+        updateEffectiveDirectionalityOfDirAuto();
+        break;
+    }
+
+    if (parent && parent->selfOrPrecedingNodesAffectDirAuto()) {
+        if (isValid && direction != TextDirectionDirective::Auto)
+            setHasDirAutoFlagRecursively(this, false);
+        parent->adjustDirectionalityIfNeededAfterChildAttributeChanged(this);
+    }
+}
+
+void Element::updateEffectiveDirectionality(std::optional<TextDirection> direction)
+{
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
+    auto effectiveDirection = direction.value_or(TextDirection::LTR);
+    setUsesEffectiveTextDirection(!!direction);
+    if (direction)
+        setEffectiveTextDirection(effectiveDirection);
+    auto updateEffectiveTextDirectionOfShadowRoot = [&](Element& element) {
+        if (RefPtr shadowRootOfElement = element.shadowRoot()) {
+            for (Ref element : childrenOfType<Element>(*shadowRootOfElement))
+                element->updateEffectiveDirectionality(direction);
+        }
+    };
+    updateEffectiveTextDirectionOfShadowRoot(*this);
+    for (auto it = descendantsOfType<Element>(*this).begin(); it;) {
+        Ref element = *it;
+        if (isValidDirValue(element->attributeWithoutSynchronization(dirAttr))) {
+            it.traverseNextSkippingChildren();
+            continue;
+        }
+        updateEffectiveTextDirectionOfShadowRoot(element);
+        Style::PseudoClassChangeInvalidation styleInvalidation(element, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
+        element->setUsesEffectiveTextDirection(!!direction);
+        if (direction)
+            element->setEffectiveTextDirection(effectiveDirection);
+        it.traverseNext();
+    }
+}
+
+void Element::adjustDirectionalityIfNeededAfterChildrenChanged(Element* beforeChange, ChildChange::Type changeType)
+{
+    // FIXME: This function looks suspicious.
+
+    if (!selfOrPrecedingNodesAffectDirAuto())
+        return;
+
+    RefPtr<Node> oldMarkedNode;
+    if (beforeChange)
+        oldMarkedNode = changeType == ChildChange::Type::ElementInserted ? ElementTraversal::nextSibling(*beforeChange) : beforeChange->nextSibling();
+
+    while (oldMarkedNode && elementAffectsDirectionality(*oldMarkedNode))
+        oldMarkedNode = oldMarkedNode->nextSibling();
+    if (oldMarkedNode)
+        setHasDirAutoFlagRecursively(oldMarkedNode.get(), false);
+
+    for (Ref elementToAdjust : lineageOfType<HTMLElement>(*this)) {
+        if (elementAffectsDirectionality(elementToAdjust)) {
+            ASSERT(elementToAdjust->hasDirectionAuto());
+            elementToAdjust->updateEffectiveDirectionalityOfDirAuto();
+            return;
+        }
+    }
+}
+
+void Element::updateTextDirectionalityAfterInputTypeChange()
+{
+    dirAttributeChanged(attributeWithoutSynchronization(dirAttr));
+}
+
+void Element::updateEffectiveDirectionalityOfDirAuto()
+{
+    auto result = computeDirectionalityFromText();
+    setHasDirAutoFlagRecursively(this, true, result.strongDirectionalityNode.get());
+    updateEffectiveDirectionality(result.direction);
+    if (renderer() && renderer()->style().direction() != result.direction)
+        invalidateStyleForSubtree();
+}
+
+auto Element::computeDirectionalityFromText() const -> TextDirectionWithStrongDirectionalityNode
+{
+    if (RefPtr textControl = dynamicDowncast<HTMLTextFormControlElement>(const_cast<Element*>(this))) {
+        if (textControl->dirAutoUsesValue()) {
+            auto direction = textControl->value().defaultWritingDirection();
+            if (!direction)
+                return { TextDirection::LTR, nullptr };
+            return { *direction == U_LEFT_TO_RIGHT ? TextDirection::LTR : TextDirection::RTL, WTFMove(textControl) };
+        }
+    }
+
+    RefPtr node = firstChild();
+    while (node) {
+        // Skip bdi, script, style and text form controls.
+        auto* element = dynamicDowncast<Element>(*node);
+        if (node->hasTagName(bdiTag) || node->hasTagName(scriptTag) || node->hasTagName(styleTag)
+            || (element && element->isTextField())) {
+            node = NodeTraversal::nextSkippingChildren(*node, this);
+            continue;
+        }
+
+        // Skip elements with valid dir attribute
+        if (element) {
+            if (isValidDirValue(element->attributeWithoutSynchronization(dirAttr))) {
+                node = NodeTraversal::nextSkippingChildren(*element, this);
+                continue;
+            }
+        }
+
+        if (node->isTextNode()) {
+            if (auto direction = node->textContent(true).defaultWritingDirection())
+                return { *direction == U_LEFT_TO_RIGHT ? TextDirection::LTR : TextDirection::RTL, node };
+        }
+        node = NodeTraversal::next(*node, this);
+    }
+    return { TextDirection::LTR, nullptr };
+}
+
+void Element::adjustDirectionalityIfNeededAfterChildAttributeChanged(Element*)
+{
+    ASSERT(selfOrPrecedingNodesAffectDirAuto());
+    for (Ref element : lineageOfType<Element>(*this)) {
+        if (elementAffectsDirectionality(element)) {
+            ASSERT(element->hasDirectionAuto());
+            element->updateEffectiveDirectionalityOfDirAuto();
+            break;
+        }
+    }
+}
+
 void Element::updateEffectiveLangStateFromParent()
 {
     ASSERT(!hasLanguageAttribute());
@@ -2840,6 +3092,14 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
     } else if (!hasLanguageAttribute())
         updateEffectiveLangStateFromParent();
 
+    if (RefPtr parent = parentOrShadowHostElement(); parent && UNLIKELY(parent->usesEffectiveTextDirection())) {
+        auto* input = dynamicDowncast<HTMLInputElement>(*this);
+        if (!elementAffectsDirectionality(*this) && !(input && input->isTelephoneField())) {
+            setUsesEffectiveTextDirection(true);
+            setEffectiveTextDirection(parent->effectiveTextDirection());
+        }
+    }
+
     return InsertedIntoAncestorResult::Done;
 }
 
@@ -2944,6 +3204,11 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
     Styleable::fromElement(*this).elementWasRemoved();
 
     document().userActionElements().clearAllForElement(*this);
+
+    if (UNLIKELY(usesEffectiveTextDirection()) && !isValidDirValue(attributeWithoutSynchronization(dirAttr))) {
+        if (auto* parent = parentOrShadowHostElement(); !(parent && parent->usesEffectiveTextDirection()))
+            setUsesEffectiveTextDirection(false);
+    }
 }
 
 PopoverData* Element::popoverData() const
@@ -3215,12 +3480,12 @@ CustomElementReactionQueue* Element::reactionQueue() const
 CustomElementDefaultARIA& Element::customElementDefaultARIA()
 {
     ASSERT(isPrecustomizedOrDefinedCustomElement());
-    auto* deafultARIA = elementRareData()->customElementDefaultARIA();
-    if (!deafultARIA) {
+    auto* defaultARIA = elementRareData()->customElementDefaultARIA();
+    if (!defaultARIA) {
         elementRareData()->setCustomElementDefaultARIA(makeUnique<CustomElementDefaultARIA>());
-        deafultARIA = elementRareData()->customElementDefaultARIA();
+        defaultARIA = elementRareData()->customElementDefaultARIA();
     }
-    return *deafultARIA;
+    return *defaultARIA;
 }
 
 CheckedRef<CustomElementDefaultARIA> Element::checkedCustomElementDefaultARIA()
@@ -3271,6 +3536,9 @@ void Element::childrenChanged(const ChildChange& change)
             break;
         }
     }
+
+    if (UNLIKELY(document().isDirAttributeDirty()))
+        adjustDirectionalityIfNeededAfterChildrenChanged(change.previousSiblingElement, change.type);
 }
 
 void Element::setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue)
@@ -3898,7 +4166,7 @@ bool Element::dispatchMouseForceWillBegin()
         return false;
 
     PlatformMouseEvent platformMouseEvent { frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), MouseButton::None, PlatformEvent::Type::NoType, 1, { }, WallTime::now(), ForceAtClick, SyntheticClickType::NoTap };
-    auto mouseForceWillBeginEvent = MouseEvent::create(eventNames().webkitmouseforcewillbeginEvent, document().windowProxy(), platformMouseEvent, { }, 0, nullptr);
+    auto mouseForceWillBeginEvent = MouseEvent::create(eventNames().webkitmouseforcewillbeginEvent, document().windowProxy(), platformMouseEvent, { }, { }, 0, nullptr);
     mouseForceWillBeginEvent->setTarget(Ref { *this });
     dispatchEvent(mouseForceWillBeginEvent);
 
@@ -4191,7 +4459,7 @@ const RenderStyle* Element::renderOrDisplayContentsStyle() const
 const RenderStyle* Element::renderOrDisplayContentsStyle(const std::optional<Style::PseudoElementIdentifier>& pseudoElementIdentifier) const
 {
     if (pseudoElementIdentifier) {
-        if (auto* pseudoElement = beforeOrAfterPseudoElement(*this, pseudoElementIdentifier->pseudoId))
+        if (RefPtr pseudoElement = beforeOrAfterPseudoElement(*this, pseudoElementIdentifier->pseudoId))
             return pseudoElement->renderOrDisplayContentsStyle();
 
         if (auto* style = renderOrDisplayContentsStyle()) {
@@ -4213,7 +4481,7 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
     ASSERT(isConnected());
 
     Ref document = this->document();
-    document->styleScope().flushPendingUpdate();
+    document->checkedStyleScope()->flushPendingUpdate();
 
     bool isInDisplayNoneTree = false;
 

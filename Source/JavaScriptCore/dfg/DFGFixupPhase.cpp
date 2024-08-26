@@ -880,6 +880,7 @@ private:
         }
 
         case ArithFRound:
+        case ArithF16Round:
         case ArithSqrt:
         case ArithUnary: {
             Edge& child1 = node->child1();
@@ -1144,6 +1145,11 @@ private:
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
 
+            case Array::Float16Array:
+                if (!CCallHelpers::supportsFloat16())
+                    node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
+                break;
+
 
             case Array::ForceExit: {
                 // Don't force OSR because we have only seen OwnStructureMode.
@@ -1223,6 +1229,7 @@ private:
             case Array::Uint8ClampedArray:
             case Array::Uint16Array:
             case Array::Uint32Array:
+            case Array::Float16Array:
             case Array::Float32Array:
             case Array::Float64Array:
                 fixEdge<KnownCellUse>(m_graph.varArgChild(node, 0));
@@ -1244,13 +1251,14 @@ private:
                     || (arrayMode.isOutOfBoundsSaneChain() && !(node->flags() & NodeBytecodeUsesAsOther)))
                     node->setResult(NodeResultDouble);
                 break;
-                
+
+            case Array::Float16Array:
             case Array::Float32Array:
             case Array::Float64Array:
                 if (!(node->op() == GetByVal && arrayMode.isOutOfBounds()))
                     node->setResult(NodeResultDouble);
                 break;
-                
+
             case Array::Uint32Array:
                 if (node->shouldSpeculateInt32())
                     break;
@@ -1332,6 +1340,11 @@ private:
                 // https://bugs.webkit.org/show_bug.cgi?id=221172
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
+            case Array::Float16Array: {
+                if (!CCallHelpers::supportsFloat16())
+                    node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
+                break;
+            }
             default:
                 break;
             }
@@ -1391,6 +1404,7 @@ private:
                 else
                     fixDoubleOrBooleanEdge(child3);
                 break;
+            case Array::Float16Array:
             case Array::Float32Array:
             case Array::Float64Array:
                 fixEdge<KnownCellUse>(child1);
@@ -1497,7 +1511,7 @@ private:
             }
             default: {
                 // Make it Array::Generic.
-                // FIXME: Add BigInt64Array / BigUint64Array support.
+                // FIXME: Add BigInt64Array / BigUint64Array / Float16Array support.
                 // https://bugs.webkit.org/show_bug.cgi?id=221172
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
@@ -2279,11 +2293,18 @@ private:
             fixEdge<CellUse>(node->child1());
             break;
         }
-            
+
         case InstanceOf: {
-            if (node->child1()->shouldSpeculateCell()
-                && node->child2()->shouldSpeculateCell()
-                && is64Bit()) {
+            if (node->child1()->shouldSpeculateCell() && node->child2()->shouldSpeculateCell() && is64Bit()) {
+                fixEdge<CellUse>(node->child1());
+                fixEdge<CellUse>(node->child2());
+                break;
+            }
+            break;
+        }
+
+        case InstanceOfMegamorphic: {
+            if (is64Bit()) {
                 fixEdge<CellUse>(node->child1());
                 fixEdge<CellUse>(node->child2());
                 break;
@@ -3167,8 +3188,23 @@ private:
         }
 
         case ForwardVarargs:
+            fixEdge<KnownInt32Use>(node->child1());
+            break;
+
+        case VarargsLength: {
+            // Actually this is common that we are passing undefined / null.
+            if (node->child1()->shouldSpeculateOther()) {
+                insertCheck<OtherUse>(node->child1().node());
+                m_graph.convertToConstant(node, jsNumber(1));
+            }
+            break;
+        }
+
         case LoadVarargs: {
             fixEdge<KnownInt32Use>(node->child1());
+            // Actually this is common that we are passing undefined / null.
+            if (node->child2()->shouldSpeculateOther())
+                fixEdge<OtherUse>(node->child2());
             break;
         }
 
@@ -3214,7 +3250,6 @@ private:
         case TailCallForwardVarargs:
         case TailCallForwardVarargsInlinedCaller:
         case CallWasm:
-        case VarargsLength:
         case ProfileControlFlow:
         case NewObject:
         case NewGenerator:
@@ -4066,13 +4101,9 @@ private:
 
         auto emitPrimordialCheckFor = [&] (JSValue primordialProperty, UniquedStringImpl* propertyUID) {
             m_graph.identifiers().ensure(propertyUID);
-            Node* actualProperty = m_insertionSet.insertNode(
-                m_indexInBlock, SpecNone, TryGetById, node->origin,
-                OpInfo(CacheableIdentifier::createFromImmortalIdentifier(propertyUID)), OpInfo(SpecFunction), Edge(searchRegExp, CellUse));
-
-            m_insertionSet.insertNode(
-                m_indexInBlock, SpecNone, CheckIsConstant, node->origin,
-                OpInfo(m_graph.freeze(primordialProperty)), Edge(actualProperty, CellUse));
+            auto* data = m_graph.m_getByIdData.add(GetByIdData { CacheableIdentifier::createFromImmortalIdentifier(propertyUID), CacheType::GetByIdPrototype });
+            Node* actualProperty = m_insertionSet.insertNode(m_indexInBlock, SpecNone, TryGetById, node->origin, OpInfo(data), OpInfo(SpecFunction), Edge(searchRegExp, CellUse));
+            m_insertionSet.insertNode(m_indexInBlock, SpecNone, CheckIsConstant, node->origin, OpInfo(m_graph.freeze(primordialProperty)), Edge(actualProperty, CellUse));
         };
 
         JSGlobalObject* globalObject = m_graph.globalObjectFor(node->origin.semantic);

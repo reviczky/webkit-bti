@@ -50,6 +50,7 @@
 #include "WasmMemory.h"
 #include "WasmMemoryInformation.h"
 #include "WasmModuleInformation.h"
+#include "WasmOperations.h"
 #include "WasmTypeDefinitionInlines.h"
 #include <wtf/StackPointer.h>
 #include <wtf/SystemTracing.h>
@@ -418,7 +419,9 @@ CodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
     // Restore stack pointer after call
     jit.addPtr(MacroAssembler::TrustedImm32(-static_cast<int32_t>(totalFrameSize)), MacroAssembler::framePointerRegister, MacroAssembler::stackPointerRegister);
 
-    marshallJSResult(jit, typeDefinition, wasmCallInfo, savedResultRegisters);
+    CCallHelpers::JumpList exceptionChecks;
+
+    marshallJSResult(jit, typeDefinition, wasmCallInfo, savedResultRegisters, exceptionChecks);
 
     ASSERT(!RegisterSetBuilder::runtimeTagRegisters().contains(GPRInfo::nonPreservedNonReturnGPR, IgnoreVectors));
 
@@ -435,11 +438,19 @@ CodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
 #endif
     jit.jumpThunk(CodeLocationLabel<JSEntryPtrTag> { executable()->entrypointFor(CodeForCall, MustCheckArity) });
 
+    exceptionChecks.link(&jit);
+    jit.loadPtr(CCallHelpers::Address(GPRInfo::wasmContextInstancePointer, JSWebAssemblyInstance::offsetOfVM()), GPRInfo::argumentGPR0);
+    jit.copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(GPRInfo::argumentGPR0);
+    jit.prepareWasmCallOperation(GPRInfo::wasmContextInstancePointer);
+    jit.setupArguments<decltype(Wasm::operationWasmUnwind)>(GPRInfo::wasmContextInstancePointer);
+    jit.callOperation<OperationPtrTag>(Wasm::operationWasmUnwind);
+    jit.farJump(GPRInfo::returnValueGPR, ExceptionHandlerPtrTag);
+
     LinkBuffer linkBuffer(jit, nullptr, LinkBuffer::Profile::WasmThunk, JITCompilationCanFail);
     if (UNLIKELY(linkBuffer.didFailToAllocate()))
         return nullptr;
 
-    auto compilation = makeUnique<Compilation>(FINALIZE_WASM_CODE(linkBuffer, JITCompilationPtrTag, nullptr, "JS->Wasm IC"), nullptr);
+    auto compilation = makeUnique<Compilation>(FINALIZE_WASM_CODE(linkBuffer, JITCompilationPtrTag, nullptr, "JS->Wasm IC %s", signature.toString().ascii().data()), nullptr);
     jsToWasmICCallee->setEntrypoint({ WTFMove(compilation), WTFMove(registersToSpill) });
 
     // Successfully compiled and linked the IC.
@@ -469,8 +480,7 @@ WebAssemblyFunction::WebAssemblyFunction(VM& vm, NativeExecutable* executable, J
     : Base { vm, executable, globalObject, structure, instance, Wasm::WasmToWasmImportableFunction { typeIndex, wasmToWasmEntrypointLoadLocation, &m_boxedWasmCallee, rtt.get() } }
     , m_jsEntrypoint { jsEntrypoint }
     , m_boxedWasmCallee(reinterpret_cast<uint64_t>(CalleeBits::boxNativeCalleeIfExists(wasmCallee)))
-    , m_jsToWasmInterpreterCallee(jsEntrypoint.compilationMode() == Wasm::CompilationMode::JSEntrypointInterpreterMode ? static_cast<Wasm::JSEntrypointInterpreterCallee*>(&jsEntrypoint) : nullptr)
-    , m_jsToWasmBoxedInterpreterCallee(CalleeBits::boxNativeCalleeIfExists(m_jsToWasmInterpreterCallee.get()))
+    , m_jsToWasmCallee(jsEntrypoint.compilationMode() == Wasm::CompilationMode::JITLessJSEntrypointMode ? static_cast<Wasm::JITLessJSEntrypointCallee*>(&jsEntrypoint) : nullptr)
 { }
 
 template<typename Visitor>

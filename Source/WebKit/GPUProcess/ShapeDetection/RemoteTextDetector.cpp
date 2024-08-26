@@ -30,11 +30,15 @@
 
 #include "ArgumentCoders.h"
 #include "RemoteRenderingBackend.h"
+#include "ShapeDetectionObjectHeap.h"
 #include <WebCore/DetectedTextInterface.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/TextDetectorInterface.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteTextDetector);
 
 RemoteTextDetector::RemoteTextDetector(Ref<WebCore::ShapeDetection::TextDetector>&& textDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     : m_backing(WTFMove(textDetector))

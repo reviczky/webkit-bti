@@ -710,6 +710,7 @@ public:
     // Locals
     PartialResult WARN_UNUSED_RETURN getLocal(uint32_t index, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN setLocal(uint32_t index, ExpressionType value);
+    PartialResult WARN_UNUSED_RETURN teeLocal(uint32_t, ExpressionType, ExpressionType& result);
 
     // Globals
     PartialResult WARN_UNUSED_RETURN getGlobal(uint32_t index, ExpressionType& result);
@@ -822,10 +823,10 @@ public:
     ALWAYS_INLINE void willParseExtendedOpcode() { }
     ALWAYS_INLINE void didParseOpcode() { }
     void didFinishParsingLocals() { }
-    void didPopValueFromStack(ExpressionType expr, String msg)
+    void didPopValueFromStack(ExpressionType expr, ASCIILiteral message)
     {
         --m_stackSize;
-        TRACE_VALUE(Wasm::Types::Void, get(expr), "pop at height: ", m_stackSize.value() + 1, " site: [", msg, "], var ", *expr);
+        TRACE_VALUE(Wasm::Types::Void, get(expr), "pop at height: ", m_stackSize.value() + 1, " site: [", message, "], var ", *expr);
     }
     const Ref<TypeDefinition> getTypeDefinition(uint32_t typeIndex) { return m_info.typeSignatures[typeIndex]; }
     const ArrayType* getArrayTypeDefinition(uint32_t);
@@ -1965,7 +1966,7 @@ auto OMGIRGenerator::emitIndirectCall(Value* calleeInstance, Value* calleeCode, 
 
     if (isTailCall) {
         const TypeIndex callerTypeIndex = m_info.internalFunctionTypeIndices[m_functionIndex];
-        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex);
+        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex).expand();
         CallInformation wasmCallerInfoAsCallee = callingConvention.callInformationFor(callerTypeDefinition, CallRole::Callee);
 
         auto [patchpoint, _, prepareForCall] = createTailCallPatchpoint(m_currentBlock, wasmCallerInfoAsCallee, wasmCalleeInfoAsCallee, args, { { calleeCode, ValueRep(GPRInfo::wasmScratchGPR0) } });
@@ -2238,6 +2239,16 @@ auto OMGIRGenerator::setLocal(uint32_t index, ExpressionType value) -> PartialRe
     ASSERT(m_locals[index]);
     append<VariableValue>(m_proc, B3::Set, origin(), m_locals[index], get(value));
     TRACE_VALUE(m_parser->typeOfLocal(index), get(value), "set_local ", index);
+    return { };
+}
+
+auto OMGIRGenerator::teeLocal(uint32_t index, ExpressionType value, ExpressionType& result) -> PartialResult
+{
+    ASSERT(m_locals[index]);
+    Value* input = get(value);
+    append<VariableValue>(m_proc, B3::Set, origin(), m_locals[index], input);
+    result = push(input);
+    TRACE_VALUE(m_parser->typeOfLocal(index), input, "tee_local ", index);
     return { };
 }
 
@@ -5026,8 +5037,8 @@ static inline void prepareForTailCallImpl(unsigned functionIndex, CCallHelpers& 
     ASSERT(WTF::roundUpToMultipleOf<stackAlignmentBytes()>(frameSize) == frameSize);
     ASSERT(WTF::roundUpToMultipleOf<stackAlignmentBytes()>(std::abs(newFPOffsetFromFP)) == static_cast<size_t>(std::abs(newFPOffsetFromFP)));
 
-    auto fpOffsetToSPOffset = [frameSize](unsigned offset) {
-        return checkedSum<int>(frameSize + offset).value();
+    auto fpOffsetToSPOffset = [frameSize](int32_t offset) {
+        return checkedSum<int>(safeCast<int>(frameSize), offset).value();
     };
 
     JIT_COMMENT(jit, "Let's use the caller's frame, so that we always have a valid frame.");
@@ -5353,7 +5364,7 @@ auto OMGIRGenerator::createTailCallPatchpoint(BasicBlock* block, CallInformation
     //    +----------------------------+                                         |                            +----------------------------+
     //    | argumentCountIncludingThis |                                         |                            |          A.C.I.T.'         |
     //    +----------------------------+                                         |                            +----------------------------+
-    //    |  F.callee                  |                                         |                            |        G.callee            |
+    //    |          F.callee          |                                         |                            |        G.callee            |
     //    +----------------------------+                                         |                            +----------------------------+
     //    |        F.codeBlock         |                               (shuffleStackArgs...)                  |        G.codeBlock         |
     //    +----------------------------+                                         |                     (arm) >+----------------------------+
@@ -5380,7 +5391,7 @@ auto OMGIRGenerator::createTailCallPatchpoint(BasicBlock* block, CallInformation
     const Checked<int32_t> offsetOfFirstSlotFromFP = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCallerInfoAsCallee.headerAndArgumentStackSizeInBytes);
     ASSERT(offsetOfFirstSlotFromFP > 0);
     const Checked<int32_t> offsetOfNewFPFromFirstSlot = checkedProduct<int32_t>(-1, WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCalleeInfoAsCallee.headerAndArgumentStackSizeInBytes));
-    const Checked<int32_t> newFPOffsetFromFP = checkedSum<int32_t>(offsetOfFirstSlotFromFP + offsetOfNewFPFromFirstSlot);
+    const Checked<int32_t> newFPOffsetFromFP = offsetOfFirstSlotFromFP + offsetOfNewFPFromFirstSlot;
     m_tailCallStackOffsetFromFP = std::min(m_tailCallStackOffsetFromFP, newFPOffsetFromFP);
 
     RegisterSet scratchRegisters = RegisterSetBuilder::macroClobberedGPRs();
@@ -5531,7 +5542,7 @@ auto OMGIRGenerator::addCall(uint32_t functionIndex, const TypeDefinition& signa
     if (isTailCall)
         calleeStackSize = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCalleeInfo.headerAndArgumentStackSizeInBytes * 2 + sizeof(Register));
     const TypeIndex callerTypeIndex = m_info.internalFunctionTypeIndices[m_functionIndex];
-    const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex);
+    const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex).expand();
     CallInformation wasmCallerInfoAsCallee = callingConvention.callInformationFor(callerTypeDefinition, CallRole::Callee);
 
     B3::Type returnType = toB3ResultType(&signature);

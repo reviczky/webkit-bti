@@ -34,13 +34,17 @@
 #include "WebGPUObjectHeap.h"
 #include <WebCore/WebGPUBindGroupLayout.h>
 #include <WebCore/WebGPUComputePipeline.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
-RemoteComputePipeline::RemoteComputePipeline(WebCore::WebGPU::ComputePipeline& computePipeline, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteComputePipeline);
+
+RemoteComputePipeline::RemoteComputePipeline(WebCore::WebGPU::ComputePipeline& computePipeline, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, RemoteGPU& gpu, WebGPUIdentifier identifier)
     : m_backing(computePipeline)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTFMove(streamConnection))
+    , m_gpu(gpu)
     , m_identifier(identifier)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteComputePipeline::messageReceiverName(), m_identifier.toUInt64());
@@ -62,7 +66,7 @@ void RemoteComputePipeline::getBindGroupLayout(uint32_t index, WebGPUIdentifier 
 {
     // "A new GPUBindGroupLayout wrapper is returned each time"
     auto bindGroupLayout = m_backing->getBindGroupLayout(index);
-    auto remoteBindGroupLayout = RemoteBindGroupLayout::create(bindGroupLayout, m_objectHeap, m_streamConnection.copyRef(), identifier);
+    auto remoteBindGroupLayout = RemoteBindGroupLayout::create(bindGroupLayout, m_objectHeap, m_streamConnection.copyRef(), m_gpu, identifier);
     m_objectHeap->addObject(identifier, remoteBindGroupLayout);
 }
 

@@ -275,6 +275,14 @@ bool LineLayout::styleWillChange(const RenderElement& renderer, const RenderStyl
     return Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() }.styleWillChange(*renderer.layoutBox(), newStyle);
 }
 
+bool LineLayout::boxContentWillChange(const RenderBox& renderer)
+{
+    if (!m_inlineContent || !renderer.layoutBox())
+        return false;
+
+    return Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() }.inlineLevelBoxContentWillChange(*renderer.layoutBox());
+}
+
 void LineLayout::updateOverflow()
 {
     InlineContentBuilder { flow(), m_boxTree }.updateLineOverflow(*m_inlineContent);
@@ -307,11 +315,22 @@ static inline Layout::BlockLayoutState::TextBoxTrim textBoxTrim(const RenderBloc
     if (!layoutState)
         return { };
     auto textBoxTrimForIFC = Layout::BlockLayoutState::TextBoxTrim { };
+    auto isFlippedLinesWritingMode = rootRenderer.style().isFlippedLinesWritingMode();
     if (layoutState->hasTextBoxTrimStart())
-        textBoxTrimForIFC.add(Layout::BlockLayoutState::TextBoxTrimSide::Start);
+        textBoxTrimForIFC.add(isFlippedLinesWritingMode ? Layout::BlockLayoutState::TextBoxTrimSide::End : Layout::BlockLayoutState::TextBoxTrimSide::Start);
     if (layoutState->hasTextBoxTrimEnd(rootRenderer))
-        textBoxTrimForIFC.add(Layout::BlockLayoutState::TextBoxTrimSide::End);
+        textBoxTrimForIFC.add(isFlippedLinesWritingMode ? Layout::BlockLayoutState::TextBoxTrimSide::Start : Layout::BlockLayoutState::TextBoxTrimSide::End);
     return textBoxTrimForIFC;
+}
+
+static inline TextEdge textBoxEdge(const RenderBlockFlow& rootRenderer)
+{
+    auto* layoutState = rootRenderer.view().frameView().layoutContext().layoutState();
+    if (!layoutState)
+        return { };
+    if (auto textBoxTrim = layoutState->textBoxTrim())
+        return textBoxTrim->propagatedTextBoxEdge;
+    return { };
 }
 
 static inline std::optional<Layout::BlockLayoutState::LineGrid> lineGrid(const RenderBlockFlow& rootRenderer)
@@ -381,6 +400,7 @@ std::optional<LayoutRect> LineLayout::layout()
         m_blockFormattingState.placedFloats(),
         lineClamp(flow()),
         textBoxTrim(flow()),
+        textBoxEdge(flow()),
         intrusiveInitialLetterBottom(),
         lineGrid(flow())
     };
@@ -395,7 +415,7 @@ std::optional<LayoutRect> LineLayout::layout()
 
     auto adjustments = adjustContentForPagination(parentBlockLayoutState, isPartialLayout);
 
-    updateRenderTreePositions(adjustments);
+    updateRenderTreePositions(adjustments, inlineFormattingContext.layoutState());
 
     if (m_lineDamage) {
         // Pagination may require another layout pass.
@@ -424,7 +444,7 @@ FloatRect LineLayout::constructContent(const Layout::InlineLayoutState& inlineLa
     return damagedRect;
 }
 
-void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdjustments)
+void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdjustments, const Layout::InlineLayoutState& inlineLayoutState)
 {
     if (!m_inlineContent)
         return;
@@ -495,6 +515,7 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
         auto& logicalGeometry = layoutState().geometryForBox(layoutBox);
 
         if (layoutBox.isFloatingPositioned()) {
+            auto isInitialLetter = layoutBox.style().pseudoElementType() == PseudoId::FirstLetter;
             auto& floatingObject = flow().insertFloatingObjectForIFC(renderer);
             auto containerLogicalWidth = m_inlineContentConstraints->visualLeft() + m_inlineContentConstraints->horizontal().logicalWidth + m_inlineContentConstraints->horizontal().logicalLeft;
             auto [marginBoxVisualRect, borderBoxVisualRect] = toMarginAndBorderBoxVisualRect(logicalGeometry, containerLogicalWidth, writingMode, isLeftToRightPlacedFloatsInlineDirection);
@@ -503,6 +524,11 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
             if (paginationOffset) {
                 marginBoxVisualRect.move(*paginationOffset);
                 borderBoxVisualRect.move(*paginationOffset);
+            }
+            if (isInitialLetter) {
+                auto firstLineTrim = LayoutUnit { inlineLayoutState.firstLineStartTrimForInitialLetter() };
+                marginBoxVisualRect.move(0_lu, -firstLineTrim);
+                borderBoxVisualRect.move(0_lu, -firstLineTrim);
             }
 
             floatingObject.setFrameRect(marginBoxVisualRect);

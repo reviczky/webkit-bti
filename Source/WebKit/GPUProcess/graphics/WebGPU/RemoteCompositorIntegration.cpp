@@ -34,35 +34,33 @@
 #include "StreamServerConnection.h"
 #include "WebGPUObjectHeap.h"
 #include <WebCore/WebGPUCompositorIntegration.h>
+#include <wtf/TZoneMallocInlines.h>
 
-#if PLATFORM(COCOA)
-#define MESSAGE_CHECK(assertion) do { \
-    if (UNLIKELY(!(assertion))) { \
-        if (auto* gpu = m_gpu.ptr()) { \
-            if (auto connection = gpu->gpuConnectionToWebProcess(); connection.get()) \
-                connection->terminateWebProcess(); \
-            \
-            return; \
-        } \
-    } \
-} while (0)
-#else
-#define MESSAGE_CHECK RELEASE_ASSERT
-#endif
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_OPTIONAL_CONNECTION_BASE(assertion, connection())
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteCompositorIntegration);
 
 RemoteCompositorIntegration::RemoteCompositorIntegration(WebCore::WebGPU::CompositorIntegration& compositorIntegration, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, RemoteGPU& gpu, WebGPUIdentifier identifier)
     : m_backing(compositorIntegration)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTFMove(streamConnection))
-    , m_identifier(identifier)
     , m_gpu(gpu)
+    , m_identifier(identifier)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteCompositorIntegration::messageReceiverName(), m_identifier.toUInt64());
 }
 
 RemoteCompositorIntegration::~RemoteCompositorIntegration() = default;
+
+RefPtr<IPC::Connection> RemoteCompositorIntegration::connection() const
+{
+    RefPtr connection = m_gpu->gpuConnectionToWebProcess();
+    if (!connection)
+        return nullptr;
+    return &connection->connection();
+}
 
 void RemoteCompositorIntegration::destruct()
 {

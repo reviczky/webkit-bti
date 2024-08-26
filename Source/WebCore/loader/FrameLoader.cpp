@@ -255,7 +255,7 @@ protected:
 
     ~PageLevelForbidScope() = default;
 
-    SingleThreadWeakPtr<Page> m_page;
+    WeakPtr<Page> m_page;
 };
 
 struct ForbidPromptsScope : public PageLevelForbidScope {
@@ -676,6 +676,9 @@ void FrameLoader::clear(RefPtr<Document>&& newDocument, bool clearWindowProperti
 
     RefAllowingPartiallyDestroyed<LocalFrame> frame = m_frame.get();
 
+    if (neededClear)
+        frame->document()->transferViewTransitionParams(*newDocument);
+
     if (neededClear && frame->document()->backForwardCacheState() != Document::InBackForwardCache) {
         Ref document { *frame->document() };
         document->cancelParsing();
@@ -795,8 +798,8 @@ void FrameLoader::didBeginDocument(bool dispatch)
     document->initContentSecurityPolicy();
 
     Ref settings = frame->settings();
-    document->cachedResourceLoader().setImagesEnabled(settings->areImagesEnabled());
-    document->cachedResourceLoader().setAutoLoadImages(settings->loadsImagesAutomatically());
+    document->protectedCachedResourceLoader()->setImagesEnabled(settings->areImagesEnabled());
+    document->protectedCachedResourceLoader()->setAutoLoadImages(settings->loadsImagesAutomatically());
 
     std::optional<NavigationNavigationType> navigationType;
 
@@ -2391,6 +2394,13 @@ void FrameLoader::transitionToCommitted(CachedPage* cachedPage)
     m_client->setCopiesOnScroll();
     m_frame->checkedHistory()->updateForCommit();
 
+    if (RefPtr document = m_frame->document()) {
+        bool canTriggerCrossDocumentViewTransition = false;
+        if (m_provisionalDocumentLoader)
+            canTriggerCrossDocumentViewTransition = m_provisionalDocumentLoader->navigationCanTriggerCrossDocumentViewTransition(*document);
+        document->dispatchPageswapEvent(canTriggerCrossDocumentViewTransition);
+    }
+
     // The call to closeURL() invokes the unload event handler, which can execute arbitrary
     // JavaScript. If the script initiates a new load, we need to abandon the current load,
     // or the two will stomp each other.
@@ -2702,7 +2712,7 @@ void FrameLoader::dispatchDidFailProvisionalLoad(DocumentLoader& provisionalDocu
     auto contentFilterWillContinueLoading = false;
 #endif
 
-    auto willContinueLoading = WillContinueLoading::No;
+    auto willContinueLoading = willInternallyHandleFailure == WillInternallyHandleFailure::Yes ? WillContinueLoading::Yes : WillContinueLoading::No;
     if (m_frame->history().provisionalItem())
         willContinueLoading = WillContinueLoading::Yes;
 #if ENABLE(CONTENT_FILTERING)
@@ -2782,8 +2792,8 @@ void FrameLoader::checkLoadCompleteForThisFrame(LoadWillContinueInAnotherProcess
             isHTTPSByDefaultEnabled = page->protectedSettings()->httpsByDefault();
         }
 
-        bool isHTTPSFirstApplicable = (isHTTPSByDefaultEnabled || provisionalDocumentLoader->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSFirst))
-            && !provisionalDocumentLoader->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnly)
+        bool isHTTPSFirstApplicable = (isHTTPSByDefaultEnabled || provisionalDocumentLoader->httpsByDefaultMode() == HTTPSByDefaultMode::UpgradeWithHTTPFallback)
+            && provisionalDocumentLoader->httpsByDefaultMode() != HTTPSByDefaultMode::UpgradeAndFailClosed
             && !isHTTPFallbackInProgress()
             && (!provisionalDocumentLoader->mainResourceLoader() || !provisionalDocumentLoader->mainResourceLoader()->redirectCount());
 
@@ -2902,11 +2912,13 @@ void FrameLoader::checkLoadCompleteForThisFrame(LoadWillContinueInAnotherProcess
             protectedFrame()->protectedPage()->diagnosticLoggingClient().logDiagnosticMessageWithResult(DiagnosticLoggingKeys::pageLoadedKey(), emptyString(), error.isNull() ? DiagnosticLoggingResultPass : DiagnosticLoggingResultFail, ShouldSample::Yes);
         }
 
+        m_shouldSkipHTTPSUpgradeForSameSiteNavigation = m_isHTTPFallbackInProgress;
+        setHTTPFallbackInProgress(false);
+
         return;
     }
         
     case FrameState::Complete:
-        setHTTPFallbackInProgress(false);
         m_loadType = FrameLoadType::Standard;
         frameLoadCompleted();
         return;
@@ -4101,6 +4113,9 @@ void FrameLoader::applyUserAgentIfNeeded(ResourceRequest& request)
 
 bool FrameLoader::shouldInterruptLoadForXFrameOptions(const String& content, const URL& url, ResourceLoaderIdentifier requestIdentifier)
 {
+    if (m_frame->settings().ignoreIframeEmbeddingProtectionsEnabled())
+        return false;
+
     RefPtr topFrame = dynamicDowncast<LocalFrame>(m_frame->tree().top());
     if (m_frame.ptr() == topFrame)
         return false;

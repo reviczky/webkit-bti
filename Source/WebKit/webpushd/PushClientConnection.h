@@ -42,6 +42,7 @@
 #include <wtf/OSObjectPtr.h>
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/spi/darwin/XPCSPI.h>
@@ -67,25 +68,19 @@ using WebKit::WebPushD::WebPushDaemonConnectionConfiguration;
 namespace WebPushD {
 
 enum class PushClientConnectionIdentifierType { };
-using PushClientConnectionIdentifier = AtomicObjectIdentifier<PushClientConnectionIdentifierType>;
+using PushClientConnectionIdentifier = LegacyNullableAtomicObjectIdentifier<PushClientConnectionIdentifierType>;
 
 class PushClientConnection : public RefCounted<PushClientConnection>, public Identified<PushClientConnectionIdentifier>, public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PushClientConnection);
 public:
-    static Ref<PushClientConnection> create(xpc_connection_t);
+    static RefPtr<PushClientConnection> create(xpc_connection_t, IPC::Decoder&);
 
-    bool hasHostAppAuditToken() const { return !!m_hostAppAuditToken; }
-
-    WebCore::PushSubscriptionSetIdentifier subscriptionSetIdentifier();
-    const String& hostAppCodeSigningIdentifier();
-
-    bool hostAppHasPushEntitlement();
-    bool hostAppHasPushInjectEntitlement();
+    WebCore::PushSubscriptionSetIdentifier subscriptionSetIdentifier() const;
+    const String& hostAppCodeSigningIdentifier() const { return m_hostAppCodeSigningIdentifier; }
+    bool hostAppHasPushInjectEntitlement() const { return m_hostAppHasPushInjectEntitlement; };
 
     const String& pushPartitionString() const { return m_pushPartitionString; }
     std::optional<WTF::UUID> dataStoreIdentifier() const { return m_dataStoreIdentifier; }
-
-    bool useMockBundlesForTesting() const { return m_useMockBundlesForTesting; }
 
     void connectionClosed();
 
@@ -96,7 +91,7 @@ public:
 #endif
 
 private:
-    PushClientConnection(xpc_connection_t);
+    PushClientConnection(xpc_connection_t, String&& hostAppCodeSigningIdentifier, bool hostAppHasPushInjectEntitlement, String&& pushPartitionString, std::optional<WTF::UUID>&& dataStoreIdentifier);
 
     // PushClientConnectionMessages
     void setPushAndNotificationsEnabledForOrigin(const String& originString, bool, CompletionHandler<void()>&& replySender);
@@ -111,36 +106,27 @@ private:
     void removeAllPushSubscriptions(CompletionHandler<void(unsigned)>&&);
     void removePushSubscriptionsForOrigin(WebCore::SecurityOriginData&&, CompletionHandler<void(unsigned)>&&);
     void setPublicTokenForTesting(const String& publicToken, CompletionHandler<void()>&&);
-    void updateConnectionConfiguration(WebPushDaemonConnectionConfiguration&&);
-    void getPushPermissionState(URL&& scopeURL, CompletionHandler<void(WebCore::PushPermissionState)>&&);
+    void initializeConnection(WebPushDaemonConnectionConfiguration&&);
+    void getPushPermissionState(WebCore::SecurityOriginData&&, CompletionHandler<void(WebCore::PushPermissionState)>&&);
+    void requestPushPermission(WebCore::SecurityOriginData&&, CompletionHandler<void(bool)>&&);
     void setHostAppAuditTokenData(const Vector<uint8_t>&);
     void getPushTopicsForTesting(CompletionHandler<void(Vector<String>, Vector<String>)>&&);
-    void didShowNotificationForTesting(URL&& scopeURL, CompletionHandler<void()>&&);
 
     void showNotification(const WebCore::NotificationData&, RefPtr<WebCore::NotificationResources>, CompletionHandler<void()>&&);
     void getNotifications(const URL& registrationURL, const String& tag, CompletionHandler<void(Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData>&&)>&&);
     void cancelNotification(const WTF::UUID& notificationID);
-    void enableMockUserNotificationCenterForTesting(CompletionHandler<void()>&&);
-
-    String bundleIdentifierFromAuditToken(audit_token_t);
-    bool hostHasEntitlement(ASCIILiteral);
+    void setAppBadge(WebCore::SecurityOriginData&&, std::optional<uint64_t>);
+    void getAppBadgeForTesting(CompletionHandler<void(std::optional<uint64_t>)>&&);
 
     OSObjectPtr<xpc_connection_t> m_xpcConnection;
+    String m_hostAppCodeSigningIdentifier;
+    bool m_hostAppHasPushInjectEntitlement { false };
+    String m_pushPartitionString;
+    Markable<WTF::UUID> m_dataStoreIdentifier;
 
 #if PLATFORM(IOS)
     mutable RetainPtr<UIWebClip> m_associatedWebClip;
 #endif
-
-    std::optional<audit_token_t> m_hostAppAuditToken;
-    std::optional<String> m_hostAppCodeSigningIdentifier;
-    std::optional<bool> m_hostAppHasPushEntitlement;
-
-    String m_bundleIdentifierOverride;
-    String m_pushPartitionString;
-    Markable<WTF::UUID> m_dataStoreIdentifier;
-
-    bool m_debugModeEnabled { false };
-    bool m_useMockBundlesForTesting { false };
 };
 
 } // namespace WebPushD

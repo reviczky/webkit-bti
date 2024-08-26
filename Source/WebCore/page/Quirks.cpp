@@ -34,6 +34,7 @@
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
 #include "ElementInlines.h"
+#include "ElementTargetingTypes.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
 #include "HTMLBodyElement.h"
@@ -642,7 +643,6 @@ bool Quirks::shouldSynthesizeTouchEvents() const
 
 // live.com rdar://52116170
 // sharepoint.com rdar://52116170
-// twitter.com rdar://59016252
 // maps.google.com https://bugs.webkit.org/show_bug.cgi?id=214945
 bool Quirks::shouldAvoidResizingWhenInputViewBoundsChange() const
 {
@@ -653,9 +653,6 @@ bool Quirks::shouldAvoidResizingWhenInputViewBoundsChange() const
     auto host = url.host();
 
     if (isDomain("live.com"_s))
-        return true;
-
-    if (isDomain("twitter.com"_s))
         return true;
 
     if (isDomain("google.com"_s) && url.path().startsWithIgnoringASCIICase("/maps/"_s))
@@ -709,6 +706,22 @@ bool Quirks::needsGMailOverflowScrollQuirk() const
         m_needsGMailOverflowScrollQuirk = m_document->url().host() == "mail.google.com"_s;
 
     return *m_needsGMailOverflowScrollQuirk;
+#else
+    return false;
+#endif
+}
+
+// web.skype.com webkit.org/b/275941
+bool Quirks::needsIPadSkypeOverflowScrollQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsIPadSkypeOverflowScrollQuirk)
+        m_needsIPadSkypeOverflowScrollQuirk = m_document->url().host() == "web.skype.com"_s;
+
+    return *m_needsIPadSkypeOverflowScrollQuirk;
 #else
     return false;
 #endif
@@ -1729,6 +1742,18 @@ bool Quirks::shouldPreventOrientationMediaQueryFromEvaluatingToLandscape() const
     return shouldPreventOrientationMediaQueryFromEvaluatingToLandscapeInternal(m_document->topDocument().url());
 }
 
+bool Quirks::shouldFlipScreenDimensions() const
+{
+#if ENABLE(FLIP_SCREEN_DIMENSIONS_QUIRKS)
+    if (!needsQuirks())
+        return false;
+
+    return shouldFlipScreenDimensionsInternal(m_document->topDocument().url());
+#else
+    return false;
+#endif
+}
+
 // This section is dedicated to UA override for iPad. iPads (but iPad Mini) are sending a desktop user agent
 // to websites. In some cases, the website breaks in some ways, not expecting a touch interface for the website.
 // Controls not active or too small, form factor, etc. In this case it is better to send the iPad Mini UA.
@@ -1915,5 +1940,15 @@ bool Quirks::shouldIgnoreTextAutoSizing() const
     return m_document->topDocument().url().host() == "news.ycombinator.com"_s;
 }
 #endif
+
+std::optional<TargetedElementSelectors> Quirks::defaultVisibilityAdjustmentSelectors(const URL& requestURL)
+{
+#if ENABLE(VISIBILITY_ADJUSTMENT_QUIRKS)
+    return defaultVisibilityAdjustmentSelectorsInternal(requestURL);
+#else
+    UNUSED_PARAM(requestURL);
+    return { };
+#endif
+}
 
 }

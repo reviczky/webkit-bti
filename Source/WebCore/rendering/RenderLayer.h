@@ -152,7 +152,7 @@ struct ScrollRectToVisibleOptions {
 using ScrollingScope = uint64_t;
 
 class RenderLayer final : public CanMakeSingleThreadWeakPtr<RenderLayer>, public CanMakeCheckedPtr<RenderLayer> {
-    WTF_MAKE_ISO_ALLOCATED(RenderLayer);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(RenderLayer);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderLayer);
 public:
     friend class RenderReplica;
@@ -415,7 +415,7 @@ public:
     bool descendantDependentFlagsAreDirty() const
     {
         return m_visibleDescendantStatusDirty || m_visibleContentStatusDirty || m_hasSelfPaintingLayerDescendantDirty
-            || m_hasNotIsolatedBlendingDescendantsStatusDirty;
+            || m_hasNotIsolatedBlendingDescendantsStatusDirty || m_hasIntrinsicallyCompositedDescendantsStatusDirty;
     }
 
     bool isPaintingSVGResourceLayer() const { return m_isPaintingSVGResourceLayer; }
@@ -445,13 +445,13 @@ public:
     RenderLayer* reflectionLayer() const;
     bool isReflectionLayer(const RenderLayer&) const;
 
-    inline const LayoutPoint& location() const;
+    const LayoutPoint& location() const { return m_topLeft; }
     void setLocation(const LayoutPoint& p) { m_topLeft = p; }
 
-    inline const IntSize& size() const;
+    const IntSize& size() const { return m_layerSize; }
     void setSize(const IntSize& size) { m_layerSize = size; } // Only public for RenderTreeAsText.
 
-    inline LayoutRect rect() const;
+    LayoutRect rect() const { return LayoutRect(location(), size()); }
 
     IntSize visibleSize() const;
 
@@ -500,7 +500,7 @@ public:
 
     void updateLayerPositionsAfterStyleChange();
     enum class CanUseSimplifiedRepaintPass : uint8_t { No, Yes };
-    void updateLayerPositionsAfterLayout(RenderElement::LayoutIdentifier, bool isRelayoutingSubtree, bool didFullRepaint, CanUseSimplifiedRepaintPass);
+    void updateLayerPositionsAfterLayout(bool isRelayoutingSubtree, bool didFullRepaint, CanUseSimplifiedRepaintPass);
     void updateLayerPositionsAfterOverflowScroll();
     void updateLayerPositionsAfterDocumentScroll();
 
@@ -999,7 +999,7 @@ private:
     // Returns true if the position changed.
     bool updateLayerPosition(OptionSet<UpdateLayerPositionsFlag>* = nullptr);
 
-    void recursiveUpdateLayerPositions(RenderElement::LayoutIdentifier, OptionSet<UpdateLayerPositionsFlag>, CanUseSimplifiedRepaintPass = CanUseSimplifiedRepaintPass::No);
+    void recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFlag>, CanUseSimplifiedRepaintPass = CanUseSimplifiedRepaintPass::No);
 
     enum UpdateLayerPositionsAfterScrollFlag {
         IsOverflowScroll                        = 1 << 0,
@@ -1185,6 +1185,10 @@ private:
 
     void updatePagination();
 
+    void setWasOmittedFromZOrderTree();
+    void setWasIncludedInZOrderTree() { m_wasOmittedFromZOrderTree = false; }
+    void removeSelfAndDescendantsFromCompositor();
+
     void setHasCompositingDescendant(bool b)  { m_hasCompositingDescendant = b; }
     void setHasCompositedNonContainedDescendants(bool value) { m_hasCompositedNonContainedDescendants = value; }
 
@@ -1275,6 +1279,8 @@ private:
     bool m_intrinsicallyComposited : 1;
     bool m_hasIntrinsicallyCompositedDescendants : 1;
     bool m_hasIntrinsicallyCompositedDescendantsStatusDirty : 1;
+
+    bool m_wasOmittedFromZOrderTree : 1 { false };
 
     RenderLayerModelObject& m_renderer;
 

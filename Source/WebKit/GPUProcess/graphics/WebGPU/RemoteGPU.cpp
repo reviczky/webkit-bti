@@ -29,6 +29,7 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "GPUConnectionToWebProcess.h"
+#include "Logging.h"
 #include "RemoteAdapter.h"
 #include "RemoteCompositorIntegration.h"
 #include "RemoteGPUMessages.h"
@@ -50,22 +51,15 @@
 #include <WebCore/WebGPUCreateImpl.h>
 #endif
 
-#if PLATFORM(COCOA)
-#define MESSAGE_CHECK(assertion) do { \
-    if (UNLIKELY(!(assertion))) { \
-        if (auto connection = m_gpuConnectionToWebProcess.get()) \
-            connection->terminateWebProcess(); \
-        return; \
-    } \
-} while (0)
-#else
-#define MESSAGE_CHECK RELEASE_ASSERT
-#endif
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_OPTIONAL_CONNECTION_BASE(assertion, connection())
 
 namespace WebKit {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteGPU);
+
 RemoteGPU::RemoteGPU(WebGPUIdentifier identifier, GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)
     : m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
+    , m_sharedPreferencesForWebProcess(gpuConnectionToWebProcess.sharedPreferencesForWebProcess())
     , m_workQueue(IPC::StreamConnectionWorkQueue::create("WebGPU work queue"_s))
     , m_streamConnection(WTFMove(streamConnection))
     , m_objectHeap(WebGPU::ObjectHeap::create())
@@ -76,6 +70,14 @@ RemoteGPU::RemoteGPU(WebGPUIdentifier identifier, GPUConnectionToWebProcess& gpu
 }
 
 RemoteGPU::~RemoteGPU() = default;
+
+RefPtr<IPC::Connection> RemoteGPU::connection() const
+{
+    RefPtr connection = m_gpuConnectionToWebProcess.get();
+    if (!connection)
+        return nullptr;
+    return &connection->connection();
+}
 
 void RemoteGPU::initialize()
 {
@@ -142,13 +144,13 @@ void RemoteGPU::requestAdapter(const WebGPU::RequestAdapterOptions& options, Web
         return;
     }
 
-    m_backing->requestAdapter(*convertedOptions, [callback = WTFMove(callback), objectHeap = m_objectHeap.copyRef(), streamConnection = Ref { *m_streamConnection }, identifier, gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get()] (RefPtr<WebCore::WebGPU::Adapter>&& adapter) mutable {
+    m_backing->requestAdapter(*convertedOptions, [callback = WTFMove(callback), objectHeap = m_objectHeap.copyRef(), streamConnection = Ref { *m_streamConnection }, identifier, gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get(), gpu = Ref { *this }] (RefPtr<WebCore::WebGPU::Adapter>&& adapter) mutable {
         if (!adapter) {
             callback(std::nullopt);
             return;
         }
 
-        auto remoteAdapter = RemoteAdapter::create(*gpuConnectionToWebProcess, *adapter, objectHeap, WTFMove(streamConnection), identifier);
+        auto remoteAdapter = RemoteAdapter::create(*gpuConnectionToWebProcess, gpu, *adapter, objectHeap, WTFMove(streamConnection), identifier);
         objectHeap->addObject(identifier, remoteAdapter);
 
         auto name = adapter->name();
@@ -201,7 +203,7 @@ void RemoteGPU::createPresentationContext(const WebGPU::PresentationContextDescr
 
     auto presentationContext = m_backing->createPresentationContext(*convertedDescriptor);
     MESSAGE_CHECK(presentationContext);
-    auto remotePresentationContext = RemotePresentationContext::create(*m_gpuConnectionToWebProcess.get(), *presentationContext, m_objectHeap, *m_streamConnection, identifier);
+    auto remotePresentationContext = RemotePresentationContext::create(*m_gpuConnectionToWebProcess.get(), *this, *presentationContext, m_objectHeap, *m_streamConnection, identifier);
     m_objectHeap->addObject(identifier, remotePresentationContext);
 }
 

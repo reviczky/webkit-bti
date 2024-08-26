@@ -633,6 +633,8 @@ enum RenderingMode {
     Range? rangeOfStringNearLocation(Range range, DOMString text, long targetOffset);
     sequence<TextIteratorState> statesOfTextIterator(Range range);
 
+    DOMString textFragmentDirectiveForRange(Range range);
+
     undefined setDelegatesScrolling(boolean enabled);
 
     unsigned long long lastSpellCheckRequestSequence();
@@ -721,6 +723,8 @@ enum RenderingMode {
     sequence<SVGSVGElement> allSVGSVGElements();
 
     boolean testProcessIncomingSyncMessagesWhenWaitingForSyncReply();
+
+    undefined setResourceCachingDisabledByWebInspector(boolean disabled);
 
     // Flags for layerTreeAsText.
     const unsigned short LAYER_TREE_INCLUDES_VISIBLE_RECTS = 1;
@@ -815,7 +819,6 @@ enum RenderingMode {
     DOMString pageProperty(DOMString propertyName, long pageNumber);
     DOMString pageSizeAndMarginsInPixels(long pageIndex, long width, long height, long marginTop, long marginRight, long marginBottom, long marginLeft);
 
-    undefined setPageScaleFactor(unrestricted float scaleFactor, long x, long y);
     float pageScaleFactor();
 
     undefined setPageZoomFactor(unrestricted float zoomFactor);
@@ -829,8 +832,6 @@ enum RenderingMode {
 
     undefined setHeaderHeight(unrestricted float height);
     undefined setFooterHeight(unrestricted float height);
-
-    undefined setTopContentInset(unrestricted float contentInset);
 
     [Conditional=FULLSCREEN_API] undefined webkitWillEnterFullScreenForElement(Element element);
     [Conditional=FULLSCREEN_API] undefined webkitDidEnterFullScreenForElement(Element element);
@@ -1045,6 +1046,7 @@ enum RenderingMode {
     undefined disableCORSForURL(DOMString url);
 
     File? createFile(DOMString url);
+    Promise<File> asyncCreateFile(DOMString url);
     DOMString createTemporaryFile(DOMString name, DOMString contents);
 
     undefined queueMicroTask(long testNumber);

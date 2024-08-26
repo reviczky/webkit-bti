@@ -168,6 +168,10 @@ set(WebKit_MESSAGES_IN_FILES
     GPUProcess/graphics/WebGPU/RemoteShaderModule
     GPUProcess/graphics/WebGPU/RemoteTexture
     GPUProcess/graphics/WebGPU/RemoteTextureView
+    GPUProcess/graphics/WebGPU/RemoteXRBinding
+    GPUProcess/graphics/WebGPU/RemoteXRProjectionLayer
+    GPUProcess/graphics/WebGPU/RemoteXRSubImage
+    GPUProcess/graphics/WebGPU/RemoteXRView
 
     GPUProcess/media/RemoteAudioDestinationManager
     GPUProcess/media/RemoteAudioSessionProxy
@@ -419,6 +423,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/FullScreenMediaDetails.serialization.in
     Shared/GPUProcessConnectionParameters.serialization.in
     Shared/GoToBackForwardItemParameters.serialization.in
+    Shared/ImageOptions.serialization.in
     Shared/InspectorExtensionTypes.serialization.in
     Shared/JavaScriptCore.serialization.in
     Shared/LayerTreeContext.serialization.in

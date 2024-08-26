@@ -138,7 +138,7 @@ public:
     virtual ~GPUConnectionToWebProcess();
 
     const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
-    void updateSharedPreferencesForWebProcess(const SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess) { m_sharedPreferencesForWebProcess = WTFMove(sharedPreferencesForWebProcess); }
+    void updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess) { m_sharedPreferencesForWebProcess = WTFMove(sharedPreferencesForWebProcess); }
 
 #if ENABLE(WEBXR)
     bool isWebXREnabled() const { return sharedPreferencesForWebProcess().webXREnabled; }
@@ -177,7 +177,7 @@ public:
     Logger& logger();
 
     const String& mediaCacheDirectory() const;
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA) || ENABLE(ENCRYPTED_MEDIA)
     const String& mediaKeysStorageDirectory() const;
 #endif
 
@@ -201,13 +201,6 @@ public:
 
 #if ENABLE(APP_PRIVACY_REPORT)
     void setTCCIdentity();
-#endif
-
-#if PLATFORM(MAC)
-    void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
-#endif
-#if PLATFORM(MAC) && ENABLE(WEBGL)
-    void dispatchDisplayWasReconfiguredForTesting() { dispatchDisplayWasReconfigured(); };
 #endif
 
     const WebCore::ProcessIdentity& webProcessIdentity() const { return m_webProcessIdentity; }
@@ -337,7 +330,7 @@ private:
 
     // IPC::Connection::Client
     void didClose(IPC::Connection&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) final;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) final;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
 

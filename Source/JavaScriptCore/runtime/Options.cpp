@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -621,6 +621,28 @@ void Options::setAllJITCodeValidations(bool value)
     Options::useJITAsserts() = value;
 }
 
+static inline void disableAllWasmOptions()
+{
+    Options::useWasm() = false;
+    Options::useWasmIPInt() = false;
+    Options::useWasmLLInt() = false;
+    Options::useBBQJIT() = false;
+    Options::useOMGJIT() = false;
+    Options::dumpWasmDisassembly() = false;
+    Options::dumpBBQDisassembly() = false;
+    Options::dumpOMGDisassembly() = false;
+    Options::failToCompileWasmCode() = true;
+
+    Options::useWasmFastMemory() = false;
+    Options::useWasmFaultSignalHandler() = false;
+    Options::numberOfWasmCompilerThreads() = 0;
+
+    Options::useWasmGC() = false;
+    Options::useWasmSIMD() = false;
+    Options::useWasmRelaxedSIMD() = false;
+    Options::useWasmTailCalls() = false;
+}
+
 static inline void disableAllJITOptions()
 {
     Options::useLLInt() = true;
@@ -635,8 +657,10 @@ static inline void disableAllJITOptions()
     Options::useJITCage() = false;
     Options::useConcurrentJIT() = false;
 
-    if (!OptionsHelper::wasOverridden(Options::useWasmID))
-        Options::useWasm() = false;
+    if (!Options::useWasmJITLessJSEntrypoint() && Options::useWasm())
+        disableAllWasmOptions();
+
+    Options::useWasmSIMD() = false;
 
     Options::usePollingTraps() = true;
 
@@ -718,17 +742,12 @@ void Options::notifyOptionsChanged()
     Options::useConcurrentGC() = false;
     Options::forceUnlinkedDFG() = false;
     Options::useWasmSIMD() = false;
-    Options::useInterpretedJSEntryWrappers() = false;
 #if !CPU(ARM_THUMB2)
     Options::useBBQJIT() = false;
 #endif
 #if CPU(ARM_THUMB2)
     Options::useBBQTierUpChecks() = false;
 #endif
-#endif
-
-#if ENABLE(C_LOOP) || !CPU(ADDRESS64) || !(CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS)))
-    Options::useInterpretedJSEntryWrappers() = false;
 #endif
 
 #if !CPU(ARM64)
@@ -741,6 +760,9 @@ void Options::notifyOptionsChanged()
     if (!Options::allowDoubleShape())
         Options::useJIT() = false; // We don't support JIT with !allowDoubleShape. So disable it.
 
+    if (!Options::useWasm())
+        disableAllWasmOptions();
+
     // At initialization time, we may decide that useJIT should be false for any
     // number of reasons (including failing to allocate JIT memory), and therefore,
     // will / should not be able to enable any JIT related services.
@@ -752,11 +774,6 @@ void Options::notifyOptionsChanged()
             Options::useDFGJIT() = false;
             Options::useFTLJIT() = false;
         }
-
-        // Windows: Building with WEBASSEMBLY_OMGJIT and disabling at runtime
-#if OS(WINDOWS)
-        Options::useOMGJIT() = false;
-#endif
 
         if (Options::dumpDisassembly()
             || Options::asyncDisassembly()
@@ -830,15 +847,13 @@ void Options::notifyOptionsChanged()
         if (Options::forceAllFunctionsToUseSIMD() && !Options::useWasmSIMD())
             Options::forceAllFunctionsToUseSIMD() = false;
 
+#if USE(JSVALUE32_64)
         if (Options::useWasmTailCalls()) {
-            // The single-pass BBQ JIT doesn't support these features currently, so we should use a different
-            // BBQ backend if any of them are enabled. We should remove these limitations as support for each
-            // is added.
-            // FIXME: Add WASM tail calls support to single-pass BBQ JIT. https://bugs.webkit.org/show_bug.cgi?id=253192
             Options::useBBQJIT() = false;
             Options::useWasmLLInt() = true;
             Options::wasmLLIntTiersUpToBBQ() = false;
         }
+#endif
 
         if (Options::useWasmSIMD() && !(Options::useWasmLLInt() || Options::useWasmIPInt())) {
             // The LLInt is responsible for discovering if functions use SIMD.
@@ -931,10 +946,8 @@ void Options::notifyOptionsChanged()
     Options::useWasmFastMemory() = false;
 #endif
 
-#if ENABLE(UNIFIED_AND_FREEZABLE_CONFIG_RECORD)
     uint8_t* reservedConfigBytes = reinterpret_cast_ptr<uint8_t*>(WebConfig::g_config + WebConfig::reservedSlotsForExecutableAllocator);
     reservedConfigBytes[WebConfig::ReservedByteForAllocationProfiling] = Options::useAllocationProfiling() ? 1 : 0;
-#endif
 
     // Do range checks where needed and make corrections to the options:
     ASSERT(Options::thresholdForOptimizeAfterLongWarmUp() >= Options::thresholdForOptimizeAfterWarmUp());
@@ -964,9 +977,10 @@ void Options::initialize()
             RELEASE_ASSERT(OptionsHelper::addressOfOption(gcMaxHeapSizeID) ==  &Options::gcMaxHeapSize());
             RELEASE_ASSERT(OptionsHelper::addressOfOption(forceOSRExitToLLIntID) ==  &Options::forceOSRExitToLLInt());
 
-#ifndef NDEBUG
+#if ENABLE(JSC_RESTRICTED_OPTIONS_BY_DEFAULT)
             Config::enableRestrictedOptions();
 #endif
+
             // Initialize each of the options with their default values:
 #define INIT_OPTION(type_, name_, defaultValue_, availability_, description_) { \
                 name_() = defaultValue_; \
@@ -1372,7 +1386,7 @@ void Option::dump(StringBuilder& builder) const
         builder.append('"', m_optionString ? span8(m_optionString) : ""_span, '"');
         break;
     case Options::Type::GCLogLevel:
-        builder.append(GCLogging::levelAsString(m_gcLogLevel));
+        builder.append(m_gcLogLevel);
         break;
     case Options::Type::OSLogType:
         builder.append(asString(m_osLogType));

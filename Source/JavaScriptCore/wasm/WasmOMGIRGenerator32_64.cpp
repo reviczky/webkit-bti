@@ -598,6 +598,7 @@ public:
     // Locals
     PartialResult WARN_UNUSED_RETURN getLocal(uint32_t index, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN setLocal(uint32_t index, ExpressionType value);
+    PartialResult WARN_UNUSED_RETURN teeLocal(uint32_t index, ExpressionType value, ExpressionType& result);
 
     // Globals
     PartialResult WARN_UNUSED_RETURN getGlobal(uint32_t index, ExpressionType& result);
@@ -710,10 +711,10 @@ public:
     ALWAYS_INLINE void willParseExtendedOpcode() { }
     ALWAYS_INLINE void didParseOpcode() { }
     void didFinishParsingLocals() { }
-    void didPopValueFromStack(ExpressionType expr, String msg)
+    void didPopValueFromStack(ExpressionType expr, ASCIILiteral message)
     {
         --m_stackSize;
-        TRACE_VALUE(Wasm::Types::Void, get(expr), "pop at height: ", m_stackSize.value() + 1, " site: [", msg, "], var ", *expr);
+        TRACE_VALUE(Wasm::Types::Void, get(expr), "pop at height: ", m_stackSize.value() + 1, " site: [", message, "], var ", *expr);
     }
     const Ref<TypeDefinition> getTypeDefinition(uint32_t typeIndex) { return m_info.typeSignatures[typeIndex]; }
     const ArrayType* getArrayTypeDefinition(uint32_t);
@@ -1619,6 +1620,16 @@ auto OMGIRGenerator::getLocal(uint32_t index, ExpressionType& result) -> Partial
     return { };
 }
 
+auto OMGIRGenerator::teeLocal(uint32_t index, ExpressionType value, ExpressionType& result) -> PartialResult
+{
+    ASSERT(m_locals[index]);
+    Value* input = get(value);
+    m_currentBlock->appendNew<VariableValue>(m_proc, B3::Set, origin(), m_locals[index], input);
+    result = push(input);
+    TRACE_VALUE(m_parser->typeOfLocal(index), input, "tee_local ", index);
+    return { };
+}
+
 auto OMGIRGenerator::addUnreachable() -> PartialResult
 {
     B3::PatchpointValue* unreachable = m_currentBlock->appendNew<B3::PatchpointValue>(m_proc, B3::Void, origin());
@@ -1693,7 +1704,7 @@ auto OMGIRGenerator::emitIndirectCall(Value* calleeInstance, Value* calleeCode, 
         m_makesTailCalls = true;
 
         const TypeIndex callerTypeIndex = m_info.internalFunctionTypeIndices[m_functionIndex];
-        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex);
+        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex).expand();
         CallInformation wasmCallerInfoAsCallee = callingConvention.callInformationFor(callerTypeDefinition, CallRole::Callee);
 
         auto [patchpoint, _, prepareForCall] = createTailCallPatchpoint(m_currentBlock, wasmCallerInfoAsCallee, wasmCalleeInfoAsCallee, args, { { calleeCode, ValueRep(GPRInfo::wasmScratchGPR0) } });
@@ -1771,17 +1782,17 @@ auto OMGIRGenerator::addCurrentMemory(ExpressionType& result) -> PartialResult
 {
     static_assert(sizeof(std::declval<Memory*>()->size()) == sizeof(uint32_t), "codegen relies on this size");
 
-    Value* jsMemory = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int64, origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfJSMemory()));
-    Value* memory = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int64, origin(), jsMemory, safeCast<int32_t>(JSWebAssemblyMemory::offsetOfMemory()));
-    Value* handle = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int64, origin(), memory, safeCast<int32_t>(Memory::offsetOfHandle()));
-    Value* size = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int64, origin(), handle, safeCast<int32_t>(BufferMemoryHandle::offsetOfSize()));
+    Value* jsMemory = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfJSMemory()));
+    Value* memory = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), jsMemory, safeCast<int32_t>(JSWebAssemblyMemory::offsetOfMemory()));
+    Value* handle = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), memory, safeCast<int32_t>(Memory::offsetOfHandle()));
+    Value* size = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), handle, safeCast<int32_t>(BufferMemoryHandle::offsetOfSize()));
 
     constexpr uint32_t shiftValue = 16;
     static_assert(PageCount::pageSize == 1ull << shiftValue, "This must hold for the code below to be correct.");
     Value* numPages = m_currentBlock->appendNew<Value>(m_proc, ZShr, origin(),
         size, m_currentBlock->appendNew<Const32Value>(m_proc, origin(), shiftValue));
 
-    result = push(m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), numPages));
+    result = push(numPages);
 
     return { };
 }
@@ -1969,7 +1980,7 @@ auto OMGIRGenerator::getGlobal(uint32_t index, ExpressionType& result) -> Partia
         break;
     case Wasm::GlobalInformation::BindingMode::Portable: {
         ASSERT(global.mutability == Wasm::Mutability::Mutable);
-        Value* pointer = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, B3::Int64, origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfGlobalPtr(m_numImportFunctions, m_info.tableCount(), index)));
+        Value* pointer = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfGlobalPtr(m_numImportFunctions, m_info.tableCount(), index)));
         result = push(m_currentBlock->appendNew<MemoryValue>(m_proc, Load, toB3Type(global.type), origin(), pointer));
         break;
     }
@@ -1993,7 +2004,7 @@ auto OMGIRGenerator::setGlobal(uint32_t index, ExpressionType value) -> PartialR
         break;
     case Wasm::GlobalInformation::BindingMode::Portable: {
         ASSERT(global.mutability == Wasm::Mutability::Mutable);
-        Value* pointer = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, B3::Int64, origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfGlobalPtr(m_numImportFunctions, m_info.tableCount(), index)));
+        Value* pointer = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), instanceValue(), safeCast<int32_t>(JSWebAssemblyInstance::offsetOfGlobalPtr(m_numImportFunctions, m_info.tableCount(), index)));
         m_currentBlock->appendNew<MemoryValue>(m_proc, Store, origin(), get(value), pointer);
         // We emit a write-barrier onto JSWebAssemblyGlobal, not JSWebAssemblyInstance.
         if (isRefType(global.type)) {
@@ -2658,7 +2669,7 @@ Value* OMGIRGenerator::emitAtomicCompareExchange(ExtAtomicOpType op, Type valueT
 void OMGIRGenerator::emitStructSet(Value* structValue, uint32_t fieldIndex, const StructType& structType, Value* argument)
 {
     auto fieldType = structType.field(fieldIndex).type;
-    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), Int64, origin(), truncate(structValue), JSWebAssemblyStruct::offsetOfPayload());
+    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), truncate(structValue), JSWebAssemblyStruct::offsetOfPayload());
     int32_t fieldOffset = fixupPointerPlusOffset(payloadBase, *structType.offsetOfField(fieldIndex));
 
     if (fieldType.is<PackedType>()) {
@@ -2674,8 +2685,9 @@ void OMGIRGenerator::emitStructSet(Value* structValue, uint32_t fieldIndex, cons
 
     ASSERT(fieldType.is<Type>());
     m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Store), origin(), argument, payloadBase, fieldOffset);
+
     if (isRefType(fieldType.unpacked()))
-        emitWriteBarrier(structValue, instanceValue());
+        emitWriteBarrier(truncate(structValue), instanceValue());
 }
 
 auto OMGIRGenerator::atomicCompareExchange(ExtAtomicOpType op, Type valueType, ExpressionType pointer, ExpressionType expected, ExpressionType value, ExpressionType& result, uint32_t offset) -> PartialResult
@@ -2919,8 +2931,8 @@ auto OMGIRGenerator::addI31GetU(ExpressionType ref, ExpressionType& result) -> P
         });
     }
 
-    Value* masked = m_currentBlock->appendNew<Value>(m_proc, B3::BitAnd, origin(), get(ref), constant(Int64, 0x7fffffff));
-    result = push(m_currentBlock->appendNew<Value>(m_proc, B3::Trunc, origin(), masked));
+    Value* masked = m_currentBlock->appendNew<Value>(m_proc, B3::BitAnd, origin(), truncate(get(ref)), constant(Int32, 0x7fffffff));
+    result = push(masked);
     return { };
 }
 
@@ -3086,7 +3098,7 @@ auto OMGIRGenerator::addArrayGet(ExtGCOpType arrayGetKind, uint32_t typeIndex, E
         });
     }
 
-    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), get(arrayref), JSWebAssemblyArray::offsetOfPayload());
+    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), truncate(get(arrayref)), JSWebAssemblyArray::offsetOfPayload());
     Value* indexValue = is32Bit() ? get(index) : m_currentBlock->appendNew<Value>(m_proc, ZExt32, origin(), get(index));
     Value* indexedAddress = m_currentBlock->appendNew<Value>(m_proc, Add, pointerType(), origin(), payloadBase,
         m_currentBlock->appendNew<Value>(m_proc, Add, pointerType(), origin(), constant(pointerType(), JSWebAssemblyArray::offsetOfElements(elementType)),
@@ -3144,7 +3156,7 @@ void OMGIRGenerator::emitArraySetUnchecked(uint32_t typeIndex, Value* arrayref, 
     StorageType elementType;
     getArrayElementType(typeIndex, elementType);
 
-    auto payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), arrayref, JSWebAssemblyArray::offsetOfPayload());
+    auto payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), truncate(arrayref), JSWebAssemblyArray::offsetOfPayload());
     auto indexValue = is32Bit() ? index : m_currentBlock->appendNew<Value>(m_proc, ZExt32, origin(), index);
     auto indexedAddress = m_currentBlock->appendNew<Value>(m_proc, Add, pointerType(), origin(), payloadBase,
         m_currentBlock->appendNew<Value>(m_proc, Add, pointerType(), origin(), constant(pointerType(), JSWebAssemblyArray::offsetOfElements(elementType)),
@@ -3166,7 +3178,7 @@ void OMGIRGenerator::emitArraySetUnchecked(uint32_t typeIndex, Value* arrayref, 
     m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Store), origin(), setValue, indexedAddress);
 
     if (isRefType(elementType.unpacked()))
-        emitWriteBarrier(arrayref, instanceValue());
+        emitWriteBarrier(truncate(arrayref), instanceValue());
 
     return;
 }
@@ -3183,7 +3195,7 @@ auto OMGIRGenerator::addArraySet(uint32_t typeIndex, ExpressionType arrayref, Ex
 
     // Check array bounds.
     Value* arraySize = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int32, origin(),
-        get(arrayref), safeCast<int32_t>(JSWebAssemblyArray::offsetOfSize()));
+        truncate(get(arrayref)), safeCast<int32_t>(JSWebAssemblyArray::offsetOfSize()));
     {
         CheckValue* check = m_currentBlock->appendNew<CheckValue>(m_proc, Check, origin(),
             m_currentBlock->appendNew<Value>(m_proc, AboveEqual, origin(), get(index), arraySize));
@@ -3377,7 +3389,7 @@ auto OMGIRGenerator::addStructGet(ExtGCOpType structGetKind, ExpressionType stru
         });
     }
 
-    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), get(structReference), JSWebAssemblyStruct::offsetOfPayload());
+    Value* payloadBase = m_currentBlock->appendNew<MemoryValue>(m_proc, memoryKind(Load), pointerType(), origin(), truncate(get(structReference)), JSWebAssemblyStruct::offsetOfPayload());
     int32_t fieldOffset = fixupPointerPlusOffset(payloadBase, *structType.offsetOfField(fieldIndex));
 
     if (fieldType.is<PackedType>()) {
@@ -3516,8 +3528,8 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
             BasicBlock* checkObject = m_proc.addBlock();
 
             // The eqref case chains together checks for i31, array, and struct with disjunctions so the control flow is more complicated, and requires some extra basic blocks to be created.
-            Value* tag = m_currentBlock->appendNew<Value>(m_proc, ZShr, origin(), get(reference), constant(Int32, 32));
-            emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), get(reference), tag), nop, checkObject);
+            Value* tag = m_currentBlock->appendNew<Value>(m_proc, TruncHigh, origin(), get(reference));
+            emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), tag, constant(Int32, JSValue::Int32Tag)), nop, checkObject);
             Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
             emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), nop, checkObject);
             emitCheckOrBranchForCast(CastKind::Test, m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), untagged, constant(Int32, Wasm::minI31ref)), nop, checkObject);
@@ -3532,7 +3544,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
             break;
         }
         case Wasm::TypeKind::I31ref: {
-            Value* tag = m_currentBlock->appendNew<Value>(m_proc, ZShr, origin(), get(reference), constant(Int32, 32));
+            Value* tag = m_currentBlock->appendNew<Value>(m_proc, TruncHigh, origin(), get(reference));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), tag, constant(Int32, JSValue::Int32Tag)), castFailure, falseBlock);
             Value* untagged = m_currentBlock->appendNew<Value>(m_proc, Trunc, origin(), get(reference));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), untagged, constant(Int32, Wasm::maxI31ref)), castFailure, falseBlock);
@@ -3541,12 +3553,12 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
         }
         case Wasm::TypeKind::Arrayref:
         case Wasm::TypeKind::Structref: {
-            Value* tag = m_currentBlock->appendNew<Value>(m_proc, ZShr, origin(), get(reference), constant(Int32, 32));
+            Value* tag = m_currentBlock->appendNew<Value>(m_proc, TruncHigh, origin(), get(reference));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), tag, constant(Int32, JSValue::CellTag)), castFailure, falseBlock);
             Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), truncate(get(reference)), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
-            Value* rtt = emitLoadRTTFromObject(get(reference));
-            emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
+            Value* rtt = emitLoadRTTFromObject(truncate(get(reference)));
+            emitCheckOrBranchForCast(castKind, emitNotRTTKind(truncate(rtt), static_cast<TypeKind>(heapType) == Wasm::TypeKind::Arrayref ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
             break;
         }
         default:
@@ -3558,20 +3570,20 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
 
         Value* rtt;
         if (signature.expand().is<Wasm::FunctionSignature>())
-            rtt = emitLoadRTTFromFuncref(get(reference));
+            rtt = emitLoadRTTFromFuncref(truncate(get(reference)));
         else {
             // The cell check is only needed for non-functions, as the typechecker does not allow non-Cell values for funcref casts.
-            Value* tag = m_currentBlock->appendNew<Value>(m_proc, ZShr, origin(), get(reference), constant(Int32, 32));
+            Value* tag = m_currentBlock->appendNew<Value>(m_proc, TruncHigh, origin(), get(reference));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), tag, constant(Int32, JSValue::CellTag)), castFailure, falseBlock);
             Value* jsType = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), truncate(get(reference)), safeCast<int32_t>(JSCell::typeInfoTypeOffset()));
             emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, NotEqual, origin(), jsType, constant(Int32, JSType::WebAssemblyGCObjectType)), castFailure, falseBlock);
-            rtt = emitLoadRTTFromObject(get(reference));
-            emitCheckOrBranchForCast(castKind, emitNotRTTKind(rtt, signature.expand().is<Wasm::ArrayType>() ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
+            rtt = emitLoadRTTFromObject(truncate(get(reference)));
+            emitCheckOrBranchForCast(castKind, emitNotRTTKind(truncate(rtt), signature.expand().is<Wasm::ArrayType>() ? RTTKind::Array : RTTKind::Struct), castFailure, falseBlock);
         }
 
         Value* targetRTT = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), m_info.rtts[heapType].get());
         Value* rttsAreEqual = m_currentBlock->appendNew<Value>(m_proc, Equal, origin(),
-            rtt, targetRTT);
+            truncate(rtt), targetRTT);
         BasicBlock* equalBlock;
         if (castKind == CastKind::Cast)
             equalBlock = continuation;
@@ -3586,7 +3598,7 @@ void OMGIRGenerator::emitRefTestOrCast(CastKind castKind, ExpressionType referen
         // FIXME: It may be worthwhile to JIT inline this in the future.
         Value* isSubRTT = m_currentBlock->appendNew<CCallValue>(m_proc, B3::Int32, origin(),
             m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<OperationPtrTag>(operationWasmIsSubRTT)),
-            rtt, targetRTT);
+            truncate(rtt), targetRTT);
         emitCheckOrBranchForCast(castKind, m_currentBlock->appendNew<Value>(m_proc, Equal, origin(), isSubRTT, constant(Int32, 0)), castFailure, falseBlock);
     }
 
@@ -4706,7 +4718,7 @@ auto OMGIRGenerator::createTailCallPatchpoint(BasicBlock* block, CallInformation
     // First slot here is the last argument to the caller, a.k.a the first stack slot that belongs to the caller.
     const Checked<int32_t> offsetOfFirstSlotFromFP = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCallerInfoAsCallee.headerAndArgumentStackSizeInBytes);
     const Checked<int32_t> offsetOfNewFPFromFirstSlot = checkedProduct<int32_t>(-1, WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCalleeInfoAsCallee.headerAndArgumentStackSizeInBytes));
-    const Checked<int32_t> newFPOffsetFromFP = checkedSum<int32_t>(offsetOfFirstSlotFromFP + offsetOfNewFPFromFirstSlot);
+    const Checked<int32_t> newFPOffsetFromFP = offsetOfFirstSlotFromFP + offsetOfNewFPFromFirstSlot;
     m_tailCallStackOffsetFromFP = std::min(m_tailCallStackOffsetFromFP, newFPOffsetFromFP);
     //    Layout of stack right before tail call F -> G
     //
@@ -4889,7 +4901,7 @@ auto OMGIRGenerator::addCall(uint32_t functionIndex, const TypeDefinition& signa
     CallInformation wasmCalleeInfoAsCallee = callingConvention.callInformationFor(signature, CallRole::Callee);
     Checked<int32_t> calleeStackSize = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCalleeInfo.headerAndArgumentStackSizeInBytes);
     const TypeIndex callerTypeIndex = m_info.internalFunctionTypeIndices[m_functionIndex];
-    const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex);
+    const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex).expand();
     CallInformation wasmCallerInfoAsCallee = callingConvention.callInformationFor(callerTypeDefinition, CallRole::Callee);
 
     B3::Type returnType;
@@ -4899,7 +4911,7 @@ auto OMGIRGenerator::addCall(uint32_t functionIndex, const TypeDefinition& signa
         m_makesTailCalls = true;
 
         const TypeIndex callerTypeIndex = m_info.internalFunctionTypeIndices[m_functionIndex];
-        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex);
+        const TypeDefinition& callerTypeDefinition = TypeInformation::get(callerTypeIndex).expand();
         CallInformation wasmCallerInfo = callingConvention.callInformationFor(callerTypeDefinition, CallRole::Callee);
         Checked<int32_t> callerStackSize = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(wasmCallerInfo.headerAndArgumentStackSizeInBytes);
         tailCallStackOffsetFromFP = callerStackSize - calleeStackSize;
@@ -5184,14 +5196,14 @@ auto OMGIRGenerator::addCallRef(const TypeDefinition& originalSignature, Vector<
     }
 
     Value* jsInstanceOffset = constant(pointerType(), safeCast<int32_t>(WebAssemblyFunctionBase::offsetOfInstance()));
-    Value* calleeInstance = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), m_currentBlock->appendNew<Value>(m_proc, Add, origin(), callee, jsInstanceOffset));
+    Value* calleeInstance = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), m_currentBlock->appendNew<Value>(m_proc, Add, origin(), truncate(callee), jsInstanceOffset));
 
     Value* calleeCode = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(),
-        m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), callee,
+        m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), truncate(callee),
         safeCast<int32_t>(WebAssemblyFunctionBase::offsetOfEntrypointLoadLocation())));
 
     Value* calleeCallee = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(),
-        m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), callee,
+        m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), truncate(callee),
         safeCast<int32_t>(WebAssemblyFunctionBase::offsetOfBoxedWasmCalleeLoadLocation())));
 
     return emitIndirectCall(calleeInstance, calleeCode, calleeCallee, calleeInstance, signature, args, results);

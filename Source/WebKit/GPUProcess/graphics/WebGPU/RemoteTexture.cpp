@@ -29,6 +29,7 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "GPUConnectionToWebProcess.h"
+#include "Logging.h"
 #include "RemoteTextureMessages.h"
 #include "RemoteTextureView.h"
 #include "StreamServerConnection.h"
@@ -37,32 +38,34 @@
 #include <WebCore/WebGPUTexture.h>
 #include <WebCore/WebGPUTextureView.h>
 #include <WebCore/WebGPUTextureViewDescriptor.h>
+#include <wtf/TZoneMallocInlines.h>
 
-#if PLATFORM(COCOA)
-#define MESSAGE_CHECK(assertion) do { \
-    if (UNLIKELY(!(assertion))) { \
-        if (auto connection = m_gpuConnectionToWebProcess.get()) \
-            connection->terminateWebProcess(); \
-        return; \
-    } \
-} while (0)
-#else
-#define MESSAGE_CHECK RELEASE_ASSERT
-#endif
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_OPTIONAL_CONNECTION_BASE(assertion, connection())
 
 namespace WebKit {
 
-RemoteTexture::RemoteTexture(GPUConnectionToWebProcess& gpuConnectionToWebProcess, WebCore::WebGPU::Texture& texture, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteTexture);
+
+RemoteTexture::RemoteTexture(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::WebGPU::Texture& texture, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
     : m_backing(texture)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTFMove(streamConnection))
     , m_identifier(identifier)
     , m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
+    , m_gpu(gpu)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteTexture::messageReceiverName(), m_identifier.toUInt64());
 }
 
 RemoteTexture::~RemoteTexture() = default;
+
+RefPtr<IPC::Connection> RemoteTexture::connection() const
+{
+    RefPtr connection = m_gpuConnectionToWebProcess.get();
+    if (!connection)
+        return nullptr;
+    return &connection->connection();
+}
 
 void RemoteTexture::stopListeningForIPC()
 {
@@ -79,7 +82,7 @@ void RemoteTexture::createView(const std::optional<WebGPU::TextureViewDescriptor
     }
     auto textureView = m_backing->createView(convertedDescriptor);
     MESSAGE_CHECK(textureView);
-    auto remoteTextureView = RemoteTextureView::create(textureView.releaseNonNull(), m_objectHeap, m_streamConnection.copyRef(), identifier);
+    auto remoteTextureView = RemoteTextureView::create(textureView.releaseNonNull(), m_objectHeap, m_streamConnection.copyRef(), m_gpu, identifier);
     m_objectHeap->addObject(identifier, remoteTextureView);
 }
 

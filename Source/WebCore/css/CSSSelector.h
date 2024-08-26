@@ -39,6 +39,8 @@ struct PossiblyQuotedIdentifier {
     bool isNull() const { return identifier.isNull(); }
 };
 
+WTF::TextStream& operator<<(WTF::TextStream&, PossiblyQuotedIdentifier);
+
 enum class SelectorSpecificityIncrement {
     ClassA = 0x10000,
     ClassB = 0x100,
@@ -157,6 +159,7 @@ public:
     bool matchesPseudoElement() const;
     bool isSiblingSelector() const;
     bool isAttributeSelector() const;
+    bool isHostPseudoClass() const;
 
     Relation relation() const { return static_cast<Relation>(m_relation); }
     Match match() const { return static_cast<Match>(m_match); }
@@ -236,7 +239,7 @@ private:
         int b { 0 }; // Used for :nth-*
         QualifiedName attribute; // used for attribute selector
         AtomString argument; // Used for :contains and :nth-*
-        FixedVector<PossiblyQuotedIdentifier> argumentList; // Used for :lang and ::part arguments.
+        FixedVector<PossiblyQuotedIdentifier> argumentList; // Used for :lang, :active-view-transition-type, and ::part arguments.
         std::unique_ptr<CSSSelectorList> selectorList; // Used for :is(), :matches(), and :not().
 
         Ref<RareData> deepCopy() const;

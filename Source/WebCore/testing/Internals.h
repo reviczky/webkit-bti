@@ -405,6 +405,8 @@ public:
     };
     Vector<TextIteratorState> statesOfTextIterator(const Range&);
 
+    String textFragmentDirectiveForRange(const Range&);
+
     ExceptionOr<void> setDelegatesScrolling(bool enabled);
 
     ExceptionOr<uint64_t> lastSpellCheckRequestSequence();
@@ -602,8 +604,6 @@ public:
     ExceptionOr<String> pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const;
 
     ExceptionOr<float> pageScaleFactor() const;
-
-    ExceptionOr<void> setPageScaleFactor(float scaleFactor, int x, int y);
     ExceptionOr<void> setPageZoomFactor(float);
     ExceptionOr<void> setTextZoomFactor(float);
 
@@ -614,8 +614,6 @@ public:
 
     void setHeaderHeight(float);
     void setFooterHeight(float);
-
-    void setTopContentInset(float);
 
 #if ENABLE(FULLSCREEN_API)
     void webkitWillEnterFullScreenForElement(Element&);
@@ -870,6 +868,7 @@ public:
     void disableCORSForURL(const String&);
 
     RefPtr<File> createFile(const String&);
+    void asyncCreateFile(const String&, DOMPromiseDeferred<IDLInterface<File>>&&);
     String createTemporaryFile(const String& name, const String& contents);
 
     void queueMicroTask(int);
@@ -1490,6 +1489,8 @@ public:
     using ImageBufferResourceLimits = WebCore::ImageBufferResourceLimits;
     using ImageBufferResourceLimitsPromise = DOMPromiseDeferred<IDLDictionary<ImageBufferResourceLimits>>;
     void getImageBufferResourceLimits(ImageBufferResourceLimitsPromise&&);
+
+    void setResourceCachingDisabledByWebInspector(bool);
 
 private:
     explicit Internals(Document&);

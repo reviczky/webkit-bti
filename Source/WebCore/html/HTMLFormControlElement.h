@@ -34,7 +34,7 @@
 namespace WebCore {
 
 class HTMLFormControlElement : public HTMLElement, public ValidatedFormListedElement {
-    WTF_MAKE_ISO_ALLOCATED(HTMLFormControlElement);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(HTMLFormControlElement);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLFormControlElement);
 public:
     virtual ~HTMLFormControlElement();
@@ -151,8 +151,6 @@ private:
     FormAssociatedElement* asFormAssociatedElement() final { return this; }
     FormListedElement* asFormListedElement() final { return this; }
     ValidatedFormListedElement* asValidatedFormListedElement() final { return this; }
-
-    bool needsMouseFocusableQuirk() const;
 
     unsigned m_isRequired : 1;
     unsigned m_valueMatchesRenderer : 1;

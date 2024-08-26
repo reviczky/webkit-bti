@@ -58,6 +58,7 @@
 #include <wtf/RefPtr.h>
 #include <wtf/RobinHoodHashSet.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
@@ -123,6 +124,7 @@ class WebPageGroup;
 class WebPageProxy;
 class WebPermissionControllerProxy;
 class WebPreferences;
+class WebProcessActivityState;
 class WebProcessPool;
 class WebUserContentControllerProxy;
 class WebsiteDataStore;
@@ -159,7 +161,7 @@ using WebProcessWithMediaStreamingToken = WebProcessWithMediaStreamingCounter::T
 enum class CheckBackForwardList : bool { No, Yes };
 
 class WebProcessProxy : public AuxiliaryProcessProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebProcessProxy);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebProcessProxy);
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakRef<WebPageProxy>>;
@@ -189,8 +191,8 @@ public:
     WebProcessPool& processPool() const;
     Ref<WebProcessPool> protectedProcessPool() const;
 
-    const std::optional<SharedPreferencesForWebProcess>& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
-    std::optional<SharedPreferencesForWebProcess> updateSharedPreferencesForWebProcess(const WebPreferences&);
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
+    std::optional<SharedPreferencesForWebProcess> updateSharedPreferencesForWebProcess(const WebPreferencesStore&);
     void didSyncSharedPreferencesForWebProcessWithNetworkProcess(uint64_t syncedPreferencesVersion);
 #if ENABLE(GPU_PROCESS)
     void didSyncSharedPreferencesForWebProcessWithGPUProcess(uint64_t syncedPreferencesVersion);
@@ -278,7 +280,8 @@ public:
     void updateTextCheckerState();
 
     void willAcquireUniversalFileReadSandboxExtension() { m_mayHaveUniversalFileReadSandboxExtension = true; }
-    void assumeReadAccessToBaseURL(WebPageProxy&, const String&);
+    void assumeReadAccessToBaseURL(WebPageProxy&, const String&, CompletionHandler<void()>&&, bool directoryOnly = false);
+    void assumeReadAccessToBaseURLs(WebPageProxy&, const Vector<String>&, CompletionHandler<void()>&&);
     bool hasAssumedReadAccessToURL(const URL&) const;
 
     bool checkURLReceivedFromWebProcess(const String&, CheckBackForwardList = CheckBackForwardList::Yes);
@@ -347,11 +350,6 @@ public:
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes() const;
     void cacheMediaMIMETypes(const Vector<String>&);
-#endif
-
-#if PLATFORM(MAC)
-    void requestHighPerformanceGPU();
-    void releaseHighPerformanceGPU();
 #endif
 
 #if HAVE(DISPLAY_LINK)
@@ -521,6 +519,8 @@ public:
     const WebCore::ProcessIdentity& processIdentity();
 #endif
 
+    WebProcessActivityState& activityState() { return m_activityState; }
+
 private:
     Type type() const final { return Type::WebContent; }
 
@@ -598,7 +598,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive() override;
@@ -784,7 +784,7 @@ private:
     bool m_platformSuspendDidReleaseNearSuspendedAssertion { false };
 #endif
     mutable String m_environmentIdentifier;
-    mutable std::optional<SharedPreferencesForWebProcess> m_sharedPreferencesForWebProcess;
+    mutable SharedPreferencesForWebProcess m_sharedPreferencesForWebProcess;
     uint64_t m_sharedPreferencesVersionInNetworkProcess { 0 };
 #if ENABLE(GPU_PROCESS)
     uint64_t m_sharedPreferencesVersionInGPUProcess { 0 };
@@ -801,6 +801,8 @@ private:
     Seconds m_totalBackgroundTime;
     Seconds m_totalSuspendedTime;
     WebCore::ProcessIdentity m_processIdentity;
+
+    UniqueRef<WebProcessActivityState> m_activityState;
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const WebProcessProxy&);

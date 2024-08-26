@@ -43,6 +43,10 @@
 #include <IOSurface/IOSurfaceRef.h>
 #endif
 
+#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#include <WebCore/MediaPlayerIdentifier.h>
+#endif
+
 namespace WebCore::WebGPU {
 
 class BindGroup;
@@ -76,6 +80,7 @@ struct ShaderModuleDescriptor;
 class Surface;
 class Texture;
 struct TextureDescriptor;
+class XRBinding;
 
 class Device : public RefCounted<Device>, public CanMakeWeakPtr<Device> {
 public:
@@ -98,10 +103,14 @@ public:
 
     virtual void destroy() = 0;
 
+    virtual RefPtr<XRBinding> createXRBinding() = 0;
     virtual RefPtr<Buffer> createBuffer(const BufferDescriptor&) = 0;
     virtual RefPtr<Texture> createTexture(const TextureDescriptor&) = 0;
     virtual RefPtr<Sampler> createSampler(const SamplerDescriptor&) = 0;
     virtual RefPtr<ExternalTexture> importExternalTexture(const ExternalTextureDescriptor&) = 0;
+#if PLATFORM(COCOA) && ENABLE(VIDEO)
+    virtual void updateExternalTexture(const WebCore::WebGPU::ExternalTexture&, const WebCore::MediaPlayerIdentifier&) = 0;
+#endif
 
     virtual RefPtr<BindGroupLayout> createBindGroupLayout(const BindGroupLayoutDescriptor&) = 0;
     virtual RefPtr<PipelineLayout> createPipelineLayout(const PipelineLayoutDescriptor&) = 0;

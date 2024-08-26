@@ -36,6 +36,7 @@
 #include "LayoutRect.h"
 #include "Path.h"
 #include "RuntimeApplicationChecks.h"
+#include "TextIterator.h"
 #include <iterator>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
@@ -428,7 +429,7 @@ public:
 
     AXObjectCache* axObjectCache() const override;
 
-    static AccessibilityObject* anchorElementForNode(Node*);
+    static AccessibilityObject* anchorElementForNode(Node&);
     static AccessibilityObject* headingElementForNode(Node*);
     virtual Element* anchorElement() const { return nullptr; }
     virtual RefPtr<Element> popoverTargetElement() const { return nullptr; }
@@ -449,6 +450,7 @@ public:
     bool supportsPath() const override { return false; }
 
     TextIteratorBehaviors textIteratorBehaviorForTextRange() const;
+    static TextIterator textIteratorIgnoringFullSizeKana(const SimpleRange&);
     CharacterRange selectedTextRange() const override { return { }; }
     int insertionPointLineNumber() const override { return -1; }
 

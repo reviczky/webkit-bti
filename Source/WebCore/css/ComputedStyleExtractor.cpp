@@ -371,6 +371,10 @@ static Ref<CSSValue> fontSizeAdjustFromStyle(const RenderStyle& style)
 
     auto metric = fontSizeAdjust.metric;
     auto value = fontSizeAdjust.shouldResolveFromFont() ? fontSizeAdjust.resolve(style.computedFontSize(), style.metricsOfPrimaryFont()) : fontSizeAdjust.value.asOptional();
+
+    if (!value)
+        return CSSPrimitiveValue::create(CSSValueNone);
+
     if (metric == FontSizeAdjust::Metric::ExHeight)
         return CSSPrimitiveValue::create(*value);
 
@@ -387,14 +391,24 @@ static Ref<CSSPrimitiveValue> textSpacingTrimFromStyle(const RenderStyle& style)
     return CSSPrimitiveValue::create(CSSValueSpaceAll);
 }
 
-static Ref<CSSPrimitiveValue> textAutospaceFromStyle(const RenderStyle& style)
+static Ref<CSSValue> textAutospaceFromStyle(const RenderStyle& style)
 {
     // FIXME: add support for remaining values once spec is stable and we are parsing them.
     auto textAutospace = style.textAutospace();
     if (textAutospace.isAuto())
         return CSSPrimitiveValue::create(CSSValueAuto);
+    if (textAutospace.isNoAutospace())
+        return CSSPrimitiveValue::create(CSSValueNoAutospace);
+    if (textAutospace.isNormal())
+        return CSSPrimitiveValue::create(CSSValueNormal);
 
-    return CSSPrimitiveValue::create(CSSValueNoAutospace);
+    CSSValueListBuilder list;
+    if (textAutospace.hasIdeographAlpha())
+        list.append(CSSPrimitiveValue::create(CSSValueIdeographAlpha));
+    if (textAutospace.hasIdeographNumeric())
+        list.append(CSSPrimitiveValue::create(CSSValueIdeographNumeric));
+
+    return CSSValueList::createSpaceSeparated(WTFMove(list));
 }
 
 static Ref<CSSPrimitiveValue> zoomAdjustedPixelValue(double value, const RenderStyle& style)
@@ -620,6 +634,45 @@ RefPtr<CSSValue> ComputedStyleExtractor::whiteSpaceShorthandValue(const RenderSt
         return createConvertingToCSSValueID(whiteSpaceCollapse);
 
     return CSSValuePair::create(createConvertingToCSSValueID(whiteSpaceCollapse), createConvertingToCSSValueID(textWrapMode));
+}
+
+static Ref<CSSValue> valueForTextEdge(CSSPropertyID property, const TextEdge& textEdge)
+{
+    if (property == CSSPropertyTextBoxEdge && textEdge.over == TextEdgeType::Auto && textEdge.under == TextEdgeType::Auto)
+        return createConvertingToCSSValueID(textEdge.over);
+
+    if (property == CSSPropertyLineFitEdge && textEdge.over == TextEdgeType::Leading && textEdge.under == TextEdgeType::Leading)
+        return createConvertingToCSSValueID(textEdge.over);
+
+    // https://www.w3.org/TR/css-inline-3/#text-edges
+    // "If only one value is specified, both edges are assigned that same keyword if possible; else text is assumed as the missing value."
+    auto shouldSerializeUnderEdge = [&]() {
+        if (textEdge.over == TextEdgeType::CapHeight || textEdge.over == TextEdgeType::ExHeight)
+            return textEdge.under != TextEdgeType::Text;
+        return textEdge.over != textEdge.under;
+    }();
+
+    if (!shouldSerializeUnderEdge)
+        return createConvertingToCSSValueID(textEdge.over);
+
+    return CSSValuePair::create(createConvertingToCSSValueID(textEdge.over),
+        createConvertingToCSSValueID(textEdge.under));
+}
+
+RefPtr<CSSValue> ComputedStyleExtractor::textBoxShorthandValue(const RenderStyle& style) const
+{
+    auto textBoxTrim = style.textBoxTrim();
+    auto textBoxEdge = style.textBoxEdge();
+    auto textBoxEdgeIsAuto = textBoxEdge == TextEdge { TextEdgeType::Auto, TextEdgeType::Auto };
+
+    if (textBoxTrim == TextBoxTrim::None && textBoxEdgeIsAuto)
+        return CSSPrimitiveValue::create(CSSValueNormal);
+    if (textBoxEdgeIsAuto)
+        return createConvertingToCSSValueID(textBoxTrim);
+    if (textBoxTrim == TextBoxTrim::TrimBoth)
+        return valueForTextEdge(CSSPropertyTextBoxEdge, textBoxEdge);
+
+    return CSSValuePair::create(createConvertingToCSSValueID(textBoxTrim), valueForTextEdge(CSSPropertyTextBoxEdge, textBoxEdge));
 }
 
 Ref<CSSPrimitiveValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle& style, const StyleColor& color)
@@ -965,7 +1018,7 @@ Ref<CSSValue> ComputedStyleExtractor::valueForShadow(const ShadowData* shadow, C
         auto spread = propertyID == CSSPropertyTextShadow ? RefPtr<CSSPrimitiveValue>() : adjustLengthForZoom(currShadowData->spread(), style, adjust);
         auto shadowStyle = propertyID == CSSPropertyTextShadow || currShadowData->style() == ShadowStyle::Normal ? RefPtr<CSSPrimitiveValue>() : CSSPrimitiveValue::create(CSSValueInset);
         auto color = cssValuePool.createColorValue(style.colorResolvingCurrentColor(currShadowData->color()));
-        list.append(CSSShadowValue::create(WTFMove(x), WTFMove(y), WTFMove(blur), WTFMove(spread), WTFMove(shadowStyle), WTFMove(color)));
+        list.append(CSSShadowValue::create(WTFMove(x), WTFMove(y), WTFMove(blur), WTFMove(spread), WTFMove(shadowStyle), WTFMove(color), currShadowData->isWebkitBoxShadow()));
     }
     list.reverse();
     return CSSValueList::createCommaSeparated(WTFMove(list));
@@ -1264,18 +1317,6 @@ static Ref<CSSValue> valueForScrollbarGutter(const ScrollbarGutter& gutter)
     if (!gutter.bothEdges)
         return CSSPrimitiveValue::create(gutter.isAuto ? CSSValueAuto : CSSValueStable);
     return CSSValuePair::create(CSSPrimitiveValue::create(CSSValueStable), CSSPrimitiveValue::create(CSSValueBothEdges));
-}
-
-static Ref<CSSValue> valueForTextBoxEdge(const TextBoxEdge& textBoxEdge)
-{
-    if (textBoxEdge.over == TextBoxEdgeType::Leading && textBoxEdge.under == TextBoxEdgeType::Leading)
-        return createConvertingToCSSValueID(textBoxEdge.over);
-
-    if (textBoxEdge.under == TextBoxEdgeType::Text)
-        return createConvertingToCSSValueID(textBoxEdge.over);
-
-    return CSSValueList::createSpaceSeparated(createConvertingToCSSValueID(textBoxEdge.over),
-        createConvertingToCSSValueID(textBoxEdge.under));
 }
 
 static Ref<CSSValue> willChangePropertyValue(const WillChangeData* willChangeData)
@@ -1787,6 +1828,21 @@ static Ref<CSSValue> createLineBoxContainValue(OptionSet<LineBoxContain> lineBox
     if (!lineBoxContain)
         return CSSPrimitiveValue::create(CSSValueNone);
     return CSSLineBoxContainValue::create(lineBoxContain);
+}
+
+static Ref<CSSValue> valueForWebkitRubyPosition(RubyPosition position)
+{
+    return CSSPrimitiveValue::create([&] {
+        switch (position) {
+        case RubyPosition::Over:
+            return CSSValueBefore;
+        case RubyPosition::Under:
+            return CSSValueAfter;
+        case RubyPosition::InterCharacter:
+            return CSSValueInterCharacter;
+        }
+        return CSSValueBefore;
+    }());
 }
 
 static Element* styleElementForNode(Node* node)
@@ -2325,7 +2381,7 @@ static Ref<CSSValue> fontFamily(const RenderStyle& style)
 static RefPtr<CSSPrimitiveValue> optionalLineHeight(const RenderStyle& style, ComputedStyleExtractor::PropertyValueType valueType)
 {
     Length length = style.lineHeight();
-    if (length.isNegative())
+    if (length.isNormal())
         return nullptr;
     if (length.isPercent()) {
         // BuilderConverter::convertLineHeight() will convert a percentage value to a fixed value,
@@ -3593,8 +3649,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return CSSPrimitiveValue::create(style.flexBasis(), style);
     case CSSPropertyFlexDirection:
         return createConvertingToCSSValueID(style.flexDirection());
-    case CSSPropertyFlexFlow:
+    case CSSPropertyFlexFlow: {
+        if (style.flexWrap() == RenderStyle::initialFlexWrap())
+            return createConvertingToCSSValueID(style.flexDirection());
+        if (style.flexDirection() == RenderStyle::initialFlexDirection())
+            return createConvertingToCSSValueID(style.flexWrap());
         return getCSSPropertyValuesForShorthandProperties(flexFlowShorthand());
+    }
     case CSSPropertyFlexGrow:
         return CSSPrimitiveValue::create(style.flexGrow());
     case CSSPropertyFlexShrink:
@@ -3956,6 +4017,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingBottom, &RenderBoxModelObject::computedCSSPaddingBottom>(style, renderer);
     case CSSPropertyPaddingLeft:
         return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingLeft, &RenderBoxModelObject::computedCSSPaddingLeft>(style, renderer);
+    case CSSPropertyPage:
+        // FIXME: This is missing a computed style.
+        return nullptr;
     case CSSPropertyPageBreakAfter:
         return CSSPrimitiveValue::create(convertToPageBreak(style.breakAfter()));
     case CSSPropertyPageBreakBefore:
@@ -3974,8 +4038,10 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return createConvertingToCSSValueID(style.position());
     case CSSPropertyRight:
         return positionOffsetValue(style, CSSPropertyRight, renderer);
-    case CSSPropertyWebkitRubyPosition:
+    case CSSPropertyRubyPosition:
         return createConvertingToCSSValueID(style.rubyPosition());
+    case CSSPropertyWebkitRubyPosition:
+        return valueForWebkitRubyPosition(style.rubyPosition());
     case CSSPropertyRubyAlign:
         return createConvertingToCSSValueID(style.rubyAlign());
     case CSSPropertyTableLayout:
@@ -4060,6 +4126,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return currentColorOrValidColor(style, style.textStrokeColor());
     case CSSPropertyWebkitTextStrokeWidth:
         return zoomAdjustedPixelValue(style.textStrokeWidth(), style);
+    case CSSPropertyTextBox:
+        return textBoxShorthandValue(style);
     case CSSPropertyTextTransform:
         return renderTextTransformFlagsToCSSValue(style.textTransform());
     case CSSPropertyTextWrap:
@@ -4097,6 +4165,17 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         }
         ASSERT_NOT_REACHED();
         return nullptr;
+    case CSSPropertyViewTransitionClass: {
+        auto classList = style.viewTransitionClasses();
+        if (classList.isEmpty())
+            return CSSPrimitiveValue::create(CSSValueNone);
+
+        CSSValueListBuilder list;
+        for (auto& name : classList)
+            list.append(valueForScopedName(name));
+
+        return CSSValueList::createSpaceSeparated(WTFMove(list));
+    }
     case CSSPropertyViewTransitionName: {
         auto viewTransitionName = style.viewTransitionName();
         if (!viewTransitionName)
@@ -4520,8 +4599,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return getCSSPropertyValuesFor4SidesShorthand(borderWidthShorthand());
     case CSSPropertyColumnRule:
         return getCSSPropertyValuesForShorthandProperties(columnRuleShorthand());
-    case CSSPropertyColumns:
+    case CSSPropertyColumns: {
+        if (style.hasAutoColumnCount())
+            return style.hasAutoColumnWidth() ? CSSPrimitiveValue::create(CSSValueAuto) : zoomAdjustedPixelValue(style.columnWidth(), style);
+        if (style.hasAutoColumnWidth())
+            return style.hasAutoColumnCount() ? CSSPrimitiveValue::create(CSSValueAuto) : CSSPrimitiveValue::create(style.columnCount());
         return getCSSPropertyValuesForShorthandProperties(columnsShorthand());
+    }
     case CSSPropertyInset:
         return getCSSPropertyValuesFor4SidesShorthand(insetShorthand());
     case CSSPropertyInsetBlock:
@@ -4603,7 +4687,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyOverflowAnchor:
         return createConvertingToCSSValueID(style.overflowAnchor());
     case CSSPropertyTextBoxEdge:
-        return valueForTextBoxEdge(style.textBoxEdge());
+        return valueForTextEdge(propertyID, style.textBoxEdge());
+    case CSSPropertyLineFitEdge:
+        return valueForTextEdge(propertyID, style.lineFitEdge());
 
 #if ENABLE(APPLE_PAY)
     case CSSPropertyApplePayButtonStyle:
@@ -4761,21 +4847,25 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertySyntax:
         return nullptr;
 
-    // Unimplemented @font-face properties.
+    // @font-face descriptors.
     case CSSPropertySrc:
     case CSSPropertyUnicodeRange:
     case CSSPropertyFontDisplay:
     case CSSPropertySizeAdjust:
         return nullptr;
 
-    // Unimplemented @font-palette-values properties
+    // @view-transition descriptors.
+    case CSSPropertyNavigation:
+    case CSSPropertyTypes:
+        return nullptr;
+
+    // @font-palette-values descriptors.
     case CSSPropertyBasePalette:
     case CSSPropertyOverrideColors:
         return nullptr;
 
-    // Other unimplemented properties.
-    case CSSPropertyPage: // for @page
-    case CSSPropertySize: // for @page
+    // @page descriptors.
+    case CSSPropertySize:
         return nullptr;
 
     // Unimplemented -webkit- properties.

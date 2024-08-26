@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,12 +34,13 @@
 #include "WebPageProxyIdentifier.h"
 #include <wtf/Forward.h>
 #include <wtf/Identified.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakObjCPtr.h>
 
 OBJC_CLASS NSArray;
 OBJC_CLASS NSLocale;
 OBJC_CLASS WKWebView;
-OBJC_PROTOCOL(_WKWebExtensionTab);
+OBJC_PROTOCOL(WKWebExtensionTab);
 
 namespace WebKit {
 
@@ -57,7 +58,7 @@ enum class WebExtensionTabImageFormat : uint8_t {
 
 class WebExtensionTab : public RefCounted<WebExtensionTab>, public CanMakeWeakPtr<WebExtensionTab>, public Identified<WebExtensionTabIdentifier> {
     WTF_MAKE_NONCOPYABLE(WebExtensionTab);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebExtensionTab);
 
 public:
     template<typename... Args>
@@ -66,27 +67,27 @@ public:
         return adoptRef(*new WebExtensionTab(std::forward<Args>(args)...));
     }
 
-    explicit WebExtensionTab(const WebExtensionContext&, _WKWebExtensionTab *);
+    explicit WebExtensionTab(const WebExtensionContext&, WKWebExtensionTab *);
 
     enum class ChangedProperties : uint16_t {
-        Audible    = 1 << 1,
-        Loading    = 1 << 2,
-        Muted      = 1 << 3,
-        Pinned     = 1 << 4,
-        ReaderMode = 1 << 5,
-        Size       = 1 << 6,
-        Title      = 1 << 7,
-        URL        = 1 << 8,
-        ZoomFactor = 1 << 9,
+        Loading      = 1 << 1,
+        Muted        = 1 << 2,
+        Pinned       = 1 << 3,
+        PlayingAudio = 1 << 4,
+        ReaderMode   = 1 << 5,
+        Size         = 1 << 6,
+        Title        = 1 << 7,
+        URL          = 1 << 8,
+        ZoomFactor   = 1 << 9,
     };
 
     static constexpr OptionSet<ChangedProperties> allChangedProperties()
     {
         return {
-            ChangedProperties::Audible,
             ChangedProperties::Loading,
             ChangedProperties::Muted,
             ChangedProperties::Pinned,
+            ChangedProperties::PlayingAudio,
             ChangedProperties::ReaderMode,
             ChangedProperties::Size,
             ChangedProperties::Title,
@@ -131,7 +132,7 @@ public:
     RefPtr<WebExtensionTab> parentTab() const;
     void setParentTab(RefPtr<WebExtensionTab>, CompletionHandler<void(Expected<void, WebExtensionError>&&)>&&);
 
-    WKWebView *mainWebView() const;
+    WKWebView *webView() const;
 
     String title() const;
 
@@ -149,12 +150,12 @@ public:
 
     bool isReaderModeAvailable() const;
 
-    bool isReaderModeShowing() const;
-    void setReaderModeShowing(bool, CompletionHandler<void(Expected<void, WebExtensionError>&&)>&&);
+    bool isReaderModeActive() const;
+    void setReaderModeActive(bool, CompletionHandler<void(Expected<void, WebExtensionError>&&)>&&);
 
-    void toggleReaderMode(CompletionHandler<void(Expected<void, WebExtensionError>&&)>&& completionHandler) { setReaderModeShowing(!isReaderModeShowing(), WTFMove(completionHandler)); }
+    void toggleReaderMode(CompletionHandler<void(Expected<void, WebExtensionError>&&)>&& completionHandler) { setReaderModeActive(!isReaderModeActive(), WTFMove(completionHandler)); }
 
-    bool isAudible() const;
+    bool isPlayingAudio() const;
 
     bool isMuted() const;
     void setMuted(bool, CompletionHandler<void(Expected<void, WebExtensionError>&&)>&&);
@@ -195,19 +196,19 @@ public:
 
     void close(CompletionHandler<void(Expected<void, WebExtensionError>&&)>&&);
 
-    bool shouldGrantTabPermissionsOnUserGesture() const;
+    bool shouldGrantPermissionsOnUserGesture() const;
 
     WebProcessProxySet processes(WebExtensionEventListenerType, WebExtensionContentWorldType) const;
 
 #ifdef __OBJC__
-    _WKWebExtensionTab *delegate() const { return m_delegate.getAutoreleased(); }
+    WKWebExtensionTab *delegate() const { return m_delegate.getAutoreleased(); }
 
     bool isValid() const { return m_extensionContext && m_delegate; }
 #endif
 
 private:
     WeakPtr<WebExtensionContext> m_extensionContext;
-    WeakObjCPtr<_WKWebExtensionTab> m_delegate;
+    WeakObjCPtr<WKWebExtensionTab> m_delegate;
     RefPtr<WebExtensionMatchPattern> m_temporaryPermissionMatchPattern;
     OptionSet<ChangedProperties> m_changedProperties;
     bool m_activeUserGesture : 1 { false };
@@ -218,14 +219,14 @@ private:
     bool m_respondsToIndex : 1 { false };
     bool m_respondsToParentTab : 1 { false };
     bool m_respondsToSetParentTab : 1 { false };
-    bool m_respondsToMainWebView : 1 { false };
+    bool m_respondsToWebView : 1 { false };
     bool m_respondsToTitle : 1 { false };
     bool m_respondsToIsPinned : 1 { false };
     bool m_respondsToSetPinned : 1 { false };
     bool m_respondsToIsReaderModeAvailable : 1 { false };
-    bool m_respondsToIsReaderModeShowing : 1 { false };
-    bool m_respondsToSetReaderModeShowing : 1 { false };
-    bool m_respondsToIsAudible : 1 { false };
+    bool m_respondsToIsReaderModeActive : 1 { false };
+    bool m_respondsToSetReaderModeActive : 1 { false };
+    bool m_respondsToIsPlayingAudio : 1 { false };
     bool m_respondsToIsMuted : 1 { false };
     bool m_respondsToSetMuted : 1 { false };
     bool m_respondsToSize : 1 { false };
@@ -234,7 +235,7 @@ private:
     bool m_respondsToURL : 1 { false };
     bool m_respondsToPendingURL : 1 { false };
     bool m_respondsToIsLoadingComplete : 1 { false };
-    bool m_respondsToWebpageLocale : 1 { false };
+    bool m_respondsToDetectWebpageLocale : 1 { false };
     bool m_respondsToTakeSnapshot : 1 { false };
     bool m_respondsToLoadURL : 1 { false };
     bool m_respondsToReload : 1 { false };

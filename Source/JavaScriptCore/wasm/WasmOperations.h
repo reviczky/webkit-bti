@@ -49,6 +49,12 @@ class TypeDefinition;
 
 typedef int64_t EncodedWasmValue;
 
+JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationJSToWasmEntryWrapperBuildFrame, void, (void*, CallFrame*));
+JSC_DECLARE_JIT_OPERATION(operationJSToWasmEntryWrapperBuildReturnFrame, EncodedJSValue, (void*, CallFrame*));
+JSC_DECLARE_JIT_OPERATION(operationGetWasmCalleeStackSize, EncodedJSValue, (JSWebAssemblyInstance*, Wasm::Callee*));
+JSC_DECLARE_JIT_OPERATION(operationWasmToJSExitMarshalArguments, EncodedJSValue, (void*, CallFrame*, void*, JSWebAssemblyInstance*));
+JSC_DECLARE_JIT_OPERATION(operationWasmToJSExitMarshalReturnValues, EncodedJSValue, (void* sp, CallFrame* cfr, JSWebAssemblyInstance*));
+
 #if ENABLE(WEBASSEMBLY_OMGJIT)
 void loadValuesIntoBuffer(Probe::Context&, const StackMap&, uint64_t* buffer, SavedFPWidth);
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationWasmTriggerTierUpNow, void, (JSWebAssemblyInstance*, uint32_t functionIndex));
@@ -68,7 +74,7 @@ JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationConvertToAnyref, EncodedJSValue, (JS
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationConvertToBigInt, EncodedJSValue, (JSWebAssemblyInstance*, EncodedWasmValue));
 
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationIterateResults, void, (JSWebAssemblyInstance*, const TypeDefinition*, EncodedJSValue, uint64_t*, uint64_t*));
-JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationAllocateResultsArray, JSArray*, (JSWebAssemblyInstance*, const TypeDefinition*, IndexingType, JSValue*));
+JSC_DECLARE_JIT_OPERATION(operationAllocateResultsArray, JSArray*, (JSWebAssemblyInstance*, const TypeDefinition*, IndexingType, JSValue*));
 
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationWasmWriteBarrierSlowPath, void, (JSCell*, VM*));
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationPopcount32, uint32_t, (int32_t));
@@ -109,6 +115,9 @@ struct ThrownExceptionInfo {
     EncodedJSValue thrownValue;
     void* payload;
 };
+#if USE(JSVALUE64)
+static_assert(sizeof(ThrownExceptionInfo) == sizeof(UCPURegister) * 2, "ThrownExceptionInfo should fit in two machine registers");
+#endif
 
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationWasmArrayNew, EncodedJSValue, (JSWebAssemblyInstance* instance, uint32_t typeIndex, uint32_t size, uint64_t value));
 JSC_DECLARE_NOEXCEPT_JIT_OPERATION(operationWasmArrayNewVector, EncodedJSValue, (JSWebAssemblyInstance* instance, uint32_t typeIndex, uint32_t size, uint64_t lane0, uint64_t lane1));
