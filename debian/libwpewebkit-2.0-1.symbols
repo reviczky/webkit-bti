@@ -185,6 +185,16 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_cache_model_get_type@Base 2.24.1
  webkit_color_get_type@Base 2.24.1
  webkit_color_parse@Base 2.24.1
+ webkit_console_message_copy@Base 2.44.3
+ webkit_console_message_free@Base 2.44.3
+ webkit_console_message_get_level@Base 2.44.3
+ webkit_console_message_get_line@Base 2.44.3
+ webkit_console_message_get_source@Base 2.44.3
+ webkit_console_message_get_source_id@Base 2.44.3
+ webkit_console_message_get_text@Base 2.44.3
+ webkit_console_message_get_type@Base 2.44.3
+ webkit_console_message_level_get_type@Base 2.44.3
+ webkit_console_message_source_get_type@Base 2.44.3
  webkit_context_menu_action_get_type@Base 2.24.1
  webkit_context_menu_append@Base 2.24.1
  webkit_context_menu_first@Base 2.24.1
