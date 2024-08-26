@@ -3,6 +3,8 @@ webkit2gtk (2.45.91-1) UNRELEASED; urgency=medium
   [ Alberto Garcia ]
   * New upstream development release.
   * Refresh all patches.
+  * debian/copyright:
+    - Update copyright information of all files.
 
   [ Jeremy Bícha ]
   * Enable sysprof profiling integration on available architectures.

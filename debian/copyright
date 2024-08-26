@@ -146,6 +146,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2023 Devin Rousso <hi@devinrousso.com>
            2023 James Howard <jameshoward@mac.com>
            2024 Keith Cirkel <webkit@keithcirkel.co.uk>
+           2024 Marais Rossouw <me@marais.co>
            2024 SONY Interactive Entertainment Inc
 License: BSD-2-clause
 Comment:
@@ -195,6 +196,8 @@ Copyright: 2016-2017 Apple Inc
 License: BSD-2-clause or BSL-1.0
 
 Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
+       Source/WTF/wtf/EnumTraits.h
+       Source/WTF/wtf/Float16.h
        Source/WTF/wtf/RobinHoodHashTable.h
 Copyright: 2015-2024 Apple Inc
 License: BSD-2-clause or Expat
@@ -284,8 +287,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/runtime/JSSegmentedVariableObject.h
        Source/JavaScriptCore/runtime/JSSymbolTableObject.cpp
        Source/JavaScriptCore/runtime/JSSymbolTableObject.h
-       Source/JavaScriptCore/runtime/RegisterTZoneTypes.cpp
-       Source/JavaScriptCore/runtime/RegisterTZoneTypes.h
        Source/JavaScriptCore/runtime/SamplingCounter.cpp
        Source/JavaScriptCore/runtime/SamplingCounter.h
        Source/JavaScriptCore/runtime/SymbolTable.cpp
@@ -681,8 +682,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebInspectorUI/UserInterface/Views/GradientSlider.js
        Source/WebInspectorUI/UserInterface/Views/TreeElement.js
        Source/WebInspectorUI/UserInterface/Views/TreeOutline.js
-       Source/WebKit/Shared/API/RegisterTZoneTypes.cpp
-       Source/WebKit/Shared/API/RegisterTZoneTypes.h
        Source/WebKit/UIProcess/Launcher/playstation/ProcessLauncherPlayStation.cpp
        Source/bmalloc/libpas/src/libpas/pas_red_black_tree.c
        Source/bmalloc/libpas/src/libpas/pas_red_black_tree.h
@@ -2369,8 +2368,14 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/egl/GLContextLibWPE.cpp
        Source/WebCore/platform/graphics/egl/GLContextWrapper.cpp
        Source/WebCore/platform/graphics/egl/GLContextWrapper.h
+       Source/WebCore/platform/graphics/egl/GLDisplay.cpp
+       Source/WebCore/platform/graphics/egl/GLDisplay.h
        Source/WebCore/platform/graphics/egl/GLFence.cpp
        Source/WebCore/platform/graphics/egl/GLFence.h
+       Source/WebCore/platform/graphics/egl/GLFenceEGL.cpp
+       Source/WebCore/platform/graphics/egl/GLFenceEGL.h
+       Source/WebCore/platform/graphics/egl/GLFenceGL.cpp
+       Source/WebCore/platform/graphics/egl/GLFenceGL.h
        Source/WebCore/platform/graphics/filters/DistantLightSource.h
        Source/WebCore/platform/graphics/filters/FEBlend.cpp
        Source/WebCore/platform/graphics/filters/FEBlend.h
@@ -2728,6 +2733,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderImage.h
        Source/WebCore/rendering/RenderImageResource.cpp
        Source/WebCore/rendering/RenderImageResource.h
+       Source/WebCore/rendering/RenderImageResourceStyleImage.cpp
+       Source/WebCore/rendering/RenderImageResourceStyleImage.h
        Source/WebCore/rendering/RenderInline.cpp
        Source/WebCore/rendering/RenderInline.h
        Source/WebCore/rendering/RenderLayerModelObject.cpp
