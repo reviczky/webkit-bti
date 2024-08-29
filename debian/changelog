@@ -1,3 +1,10 @@
+webkit2gtk (2.45.91-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Disable bmalloc in armhf (WebKit bug #278858).
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 29 Aug 2024 18:25:54 +0200
+
 webkit2gtk (2.45.91-1) experimental; urgency=medium
 
   [ Alberto Garcia ]
