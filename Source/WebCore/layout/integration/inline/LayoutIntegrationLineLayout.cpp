@@ -468,7 +468,7 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
             continue;
 
         auto& layoutBox = box.layoutBox();
-        if (!layoutBox.isAtomicInlineLevelBox())
+        if (!layoutBox.isAtomicInlineBox())
             continue;
 
         auto& renderer = downcast<RenderBox>(*box.layoutBox().rendererForIntegration());
@@ -476,24 +476,6 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
             layer->setIsHiddenByOverflowTruncation(box.isFullyTruncated());
 
         renderer.setLocation(Layout::toLayoutPoint(box.visualRectIgnoringBlockDirection().location()));
-        auto relayoutRubyAnnotationIfNeeded = [&] {
-            if (!layoutBox.isRubyAnnotationBox())
-                return;
-            // Annotation inline-block may get resized during inline layout (when base is wider) and
-            // we need to apply this new size on the annotation content by running layout.
-            auto needsResizing = layoutBox.isInterlinearRubyAnnotationBox() || !isHorizontalWritingMode;
-            if (!needsResizing)
-                return;
-            auto logicalMarginBoxSize = Layout::BoxGeometry::marginBoxRect(layoutState().geometryForBox(layoutBox)).size();
-            if (logicalMarginBoxSize == renderer.size())
-                return;
-            renderer.setSize(logicalMarginBoxSize);
-            renderer.setOverridingLogicalWidthLength({ logicalMarginBoxSize.width(), LengthType::Fixed });
-            renderer.setNeedsLayout(MarkOnlyThis);
-            renderer.layoutIfNeeded();
-            renderer.clearOverridingLogicalWidthLength();
-        };
-        relayoutRubyAnnotationIfNeeded();
     }
 
     HashMap<CheckedRef<const Layout::Box>, LayoutSize> floatPaginationOffsetMap;
@@ -1033,7 +1015,7 @@ bool LineLayout::hitTest(const HitTestRequest& request, HitTestResult& result, c
         if (!layerPaintScope.includes(box))
             continue;
 
-        if (box.isAtomicInlineLevelBox()) {
+        if (box.isAtomicInlineBox()) {
             if (renderer.hitTest(request, result, locationInContainer, flippedContentOffsetIfNeeded(flow(), downcast<RenderBox>(renderer), accumulatedOffset)))
                 return true;
             continue;
@@ -1078,7 +1060,7 @@ void LineLayout::shiftLinesBy(LayoutUnit blockShift)
         else
             box.moveHorizontally(blockShift);
 
-        if (box.isAtomicInlineLevelBox()) {
+        if (box.isAtomicInlineBox()) {
             CheckedRef renderer = downcast<RenderBox>(*box.layoutBox().rendererForIntegration());
             renderer->move(deltaX, deltaY);
         }
