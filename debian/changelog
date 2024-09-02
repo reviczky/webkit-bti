@@ -2,6 +2,8 @@ webkit2gtk (2.45.92-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * Disable dont-detect-sse2.patch since it breaks the i386 build
+    (WebKit bug #278661).
   * debian/rules:
     - Disable bmalloc in armhf (WebKit bug #278858).
 
