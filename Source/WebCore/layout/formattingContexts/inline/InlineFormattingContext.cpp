@@ -409,7 +409,7 @@ void InlineFormattingContext::resetGeometryForClampedContent(const InlineItemRan
     auto& inlineItemList = inlineContentCache().inlineItems().content();
     for (size_t index = needsDisplayContentRange.startIndex(); index < needsDisplayContentRange.endIndex(); ++index) {
         auto& inlineItem = inlineItemList[index];
-        auto hasBoxGeometry = inlineItem.isBox() || inlineItem.isFloat() || inlineItem.isHardLineBreak() || inlineItem.isInlineBoxStart();
+        auto hasBoxGeometry = inlineItem.isAtomicInlineBox() || inlineItem.isFloat() || inlineItem.isHardLineBreak() || inlineItem.isInlineBoxStart();
         if (!hasBoxGeometry)
             continue;
         auto& boxGeometry = geometryForBox(inlineItem.layoutBox());
@@ -547,9 +547,9 @@ void InlineFormattingContext::rebuildInlineItemListIfNeeded(InlineDamage* lineDa
     inlineContentCache.clearMaximumIntrinsicWidthLineContent();
 }
 
-void InlineFormattingContext::layoutWithFormattingContextForBox(const ElementBox& box)
+void InlineFormattingContext::layoutWithFormattingContextForBox(const ElementBox& box, std::optional<LayoutUnit> widthConstraint)
 {
-    m_globalLayoutState.layoutWithFormattingContextForBox(box);
+    m_globalLayoutState.layoutWithFormattingContextForBox(box, widthConstraint);
 }
 
 
