@@ -1,6 +1,7 @@
 webkit2gtk (2.44.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Drop fix-clang-build.patch and fix-webasm-crash.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 09 Sep 2024 12:21:46 +0200
 
