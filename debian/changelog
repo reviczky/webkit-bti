@@ -1,4 +1,4 @@
-webkit2gtk (2.44.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.44.4-1) unstable; urgency=medium
 
   * New upstream release.
   * Drop fix-clang-build.patch and fix-webasm-crash.patch.
@@ -6,7 +6,7 @@ webkit2gtk (2.44.4-1) UNRELEASED; urgency=medium
     - Disable dh_dwz, it breaks the build in at least i386 and amd64
       (see #1081000).
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 09 Sep 2024 12:21:46 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 09 Sep 2024 14:22:28 +0200
 
 webkit2gtk (2.44.3-1) unstable; urgency=high
 
