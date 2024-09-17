@@ -141,7 +141,7 @@ public:
     void didFinishLoadInAnotherProcess();
     void removeFromTree();
 
-    void startDownload(const WebCore::ResourceRequest&, const String& suggestedName = { });
+    void startDownload(const WebCore::ResourceRequest&, const String& suggestedName = { }, WebCore::FromDownloadAttribute = WebCore::FromDownloadAttribute::No);
     void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 
     void addConsoleMessage(MessageSource, MessageLevel, const String&, uint64_t requestID = 0);
@@ -244,7 +244,7 @@ public:
     Markable<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier() { return m_layerHostingContextIdentifier; }
 
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtections() const;
-    OptionSet<WebCore::AdvancedPrivacyProtections> originatorAdvancedPrivacyProtections() const;
+    std::optional<OptionSet<WebCore::AdvancedPrivacyProtections>> originatorAdvancedPrivacyProtections() const;
 
     bool handleContextMenuEvent(const WebCore::PlatformMouseEvent&);
     WebCore::HandleUserInputEventResult handleMouseEvent(const WebMouseEvent&);
