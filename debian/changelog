@@ -1,5 +1,6 @@
-webkit2gtk (2.44.4-2) UNRELEASED; urgency=medium
+webkit2gtk (2.46.0-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * Bring all changes from the 2.45 (experimental) branch.
   * Enable sysprof profiling integration on available architectures.
   * Rename webkit2gtk-driver to webkitgtk-webdriver.
