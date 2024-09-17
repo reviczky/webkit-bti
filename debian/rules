@@ -41,6 +41,8 @@ DH_GENCONTROL_ARGS =
 
 ifneq ($(filter amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4,$(DEB_HOST_ARCH)),)
 EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=ON
+else
+EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=OFF
 endif
 
 # Sacrifice speed in order to make it more likely resource limits
