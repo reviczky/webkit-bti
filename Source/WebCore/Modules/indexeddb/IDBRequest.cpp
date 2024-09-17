@@ -47,13 +47,13 @@
 #include "WebCoreOpaqueRoot.h"
 #include <JavaScriptCore/StrongInlines.h>
 #include <variant>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 using namespace JSC;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(IDBRequest);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(IDBRequest);
 
 Ref<IDBRequest> IDBRequest::create(ScriptExecutionContext& context, IDBObjectStore& objectStore, IDBTransaction& transaction)
 {
@@ -246,18 +246,11 @@ IndexedDB::IndexRecordType IDBRequest::requestedIndexRecordType() const
     return m_requestedIndexRecordType;
 }
 
-EventTargetInterface IDBRequest::eventTargetInterface() const
+enum EventTargetInterfaceType IDBRequest::eventTargetInterface() const
 {
     ASSERT(canCurrentThreadAccessThreadLocalData(originThread()));
 
-    return IDBRequestEventTargetInterfaceType;
-}
-
-const char* IDBRequest::activeDOMObjectName() const
-{
-    ASSERT(canCurrentThreadAccessThreadLocalData(originThread()));
-
-    return "IDBRequest";
+    return EventTargetInterfaceType::IDBRequest;
 }
 
 bool IDBRequest::virtualHasPendingActivity() const

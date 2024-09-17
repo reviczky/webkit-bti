@@ -28,6 +28,7 @@
 
 #include "BitmapImage.h"
 #include "GdkCairoUtilities.h"
+#include "GdkSkiaUtilities.h"
 #include "SharedBuffer.h"
 #include <cairo.h>
 #include <gdk/gdk.h>
@@ -41,7 +42,7 @@ static Ref<Image> loadImageFromGResource(const char* iconName)
     GUniquePtr<char> path(g_strdup_printf("/org/webkitgtk/resources/images/%s", iconName));
     GRefPtr<GBytes> data = adoptGRef(g_resources_lookup_data(path.get(), G_RESOURCE_LOOKUP_FLAGS_NONE, nullptr));
     ASSERT(data);
-    icon->setData(SharedBuffer::create(static_cast<const unsigned char*>(g_bytes_get_data(data.get(), nullptr)), g_bytes_get_size(data.get())), true);
+    icon->setData(SharedBuffer::create(std::span { static_cast<const uint8_t*>(g_bytes_get_data(data.get(), nullptr)), g_bytes_get_size(data.get()) }), true);
     return icon;
 }
 
@@ -56,23 +57,31 @@ void ImageAdapter::invalidate()
 
 GRefPtr<GdkPixbuf> ImageAdapter::gdkPixbuf()
 {
-    auto nativeImage = image().nativeImageForCurrentFrame();
+    RefPtr nativeImage = image().currentNativeImage();
     if (!nativeImage)
         return nullptr;
 
     auto& surface = nativeImage->platformImage();
+#if USE(CAIRO)
     return cairoSurfaceToGdkPixbuf(surface.get());
+#elif USE(SKIA)
+    return skiaImageToGdkPixbuf(*surface.get());
+#endif
 }
 
 #if USE(GTK4)
 GRefPtr<GdkTexture> ImageAdapter::gdkTexture()
 {
-    auto nativeImage = image().nativeImageForCurrentFrame();
+    RefPtr nativeImage = image().currentNativeImage();
     if (!nativeImage)
         return nullptr;
 
     auto& surface = nativeImage->platformImage();
+#if USE(CAIRO)
     return cairoSurfaceToGdkTexture(surface.get());
+#elif USE(SKIA)
+    return skiaImageToGdkTexture(*surface.get());
+#endif
 }
 #endif
 

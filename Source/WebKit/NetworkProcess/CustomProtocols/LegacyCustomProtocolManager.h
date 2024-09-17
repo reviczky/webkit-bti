@@ -25,13 +25,13 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include "LegacyCustomProtocolID.h"
 #include "MessageReceiver.h"
 #include "NetworkProcessSupplement.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/Lock.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakRef.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
@@ -55,7 +55,7 @@ class NetworkProcess;
 struct NetworkProcessCreationParameters;
 
 class LegacyCustomProtocolManager : public NetworkProcessSupplement, public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(LegacyCustomProtocolManager);
     WTF_MAKE_NONCOPYABLE(LegacyCustomProtocolManager);
 public:
     explicit LegacyCustomProtocolManager(NetworkProcess&);
@@ -88,7 +88,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
     void didFailWithError(LegacyCustomProtocolID, const WebCore::ResourceError&);
-    void didLoadData(LegacyCustomProtocolID, const IPC::DataReference&);
+    void didLoadData(LegacyCustomProtocolID, std::span<const uint8_t>);
     void didReceiveResponse(LegacyCustomProtocolID, const WebCore::ResourceResponse&, CacheStoragePolicy);
     void didFinishLoading(LegacyCustomProtocolID);
     void wasRedirectedToRequest(LegacyCustomProtocolID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse& redirectResponse);

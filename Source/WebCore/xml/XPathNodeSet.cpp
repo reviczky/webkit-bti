@@ -127,7 +127,7 @@ static void sortBlock(unsigned from, unsigned to, Vector<Vector<Node*>>& parentM
 
             ASSERT(previousGroupEnd != groupEnd);
             previousGroupEnd = groupEnd;
-#if ASSERT_ENABLED
+#ifndef NDEBUG
             parentNodes.remove(n);
 #endif
         }

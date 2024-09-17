@@ -35,6 +35,7 @@
 #include <WebCore/CoreAudioCaptureSource.h>
 #include <WebCore/PlatformMediaSessionManager.h>
 #include <wtf/HashCountedSet.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -44,6 +45,8 @@ static bool categoryCanMixWithOthers(AudioSession::CategoryType category)
 {
     return category == AudioSession::CategoryType::AmbientSound;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteAudioSessionProxyManager);
 
 RemoteAudioSessionProxyManager::RemoteAudioSessionProxyManager(GPUProcess& gpuProcess)
     : m_gpuProcess(gpuProcess)
@@ -138,6 +141,24 @@ void RemoteAudioSessionProxyManager::updatePreferredBufferSizeForProcess()
         AudioSession::sharedSession().setPreferredBufferSize(preferredBufferSize);
 }
 
+void RemoteAudioSessionProxyManager::updateSpatialExperience()
+{
+    String sceneIdentifier;
+    std::optional<AudioSession::SoundStageSize> maxSize;
+    for (auto& proxy : m_proxies) {
+        if (!proxy.isActive())
+            continue;
+
+        if (!maxSize || proxy.soundStageSize() > *maxSize) {
+            maxSize = proxy.soundStageSize();
+            sceneIdentifier = proxy.sceneIdentifier();
+        }
+    }
+
+    AudioSession::sharedSession().setSceneIdentifier(sceneIdentifier);
+    AudioSession::sharedSession().setSoundStageSize(maxSize.value_or(AudioSession::SoundStageSize::Automatic));
+}
+
 bool RemoteAudioSessionProxyManager::hasOtherActiveProxyThan(RemoteAudioSessionProxy& proxyToExclude)
 {
     for (auto& proxy : m_proxies) {
@@ -214,7 +235,7 @@ void RemoteAudioSessionProxyManager::updatePresentingProcesses()
 
     Vector<audit_token_t> presentingProcesses;
 
-    if (auto token = m_gpuProcess.parentProcessConnection()->getAuditToken())
+    if (auto token = m_gpuProcess->parentProcessConnection()->getAuditToken())
         presentingProcesses.append(*token);
 
     // AVAudioSession will take out an assertion on all the "presenting applications"
@@ -225,7 +246,7 @@ void RemoteAudioSessionProxyManager::updatePresentingProcesses()
     m_proxies.forEach([&](auto& proxy) {
         if (!proxy.isActive())
             return;
-        if (auto& token = proxy.gpuConnectionToWebProcess().presentingApplicationAuditToken())
+        if (auto& token = proxy.gpuConnectionToWebProcess()->presentingApplicationAuditToken())
             presentingProcesses.append(*token);
     });
     AudioSession::sharedSession().setPresentingProcesses(WTFMove(presentingProcesses));

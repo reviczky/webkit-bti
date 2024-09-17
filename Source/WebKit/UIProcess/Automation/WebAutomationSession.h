@@ -83,6 +83,8 @@ class WebOpenPanelResultListenerProxy;
 class WebPageProxy;
 class WebProcessPool;
 
+enum class ForceSoftwareCapturingViewportSnapshot : bool;
+
 class AutomationCommandError {
 public:
     Inspector::Protocol::Automation::ErrorMessage type;
@@ -172,6 +174,7 @@ public:
     void getBrowsingContext(const Inspector::Protocol::Automation::BrowsingContextHandle&, Ref<GetBrowsingContextCallback>&&);
     void createBrowsingContext(std::optional<Inspector::Protocol::Automation::BrowsingContextPresentation>&&, Ref<CreateBrowsingContextCallback>&&);
     Inspector::Protocol::ErrorStringOr<void> closeBrowsingContext(const Inspector::Protocol::Automation::BrowsingContextHandle&);
+    Inspector::Protocol::ErrorStringOr<void> deleteSession();
     void switchToBrowsingContext(const Inspector::Protocol::Automation::BrowsingContextHandle&, const Inspector::Protocol::Automation::FrameHandle&, Ref<SwitchToBrowsingContextCallback>&&);
     void setWindowFrameOfBrowsingContext(const Inspector::Protocol::Automation::BrowsingContextHandle&, RefPtr<JSON::Object>&& origin, RefPtr<JSON::Object>&& size, Ref<SetWindowFrameOfBrowsingContextCallback>&&);
     void maximizeWindowOfBrowsingContext(const Inspector::Protocol::Automation::BrowsingContextHandle&, Ref<MaximizeWindowOfBrowsingContextCallback>&&);
@@ -266,7 +269,7 @@ private:
     void updateClickCount(MouseButton, const WebCore::IntPoint&, Seconds maxTime = 1_s, int maxDistance = 0);
     void resetClickCount();
     void platformSimulateMouseInteraction(WebPageProxy&, MouseInteraction, MouseButton, const WebCore::IntPoint& locationInViewport, OptionSet<WebEventModifier>, const String& pointerType);
-    static OptionSet<WebEventModifier> platformWebModifiersFromRaw(unsigned modifiers);
+    static OptionSet<WebEventModifier> platformWebModifiersFromRaw(WebPageProxy&, unsigned modifiers);
 #endif
 #if ENABLE(WEBDRIVER_TOUCH_INTERACTIONS)
     // Simulates a single touch point being pressed, moved, and released.

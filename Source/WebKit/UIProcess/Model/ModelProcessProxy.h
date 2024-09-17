@@ -35,6 +35,7 @@
 #include <WebCore/PageIdentifier.h>
 #include <memory>
 #include <pal/SessionID.h>
+#include <wtf/TZoneMalloc.h>
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 #include "LayerHostingContext.h"
@@ -48,7 +49,7 @@ struct ModelProcessConnectionParameters;
 struct ModelProcessCreationParameters;
 
 class ModelProcessProxy final : public AuxiliaryProcessProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ModelProcessProxy);
     WTF_MAKE_NONCOPYABLE(ModelProcessProxy);
     friend LazyNeverDestroyed<ModelProcessProxy>;
 public:
@@ -58,7 +59,6 @@ public:
 
     void createModelProcessConnection(WebProcessProxy&, IPC::Connection::Handle&& connectionIdentifier, ModelProcessConnectionParameters&&);
 
-    ProcessThrottler& throttler() final { return m_throttler; }
     void updateProcessAssertion();
 
     void terminateForTesting();
@@ -68,6 +68,10 @@ public:
 
 private:
     explicit ModelProcessProxy();
+
+    void terminateWebProcess(WebCore::ProcessIdentifier);
+
+    Type type() const final { return Type::Model; }
 
     void addSession(const WebsiteDataStore&);
 
@@ -91,7 +95,7 @@ private:
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     void didClose(IPC::Connection&) override;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive() final;
@@ -104,7 +108,6 @@ private:
 
     ModelProcessCreationParameters processCreationParameters();
 
-    ProcessThrottler m_throttler;
     ProcessThrottler::ActivityVariant m_activityFromWebProcesses;
 
     HashSet<PAL::SessionID> m_sessionIDs;

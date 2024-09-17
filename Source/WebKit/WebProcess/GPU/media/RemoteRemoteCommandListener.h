@@ -31,6 +31,8 @@
 #include "MessageReceiver.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
 #include <WebCore/RemoteCommandListener.h>
+#include <wtf/Identified.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace IPC {
 class Connection;
@@ -43,10 +45,11 @@ class WebProcess;
 
 class RemoteRemoteCommandListener final
     : public WebCore::RemoteCommandListener
+    , private Identified<RemoteRemoteCommandListenerIdentifier>
     , private GPUProcessConnection::Client
     , private IPC::MessageReceiver
     , public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteRemoteCommandListener> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteRemoteCommandListener);
 public:
     static Ref<RemoteRemoteCommandListener> create(WebCore::RemoteCommandListenerClient&);
     explicit RemoteRemoteCommandListener(WebCore::RemoteCommandListenerClient&);
@@ -71,7 +74,6 @@ private:
 
     GPUProcessConnection& ensureGPUProcessConnection();
 
-    RemoteRemoteCommandListenerIdentifier m_identifier;
     WebCore::RemoteCommandListener::RemoteCommandsSet m_currentCommands;
     bool m_currentSupportSeeking { false };
     ThreadSafeWeakPtr<GPUProcessConnection> m_gpuProcessConnection;

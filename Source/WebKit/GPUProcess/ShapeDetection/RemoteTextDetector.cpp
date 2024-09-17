@@ -30,11 +30,15 @@
 
 #include "ArgumentCoders.h"
 #include "RemoteRenderingBackend.h"
+#include "ShapeDetectionObjectHeap.h"
 #include <WebCore/DetectedTextInterface.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/TextDetectorInterface.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteTextDetector);
 
 RemoteTextDetector::RemoteTextDetector(Ref<WebCore::ShapeDetection::TextDetector>&& textDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     : m_backing(WTFMove(textDetector))
@@ -47,15 +51,30 @@ RemoteTextDetector::RemoteTextDetector(Ref<WebCore::ShapeDetection::TextDetector
 
 RemoteTextDetector::~RemoteTextDetector() = default;
 
+const SharedPreferencesForWebProcess& RemoteTextDetector::sharedPreferencesForWebProcess() const
+{
+    return m_backend->sharedPreferencesForWebProcess();
+}
+
+Ref<WebCore::ShapeDetection::TextDetector> RemoteTextDetector::protectedBacking()
+{
+    return backing();
+}
+
+Ref<RemoteRenderingBackend> RemoteTextDetector::protectedBackend()
+{
+    return m_backend.get();
+}
+
 void RemoteTextDetector::detect(WebCore::RenderingResourceIdentifier renderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedText>&&)>&& completionHandler)
 {
-    auto imageBuffer = m_backend.imageBuffer(renderingResourceIdentifier);
+    auto imageBuffer = protectedBackend()->imageBuffer(renderingResourceIdentifier);
     if (!imageBuffer) {
         completionHandler({ });
         return;
     }
 
-    m_backing->detect(*imageBuffer, WTFMove(completionHandler));
+    protectedBacking()->detect(*imageBuffer, WTFMove(completionHandler));
 }
 
 } // namespace WebKit

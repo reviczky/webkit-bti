@@ -35,6 +35,8 @@
 #include <WebCore/ShareableBitmap.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 
 namespace IPC {
@@ -45,7 +47,7 @@ namespace WebKit {
 class GPUConnectionToWebProcess;
 
 class RemoteImageDecoderAVFProxy : private IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteImageDecoderAVFProxy);
 public:
     explicit RemoteImageDecoderAVFProxy(GPUConnectionToWebProcess&);
     virtual ~RemoteImageDecoderAVFProxy() = default;
@@ -66,7 +68,7 @@ private:
 
     void encodedDataStatusChanged(WebCore::ImageDecoderIdentifier);
 
-    WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
     HashMap<WebCore::ImageDecoderIdentifier, RefPtr<WebCore::ImageDecoderAVFObjC>> m_imageDecoders;
     WebCore::ProcessIdentity m_resourceOwner;
 };

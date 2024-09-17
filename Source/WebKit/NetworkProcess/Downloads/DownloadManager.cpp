@@ -89,7 +89,7 @@ void DownloadManager::downloadDestinationDecided(DownloadID downloadID, Ref<Netw
     m_downloadsAfterDestinationDecided.set(downloadID, WTFMove(networkDataTask));
 }
 
-void DownloadManager::resumeDownload(PAL::SessionID sessionID, DownloadID downloadID, const IPC::DataReference& resumeData, const String& path, SandboxExtension::Handle&& sandboxExtensionHandle, CallDownloadDidStart callDownloadDidStart)
+void DownloadManager::resumeDownload(PAL::SessionID sessionID, DownloadID downloadID, std::span<const uint8_t> resumeData, const String& path, SandboxExtension::Handle&& sandboxExtensionHandle, CallDownloadDidStart callDownloadDidStart)
 {
 #if !PLATFORM(COCOA)
     notImplemented();
@@ -110,7 +110,7 @@ void DownloadManager::resumeDownload(PAL::SessionID sessionID, DownloadID downlo
 #endif
 }
 
-void DownloadManager::cancelDownload(DownloadID downloadID, CompletionHandler<void(const IPC::DataReference&)>&& completionHandler)
+void DownloadManager::cancelDownload(DownloadID downloadID, CompletionHandler<void(std::span<const uint8_t>)>&& completionHandler)
 {
     if (auto* download = m_downloads.get(downloadID)) {
         ASSERT(!m_pendingDownloads.contains(downloadID));
@@ -126,6 +126,15 @@ void DownloadManager::cancelDownload(DownloadID downloadID, CompletionHandler<vo
 }
 
 #if PLATFORM(COCOA)
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+void DownloadManager::publishDownloadProgress(DownloadID downloadID, const URL& url, std::span<const uint8_t> bookmarkData)
+{
+    if (auto* download = m_downloads.get(downloadID))
+        download->publishProgress(url, bookmarkData);
+    else if (auto* pendingDownload = m_pendingDownloads.get(downloadID))
+        pendingDownload->publishProgress(url, bookmarkData);
+}
+#else
 void DownloadManager::publishDownloadProgress(DownloadID downloadID, const URL& url, SandboxExtension::Handle&& sandboxExtensionHandle)
 {
     if (auto* download = m_downloads.get(downloadID))
@@ -133,6 +142,7 @@ void DownloadManager::publishDownloadProgress(DownloadID downloadID, const URL& 
     else if (auto* pendingDownload = m_pendingDownloads.get(downloadID))
         pendingDownload->publishProgress(url, WTFMove(sandboxExtensionHandle));
 }
+#endif
 #endif // PLATFORM(COCOA)
 
 void DownloadManager::downloadFinished(Download& download)

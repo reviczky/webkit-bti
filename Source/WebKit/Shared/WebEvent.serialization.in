@@ -100,6 +100,8 @@ class WebKit::WebKeyboardEvent : WebKit::WebEvent {
 #if ENABLE(TOUCH_EVENTS)
 class WebKit::WebTouchEvent : WebKit::WebEvent {
     Vector<WebKit::WebPlatformTouchPoint> touchPoints();
+    Vector<WebKit::WebTouchEvent> coalescedEvents();
+    Vector<WebKit::WebTouchEvent> predictedEvents();
 #if PLATFORM(IOS_FAMILY)
     WebCore::IntPoint position();
     bool isPotentialTap();
@@ -158,6 +160,8 @@ class WebKit::WebTouchEvent : WebKit::WebEvent {
     TwoFingerTap
 };
 
+enum class WebKit::GestureWasCancelled : bool;
+
 class WebKit::WebMouseEvent : WebKit::WebEvent {
     WebKit::WebMouseEventButton button();
     unsigned short buttons();
@@ -181,7 +185,9 @@ class WebKit::WebMouseEvent : WebKit::WebEvent {
     String pointerType();
 #endif
     WebKit::GestureWasCancelled gestureWasCancelled();
-}
+    WebCore::IntPoint unadjustedMovementDelta();
+    Vector<WebKit::WebMouseEvent> coalescedEvents();
+};
 
 #if ENABLE(MAC_GESTURE_EVENTS)
 class WebKit::WebGestureEvent : WebKit::WebEvent {

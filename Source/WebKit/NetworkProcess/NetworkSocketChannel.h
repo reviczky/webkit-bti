@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include "MessageReceiver.h"
 #include "MessageSender.h"
 #include "WebPageProxyIdentifier.h"
@@ -36,6 +35,7 @@
 #include <WebCore/WebSocketIdentifier.h>
 #include <pal/SessionID.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -59,7 +59,7 @@ class NetworkProcess;
 class NetworkSession;
 
 class NetworkSocketChannel : public IPC::MessageSender, public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NetworkSocketChannel);
 public:
     static std::unique_ptr<NetworkSocketChannel> create(NetworkConnectionToWebProcess&, PAL::SessionID, const WebCore::ResourceRequest&, const String& protocol, WebCore::WebSocketIdentifier, WebPageProxyIdentifier, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, const WebCore::ClientOrigin&, bool hadMainFrameMainResourcePrivateRelayed, bool allowPrivacyProxy, OptionSet<WebCore::AdvancedPrivacyProtections>, WebCore::ShouldRelaxThirdPartyCookieBlocking, WebCore::StoredCredentialsPolicy);
 
@@ -71,16 +71,18 @@ public:
     friend class WebSocketTask;
 
 private:
+    Ref<NetworkConnectionToWebProcess> protectedConnectionToWebProcess();
+
     void didConnect(const String& subprotocol, const String& extensions);
     void didReceiveText(const String&);
-    void didReceiveBinaryData(const uint8_t* data, size_t length);
+    void didReceiveBinaryData(std::span<const uint8_t>);
     void didClose(unsigned short code, const String& reason);
     void didReceiveMessageError(String&&);
     void didSendHandshakeRequest(WebCore::ResourceRequest&&);
     void didReceiveHandshakeResponse(WebCore::ResourceResponse&&);
 
-    void sendString(const IPC::DataReference&, CompletionHandler<void()>&&);
-    void sendData(const IPC::DataReference&, CompletionHandler<void()>&&);
+    void sendString(std::span<const uint8_t>, CompletionHandler<void()>&&);
+    void sendData(std::span<const uint8_t>, CompletionHandler<void()>&&);
     void close(int32_t code, const String& reason);
     void sendDelayedError();
 
@@ -91,7 +93,7 @@ private:
 
     void finishClosingIfPossible();
 
-    NetworkConnectionToWebProcess& m_connectionToWebProcess;
+    WeakRef<NetworkConnectionToWebProcess> m_connectionToWebProcess;
     WebCore::WebSocketIdentifier m_identifier;
     WeakPtr<NetworkSession> m_session;
     std::unique_ptr<WebSocketTask> m_socket;

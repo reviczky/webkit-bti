@@ -26,16 +26,18 @@
 #include "config.h"
 #include "PendingDownload.h"
 
-#include "DataReference.h"
 #include "Download.h"
 #include "DownloadProxyMessages.h"
 #include "MessageSenderInlines.h"
 #include "NetworkLoad.h"
 #include "NetworkProcess.h"
 #include "WebCoreArgumentCoders.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PendingDownload);
 
 PendingDownload::PendingDownload(IPC::Connection* parentProcessConnection, NetworkLoadParameters&& parameters, DownloadID downloadID, NetworkSession& networkSession, const String& suggestedName)
     : m_networkLoad(makeUnique<NetworkLoad>(*this, WTFMove(parameters), networkSession))
@@ -63,14 +65,12 @@ PendingDownload::PendingDownload(IPC::Connection* parentProcessConnection, std::
     m_networkLoad->convertTaskToDownload(*this, request, response, WTFMove(completionHandler));
 }
 
-PendingDownload::~PendingDownload() = default;
-
 void PendingDownload::willSendRedirectedRequest(WebCore::ResourceRequest&&, WebCore::ResourceRequest&& redirectRequest, WebCore::ResourceResponse&& redirectResponse, CompletionHandler<void(WebCore::ResourceRequest&&)>&& completionHandler)
 {
     sendWithAsyncReply(Messages::DownloadProxy::WillSendRequest(WTFMove(redirectRequest), WTFMove(redirectResponse)), WTFMove(completionHandler));
 };
 
-void PendingDownload::cancel(CompletionHandler<void(const IPC::DataReference&)>&& completionHandler)
+void PendingDownload::cancel(CompletionHandler<void(std::span<const uint8_t>)>&& completionHandler)
 {
     ASSERT(m_networkLoad);
     m_networkLoad->cancel();
@@ -78,17 +78,31 @@ void PendingDownload::cancel(CompletionHandler<void(const IPC::DataReference&)>&
 }
 
 #if PLATFORM(COCOA)
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+void PendingDownload::publishProgress(const URL& url, std::span<const uint8_t> bookmarkData)
+{
+    ASSERT(!m_progressURL.isValid());
+    m_progressURL = url;
+    m_bookmarkData = bookmarkData;
+}
+#else
 void PendingDownload::publishProgress(const URL& url, SandboxExtension::Handle&& sandboxExtension)
 {
     ASSERT(!m_progressURL.isValid());
     m_progressURL = url;
     m_progressSandboxExtension = WTFMove(sandboxExtension);
 }
+#endif
 
 void PendingDownload::didBecomeDownload(const std::unique_ptr<Download>& download)
 {
-    if (m_progressURL.isValid())
-        download->publishProgress(m_progressURL, WTFMove(m_progressSandboxExtension));
+    if (!m_progressURL.isValid())
+        return;
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+    download->publishProgress(m_progressURL, m_bookmarkData);
+#else
+    download->publishProgress(m_progressURL, WTFMove(m_progressSandboxExtension));
+#endif
 }
 #endif // PLATFORM(COCOA)
 

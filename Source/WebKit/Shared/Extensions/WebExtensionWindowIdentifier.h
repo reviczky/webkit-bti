@@ -31,7 +31,7 @@
 namespace WebKit {
 
 struct WebExtensionWindowIdentifierType;
-using WebExtensionWindowIdentifier = ObjectIdentifier<WebExtensionWindowIdentifierType>;
+using WebExtensionWindowIdentifier = LegacyNullableObjectIdentifier<WebExtensionWindowIdentifierType>;
 
 namespace WebExtensionWindowConstants {
 
@@ -86,7 +86,11 @@ inline std::optional<WebExtensionWindowIdentifier> toWebExtensionWindowIdentifie
     }
 
     WebExtensionWindowIdentifier result { static_cast<uint64_t>(identifier) };
-    ASSERT(result.isValid());
+    if (!result.isValid()) {
+        ASSERT_NOT_REACHED();
+        return WebExtensionWindowConstants::NoneIdentifier;
+    }
+
     return result;
 }
 

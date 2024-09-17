@@ -37,6 +37,7 @@
 #include <WebCore/TextureMapperFPSCounter.h>
 #include <WebCore/Timer.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 class GraphicsLayer;
@@ -52,7 +53,7 @@ namespace WebKit {
 class WebPage;
 
 class LayerTreeHost : public WebCore::GraphicsLayerClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(LayerTreeHost);
 public:
     explicit LayerTreeHost(WebPage&);
     ~LayerTreeHost();
@@ -76,6 +77,7 @@ public:
     void didChangeViewportAttributes(WebCore::ViewportAttributes&&);
     void setIsDiscardable(bool);
     void deviceOrPageScaleFactorChanged();
+    void backgroundColorDidChange();
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID);
     WebCore::PlatformDisplayID displayID() const { return m_displayID; }
 

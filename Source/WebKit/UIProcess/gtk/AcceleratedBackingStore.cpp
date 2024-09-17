@@ -30,9 +30,10 @@
 #include "WebPageProxy.h"
 #include <WebCore/PlatformDisplay.h>
 #include <gtk/gtk.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GUniquePtr.h>
 
-#if PLATFORM(GTK) && USE(EGL)
+#if PLATFORM(GTK)
 #include "AcceleratedBackingStoreDMABuf.h"
 #endif
 
@@ -62,9 +63,11 @@ static bool gtkCanUseHardwareAcceleration()
 }
 #endif
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedBackingStore);
+
 bool AcceleratedBackingStore::checkRequirements()
 {
-#if PLATFORM(GTK) && USE(EGL)
+#if PLATFORM(GTK)
     if (AcceleratedBackingStoreDMABuf::checkRequirements())
         return gtkCanUseHardwareAcceleration();
 #endif
@@ -77,7 +80,7 @@ std::unique_ptr<AcceleratedBackingStore> AcceleratedBackingStore::create(WebPage
     if (!HardwareAccelerationManager::singleton().canUseHardwareAcceleration())
         return nullptr;
 
-#if PLATFORM(GTK) && USE(EGL)
+#if PLATFORM(GTK)
     if (AcceleratedBackingStoreDMABuf::checkRequirements())
         return AcceleratedBackingStoreDMABuf::create(webPage);
 #endif

@@ -39,11 +39,11 @@
 #include "MediaPlaybackTarget.h"
 #include "RemotePlaybackAvailabilityCallback.h"
 #include "WebCoreOpaqueRootInlines.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RemotePlayback);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RemotePlayback);
 
 Ref<RemotePlayback> RemotePlayback::create(HTMLMediaElement& element)
 {
@@ -62,9 +62,7 @@ RemotePlayback::RemotePlayback(HTMLMediaElement& element)
 {
 }
 
-RemotePlayback::~RemotePlayback()
-{
-}
+RemotePlayback::~RemotePlayback() = default;
 
 WebCoreOpaqueRoot RemotePlayback::opaqueRootConcurrently() const
 {
@@ -365,6 +363,11 @@ void RemotePlayback::disconnect()
     });
 }
 
+void RemotePlayback::stop()
+{
+    m_callbackMap.clear();
+}
+
 void RemotePlayback::playbackTargetPickerWasDismissed()
 {
     if (m_promptPromises.isEmpty())
@@ -435,11 +438,6 @@ void RemotePlayback::availabilityChanged(bool available)
 void RemotePlayback::invalidate()
 {
     m_mediaElement = nullptr;
-}
-
-const char* RemotePlayback::activeDOMObjectName() const
-{
-    return "RemotePlayback";
 }
 
 #if !RELEASE_LOG_DISABLED

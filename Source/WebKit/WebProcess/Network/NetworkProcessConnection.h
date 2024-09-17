@@ -36,7 +36,6 @@
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
-class RegistrableDomain;
 class ResourceError;
 class ResourceRequest;
 class ResourceResponse;
@@ -93,8 +92,6 @@ public:
 #endif
     void updateCachedCookiesEnabled();
 
-    void addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&&);
-
 private:
     NetworkProcessConnection(IPC::Connection::Identifier, WebCore::HTTPCookieAcceptPolicy);
 
@@ -102,7 +99,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t) override;
 
     void didFinishPingLoad(WebCore::ResourceLoaderIdentifier pingLoadIdentifier, WebCore::ResourceError&&, WebCore::ResourceResponse&&);
     void didFinishPreconnection(WebCore::ResourceLoaderIdentifier preconnectionIdentifier, WebCore::ResourceError&&);

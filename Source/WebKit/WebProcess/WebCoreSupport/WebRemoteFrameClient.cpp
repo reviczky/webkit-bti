@@ -39,8 +39,7 @@ namespace WebKit {
 using namespace WebCore;
 
 WebRemoteFrameClient::WebRemoteFrameClient(Ref<WebFrame>&& frame, ScopeExit<Function<void()>>&& frameInvalidator)
-    : WebFrameLoaderClient(WTFMove(frame))
-    , m_frameInvalidator(WTFMove(frameInvalidator))
+    : WebFrameLoaderClient(WTFMove(frame), WTFMove(frameInvalidator))
 {
 }
 
@@ -89,16 +88,51 @@ String WebRemoteFrameClient::renderTreeAsText(size_t baseIndent, OptionSet<Rende
     RefPtr page = m_frame->page();
     if (!page)
         return "Test Error - Missing page"_s;
-    auto sendResult = page->sendSync(Messages::WebPageProxy::RenderTreeAsText(m_frame->frameID(), baseIndent, behavior));
+    auto sendResult = page->sendSync(Messages::WebPageProxy::RenderTreeAsTextForTesting(m_frame->frameID(), baseIndent, behavior));
     if (!sendResult.succeeded())
-        return "Test Error - sending WebPageProxy::RenderTreeAsText failed"_s;
+        return "Test Error - sending WebPageProxy::RenderTreeAsTextForTesting failed"_s;
     auto [result] = sendResult.takeReply();
     return result;
 }
 
-void WebRemoteFrameClient::broadcastFrameRemovalToOtherProcesses()
+void WebRemoteFrameClient::unbindRemoteAccessibilityFrames(int processIdentifier)
 {
-    WebFrameLoaderClient::broadcastFrameRemovalToOtherProcesses();
+#if PLATFORM(COCOA)
+    // Make sure AppKit system knows about our remote UI process status now.
+    if (RefPtr page = m_frame->page())
+        page->accessibilityManageRemoteElementStatus(false, processIdentifier);
+#else
+    UNUSED_PARAM(processIdentifier);
+#endif
+}
+
+void WebRemoteFrameClient::updateRemoteFrameAccessibilityOffset(WebCore::FrameIdentifier frameID, WebCore::IntPoint offset)
+{
+    if (RefPtr page = m_frame->page())
+        page->send(Messages::WebPageProxy::UpdateRemoteFrameAccessibilityOffset(frameID, offset));
+}
+
+void WebRemoteFrameClient::bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier frameID, Vector<uint8_t>&& dataToken, CompletionHandler<void(Vector<uint8_t>, int)>&& completionHandler)
+{
+    RefPtr page = m_frame->page();
+    if (!page) {
+        completionHandler({ }, 0);
+        return;
+    }
+
+    auto sendResult = page->sendSync(Messages::WebPageProxy::BindRemoteAccessibilityFrames(processIdentifier, frameID, WTFMove(dataToken)));
+    if (!sendResult.succeeded()) {
+        completionHandler({ }, 0);
+        return;
+    }
+
+    auto [resultToken, processIdentifierResult] = sendResult.takeReply();
+
+    // Make sure AppKit system knows about our remote UI process status now.
+#if PLATFORM(COCOA)
+    page->accessibilityManageRemoteElementStatus(true, processIdentifierResult);
+#endif
+    completionHandler(resultToken, processIdentifierResult);
 }
 
 void WebRemoteFrameClient::closePage()
@@ -119,10 +153,32 @@ void WebRemoteFrameClient::unfocus()
         page->send(Messages::WebPageProxy::SetFocus(false));
 }
 
+void WebRemoteFrameClient::documentURLForConsoleLog(CompletionHandler<void(const URL&)>&& completionHandler)
+{
+    if (auto* page = m_frame->page())
+        page->sendWithAsyncReply(Messages::WebPageProxy::DocumentURLForConsoleLog(m_frame->frameID()), WTFMove(completionHandler));
+    else
+        completionHandler({ });
+}
+
 void WebRemoteFrameClient::dispatchDecidePolicyForNavigationAction(const NavigationAction& navigationAction, const ResourceRequest& request, const ResourceResponse& redirectResponse,
-    FormState* formState, const String& clientRedirectSourceForHistory, uint64_t navigationID, std::optional<HitTestResult>&& hitTestResult, bool hasOpener, SandboxFlags sandboxFlags, PolicyDecisionMode policyDecisionMode, FramePolicyFunction&& function)
+    FormState* formState, const String& clientRedirectSourceForHistory, std::optional<WebCore::NavigationIdentifier> navigationID, std::optional<HitTestResult>&& hitTestResult, bool hasOpener, SandboxFlags sandboxFlags, PolicyDecisionMode policyDecisionMode, FramePolicyFunction&& function)
 {
     WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(navigationAction, request, redirectResponse, formState, clientRedirectSourceForHistory, navigationID, WTFMove(hitTestResult), hasOpener, sandboxFlags, policyDecisionMode, WTFMove(function));
+}
+
+void WebRemoteFrameClient::applyWebsitePolicies(WebsitePoliciesData&& websitePolicies)
+{
+    RefPtr coreFrame = m_frame->coreRemoteFrame();
+    if (!coreFrame) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    coreFrame->setCustomUserAgent(websitePolicies.customUserAgent);
+    coreFrame->setCustomUserAgentAsSiteSpecificQuirks(websitePolicies.customUserAgentAsSiteSpecificQuirks);
+    coreFrame->setAdvancedPrivacyProtections(websitePolicies.advancedPrivacyProtections);
+    coreFrame->setCustomNavigatorPlatform(websitePolicies.customNavigatorPlatform);
 }
 
 }

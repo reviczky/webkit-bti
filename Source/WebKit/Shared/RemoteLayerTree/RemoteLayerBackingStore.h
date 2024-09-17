@@ -36,9 +36,19 @@
 #include <WebCore/Region.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/MonotonicTime.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 OBJC_CLASS CALayer;
+
+namespace WebKit {
+class RemoteLayerBackingStore;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLayerBackingStore> : std::true_type { };
+}
 
 // FIXME: Make PlatformCALayerRemote.cpp Objective-C so we can include WebLayer.h here and share the typedef.
 namespace WebCore {
@@ -73,13 +83,13 @@ enum class LayerContentsType : uint8_t {
 };
 
 class RemoteLayerBackingStore : public CanMakeWeakPtr<RemoteLayerBackingStore> {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerBackingStore);
     WTF_MAKE_NONCOPYABLE(RemoteLayerBackingStore);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
-    RemoteLayerBackingStore(PlatformCALayerRemote*);
+    RemoteLayerBackingStore(PlatformCALayerRemote&);
     virtual ~RemoteLayerBackingStore();
 
-    static std::unique_ptr<RemoteLayerBackingStore> createForLayer(PlatformCALayerRemote*);
+    static std::unique_ptr<RemoteLayerBackingStore> createForLayer(PlatformCALayerRemote&);
 
     enum class Type : bool {
         IOSurface,
@@ -95,7 +105,7 @@ public:
 
     enum class ProcessModel : uint8_t { InProcess, Remote };
     virtual ProcessModel processModel() const = 0;
-    static ProcessModel processModelForLayer(PlatformCALayerRemote*);
+    static ProcessModel processModelForLayer(PlatformCALayerRemote&);
 
     struct Parameters {
         Type type { Type::Bitmap };
@@ -121,6 +131,7 @@ public:
 
     // Returns true if we need to encode the buffer.
     bool layerWillBeDisplayed();
+    bool layerWillBeDisplayedWithRenderingSuppression();
     bool needsDisplay() const;
 
     bool performDelegatedLayerDisplay();
@@ -135,14 +146,14 @@ public:
     float scale() const { return m_parameters.scale; }
     bool usesDeepColorBackingStore() const;
     WebCore::DestinationColorSpace colorSpace() const { return m_parameters.colorSpace; }
-    WebCore::PixelFormat pixelFormat() const;
+    WebCore::ImageBufferPixelFormat pixelFormat() const;
     Type type() const { return m_parameters.type; }
     bool isOpaque() const { return m_parameters.isOpaque; }
     unsigned bytesPerPixel() const;
     bool supportsPartialRepaint() const;
     bool drawingRequiresClearedPixels() const;
 
-    PlatformCALayerRemote* layer() const { return m_layer; }
+    PlatformCALayerRemote& layer() const { return m_layer; }
 
     void encode(IPC::Encoder&) const;
 
@@ -189,7 +200,7 @@ protected:
 
     WebCore::IntRect layerBounds() const;
 
-    PlatformCALayerRemote* m_layer;
+    PlatformCALayerRemote& m_layer;
 
     Parameters m_parameters;
 
@@ -212,8 +223,8 @@ protected:
 // The subset of RemoteLayerBackingStore that gets serialized into the UI
 // process, and gets applied to the CALayer.
 class RemoteLayerBackingStoreProperties {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerBackingStoreProperties);
     WTF_MAKE_NONCOPYABLE(RemoteLayerBackingStoreProperties);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
     RemoteLayerBackingStoreProperties() = default;
     RemoteLayerBackingStoreProperties(RemoteLayerBackingStoreProperties&&) = default;

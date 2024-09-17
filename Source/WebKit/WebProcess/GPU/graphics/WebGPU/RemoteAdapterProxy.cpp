@@ -31,14 +31,18 @@
 #include "RemoteAdapterMessages.h"
 #include "RemoteDeviceProxy.h"
 #include "WebGPUConvertToBackingContext.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit::WebGPU {
 
-RemoteAdapterProxy::RemoteAdapterProxy(String&& name, WebCore::WebGPU::SupportedFeatures& features, WebCore::WebGPU::SupportedLimits& limits, bool isFallbackAdapter, RemoteGPUProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteAdapterProxy);
+
+RemoteAdapterProxy::RemoteAdapterProxy(String&& name, WebCore::WebGPU::SupportedFeatures& features, WebCore::WebGPU::SupportedLimits& limits, bool isFallbackAdapter, bool xrCompatible, RemoteGPUProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
     : Adapter(WTFMove(name), features, limits, isFallbackAdapter)
     , m_backing(identifier)
     , m_convertToBackingContext(convertToBackingContext)
     , m_parent(parent)
+    , m_xrCompatible(xrCompatible)
 {
 }
 
@@ -53,13 +57,13 @@ void RemoteAdapterProxy::requestDevice(const WebCore::WebGPU::DeviceDescriptor& 
     auto convertedDescriptor = m_convertToBackingContext->convertToBacking(descriptor);
     ASSERT(convertedDescriptor);
     if (!convertedDescriptor)
-        return;
+        return callback(nullptr);
 
     auto identifier = WebGPUIdentifier::generate();
     auto queueIdentifier = WebGPUIdentifier::generate();
     auto sendResult = sendSync(Messages::RemoteAdapter::RequestDevice(*convertedDescriptor, identifier, queueIdentifier));
     if (!sendResult.succeeded())
-        return;
+        return callback(nullptr);
 
     auto [supportedFeatures, supportedLimits] = sendResult.takeReply();
     if (!supportedLimits.maxTextureDimension2D) {
@@ -105,6 +109,11 @@ void RemoteAdapterProxy::requestDevice(const WebCore::WebGPU::DeviceDescriptor& 
     auto result = RemoteDeviceProxy::create(WTFMove(resultSupportedFeatures), WTFMove(resultSupportedLimits), *this, m_convertToBackingContext, identifier, queueIdentifier);
     result->setLabel(WTFMove(convertedDescriptor->label));
     callback(WTFMove(result));
+}
+
+bool RemoteAdapterProxy::xrCompatible()
+{
+    return m_xrCompatible;
 }
 
 } // namespace WebKit::WebGPU

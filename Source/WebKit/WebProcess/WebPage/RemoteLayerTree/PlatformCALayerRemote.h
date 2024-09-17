@@ -26,6 +26,7 @@
 #pragma once
 
 #include "LayerProperties.h"
+#include "RemoteLayerTreeContext.h"
 #include "RemoteLayerTreeTransaction.h"
 #include <WebCore/HTMLMediaElementIdentifier.h>
 #include <WebCore/PlatformCALayer.h>
@@ -43,7 +44,8 @@ struct AcceleratedEffectValues;
 
 namespace WebKit {
 
-class RemoteLayerTreeContext;
+
+using LayerHostingContextID = uint32_t;
 
 struct PlatformCALayerRemoteDelegatedContents {
     ImageBufferBackendHandle surface;
@@ -55,6 +57,7 @@ class PlatformCALayerRemote : public WebCore::PlatformCALayer, public CanMakeWea
 public:
     static Ref<PlatformCALayerRemote> create(WebCore::PlatformCALayer::LayerType, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
     static Ref<PlatformCALayerRemote> create(PlatformLayer *, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
+    static Ref<PlatformCALayerRemote> create(LayerHostingContextID, WebCore::PlatformCALayerClient* owner, RemoteLayerTreeContext&);
 #if ENABLE(MODEL_ELEMENT)
     static Ref<PlatformCALayerRemote> create(Ref<WebCore::Model>, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
 #endif
@@ -68,9 +71,11 @@ public:
     PlatformLayer* platformLayer() const override { return nullptr; }
 
     void recursiveBuildTransaction(RemoteLayerTreeContext&, RemoteLayerTreeTransaction&);
+    void recursiveMarkWillBeDisplayedWithRenderingSuppresion();
 
     void setNeedsDisplayInRect(const WebCore::FloatRect& dirtyRect) override;
     void setNeedsDisplay() override;
+    bool needsDisplay() const override;
 
     void copyContentsFromLayer(PlatformCALayer*) override;
 
@@ -93,7 +98,7 @@ public:
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     void clearAcceleratedEffectsAndBaseValues() override;
-    void setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects&, WebCore::AcceleratedEffectValues&) override;
+    void setAcceleratedEffectsAndBaseValues(const WebCore::AcceleratedEffects&, const WebCore::AcceleratedEffectValues&) override;
 #endif
 
     void setMaskLayer(RefPtr<WebCore::PlatformCALayer>&&) override;
@@ -116,7 +121,9 @@ public:
     WebCore::TransformationMatrix sublayerTransform() const override;
     void setSublayerTransform(const WebCore::TransformationMatrix&) override;
 
-    void setIsBackdropRoot(bool) override;
+    void setIsBackdropRoot(bool) final;
+    bool backdropRootIsOpaque() const final;
+    void setBackdropRootIsOpaque(bool) final;
 
     bool isHidden() const override;
     void setHidden(bool) override;
@@ -244,8 +251,7 @@ public:
     void didCommit();
 
     void moveToContext(RemoteLayerTreeContext&);
-    void clearContext() { m_context = nullptr; }
-    RemoteLayerTreeContext* context() const { return m_context; }
+    RemoteLayerTreeContext* context() const { return m_context.get(); }
     
     void markFrontBufferVolatileForTesting() override;
     virtual void populateCreationProperties(RemoteLayerTreeTransaction::LayerCreationProperties&, const RemoteLayerTreeContext&, WebCore::PlatformCALayer::LayerType);
@@ -273,7 +279,7 @@ private:
 
     bool requiresCustomAppearanceUpdateOnBoundsChange() const;
 
-    WebCore::LayerPool& layerPool() override;
+    WebCore::LayerPool* layerPool() override;
 
     LayerProperties m_properties;
     WebCore::PlatformCALayerList m_children;
@@ -283,7 +289,7 @@ private:
     bool m_acceleratesDrawing { false };
     bool m_wantsDeepColorBackingStore { false };
 
-    RemoteLayerTreeContext* m_context;
+    WeakPtr<RemoteLayerTreeContext> m_context;
 };
 
 } // namespace WebKit

@@ -44,8 +44,6 @@ AudioDSPKernelProcessor::AudioDSPKernelProcessor(float sampleRate, unsigned numb
 {
 }
 
-AudioDSPKernelProcessor::~AudioDSPKernelProcessor() = default;
-
 void AudioDSPKernelProcessor::initialize()
 {
     if (isInitialized())

@@ -57,8 +57,10 @@
 #include <glib/gi18n-lib.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 
 #if !ENABLE(2022_GLIB_API)
 #include "WebKitDOMDocumentPrivate.h"
@@ -114,7 +116,7 @@ WEBKIT_DEFINE_FINAL_TYPE(WebKitWebPage, webkit_web_page, G_TYPE_OBJECT, GObject)
 static void webFrameDestroyed(WebFrame*);
 
 class WebKitFrameWrapper final: public FrameDestructionObserver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(WebKitFrameWrapper);
 public:
     WebKitFrameWrapper(WebFrame& webFrame)
         : FrameDestructionObserver(webFrame.coreLocalFrame())
@@ -317,7 +319,7 @@ private:
     {
         // Post on the console as well to be consistent with the inspector.
         if (response.httpStatusCode() >= 400) {
-            String errorMessage = makeString("Failed to load resource: the server responded with a status of ", response.httpStatusCode(), " (", response.httpStatusText(), ')');
+            String errorMessage = makeString("Failed to load resource: the server responded with a status of "_s, response.httpStatusCode(), " ("_s, response.httpStatusText(), ')');
             webkitWebPageDidSendConsoleMessage(m_webPage, MessageSource::Network, MessageLevel::Error, errorMessage, 0, response.url().string());
         }
     }
@@ -327,7 +329,7 @@ private:
         // Post on the console as well to be consistent with the inspector.
         if (!error.isCancellation()) {
             auto errorDescription = error.localizedDescription();
-            auto errorMessage = makeString("Failed to load resource", errorDescription.isEmpty() ? "" : ": ", errorDescription);
+            auto errorMessage = makeString("Failed to load resource"_s, errorDescription.isEmpty() ? ""_s : ": "_s, errorDescription);
             webkitWebPageDidSendConsoleMessage(m_webPage, MessageSource::Network, MessageLevel::Error, errorMessage, 0, error.failingURL().string());
         }
     }

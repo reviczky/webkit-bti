@@ -17,7 +17,7 @@
 #elif defined(__APPLE__)
 #    define ANGLE_PLATFORM_APPLE 1
 #    define ANGLE_PLATFORM_POSIX 1
-#elif defined(ANDROID)
+#elif defined(ANDROID) && !defined(ANGLE_ANDROID_DMA_BUF)
 #    define ANGLE_PLATFORM_ANDROID 1
 #    define ANGLE_PLATFORM_POSIX 1
 #elif defined(__ggp__)
@@ -91,11 +91,8 @@
 #        endif
 #    endif
 
-// Include <windows.h> to ensure tests related files can be built when building
-// vulkan only backend ANGLE on windows.
-#    if defined(ANGLE_ENABLE_VULKAN)
-#        include <windows.h>
-#    endif
+// Include <windows.h> to ensure files that refer to near/far can be compiled.
+#    include <windows.h>
 
 // Macros 'near', 'far', 'NEAR' and 'FAR' are defined by 'shared/minwindef.h' in the Windows SDK.
 // Macros 'near' and 'far' are empty. They are not used by other Windows headers and are undefined
@@ -107,14 +104,6 @@
 #    undef FAR
 #    define NEAR
 #    define FAR
-#endif
-
-#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
-#    include <intrin.h>
-#    define ANGLE_USE_SSE
-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
-#    include <x86intrin.h>
-#    define ANGLE_USE_SSE
 #endif
 
 // Mips and arm devices need to include stddef for size_t.

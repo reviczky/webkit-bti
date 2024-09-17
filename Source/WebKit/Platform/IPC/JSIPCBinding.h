@@ -50,6 +50,7 @@ namespace WebCore {
 class FloatRect;
 class IntRect;
 class RegistrableDomain;
+struct ExceptionData;
 
 }
 
@@ -60,7 +61,8 @@ class Semaphore;
 template<typename T, std::enable_if_t<!std::is_arithmetic<T>::value && !std::is_enum<T>::value>* = nullptr>
 JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, T&&)
 {
-    return JSC::jsUndefined();
+    // Report that we don't recognize this type.
+    return JSC::JSValue();
 }
 
 template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, String&&);
@@ -96,6 +98,18 @@ template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, uin
 template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, size_t);
 
 template<typename U>
+JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, LegacyNullableObjectIdentifier<U>&& value)
+{
+    return jsValueForDecodedArgumentValue(globalObject, value.toUInt64());
+}
+
+template<typename U>
+JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, LegacyNullableAtomicObjectIdentifier<U>&& value)
+{
+    return jsValueForDecodedArgumentValue(globalObject, value.toUInt64());
+}
+
+template<typename U>
 JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, ObjectIdentifier<U>&& value)
 {
     return jsValueForDecodedArgumentValue(globalObject, value.toUInt64());
@@ -109,6 +123,7 @@ JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, A
 
 template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, WebCore::IntRect&&);
 template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, WebCore::FloatRect&&);
+template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject*, WebCore::ExceptionData&&);
 
 template<typename U>
 JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, OptionSet<U>&& value)
@@ -126,11 +141,9 @@ template<typename U>
 JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* globalObject, std::optional<U>&& value)
 {
     if (!value)
-        return JSC::JSValue();
+        return JSC::jsUndefined();
     return jsValueForDecodedArgumentValue(globalObject, std::forward<U>(*value));
 }
-
-bool putJSValueForDecodedArgumentAtIndexOrArrayBufferIfUndefined(JSC::JSGlobalObject*, JSC::JSArray*, unsigned index, JSC::JSValue, DataReference buffer);
 
 template<typename... Elements>
 std::optional<JSC::JSValue> putJSValueForDecodeArgumentInArray(JSC::JSGlobalObject*, IPC::Decoder&, JSC::JSArray*, size_t currentIndex, std::tuple<Elements...>*);
@@ -150,12 +163,19 @@ std::optional<JSC::JSValue> putJSValueForDecodeArgumentInArray(JSC::JSGlobalObje
     if (!value)
         return std::nullopt;
 
+    auto scope = DECLARE_THROW_SCOPE(globalObject->vm());
     auto jsValue = jsValueForDecodedArgumentValue(globalObject, WTFMove(*value));
-    if (jsValue.isEmpty())
-        return jsValue;
-
-    auto span = decoder.buffer().subspan(startingBufferOffset, decoder.currentBufferOffset() - startingBufferOffset);
-    putJSValueForDecodedArgumentAtIndexOrArrayBufferIfUndefined(globalObject, array, currentIndex, jsValue, span);
+    RETURN_IF_EXCEPTION(scope, std::nullopt);
+    if (jsValue.isEmpty()) {
+        // Create array buffers out of types we don't recognize.
+        auto span = decoder.span().subspan(startingBufferOffset, decoder.currentBufferOffset() - startingBufferOffset);
+        auto arrayBuffer = JSC::ArrayBuffer::create(span);
+        if (auto* structure = globalObject->arrayBufferStructure(arrayBuffer->sharingMode()))
+            jsValue = JSC::JSArrayBuffer::create(Ref { globalObject->vm() }, structure, WTFMove(arrayBuffer));
+        RETURN_IF_EXCEPTION(scope, std::nullopt);
+    }
+    array->putDirectIndex(globalObject, currentIndex, jsValue);
+    RETURN_IF_EXCEPTION(scope, std::nullopt);
 
     std::tuple<Elements...>* dummyArguments = nullptr;
     return putJSValueForDecodeArgumentInArray<Elements...>(globalObject, decoder, array, currentIndex + 1, dummyArguments);

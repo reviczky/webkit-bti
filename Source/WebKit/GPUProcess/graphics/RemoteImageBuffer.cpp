@@ -31,15 +31,12 @@
 #include "IPCSemaphore.h"
 #include "RemoteImageBufferMessages.h"
 #include "RemoteRenderingBackend.h"
+#include "RemoteSharedResourceCache.h"
 #include "StreamConnectionWorkQueue.h"
 #include <WebCore/GraphicsContext.h>
+#include <wtf/StdLibExtras.h>
 
-#define MESSAGE_CHECK(assertion, message) do { \
-    if (UNLIKELY(!(assertion))) { \
-        m_backend->terminateWebProcess(message); \
-        return; \
-    } \
-} while (0)
+#define MESSAGE_CHECK(assertion, message) MESSAGE_CHECK_WITH_MESSAGE_BASE(assertion, &m_backend->gpuConnectionToWebProcess().connection(), message)
 
 namespace WebKit {
 
@@ -54,10 +51,13 @@ RemoteImageBuffer::RemoteImageBuffer(Ref<WebCore::ImageBuffer> imageBuffer, Remo
     : m_backend(&backend)
     , m_imageBuffer(WTFMove(imageBuffer))
 {
+    m_backend->sharedResourceCache().didCreateImageBuffer(m_imageBuffer->renderingPurpose(), m_imageBuffer->renderingMode());
 }
 
 RemoteImageBuffer::~RemoteImageBuffer()
 {
+    if (m_backend)
+        m_backend->sharedResourceCache().didReleaseImageBuffer(m_imageBuffer->renderingPurpose(), m_imageBuffer->renderingMode());
     // Volatile image buffers do not have contexts.
     if (m_imageBuffer->volatilityState() == WebCore::VolatilityState::Volatile)
         return;
@@ -77,38 +77,41 @@ void RemoteImageBuffer::startListeningForIPC()
 
 void RemoteImageBuffer::stopListeningForIPC()
 {
-    if (auto backend = std::exchange(m_backend, { }))
+    if (auto backend = std::exchange(m_backend, { })) {
+        backend->sharedResourceCache().didReleaseImageBuffer(m_imageBuffer->renderingPurpose(), m_imageBuffer->renderingMode());
         backend->streamConnection().stopReceivingMessages(Messages::RemoteImageBuffer::messageReceiverName(), identifier().toUInt64());
+    }
 }
 
-void RemoteImageBuffer::getPixelBuffer(WebCore::PixelBufferFormat destinationFormat, WebCore::IntRect srcRect, CompletionHandler<void()>&& completionHandler)
+void RemoteImageBuffer::getPixelBuffer(WebCore::PixelBufferFormat destinationFormat, WebCore::IntPoint srcPoint, WebCore::IntSize srcSize, CompletionHandler<void()>&& completionHandler)
 {
     assertIsCurrent(workQueue());
     auto memory = m_backend->sharedMemoryForGetPixelBuffer();
-    MESSAGE_CHECK(memory, "No shared memory for getPixelBufferForImageBuffer"_s);
-    MESSAGE_CHECK(WebCore::PixelBuffer::supportedPixelFormat(destinationFormat.pixelFormat), "Pixel format not supported"_s);
-    auto pixelBuffer = m_imageBuffer->getPixelBuffer(destinationFormat, srcRect);
-    if (pixelBuffer) {
-        MESSAGE_CHECK(pixelBuffer->sizeInBytes() <= memory->size(), "Shmem for return of getPixelBuffer is too small"_s);
-        memcpy(memory->data(), pixelBuffer->bytes(), pixelBuffer->sizeInBytes());
+    MESSAGE_CHECK(memory, "No shared memory for getPixelBufferForImageBuffer");
+    MESSAGE_CHECK(WebCore::PixelBuffer::supportedPixelFormat(destinationFormat.pixelFormat), "Pixel format not supported");
+    WebCore::IntRect srcRect(srcPoint, srcSize);
+    if (auto pixelBuffer = m_imageBuffer->getPixelBuffer(destinationFormat, srcRect)) {
+        MESSAGE_CHECK(pixelBuffer->bytes().size() <= memory->size(), "Shmem for return of getPixelBuffer is too small");
+        memcpySpan(memory->mutableSpan(), pixelBuffer->bytes());
     } else
-        memset(memory->data(), 0, memory->size());
+        memsetSpan(memory->mutableSpan(), 0);
     completionHandler();
 }
 
-void RemoteImageBuffer::getPixelBufferWithNewMemory(WebCore::SharedMemory::Handle&& handle, WebCore::PixelBufferFormat destinationFormat, WebCore::IntRect srcRect, CompletionHandler<void()>&& completionHandler)
+void RemoteImageBuffer::getPixelBufferWithNewMemory(WebCore::SharedMemory::Handle&& handle, WebCore::PixelBufferFormat destinationFormat, WebCore::IntPoint srcPoint, WebCore::IntSize srcSize, CompletionHandler<void()>&& completionHandler)
 {
     assertIsCurrent(workQueue());
     m_backend->setSharedMemoryForGetPixelBuffer(nullptr);
     auto sharedMemory = WebCore::SharedMemory::map(WTFMove(handle), WebCore::SharedMemory::Protection::ReadWrite);
-    MESSAGE_CHECK(sharedMemory, "Shared memory could not be mapped."_s);
+    MESSAGE_CHECK(sharedMemory, "Shared memory could not be mapped.");
     m_backend->setSharedMemoryForGetPixelBuffer(WTFMove(sharedMemory));
-    getPixelBuffer(WTFMove(destinationFormat), WTFMove(srcRect), WTFMove(completionHandler));
+    getPixelBuffer(WTFMove(destinationFormat), WTFMove(srcPoint), WTFMove(srcSize), WTFMove(completionHandler));
 }
 
-void RemoteImageBuffer::putPixelBuffer(Ref<WebCore::PixelBuffer> pixelBuffer, WebCore::IntRect srcRect, WebCore::IntPoint destPoint, WebCore::AlphaPremultiplication destFormat)
+void RemoteImageBuffer::putPixelBuffer(Ref<WebCore::PixelBuffer> pixelBuffer, WebCore::IntPoint srcPoint, WebCore::IntSize srcSize, WebCore::IntPoint destPoint, WebCore::AlphaPremultiplication destFormat)
 {
     assertIsCurrent(workQueue());
+    WebCore::IntRect srcRect(srcPoint, srcSize);
     m_imageBuffer->putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
 }
 
@@ -119,12 +122,14 @@ void RemoteImageBuffer::getShareableBitmap(WebCore::PreserveResolution preserveR
         auto backendSize = m_imageBuffer->backendSize();
         auto logicalSize = m_imageBuffer->logicalSize();
         auto resultSize = preserveResolution == WebCore::PreserveResolution::Yes ? backendSize : m_imageBuffer->truncatedLogicalSize();
+        if (resultSize.isEmpty())
+            return std::nullopt;
         auto bitmap = WebCore::ShareableBitmap::create({ resultSize, m_imageBuffer->colorSpace() });
         if (!bitmap)
             return std::nullopt;
         auto handle = bitmap->createHandle();
-        if (m_backend->resourceOwner())
-            handle->setOwnershipOfMemory(m_backend->resourceOwner(), WebCore::MemoryLedger::Graphics);
+        if (m_backend->sharedResourceCache().resourceOwner())
+            handle->setOwnershipOfMemory(m_backend->sharedResourceCache().resourceOwner(), WebCore::MemoryLedger::Graphics);
         auto context = bitmap->createGraphicsContext();
         if (!context)
             return std::nullopt;
@@ -146,8 +151,8 @@ void RemoteImageBuffer::filteredNativeImage(Ref<WebCore::Filter> filter, Complet
         if (!bitmap)
             return std::nullopt;
         auto handle = bitmap->createHandle();
-        if (m_backend->resourceOwner())
-            handle->setOwnershipOfMemory(m_backend->resourceOwner(), WebCore::MemoryLedger::Graphics);
+        if (m_backend->sharedResourceCache().resourceOwner())
+            handle->setOwnershipOfMemory(m_backend->sharedResourceCache().resourceOwner(), WebCore::MemoryLedger::Graphics);
         auto context = bitmap->createGraphicsContext();
         if (!context)
             return std::nullopt;

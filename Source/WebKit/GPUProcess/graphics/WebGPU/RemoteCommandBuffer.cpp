@@ -32,13 +32,17 @@
 #include "StreamServerConnection.h"
 #include "WebGPUObjectHeap.h"
 #include <WebCore/WebGPUCommandBuffer.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
-RemoteCommandBuffer::RemoteCommandBuffer(WebCore::WebGPU::CommandBuffer& commandBuffer, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteCommandBuffer);
+
+RemoteCommandBuffer::RemoteCommandBuffer(WebCore::WebGPU::CommandBuffer& commandBuffer, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, RemoteGPU& gpu, WebGPUIdentifier identifier)
     : m_backing(commandBuffer)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTFMove(streamConnection))
+    , m_gpu(gpu)
     , m_identifier(identifier)
 {
     m_streamConnection->startReceivingMessages(*this, Messages::RemoteCommandBuffer::messageReceiverName(), m_identifier.toUInt64());
@@ -48,7 +52,7 @@ RemoteCommandBuffer::~RemoteCommandBuffer() = default;
 
 void RemoteCommandBuffer::destruct()
 {
-    m_objectHeap.removeObject(m_identifier);
+    m_objectHeap->removeObject(m_identifier);
 }
 
 void RemoteCommandBuffer::stopListeningForIPC()

@@ -136,11 +136,6 @@ WKStringRef WKBundleFrameCopyCounterValue(WKBundleFrameRef frameRef, JSObjectRef
     return WebKit::toCopiedAPI(WebKit::toImpl(frameRef)->counterValue(element));
 }
 
-WKStringRef WKBundleFrameCopyInnerText(WKBundleFrameRef frameRef)
-{
-    return WebKit::toCopiedAPI(WebKit::toImpl(frameRef)->innerText());
-}
-
 unsigned WKBundleFrameGetPendingUnloadCount(WKBundleFrameRef frameRef)
 {
     return WebKit::toImpl(frameRef)->pendingUnloadCount();
@@ -153,9 +148,8 @@ WKBundlePageRef WKBundleFrameGetPage(WKBundleFrameRef frameRef)
 
 void WKBundleFrameClearOpener(WKBundleFrameRef frameRef)
 {
-    auto* coreFrame = WebKit::toImpl(frameRef)->coreLocalFrame();
-    if (coreFrame)
-        coreFrame->loader().setOpener(nullptr);
+    if (auto* coreFrame = WebKit::toImpl(frameRef)->coreLocalFrame())
+        coreFrame->setOpener(nullptr);
 }
 
 void WKBundleFrameStopLoading(WKBundleFrameRef frameRef)
@@ -293,7 +287,7 @@ void WKBundleFrameFocus(WKBundleFrameRef frameRef)
     if (!coreFrame)
         return;
 
-    CheckedRef(coreFrame->page()->focusController())->setFocusedFrame(coreFrame.get());
+    coreFrame->page()->checkedFocusController()->setFocusedFrame(coreFrame.get());
 }
 
 void _WKBundleFrameGenerateTestReport(WKBundleFrameRef frameRef, WKStringRef message, WKStringRef group)
@@ -304,4 +298,27 @@ void _WKBundleFrameGenerateTestReport(WKBundleFrameRef frameRef, WKStringRef mes
 
     if (RefPtr document = coreFrame->document())
         document->reportingScope().generateTestReport(WebKit::toWTFString(message), WebKit::toWTFString(group));
+}
+
+void* WKAccessibilityRootObject(WKBundleFrameRef frameRef)
+{
+    RefPtr frame = WebKit::toImpl(frameRef)->coreLocalFrame();
+    if (!frame)
+        return nullptr;
+
+    WebCore::AXObjectCache::enableAccessibility();
+
+    RefPtr document = frame->rootFrame().document();
+    if (!document)
+        return nullptr;
+
+    CheckedPtr axObjectCache = document->axObjectCache();
+    if (!axObjectCache)
+        return nullptr;
+
+    auto* root = axObjectCache->rootObject();
+    if (!root)
+        return nullptr;
+
+    return root->wrapper();
 }

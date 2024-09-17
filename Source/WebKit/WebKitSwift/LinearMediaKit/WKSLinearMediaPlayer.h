@@ -28,11 +28,34 @@
 #if defined(TARGET_OS_VISION) && TARGET_OS_VISION
 
 #import <UIKit/UIKit.h>
-#import <WebKitSwift/WKSLinearMediaTypes.h>
+
+#if __has_include(<xpc/xpc.h>)
+#import <xpc/xpc.h>
+#else
+// Avoid importing <wtf/spi/darwin/XPCSPI.h> since this header needs to be parsed as a module, and
+// XPCSPI.h has some non-modular includes.
+OS_OBJECT_DECL(xpc_object);
+#endif
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class LMPlayableViewController;
+@class WKSLinearMediaContentMetadata;
 @class WKSLinearMediaPlayer;
+@class WKSLinearMediaTimeRange;
+@class WKSLinearMediaTrack;
+
+typedef NS_ENUM(NSInteger, WKSLinearMediaContentMode);
+typedef NS_ENUM(NSInteger, WKSLinearMediaContentType);
+typedef NS_ENUM(NSInteger, WKSLinearMediaPresentationState);
+typedef NS_ENUM(NSInteger, WKSLinearMediaViewingMode);
+
+typedef NS_OPTIONS(NSInteger, WKSLinearMediaFullscreenBehaviors) {
+    WKSLinearMediaFullscreenBehaviorsSceneResize = 1 << 0,
+    WKSLinearMediaFullscreenBehaviorsSceneSizeRestrictions = 1 << 1,
+    WKSLinearMediaFullscreenBehaviorsSceneChromeOptions = 1 << 2,
+    WKSLinearMediaFullscreenBehaviorsHostContentInline = 1 << 3,
+};
 
 API_AVAILABLE(visionos(1.0))
 @protocol WKSLinearMediaPlayerDelegate <NSObject>
@@ -64,22 +87,20 @@ API_AVAILABLE(visionos(1.0))
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player updateVideoBounds:(CGRect)videoBounds;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player updateViewingMode:(WKSLinearMediaViewingMode)viewingMode;
 - (void)linearMediaPlayerTogglePip:(WKSLinearMediaPlayer *)player;
-- (void)linearMediaPlayerToggleInlineMode:(WKSLinearMediaPlayer *)player;
-- (void)linearMediaPlayerWillEnterFullscreen:(WKSLinearMediaPlayer *)player;
-- (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player didEnterFullscreenWithError:(NSError * _Nullable)error;
-- (void)linearMediaPlayerWillExitFullscreen:(WKSLinearMediaPlayer *)player;
-- (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player didExitFullscreenWithError:(NSError * _Nullable)error;
+- (void)linearMediaPlayerEnterFullscreen:(WKSLinearMediaPlayer *)player;
+- (void)linearMediaPlayerExitFullscreen:(WKSLinearMediaPlayer *)player;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setTimeResolverInterval:(NSTimeInterval)interval;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setTimeResolverResolution:(NSTimeInterval)resolution;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setThumbnailSize:(CGSize)size;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player seekThumbnailToTime:(NSTimeInterval)time;
+- (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setVideoReceiverEndpoint:(xpc_object_t)videoReceiverEndpoint;
 @end
 
 API_AVAILABLE(visionos(1.0))
 @interface WKSLinearMediaPlayer : NSObject
 @property (nonatomic, weak, nullable) id <WKSLinearMediaPlayerDelegate> delegate;
 @property (nonatomic) double selectedPlaybackRate;
-@property (nonatomic) WKSLinearMediaPresentationMode presentationMode;
+@property (nonatomic, readonly) WKSLinearMediaPresentationState presentationState;
 @property (nonatomic, strong, nullable) NSError *error;
 @property (nonatomic) BOOL canTogglePlayback;
 @property (nonatomic) BOOL requiresLinearPlayback;
@@ -105,7 +126,7 @@ API_AVAILABLE(visionos(1.0))
 @property (nonatomic, copy) NSArray<UIViewController *> *contentInfoViewControllers;
 @property (nonatomic, copy) NSArray<UIAction *> *contextualActions;
 @property (nonatomic, strong, nullable) UIView *contextualActionsInfoView;
-@property (nonatomic, strong, nullable) NSValue *contentDimensions;
+@property (nonatomic) CGSize contentDimensions;
 @property (nonatomic) WKSLinearMediaContentMode contentMode;
 @property (nonatomic, strong, nullable) CALayer *videoLayer;
 @property (nonatomic) WKSLinearMediaViewingMode anticipatedViewingMode;
@@ -122,18 +143,24 @@ API_AVAILABLE(visionos(1.0))
 @property (nonatomic, strong, nullable) WKSLinearMediaTrack *currentLegibleTrack;
 @property (nonatomic, copy) NSArray<WKSLinearMediaTrack *> *legibleTracks;
 @property (nonatomic) WKSLinearMediaContentType contentType;
+@property (nonatomic, strong) WKSLinearMediaContentMetadata *contentMetadata;
 @property (nonatomic) BOOL transportBarIncludesTitleView;
 @property (nonatomic, copy, nullable) NSData *artwork;
 @property (nonatomic) BOOL isPlayableOffline;
 @property (nonatomic) BOOL allowPip;
 @property (nonatomic) BOOL allowFullScreenFromInline;
-@property (nonatomic, strong, nullable) NSNumber *isLiveStream;
+@property (nonatomic) BOOL isLiveStream;
+@property (nonatomic) BOOL isSpatial;
 @property (nonatomic, strong, nullable) NSNumber *recommendedViewingRatio;
 @property (nonatomic) WKSLinearMediaFullscreenBehaviors fullscreenSceneBehaviors;
 @property (nonatomic) double startTime;
 @property (nonatomic) double endTime;
 @property (nonatomic, strong, nullable) NSDate *startDate;
 @property (nonatomic, strong, nullable) NSDate *endDate;
+
+- (LMPlayableViewController *)makeViewController;
+- (void)enterFullscreenWithCompletionHandler:(void (^)(BOOL, NSError * _Nullable))completionHandler;
+- (void)exitFullscreenWithCompletionHandler:(void (^)(BOOL, NSError * _Nullable))completionHandler;
 @end
 
 NS_ASSUME_NONNULL_END

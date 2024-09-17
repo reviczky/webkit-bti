@@ -33,6 +33,11 @@
 #include <WebCore/WebGPUCommandEncoderDescriptor.h>
 #include <WebCore/WebGPUDevice.h>
 #include <wtf/Deque.h>
+#include <wtf/TZoneMalloc.h>
+
+#if PLATFORM(COCOA) && ENABLE(VIDEO)
+#include <WebCore/MediaPlayerIdentifier.h>
+#endif
 
 namespace WebKit::WebGPU {
 
@@ -40,7 +45,7 @@ class ConvertToBackingContext;
 class RemoteQueueProxy;
 
 class RemoteDeviceProxy final : public WebCore::WebGPU::Device {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteDeviceProxy);
 public:
     static Ref<RemoteDeviceProxy> create(Ref<WebCore::WebGPU::SupportedFeatures>&& features, Ref<WebCore::WebGPU::SupportedLimits>&& limits, RemoteAdapterProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier, WebGPUIdentifier queueIdentifier)
     {
@@ -51,6 +56,7 @@ public:
 
     RemoteAdapterProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent->root(); }
+    WebGPUIdentifier backing() const { return m_backing; }
 
 private:
     friend class DowncastConvertToBackingContext;
@@ -62,48 +68,44 @@ private:
     RemoteDeviceProxy& operator=(const RemoteDeviceProxy&) = delete;
     RemoteDeviceProxy& operator=(RemoteDeviceProxy&&) = delete;
 
-    WebGPUIdentifier backing() const { return m_backing; }
-    
-    static inline constexpr Seconds defaultSendTimeout = 30_s;
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
     {
-        return root().streamClientConnection().send(WTFMove(message), backing(), defaultSendTimeout);
-    }
-    template<typename T>
-    WARN_UNUSED_RETURN IPC::Connection::SendSyncResult<T> sendSync(T&& message)
-    {
-        return root().streamClientConnection().sendSync(WTFMove(message), backing(), defaultSendTimeout);
+        return root().streamClientConnection().send(WTFMove(message), backing());
     }
     template<typename T, typename C>
     WARN_UNUSED_RETURN IPC::StreamClientConnection::AsyncReplyID sendWithAsyncReply(T&& message, C&& completionHandler)
     {
-        return root().streamClientConnection().sendWithAsyncReply(WTFMove(message), completionHandler, backing(), defaultSendTimeout);
+        return root().streamClientConnection().sendWithAsyncReply(WTFMove(message), completionHandler, backing());
     }
 
     Ref<WebCore::WebGPU::Queue> queue() final;
 
     void destroy() final;
 
-    Ref<WebCore::WebGPU::Buffer> createBuffer(const WebCore::WebGPU::BufferDescriptor&) final;
-    Ref<WebCore::WebGPU::Texture> createTexture(const WebCore::WebGPU::TextureDescriptor&) final;
-    Ref<WebCore::WebGPU::Sampler> createSampler(const WebCore::WebGPU::SamplerDescriptor&) final;
-    Ref<WebCore::WebGPU::ExternalTexture> importExternalTexture(const WebCore::WebGPU::ExternalTextureDescriptor&) final;
+    RefPtr<WebCore::WebGPU::XRBinding> createXRBinding() final;
+    RefPtr<WebCore::WebGPU::Buffer> createBuffer(const WebCore::WebGPU::BufferDescriptor&) final;
+    RefPtr<WebCore::WebGPU::Texture> createTexture(const WebCore::WebGPU::TextureDescriptor&) final;
+    RefPtr<WebCore::WebGPU::Sampler> createSampler(const WebCore::WebGPU::SamplerDescriptor&) final;
+    RefPtr<WebCore::WebGPU::ExternalTexture> importExternalTexture(const WebCore::WebGPU::ExternalTextureDescriptor&) final;
+#if PLATFORM(COCOA) && ENABLE(VIDEO)
+    void updateExternalTexture(const WebCore::WebGPU::ExternalTexture&, const WebCore::MediaPlayerIdentifier&) final;
+#endif
 
-    Ref<WebCore::WebGPU::BindGroupLayout> createBindGroupLayout(const WebCore::WebGPU::BindGroupLayoutDescriptor&) final;
-    Ref<WebCore::WebGPU::PipelineLayout> createPipelineLayout(const WebCore::WebGPU::PipelineLayoutDescriptor&) final;
-    Ref<WebCore::WebGPU::BindGroup> createBindGroup(const WebCore::WebGPU::BindGroupDescriptor&) final;
+    RefPtr<WebCore::WebGPU::BindGroupLayout> createBindGroupLayout(const WebCore::WebGPU::BindGroupLayoutDescriptor&) final;
+    RefPtr<WebCore::WebGPU::PipelineLayout> createPipelineLayout(const WebCore::WebGPU::PipelineLayoutDescriptor&) final;
+    RefPtr<WebCore::WebGPU::BindGroup> createBindGroup(const WebCore::WebGPU::BindGroupDescriptor&) final;
 
-    Ref<WebCore::WebGPU::ShaderModule> createShaderModule(const WebCore::WebGPU::ShaderModuleDescriptor&) final;
-    Ref<WebCore::WebGPU::ComputePipeline> createComputePipeline(const WebCore::WebGPU::ComputePipelineDescriptor&) final;
-    Ref<WebCore::WebGPU::RenderPipeline> createRenderPipeline(const WebCore::WebGPU::RenderPipelineDescriptor&) final;
-    void createComputePipelineAsync(const WebCore::WebGPU::ComputePipelineDescriptor&, CompletionHandler<void(RefPtr<WebCore::WebGPU::ComputePipeline>&&)>&&) final;
-    void createRenderPipelineAsync(const WebCore::WebGPU::RenderPipelineDescriptor&, CompletionHandler<void(RefPtr<WebCore::WebGPU::RenderPipeline>&&)>&&) final;
+    RefPtr<WebCore::WebGPU::ShaderModule> createShaderModule(const WebCore::WebGPU::ShaderModuleDescriptor&) final;
+    RefPtr<WebCore::WebGPU::ComputePipeline> createComputePipeline(const WebCore::WebGPU::ComputePipelineDescriptor&) final;
+    RefPtr<WebCore::WebGPU::RenderPipeline> createRenderPipeline(const WebCore::WebGPU::RenderPipelineDescriptor&) final;
+    void createComputePipelineAsync(const WebCore::WebGPU::ComputePipelineDescriptor&, CompletionHandler<void(RefPtr<WebCore::WebGPU::ComputePipeline>&&, String&&)>&&) final;
+    void createRenderPipelineAsync(const WebCore::WebGPU::RenderPipelineDescriptor&, CompletionHandler<void(RefPtr<WebCore::WebGPU::RenderPipeline>&&, String&&)>&&) final;
 
-    Ref<WebCore::WebGPU::CommandEncoder> createCommandEncoder(const std::optional<WebCore::WebGPU::CommandEncoderDescriptor>&) final;
-    Ref<WebCore::WebGPU::RenderBundleEncoder> createRenderBundleEncoder(const WebCore::WebGPU::RenderBundleEncoderDescriptor&) final;
+    RefPtr<WebCore::WebGPU::CommandEncoder> createCommandEncoder(const std::optional<WebCore::WebGPU::CommandEncoderDescriptor>&) final;
+    RefPtr<WebCore::WebGPU::RenderBundleEncoder> createRenderBundleEncoder(const WebCore::WebGPU::RenderBundleEncoderDescriptor&) final;
 
-    Ref<WebCore::WebGPU::QuerySet> createQuerySet(const WebCore::WebGPU::QuerySetDescriptor&) final;
+    RefPtr<WebCore::WebGPU::QuerySet> createQuerySet(const WebCore::WebGPU::QuerySetDescriptor&) final;
 
     void pushErrorScope(WebCore::WebGPU::ErrorFilter) final;
     void popErrorScope(CompletionHandler<void(bool, std::optional<WebCore::WebGPU::Error>&&)>&&) final;

@@ -31,10 +31,12 @@
 
 #include "APIPageConfiguration.h"
 #include "AcceleratedBackingStore.h"
+#include "Display.h"
 #include "DragSource.h"
 #include "DrawingAreaProxyCoordinatedGraphics.h"
 #include "DropTarget.h"
 #include "EditorState.h"
+#include "GtkSettingsManager.h"
 #include "InputMethodFilter.h"
 #include "KeyAutoRepeatHandler.h"
 #include "KeyBindingTranslator.h"
@@ -63,13 +65,11 @@
 #include "WebProcessPool.h"
 #include "WebUserContentControllerProxy.h"
 #include <WebCore/ActivityState.h>
-#include <WebCore/CairoUtilities.h>
 #include <WebCore/GRefPtrGtk.h>
 #include <WebCore/GUniquePtrGtk.h>
 #include <WebCore/GtkUtilities.h>
 #include <WebCore/GtkVersioning.h>
 #include <WebCore/NotImplemented.h>
-#include <WebCore/PlatformDisplay.h>
 #include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMouseEvent.h>
 #include <WebCore/PointerEvent.h>
@@ -251,7 +251,7 @@ typedef HashMap<uint32_t, GRefPtr<GdkEvent>> TouchEventsMap;
 
 struct _WebKitWebViewBasePrivate {
     _WebKitWebViewBasePrivate()
-        : updateActivityStateTimer(RunLoop::main(), this, &_WebKitWebViewBasePrivate::updateActivityStateTimerFired)
+        : pageScaleFactor(1.0)
 #if GTK_CHECK_VERSION(3, 24, 0)
         , releaseEmojiChooserTimer(RunLoop::main(), this, &_WebKitWebViewBasePrivate::releaseEmojiChooserTimerFired)
 #endif
@@ -261,14 +261,6 @@ struct _WebKitWebViewBasePrivate {
         releaseEmojiChooserTimer.setPriority(RunLoopSourcePriority::ReleaseUnusedResourcesTimer);
 #endif
         nextPresentationUpdateTimer.setPriority(GDK_PRIORITY_REDRAW - 10);
-    }
-
-    void updateActivityStateTimerFired()
-    {
-        if (!pageProxy)
-            return;
-        pageProxy->activityStateDidChange(activityStateFlagsToUpdate);
-        activityStateFlagsToUpdate = { };
     }
 
 #if GTK_CHECK_VERSION(3, 24, 0)
@@ -341,12 +333,9 @@ struct _WebKitWebViewBasePrivate {
 
     ToplevelWindow* toplevelOnScreenWindow { nullptr };
 
-    // View State.
     OptionSet<ActivityState> activityState;
-    OptionSet<ActivityState> activityStateFlagsToUpdate;
-    RunLoop::Timer updateActivityStateTimer;
-
     PlatformDisplayID displayID;
+    double pageScaleFactor; // Adjusts all CSS units to match fontDPI
 
 #if ENABLE(FULLSCREEN_API)
     WebFullScreenManagerProxy::FullscreenState fullScreenState;
@@ -432,6 +421,26 @@ webkitWebViewBaseAccessibleInterfaceInit(GtkAccessibleInterface* iface)
 }
 #endif
 
+static void refreshInternalScaling(WebKitWebViewBase* self)
+{
+    // We have for the moment settled on the scheme of entirely trusting
+    // fontDPI to determine the overall page scaling of the web view, and not
+    // performing any separate font scaling. The page scaling ensures the fonts
+    // are the specified size, and scaling the entire page, as opposed to just
+    // the fonts, ensures that the layout is self-consistent (i.e., that divs
+    // or other boxes holding text won't find their contents overflowing or
+    // wrapping weirdly.
+
+    double newPageScale = WebCore::fontDPI() / 96.;
+
+    // Adjust the page zoom if needed, updating the internal scale factor.
+    if (std::abs(newPageScale / self->priv->pageScaleFactor - 1.) > 0.02) {
+        auto* page = webkitWebViewBaseGetPage(self);
+        page->setPageZoomFactor(page->pageZoomFactor() * newPageScale / self->priv->pageScaleFactor);
+        self->priv->pageScaleFactor = newPageScale;
+    }
+}
+
 static void webkitWebViewBaseUpdateDisplayID(WebKitWebViewBase* webViewBase, GdkMonitor* monitor)
 {
     if (!monitor)
@@ -442,18 +451,9 @@ static void webkitWebViewBaseUpdateDisplayID(WebKitWebViewBase* webViewBase, Gdk
         return;
 
     webViewBase->priv->displayID = displayID;
+    refreshInternalScaling(webViewBase);
     if (webViewBase->priv->pageProxy)
         webViewBase->priv->pageProxy->windowScreenDidChange(displayID);
-}
-
-static void webkitWebViewBaseScheduleUpdateActivityState(WebKitWebViewBase* webViewBase, OptionSet<ActivityState> flagsToUpdate)
-{
-    WebKitWebViewBasePrivate* priv = webViewBase->priv;
-    priv->activityStateFlagsToUpdate.add(flagsToUpdate);
-    if (priv->updateActivityStateTimer.isActive())
-        return;
-
-    priv->updateActivityStateTimer.startOneShot(0_s);
 }
 
 void webkitWebViewBaseToplevelWindowIsActiveChanged(WebKitWebViewBase* webViewBase, bool isActive)
@@ -476,7 +476,7 @@ void webkitWebViewBaseToplevelWindowIsActiveChanged(WebKitWebViewBase* webViewBa
             priv->inputMethodFilter.notifyFocusedOut();
 #endif
     }
-    webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::WindowIsActive);
+    priv->pageProxy->activityStateDidChange(ActivityState::WindowIsActive);
 }
 
 void webkitWebViewBaseToplevelWindowStateChanged(WebKitWebViewBase* webViewBase, uint32_t changedMask, uint32_t state)
@@ -529,7 +529,7 @@ void webkitWebViewBaseToplevelWindowStateChanged(WebKitWebViewBase* webViewBase,
             return;
         priv->activityState.remove(ActivityState::IsVisible);
     }
-    webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::IsVisible);
+    priv->pageProxy->activityStateDidChange(ActivityState::IsVisible);
 }
 
 void webkitWebViewBaseToplevelWindowMonitorChanged(WebKitWebViewBase* webViewBase, GdkMonitor* monitor)
@@ -538,12 +538,12 @@ void webkitWebViewBaseToplevelWindowMonitorChanged(WebKitWebViewBase* webViewBas
     if (priv->toplevelOnScreenWindow->isInMonitor()) {
         if (!(priv->activityState & ActivityState::IsVisible) && gtk_widget_get_mapped(GTK_WIDGET(webViewBase)) && !priv->toplevelOnScreenWindow->isMinimized()) {
             priv->activityState.add(ActivityState::IsVisible);
-            webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::IsVisible);
+            priv->pageProxy->activityStateDidChange(ActivityState::IsVisible);
         }
     } else {
         if (priv->activityState & ActivityState::IsVisible) {
             priv->activityState.remove(ActivityState::IsVisible);
-            webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::IsVisible);
+            priv->pageProxy->activityStateDidChange(ActivityState::IsVisible);
         }
     }
     webkitWebViewBaseUpdateDisplayID(webViewBase, monitor);
@@ -572,7 +572,7 @@ static void webkitWebViewBaseSetToplevelOnScreenWindow(WebKitWebViewBase* webVie
 #if ENABLE(DEVELOPER_MODE)
         // Xvfb doesn't support toplevel focus, so gtk_window_is_active() always returns false. We consider
         // toplevel window to be always active since it's the only one.
-        if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::X11) {
+        if (Display::singleton().isX11()) {
             if (!g_strcmp0(g_getenv("UNDER_XVFB"), "yes")) {
                 priv->activityState.add(ActivityState::WindowIsActive);
                 flagsToUpdate.add(ActivityState::WindowIsActive);
@@ -598,7 +598,7 @@ static void webkitWebViewBaseSetToplevelOnScreenWindow(WebKitWebViewBase* webVie
     }
 
     if (flagsToUpdate)
-        webkitWebViewBaseScheduleUpdateActivityState(webViewBase, flagsToUpdate);
+        priv->pageProxy->activityStateDidChange(flagsToUpdate);
 }
 
 static void webkitWebViewBaseRealize(GtkWidget* widget)
@@ -853,6 +853,7 @@ static void webkitWebViewBaseDispose(GObject* gobject)
         webkitWebViewAccessibleSetWebView(WEBKIT_WEB_VIEW_ACCESSIBLE(webView->priv->accessible.get()), nullptr);
 #endif
 
+    GtkSettingsManager::singleton().removeObserver(webView);
     webkitWebViewBaseSetToplevelOnScreenWindow(webView, nullptr);
 #if GTK_CHECK_VERSION(3, 24, 0)
     webkitWebViewBaseCompleteEmojiChooserRequest(webView, emptyString());
@@ -1089,7 +1090,7 @@ static void webkitWebViewBaseMap(GtkWidget* widget)
         return;
 
     priv->activityState.add(ActivityState::IsVisible);
-    webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::IsVisible);
+    priv->pageProxy->activityStateDidChange(ActivityState::IsVisible);
 }
 
 static void webkitWebViewBaseUnmap(GtkWidget* widget)
@@ -1102,7 +1103,7 @@ static void webkitWebViewBaseUnmap(GtkWidget* widget)
         return;
 
     priv->activityState.remove(ActivityState::IsVisible);
-    webkitWebViewBaseScheduleUpdateActivityState(webViewBase, ActivityState::IsVisible);
+    priv->pageProxy->activityStateDidChange(ActivityState::IsVisible);
 }
 
 static bool shouldForwardWheelEvent(WebKitWebViewBase* webViewBase, GdkEvent* event)
@@ -1721,7 +1722,7 @@ static gboolean webkitWebViewBaseCrossingNotifyEvent(GtkWidget* widget, GdkEvent
     // Do not send mouse move events to the WebProcess for crossing events during testing.
     // WTR never generates crossing events and they can confuse tests.
     // https://bugs.webkit.org/show_bug.cgi?id=185072.
-    if (UNLIKELY(priv->pageProxy->process().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
+    if (UNLIKELY(priv->pageProxy->configuration().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
         return GDK_EVENT_PROPAGATE;
 #endif
 
@@ -1772,7 +1773,7 @@ static void webkitWebViewBaseEnter(WebKitWebViewBase* webViewBase, double x, dou
     // Do not send mouse move events to the WebProcess for crossing events during testing.
     // WTR never generates crossing events and they can confuse tests.
     // https://bugs.webkit.org/show_bug.cgi?id=185072.
-    if (UNLIKELY(priv->pageProxy->process().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
+    if (UNLIKELY(priv->pageProxy->configuration().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
         return;
 #endif
 
@@ -1812,7 +1813,7 @@ static void webkitWebViewBaseLeave(WebKitWebViewBase* webViewBase, GdkCrossingMo
     // Do not send mouse move events to the WebProcess for crossing events during testing.
     // WTR never generates crossing events and they can confuse tests.
     // https://bugs.webkit.org/show_bug.cgi?id=185072.
-    if (UNLIKELY(priv->pageProxy->process().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
+    if (UNLIKELY(priv->pageProxy->configuration().processPool().configuration().fullySynchronousModeIsAllowedForTesting()))
         return;
 #endif
 
@@ -2563,32 +2564,41 @@ WebPageProxy* webkitWebViewBaseGetPage(WebKitWebViewBase* webkitWebViewBase)
     return webkitWebViewBase->priv->pageProxy.get();
 }
 
+double webkitWebViewBaseGetPageScale(WebKitWebViewBase* webkitWebViewBase)
+{
+    return webkitWebViewBase->priv->pageScaleFactor;
+}
+
 static void deviceScaleFactorChanged(WebKitWebViewBase* webkitWebViewBase)
 {
     webkitWebViewBase->priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
+    refreshInternalScaling(webkitWebViewBase);
 }
 
 void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<API::PageConfiguration>&& configuration)
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
 
-    WebProcessPool* processPool = configuration->processPool();
-    if (!processPool) {
-        auto processPoolConfiguration = API::ProcessPoolConfiguration::create();
-        processPool = &WebProcessPool::create(processPoolConfiguration).leakRef();
-        configuration->setProcessPool(processPool);
-    }
-
-    priv->pageProxy = processPool->createWebPage(*priv->pageClient, WTFMove(configuration));
+    WebProcessPool& processPool = configuration->processPool();
+    priv->pageProxy = processPool.createWebPage(*priv->pageClient, WTFMove(configuration));
     priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
     priv->acceleratedBackingStore = AcceleratedBackingStore::create(*priv->pageProxy);
-    priv->pageProxy->initializeWebPage();
+
+    auto& openerInfo = priv->pageProxy->configuration().openerInfo();
+    priv->pageProxy->initializeWebPage(openerInfo ? openerInfo->site : Site(aboutBlankURL()));
 
     if (priv->displayID)
         priv->pageProxy->windowScreenDidChange(priv->displayID);
 
+    refreshInternalScaling(webkitWebViewBase);
     // We attach this here, because changes in scale factor are passed directly to the page proxy.
     g_signal_connect(webkitWebViewBase, "notify::scale-factor", G_CALLBACK(deviceScaleFactorChanged), nullptr);
+    // Also watch for changes to xft-dpi
+    GtkSettingsManager::singleton().addObserver([webkitWebViewBase](const GtkSettingsState& state) {
+        if (!state.xftDPI)
+            return;
+        refreshInternalScaling(webkitWebViewBase);
+    }, webkitWebViewBase);
 }
 
 void webkitWebViewBaseSetTooltipText(WebKitWebViewBase* webViewBase, const char* tooltip)
@@ -2810,7 +2820,7 @@ void webkitWebViewBaseSetFocus(WebKitWebViewBase* webViewBase, bool focused)
     } else
         priv->activityState.remove(ActivityState::IsFocused);
 
-    webkitWebViewBaseScheduleUpdateActivityState(webViewBase, flagsToUpdate);
+    priv->pageProxy->activityStateDidChange(flagsToUpdate);
 }
 
 void webkitWebViewBaseSetEditable(WebKitWebViewBase* webViewBase, bool editable)
@@ -2874,7 +2884,7 @@ bool webkitWebViewBaseIsFocused(WebKitWebViewBase* webViewBase)
 #if ENABLE(DEVELOPER_MODE)
     // Xvfb doesn't support toplevel focus, so the view is never focused. We consider it to tbe focused when
     // its window is marked as active.
-    if (WebCore::PlatformDisplay::sharedDisplay().type() == WebCore::PlatformDisplay::Type::X11) {
+    if (Display::singleton().isX11()) {
         if (!g_strcmp0(g_getenv("UNDER_XVFB"), "yes") && webViewBase->priv->activityState.contains(ActivityState::WindowIsActive))
             return true;
     }
@@ -3507,3 +3517,12 @@ void webkitWebViewBaseSetPlugID(WebKitWebViewBase* webViewBase, const String& pl
 #endif // GTK_ACCESSIBILITY_ATSPI
 }
 #endif
+
+RendererBufferFormat webkitWebViewBaseGetRendererBufferFormat(WebKitWebViewBase* webViewBase)
+{
+    auto* drawingArea = static_cast<DrawingAreaProxyCoordinatedGraphics*>(webViewBase->priv->pageProxy->drawingArea());
+    if (!drawingArea || !drawingArea->isInAcceleratedCompositingMode())
+        return { };
+
+    return webViewBase->priv->acceleratedBackingStore->bufferFormat();
+}

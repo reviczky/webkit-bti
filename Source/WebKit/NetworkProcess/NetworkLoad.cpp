@@ -41,10 +41,13 @@
 #include <WebCore/SharedBuffer.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkLoad);
 
 NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkLoadParameters&& parameters, NetworkSession& networkSession)
     : m_client(client)
@@ -321,6 +324,12 @@ void NetworkLoad::setH2PingCallback(const URL& url, CompletionHandler<void(Expec
         m_task->setH2PingCallback(url, WTFMove(completionHandler));
     else
         completionHandler(makeUnexpected(internalError(url)));
+}
+
+void NetworkLoad::setTimingAllowFailedFlag()
+{
+    if (m_task)
+        m_task->setTimingAllowFailedFlag();
 }
 
 String NetworkLoad::attributedBundleIdentifier(WebPageProxyIdentifier pageID)

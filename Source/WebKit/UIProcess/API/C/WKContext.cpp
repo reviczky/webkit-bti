@@ -169,6 +169,7 @@ void WKContextSetHistoryClient(WKContextRef contextRef, const WKContextHistoryCl
     }
 }
 
+// FIXME: Remove when rdar://133503931 is complete.
 void WKContextSetDownloadClient(WKContextRef context, const WKContextDownloadClientBase* wkClient)
 {
     class LegacyDownloadClient final : public API::Client<WKContextDownloadClientBase>, public API::DownloadClient {
@@ -251,11 +252,6 @@ void WKContextSetDownloadClient(WKContextRef context, const WKContextDownloadCli
         WKContextRef m_context;
     };
     WebKit::toImpl(context)->setLegacyDownloadClient(adoptRef(*new LegacyDownloadClient(wkClient, context)));
-}
-
-void WKContextSetConnectionClient(WKContextRef contextRef, const WKContextConnectionClientBase* wkClient)
-{
-    WebKit::toImpl(contextRef)->initializeConnectionClient(wkClient);
 }
 
 WKDownloadRef WKContextDownloadURLRequest(WKContextRef, WKURLRequestRef)

@@ -36,9 +36,13 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/StoredCredentialsPolicy.h>
+#include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(EarlyHintsResourceLoader);
 
 EarlyHintsResourceLoader::EarlyHintsResourceLoader(NetworkResourceLoader& loader)
     : m_loader(&loader)
@@ -142,7 +146,7 @@ void EarlyHintsResourceLoader::startPreconnectTask(const URL& baseURL, const Lin
     parameters.isNavigatingToAppBoundDomain = m_loader->parameters().isNavigatingToAppBoundDomain;
     (new PreconnectTask(*networkSession, WTFMove(parameters), [](const WebCore::ResourceError&, const WebCore::NetworkLoadMetrics&) { }))->start();
 
-    addConsoleMessage(MessageSource::Network, MessageLevel::Info, makeString("Preconnecting to "_s, url.string(), " due to early hint"));
+    addConsoleMessage(MessageSource::Network, MessageLevel::Info, makeString("Preconnecting to "_s, url.string(), " due to early hint"_s));
 #else
     UNUSED_PARAM(baseURL);
     UNUSED_PARAM(header);

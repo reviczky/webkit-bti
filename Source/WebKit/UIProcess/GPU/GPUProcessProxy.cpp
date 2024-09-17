@@ -54,6 +54,7 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/LogInitialization.h>
 #include <wtf/MachSendRight.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/TranslatedProcess.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -70,8 +71,8 @@
 #include <wtf/BlockPtr.h>
 #endif
 
-#if USE(GBM)
-#include <WebCore/PlatformDisplay.h>
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "DRMDevice.h"
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
@@ -109,6 +110,8 @@ static RefPtr<GPUProcessProxy>& keptAliveGPUProcessProxy()
     return keptAliveGPUProcessProxy.get();
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GPUProcessProxy);
+
 void GPUProcessProxy::keepProcessAliveTemporarily()
 {
     ASSERT(isMainRunLoop());
@@ -142,13 +145,9 @@ GPUProcessProxy* GPUProcessProxy::singletonIfCreated()
 }
 
 #if USE(SANDBOX_EXTENSIONS_FOR_CACHE_AND_TEMP_DIRECTORY_ACCESS)
-static String gpuProcessCachesDirectory(bool isExtension)
+static String gpuProcessCachesDirectory()
 {
-    ASCIILiteral cacheDirectory;
-    if (isExtension)
-        cacheDirectory = "/Library/Caches/com.apple.WebKit.GPUExtension/"_s;
-    else
-        cacheDirectory = "/Library/Caches/com.apple.WebKit.GPU/"_s;
+    constexpr ASCIILiteral cacheDirectory = "/Library/Caches/com.apple.WebKit.GPU/"_s;
 
     String path = WebsiteDataStore::cacheDirectoryInContainerOrHomeDirectory(cacheDirectory);
 
@@ -159,8 +158,7 @@ static String gpuProcessCachesDirectory(bool isExtension)
 #endif
 
 GPUProcessProxy::GPUProcessProxy()
-    : AuxiliaryProcessProxy()
-    , m_throttler(*this, WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion())
+    : AuxiliaryProcessProxy(WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion() ? ShouldTakeUIBackgroundAssertion::Yes : ShouldTakeUIBackgroundAssertion::No)
 #if ENABLE(MEDIA_STREAM)
     , m_useMockCaptureDevices(MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled())
 #endif
@@ -186,15 +184,11 @@ GPUProcessProxy::GPUProcessProxy()
     parameters.parentPID = getCurrentProcessID();
 
 #if USE(SANDBOX_EXTENSIONS_FOR_CACHE_AND_TEMP_DIRECTORY_ACCESS)
-    bool isExtension = false;
-#if USE(EXTENSIONKIT)
-    isExtension = !!extensionProcess();
-#endif
-    auto containerCachesDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(gpuProcessCachesDirectory(isExtension));
+    parameters.containerCachesDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(gpuProcessCachesDirectory());
     auto containerTemporaryDirectory = WebsiteDataStore::defaultResolvedContainerTemporaryDirectory();
 
-    if (!containerCachesDirectory.isEmpty()) {
-        if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(containerCachesDirectory, SandboxExtension::Type::ReadWrite))
+    if (!parameters.containerCachesDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(parameters.containerCachesDirectory, SandboxExtension::Type::ReadWrite))
             parameters.containerCachesDirectoryExtensionHandle = WTFMove(*handle);
     }
 
@@ -211,7 +205,7 @@ GPUProcessProxy::GPUProcessProxy()
 #endif
 
 #if USE(GBM)
-    parameters.renderDeviceFile = WebCore::PlatformDisplay::sharedDisplay().drmRenderNodeFile();
+    parameters.renderDeviceFile = drmRenderNodeDevice();
 #endif
 
     platformInitializeGPUProcessParameters(parameters);
@@ -221,7 +215,7 @@ GPUProcessProxy::GPUProcessProxy()
 #endif
 
     // Initialize the GPU process.
-    send(Messages::GPUProcess::InitializeGPUProcess(WTFMove(parameters)), 0);
+    sendWithAsyncReply(Messages::GPUProcess::InitializeGPUProcess(WTFMove(parameters)), [initializationActivityAndGrant = initializationActivityAndGrant()] { });
 
 #if HAVE(AUDIO_COMPONENT_SERVER_REGISTRATIONS) && ENABLE(AUDIO_COMPONENT_SERVER_REGISTRATIONS_IN_GPU_PROCESS)
     auto registrations = fetchAudioComponentServerRegistrations();
@@ -296,21 +290,21 @@ static inline bool addCameraSandboxExtensions(Vector<SandboxExtension::Handle>& 
             // Needed for rdar://108282689:
             auto appleCameraUserClientExtensionHandle = SandboxExtension::createHandleForMachLookup(appleCameraUserClientPath, std::nullopt);
             if (!appleCameraUserClientExtensionHandle) {
-                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientPath.characters8());
+                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientPath.characters());
                 return false;
             }
             extensions.append(WTFMove(*appleCameraUserClientExtensionHandle));
 
             auto appleCameraUserClientIOKitClientClassExtensionHandle = SandboxExtension::createHandleForIOKitClassExtension(appleCameraUserClientIOKitClientClass, std::nullopt);
             if (!appleCameraUserClientIOKitClientClassExtensionHandle) {
-                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientIOKitClientClass.characters8());
+                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientIOKitClientClass.characters());
                 return false;
             }
             extensions.append(WTFMove(*appleCameraUserClientIOKitClientClassExtensionHandle));
 
             auto appleCameraUserClientIOKitServiceClassExtensionHandle = SandboxExtension::createHandleForIOKitClassExtension(appleCameraUserClientIOKitServiceClass, std::nullopt);
             if (!appleCameraUserClientIOKitServiceClassExtensionHandle) {
-                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientIOKitServiceClass.characters8());
+                RELEASE_LOG_ERROR(WebRTC, "Unable to create %s sandbox extension", appleCameraUserClientIOKitServiceClass.characters());
                 return false;
             }
             extensions.append(WTFMove(*appleCameraUserClientIOKitServiceClassExtensionHandle));
@@ -394,7 +388,7 @@ void GPUProcessProxy::updateSandboxAccess(bool allowAudioCapture, bool allowVide
         m_hasSentMicrophoneSandboxExtension = true;
 
 #if HAVE(SCREEN_CAPTURE_KIT)
-    if (allowDisplayCapture && !m_hasSentDisplayCaptureSandboxExtension && addDisplayCaptureSandboxExtension(connection()->getAuditToken(), extensions))
+    if (allowDisplayCapture && !m_hasSentDisplayCaptureSandboxExtension && addDisplayCaptureSandboxExtension(connection().getAuditToken(), extensions))
         m_hasSentDisplayCaptureSandboxExtension = true;
 #endif
 
@@ -460,6 +454,11 @@ void GPUProcessProxy::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType
 {
     sendWithAsyncReply(Messages::GPUProcess::PromptForGetDisplayMedia { type }, WTFMove(completionHandler));
 }
+
+void GPUProcessProxy::cancelGetDisplayMediaPrompt()
+{
+    send(Messages::GPUProcess::CancelGetDisplayMediaPrompt { }, 0);
+}
 #endif
 
 void GPUProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
@@ -470,11 +469,13 @@ void GPUProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 
 void GPUProcessProxy::connectionWillOpen(IPC::Connection&)
 {
+    RELEASE_LOG(Process, "%p - GPUProcessProxy::connectionWillOpen:", this);
 }
 
 void GPUProcessProxy::processWillShutDown(IPC::Connection& connection)
 {
-    ASSERT_UNUSED(connection, this->connection() == &connection);
+    RELEASE_LOG(Process, "%p - GPUProcessProxy::processWillShutDown:", this);
+    ASSERT_UNUSED(connection, &this->connection() == &connection);
     if (singleton() == this)
         singleton() = nullptr;
 }
@@ -507,6 +508,11 @@ void GPUProcessProxy::createGPUProcessConnection(WebProcessProxy& webProcessProx
     }, 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
+void GPUProcessProxy::sharedPreferencesForWebProcessDidChange(WebProcessProxy& webProcessProxy, SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess, CompletionHandler<void()>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::GPUProcess::SharedPreferencesForWebProcessDidChange { webProcessProxy.coreProcessIdentifier(), WTFMove(sharedPreferencesForWebProcess) }, WTFMove(completionHandler));
+}
+
 void GPUProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
 {
     Ref protectedThis { *this };
@@ -518,12 +524,15 @@ void GPUProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
     case ProcessTerminationReason::IdleExit:
     case ProcessTerminationReason::Unresponsive:
     case ProcessTerminationReason::Crash:
-        RELEASE_LOG_ERROR(Process, "%p - GPUProcessProxy::gpuProcessExited: reason=%" PUBLIC_LOG_STRING, this, processTerminationReasonToString(reason));
+        RELEASE_LOG_ERROR(Process, "%p - GPUProcessProxy::gpuProcessExited: reason=%" PUBLIC_LOG_STRING, this, processTerminationReasonToString(reason).characters());
         break;
     case ProcessTerminationReason::ExceededProcessCountLimit:
     case ProcessTerminationReason::NavigationSwap:
     case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::RequestedByGPUProcess:
+    case ProcessTerminationReason::RequestedByModelProcess:
+    case ProcessTerminationReason::GPUProcessCrashedTooManyTimes:
+    case ProcessTerminationReason::ModelProcessCrashedTooManyTimes:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -553,6 +562,12 @@ void GPUProcessProxy::processIsReadyToExit()
     gpuProcessExited(ProcessTerminationReason::IdleExit); // May cause |this| to get deleted.
 }
 
+void GPUProcessProxy::childConnectionDidBecomeUnresponsive()
+{
+    RELEASE_LOG_ERROR(Process, "%p - GPUProcessProxy::childConnectionDidBecomeUnresponsive:", this);
+    didBecomeUnresponsive();
+}
+
 void GPUProcessProxy::terminateForTesting()
 {
     processIsReadyToExit();
@@ -569,7 +584,7 @@ void GPUProcessProxy::didClose(IPC::Connection&)
     gpuProcessExited(ProcessTerminationReason::Crash); // May cause |this| to get deleted.
 }
 
-void GPUProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void GPUProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t)
 {
     logInvalidMessage(connection, messageName);
 
@@ -585,6 +600,8 @@ void GPUProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC:
 
 void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
 {
+    RELEASE_LOG(Process, "%p - GPUProcessProxy::didFinishLaunching:", this);
+
     AuxiliaryProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
 
     if (!connectionIdentifier) {
@@ -592,10 +609,6 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
         return;
     }
     
-#if USE(RUNNINGBOARD)
-    m_throttler.didConnectToProcess(*this);
-#endif
-
 #if PLATFORM(COCOA)
     if (auto networkProcess = NetworkProcessProxy::defaultNetworkProcess())
         networkProcess->sendXPCEndpointToProcess(*this);
@@ -617,7 +630,19 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
         });
     }).get());
 #endif
+
+#if USE(EXTENSIONKIT)
+    sendBookmarkDataForCacheDirectory();
+#endif
 }
+
+#if ENABLE(WEBXR)
+void GPUProcessProxy::webXRPromptAccepted(std::optional<WebCore::ProcessIdentity> processIdentity, CompletionHandler<void(bool)>&& completion)
+{
+    sendWithAsyncReply(Messages::GPUProcess::WebXRPromptAccepted(WTFMove(processIdentity)), WTFMove(completion));
+}
+#endif
+
 
 void GPUProcessProxy::updateProcessAssertion()
 {
@@ -652,15 +677,16 @@ static inline GPUProcessSessionParameters gpuProcessSessionParameters(const Webs
 {
     GPUProcessSessionParameters parameters;
 
-    parameters.mediaCacheDirectory = store.resolvedMediaCacheDirectory();
+    auto& resolvedDirectories = const_cast<WebsiteDataStore&>(store).resolvedDirectories();
+    parameters.mediaCacheDirectory = resolvedDirectories.mediaCacheDirectory;
     SandboxExtension::Handle mediaCacheDirectoryExtensionHandle;
     if (!parameters.mediaCacheDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(parameters.mediaCacheDirectory, SandboxExtension::Type::ReadWrite))
             parameters.mediaCacheDirectorySandboxExtensionHandle = WTFMove(*handle);
     }
 
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-    parameters.mediaKeysStorageDirectory = store.resolvedMediaKeysDirectory();
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA) || ENABLE(ENCRYPTED_MEDIA)
+    parameters.mediaKeysStorageDirectory = resolvedDirectories.mediaKeysStorageDirectory;
     SandboxExtension::Handle mediaKeysStorageDirectorySandboxExtensionHandle;
     if (!parameters.mediaKeysStorageDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(parameters.mediaKeysStorageDirectory, SandboxExtension::Type::ReadWrite))
@@ -694,17 +720,20 @@ void GPUProcessProxy::removeSession(PAL::SessionID sessionID)
 
 void GPUProcessProxy::sendPrepareToSuspend(IsSuspensionImminent isSuspensionImminent, double remainingRunTime, CompletionHandler<void()>&& completionHandler)
 {
+    RELEASE_LOG(ProcessSuspension, "%p - GPUProcessProxy::sendPrepareToSuspend:", this);
     sendWithAsyncReply(Messages::GPUProcess::PrepareToSuspend(isSuspensionImminent == IsSuspensionImminent::Yes, MonotonicTime::now() + Seconds(remainingRunTime)), WTFMove(completionHandler), 0, { }, ShouldStartProcessThrottlerActivity::No);
 }
 
 void GPUProcessProxy::sendProcessDidResume(ResumeReason)
 {
+    RELEASE_LOG(ProcessSuspension, "%p - GPUProcessProxy::sendProcessDidResume:", this);
     if (canSendMessage())
         send(Messages::GPUProcess::ProcessDidResume(), 0);
 }
 
 void GPUProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProcessIdentifier)
 {
+    RELEASE_LOG_ERROR(Process, "GPUProcessProxy::terminateWebProcess: webProcessIdentifier=%" PRIu64, webProcessIdentifier.toUInt64());
     if (auto process = WebProcessProxy::processForIdentifier(webProcessIdentifier))
         process->requestTermination(ProcessTerminationReason::RequestedByGPUProcess);
 }
@@ -712,13 +741,13 @@ void GPUProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProcessI
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 void GPUProcessProxy::didCreateContextForVisibilityPropagation(WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier pageID, LayerHostingContextID contextID)
 {
-    RELEASE_LOG(Process, "GPUProcessProxy::didCreateContextForVisibilityPropagation: webPageProxyID: %" PRIu64 ", pagePID: %" PRIu64 ", contextID: %u", webPageProxyID.toUInt64(), pageID.toUInt64(), contextID);
+    RELEASE_LOG(Process, "%p - GPUProcessProxy::didCreateContextForVisibilityPropagation: webPageProxyID: %" PRIu64 ", pagePID: %" PRIu64 ", contextID: %u", this, webPageProxyID.toUInt64(), pageID.toUInt64(), contextID);
     auto page = WebProcessProxy::webPage(webPageProxyID);
     if (!page) {
-        RELEASE_LOG(Process, "GPUProcessProxy::didCreateContextForVisibilityPropagation() No WebPageProxy with this identifier");
+        RELEASE_LOG(Process, "%p - GPUProcessProxy::didCreateContextForVisibilityPropagation() No WebPageProxy with this identifier", this);
         return;
     }
-    if (page->webPageID() == pageID) {
+    if (page->webPageIDInMainFrameProcess() == pageID) {
         page->didCreateContextInGPUProcessForVisibilityPropagation(contextID);
         return;
     }
@@ -727,16 +756,11 @@ void GPUProcessProxy::didCreateContextForVisibilityPropagation(WebPageProxyIdent
         provisionalPage->didCreateContextInGPUProcessForVisibilityPropagation(contextID);
         return;
     }
-    RELEASE_LOG(Process, "GPUProcessProxy::didCreateContextForVisibilityPropagation() There was a WebPageProxy for this identifier, but it had the wrong WebPage identifier.");
+    RELEASE_LOG(Process, "%p - GPUProcessProxy::didCreateContextForVisibilityPropagation() There was a WebPageProxy for this identifier, but it had the wrong WebPage identifier.", this);
 }
 #endif
 
 #if PLATFORM(MAC)
-void GPUProcessProxy::displayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
-{
-    send(Messages::GPUProcess::DisplayConfigurationChanged { displayID, flags }, 0);
-}
-
 void GPUProcessProxy::setScreenProperties(const WebCore::ScreenProperties& properties)
 {
     send(Messages::GPUProcess::SetScreenProperties { properties }, 0);
@@ -777,7 +801,7 @@ void GPUProcessProxy::updateScreenPropertiesIfNeeded()
 
 void GPUProcessProxy::didBecomeUnresponsive()
 {
-    RELEASE_LOG_ERROR(Process, "GPUProcessProxy::didBecomeUnresponsive: GPUProcess with PID %d became unresponsive, terminating it", processID());
+    RELEASE_LOG_ERROR(Process, "%p - GPUProcessProxy::didBecomeUnresponsive: GPUProcess with PID %d became unresponsive, terminating it", this, processID());
     terminate();
     gpuProcessExited(ProcessTerminationReason::Unresponsive);
 }

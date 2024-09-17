@@ -348,7 +348,7 @@ void MemoryPressureMonitor::start()
 
     m_started = true;
 
-    Thread::create("MemoryPressureMonitor", [] {
+    Thread::create("MemoryPressureMonitor"_s, [] {
         FileHandle memInfoFile, zoneInfoFile, cgroupControllerFile;
         CGroupMemoryController memoryController = CGroupMemoryController();
         Seconds pollInterval = s_maxPollingInterval;

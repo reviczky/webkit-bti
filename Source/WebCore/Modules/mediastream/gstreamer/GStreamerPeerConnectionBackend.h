@@ -29,6 +29,15 @@
 #include <wtf/HashMap.h>
 
 namespace WebCore {
+class GStreamerPeerConnectionBackend;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::GStreamerPeerConnectionBackend> : std::true_type { };
+}
+
+namespace WebCore {
 
 class GStreamerMediaEndpoint;
 class GStreamerRtpReceiverBackend;
@@ -98,9 +107,6 @@ private:
 
     void collectTransceivers() final;
 
-    void addPendingTrackEvent(PendingTrackEvent&&);
-    void dispatchPendingTrackEvents(MediaStream&);
-
     bool isLocalDescriptionSet() const final { return m_isLocalDescriptionSet; }
 
     template<typename T>
@@ -119,10 +125,6 @@ private:
     Ref<GStreamerMediaEndpoint> m_endpoint;
     bool m_isLocalDescriptionSet { false };
     bool m_isRemoteDescriptionSet { false };
-
-    Vector<std::unique_ptr<GStreamerIceCandidate>> m_pendingCandidates;
-    Vector<Ref<RTCRtpReceiver>> m_pendingReceivers;
-    Vector<PendingTrackEvent> m_pendingTrackEvents;
 
     bool m_isReconfiguring { false };
 };

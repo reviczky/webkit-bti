@@ -34,8 +34,11 @@
 #include "NetworkRTCProviderMessages.h"
 #include "WebProcess.h"
 #include <wtf/MainThread.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LibWebRTCResolver);
 
 void LibWebRTCResolver::sendOnMainThread(Function<void(IPC::Connection&)>&& callback)
 {
@@ -47,8 +50,8 @@ void LibWebRTCResolver::sendOnMainThread(Function<void(IPC::Connection&)>&& call
 
 LibWebRTCResolver::~LibWebRTCResolver()
 {
-    WebProcess::singleton().libWebRTCNetwork().socketFactory().removeResolver(m_identifier);
-    sendOnMainThread([identifier = m_identifier](IPC::Connection& connection) {
+    WebProcess::singleton().libWebRTCNetwork().socketFactory().removeResolver(identifier());
+    sendOnMainThread([identifier = this->identifier()](IPC::Connection& connection) {
         connection.send(Messages::NetworkRTCProvider::StopResolver(identifier), 0);
     });
 }
@@ -62,7 +65,7 @@ void LibWebRTCResolver::start(const rtc::SocketAddress& address, Function<void()
     m_port = address.port();
 
     auto addressString = address.HostAsURIString();
-    String name { addressString.data(), static_cast<unsigned>(addressString.length()) };
+    String name { std::span { addressString } };
 
     if (name.endsWithIgnoringASCIICase(".local"_s) && !WTF::isVersion4UUID(StringView { name }.left(name.length() - 6))) {
         RELEASE_LOG_ERROR(WebRTC, "mDNS candidate is not a Version 4 UUID");
@@ -70,7 +73,7 @@ void LibWebRTCResolver::start(const rtc::SocketAddress& address, Function<void()
         return;
     }
 
-    sendOnMainThread([identifier = m_identifier, name = WTFMove(name).isolatedCopy()](IPC::Connection& connection) {
+    sendOnMainThread([identifier = this->identifier(), name = WTFMove(name).isolatedCopy()](IPC::Connection& connection) {
         connection.send(Messages::NetworkRTCProvider::CreateResolver(identifier, name), 0);
     });
 }

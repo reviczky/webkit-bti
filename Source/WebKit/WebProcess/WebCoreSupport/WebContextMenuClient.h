@@ -30,11 +30,12 @@
 
 #include "WebPage.h"
 #include <WebCore/ContextMenuClient.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
 class WebContextMenuClient : public WebCore::ContextMenuClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebContextMenuClient);
 public:
     WebContextMenuClient(WebPage* page)
         : m_page(page)
@@ -55,10 +56,6 @@ private:
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
     bool supportsCopySubject() final { return true; }
-#endif
-
-#if PLATFORM(COCOA)
-    void searchWithSpotlight() override;
 #endif
 
 #if HAVE(TRANSLATION_UI_SERVICES)

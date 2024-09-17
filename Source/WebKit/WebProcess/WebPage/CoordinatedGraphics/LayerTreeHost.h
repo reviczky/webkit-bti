@@ -37,6 +37,7 @@
 #include <wtf/Forward.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 
 #if !HAVE(DISPLAY_LINK)
 #include "ThreadedDisplayRefreshMonitor.h"
@@ -50,6 +51,7 @@
 
 namespace WebCore {
 class CoordinatedGraphicsLayer;
+class Damage;
 class IntRect;
 class IntSize;
 class GraphicsLayer;
@@ -69,7 +71,7 @@ class LayerTreeHost
 #endif
 #endif
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(LayerTreeHost);
 public:
 #if HAVE(DISPLAY_LINK)
     explicit LayerTreeHost(WebPage&);
@@ -100,6 +102,7 @@ public:
     void didChangeViewportAttributes(WebCore::ViewportAttributes&&);
 
     void deviceOrPageScaleFactorChanged();
+    void backgroundColorDidChange();
 
 #if !HAVE(DISPLAY_LINK)
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID);
@@ -138,7 +141,8 @@ private:
     void didDestroyGLContext() override;
     void resize(const WebCore::IntSize&) override;
     void willRenderFrame() override;
-    void didRenderFrame() override;
+    void clearIfNeeded() override;
+    void didRenderFrame(uint32_t, const WebCore::Damage&) override;
     void displayDidRefresh(WebCore::PlatformDisplayID) override;
 
 #if !HAVE(DISPLAY_LINK)
@@ -164,6 +168,7 @@ private:
     bool m_scheduledWhileWaitingForRenderer { false };
     float m_lastPageScaleFactor { 1 };
     WebCore::IntPoint m_lastScrollPosition;
+    bool m_scrolledSinceLastFrame { false };
     WebCore::GraphicsLayer* m_viewOverlayRootLayer { nullptr };
     std::unique_ptr<AcceleratedSurface> m_surface;
     RefPtr<ThreadedCompositor> m_compositor;
@@ -187,6 +192,9 @@ private:
     double m_transientZoomScale { 1 };
     WebCore::FloatPoint m_transientZoomOrigin;
 #endif
+
+    uint32_t m_compositionRequestID { 0 };
+    uint32_t m_compositionResponseID { 0 };
 };
 
 #if !USE(COORDINATED_GRAPHICS)

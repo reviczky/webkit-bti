@@ -28,7 +28,6 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/SharedMemory.h>
 #include <optional>
@@ -82,7 +81,7 @@ public:
     // It relies on an implementation detail that makes m_buffer become a contiguous SharedBuffer
     // once it's deserialised over IPC.
     RefPtr<WebCore::SharedBuffer> unsafeBuffer() const;
-    const uint8_t* data() const;
+    std::span<const uint8_t> span() const;
     RefPtr<WebCore::SharedMemory> sharedCopy() const;
 
 private:
@@ -91,7 +90,7 @@ private:
         , m_memory(WTFMove(memory)) { }
 
     size_t m_size { 0 };
-    mutable RefPtr<WebCore::FragmentedSharedBuffer> m_buffer;
+    RefPtr<WebCore::FragmentedSharedBuffer> m_buffer;
     RefPtr<WebCore::SharedMemory> m_memory; // Only set on the receiver side and if m_size isn't 0.
 };
 

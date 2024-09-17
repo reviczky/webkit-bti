@@ -29,6 +29,7 @@
 #include "AuxiliaryProcessProxy.h"
 #include "WKBase.h"
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -45,6 +46,8 @@ ASCIILiteral processAssertionTypeDescription(ProcessAssertionType type)
         return "foreground"_s;
     case ProcessAssertionType::MediaPlayback:
         return "media-playback"_s;
+    case ProcessAssertionType::FinishTaskCanSleep:
+        return "finish-task-can-sleep"_s;
     case ProcessAssertionType::FinishTaskInterruptable:
         return "finish-task-interruptible"_s;
     case ProcessAssertionType::BoostedJetsam:
@@ -52,6 +55,8 @@ ASCIILiteral processAssertionTypeDescription(ProcessAssertionType type)
     }
     return "unknown"_s;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ProcessAssertion);
 
 void ProcessAssertion::aquireAssertion(Mode mode, CompletionHandler<void()>&& acquisisionHandler)
 {

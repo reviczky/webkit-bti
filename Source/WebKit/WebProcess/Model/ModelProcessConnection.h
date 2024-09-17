@@ -41,7 +41,9 @@ struct ModelProcessConnectionInfo;
 struct WebPageCreationParameters;
 
 
-class ModelProcessConnection : public RefCounted<ModelProcessConnection>, public IPC::Connection::Client {
+class ModelProcessConnection
+    : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ModelProcessConnection>
+    , public IPC::Connection::Client {
 public:
     static RefPtr<ModelProcessConnection> create(IPC::Connection& parentConnection);
     ~ModelProcessConnection();
@@ -60,16 +62,20 @@ public:
 
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
-    class Client : public CanMakeWeakPtr<Client> {
+    class Client {
     public:
         virtual ~Client() = default;
+
+        virtual void ref() const = 0;
+        virtual void deref() const = 0;
+        virtual ThreadSafeWeakPtrControlBlock& controlBlock() const = 0;
 
         virtual void modelProcessConnectionDidClose(ModelProcessConnection&) { }
     };
     void addClient(const Client& client) { m_clients.add(client); }
-    void removeClient(const Client& client) { m_clients.remove(client); }
 
     static constexpr Seconds defaultTimeout = 3_s;
+
 private:
     ModelProcessConnection(IPC::Connection::Identifier&&);
     bool waitForDidInitialize();
@@ -79,7 +85,7 @@ private:
     void didClose(IPC::Connection&) override;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
     bool dispatchSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
@@ -95,7 +101,7 @@ private:
     std::optional<audit_token_t> m_auditToken;
 #endif
 
-    WeakHashSet<Client> m_clients;
+    ThreadSafeWeakHashSet<Client> m_clients;
 };
 
 } // namespace WebKit

@@ -70,8 +70,6 @@ NativeImage::NativeImage(UniqueRef<NativeImageBackend> backend, RenderingResourc
 {
 }
 
-NativeImage::~NativeImage() = default;
-
 const PlatformImagePtr& NativeImage::platformImage() const
 {
     return m_backend->platformImage();

@@ -26,6 +26,7 @@
 #pragma once
 
 #include "PageClient.h"
+#include <wtf/TZoneMalloc.h>
 #if ENABLE(FULLSCREEN_API)
 #include "WebFullScreenManagerProxy.h"
 #endif
@@ -40,9 +41,13 @@ class PageClientImpl final : public PageClient
     , public WebFullScreenManagerProxyClient
 #endif
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PageClientImpl);
 public:
     PageClientImpl(PlayStationWebView&);
+
+#if USE(GRAPHICS_LAYER_WC)
+    uint64_t viewWidget();
+#endif
 
 private:
     // Create a new drawing area proxy for the given page.
@@ -129,7 +134,7 @@ private:
 #endif
 
     // Custom representations.
-    void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, const IPC::DataReference&) override;
+    void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, std::span<const uint8_t>) override;
 
     void navigationGestureDidBegin() override;
     void navigationGestureWillEnd(bool willNavigate, WebBackForwardListItem&) override;
@@ -154,7 +159,7 @@ private:
 
     WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
 
-    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) override;
+    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, WebCore::DOMPasteRequiresInteraction, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) override;
 
 #if USE(WPE_RENDERER)
     UnixFileDescriptor hostFileDescriptor() override;

@@ -31,10 +31,13 @@
 #include "Logging.h"
 #include "RemoteMediaPlayerManager.h"
 #include "RemoteMediaPlayerManagerProxyMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaPlayerMIMETypeCache);
 
 RemoteMediaPlayerMIMETypeCache::RemoteMediaPlayerMIMETypeCache(RemoteMediaPlayerManager& manager, MediaPlayerEnums::MediaEngineIdentifier engineIdentifier)
     : m_manager(manager)
@@ -62,7 +65,7 @@ HashSet<String>& RemoteMediaPlayerMIMETypeCache::supportedTypes()
             addSupportedTypes(types);
             m_hasPopulatedSupportedTypesCacheFromGPUProcess = true;
         } else
-            RELEASE_LOG_ERROR(Media, "RemoteMediaPlayerMIMETypeCache::supportedTypes: Sync IPC to the GPUProcess failed with error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error()));
+            RELEASE_LOG_ERROR(Media, "RemoteMediaPlayerMIMETypeCache::supportedTypes: Sync IPC to the GPUProcess failed with error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error()).characters());
     }
     return m_supportedTypesCache;
 }

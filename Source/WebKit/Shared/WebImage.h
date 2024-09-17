@@ -43,7 +43,7 @@ namespace WebKit {
 
 // WebImage - An image type suitable for vending to an API.
 
-class WebImage final : public API::ObjectImpl<API::Object::Type::Image> {
+class WebImage : public API::ObjectImpl<API::Object::Type::Image> {
 public:
     using ParametersAndHandle = std::pair<WebCore::ImageBufferParameters, WebCore::ShareableBitmap::Handle>;
 
@@ -51,8 +51,6 @@ public:
     static Ref<WebImage> create(std::optional<ParametersAndHandle>&&);
     static Ref<WebImage> create(Ref<WebCore::ImageBuffer>&&);
     static Ref<WebImage> createEmpty();
-
-    virtual ~WebImage();
 
     WebCore::IntSize size() const;
     const WebCore::ImageBufferParameters* parameters() const;

@@ -23,11 +23,13 @@
 #if ENABLE(GPU_PROCESS)
 
 messages -> GPUProcess LegacyReceiver {
-    InitializeGPUProcess(struct WebKit::GPUProcessCreationParameters processCreationParameters)
+    InitializeGPUProcess(struct WebKit::GPUProcessCreationParameters processCreationParameters) -> ()
 
-    CreateGPUConnectionToWebProcess(WebCore::ProcessIdentifier processIdentifier, PAL::SessionID sessionID, IPC::Connection::Handle connectionHandle, struct WebKit::GPUProcessConnectionParameters parameters) -> () AllowedWhenWaitingForSyncReply
+    CreateGPUConnectionToWebProcess(WebCore::ProcessIdentifier processIdentifier, PAL::SessionID sessionID, IPC::ConnectionHandle connectionHandle, struct WebKit::GPUProcessConnectionParameters parameters) -> () AllowedWhenWaitingForSyncReply
+    SharedPreferencesForWebProcessDidChange(WebCore::ProcessIdentifier processIdentifier, struct WebKit::SharedPreferencesForWebProcess sharedPreferencesForWebProcess) -> ()
+
     UpdateGPUProcessPreferences(struct WebKit::GPUProcessPreferences preferences)
-    UpdateSandboxAccess(Vector<WebKit::SandboxExtension::Handle> extensions);
+    UpdateSandboxAccess(Vector<WebKit::SandboxExtensionHandle> extensions);
 
     PrepareToSuspend(bool isSuspensionImminent, MonotonicTime estimatedSuspendTime) -> ()
     ProcessDidResume()
@@ -52,7 +54,6 @@ messages -> GPUProcess LegacyReceiver {
     SetUseSCContentSharingPicker(bool use)
 #endif
 #if PLATFORM(MAC)
-    DisplayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
     SetScreenProperties(struct WebCore::ScreenProperties screenProperties)
 #endif
 
@@ -60,18 +61,15 @@ messages -> GPUProcess LegacyReceiver {
 
 #if HAVE(SCREEN_CAPTURE_KIT)
     PromptForGetDisplayMedia(enum:uint8_t WebCore::DisplayCapturePromptType type) -> (std::optional<WebCore::CaptureDevice> device)
+    CancelGetDisplayMediaPrompt()
 #endif
 
 #if ENABLE(VIDEO)
-    RequestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier) -> (std::optional<WebCore::ShareableBitmap::Handle> handle)
-#endif
-
-#if ENABLE(CFPREFS_DIRECT_MODE)
-    NotifyPreferencesChanged(String domain, String key, std::optional<String> encodedValue)
+    RequestBitmapImageForCurrentTime(WebCore::ProcessIdentifier processIdentifier, WebCore::MediaPlayerIdentifier playerIdentifier) -> (std::optional<WebCore::ShareableBitmapHandle> handle)
 #endif
 
 #if PLATFORM(MAC)
-    OpenDirectoryCacheInvalidated(WebKit::SandboxExtension::Handle handle)
+    OpenDirectoryCacheInvalidated(WebKit::SandboxExtensionHandle handle)
 #endif
 
 #if HAVE(AUDIO_COMPONENT_SERVER_REGISTRATIONS)
@@ -79,12 +77,19 @@ messages -> GPUProcess LegacyReceiver {
 #endif
 
 #if HAVE(POWERLOG_TASK_MODE_QUERY)
-    EnablePowerLogging(WebKit::SandboxExtension::Handle handle)
+    EnablePowerLogging(WebKit::SandboxExtensionHandle handle)
 #endif
 
     UserPreferredLanguagesChanged(Vector<String> languages)
 
     WebProcessConnectionCountForTesting() -> (uint64_t count)
+
+#if USE(EXTENSIONKIT)
+    ResolveBookmarkDataForCacheDirectory(std::span<const uint8_t> bookmarkData)
+#endif
+#if ENABLE(WEBXR)
+    WebXRPromptAccepted(std::optional<WebCore::ProcessIdentity> processIdentity) -> (bool accepted)
+#endif
 }
 
 #endif // ENABLE(GPU_PROCESS)

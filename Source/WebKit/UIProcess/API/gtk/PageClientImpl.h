@@ -35,6 +35,7 @@
 #include <WebCore/IntSize.h>
 #include <gtk/gtk.h>
 #include <memory>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 enum class DOMPasteAccessPolicy : uint8_t;
@@ -52,7 +53,7 @@ class PageClientImpl : public PageClient
     , public WebFullScreenManagerProxyClient
 #endif
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PageClientImpl);
 public:
     explicit PageClientImpl(GtkWidget*);
 
@@ -138,7 +139,7 @@ private:
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;
 #endif
 
-    void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, const IPC::DataReference&) override;
+    void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, std::span<const uint8_t>) override;
 
     void navigationGestureDidBegin() override;
     void navigationGestureWillEnd(bool, WebBackForwardListItem&) override;
@@ -162,7 +163,7 @@ private:
     void isPlayingAudioWillChange() final { }
     void isPlayingAudioDidChange() final { }
 
-    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) final;
+    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, WebCore::DOMPasteRequiresInteraction, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) final;
 
     WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() override;
 

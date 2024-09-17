@@ -25,11 +25,20 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include "DownloadID.h"
 #include "MessageSender.h"
 #include "NetworkLoadClient.h"
 #include "SandboxExtension.h"
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class PendingDownload;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PendingDownload> : std::true_type { };
+}
 
 namespace IPC {
 class Connection;
@@ -47,16 +56,19 @@ class NetworkLoadParameters;
 class NetworkSession;
 
 class PendingDownload : public NetworkLoadClient, public IPC::MessageSender, public CanMakeWeakPtr<PendingDownload> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PendingDownload);
 public:
     PendingDownload(IPC::Connection*, NetworkLoadParameters&&, DownloadID, NetworkSession&, const String& suggestedName);
     PendingDownload(IPC::Connection*, std::unique_ptr<NetworkLoad>&&, ResponseCompletionHandler&&, DownloadID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
-    virtual ~PendingDownload();
 
-    void cancel(CompletionHandler<void(const IPC::DataReference&)>&&);
+    void cancel(CompletionHandler<void(std::span<const uint8_t>)>&&);
 
 #if PLATFORM(COCOA)
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+    void publishProgress(const URL&, std::span<const uint8_t>);
+#else
     void publishProgress(const URL&, SandboxExtension::Handle&&);
+#endif
     void didBecomeDownload(const std::unique_ptr<Download>&);
 #endif
 
@@ -82,7 +94,11 @@ private:
 
 #if PLATFORM(COCOA)
     URL m_progressURL;
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+    Vector<uint8_t> m_bookmarkData;
+#else
     SandboxExtension::Handle m_progressSandboxExtension;
+#endif
 #endif
 };
 

@@ -41,6 +41,7 @@
 #include <wtf/glib/Sandbox.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/unix/UnixFileDescriptor.h>
 
 #if HAVE(GTK_UNIX_PRINTING)
@@ -277,12 +278,12 @@ static WebKitPrintOperationResponse webkitPrintOperationRunDialog(WebKitPrintOpe
 {
     GtkPrintUnixDialog* printDialog = GTK_PRINT_UNIX_DIALOG(gtk_print_unix_dialog_new(0, parent));
     gtk_print_unix_dialog_set_manual_capabilities(printDialog, static_cast<GtkPrintCapabilities>(GTK_PRINT_CAPABILITY_NUMBER_UP
-                                                                                                 | GTK_PRINT_CAPABILITY_NUMBER_UP_LAYOUT
-                                                                                                 | GTK_PRINT_CAPABILITY_PAGE_SET
-                                                                                                 | GTK_PRINT_CAPABILITY_REVERSE
-                                                                                                 | GTK_PRINT_CAPABILITY_COPIES
-                                                                                                 | GTK_PRINT_CAPABILITY_COLLATE
-                                                                                                 | GTK_PRINT_CAPABILITY_SCALE));
+        | GTK_PRINT_CAPABILITY_NUMBER_UP_LAYOUT | GTK_PRINT_CAPABILITY_PAGE_SET | GTK_PRINT_CAPABILITY_REVERSE
+        | GTK_PRINT_CAPABILITY_COPIES | GTK_PRINT_CAPABILITY_COLLATE | GTK_PRINT_CAPABILITY_SCALE
+#if USE(SKIA)
+        | GTK_PRINT_CAPABILITY_GENERATE_PDF
+#endif
+        ));
 
     WebKitPrintOperationPrivate* priv = printOperation->priv;
     // Make sure the initial settings of the GtkPrintUnixDialog is a valid
@@ -386,7 +387,7 @@ static void webkitPrintOperationPrintPagesForFrame(WebKitPrintOperation* printOp
 
     PrintInfo printInfo(priv->printJob.get(), printOperation->priv->printMode);
     auto& page = webkitWebViewGetPage(printOperation->priv->webView.get());
-    page.drawPagesForPrinting(webFrame, printInfo, [printOperation = GRefPtr<WebKitPrintOperation>(printOperation)](std::optional<WebCore::SharedMemory::Handle>&& data, WebCore::ResourceError&& error) mutable {
+    page.drawPagesForPrinting(*webFrame, printInfo, [printOperation = GRefPtr<WebKitPrintOperation>(printOperation)](std::optional<WebCore::SharedMemory::Handle>&& data, WebCore::ResourceError&& error) mutable {
         auto* priv = printOperation->priv;
         // When running synchronously, WebPageProxy::printFrame() calls endPrinting().
         if (priv->printMode == PrintInfo::PrintMode::Async && priv->webView)
@@ -481,7 +482,7 @@ static void webkitPrintOperationSendPagesToPrintPortal(WebKitPrintOperation* pri
 
     PrintInfo printInfo(priv->printJob.get(), printOperation->priv->printMode);
     auto& page = webkitWebViewGetPage(printOperation->priv->webView.get());
-    page.drawPagesForPrinting(webFrame, printInfo, [printOperation = GRefPtr<WebKitPrintOperation>(printOperation), token = *preparePrintResponse->token](std::optional<WebCore::SharedMemory::Handle>&& data, WebCore::ResourceError&& error) mutable {
+    page.drawPagesForPrinting(*webFrame, printInfo, [printOperation = GRefPtr<WebKitPrintOperation>(printOperation), token = *preparePrintResponse->token](std::optional<WebCore::SharedMemory::Handle>&& data, WebCore::ResourceError&& error) mutable {
         auto* priv = printOperation->priv;
         // When running synchronously, WebPageProxy::printFrame() calls endPrinting().
         if (priv->printMode == PrintInfo::PrintMode::Async && priv->webView)
@@ -572,8 +573,8 @@ static void webkitPrintOperationPreparePrint(WebKitPrintOperation* printOperatio
     auto* connection = g_dbus_proxy_get_connection(priv->portalProxy.get());
     auto uniqueName = String::fromUTF8(g_dbus_connection_get_unique_name(connection));
     auto senderName = makeStringByReplacingAll(uniqueName.substring(1), '.', '_');
-    auto token = makeString("WebKitGTK", weakRandomNumber<uint32_t>());
-    auto requestPath = makeString("/org/freedesktop/portal/desktop/request/", senderName, "/", token);
+    auto token = makeString("WebKitGTK"_s, weakRandomNumber<uint32_t>());
+    auto requestPath = makeString("/org/freedesktop/portal/desktop/request/"_s, senderName, '/', token);
 
     RELEASE_ASSERT(!priv->signalId);
 
@@ -612,9 +613,18 @@ static void webkitPrintOperationPreparePrint(WebKitPrintOperation* printOperatio
     g_variant_builder_init(&options, G_VARIANT_TYPE_VARDICT);
     g_variant_builder_add(&options, "{sv}", "handle_token", g_variant_new_string(token.ascii().data()));
 
+#if USE(SKIA)
+    GRefPtr<GVariant> portalVersion = adoptGRef(g_dbus_proxy_get_cached_property(priv->portalProxy.get(), "version"));
+    if (portalVersion && g_variant_get_uint32(portalVersion.get()) >= 3)
+        g_variant_builder_add(&options, "{sv}", "supported_output_file_formats", g_variant_new_strv((const char* const[]) { "pdf" }, 1));
+#endif
+
     const char* title = _("Print Web Page");
     GRefPtr<GtkPageSetup> pageSetup = priv->pageSetup ? priv->pageSetup : adoptGRef(gtk_page_setup_new());
     GRefPtr<GtkPrintSettings> printSettings = adoptGRef(priv->printSettings ? gtk_print_settings_copy(priv->printSettings.get()) : gtk_print_settings_new());
+#if USE(SKIA)
+    gtk_print_settings_set(printSettings.get(), GTK_PRINT_SETTINGS_OUTPUT_FILE_FORMAT, "pdf");
+#endif
 
     GRefPtr<GVariant> arguments(g_variant_new("(ss@a{sv}@a{sv}a{sv})", "", title, gtk_print_settings_to_gvariant(printSettings.get()), gtk_page_setup_to_gvariant(pageSetup.get()), &options));
 
@@ -862,7 +872,10 @@ static GRefPtr<GtkPrinter> printerFromSettingsOrDefault(GtkPrintSettings* settin
  * operation finishes. If an error occurs while printing the signal
  * #WebKitPrintOperation::failed is emitted before #WebKitPrintOperation::finished.
  *
- * Deprecated: 2.46. This function does nothing if the app is sandboxed.
+ * If the app is running in a sandbox, this function only works if printing to
+ * a file that is in a location accessible to the sandbox, usually acquired
+ * through the File Chooser portal. This function will not work for physical
+ * printers when running in a sandbox.
  */
 void webkit_print_operation_print(WebKitPrintOperation* printOperation)
 {

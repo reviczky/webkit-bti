@@ -33,6 +33,7 @@
 #include <wtf/HexNumber.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/PrintStream.h>
+#include <wtf/text/MakeString.h>
 
 GST_DEBUG_CATEGORY(webkit_capturer_debug);
 #define GST_CAT_DEFAULT webkit_capturer_debug
@@ -95,23 +96,23 @@ void GStreamerCapturer::tearDown(bool disconnectSignals)
     m_pipeline = nullptr;
 }
 
-GStreamerCapturer::Observer::~Observer()
+GStreamerCapturerObserver::~GStreamerCapturerObserver()
 {
 }
 
-void GStreamerCapturer::addObserver(Observer& observer)
+void GStreamerCapturer::addObserver(GStreamerCapturerObserver& observer)
 {
     ASSERT(isMainThread());
     m_observers.add(observer);
 }
 
-void GStreamerCapturer::removeObserver(Observer& observer)
+void GStreamerCapturer::removeObserver(GStreamerCapturerObserver& observer)
 {
     ASSERT(isMainThread());
     m_observers.remove(observer);
 }
 
-void GStreamerCapturer::forEachObserver(const Function<void(Observer&)>& apply)
+void GStreamerCapturer::forEachObserver(const Function<void(GStreamerCapturerObserver&)>& apply)
 {
     ASSERT(isMainThread());
     Ref protectedThis { *this };
@@ -137,7 +138,7 @@ GstElement* GStreamerCapturer::createSource()
                 callOnMainThread([event, capturer = reinterpret_cast<GStreamerCapturer*>(userData)] {
                     GstCaps* caps;
                     gst_event_parse_caps(event, &caps);
-                    capturer->forEachObserver([caps](Observer& observer) {
+                    capturer->forEachObserver([caps](GStreamerCapturerObserver& observer) {
                         observer.sourceCapsChanged(caps);
                     });
                 });
@@ -146,7 +147,7 @@ GstElement* GStreamerCapturer::createSource()
         }
     } else {
         ASSERT(m_device);
-        auto sourceName = makeString(name(), hex(reinterpret_cast<uintptr_t>(this)));
+        auto sourceName = makeString(WTF::span(name()), hex(reinterpret_cast<uintptr_t>(this)));
         m_src = gst_device_create_element(m_device->device(), sourceName.ascii().data());
         ASSERT(m_src);
         g_object_set(m_src.get(), "do-timestamp", TRUE, nullptr);
@@ -197,6 +198,8 @@ void GStreamerCapturer::setupPipeline()
     m_capsfilter = makeElement("capsfilter");
     m_sink = makeElement("appsink");
 
+    gst_util_set_object_arg(G_OBJECT(m_capsfilter.get()), "caps-change-mode", "delayed");
+
     gst_app_sink_set_emit_signals(GST_APP_SINK(m_sink.get()), TRUE);
     g_object_set(m_sink.get(), "enable-last-sample", FALSE, nullptr);
     g_object_set(m_capsfilter.get(), "caps", m_caps.get(), nullptr);
@@ -211,7 +214,7 @@ void GStreamerCapturer::setupPipeline()
 GstElement* GStreamerCapturer::makeElement(const char* factoryName)
 {
     auto* element = makeGStreamerElement(factoryName, nullptr);
-    auto elementName = makeString(name(), "_capturer_", GST_OBJECT_NAME(element), '_', hex(reinterpret_cast<uintptr_t>(this)));
+    auto elementName = makeString(span(name()), "_capturer_"_s, span(GST_OBJECT_NAME(element)), '_', hex(reinterpret_cast<uintptr_t>(this)));
     gst_object_set_name(GST_OBJECT(element), elementName.ascii().data());
 
     return element;

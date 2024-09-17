@@ -31,10 +31,13 @@
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcess.h"
 #include "RemoteRemoteCommandListenerMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteRemoteCommandListenerProxy);
 
 RemoteRemoteCommandListenerProxy::RemoteRemoteCommandListenerProxy(GPUConnectionToWebProcess& gpuConnection, RemoteRemoteCommandListenerIdentifier&& identifier)
     : m_gpuConnection(gpuConnection)
@@ -50,8 +53,8 @@ void RemoteRemoteCommandListenerProxy::updateSupportedCommands(Vector<WebCore::P
     m_supportedCommands.add(registeredCommands.begin(), registeredCommands.end());
     m_supportsSeeking = supportsSeeking;
 
-    if (m_gpuConnection)
-        m_gpuConnection->updateSupportedRemoteCommands();
+    if (auto connection = m_gpuConnection.get())
+        connection->updateSupportedRemoteCommands();
 }
 
 }

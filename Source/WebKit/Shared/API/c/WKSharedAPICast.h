@@ -76,8 +76,6 @@ class WebArchiveResource;
 
 namespace WebKit {
 
-class ObjCObjectGraph;
-class WebConnection;
 class WebContextMenuItem;
 class WebImage;
 
@@ -94,7 +92,6 @@ template<typename ImplType> struct ImplTypeInfo;
 
 WK_ADD_API_MAPPING(WKArrayRef, API::Array)
 WK_ADD_API_MAPPING(WKBooleanRef, API::Boolean)
-WK_ADD_API_MAPPING(WKConnectionRef, WebConnection)
 WK_ADD_API_MAPPING(WKContextMenuItemRef, WebContextMenuItem)
 WK_ADD_API_MAPPING(WKDataRef, API::Data)
 WK_ADD_API_MAPPING(WKDictionaryRef, API::Dictionary)
@@ -124,7 +121,6 @@ template<> struct APITypeInfo<WKMutableDictionaryRef> {
 #if PLATFORM(COCOA)
 WK_ADD_API_MAPPING(WKWebArchiveRef, API::WebArchive)
 WK_ADD_API_MAPPING(WKWebArchiveResourceRef, API::WebArchiveResource)
-WK_ADD_API_MAPPING(WKObjCTypeWrapperRef, ObjCObjectGraph)
 #endif
 
 template<typename T, typename APIType = typename ImplTypeInfo<T>::APIType>
@@ -437,8 +433,6 @@ inline WKContextMenuItemTag toAPI(WebCore::ContextMenuAction action)
         return kWKContextMenuItemTagLearnSpelling;
     case WebCore::ContextMenuItemTagOther:
         return kWKContextMenuItemTagOther;
-    case WebCore::ContextMenuItemTagSearchInSpotlight:
-        return kWKContextMenuItemTagSearchInSpotlight;
     case WebCore::ContextMenuItemTagSearchWeb:
         return kWKContextMenuItemTagSearchWeb;
     case WebCore::ContextMenuItemTagLookUpInDictionary:
@@ -541,12 +535,16 @@ inline WKContextMenuItemTag toAPI(WebCore::ContextMenuAction action)
         return kWKContextMenuItemTagToggleVideoEnhancedFullscreen;
     case WebCore::ContextMenuItemTagMediaPlayPause:
         return kWKContextMenuItemTagMediaPlayPause;
+    case WebCore::ContextMenuItemTagToggleVideoViewer:
+        return kWKContextMenuItemTagToggleVideoViewer;
     case WebCore::ContextMenuItemTagMediaMute:
         return kWKContextMenuItemTagMediaMute;
     case WebCore::ContextMenuItemTagAddHighlightToCurrentQuickNote:
         return kWKContextMenuItemTagAddHighlightToCurrentQuickNote;
     case WebCore::ContextMenuItemTagAddHighlightToNewQuickNote:
         return kWKContextMenuItemTagAddHighlightToNewQuickNote;
+    case WebCore::ContextMenuItemTagCopyLinkToHighlight:
+        return kWKContextMenuItemTagCopyLinkToHighlight;
 #if PLATFORM(COCOA)
     case WebCore::ContextMenuItemTagCorrectSpellingAutomatically:
         return kWKContextMenuItemTagCorrectSpellingAutomatically;
@@ -581,6 +579,8 @@ inline WKContextMenuItemTag toAPI(WebCore::ContextMenuAction action)
         return kWKContextMenuItemTagRevealImage;
     case WebCore::ContextMenuItemTagTranslate:
         return kWKContextMenuItemTagTranslate;
+    case WebCore::ContextMenuItemTagWritingTools:
+        return kWKContextMenuItemTagWritingTools;
     case WebCore::ContextMenuItemTagCopySubject:
         return kWKContextMenuItemTagCopyCroppedImage;
     default:
@@ -652,7 +652,7 @@ inline WebCore::ContextMenuAction toImpl(WKContextMenuItemTag tag)
     case kWKContextMenuItemTagOther:
         return WebCore::ContextMenuItemTagOther;
     case kWKContextMenuItemTagSearchInSpotlight:
-        return WebCore::ContextMenuItemTagSearchInSpotlight;
+        return WebCore::ContextMenuItemTagNoAction;
     case kWKContextMenuItemTagSearchWeb:
         return WebCore::ContextMenuItemTagSearchWeb;
     case kWKContextMenuItemTagLookUpInDictionary:
@@ -755,12 +755,16 @@ inline WebCore::ContextMenuAction toImpl(WKContextMenuItemTag tag)
         return WebCore::ContextMenuItemTagToggleVideoEnhancedFullscreen;
     case kWKContextMenuItemTagMediaPlayPause:
         return WebCore::ContextMenuItemTagMediaPlayPause;
+    case kWKContextMenuItemTagToggleVideoViewer:
+        return WebCore::ContextMenuItemTagToggleVideoViewer;
     case kWKContextMenuItemTagMediaMute:
         return WebCore::ContextMenuItemTagMediaMute;
     case kWKContextMenuItemTagAddHighlightToCurrentQuickNote:
         return WebCore::ContextMenuItemTagAddHighlightToCurrentQuickNote;
     case kWKContextMenuItemTagAddHighlightToNewQuickNote:
         return WebCore::ContextMenuItemTagAddHighlightToNewQuickNote;
+    case kWKContextMenuItemTagCopyLinkToHighlight:
+        return WebCore::ContextMenuItemTagCopyLinkToHighlight;
 #if PLATFORM(COCOA)
     case kWKContextMenuItemTagCorrectSpellingAutomatically:
         return WebCore::ContextMenuItemTagCorrectSpellingAutomatically;
@@ -795,6 +799,8 @@ inline WebCore::ContextMenuAction toImpl(WKContextMenuItemTag tag)
         return WebCore::ContextMenuItemTagLookUpImage;
     case kWKContextMenuItemTagTranslate:
         return WebCore::ContextMenuItemTagTranslate;
+    case kWKContextMenuItemTagWritingTools:
+        return WebCore::ContextMenuItemTagWritingTools;
     case kWKContextMenuItemTagCopyCroppedImage:
         return WebCore::ContextMenuItemTagCopySubject;
     case kWKContextMenuItemTagOpenLinkInThisWindow:
@@ -993,44 +999,38 @@ inline WebCore::VisibilityState toVisibilityState(WKPageVisibilityState wkPageVi
 
 inline ImageOptions toImageOptions(WKImageOptions wkImageOptions)
 {
-    unsigned imageOptions = 0;
-
     if (wkImageOptions & kWKImageOptionsShareable)
-        imageOptions |= ImageOptionsShareable;
-
-    return static_cast<ImageOptions>(imageOptions);
+        return ImageOption::Shareable;
+    return { };
 }
 
 inline SnapshotOptions snapshotOptionsFromImageOptions(WKImageOptions wkImageOptions)
 {
-    unsigned snapshotOptions = 0;
-
     if (wkImageOptions & kWKImageOptionsShareable)
-        snapshotOptions |= SnapshotOptionsShareable;
-    
-    return snapshotOptions;
+        return SnapshotOption::Shareable;
+    return { };
 }
 
 inline SnapshotOptions toSnapshotOptions(WKSnapshotOptions wkSnapshotOptions)
 {
-    unsigned snapshotOptions = 0;
+    SnapshotOptions snapshotOptions;
 
     if (wkSnapshotOptions & kWKSnapshotOptionsShareable)
-        snapshotOptions |= SnapshotOptionsShareable;
+        snapshotOptions.add(SnapshotOption::Shareable);
     if (wkSnapshotOptions & kWKSnapshotOptionsExcludeSelectionHighlighting)
-        snapshotOptions |= SnapshotOptionsExcludeSelectionHighlighting;
+        snapshotOptions.add(SnapshotOption::ExcludeSelectionHighlighting);
     if (wkSnapshotOptions & kWKSnapshotOptionsInViewCoordinates)
-        snapshotOptions |= SnapshotOptionsInViewCoordinates;
+        snapshotOptions.add(SnapshotOption::InViewCoordinates);
     if (wkSnapshotOptions & kWKSnapshotOptionsPaintSelectionRectangle)
-        snapshotOptions |= SnapshotOptionsPaintSelectionRectangle;
+        snapshotOptions.add(SnapshotOption::PaintSelectionRectangle);
     if (wkSnapshotOptions & kWKSnapshotOptionsForceBlackText)
-        snapshotOptions |= SnapshotOptionsForceBlackText;
+        snapshotOptions.add(SnapshotOption::ForceBlackText);
     if (wkSnapshotOptions & kWKSnapshotOptionsForceWhiteText)
-        snapshotOptions |= SnapshotOptionsForceWhiteText;
+        snapshotOptions.add(SnapshotOption::ForceWhiteText);
     if (wkSnapshotOptions & kWKSnapshotOptionsPrinting)
-        snapshotOptions |= SnapshotOptionsPrinting;
+        snapshotOptions.add(SnapshotOption::Printing);
     if (wkSnapshotOptions & kWKSnapshotOptionsExtendedColor)
-        snapshotOptions |= SnapshotOptionsUseScreenColorSpace;
+        snapshotOptions.add(SnapshotOption::UseScreenColorSpace);
 
     return snapshotOptions;
 }

@@ -56,11 +56,17 @@
 #include <Namespace/OuterClass.h>
 #endif
 #include <Namespace/ReturnRefClass.h>
+#if USE(APPKIT)
+#include <WebCore/AppKitControlSystemImage.h>
+#endif
 #include <WebCore/FloatBoxExtent.h>
 #include <WebCore/InheritanceGrandchild.h>
 #include <WebCore/InheritsFrom.h>
 #include <WebCore/MoveOnlyBaseClass.h>
 #include <WebCore/MoveOnlyDerivedClass.h>
+#if USE(APPKIT)
+#include <WebCore/ScrollbarTrackCornerSystemImageMac.h>
+#endif
 #include <WebCore/ScrollingStateFrameHostingNode.h>
 #include <WebCore/ScrollingStateFrameHostingNodeWithStuffAfterTuple.h>
 #include <WebCore/TimingFunction.h>
@@ -99,9 +105,7 @@ template<> struct VirtualTableAndRefCountOverhead<true, false> {
 };
 template<> struct VirtualTableAndRefCountOverhead<false, false> { };
 
-#if COMPILER(GCC)
 IGNORE_WARNINGS_BEGIN("invalid-offsetof")
-#endif
 
 namespace IPC {
 
@@ -180,10 +184,16 @@ void ArgumentCoder<Namespace::Subnamespace::StructName>::encode(OtherEncoder& en
 std::optional<Namespace::Subnamespace::StructName> ArgumentCoder<Namespace::Subnamespace::StructName>::decode(Decoder& decoder)
 {
     auto firstMemberName = decoder.decode<FirstMemberType>();
+    if (UNLIKELY(!firstMemberName))
+        decoder.setIndexOfDecodingFailure(0);
 #if ENABLE(SECOND_MEMBER)
     auto secondMemberName = decoder.decode<SecondMemberType>();
+    if (UNLIKELY(!secondMemberName))
+        decoder.setIndexOfDecodingFailure(1);
 #endif
     auto nullableTestMember = decoder.decode<RetainPtr<CFTypeRef>>();
+    if (UNLIKELY(!nullableTestMember))
+        decoder.setIndexOfDecodingFailure(2);
     if (UNLIKELY(!decoder.isValid()))
         return std::nullopt;
     return {
@@ -1387,6 +1397,65 @@ std::optional<Namespace::OtherOuterClass> ArgumentCoder<Namespace::OtherOuterCla
 
 #endif
 
+#if USE(APPKIT)
+void ArgumentCoder<WebCore::AppKitControlSystemImage>::encode(Encoder& encoder, const WebCore::AppKitControlSystemImage& instance)
+{
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_controlType)>, WebCore::AppKitControlSystemImageType>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_tintColor)>, WebCore::Color>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_useDarkAppearance)>, bool>);
+    struct ShouldBeSameSizeAsAppKitControlSystemImage : public VirtualTableAndRefCountOverhead<std::is_polymorphic_v<WebCore::AppKitControlSystemImage>, true> {
+        WebCore::AppKitControlSystemImageType m_controlType;
+        WebCore::Color m_tintColor;
+        bool m_useDarkAppearance;
+    };
+    static_assert(sizeof(ShouldBeSameSizeAsAppKitControlSystemImage) == sizeof(WebCore::AppKitControlSystemImage));
+    static_assert(MembersInCorrectOrder < 0
+        , offsetof(WebCore::AppKitControlSystemImage, m_controlType)
+        , offsetof(WebCore::AppKitControlSystemImage, m_tintColor)
+        , offsetof(WebCore::AppKitControlSystemImage, m_useDarkAppearance)
+    >::value);
+
+    encoder << instance.m_tintColor;
+    encoder << instance.m_useDarkAppearance;
+}
+
+void ArgumentCoder<WebCore::AppKitControlSystemImage>::encode(StreamConnectionEncoder& encoder, const WebCore::AppKitControlSystemImage& instance)
+{
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_controlType)>, WebCore::AppKitControlSystemImageType>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_tintColor)>, WebCore::Color>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(instance.m_useDarkAppearance)>, bool>);
+    struct ShouldBeSameSizeAsAppKitControlSystemImage : public VirtualTableAndRefCountOverhead<std::is_polymorphic_v<WebCore::AppKitControlSystemImage>, true> {
+        WebCore::AppKitControlSystemImageType m_controlType;
+        WebCore::Color m_tintColor;
+        bool m_useDarkAppearance;
+    };
+    static_assert(sizeof(ShouldBeSameSizeAsAppKitControlSystemImage) == sizeof(WebCore::AppKitControlSystemImage));
+    static_assert(MembersInCorrectOrder < 0
+        , offsetof(WebCore::AppKitControlSystemImage, m_controlType)
+        , offsetof(WebCore::AppKitControlSystemImage, m_tintColor)
+        , offsetof(WebCore::AppKitControlSystemImage, m_useDarkAppearance)
+    >::value);
+
+    encoder << instance.m_tintColor;
+    encoder << instance.m_useDarkAppearance;
+}
+
+std::optional<Ref<WebCore::AppKitControlSystemImage>> ArgumentCoder<WebCore::AppKitControlSystemImage>::decode(Decoder& decoder)
+{
+    auto m_tintColor = decoder.decode<WebCore::Color>();
+    auto m_useDarkAppearance = decoder.decode<bool>();
+    if (UNLIKELY(!decoder.isValid()))
+        return std::nullopt;
+    return {
+        WebCore::ScrollbarTrackCornerSystemImageMac::create(
+            WTFMove(*m_tintColor),
+            WTFMove(*m_useDarkAppearance)
+        )
+    };
+}
+
+#endif
+
 } // namespace IPC
 
 namespace WTF {
@@ -1520,6 +1589,4 @@ template<> bool isValidEnum<EnumNamespace::InnerEnumType, void>(uint8_t value)
 
 } // namespace WTF
 
-#if COMPILER(GCC)
 IGNORE_WARNINGS_END
-#endif

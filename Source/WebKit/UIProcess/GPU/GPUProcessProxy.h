@@ -37,6 +37,7 @@
 #include <WebCore/ShareableBitmap.h>
 #include <memory>
 #include <pal/SessionID.h>
+#include <wtf/TZoneMalloc.h>
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 #include "LayerHostingContext.h"
@@ -64,11 +65,12 @@ class WebsiteDataStore;
 
 struct GPUProcessConnectionParameters;
 struct GPUProcessCreationParameters;
-struct GPUProcessPreferencesForWebProcess;
+struct SharedPreferencesForWebProcess;
 
 class GPUProcessProxy final : public AuxiliaryProcessProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(GPUProcessProxy);
     WTF_MAKE_NONCOPYABLE(GPUProcessProxy);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(GPUProcessProxy);
     friend LazyNeverDestroyed<GPUProcessProxy>;
 public:
     static void keepProcessAliveTemporarily();
@@ -78,7 +80,8 @@ public:
 
     void createGPUProcessConnection(WebProcessProxy&, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&);
 
-    ProcessThrottler& throttler() final { return m_throttler; }
+    void sharedPreferencesForWebProcessDidChange(WebProcessProxy&, SharedPreferencesForWebProcess&&, CompletionHandler<void()>&&);
+
     void updateProcessAssertion();
 
 #if ENABLE(MEDIA_STREAM)
@@ -99,12 +102,12 @@ public:
 
 #if HAVE(SCREEN_CAPTURE_KIT)
     void promptForGetDisplayMedia(WebCore::DisplayCapturePromptType, CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&&);
+    void cancelGetDisplayMediaPrompt();
 #endif
 
     void removeSession(PAL::SessionID);
 
 #if PLATFORM(MAC)
-    void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
     void setScreenProperties(const WebCore::ScreenProperties&);
 #endif
 
@@ -112,9 +115,14 @@ public:
     void enablePowerLogging();
     static bool isPowerLoggingInTaskMode();
 #endif
+#if ENABLE(WEBXR)
+    void webXRPromptAccepted(std::optional<WebCore::ProcessIdentity>, CompletionHandler<void(bool)>&&);
+#endif
 
     void updatePreferences(WebProcessProxy&);
     void updateScreenPropertiesIfNeeded();
+
+    void childConnectionDidBecomeUnresponsive();
 
     void terminateForTesting();
     void webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&&);
@@ -130,6 +138,8 @@ public:
 
 private:
     explicit GPUProcessProxy();
+
+    Type type() const final { return Type::GraphicsProcessing; }
 
     void addSession(const WebsiteDataStore&);
 
@@ -153,7 +163,7 @@ private:
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     void didClose(IPC::Connection&) override;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive() final;
@@ -179,7 +189,10 @@ private:
     GPUProcessCreationParameters processCreationParameters();
     void platformInitializeGPUProcessParameters(GPUProcessCreationParameters&);
 
-    ProcessThrottler m_throttler;
+#if USE(EXTENSIONKIT)
+    void sendBookmarkDataForCacheDirectory();
+#endif
+
     ProcessThrottler::ActivityVariant m_activityFromWebProcesses;
 #if ENABLE(MEDIA_STREAM)
     bool m_useMockCaptureDevices { false };

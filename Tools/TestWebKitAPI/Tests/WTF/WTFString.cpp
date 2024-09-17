@@ -30,6 +30,7 @@
 #include <sstream>
 #include <wtf/MathExtras.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/WTFString.h>
 
 namespace TestWebKitAPI {
@@ -375,7 +376,7 @@ TEST(WTF, StringUnicodeEqualUCharArray)
     EXPECT_FALSE(equal(string1, abcd));
     EXPECT_FALSE(equal(string1, aBc));
 
-    String string2(abc, 3);
+    String string2({ abc, 3 });
     EXPECT_FALSE(equal(string2, ab));
     EXPECT_TRUE(equal(string2, abc));
     EXPECT_FALSE(equal(string2, abcd));

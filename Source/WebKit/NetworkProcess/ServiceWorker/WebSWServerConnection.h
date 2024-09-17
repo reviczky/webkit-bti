@@ -39,6 +39,7 @@
 #include <WebCore/SWServer.h>
 #include <pal/SessionID.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace IPC {
@@ -67,6 +68,8 @@ class NetworkResourceLoader;
 class ServiceWorkerFetchTask;
 
 class WebSWServerConnection final : public WebCore::SWServer::Connection, public IPC::MessageSender, public IPC::MessageReceiver {
+    WTF_MAKE_TZONE_ALLOCATED(WebSWServerConnection);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebSWServerConnection);
 public:
     WebSWServerConnection(NetworkConnectionToWebProcess&, WebCore::SWServer&, IPC::Connection&, WebCore::ProcessIdentifier);
     WebSWServerConnection(const WebSWServerConnection&) = delete;
@@ -147,6 +150,10 @@ private:
     void getNavigationPreloadState(WebCore::ServiceWorkerRegistrationIdentifier, ExceptionOrNavigationPreloadStateCallback&&);
 
     void retrieveRecordResponseBody(WebCore::BackgroundFetchRecordIdentifier, RetrieveRecordResponseBodyCallbackIdentifier);
+
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    void getNotifications(const URL& registrationURL, const String& tag, CompletionHandler<void(Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData>&&)>&&);
+#endif
 
     URL clientURLFromIdentifier(WebCore::ServiceWorkerOrClientIdentifier);
 

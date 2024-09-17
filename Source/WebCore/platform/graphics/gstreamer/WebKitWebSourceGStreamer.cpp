@@ -946,11 +946,10 @@ static void webKitWebSrcUriHandlerInit(gpointer gIface, gpointer)
     iface->set_uri = webKitWebSrcSetUri;
 }
 
-void webKitWebSrcSetResourceLoader(WebKitWebSrc* src, const RefPtr<WebCore::PlatformMediaResourceLoader>& loader)
+void webKitWebSrcSetResourceLoader(WebKitWebSrc* src, WebCore::PlatformMediaResourceLoader& loader)
 {
-    ASSERT(loader);
     DataMutexLocker members { src->priv->dataMutex };
-    members->loader = loader;
+    members->loader = &loader;
 }
 
 void webKitWebSrcSetReferrer(WebKitWebSrc* src, const String& referrer)
@@ -1181,7 +1180,8 @@ void CachedResourceStreamingClient::dataReceived(PlatformMediaResource&, const S
         gst_structure_new("webkit-network-statistics", "read-position", G_TYPE_UINT64, members->readPosition, "size", G_TYPE_UINT64, members->size, nullptr)));
 
     checkUpdateBlocksize(length);
-    GstBuffer* buffer = gstBufferNewWrappedFast(fastMemDup(data.data(), length), length);
+    auto dataSpan = data.span();
+    GstBuffer* buffer = gstBufferNewWrappedFast(fastMemDup(dataSpan.data(), dataSpan.size()), length);
     gst_adapter_push(members->adapter.get(), buffer);
 
     stopLoaderIfNeeded(src.get(), members);

@@ -23,6 +23,7 @@ Build-Depends: debhelper-compat (= 13),
                libjxl-dev,
                liblcms2-dev,
                libmanette-0.2-dev (>= 0.2.4) [linux-any],
+               libsysprof-capture-4-dev (>= 3.38.0) [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4],
                libxslt1-dev,
                libxml2-dev,
                @EXTRA_BUILD_DEPS@
@@ -100,12 +101,15 @@ Description: Web content engine library for GTK - documentation
  .
  This package contains the documentation.
 
-Package: webkit2gtk-driver
+Package: @WEBDRIVER_PKG@
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: @WEBDRIVER_DEP_PKG@ (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
+Conflicts: ${wkwebdriver:Conflicts}
+Breaks: ${wkwebdriver:Replaces}
+Replaces: ${wkwebdriver:Replaces}
 Description: WebKitGTK WebDriver support
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in

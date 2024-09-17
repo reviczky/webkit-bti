@@ -33,8 +33,11 @@
 #import "WebExtensionMatchPattern.h"
 #import "WebExtensionMenuItemContextParameters.h"
 #import "WebExtensionMenuItemParameters.h"
+#import <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebExtensionMenuItem);
 
 bool WebExtensionMenuItem::operator==(const WebExtensionMenuItem& other) const
 {
@@ -97,13 +100,8 @@ bool WebExtensionMenuItem::matches(const WebExtensionMenuItemContextParameters& 
         return false;
     };
 
-    if (matchesType({ ContextType::Action, ContextType::Tab })) {
-        // Additional context checks are not required for Action or Tab.
-        return true;
-    }
-
     auto matchesPattern = [&](const auto& patterns, const URL& url) {
-        if (patterns.isEmpty())
+        if (url.isNull() || patterns.isEmpty())
             return true;
 
         for (const auto& pattern : patterns) {
@@ -117,6 +115,11 @@ bool WebExtensionMenuItem::matches(const WebExtensionMenuItemContextParameters& 
     // Document patterns match for any context type.
     if (!matchesPattern(documentPatterns(), contextParameters.frameURL))
         return false;
+
+    if (matchesType({ ContextType::Action, ContextType::Tab })) {
+        // Additional context checks are not required for Action or Tab.
+        return true;
+    }
 
     if (matchesType(ContextType::Link)) {
         ASSERT(!contextParameters.linkURL.isNull());

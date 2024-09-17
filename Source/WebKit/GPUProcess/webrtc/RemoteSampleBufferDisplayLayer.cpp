@@ -35,14 +35,17 @@
 #include "SampleBufferDisplayLayerMessages.h"
 #include <WebCore/ImageTransferSessionVT.h>
 #include <WebCore/LocalSampleBufferDisplayLayer.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
 
-std::unique_ptr<RemoteSampleBufferDisplayLayer> RemoteSampleBufferDisplayLayer::create(GPUConnectionToWebProcess& gpuConnection, SampleBufferDisplayLayerIdentifier identifier, Ref<IPC::Connection>&& connection)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteSampleBufferDisplayLayer);
+
+RefPtr<RemoteSampleBufferDisplayLayer> RemoteSampleBufferDisplayLayer::create(GPUConnectionToWebProcess& gpuConnection, SampleBufferDisplayLayerIdentifier identifier, Ref<IPC::Connection>&& connection)
 {
-    auto layer = std::unique_ptr<RemoteSampleBufferDisplayLayer>(new RemoteSampleBufferDisplayLayer(gpuConnection, identifier, WTFMove(connection)));
+    RefPtr layer = adoptRef(*new RemoteSampleBufferDisplayLayer(gpuConnection, identifier, WTFMove(connection)));
     return layer->m_sampleBufferDisplayLayer ? WTFMove(layer) : nullptr;
 }
 
@@ -51,17 +54,24 @@ RemoteSampleBufferDisplayLayer::RemoteSampleBufferDisplayLayer(GPUConnectionToWe
     , m_identifier(identifier)
     , m_connection(WTFMove(connection))
     , m_sampleBufferDisplayLayer(LocalSampleBufferDisplayLayer::create(*this))
-    , m_sharedVideoFrameReader(Ref { m_gpuConnection.videoFrameObjectHeap() }, m_gpuConnection.webProcessIdentity())
+    , m_sharedVideoFrameReader(Ref { gpuConnection.videoFrameObjectHeap() }, gpuConnection.webProcessIdentity())
 {
     ASSERT(m_sampleBufferDisplayLayer);
 }
 
-void RemoteSampleBufferDisplayLayer::initialize(bool hideRootLayer, IntSize size, bool shouldMaintainAspectRatio, LayerInitializationCallback&& callback)
+void RemoteSampleBufferDisplayLayer::initialize(bool hideRootLayer, IntSize size, bool shouldMaintainAspectRatio, bool canShowWhileLocked, LayerInitializationCallback&& callback)
 {
-    m_sampleBufferDisplayLayer->initialize(hideRootLayer, size, shouldMaintainAspectRatio, [this, weakThis = WeakPtr { *this }, callback = WTFMove(callback)](bool didSucceed) mutable {
+    LayerHostingContextOptions contextOptions;
+#if PLATFORM(IOS_FAMILY)
+    contextOptions.canShowWhileLocked = canShowWhileLocked;
+#else
+    UNUSED_PARAM(canShowWhileLocked);
+#endif
+    m_sampleBufferDisplayLayer->initialize(hideRootLayer, size, shouldMaintainAspectRatio, [this, weakThis = WeakPtr { *this }, contextOptions, callback = WTFMove(callback)](bool didSucceed) mutable {
         if (!weakThis || !didSucceed)
             return callback({ });
-        m_layerHostingContext = LayerHostingContext::createForExternalHostingProcess();
+
+        m_layerHostingContext = LayerHostingContext::createForExternalHostingProcess(contextOptions);
         m_layerHostingContext->setRootLayer(m_sampleBufferDisplayLayer->rootLayer());
         callback(m_layerHostingContext->contextID());
     });

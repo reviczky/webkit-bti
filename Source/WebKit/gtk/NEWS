@@ -1,77 +1,129 @@
-================
-WebKitGTK 2.44.4
-================
+=================
+WebKitGTK 2.45.92
+=================
 
-What's new in WebKitGTK 2.44.4?
+What's new in WebKitGTK 2.45.92?
 
-  - Add quirk to allow totale.rosettastone.com to load properly.
-  - Fix webkit_web_resource_get_data() not working properly in some sites.
-  - Fix not being able to jump-to-source in Web Inspector canvas traces.
-  - Fix not being able to scroll list of WebGL shader programs in the
-    Web Inspector.
+  - Add webkit://gpu/stdout to dump the information from webkit://gpu to stdout.
+  - Undeprecate injected bundle frame access interfaces.
+  - Fix drag and drop.
+  - Fix connection to a11y bus under flatpak.
+  - Fix the build with Wayland and GBM disabled.
+  - Fix the build in non-linux systems.
   - Fix linker relocation errors on Debug/RelWithDebInfo builds.
-  - Fix crashes when built with Clang with Link-Time Optimization (LTO).
+  - Fix several crashes and rendering issues.
+
+=================
+WebKitGTK 2.45.91
+=================
+
+What's new in WebKitGTK 2.45.91?
+
+  - Add new API to WebKitAutomationSession to be notified when the session is about to be closed.
+  - Fix WebGL with accelerated compositing disabled.
+  - Fix image filtering not being applied in some cases.
+  - Fix the build on 32 bits systems.
+  - Fix the build with -DUSE_TEXTURE_MAPPER_DMABUF=OFF
+  - Fix several crashes and rendering issues.
+  - Translatation updates: Slovenian.
+
+=================
+WebKitGTK 2.45.90
+=================
+
+What's new in WebKitGTK 2.45.90?
+
+  - Add explicit fencing support when available.
+  - Use RGBA as the pixel format for texture backed SkSurfaces.
+  - Fix build with gstreamer versions < 1.22.
+  - Translatation updates: Slovenian.
+
+================
+WebKitGTK 2.45.6
+================
+
+What's new in WebKitGTK 2.45.6?
+
+  - Fix web process cache suspend/resume when sandbox is enabled.
+  - Use server wait instead of client wait for GL fences when possible.
+  - Avoid unnecessary composition when layer didn't change even if a request animation frame is scheduled.
+  - Improve pointer lock on X11.
   - Fix several crashes and rendering issues.
 
 ================
-WebKitGTK 2.44.3
+WebKitGTK 2.45.5
 ================
 
-What's new in WebKitGTK 2.44.3?
+What's new in WebKitGTK 2.45.5?
 
-  - Fix web process cache suspend/resume when sandbox is enabled.
-  - Fix accelerated images dissapearing after scrolling.
-  - Fix video flickering with DMA-BUF sink.
+  - Add support for system tracing with Sysprof.
+  - Allow receiving event listener signals from the a11y bus.
   - Fix pointer lock on X11.
+  - Fix source links in generated API documentation.
+  - Fix drawing shadows in some cases when ImageBitmap is accelerated.
+  - Fix the build with MEDIA_STREAM disabled.
+  - Fix several crashes and rendering issues.
+
+================
+WebKitGTK 2.45.4
+================
+
+What's new in WebKitGTK 2.45.4?
+
+  - Enable offscreen canvas by default in production builds too.
+  - Fix video flickering with DMA-BUF sink.
   - Fix movement delta on mouse events in GTK3.
+  - Fix accelerated images dissapearing after scrolling.
+  - Bubblewrap sandbox no longer kills auxiliary process when UI process terminates.
+  - Fix rendering of shadows with several compositing operators.
+  - Implement FEDropShadow and FEComponentTransfer filters using Skia.
+  - Undeprecate webkit_back_forward_list_item_get_title().
   - Undeprecate console message API and make it available in 2022 API.
   - Fix several crashes and rendering issues.
 
 ================
-WebKitGTK 2.44.2
+WebKitGTK 2.45.3
 ================
 
-What's new in WebKitGTK 2.44.2?
+What's new in WebKitGTK 2.45.3?
 
-  - Make gamepads visible on axis movements, and not only on button presses.
-  - Disable the gst-libav AAC decoder.
-  - Make user scripts and style sheets visible in the Web Inspector.
-  - Use the geolocation portal where available, with the existing geoclue
-    as fallback if the portal is not usable.
-  - Use the printing portal when running sandboxed.
-  - Use the file transfer portal for drag and drop when running sandboxed.
-  - Avoid notifying an empty cursor rectangle to input methods.
-  - Remove empty bar shown in detached inspector windows.
+  - Enable offscreen canvas by default.
+  - Enable ImageBitmap acceleration.
+  - Add support for accelerated offscreen canvas.
+  - Do not display WebGL front buffer before it's initialized.
+  - Fix text scaling.
+  - Add a new setting to enable or disable the 2D canvas acceleration (enabled by default).
+  - Deprecate WebKitWebContext:use-system-appearance-for-scrollbars property.
+  - Undeprecate and document webkit_print_operation_print() behavior.
+  - Fix several crashes and rendering issues.
+
+================
+WebKitGTK 2.45.2
+================
+
+What's new in WebKitGTK 2.45.2?
+
+  - Use cairo on big-endian for now, since skia doesn't support it.
+  - Fix a crash in GIF image decoder.
+  - Revert the text scaling fix, since it caused several issues in some sites.
+  - Add new API to load settings from a config file.
+  - Fix several crashes and rendering issues.
+
+================
+WebKitGTK 2.45.1
+================
+
+What's new in WebKitGTK 2.45.1?
+
+  - Use skia instead of cairo for rendering.
+  - Sync WebGL content with fences when available.
+  - Implement printing using the Print portal.
+  - Disable the gst-libav aac decoder.
+  - Fix text scaling.
   - Consider keycode when activating application accelerators.
-  - Fix the build with ENABLE_WEBAUDIO disabled.
+  - Support AXActiveElement and AXSelectedChildren for comboboxes, lists and listboxes.
+  - Avoid notifying an empty cursor rectangle to input methods.
   - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.44.1
-================
-
-What's new in WebKitGTK 2.44.1?
-
-  - Fix handling of lifetime of web view child dialogs in GTK4.
-  - Do not schedule layer flushes when drawing area size is empty.
-  - Fix videos with alpha when using the DMA-BUF sink.
-  - Fix the build with USE_GBM=OFF.
-  - Fix the build in 32bit platforms
-  - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.44.0
-================
-
-What's new in WebKitGTK 2.44.0?
-
-  - Fix connection of UI and web process accessibility tree in GTK4.
-  - Add BubblewrapLauncher sandbox directory for the gstreamer user registry cache directory.
-  - Fix bug causing preferred language to not be passed to NetworkProcess if set in WebContext before creating WebView.
-  - Do not use real time priority for the display link thread.
-  - Use a shorter web process cache lifetime.
-  - Fix several crashes and rendering issues.
-  - Translation updates: German, Polish, Swedish, Turkish.
 
 ================
 WebKitGTK 2.43.4

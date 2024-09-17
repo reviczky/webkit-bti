@@ -36,8 +36,6 @@ FetchBodySource::FetchBodySource(FetchBodyOwner& bodyOwner)
 {
 }
 
-FetchBodySource::~FetchBodySource() = default;
-
 void FetchBodySource::setActive()
 {
     ASSERT(m_bodyOwner);

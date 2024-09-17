@@ -62,15 +62,14 @@
 #include <WebCore/UserTypingGestureIndicator.h>
 #include <WebCore/VisibleUnits.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringView.h>
-
-#if PLATFORM(GTK)
-#include <WebCore/PlatformDisplay.h>
-#endif
 
 namespace WebKit {
 using namespace WebCore;
 using namespace HTMLNames;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebEditorClient);
 
 bool WebEditorClient::shouldDeleteRange(const std::optional<SimpleRange>& range)
 {
@@ -268,9 +267,21 @@ void WebEditorClient::willWriteSelectionToPasteboard(const std::optional<SimpleR
     m_page->injectedBundleEditorClient().willWriteToPasteboard(*m_page, range);
 }
 
-void WebEditorClient::getClientPasteboardData(const std::optional<SimpleRange>& range, Vector<String>& pasteboardTypes, Vector<RefPtr<SharedBuffer>>& pasteboardData)
+void WebEditorClient::getClientPasteboardData(const std::optional<SimpleRange>& range, Vector<std::pair<String, RefPtr<WebCore::SharedBuffer>>>& pasteboardTypesAndData)
 {
+    Vector<String> pasteboardTypes;
+    Vector<RefPtr<WebCore::SharedBuffer>> pasteboardData;
+    for (size_t i = 0; i < pasteboardTypesAndData.size(); ++i) {
+        pasteboardTypes.append(pasteboardTypesAndData[i].first);
+        pasteboardData.append(pasteboardTypesAndData[i].second);
+    }
+
     m_page->injectedBundleEditorClient().getPasteboardDataForRange(*m_page, range, pasteboardTypes, pasteboardData);
+
+    ASSERT(pasteboardTypes.size() == pasteboardData.size());
+    pasteboardTypesAndData.clear();
+    for (size_t i = 0; i < pasteboardTypes.size(); ++i)
+        pasteboardTypesAndData.append(std::make_pair(pasteboardTypes[i], pasteboardData[i]));
 }
 
 bool WebEditorClient::performTwoStepDrop(DocumentFragment& fragment, const SimpleRange& destination, bool isMove)
@@ -611,15 +622,11 @@ void WebEditorClient::setInputMethodState(Element* element)
 
 bool WebEditorClient::supportsGlobalSelection()
 {
-#if PLATFORM(GTK) && PLATFORM(X11)
-    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::X11)
-        return true;
-#endif
-#if PLATFORM(GTK) && PLATFORM(WAYLAND)
-    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland)
-        return true;
-#endif
+#if PLATFORM(GTK)
+    return true;
+#else
     return false;
+#endif
 }
 
 } // namespace WebKit

@@ -34,7 +34,9 @@
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakRef.h>
 
 namespace WebCore::ShapeDetection {
 class BarcodeDetector;
@@ -44,6 +46,7 @@ struct DetectedBarcode;
 
 namespace WebKit {
 class RemoteRenderingBackend;
+struct SharedPreferencesForWebProcess;
 
 namespace ShapeDetection {
 class ObjectHeap;
@@ -51,13 +54,14 @@ class ObjectHeap;
 
 class RemoteBarcodeDetector : public IPC::StreamMessageReceiver {
 public:
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteBarcodeDetector);
 public:
     static Ref<RemoteBarcodeDetector> create(Ref<WebCore::ShapeDetection::BarcodeDetector>&& barcodeDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     {
         return adoptRef(*new RemoteBarcodeDetector(WTFMove(barcodeDetector), objectHeap, backend, identifier, webProcessIdentifier));
     }
 
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
     virtual ~RemoteBarcodeDetector();
 
 private:
@@ -69,14 +73,16 @@ private:
     RemoteBarcodeDetector& operator=(RemoteBarcodeDetector&&) = delete;
 
     WebCore::ShapeDetection::BarcodeDetector& backing() { return m_backing; }
+    Ref<WebCore::ShapeDetection::BarcodeDetector> protectedBacking();
+    Ref<RemoteRenderingBackend> protectedBackend();
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 
     void detect(WebCore::RenderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedBarcode>&&)>&&);
 
     Ref<WebCore::ShapeDetection::BarcodeDetector> m_backing;
-    ShapeDetection::ObjectHeap& m_objectHeap;
-    RemoteRenderingBackend& m_backend;
+    WeakRef<ShapeDetection::ObjectHeap> m_objectHeap;
+    WeakRef<RemoteRenderingBackend> m_backend;
     const ShapeDetectionIdentifier m_identifier;
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
 };

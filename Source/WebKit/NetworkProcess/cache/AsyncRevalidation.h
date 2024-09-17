@@ -31,7 +31,19 @@
 #include "NetworkCacheEntry.h"
 #include "NetworkCacheSpeculativeLoad.h"
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebCore {
+namespace NetworkCache {
+class AsyncRevalidation;
+}
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::NetworkCache::AsyncRevalidation> : std::true_type { };
+}
 
 namespace WebCore {
 enum class AdvancedPrivacyProtections : uint16_t;
@@ -45,7 +57,7 @@ class SpeculativeLoad;
 namespace NetworkCache {
 
 class AsyncRevalidation : public CanMakeWeakPtr<AsyncRevalidation> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AsyncRevalidation);
 public:
     enum class Result {
         Failure,

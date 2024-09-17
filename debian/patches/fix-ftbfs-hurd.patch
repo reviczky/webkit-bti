@@ -6,7 +6,7 @@ Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 +++ webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
-@@ -72,11 +72,21 @@ static void scanDirectoryForDictionaries
+@@ -73,11 +73,21 @@ static void scanDirectoryForDictionaries
              continue;
  
          auto filePath = FileSystem::pathByAppendingComponent(directoryPathString, fileName);
@@ -32,7 +32,7 @@ Index: webkitgtk/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
 +++ webkitgtk/Source/WTF/wtf/posix/FileSystemPOSIX.cpp
-@@ -50,6 +50,10 @@
+@@ -51,6 +51,10 @@
  #include <glib.h>
  #endif
  

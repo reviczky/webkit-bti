@@ -34,6 +34,7 @@
 #include "SubframeLoader.h"
 
 #include "ContentSecurityPolicy.h"
+#include "DNS.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
 #include "DocumentInlines.h"
@@ -138,12 +139,12 @@ bool FrameLoader::SubframeLoader::pluginIsLoadable(const URL& url)
             return false;
         }
 
-        if (!portAllowed(url)) {
+        if (!portAllowed(url) || isIPAddressDisallowed(url)) {
             FrameLoader::reportBlockedLoadFailed(protectedFrame(), url);
             return false;
         }
 
-        if (!MixedContentChecker::frameAndAncestorsCanRunInsecureContent(protectedFrame(), securityOrigin, url))
+        if (MixedContentChecker::shouldBlockRequestForRunnableContent(protectedFrame(), securityOrigin, url))
             return false;
     }
 
@@ -180,7 +181,7 @@ bool FrameLoader::SubframeLoader::requestPlugin(HTMLPlugInImageElement& ownerEle
     // Application plug-ins are plug-ins implemented by the user agent, for example Qt plug-ins,
     // as opposed to third-party code such as Flash. The user agent decides whether or not they are
     // permitted, rather than WebKit.
-    if (!(m_frame->arePluginsEnabled() || MIMETypeRegistry::isApplicationPluginMIMEType(mimeType)))
+    if (!(m_frame->settings().legacyPluginQuirkForMailSignaturesEnabled() || MIMETypeRegistry::isApplicationPluginMIMEType(mimeType)))
         return false;
 
     if (!pluginIsLoadable(url))
@@ -266,9 +267,9 @@ LocalFrame* FrameLoader::SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerEl
                 page->willChangeLocationInCompletelyLoadedSubframe();
         }
 
-        frame->checkedNavigationScheduler()->scheduleLocationChange(initiatingDocument, initiatingDocument->protectedSecurityOrigin(), upgradedRequestURL, m_frame->loader().outgoingReferrer(), lockHistory, lockBackForwardList, WTFMove(stopDelayingLoadEvent));
+        frame->checkedNavigationScheduler()->scheduleLocationChange(initiatingDocument, initiatingDocument->protectedSecurityOrigin(), upgradedRequestURL, m_frame->loader().outgoingReferrer(), lockHistory, lockBackForwardList, NavigationHistoryBehavior::Auto, WTFMove(stopDelayingLoadEvent));
     } else
-        frame = loadSubframe(ownerElement, upgradedRequestURL, frameName, m_frame->loader().outgoingReferrer());
+        frame = loadSubframe(ownerElement, upgradedRequestURL, frameName, m_frame->loader().outgoingReferrerURL());
 
     if (!frame)
         return nullptr;
@@ -277,7 +278,7 @@ LocalFrame* FrameLoader::SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerEl
     return dynamicDowncast<LocalFrame>(ownerElement.contentFrame());
 }
 
-RefPtr<LocalFrame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const URL& url, const AtomString& name, const String& referrer)
+RefPtr<LocalFrame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const URL& url, const AtomString& name, const URL& referrer)
 {
     Ref frame = m_frame.get();
     Ref document = ownerElement.document();
@@ -287,7 +288,7 @@ RefPtr<LocalFrame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerEleme
         return nullptr;
     }
 
-    if (!portAllowed(url)) {
+    if (!portAllowed(url) || isIPAddressDisallowed(url)) {
         FrameLoader::reportBlockedLoadFailed(frame, url);
         return nullptr;
     }
@@ -323,7 +324,7 @@ RefPtr<LocalFrame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerEleme
     // https://html.spec.whatwg.org/#initialise-the-document-object, should
     // not happen when creating and initializing a new Document object (in
     // which case, Referrer Policy is applied).
-    auto referrerToUse = url.isAboutBlank() ? referrer : SecurityPolicy::generateReferrerHeader(policy, url, referrer, OriginAccessPatternsForWebProcess::singleton());
+    auto referrerToUse = url.isAboutBlank() ? referrer.string() : SecurityPolicy::generateReferrerHeader(policy, url, referrer, OriginAccessPatternsForWebProcess::singleton());
 
     frame->checkedLoader()->loadURLIntoChildFrame(url, referrerToUse, subFrame.get());
 
@@ -373,10 +374,6 @@ RefPtr<LocalFrame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerEleme
 bool FrameLoader::SubframeLoader::shouldUsePlugin(const URL& url, const String& mimeType, bool hasFallback, bool& useFallback)
 {
     Ref frame = m_frame.get();
-    if (frame->checkedLoader()->client().shouldAlwaysUsePluginDocument(mimeType)) {
-        useFallback = false;
-        return true;
-    }
 
     ObjectContentType objectType = frame->checkedLoader()->client().objectContentType(url, mimeType);
     // If an object's content can't be handled and it has no fallback, let

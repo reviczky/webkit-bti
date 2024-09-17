@@ -25,9 +25,8 @@
 
 #pragma once
 
-#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
+#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_RECORDER)
 
-#include "DataReference.h"
 #include "MediaRecorderIdentifier.h"
 #include "MessageReceiver.h"
 #include "RemoteVideoFrameIdentifier.h"
@@ -36,6 +35,9 @@
 #include <WebCore/CAAudioStreamDescription.h>
 #include <WebCore/MediaRecorderPrivateWriterCocoa.h>
 #include <wtf/MediaTime.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
+#include <wtf/WeakRef.h>
 
 namespace IPC {
 class Connection;
@@ -52,7 +54,7 @@ namespace WebKit {
 class GPUConnectionToWebProcess;
 
 class RemoteMediaRecorder : private IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteMediaRecorder);
 public:
     static std::unique_ptr<RemoteMediaRecorder> create(GPUConnectionToWebProcess&, MediaRecorderIdentifier, bool recordAudio, bool recordVideo, const WebCore::MediaRecorderPrivateOptions&);
     ~RemoteMediaRecorder();
@@ -66,18 +68,20 @@ public:
 private:
     RemoteMediaRecorder(GPUConnectionToWebProcess&, MediaRecorderIdentifier, Ref<WebCore::MediaRecorderPrivateWriter>&&, bool recordAudio);
 
+    RefPtr<IPC::Connection> connection() const;
+
     // IPC::MessageReceiver
     void audioSamplesStorageChanged(ConsumerSharedCARingBuffer::Handle&&, const WebCore::CAAudioStreamDescription&);
     void audioSamplesAvailable(MediaTime, uint64_t numberOfFrames);
     void videoFrameAvailable(SharedVideoFrame&&);
-    void fetchData(CompletionHandler<void(IPC::DataReference&&, double)>&&);
+    void fetchData(CompletionHandler<void(std::span<const uint8_t>, double)>&&);
     void stopRecording(CompletionHandler<void()>&&);
     void pause(CompletionHandler<void()>&&);
     void resume(CompletionHandler<void()>&&);
     void setSharedVideoFrameSemaphore(IPC::Semaphore&&);
     void setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&&);
 
-    GPUConnectionToWebProcess& m_gpuConnectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     MediaRecorderIdentifier m_identifier;
     Ref<WebCore::MediaRecorderPrivateWriter> m_writer;
 
@@ -91,4 +95,4 @@ private:
 
 }
 
-#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
+#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_RECORDER)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,7 @@
 #include "APIUserInitiatedAction.h"
 #include "AuxiliaryProcessProxy.h"
 #include "BackgroundProcessResponsivenessTimer.h"
-#include "GPUProcessPreferencesForWebProcess.h"
+#include "GPUProcessConnectionIdentifier.h"
 #include "MessageReceiverMap.h"
 #include "NetworkProcessProxy.h"
 #include "ProcessLauncher.h"
@@ -36,16 +36,17 @@
 #include "ProcessThrottler.h"
 #include "RemoteWorkerInitializationData.h"
 #include "ResponsivenessTimer.h"
+#include "SharedPreferencesForWebProcess.h"
 #include "SpeechRecognitionServer.h"
 #include "UserContentControllerIdentifier.h"
 #include "VisibleWebPageCounter.h"
-#include "WebConnectionToWebProcess.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/CrossOriginMode.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/MediaProducer.h>
 #include <WebCore/PageIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
+#include <WebCore/ProcessIdentity.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SharedStringHash.h>
 #include <pal/SessionID.h>
@@ -56,6 +57,8 @@
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/RobinHoodHashSet.h>
+#include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
@@ -69,6 +72,15 @@
 #include "DisplayLinkProcessProxyClient.h"
 #endif
 
+namespace WebKit {
+class WebProcessProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebProcessProxy> : std::true_type { };
+}
+
 namespace API {
 class Navigation;
 class PageConfiguration;
@@ -80,7 +92,10 @@ class ResourceRequest;
 struct NotificationData;
 struct PluginInfo;
 struct PrewarmInformation;
+struct WebProcessCreationParameters;
 class SecurityOriginData;
+struct WrappedCryptoKey;
+
 enum class PermissionName : uint8_t;
 enum class ThirdPartyCookieBlockingMode : uint8_t;
 using FramesPerSecond = unsigned;
@@ -95,7 +110,6 @@ namespace WebKit {
 
 class AudioSessionRoutingArbitratorProxy;
 class ModelProcessProxy;
-class ObjCObjectGraph;
 class PageClient;
 class ProvisionalPageProxy;
 class RemotePageProxy;
@@ -109,6 +123,8 @@ class WebLockRegistryProxy;
 class WebPageGroup;
 class WebPageProxy;
 class WebPermissionControllerProxy;
+class WebPreferences;
+class WebProcessActivityState;
 class WebProcessPool;
 class WebUserContentControllerProxy;
 class WebsiteDataStore;
@@ -122,6 +138,7 @@ struct WebPageCreationParameters;
 struct WebPreferencesStore;
 struct WebsiteData;
 
+enum class ProcessThrottleState : uint8_t;
 enum class RemoteWorkerType : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
@@ -144,6 +161,8 @@ using WebProcessWithMediaStreamingToken = WebProcessWithMediaStreamingCounter::T
 enum class CheckBackForwardList : bool { No, Yes };
 
 class WebProcessProxy : public AuxiliaryProcessProxy {
+    WTF_MAKE_TZONE_ALLOCATED(WebProcessProxy);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebProcessProxy);
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakRef<WebPageProxy>>;
     using UserInitiatedActionByAuthorizationTokenMap = HashMap<WTF::UUID, RefPtr<API::UserInitiatedAction>>;
@@ -162,8 +181,7 @@ public:
     static void forWebPagesWithOrigin(PAL::SessionID, const WebCore::SecurityOriginData&, const Function<void(WebPageProxy&)>&);
     static Vector<std::pair<WebCore::ProcessIdentifier, WebCore::RegistrableDomain>> allowedFirstPartiesForCookies();
 
-    WebConnection* webConnection() const { return m_webConnection.get(); }
-    RefPtr<WebConnection> protectedWebConnection() const { return m_webConnection; }
+    void initializeWebProcess(WebProcessCreationParameters&&);
 
     unsigned suspendedPageCount() const { return m_suspendedPages.computeSize(); }
     void addSuspendedPageProxy(SuspendedPageProxy&);
@@ -173,9 +191,13 @@ public:
     WebProcessPool& processPool() const;
     Ref<WebProcessPool> protectedProcessPool() const;
 
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
+    std::optional<SharedPreferencesForWebProcess> updateSharedPreferencesForWebProcess(const WebPreferencesStore&);
+    void didSyncSharedPreferencesForWebProcessWithNetworkProcess(uint64_t syncedPreferencesVersion);
 #if ENABLE(GPU_PROCESS)
-    const std::optional<GPUProcessPreferencesForWebProcess>& preferencesForGPUProcess() const { return m_preferencesForGPUProcess; }
+    void didSyncSharedPreferencesForWebProcessWithGPUProcess(uint64_t syncedPreferencesVersion);
 #endif
+    void waitForSharedPreferencesForWebProcessToSync(uint64_t sharedPreferencesVersion, CompletionHandler<void(bool success)>&&);
 
     bool isMatchingRegistrableDomain(const WebCore::RegistrableDomain& domain) const { return m_registrableDomain ? *m_registrableDomain == domain : false; }
     WebCore::RegistrableDomain registrableDomain() const { return valueOrDefault(m_registrableDomain); }
@@ -217,6 +239,7 @@ public:
     void removeRemotePageProxy(RemotePageProxy&);
 
     Vector<Ref<WebPageProxy>> pages() const;
+    Vector<Ref<WebPageProxy>> mainPages() const;
     unsigned pageCount() const { return m_pageMap.size(); }
     unsigned provisionalPageCount() const { return m_provisionalPages.computeSize(); }
     unsigned visiblePageCount() const { return m_visiblePageCounter.value(); }
@@ -257,7 +280,8 @@ public:
     void updateTextCheckerState();
 
     void willAcquireUniversalFileReadSandboxExtension() { m_mayHaveUniversalFileReadSandboxExtension = true; }
-    void assumeReadAccessToBaseURL(WebPageProxy&, const String&);
+    void assumeReadAccessToBaseURL(WebPageProxy&, const String&, CompletionHandler<void()>&&, bool directoryOnly = false);
+    void assumeReadAccessToBaseURLs(WebPageProxy&, const Vector<String>&, CompletionHandler<void()>&&);
     bool hasAssumedReadAccessToURL(const URL&) const;
 
     bool checkURLReceivedFromWebProcess(const String&, CheckBackForwardList = CheckBackForwardList::Yes);
@@ -293,17 +317,7 @@ public:
     RefPtr<API::Object> transformHandlesToObjects(API::Object*);
     static RefPtr<API::Object> transformObjectsToHandles(API::Object*);
 
-#if PLATFORM(COCOA)
-    RefPtr<ObjCObjectGraph> transformHandlesToObjects(ObjCObjectGraph&);
-    static RefPtr<ObjCObjectGraph> transformObjectsToHandles(ObjCObjectGraph&);
-#endif
-
     void windowServerConnectionStateChanged();
-
-    void setIsHoldingLockedFiles(bool);
-
-    ProcessThrottler& throttler() final { return m_throttler; }
-    const ProcessThrottler& throttler() const { return m_throttler; }
 
     void isResponsive(CompletionHandler<void(bool isWebProcessResponsive)>&&);
     void isResponsiveWithLazyStop();
@@ -317,6 +331,7 @@ public:
     void didExceedCPULimit();
     void didExceedActiveMemoryLimit();
     void didExceedInactiveMemoryLimit();
+    void didExceedMemoryFootprintThreshold(size_t);
 
     void didCommitProvisionalLoad() { m_hasCommittedAnyProvisionalLoads = true; }
     bool hasCommittedAnyProvisionalLoads() const { return m_hasCommittedAnyProvisionalLoads; }
@@ -335,11 +350,6 @@ public:
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes() const;
     void cacheMediaMIMETypes(const Vector<String>&);
-#endif
-
-#if PLATFORM(MAC)
-    void requestHighPerformanceGPU();
-    void releaseHighPerformanceGPU();
 #endif
 
 #if HAVE(DISPLAY_LINK)
@@ -391,7 +401,7 @@ public:
     void sendAudioComponentRegistrations();
 #endif
 
-    bool hasSameGPUProcessPreferencesAs(const API::PageConfiguration&) const;
+    bool hasSameGPUAndNetworkProcessPreferencesAs(const API::PageConfiguration&) const;
 
 #if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
     void enableRemoteInspectorIfNeeded();
@@ -471,6 +481,8 @@ public:
     void setCaptionLanguage(const String&);
 #endif
     void getNotifications(const URL&, const String&, CompletionHandler<void(Vector<WebCore::NotificationData>&&)>&&);
+    void wrapCryptoKey(Vector<uint8_t>&&, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
+    void unwrapCryptoKey(WebCore::WrappedCryptoKey&&, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
 
     void setAppBadge(std::optional<WebPageProxyIdentifier>, const WebCore::SecurityOriginData&, std::optional<uint64_t> badge);
     void setClientBadge(WebPageProxyIdentifier, const WebCore::SecurityOriginData&, std::optional<uint64_t> badge);
@@ -480,7 +492,7 @@ public:
 
 #if PLATFORM(COCOA)
     std::optional<audit_token_t> auditToken() const;
-    Vector<SandboxExtension::Handle> fontdMachExtensionHandles(SandboxExtension::MachBootstrapOptions) const;
+    std::optional<Vector<SandboxExtension::Handle>> fontdMachExtensionHandles();
 #endif
 
     bool isConnectedToHardwareConsole() const { return m_isConnectedToHardwareConsole; }
@@ -495,13 +507,23 @@ public:
     static void permissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
     void processPermissionChanged(WebCore::PermissionName, const WebCore::SecurityOriginData&);
 
-    void addAllowedFirstPartyForCookies(const WebCore::RegistrableDomain&);
-
     Logger& logger();
 
     void resetState();
 
-protected:
+    Seconds totalForegroundTime() const;
+    Seconds totalBackgroundTime() const;
+    Seconds totalSuspendedTime() const;
+
+#if ENABLE(WEBXR)
+    const WebCore::ProcessIdentity& processIdentity();
+#endif
+
+    WebProcessActivityState& activityState() { return m_activityState; }
+
+private:
+    Type type() const final { return Type::WebContent; }
+
     WebProcessProxy(WebProcessPool&, WebsiteDataStore*, IsPrewarmed, WebCore::CrossOriginMode, LockdownMode);
 
     // AuxiliaryProcessProxy
@@ -523,17 +545,18 @@ protected:
     bool isJITEnabled() const final;
     bool shouldEnableSharedArrayBuffer() const final { return m_crossOriginMode == WebCore::CrossOriginMode::Isolated; }
     bool shouldEnableLockdownMode() const final { return m_lockdownMode == LockdownMode::Enabled; }
+    bool shouldDisableJITCage() const final;
 
     void validateFreezerStatus();
 
-private:
+    void getWebCryptoMasterKey(CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
     using WebProcessProxyMap = HashMap<WebCore::ProcessIdentifier, CheckedRef<WebProcessProxy>>;
     static WebProcessProxyMap& allProcessMap();
     static Vector<Ref<WebProcessProxy>> allProcesses();
     static WebPageProxyMap& globalPageMap();
     static Vector<Ref<WebPageProxy>> globalPages();
 
-    void initializePreferencesForGPUProcess(const WebPageProxy&);
+    void initializePreferencesForGPUAndNetworkProcesses(const WebPageProxy&);
 
     void reportProcessDisassociatedWithPageIfNecessary(WebPageProxyIdentifier);
     bool isAssociatedWithPage(WebPageProxyIdentifier) const;
@@ -543,7 +566,7 @@ private:
 
     // IPC message handlers.
     void updateBackForwardItem(const BackForwardListItemState&);
-    void didDestroyFrame(WebCore::FrameIdentifier, WebPageProxyIdentifier);
+    void didDestroyFrame(IPC::Connection&, WebCore::FrameIdentifier, WebPageProxyIdentifier);
     void didDestroyUserGestureToken(WebCore::PageIdentifier, uint64_t);
 
     bool canBeAddedToWebProcessCache() const;
@@ -555,7 +578,8 @@ private:
     void getNetworkProcessConnection(CompletionHandler<void(NetworkProcessConnectionInfo&&)>&&);
 
 #if ENABLE(GPU_PROCESS)
-    void createGPUProcessConnection(IPC::Connection::Handle&&, WebKit::GPUProcessConnectionParameters&&);
+    void createGPUProcessConnection(GPUProcessConnectionIdentifier, IPC::Connection::Handle&&);
+    void gpuProcessConnectionDidBecomeUnresponsive(GPUProcessConnectionIdentifier);
 #endif
 
 #if ENABLE(MODEL_PROCESS)
@@ -571,11 +595,10 @@ private:
     void processDidTerminateOrFailedToLaunch(ProcessTerminationReason);
 
     // IPC::Connection::Client
-    friend class WebConnectionToWebProcess;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive() override;
@@ -607,7 +630,7 @@ private:
 
     void systemBeep();
     
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     void isAXAuthenticated(CoreIPCAuditToken&&, CompletionHandler<void(bool)>&&);
 #endif
 
@@ -617,6 +640,8 @@ private:
 
     bool shouldTakeNearSuspendedAssertion() const;
     bool shouldDropNearSuspendedAssertionAfterDelay() const;
+
+    void updateRuntimeStatistics();
 
     enum class IsWeak : bool { No, Yes };
     template<typename T> class WeakOrStrongPtr {
@@ -652,7 +677,6 @@ private:
 
     BackgroundProcessResponsivenessTimer m_backgroundResponsivenessTimer;
     
-    RefPtr<WebConnectionToWebProcess> m_webConnection;
     WeakOrStrongPtr<WebProcessPool> m_processPool; // Pre-warmed and cached processes do not hold a strong reference to their pool.
 
     bool m_mayHaveUniversalFileReadSandboxExtension; // True if a read extension for "/" was ever granted - we don't track whether WebProcess still has it.
@@ -670,8 +694,6 @@ private:
     WeakHashSet<WebUserContentControllerProxy> m_webUserContentControllerProxies;
 
     int m_numberOfTimesSuddenTerminationWasDisabled;
-    ProcessThrottler m_throttler;
-    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_activityForHoldingLockedFiles;
     ForegroundWebProcessToken m_foregroundToken;
     BackgroundWebProcessToken m_backgroundToken;
     bool m_areThrottleStateChangesEnabled { true };
@@ -708,6 +730,7 @@ private:
     WebCore::CrossOriginMode m_crossOriginMode { WebCore::CrossOriginMode::Shared };
 #if PLATFORM(COCOA)
     bool m_hasNetworkExtensionSandboxAccess { false };
+    bool m_sentFontdMachExtensionHandles { false };
 #endif
 
 #if PLATFORM(WATCHOS)
@@ -761,11 +784,31 @@ private:
     bool m_platformSuspendDidReleaseNearSuspendedAssertion { false };
 #endif
     mutable String m_environmentIdentifier;
+    mutable SharedPreferencesForWebProcess m_sharedPreferencesForWebProcess;
+    uint64_t m_sharedPreferencesVersionInNetworkProcess { 0 };
 #if ENABLE(GPU_PROCESS)
-    mutable std::optional<GPUProcessPreferencesForWebProcess> m_preferencesForGPUProcess;
+    uint64_t m_sharedPreferencesVersionInGPUProcess { 0 };
 #endif
+    uint64_t m_awaitedSharedPreferencesVersion { 0 };
+    CompletionHandler<void(bool success)> m_sharedPreferencesForWebProcessCompletionHandler;
+#if ENABLE(GPU_PROCESS)
+    GPUProcessConnectionIdentifier m_gpuProcessConnectionIdentifier;
+#endif
+
+    ProcessThrottleState m_throttleStateForStatistics { ProcessThrottleState::Suspended };
+    MonotonicTime m_throttleStateForStatisticsTimestamp;
+    Seconds m_totalForegroundTime;
+    Seconds m_totalBackgroundTime;
+    Seconds m_totalSuspendedTime;
+    WebCore::ProcessIdentity m_processIdentity;
+
+    UniqueRef<WebProcessActivityState> m_activityState;
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const WebProcessProxy&);
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::WebProcessProxy)
+static bool isType(const WebKit::AuxiliaryProcessProxy& process) { return process.type() == WebKit::AuxiliaryProcessProxy::Type::WebContent; }
+SPECIALIZE_TYPE_TRAITS_END()

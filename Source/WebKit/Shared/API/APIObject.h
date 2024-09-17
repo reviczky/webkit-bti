@@ -55,7 +55,6 @@ public:
         AuthenticationDecisionListener,
         CaptionUserPreferencesTestingModeToken,
         CertificateInfo,
-        Connection,
         ContextMenuItem,
         Credential,
         Data,
@@ -72,6 +71,8 @@ public:
         SessionState,
         SerializedScriptValue,
         String,
+        TargetedElementInfo,
+        TargetedElementRequest,
         URL,
         URLRequest,
         URLResponse,
@@ -181,8 +182,12 @@ public:
         WebExtensionContext,
         WebExtensionController,
         WebExtensionControllerConfiguration,
+        WebExtensionDataRecord,
         WebExtensionMatchPattern,
         WebExtensionMessagePort,
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+        WebExtensionSidebar,
+#endif
 #endif
         WebResourceLoadStatisticsManager,
         WebsiteDataRecord,
@@ -216,7 +221,6 @@ public:
 
         // Platform specific
         EditCommandProxy,
-        ObjCObjectGraph,
         View,
 #if USE(SOUP)
         SoupRequestManager,
@@ -300,7 +304,7 @@ inline API::Object* Object::unwrap(void* object)
 }
 #endif
 
-} // namespace Object
+} // namespace API
 
 #undef DELEGATE_REF_COUNTING_TO_COCOA
 

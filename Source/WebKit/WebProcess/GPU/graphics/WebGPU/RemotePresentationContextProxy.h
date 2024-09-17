@@ -31,6 +31,11 @@
 #include "WebGPUIdentifier.h"
 #include <WebCore/WebGPUIntegralTypes.h>
 #include <WebCore/WebGPUPresentationContext.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebCore {
+class NativeImage;
+}
 
 namespace WebKit::WebGPU {
 
@@ -38,7 +43,7 @@ class ConvertToBackingContext;
 class RemoteTextureProxy;
 
 class RemotePresentationContextProxy final : public WebCore::WebGPU::PresentationContext {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemotePresentationContextProxy);
 public:
     static Ref<RemotePresentationContextProxy> create(RemoteGPUProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
     {
@@ -50,7 +55,7 @@ public:
     RemoteGPUProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent->root(); }
 
-    void present();
+    void present(bool = false) final;
 
 private:
     friend class DowncastConvertToBackingContext;
@@ -63,20 +68,15 @@ private:
     RemotePresentationContextProxy& operator=(RemotePresentationContextProxy&&) = delete;
 
     WebGPUIdentifier backing() const { return m_backing; }
+    RefPtr<WebCore::NativeImage> getMetalTextureAsNativeImage(uint32_t) final;
 
-    static inline constexpr Seconds defaultSendTimeout = 30_s;
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
     {
-        return root().streamClientConnection().send(WTFMove(message), backing(), defaultSendTimeout);
-    }
-    template<typename T>
-    WARN_UNUSED_RETURN IPC::Connection::SendSyncResult<T> sendSync(T&& message)
-    {
-        return root().streamClientConnection().sendSync(WTFMove(message), backing(), defaultSendTimeout);
+        return root().streamClientConnection().send(WTFMove(message), backing());
     }
 
-    void configure(const WebCore::WebGPU::CanvasConfiguration&) final;
+    bool configure(const WebCore::WebGPU::CanvasConfiguration&) final;
     void unconfigure() final;
 
     RefPtr<WebCore::WebGPU::Texture> getCurrentTexture() final;

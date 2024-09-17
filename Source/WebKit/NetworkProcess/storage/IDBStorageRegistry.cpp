@@ -29,10 +29,13 @@
 #include "IDBStorageConnectionToClient.h"
 #include <WebCore/UniqueIDBDatabaseConnection.h>
 #include <WebCore/UniqueIDBDatabaseTransaction.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 IDBStorageRegistry::IDBStorageRegistry() = default;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(IDBStorageRegistry);
 
 WebCore::IDBServer::IDBConnectionToClient& IDBStorageRegistry::ensureConnectionToClient(IPC::Connection::UniqueID connection, WebCore::IDBConnectionIdentifier identifier)
 {
@@ -88,7 +91,7 @@ void IDBStorageRegistry::unregisterTransaction(WebCore::IDBServer::UniqueIDBData
     m_transactions.remove(identifier);
 }
 
-WebCore::IDBServer::UniqueIDBDatabaseConnection* IDBStorageRegistry::connection(uint64_t identifier)
+WebCore::IDBServer::UniqueIDBDatabaseConnection* IDBStorageRegistry::connection(WebCore::IDBDatabaseConnectionIdentifier identifier)
 {
     return m_connections.get(identifier).get();
 }

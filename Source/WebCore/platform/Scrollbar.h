@@ -72,7 +72,7 @@ public:
     int totalSize() const { return m_totalSize; }
     int maximum() const { return m_totalSize - m_visibleSize; }
     ScrollbarWidth widthStyle() const { return m_widthStyle; }
-    
+
     int occupiedWidth() const;
     int occupiedHeight() const;
 
@@ -143,6 +143,7 @@ public:
 
     bool shouldRegisterScrollbar() const;
     int minimumThumbLength() const;
+    void updateScrollbarThickness();
 
     virtual bool isMacScrollbar() const { return false; }
 

@@ -26,15 +26,15 @@
 #pragma once
 
 #include "Attachment.h"
-#include "DataReference.h"
 #include "MessageNames.h"
 #include "ReceiverMatcher.h"
-#include <wtf/Algorithms.h>
 #include <wtf/ArgumentCoder.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
 #if PLATFORM(MAC)
@@ -53,8 +53,6 @@ enum class MessageFlags : uint8_t;
 enum class ShouldDispatchWhenWaitingForSyncReply : uint8_t;
 
 template<typename, typename> struct ArgumentCoder;
-template<typename, typename, typename> struct HasLegacyDecoder;
-template<typename, typename, typename> struct HasModernDecoder;
 
 #ifdef __OBJC__
 template<typename T> using IsObjCObject = std::enable_if_t<std::is_convertible<T *, id>::value, T *>;
@@ -68,12 +66,12 @@ template<typename T, typename = IsObjCObject<T>> Class getClass()
 #endif
 
 class Decoder {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Decoder);
 public:
-    static std::unique_ptr<Decoder> create(DataReference buffer, Vector<Attachment>&&);
-    using BufferDeallocator = Function<void(DataReference)>;
-    static std::unique_ptr<Decoder> create(DataReference buffer, BufferDeallocator&&, Vector<Attachment>&&);
-    Decoder(DataReference stream, uint64_t destinationID);
+    static std::unique_ptr<Decoder> create(std::span<const uint8_t> buffer, Vector<Attachment>&&);
+    using BufferDeallocator = Function<void(std::span<const uint8_t>)>;
+    static std::unique_ptr<Decoder> create(std::span<const uint8_t> buffer, BufferDeallocator&&, Vector<Attachment>&&);
+    Decoder(std::span<const uint8_t> stream, uint64_t destinationID);
 
     ~Decoder();
 
@@ -105,8 +103,8 @@ public:
 
     static std::unique_ptr<Decoder> unwrapForTesting(Decoder&);
 
-    DataReference buffer() const { return m_buffer; }
-    size_t currentBufferOffset() const { return static_cast<size_t>(std::distance(m_buffer.begin(), m_bufferPosition)); }
+    std::span<const uint8_t> span() const { return m_buffer; }
+    size_t currentBufferOffset() const { return std::distance(m_buffer.begin(), m_bufferPosition); }
 
     WARN_UNUSED_RETURN bool isValid() const { return !!m_buffer.data(); }
     void markInvalid()
@@ -123,50 +121,19 @@ public:
     WARN_UNUSED_RETURN std::optional<T> decodeObject();
 
     template<typename T>
-    WARN_UNUSED_RETURN bool decode(T& t)
-    {
-        using Impl = ArgumentCoder<std::remove_cvref_t<T>, void>;
-        if constexpr(HasLegacyDecoder<T, Impl>::value) {
-            if (UNLIKELY(!Impl::decode(*this, t))) {
-                markInvalid();
-                return false;
-            }
-        } else {
-            std::optional<T> optional { decode<T>() };
-            if (UNLIKELY(!optional)) {
-                markInvalid();
-                return false;
-            }
-            t = WTFMove(*optional);
-        }
-        return true;
-    }
-
-    template<typename T>
     Decoder& operator>>(std::optional<T>& t)
     {
         t = decode<T>();
         return *this;
     }
 
-    // The preferred decode() function. Can decode T which is not default constructible when T
-    // has a modern decoder, e.g decoding function that returns std::optional.
     template<typename T>
     std::optional<T> decode()
     {
-        using Impl = ArgumentCoder<std::remove_cvref_t<T>, void>;
-        if constexpr(HasModernDecoder<T, Impl>::value) {
-            std::optional<T> t { Impl::decode(*this) };
-            if (UNLIKELY(!t))
-                markInvalid();
-            return t;
-        } else {
-            std::optional<T> t { T { } };
-            if (LIKELY(Impl::decode(*this, *t)))
-                return t;
+        std::optional<T> t { ArgumentCoder<std::remove_cvref_t<T>, void>::decode(*this) };
+        if (UNLIKELY(!t))
             markInvalid();
-            return std::nullopt;
-        }
+        return t;
     }
 
 #ifdef __OBJC__
@@ -191,11 +158,18 @@ public:
 
     std::optional<Attachment> takeLastAttachment();
 
-private:
-    Decoder(DataReference buffer, BufferDeallocator&&, Vector<Attachment>&&);
+    void setIndexOfDecodingFailure(int32_t indexOfObjectFailingDecoding)
+    {
+        if (m_indexOfObjectFailingDecoding == -1)
+            m_indexOfObjectFailingDecoding = indexOfObjectFailingDecoding;
+    }
+    int32_t indexOfObjectFailingDecoding() const { return m_indexOfObjectFailingDecoding; }
 
-    DataReference m_buffer;
-    DataReference::iterator m_bufferPosition;
+private:
+    Decoder(std::span<const uint8_t> buffer, BufferDeallocator&&, Vector<Attachment>&&);
+
+    std::span<const uint8_t> m_buffer;
+    std::span<const uint8_t>::iterator m_bufferPosition;
     BufferDeallocator m_bufferDeallocator;
 
     Vector<Attachment> m_attachments;
@@ -212,6 +186,8 @@ private:
 #endif
 
     uint64_t m_destinationID;
+
+    int32_t m_indexOfObjectFailingDecoding { -1 };
 };
 
 template<>

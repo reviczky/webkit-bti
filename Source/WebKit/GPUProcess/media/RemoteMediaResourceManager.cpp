@@ -38,10 +38,13 @@
 #include <WebCore/PlatformMediaResourceLoader.h>
 #include <WebCore/ResourceRequest.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaResourceManager);
 
 RemoteMediaResourceManager::RemoteMediaResourceManager()
 {
@@ -49,7 +52,6 @@ RemoteMediaResourceManager::RemoteMediaResourceManager()
 
 RemoteMediaResourceManager::~RemoteMediaResourceManager()
 {
-    assertIsMainThread();
     Locker locker { m_lock };
     // Shutdown any stale RemoteMediaResources. We must complete this step in a follow-up task to prevent re-entry in RemoteMediaResourceManager.
     callOnMainRunLoop([resources = WTFMove(m_remoteMediaResources)] {

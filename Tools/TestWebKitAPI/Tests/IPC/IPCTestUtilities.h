@@ -38,7 +38,7 @@ std::optional<T> copyViaEncoder(const T& o)
 {
     IPC::Encoder encoder(static_cast<IPC::MessageName>(78), 0);
     encoder << o;
-    auto decoder = IPC::Decoder::create({ encoder.buffer(), encoder.bufferSize() }, encoder.releaseAttachments());
+    auto decoder = IPC::Decoder::create(encoder.span(), encoder.releaseAttachments());
     return decoder->decode<T>();
 }
 
@@ -138,7 +138,7 @@ public:
         m_didClose = true;
     }
 
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName message) override
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName message, int32_t) override
     {
         m_didReceiveInvalidMessage = message;
     }

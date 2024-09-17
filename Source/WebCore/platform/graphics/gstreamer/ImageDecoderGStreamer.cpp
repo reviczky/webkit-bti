@@ -26,12 +26,12 @@
 #include "GStreamerRegistryScanner.h"
 #include "ImageGStreamer.h"
 #include "MediaSampleGStreamer.h"
-#include "NotImplemented.h"
 #include "RuntimeApplicationChecks.h"
 #include "VideoFrameGStreamer.h"
 #include <gst/base/gsttypefindhelper.h>
 #include <wtf/MainThread.h>
 #include <wtf/Scope.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebCore {
 
@@ -119,7 +119,7 @@ ImageDecoderGStreamer::ImageDecoderGStreamer(FragmentedSharedBuffer& data, const
 {
     ensureDebugCategoryIsInitialized();
     static Atomic<uint32_t> decoderId;
-    GRefPtr<GstElement> parsebin = gst_element_factory_make("parsebin", makeString("image-decoder-parser-", decoderId.exchangeAdd(1)).utf8().data());
+    GRefPtr<GstElement> parsebin = gst_element_factory_make("parsebin", makeString("image-decoder-parser-"_s, decoderId.exchangeAdd(1)).utf8().data());
     m_parserHarness = GStreamerElementHarness::create(WTFMove(parsebin), [](auto&, auto&&) { }, [this](auto& pad) -> RefPtr<GStreamerElementHarness> {
         auto caps = adoptGRef(gst_pad_query_caps(pad.get(), nullptr));
         auto identityHarness = GStreamerElementHarness::create(GRefPtr<GstElement>(gst_element_factory_make("identity", nullptr)), [](auto&, const auto&) { });
@@ -216,18 +216,6 @@ RepetitionCount ImageDecoderGStreamer::repetitionCount() const
 {
     // In the absence of instructions to the contrary, assume all media formats repeat infinitely.
     return frameCount() > 1 ? RepetitionCountInfinite : RepetitionCountNone;
-}
-
-String ImageDecoderGStreamer::uti() const
-{
-    notImplemented();
-    return { };
-}
-
-ImageDecoder::FrameMetadata ImageDecoderGStreamer::frameMetadataAtIndex(size_t) const
-{
-    notImplemented();
-    return { };
 }
 
 Seconds ImageDecoderGStreamer::frameDurationAtIndex(size_t index) const

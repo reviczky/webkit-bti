@@ -34,6 +34,9 @@
 #include <memory>
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
+#include <wtf/WeakRef.h>
 
 #if PLATFORM(COCOA)
 #include "SharedCARingBuffer.h"
@@ -54,7 +57,7 @@ class GPUConnectionToWebProcess;
 class RemoteAudioDestination;
 
 class RemoteAudioDestinationManager : private IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteAudioDestinationManager);
     WTF_MAKE_NONCOPYABLE(RemoteAudioDestinationManager);
 public:
     RemoteAudioDestinationManager(GPUConnectionToWebProcess&);
@@ -76,7 +79,7 @@ private:
 #endif
 
     HashMap<RemoteAudioDestinationIdentifier, UniqueRef<RemoteAudioDestination>> m_audioDestinations;
-    GPUConnectionToWebProcess& m_gpuConnectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
 };
 
 } // namespace WebKit;

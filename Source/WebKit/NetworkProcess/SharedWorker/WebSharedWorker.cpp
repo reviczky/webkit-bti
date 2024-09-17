@@ -31,6 +31,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/WeakRef.h>
 
 namespace WebKit {
@@ -42,14 +43,15 @@ static HashMap<WebCore::SharedWorkerIdentifier, WeakRef<WebSharedWorker>>& allWo
     return allWorkers;
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSharedWorker);
+
 WebSharedWorker::WebSharedWorker(WebSharedWorkerServer& server, const WebCore::SharedWorkerKey& key, const WebCore::WorkerOptions& workerOptions)
     : m_server(server)
-    , m_identifier(WebCore::SharedWorkerIdentifier::generate())
     , m_key(key)
     , m_workerOptions(workerOptions)
 {
-    ASSERT(!allWorkers().contains(m_identifier));
-    allWorkers().add(m_identifier, *this);
+    ASSERT(!allWorkers().contains(identifier()));
+    allWorkers().add(identifier(), *this);
 }
 
 WebSharedWorker::~WebSharedWorker()
@@ -59,8 +61,8 @@ WebSharedWorker::~WebSharedWorker()
             connection->removeSharedWorkerObject(sharedWorkerObject.identifier);
     }
 
-    ASSERT(allWorkers().get(m_identifier) == this);
-    allWorkers().remove(m_identifier);
+    ASSERT(allWorkers().get(identifier()) == this);
+    allWorkers().remove(identifier());
 }
 
 WebSharedWorker* WebSharedWorker::fromIdentifier(WebCore::SharedWorkerIdentifier identifier)

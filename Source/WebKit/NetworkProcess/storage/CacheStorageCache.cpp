@@ -35,6 +35,7 @@
 #include <WebCore/OriginAccessPatterns.h>
 #include <WebCore/ResourceError.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -62,9 +63,10 @@ static Ref<CacheStorageStore> createStore(const String& uniqueName, const String
     return CacheStorageDiskStore::create(uniqueName, path, WTFMove(queue));
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(CacheStorageCache);
+
 CacheStorageCache::CacheStorageCache(CacheStorageManager& manager, const String& name, const String& uniqueName, const String& path, Ref<WorkQueue>&& queue)
     : m_manager(manager)
-    , m_identifier(WebCore::DOMCacheIdentifier::generate())
     , m_name(name)
     , m_uniqueName(uniqueName)
 #if ASSERT_ENABLED
@@ -113,7 +115,7 @@ void CacheStorageCache::open(WebCore::DOMCacheEngine::CacheIdentifierCallback&& 
     assertIsOnCorrectQueue();
 
     if (m_isInitialized)
-        return callback(WebCore::DOMCacheEngine::CacheIdentifierOperationResult { m_identifier, false });
+        return callback(WebCore::DOMCacheEngine::CacheIdentifierOperationResult { identifier(), false });
 
     m_pendingInitializationCallbacks.append(WTFMove(callback));
     if (m_pendingInitializationCallbacks.size() > 1)
@@ -139,7 +141,7 @@ void CacheStorageCache::open(WebCore::DOMCacheEngine::CacheIdentifierCallback&& 
 
         m_isInitialized = true;
         for (auto& callback : m_pendingInitializationCallbacks)
-            callback(WebCore::DOMCacheEngine::CacheIdentifierOperationResult { m_identifier, false });
+            callback(WebCore::DOMCacheEngine::CacheIdentifierOperationResult { identifier(), false });
         m_pendingInitializationCallbacks.clear();
     });
 }

@@ -28,11 +28,12 @@
 #include "InspectorExtensionTypes.h"
 #include <WebCore/FrameIdentifier.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace API {
 
 class InspectorExtensionClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(InspectorExtensionClient);
 public:
     virtual ~InspectorExtensionClient() = default;
 
@@ -40,6 +41,7 @@ public:
     virtual void didHideExtensionTab(const Inspector::ExtensionTabID&) { }
     virtual void didNavigateExtensionTab(const Inspector::ExtensionTabID&, const WTF::URL&) { }
     virtual void inspectedPageDidNavigate(const WTF::URL&) { }
+    virtual void effectiveAppearanceDidChange(Inspector::ExtensionAppearance) { }
 };
 
 } // namespace API

@@ -34,19 +34,15 @@
 namespace WebKit {
 
 class WebExtensionAPIDevToolsNetwork : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsNetwork, devToolsNetwork);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsNetwork, devToolsNetwork, devtools.network);
 
 public:
 #if PLATFORM(COCOA)
-    void getHAR(Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
-
     WebExtensionAPIEvent& onNavigated();
-    WebExtensionAPIEvent& onRequestFinished();
 #endif
 
 private:
     RefPtr<WebExtensionAPIEvent> m_onNavigated;
-    RefPtr<WebExtensionAPIEvent> m_onRequestFinished;
 };
 
 } // namespace WebKit

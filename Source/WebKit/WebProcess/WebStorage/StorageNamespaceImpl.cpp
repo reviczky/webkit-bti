@@ -66,8 +66,6 @@ StorageNamespaceImpl::StorageNamespaceImpl(WebCore::StorageType storageType, con
     ASSERT(storageType == StorageType::Session || !m_sessionPageID);
 }
 
-StorageNamespaceImpl::~StorageNamespaceImpl() = default;
-
 PAL::SessionID StorageNamespaceImpl::sessionID() const
 {
     return WebProcess::singleton().sessionID();

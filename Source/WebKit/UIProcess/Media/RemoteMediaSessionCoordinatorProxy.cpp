@@ -39,6 +39,7 @@
 #include <wtf/LoggerHelper.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 extern WTFLogChannel LogMedia;
@@ -46,6 +47,8 @@ extern WTFLogChannel LogMedia;
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaSessionCoordinatorProxy);
 
 Ref<RemoteMediaSessionCoordinatorProxy> RemoteMediaSessionCoordinatorProxy::create(WebPageProxy& webPageProxy, Ref<MediaSessionCoordinatorProxyPrivate>&& privateCoordinator)
 {
@@ -61,12 +64,17 @@ RemoteMediaSessionCoordinatorProxy::RemoteMediaSessionCoordinatorProxy(WebPagePr
 #endif
 {
     m_privateCoordinator->setClient(*this);
-    m_webPageProxy.process().addMessageReceiver(Messages::RemoteMediaSessionCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageID(), *this);
+    m_webPageProxy.legacyMainFrameProcess().addMessageReceiver(Messages::RemoteMediaSessionCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageIDInMainFrameProcess(), *this);
 }
 
 RemoteMediaSessionCoordinatorProxy::~RemoteMediaSessionCoordinatorProxy()
 {
-    m_webPageProxy.process().removeMessageReceiver(Messages::RemoteMediaSessionCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageID());
+    m_webPageProxy.legacyMainFrameProcess().removeMessageReceiver(Messages::RemoteMediaSessionCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageIDInMainFrameProcess());
+}
+
+const SharedPreferencesForWebProcess& RemoteMediaSessionCoordinatorProxy::sharedPreferencesForWebProcess() const
+{
+    return m_webPageProxy.legacyMainFrameProcess().sharedPreferencesForWebProcess();
 }
 
 void RemoteMediaSessionCoordinatorProxy::join(MediaSessionCommandCompletionHandler&& completionHandler)
@@ -157,27 +165,27 @@ void RemoteMediaSessionCoordinatorProxy::trackIdentifierChanged(const String& id
 
 void RemoteMediaSessionCoordinatorProxy::seekSessionToTime(double time, CompletionHandler<void(bool)>&& callback)
 {
-    m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SeekSessionToTime { time }, callback);
+    m_webPageProxy.legacyMainFrameProcess().sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SeekSessionToTime { time }, callback, m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
 void RemoteMediaSessionCoordinatorProxy::playSession(std::optional<double> atTime, std::optional<MonotonicTime> hostTime, CompletionHandler<void(bool)>&& callback)
 {
-    m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::PlaySession { WTFMove(atTime), WTFMove(hostTime) }, callback);
+    m_webPageProxy.legacyMainFrameProcess().sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::PlaySession { WTFMove(atTime), WTFMove(hostTime) }, callback, m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
 void RemoteMediaSessionCoordinatorProxy::pauseSession(CompletionHandler<void(bool)>&& callback)
 {
-    m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::PauseSession { }, callback);
+    m_webPageProxy.legacyMainFrameProcess().sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::PauseSession { }, callback, m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
 void RemoteMediaSessionCoordinatorProxy::setSessionTrack(const String& trackId, CompletionHandler<void(bool)>&& callback)
 {
-    m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SetSessionTrack { trackId }, callback);
+    m_webPageProxy.legacyMainFrameProcess().sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SetSessionTrack { trackId }, callback, m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
 void RemoteMediaSessionCoordinatorProxy::coordinatorStateChanged(WebCore::MediaSessionCoordinatorState state)
 {
-    m_webPageProxy.send(Messages::RemoteMediaSessionCoordinator::CoordinatorStateChanged { state });
+    m_webPageProxy.legacyMainFrameProcess().send(Messages::RemoteMediaSessionCoordinator::CoordinatorStateChanged { state }, m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
 #if !RELEASE_LOG_DISABLED

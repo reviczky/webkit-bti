@@ -42,6 +42,8 @@ ANGLE_CHROMIUM_DEPS = [
     'third_party/android_build_tools/aapt2',
     'third_party/android_build_tools/art',
     'third_party/android_build_tools/bundletool',
+    'third_party/android_build_tools/error_prone/cipd',
+    'third_party/android_build_tools/error_prone_javac/cipd',
     'third_party/android_build_tools/lint',
     'third_party/android_build_tools/manifest_merger',
     'third_party/android_deps',
@@ -78,7 +80,7 @@ ANGLE_CHROMIUM_DEPS = [
     'third_party/r8',
     'third_party/r8/d8',
     'third_party/requests/src',
-    'third_party/siso',
+    'third_party/siso/cipd',
     'third_party/six',
     'third_party/turbine',
     'third_party/zlib',
@@ -92,6 +94,7 @@ ANGLE_CHROMIUM_DEPS = [
     'tools/perf',
     'tools/protoc_wrapper',
     'tools/python',
+    'tools/rust',
     'tools/skia_goldctl/linux',
     'tools/skia_goldctl/mac_amd64',
     'tools/skia_goldctl/mac_arm64',
@@ -310,6 +313,9 @@ def BuildDepsentryDict(deps_dict):
                 dep = {'url': dep}
             if dep.get('dep_type') == 'cipd':
                 result[path] = CipdDepsEntry(path, dep['packages'])
+            elif dep.get('dep_type') == 'gcs':
+                # Ignore GCS deps - there aren't any that we want to sync yet
+                continue
             else:
                 if '@' not in dep['url']:
                     continue

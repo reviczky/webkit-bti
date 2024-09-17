@@ -40,7 +40,7 @@
 namespace WebKit {
 
 struct WebExtensionFrameIdentifierType;
-using WebExtensionFrameIdentifier = ObjectIdentifier<WebExtensionFrameIdentifierType>;
+using WebExtensionFrameIdentifier = LegacyNullableObjectIdentifier<WebExtensionFrameIdentifierType>;
 
 namespace WebExtensionFrameConstants {
 
@@ -82,17 +82,17 @@ inline WebCore::FrameIdentifier toWebCoreFrameIdentifier(const WebExtensionFrame
     if (isMainFrame(identifier))
         return page.mainWebFrame().frameID();
 
-    WebCore::FrameIdentifier result { ObjectIdentifier<WebCore::FrameIdentifierType> { identifier.toUInt64() }, WebCore::Process::identifier() };
+    WebCore::FrameIdentifier result { LegacyNullableObjectIdentifier<WebCore::FrameIdentifierType> { identifier.toUInt64() }, WebCore::Process::identifier() };
     ASSERT(result.object().isValid());
     return result;
 }
 
 inline bool matchesFrame(const WebExtensionFrameIdentifier& identifier, const WebFrame& frame)
 {
-    if (auto* coreFrame = frame.coreFrame(); coreFrame->isMainFrame() && isMainFrame(identifier))
+    if (RefPtr coreFrame = frame.coreFrame(); coreFrame && coreFrame->isMainFrame() && isMainFrame(identifier))
         return true;
 
-    if (auto* page = frame.page(); &page->mainWebFrame() == &frame && isMainFrame(identifier))
+    if (RefPtr page = frame.page(); page && &page->mainWebFrame() == &frame && isMainFrame(identifier))
         return true;
 
     return frame.frameID().object().toUInt64() == identifier.toUInt64();
@@ -101,16 +101,20 @@ inline bool matchesFrame(const WebExtensionFrameIdentifier& identifier, const We
 inline WebExtensionFrameIdentifier toWebExtensionFrameIdentifier(WebCore::FrameIdentifier frameIdentifier)
 {
     WebExtensionFrameIdentifier result { frameIdentifier.object().toUInt64() };
-    ASSERT(result.isValid());
+    if (!result.isValid()) {
+        ASSERT_NOT_REACHED();
+        return WebExtensionFrameConstants::NoneIdentifier;
+    }
+
     return result;
 }
 
 inline WebExtensionFrameIdentifier toWebExtensionFrameIdentifier(const WebFrame& frame)
 {
-    if (auto* coreFrame = frame.coreFrame(); coreFrame->isMainFrame())
+    if (RefPtr coreFrame = frame.coreFrame(); coreFrame && coreFrame->isMainFrame())
         return WebExtensionFrameConstants::MainFrameIdentifier;
 
-    if (auto* page = frame.page(); &page->mainWebFrame() == &frame)
+    if (RefPtr page = frame.page(); page && &page->mainWebFrame() == &frame)
         return WebExtensionFrameConstants::MainFrameIdentifier;
 
     return toWebExtensionFrameIdentifier(frame.frameID());
@@ -136,7 +140,11 @@ inline WebExtensionFrameIdentifier toWebExtensionFrameIdentifier(WKFrameInfo *fr
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     WebExtensionFrameIdentifier result { frameInfo._handle.frameID };
 ALLOW_DEPRECATED_DECLARATIONS_END
-    ASSERT(result.isValid());
+    if (!result.isValid()) {
+        ASSERT_NOT_REACHED();
+        return WebExtensionFrameConstants::NoneIdentifier;
+    }
+
     return result;
 }
 #endif // __OBJC__

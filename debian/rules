@@ -23,6 +23,9 @@ USE_OLD_DOC_PKG=NO
 # Set to YES to build libjavascriptcoregtk-4.0-bin instead of libjavascriptcoregtk-bin
 USE_OLD_JSCBIN_PKG=NO
 
+# Set to YES to build webkit2gtk-driver instead of webkitgtk-webdriver
+USE_OLD_WEBDRIVER_PKG=NO
+
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
@@ -36,6 +39,10 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
+ifneq ($(filter amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4,$(DEB_HOST_ARCH)),)
+EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=ON
+endif
+
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)
@@ -47,6 +54,9 @@ endif
 # most buildds. Use -g1 in all architectures to make them smaller.
 CFLAGS := $(CFLAGS:-g=-g1)
 CXXFLAGS := $(CXXFLAGS:-g=-g1)
+
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=949621
+LDFLAGS += -Wl,--reduce-memory-overheads
 
 # Don't build with -gsplit-dwarf (see #1016936)
 EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
@@ -60,6 +70,11 @@ endif
 # These are not available in the Hurd (#1033999)
 ifneq (,$(filter $(DEB_HOST_ARCH),hurd-i386))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_GBM=OFF -DUSE_LIBDRM=OFF
+endif
+
+# FTBFS in armhf if bmalloc is enabled - https://bugs.webkit.org/show_bug.cgi?id=278858
+ifneq (,$(filter $(DEB_HOST_ARCH),armhf))
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 endif
 
 # Systemd/elogind and libmanette are Linux-only
@@ -119,13 +134,6 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
 
-# Lower max parallel jobs on some builders
-ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
-ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
-	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
-endif
-endif
-
 # set the distributor agent for Ubuntu
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSER_AGENT_BRANDING="Ubuntu"
@@ -171,6 +179,14 @@ else
 	LIBJSCBIN_DEP_PKG=libjavascriptcoregtk-4.1-0
 	JSCBIN_BUILD=webkit2gtk-4.1
 	DH_GENCONTROL_ARGS += -Vjscbin:Replaces="libjavascriptcoregtk-4.0-bin (<< 2.43.4-2~)"
+endif
+
+ifeq ($(USE_OLD_WEBDRIVER_PKG),YES)
+	WEBDRIVER_PKG=webkit2gtk-driver
+	DH_GENCONTROL_ARGS += -Vwkwebdriver:Conflicts="webkitgtk-webdriver"
+else
+	WEBDRIVER_PKG=webkitgtk-webdriver
+	DH_GENCONTROL_ARGS += -Vwkwebdriver:Replaces="webkit2gtk-driver (<< 2.45.5~)"
 endif
 
 # Disable commands and binary packages of the builds that we don't want
@@ -270,6 +286,7 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 		    -e 's/@LIBWEBKITGTKDOC_PKG@/$(LIBWEBKITGTKDOC_PKG)/' \
 		    -e 's/@LIBJSCBIN_PKG@/$(LIBJSCBIN_PKG)/' \
 		    -e 's/@LIBJSCBIN_DEP_PKG@/$(LIBJSCBIN_DEP_PKG)/' \
+		    -e 's/@WEBDRIVER_PKG@/$(WEBDRIVER_PKG)/' \
 		    -e 's/@WEBDRIVER_DEP_PKG@/$(WEBDRIVER_DEP_PKG)/' \
 		>> debian/control
 ifeq ($(USE_PREBUILT_DOCS),YES)
@@ -280,6 +297,9 @@ ifeq ($(USE_OLD_DOC_PKG),NO)
 endif
 ifeq ($(USE_OLD_JSCBIN_PKG),NO)
 	cat debian/control-jscbin.in >> debian/control
+endif
+ifeq ($(USE_OLD_WEBDRIVER_PKG),NO)
+	cat debian/control-webdriver.in >> debian/control
 endif
 	$(SOUP2_BUILD) cat debian/control-common.in | \
 		sed -e 's/@SOUPDEV_PKG@/libsoup2.4-dev/g' \
@@ -334,8 +354,12 @@ override_dh_auto_configure:
 	fi
 	echo debian/jsc.1 > debian/$(LIBJSCBIN_PKG).manpages
 	echo 'usr/lib/$(DEB_HOST_MULTIARCH)/$(JSCBIN_BUILD)/jsc usr/bin/' > debian/$(LIBJSCBIN_PKG).install
+	echo debian/WebKitWebDriver.1 > debian/$(WEBDRIVER_PKG).manpages
+	echo usr/bin/WebKitWebDriver > debian/$(WEBDRIVER_PKG).install
 	echo debian/$(LIBJSCBIN_PKG).manpages >> debian/clean
 	echo debian/$(LIBJSCBIN_PKG).install >> debian/clean
+	echo debian/$(WEBDRIVER_PKG).manpages >> debian/clean
+	echo debian/$(WEBDRIVER_PKG).install >> debian/clean
 	$(SOUP2_BUILD) dh_auto_configure -Bbuild-soup2 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=ON -DUSE_GTK4=OFF \
 		$(ENABLE_WEBDRIVER_SOUP2) -DENABLE_DOCUMENTATION=OFF

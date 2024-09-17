@@ -34,12 +34,12 @@
 #include "StyledElement.h"
 #include "TextNodeTraversal.h"
 #include "XMLNSNames.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/AtomString.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(Attr);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Attr);
 
 using namespace HTMLNames;
 
@@ -94,17 +94,19 @@ ExceptionOr<void> Attr::setPrefix(const AtomString& prefix)
     return { };
 }
 
-void Attr::setValue(const AtomString& value)
+ExceptionOr<void> Attr::setValue(const AtomString& value)
 {
     if (RefPtr element = m_element.get())
-        element->setAttribute(qualifiedName(), value);
+        return element->setAttribute(qualifiedName(), value, true);
     else
         m_standaloneValue = value;
+
+    return { };
 }
 
-void Attr::setNodeValue(const String& value)
+ExceptionOr<void> Attr::setNodeValue(const String& value)
 {
-    setValue(value.isNull() ? emptyAtom() : AtomString(value));
+    return setValue(value.isNull() ? emptyAtom() : AtomString(value));
 }
 
 Ref<Node> Attr::cloneNodeInternal(Document& targetDocument, CloningOperation)

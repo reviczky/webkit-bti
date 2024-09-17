@@ -169,10 +169,8 @@ WK_EXPORT void WKPageSetIgnoresViewportScaleLimits(WKPageRef page, bool ignoresV
 WK_EXPORT WKProcessID WKPageGetProcessIdentifier(WKPageRef page);
 WK_EXPORT WKProcessID WKPageGetGPUProcessIdentifier(WKPageRef page);
 
-#ifdef __BLOCKS__
-typedef void (^WKPageGetApplicationManifestBlock)(void);
-WK_EXPORT void WKPageGetApplicationManifest_b(WKPageRef page, WKPageGetApplicationManifestBlock block);
-#endif
+typedef void (*WKPageGetApplicationManifestFunction)(void* functionContext);
+WK_EXPORT void WKPageGetApplicationManifest(WKPageRef page, void* context, WKPageGetApplicationManifestFunction block);
 
 typedef void (*WKPageDumpPrivateClickMeasurementFunction)(WKStringRef privateClickMeasurementRepresentation, void* functionContext);
 WK_EXPORT void WKPageDumpPrivateClickMeasurement(WKPageRef, WKPageDumpPrivateClickMeasurementFunction, void* callbackContext);
@@ -214,6 +212,14 @@ WK_EXPORT void WKPageDispatchActivityStateUpdateForTesting(WKPageRef page);
 
 WK_EXPORT void WKPagePermissionChanged(WKStringRef permissionName, WKStringRef originString);
 
+WK_EXPORT void WKPageExecuteCommandForTesting(WKPageRef pageRef, WKStringRef command, WKStringRef value);
+WK_EXPORT bool WKPageIsEditingCommandEnabledForTesting(WKPageRef page, WKStringRef command);
+WK_EXPORT void WKPageSetPermissionLevelForTesting(WKPageRef page, WKStringRef origin, bool allowed);
+
+typedef void (*WKPageSetTopContentInsetForTestingFunction)(void* functionContext);
+WK_EXPORT void WKPageSetTopContentInsetForTesting(WKPageRef page, float contentInset, void* context, WKPageSetTopContentInsetForTestingFunction callback);
+typedef void (*WKPageSetPageScaleFactorForTestingFunction)(void* functionContext);
+WK_EXPORT void WKPageSetPageScaleFactorForTesting(WKPageRef page, float scaleFactor, WKPoint point, void* context, WKPageSetPageScaleFactorForTestingFunction completionHandler);
 #ifdef __cplusplus
 }
 #endif

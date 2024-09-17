@@ -153,8 +153,11 @@ static GstCaps* transformCaps(GstBaseTransform* base, GstPadDirection direction,
 
             outgoingStructure = GUniquePtr<GstStructure>(gst_structure_copy(incomingStructure));
 
-            if (!canDoPassthrough)
-                gst_structure_set_name(outgoingStructure.get(), gst_structure_get_string(outgoingStructure.get(), "original-media-type"));
+            if (!canDoPassthrough) {
+                auto originalMediaType = WebCore::gstStructureGetString(outgoingStructure.get(), "original-media-type"_s);
+                RELEASE_ASSERT(originalMediaType);
+                gst_structure_set_name(outgoingStructure.get(), static_cast<const char*>(originalMediaType.rawCharacters()));
+            }
 
             // Filter out the DRM related fields from the down-stream caps.
             gst_structure_remove_fields(outgoingStructure.get(), "protection-system", "original-media-type", "encryption-algorithm", "encoding-scope", "cipher-mode", nullptr);
@@ -166,8 +169,9 @@ static GstCaps* transformCaps(GstBaseTransform* base, GstPadDirection direction,
                 // can cause caps negotiation failures with adaptive bitrate streams.
                 gst_structure_remove_fields(outgoingStructure.get(), "base-profile", "codec_data", "height", "framerate", "level", "pixel-aspect-ratio", "profile", "rate", "width", nullptr);
 
+                auto name = WebCore::gstStructureGetName(incomingStructure);
                 gst_structure_set(outgoingStructure.get(), "protection-system", G_TYPE_STRING, klass->protectionSystemId(self),
-                    "original-media-type", G_TYPE_STRING, gst_structure_get_name(incomingStructure), nullptr);
+                    "original-media-type", G_TYPE_STRING, reinterpret_cast<const char*>(name.rawCharacters()) , nullptr);
 
                 // GST_PROTECTION_UNSPECIFIED_SYSTEM_ID was added in the GStreamer
                 // developement git master which will ship as version 1.16.0.
@@ -263,41 +267,52 @@ static GstFlowReturn transformInPlace(GstBaseTransform* base, GstBuffer* buffer)
         priv->decryptionState = DecryptionState::Idle;
     });
 
-    bool isCbcs = !g_strcmp0(gst_structure_get_string(protectionMeta->info, "cipher-mode"), "cbcs");
+    bool isCbcs = false;
+    if (auto cipherMode = WebCore::gstStructureGetString(protectionMeta->info, "cipher-mode"_s))
+        isCbcs = WTF::equalIgnoringASCIICase(cipherMode, "cbcs"_s);
 
-    unsigned ivSize;
-    if (!gst_structure_get_uint(protectionMeta->info, "iv_size", &ivSize)) {
+    auto ivSizeFromMeta = WebCore::gstStructureGet<unsigned>(protectionMeta->info, "iv_size"_s);
+    if (!ivSizeFromMeta) {
         GST_ELEMENT_ERROR(self, STREAM, FAILED, ("Failed to get iv_size"), (nullptr));
         return GST_FLOW_NOT_SUPPORTED;
     }
-    if (!ivSize && !gst_structure_get_uint(protectionMeta->info, "constant_iv_size", &ivSize)) {
-        GST_ELEMENT_ERROR(self, STREAM, FAILED, ("No iv_size and failed to get constant_iv_size"), (nullptr));
-        ASSERT(isCbcs);
-        return GST_FLOW_NOT_SUPPORTED;
+
+    unsigned ivSize;
+    if (*ivSizeFromMeta)
+        ivSize = *ivSizeFromMeta;
+    else {
+        auto constantIvSize = WebCore::gstStructureGet<unsigned>(protectionMeta->info, "constant_iv_size"_s);
+        if (!constantIvSize) {
+            GST_ELEMENT_ERROR(self, STREAM, FAILED, ("No iv_size and failed to get constant_iv_size"), (nullptr));
+            ASSERT(isCbcs);
+            return GST_FLOW_NOT_SUPPORTED;
+        }
+        ivSize = *constantIvSize;
     }
 
-    gboolean encrypted;
-    if (!gst_structure_get_boolean(protectionMeta->info, "encrypted", &encrypted)) {
+    auto isEncrypted = WebCore::gstStructureGet<bool>(protectionMeta->info, "encrypted"_s);
+    if (!isEncrypted) {
         GST_ELEMENT_ERROR(self, STREAM, FAILED, ("Failed to get encrypted flag"), (nullptr));
         return GST_FLOW_NOT_SUPPORTED;
     }
 
-    if (!ivSize || !encrypted) {
-        GST_TRACE_OBJECT(self, "iv size %u, encrypted %s, bailing out OK as unencrypted", ivSize, boolForPrinting(encrypted));
+    if (!ivSize || !*isEncrypted) {
+        GST_TRACE_OBJECT(self, "iv size %u, encrypted %s, bailing out OK as unencrypted", ivSize, boolForPrinting(*isEncrypted));
         return GST_FLOW_OK;
     }
 
     GST_DEBUG_OBJECT(base, "protection meta: %" GST_PTR_FORMAT, protectionMeta->info);
 
-    unsigned subSampleCount = 0;
+    auto subSampleCountFromMeta = WebCore::gstStructureGet<unsigned>(protectionMeta->info, "subsample_count"_s);
     // cbcs could not include the subsample_count.
-    if (!gst_structure_get_uint(protectionMeta->info, "subsample_count", &subSampleCount) && !isCbcs) {
+    if (!subSampleCountFromMeta && !isCbcs) {
         GST_ELEMENT_ERROR(self, STREAM, FAILED, ("Failed to get subsample_count"), (nullptr));
         return GST_FLOW_NOT_SUPPORTED;
     }
 
     const GValue* value;
     GstBuffer* subSamplesBuffer = nullptr;
+    auto subSampleCount = subSampleCountFromMeta.value_or(0);
     if (subSampleCount) {
         value = gst_structure_get_value(protectionMeta->info, "subsamples");
         if (!value) {
@@ -432,11 +447,16 @@ static gboolean sinkEventHandler(GstBaseTransform* trans, GstEvent* event)
     // handled in here.
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_CUSTOM_DOWNSTREAM_OOB: {
-        ASSERT(gst_event_has_name(event, "attempt-to-decrypt"));
-        GST_DEBUG_OBJECT(self, "Handling attempt-to-decrypt");
-        gboolean result = installCDMProxyIfNotAvailable(self);
-        gst_event_unref(event);
-        return result;
+        GST_DEBUG_OBJECT(self, "Custom Downstream OOB %" GST_PTR_FORMAT, event);
+
+        if (gst_event_has_name(event, "attempt-to-decrypt")) {
+            GST_DEBUG_OBJECT(self, "Handling attempt-to-decrypt");
+            gboolean result = installCDMProxyIfNotAvailable(self);
+            gst_event_unref(event);
+            return result;
+        }
+        // Let event propagate.
+        break;
     }
     case GST_EVENT_FLUSH_START:
         GST_DEBUG_OBJECT(self, "Flush-start");
@@ -490,7 +510,7 @@ static GstStateChangeReturn changeState(GstElement* element, GstStateChange tran
     case GST_STATE_CHANGE_READY_TO_PAUSED: {
         GST_DEBUG_OBJECT(self, "READY->PAUSED");
 
-        LockHolder locker(priv->lock);
+        Locker locker(priv->lock);
         priv->isStopped = false;
         break;
     }
@@ -498,7 +518,7 @@ static GstStateChangeReturn changeState(GstElement* element, GstStateChange tran
         // We need to do this here instead of after the , otherwise we won't be able to break the wait.
         GST_DEBUG_OBJECT(self, "PAUSED->READY");
 
-        LockHolder locker(priv->lock);
+        Locker locker(priv->lock);
         priv->isStopped = true;
         priv->condition.notifyOne();
         if (priv->cdmProxy)

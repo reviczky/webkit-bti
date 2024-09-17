@@ -69,7 +69,7 @@ static WorkaroundMode getWorkAroundModeFromEnvironment(const char* environmentVa
 }
 
 // Workaround for: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/3471 basesink: Support position queries after non-resetting flushes.
-// Fix merged in 1.23, will ship in GStreamer 1.24.0.
+// Fix merged in 1.23, shipped in GStreamer 1.24.0.
 
 class BaseSinkPositionFlushWorkaroundProbe {
 public:
@@ -101,7 +101,7 @@ private:
     {
 #ifndef GST_DISABLE_GST_DEBUG
         GUniquePtr<char> versionString(gst_version_string());
-        GST_DEBUG("BaseSinkPositionFlushWorkaroundProbe: running %s, the bug fix was merged in 1.23 and is expected to ship in 1.24.0.", versionString.get());
+        GST_DEBUG("BaseSinkPositionFlushWorkaroundProbe: running %s, the bug was fixed in 1.24.", versionString.get());
 #endif
         WorkaroundMode mode = getWorkAroundModeFromEnvironment("WEBKIT_GST_WORKAROUND_BASE_SINK_POSITION_FLUSH", WEBKIT_GST_WORKAROUND_BASE_SINK_POSITION_FLUSH_DEFAULT_MODE);
         if (mode == WorkaroundMode::ForceEnable) {
@@ -113,7 +113,7 @@ private:
             return false;
         }
 
-        return !webkitGstCheckVersion(1, 23, 0);
+        return !webkitGstCheckVersion(1, 24, 0);
     }
 
     static void initializeIsNeeded()
@@ -204,10 +204,7 @@ private:
             return false;
         }
 
-#ifndef GST_DISABLE_GST_DEBUG
-        GUniquePtr<char> version(gst_plugins_base_version_string());
-        GST_DEBUG("AppSinkFlushCapsWorkaroundProbe: gst-plugins-base version is %s, bug was fixed in 1.21.1 and backported to 1.20.3.", version.get());
-#endif
+        GST_DEBUG("AppSinkFlushCapsWorkaroundProbe: gst-plugins-base version is %s, bug was fixed in 1.21.1 and backported to 1.20.3.", gst_plugins_base_version_string());
         WorkaroundMode mode = getWorkAroundModeFromEnvironment("WEBKIT_GST_WORKAROUND_APP_SINK_FLUSH_CAPS", WEBKIT_GST_WORKAROUND_APP_SINK_FLUSH_CAPS_DEFAULT_MODE);
         if (mode == WorkaroundMode::ForceEnable) {
             GST_DEBUG("AppSinkFlushCapsWorkaroundProbe: forcing workaround to be enabled.");

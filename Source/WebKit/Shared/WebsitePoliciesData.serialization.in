@@ -51,12 +51,13 @@ enum class WebKit::WebContentMode : uint8_t {
 };
 
 struct WebKit::WebsitePoliciesData {
-    HashMap<WTF::String, Vector<WTF::String>> activeContentRuleListActionPatterns;
+    HashMap<String, Vector<String>> activeContentRuleListActionPatterns;
     Vector<WebCore::CustomHeaderFields> customHeaderFields;
-    WTF::String customUserAgent;
-    WTF::String customUserAgentAsSiteSpecificQuirks;
-    WTF::String customNavigatorPlatform;
-    WTF::String applicationNameForDesktopUserAgent;
+    Vector<WebCore::TargetedElementSelectors> visibilityAdjustmentSelectors;
+    String customUserAgent;
+    String customUserAgentAsSiteSpecificQuirks;
+    String customNavigatorPlatform;
+    String applicationNameForDesktopUserAgent;
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtections;
     OptionSet<WebKit::WebsiteAutoplayQuirk> allowedAutoplayQuirks;
     WebCore::ContentExtensionEnablement contentExtensionEnablement;
@@ -74,7 +75,7 @@ struct WebKit::WebsitePoliciesData {
 #if ENABLE(DEVICE_ORIENTATION)
     WebCore::DeviceOrientationOrMotionPermissionState deviceOrientationAndMotionAccessState;
 #endif
-    bool allowContentChangeObserverQuirk;
+    WebCore::HTTPSByDefaultMode httpsByDefaultMode;
     bool idempotentModeAutosizingOnlyHonorsPercentages;
     bool allowPrivacyProxy;
     bool allowSiteSpecificQuirksToOverrideContentMode;

@@ -27,10 +27,13 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "RemoteGPU.h"
 #include "StreamMessageReceiver.h"
 #include "WebGPUIdentifier.h"
 #include <WebCore/WebGPUIntegralTypes.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/WeakRef.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore::WebGPU {
@@ -48,21 +51,23 @@ class ObjectHeap;
 }
 
 class RemoteComputePassEncoder final : public IPC::StreamMessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteComputePassEncoder);
 public:
-    static Ref<RemoteComputePassEncoder> create(WebCore::WebGPU::ComputePassEncoder& computePassEncoder, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+    static Ref<RemoteComputePassEncoder> create(WebCore::WebGPU::ComputePassEncoder& computePassEncoder, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, RemoteGPU& gpu, WebGPUIdentifier identifier)
     {
-        return adoptRef(*new RemoteComputePassEncoder(computePassEncoder, objectHeap, WTFMove(streamConnection), identifier));
+        return adoptRef(*new RemoteComputePassEncoder(computePassEncoder, objectHeap, WTFMove(streamConnection), gpu, identifier));
     }
 
     virtual ~RemoteComputePassEncoder();
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
 private:
     friend class WebGPU::ObjectHeap;
 
-    RemoteComputePassEncoder(WebCore::WebGPU::ComputePassEncoder&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, WebGPUIdentifier);
+    RemoteComputePassEncoder(WebCore::WebGPU::ComputePassEncoder&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, RemoteGPU&, WebGPUIdentifier);
 
     RemoteComputePassEncoder(const RemoteComputePassEncoder&) = delete;
     RemoteComputePassEncoder(RemoteComputePassEncoder&&) = delete;
@@ -90,8 +95,9 @@ private:
     void destruct();
 
     Ref<WebCore::WebGPU::ComputePassEncoder> m_backing;
-    WebGPU::ObjectHeap& m_objectHeap;
+    WeakRef<WebGPU::ObjectHeap> m_objectHeap;
     Ref<IPC::StreamServerConnection> m_streamConnection;
+    WeakRef<RemoteGPU> m_gpu;
     WebGPUIdentifier m_identifier;
 };
 

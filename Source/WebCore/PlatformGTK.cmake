@@ -1,11 +1,16 @@
 include(platform/Adwaita.cmake)
-include(platform/Cairo.cmake)
-include(platform/FreeType.cmake)
 include(platform/GCrypt.cmake)
 include(platform/GStreamer.cmake)
 include(platform/ImageDecoders.cmake)
 include(platform/Soup.cmake)
 include(platform/TextureMapper.cmake)
+
+if (USE_CAIRO)
+    include(platform/Cairo.cmake)
+    include(platform/FreeType.cmake)
+elseif (USE_SKIA)
+    include(platform/Skia.cmake)
+endif ()
 
 list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
     "SourcesGTK.txt"
@@ -46,14 +51,15 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/glib/ApplicationGLib.h
 
+    platform/graphics/egl/PlatformDisplayDefault.h
     platform/graphics/egl/PlatformDisplaySurfaceless.h
 
     platform/graphics/gbm/GBMVersioning.h
     platform/graphics/gbm/PlatformDisplayGBM.h
 
     platform/graphics/gtk/GdkCairoUtilities.h
+    platform/graphics/gtk/GdkSkiaUtilities.h
 
-    platform/graphics/x11/PlatformDisplayX11.h
     platform/graphics/x11/XErrorTrapper.h
 
     platform/gtk/GRefPtrGtk.h
@@ -119,6 +125,20 @@ if (ENABLE_SPEECH_SYNTHESIS)
     )
     list(APPEND WebCore_LIBRARIES
         ${Flite_LIBRARIES}
+    )
+endif ()
+
+if (USE_SKIA)
+    # When building with Skia we don't build Cairo sources, but since
+    # Cairo is still needed in the UI process API we need to include
+    # here the Cairo sources required.
+    list(APPEND WebCore_SOURCES
+        platform/graphics/cairo/IntRectCairo.cpp
+        platform/graphics/cairo/RefPtrCairo.cpp
+    )
+
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/graphics/cairo/RefPtrCairo.h
     )
 endif ()
 

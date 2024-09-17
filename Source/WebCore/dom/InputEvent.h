@@ -36,15 +36,13 @@ class WindowProxy;
 enum class IsInputMethodComposing : bool { No, Yes };
 
 class InputEvent final : public UIEvent {
-    WTF_MAKE_ISO_ALLOCATED(InputEvent);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(InputEvent);
 public:
     struct Init : UIEventInit {
         String data;
         bool isComposing { false }; // input method
         String inputType;
     };
-
-    virtual ~InputEvent();
 
     static Ref<InputEvent> create(const AtomString& eventType, const String& inputType, IsCancelable, RefPtr<WindowProxy>&& view,
         const String& data, RefPtr<DataTransfer>&&, const Vector<RefPtr<StaticRange>>& targetRanges, int detail, IsInputMethodComposing);
@@ -55,7 +53,6 @@ public:
     }
 
     bool isInputEvent() const override { return true; }
-    EventInterface eventInterface() const final { return InputEventInterfaceType; }
     const String& inputType() const { return m_inputType; }
     const String& data() const { return m_data; }
     RefPtr<DataTransfer> dataTransfer() const;

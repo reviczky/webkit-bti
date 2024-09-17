@@ -87,8 +87,10 @@ public:
     Vector<BackForwardListItemState> itemStates() const;
     Vector<BackForwardListItemState> filteredItemStates(Function<bool(WebBackForwardListItem&)>&&) const;
 
+    void addRootChildFrameItem(Ref<WebBackForwardListItem>&&) const;
+
 #if !LOG_DISABLED
-    const char* loggingString();
+    String loggingString();
 #endif
 
 private:

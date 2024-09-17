@@ -34,7 +34,9 @@
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakRef.h>
 
 namespace WebCore::ShapeDetection {
 struct DetectedText;
@@ -43,6 +45,7 @@ class TextDetector;
 
 namespace WebKit {
 class RemoteRenderingBackend;
+struct SharedPreferencesForWebProcess;
 
 namespace ShapeDetection {
 class ObjectHeap;
@@ -50,12 +53,14 @@ class ObjectHeap;
 
 class RemoteTextDetector : public IPC::StreamMessageReceiver {
 public:
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteTextDetector);
 public:
     static Ref<RemoteTextDetector> create(Ref<WebCore::ShapeDetection::TextDetector>&& textDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     {
         return adoptRef(*new RemoteTextDetector(WTFMove(textDetector), objectHeap, backend, identifier, webProcessIdentifier));
     }
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
 
     virtual ~RemoteTextDetector();
 
@@ -68,14 +73,16 @@ private:
     RemoteTextDetector& operator=(RemoteTextDetector&&) = delete;
 
     WebCore::ShapeDetection::TextDetector& backing() { return m_backing; }
+    Ref<WebCore::ShapeDetection::TextDetector> protectedBacking();
+    Ref<RemoteRenderingBackend> protectedBackend();
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 
     void detect(WebCore::RenderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedText>&&)>&&);
 
     Ref<WebCore::ShapeDetection::TextDetector> m_backing;
-    ShapeDetection::ObjectHeap& m_objectHeap;
-    RemoteRenderingBackend& m_backend;
+    WeakRef<ShapeDetection::ObjectHeap> m_objectHeap;
+    WeakRef<RemoteRenderingBackend> m_backend;
     const ShapeDetectionIdentifier m_identifier;
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
 };

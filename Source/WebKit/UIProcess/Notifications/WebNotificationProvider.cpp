@@ -34,8 +34,11 @@
 #include "WebNotification.h"
 #include "WebNotificationManagerProxy.h"
 #include "WebPageProxy.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebNotificationProvider);
 
 WebNotificationProvider::WebNotificationProvider(const WKNotificationProviderBase* provider)
 {
@@ -67,13 +70,13 @@ void WebNotificationProvider::didDestroyNotification(WebNotification& notificati
     m_client.didDestroyNotification(toAPI(&notification), m_client.base.clientInfo);
 }
 
-void WebNotificationProvider::clearNotifications(const Vector<uint64_t>& notificationIDs)
+void WebNotificationProvider::clearNotifications(const Vector<WebNotificationIdentifier>& notificationIDs)
 {
     if (!m_client.clearNotifications)
         return;
 
     auto arrayIDs = notificationIDs.map([](auto& notificationID) -> RefPtr<API::Object> {
-        return API::UInt64::create(notificationID);
+        return API::UInt64::create(notificationID.toUInt64());
     });
     m_client.clearNotifications(toAPI(API::Array::create(WTFMove(arrayIDs)).ptr()), m_client.base.clientInfo);
 }

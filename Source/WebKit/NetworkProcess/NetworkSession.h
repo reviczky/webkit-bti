@@ -26,7 +26,6 @@
 #pragma once
 
 #include "AppPrivacyReport.h"
-#include "DataReference.h"
 #include "DataTaskIdentifier.h"
 #include "NavigatingToAppBoundDomain.h"
 #include "NetworkNotificationManager.h"
@@ -50,6 +49,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/Ref.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakHashSet.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakPtr.h>
@@ -102,8 +102,9 @@ namespace NetworkCache {
 class Cache;
 }
 
-class NetworkSession : public WebCore::SWServerDelegate, public CanMakeCheckedPtr {
-    WTF_MAKE_FAST_ALLOCATED;
+class NetworkSession : public WebCore::SWServerDelegate, public CanMakeCheckedPtr<NetworkSession> {
+    WTF_MAKE_TZONE_ALLOCATED(NetworkSession);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(NetworkSession);
 public:
     static std::unique_ptr<NetworkSession> create(NetworkProcess&, const NetworkSessionCreationParameters&);
     virtual ~NetworkSession();
@@ -116,6 +117,7 @@ public:
     virtual HashSet<WebCore::SecurityOriginData> originsWithCredentials() { return { }; }
     virtual void removeCredentialsForOrigins(const Vector<WebCore::SecurityOriginData>&) { }
     virtual void clearCredentials(WallTime) { }
+    virtual void loadImageForDecoding(WebCore::ResourceRequest&&, WebPageProxyIdentifier, size_t, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::FragmentedSharedBuffer>>&&)>&&) { ASSERT_NOT_REACHED(); }
 
     PAL::SessionID sessionID() const { return m_sessionID; }
     NetworkProcess& networkProcess() { return m_networkProcess; }
@@ -253,7 +255,7 @@ public:
     void reportNetworkIssue(WebPageProxyIdentifier, const URL&);
 #endif
 
-#if ENABLE(BUILT_IN_NOTIFICATIONS)
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
     NetworkNotificationManager& notificationManager() { return m_notificationManager; }
 #endif
 
@@ -268,6 +270,7 @@ public:
 #endif
 
     void setInspectionForServiceWorkersAllowed(bool);
+    void setPersistedDomains(HashSet<WebCore::RegistrableDomain>&&);
                                     
 protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
@@ -281,7 +284,7 @@ protected:
     void addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier, std::optional<WebCore::ProcessIdentifier>, WebCore::RegistrableDomain&&) final;
     std::unique_ptr<WebCore::SWRegistrationStore> createUniqueRegistrationStore(WebCore::SWServer&) final;
     void requestBackgroundFetchPermission(const WebCore::ClientOrigin&, CompletionHandler<void(bool)>&&) final;
-    std::unique_ptr<WebCore::BackgroundFetchRecordLoader> createBackgroundFetchRecordLoader(WebCore::BackgroundFetchRecordLoader::Client&, const WebCore::BackgroundFetchRequest&, size_t responseDataSize, const WebCore::ClientOrigin&) final;
+    std::unique_ptr<WebCore::BackgroundFetchRecordLoader> createBackgroundFetchRecordLoader(WebCore::BackgroundFetchRecordLoaderClient&, const WebCore::BackgroundFetchRequest&, size_t responseDataSize, const WebCore::ClientOrigin&) final;
     Ref<WebCore::BackgroundFetchStore> createBackgroundFetchStore() final;
 
     BackgroundFetchStoreImpl& ensureBackgroundFetchStore();
@@ -300,6 +303,7 @@ protected:
     WebCore::SameSiteStrictEnforcementEnabled m_sameSiteStrictEnforcementEnabled { WebCore::SameSiteStrictEnforcementEnabled::No };
     WebCore::FirstPartyWebsiteDataRemovalMode m_firstPartyWebsiteDataRemovalMode { WebCore::FirstPartyWebsiteDataRemovalMode::AllButCookies };
     WebCore::RegistrableDomain m_standaloneApplicationDomain;
+    HashSet<WebCore::RegistrableDomain> m_persistedDomains;
     HashMap<String, WebCore::RegistrableDomain> m_firstPartyHostCNAMEDomains;
     HashMap<String, WebCore::IPAddress> m_firstPartyHostIPAddresses;
     std::optional<WebCore::RegistrableDomain> m_thirdPartyCNAMEDomainForTesting;
@@ -312,7 +316,7 @@ protected:
     HashSet<Ref<NetworkResourceLoader>> m_keptAliveLoads;
 
     class CachedNetworkResourceLoader {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(CachedNetworkResourceLoader);
     public:
         explicit CachedNetworkResourceLoader(Ref<NetworkResourceLoader>&&);
         RefPtr<NetworkResourceLoader> takeLoader();
@@ -359,7 +363,7 @@ protected:
 
     HashMap<WebPageProxyIdentifier, String> m_attributedBundleIdentifierFromPageIdentifiers;
 
-#if ENABLE(BUILT_IN_NOTIFICATIONS)
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
     NetworkNotificationManager m_notificationManager;
 #endif
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)

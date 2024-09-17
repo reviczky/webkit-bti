@@ -88,7 +88,7 @@ protected:
     void setPIPStandbyElement(WebCore::HTMLVideoElement*);
 
     void setAnimatingFullScreen(bool);
-    void requestRestoreFullScreen();
+    void requestRestoreFullScreen(CompletionHandler<void(bool)>&&);
     void requestExitFullScreen();
     void setFullscreenInsets(const WebCore::FloatBoxExtent&);
     void setFullscreenAutoHideDuration(Seconds);
@@ -117,21 +117,29 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "WebFullScreenManager"; }
+    ASCIILiteral logClassName() const { return "WebFullScreenManager"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 
 #if ENABLE(VIDEO)
+#if ENABLE(IMAGE_ANALYSIS)
     void scheduleTextRecognitionForMainVideo();
     void endTextRecognitionForMainVideoIfNeeded();
     void mainVideoElementTextRecognitionTimerFired();
+#endif
     void updateMainVideoElement();
     void setMainVideoElement(RefPtr<WebCore::HTMLVideoElement>&&);
 
-    WeakPtr<WebCore::HTMLVideoElement, WebCore::WeakPtrImplWithEventTargetData> m_mainVideoElement;
+    WeakPtr<WebCore::HTMLVideoElement> m_mainVideoElement;
+#if ENABLE(IMAGE_ANALYSIS)
     RunLoop::Timer m_mainVideoElementTextRecognitionTimer;
     bool m_isPerformingTextRecognitionInMainVideo { false };
+#endif
 #endif // ENABLE(VIDEO)
+
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    bool m_willUseQuickLookForFullscreen { false };
+#endif
 
     bool m_closing { false };
     bool m_inWindowFullScreenMode { false };

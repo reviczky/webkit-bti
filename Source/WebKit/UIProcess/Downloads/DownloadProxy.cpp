@@ -30,7 +30,6 @@
 #include "APIDownloadClient.h"
 #include "APIFrameInfo.h"
 #include "AuthenticationChallengeProxy.h"
-#include "DataReference.h"
 #include "DownloadProxyMap.h"
 #include "FrameInfoData.h"
 #include "NetworkProcessMessages.h"
@@ -46,6 +45,10 @@
 
 #if PLATFORM(MAC)
 #include <pal/spi/mac/QuarantineSPI.h>
+#endif
+
+#if HAVE(SEC_KEY_PROXY)
+#include "SecKeyProxyStore.h"
 #endif
 
 namespace WebKit {
@@ -68,17 +71,17 @@ DownloadProxy::~DownloadProxy()
         m_didStartCallback(nullptr);
 }
 
-static RefPtr<API::Data> createData(const IPC::DataReference& data)
+static RefPtr<API::Data> createData(std::span<const uint8_t> data)
 {
     if (data.empty())
         return nullptr;
-    return API::Data::create(data.data(), data.size());
+    return API::Data::create(data);
 }
 
 void DownloadProxy::cancel(CompletionHandler<void(API::Data*)>&& completionHandler)
 {
     if (m_dataStore) {
-        m_dataStore->networkProcess().sendWithAsyncReply(Messages::NetworkProcess::CancelDownload(m_downloadID), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)] (const IPC::DataReference& resumeData) mutable {
+        m_dataStore->networkProcess().sendWithAsyncReply(Messages::NetworkProcess::CancelDownload(m_downloadID), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)] (std::span<const uint8_t> resumeData) mutable {
             m_legacyResumeData = createData(resumeData);
             completionHandler(m_legacyResumeData.get());
             m_downloadProxyMap.downloadFinished(*this);
@@ -103,21 +106,6 @@ WebPageProxy* DownloadProxy::originatingPage() const
     return m_originatingPage.get();
 }
 
-#if PLATFORM(COCOA)
-void DownloadProxy::publishProgress(const URL& URL)
-{
-    if (!m_dataStore)
-        return;
-
-    auto handle = SandboxExtension::createHandle(URL.fileSystemPath(), SandboxExtension::Type::ReadWrite);
-    ASSERT(handle);
-    if (!handle)
-        return;
-
-    m_dataStore->networkProcess().send(Messages::NetworkProcess::PublishDownloadProgress(m_downloadID, URL, WTFMove(*handle)), 0);
-}
-#endif // PLATFORM(COCOA)
-
 void DownloadProxy::didStart(const ResourceRequest& request, const String& suggestedFilename)
 {
     m_request = request;
@@ -136,7 +124,7 @@ void DownloadProxy::didReceiveAuthenticationChallenge(AuthenticationChallenge&& 
     if (!m_dataStore)
         return;
 
-    auto authenticationChallengeProxy = AuthenticationChallengeProxy::create(WTFMove(authenticationChallenge), challengeID, *m_dataStore->networkProcess().connection(), nullptr);
+    auto authenticationChallengeProxy = AuthenticationChallengeProxy::create(WTFMove(authenticationChallenge), challengeID, m_dataStore->networkProcess().connection(), nullptr);
     m_client->didReceiveAuthenticationChallenge(*this, authenticationChallengeProxy.get());
 }
 
@@ -155,6 +143,8 @@ void DownloadProxy::didReceiveData(uint64_t bytesWritten, uint64_t totalBytesWri
 
 void DownloadProxy::decideDestinationWithSuggestedFilename(const WebCore::ResourceResponse& response, String&& suggestedFilename, CompletionHandler<void(String, SandboxExtension::Handle, AllowOverwrite)>&& completionHandler)
 {
+    RELEASE_LOG_INFO_IF(!response.expectedContentLength(), Network, "DownloadProxy::decideDestinationWithSuggestedFilename expectedContentLength is null");
+
     // As per https://html.spec.whatwg.org/#as-a-download (step 2), the filename from the Content-Disposition header
     // should override the suggested filename from the download attribute.
     if (response.isAttachmentWithFilename() || (suggestedFilename.isEmpty() && m_suggestedFilename.isEmpty()))
@@ -216,7 +206,7 @@ void DownloadProxy::didFinish()
     m_downloadProxyMap.downloadFinished(*this);
 }
 
-void DownloadProxy::didFail(const ResourceError& error, const IPC::DataReference& resumeData)
+void DownloadProxy::didFail(const ResourceError& error, std::span<const uint8_t> resumeData)
 {
     m_legacyResumeData = createData(resumeData);
 
