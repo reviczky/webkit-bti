@@ -488,55 +488,11 @@ StorageRequests& StorageRequests::singleton()
 }
 
 #if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+WebPageProxyFrameLoadStateObserver::WebPageProxyFrameLoadStateObserver() = default;
 
-class WebPageProxyFrameLoadStateObserver final : public FrameLoadStateObserver {
-    WTF_MAKE_NONCOPYABLE(WebPageProxyFrameLoadStateObserver);
-    WTF_MAKE_TZONE_ALLOCATED(WebPageProxyFrameLoadStateObserver);
-public:
-    static constexpr size_t maxVisitedDomainsSize = 6;
-
-    WebPageProxyFrameLoadStateObserver() = default;
-    virtual ~WebPageProxyFrameLoadStateObserver() = default;
-
-    void didReceiveProvisionalURL(const URL& url) override
-    {
-        m_provisionalURLs.append(url);
-    }
-
-    void didCancelProvisionalLoad() override
-    {
-        m_provisionalURLs.clear();
-    }
-
-    void didCommitProvisionalLoad() override
-    {
-        for (auto& url : m_provisionalURLs)
-            didVisitDomain(RegistrableDomain(url));
-    }
-
-    const ListHashSet<RegistrableDomain>& visitedDomains() const
-    {
-        return m_visitedDomains;
-    }
-
-private:
-    void didVisitDomain(RegistrableDomain&& domain)
-    {
-        if (domain.isEmpty())
-            return;
-
-        m_visitedDomains.prependOrMoveToFirst(WTFMove(domain));
-
-        if (m_visitedDomains.size() > maxVisitedDomainsSize)
-            m_visitedDomains.removeLast();
-    }
-
-    Vector<URL> m_provisionalURLs;
-    ListHashSet<RegistrableDomain> m_visitedDomains;
-};
+WebPageProxyFrameLoadStateObserver::~WebPageProxyFrameLoadStateObserver() = default;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebPageProxyFrameLoadStateObserver);
-
 #endif // #if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
 
 void WebPageProxy::forMostVisibleWebPageIfAny(PAL::SessionID sessionID, const SecurityOriginData& origin, CompletionHandler<void(WebPageProxy*)>&& completionHandler)
@@ -690,6 +646,10 @@ WebPageProxy::Internals::Internals(WebPageProxy& page)
 #endif
 }
 
+#if !PLATFORM(COCOA)
+WebPageProxy::Internals::~Internals() = default;
+#endif
+
 static RefPtr<WebFrameProxy> openerFrame(const API::PageConfiguration& configuration)
 {
     auto& openerInfo = configuration.openerInfo();
@@ -742,7 +702,7 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, Ref
 #endif
     , m_inspectorController(makeUnique<WebPageInspectorController>(*this))
 #if ENABLE(REMOTE_INSPECTOR)
-    , m_inspectorDebuggable(makeUnique<WebPageDebuggable>(*this))
+    , m_inspectorDebuggable(WebPageDebuggable::create(*this))
 #endif
     , m_corsDisablingPatterns(m_configuration->corsDisablingPatterns())
 #if ENABLE(APP_BOUND_DOMAINS)
@@ -859,6 +819,10 @@ WebPageProxy::~WebPageProxy()
 
 #if PLATFORM(MACCATALYST)
     EndowmentStateTracker::singleton().removeClient(internals());
+#endif
+
+#if ENABLE(REMOTE_INSPECTOR)
+    ASSERT(!m_inspectorDebuggable);
 #endif
     
     for (auto& callback : m_nextActivityStateChangeCallbacks)
@@ -1647,7 +1611,8 @@ void WebPageProxy::close()
     protectedBackForwardList()->pageClosed();
     m_inspectorController->pageClosed();
 #if ENABLE(REMOTE_INSPECTOR)
-    m_inspectorDebuggable = nullptr;
+    if (RefPtr inspectorDebuggable = std::exchange(m_inspectorDebuggable, nullptr))
+        inspectorDebuggable->detachFromPage();
 #endif
     protectedPageClient()->pageClosed();
 
@@ -2086,7 +2051,7 @@ void WebPageProxy::loadDataWithNavigationShared(Ref<WebProcessProxy>&& process, 
     prepareToLoadWebPage(process, loadParameters);
 
     process->markProcessAsRecentlyUsed();
-    process->assumeReadAccessToBaseURL(*this, baseURL, [weakProcess = WeakPtr { process }, webPageID, loadParameters = WTFMove(loadParameters), data = WTFMove(data)] () mutable {
+    process->assumeReadAccessToBaseURL(*this, baseURL, [weakProcess = WeakPtr { process }, webPageID, loadParameters = WTFMove(loadParameters)] () mutable {
         if (!weakProcess)
             return;
         weakProcess->send(Messages::WebPage::LoadData(WTFMove(loadParameters)), webPageID);
@@ -7173,7 +7138,8 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
     navigation->setLastNavigationAction(navigationActionData);
     navigation->setOriginatingFrameInfo(originatingFrameInfoData);
     navigation->setDestinationFrameSecurityOrigin(frameInfo.securityOrigin);
-    navigation->setOriginatorAdvancedPrivacyProtections(navigation->wasUserInitiated() ? navigationActionData.advancedPrivacyProtections : navigationActionData.originatorAdvancedPrivacyProtections);
+    if (navigationActionData.originatorAdvancedPrivacyProtections)
+        navigation->setOriginatorAdvancedPrivacyProtections(*navigationActionData.originatorAdvancedPrivacyProtections);
 
     RefPtr mainFrameNavigation = frame.isMainFrame() ? navigation.get() : nullptr;
     RefPtr originatingFrame = originatingFrameInfoData.frameID ? WebFrameProxy::webFrame(originatingFrameInfoData.frameID) : nullptr;
@@ -7522,7 +7488,8 @@ void WebPageProxy::decidePolicyForResponseShared(Ref<WebProcessProxy>&& process,
     RefPtr navigation = navigationID ? m_navigationState->navigation(*navigationID) : nullptr;
     Ref navigationResponse = API::NavigationResponse::create(API::FrameInfo::create(WTFMove(frameInfo), this).get(), request, response, canShowMIMEType, downloadAttribute);
 
-    if (coopValuesRequireBrowsingContextGroupSwitch(isShowingInitialAboutBlank, activeDocumentCOOPValue, frameInfo.securityOrigin.securityOrigin().get(), obtainCrossOriginOpenerPolicy(response).value, SecurityOrigin::create(response.url()).get()))
+    // COOP only applies to top-level browsing contexts.
+    if (frameInfo.isMainFrame && coopValuesRequireBrowsingContextGroupSwitch(isShowingInitialAboutBlank, activeDocumentCOOPValue, frameInfo.securityOrigin.securityOrigin().get(), obtainCrossOriginOpenerPolicy(response).value, SecurityOrigin::create(response.url()).get()))
         m_openerFrame = nullptr;
 
     Ref listener = frame->setUpPolicyListenerProxy([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), navigation = WTFMove(navigation), process, navigationResponse, request] (PolicyAction policyAction, API::WebsitePolicies*, ProcessSwapRequestedByClient processSwapRequestedByClient, RefPtr<BrowsingWarning>&& safeBrowsingWarning, std::optional<NavigatingToAppBoundDomain>, WasNavigationIntercepted) mutable {
@@ -12583,8 +12550,8 @@ void WebPageProxy::getLoadDecisionForIcon(const WebCore::LinkIcon& icon, Callbac
             return;
         }
         sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [callback = WTFMove(callback)](const IPC::SharedBufferReference& iconData) mutable {
-            if (auto buffer = iconData.unsafeBuffer())
-                callback(API::Data::create(buffer->span()).ptr());
+            if (!iconData.isNull())
+                callback(API::Data::create(iconData.span()).ptr());
             else
                 callback(nullptr);
         });

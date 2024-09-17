@@ -39,6 +39,7 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityOriginData.h>
+#include <WebCore/UserGestureTokenIdentifier.h>
 
 namespace WebCore {
 using SandboxFlags = int;
@@ -51,7 +52,7 @@ struct NavigationActionData {
     OptionSet<WebEventModifier> modifiers;
     WebMouseEventButton mouseButton { WebMouseEventButton::None };
     WebMouseEventSyntheticClickType syntheticClickType { WebMouseEventSyntheticClickType::NoTap };
-    uint64_t userGestureTokenIdentifier { 0 };
+    std::optional<WebCore::UserGestureTokenIdentifier> userGestureTokenIdentifier;
     std::optional<WTF::UUID> userGestureAuthorizationToken;
     bool canHandleRequest { false };
     WebCore::ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy { WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow };
@@ -74,7 +75,7 @@ struct NavigationActionData {
     std::optional<WebCore::OwnerPermissionsPolicyData> ownerPermissionsPolicy;
     std::optional<WebCore::PrivateClickMeasurement> privateClickMeasurement;
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtections;
-    OptionSet<WebCore::AdvancedPrivacyProtections> originatorAdvancedPrivacyProtections;
+    std::optional<OptionSet<WebCore::AdvancedPrivacyProtections>> originatorAdvancedPrivacyProtections;
 #if PLATFORM(MAC) || HAVE(UIKIT_WITH_MOUSE_SUPPORT)
     std::optional<WebKit::WebHitTestResultData> webHitTestResultData;
 #endif
