@@ -34,12 +34,12 @@
 #include <string.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
-#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX)
-#include "ProcessProviderLibWPE.h"
-#endif
-
 #if ENABLE(BREAKPAD)
 #include "unix/BreakpadExceptionHandler.h"
+#endif
+
+#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX) && (!PLATFORM(PLAYSTATION) || USE(WPE_BACKEND_PLAYSTATION))
+#include "ProcessProviderLibWPE.h"
 #endif
 
 namespace WebKit {
@@ -60,7 +60,7 @@ bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
     int minimumNumArgs = 3;
 #endif
 
-#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX)
+#if USE(LIBWPE) && !ENABLE(BUBBLEWRAP_SANDBOX) && (!PLATFORM(PLAYSTATION) || USE(WPE_BACKEND_PLAYSTATION))
     if (ProcessProviderLibWPE::singleton().isEnabled())
         minimumNumArgs = 3;
 #endif
@@ -68,22 +68,22 @@ bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
     if (argc < minimumNumArgs)
         return false;
 
-    if (auto processIdentifier = parseInteger<uint64_t>(StringView(argv[1], strlen(argv[1]))))
-        m_parameters.processIdentifier = ObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
+    if (auto processIdentifier = parseInteger<uint64_t>(span(argv[1])))
+        m_parameters.processIdentifier = LegacyNullableObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
     else
         return false;
 
-    if (auto connectionIdentifier = parseInteger<int>(StringView(argv[2], strlen(argv[2]))))
+    if (auto connectionIdentifier = parseInteger<int>(span(argv[2])))
         m_parameters.connectionIdentifier = IPC::Connection::Identifier { *connectionIdentifier };
     else
         return false;
 
-    if (!m_parameters.processIdentifier->toUInt64() || m_parameters.connectionIdentifier.handle <= 0)
+    if (!m_parameters.processIdentifier->toRawValue() || m_parameters.connectionIdentifier.handle <= 0)
         return false;
 
 #if USE(GLIB) && OS(LINUX)
     if (minimumNumArgs == 4) {
-        auto pidSocket = parseInteger<int>(StringView(argv[3], strlen(argv[3])));
+        auto pidSocket = parseInteger<int>(span(argv[3]));
         if (!pidSocket || *pidSocket < 0)
             return false;
 

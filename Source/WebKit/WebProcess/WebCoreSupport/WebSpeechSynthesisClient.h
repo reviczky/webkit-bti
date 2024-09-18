@@ -30,13 +30,23 @@
 #include <WebCore/PlatformSpeechSynthesisUtterance.h>
 #include <WebCore/PlatformSpeechSynthesisVoice.h>
 #include <WebCore/SpeechSynthesisClient.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class WebSpeechSynthesisClient;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebSpeechSynthesisClient> : std::true_type { };
+}
 
 namespace WebKit {
 
 class WebPage;
     
 class WebSpeechSynthesisClient : public WebCore::SpeechSynthesisClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebSpeechSynthesisClient);
 public:
     WebSpeechSynthesisClient(WebPage& page)
         : m_page(page)

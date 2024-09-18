@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -106,6 +106,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   <h5>Instance methods</h5>
   <div class="links">
   
+    <a class="method" href="method.Settings.apply_from_key_file.html">apply_from_key_file</a>
+  
     <a class="method" href="method.Settings.get_allow_file_access_from_file_urls.html">get_allow_file_access_from_file_urls</a>
   
     <a class="method" href="method.Settings.get_allow_modal_dialogs.html">get_allow_modal_dialogs</a>
@@ -129,6 +131,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.Settings.get_disable_web_security.html">get_disable_web_security</a>
   
     <a class="method" href="method.Settings.get_draw_compositing_indicators.html">get_draw_compositing_indicators</a>
+  
+    <a class="method" href="method.Settings.get_enable_2d_canvas_acceleration.html">get_enable_2d_canvas_acceleration</a>
   
     <a class="method" href="method.Settings.get_enable_caret_browsing.html">get_enable_caret_browsing</a>
   
@@ -237,6 +241,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.Settings.set_disable_web_security.html">set_disable_web_security</a>
   
     <a class="method" href="method.Settings.set_draw_compositing_indicators.html">set_draw_compositing_indicators</a>
+  
+    <a class="method" href="method.Settings.set_enable_2d_canvas_acceleration.html">set_enable_2d_canvas_acceleration</a>
   
     <a class="method" href="method.Settings.set_enable_caret_browsing.html">set_enable_caret_browsing</a>
   
@@ -357,6 +363,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   
     <a class="property" href="property.Settings.draw-compositing-indicators.html">draw-compositing-indicators</a>
   
+    <a class="property" href="property.Settings.enable-2d-canvas-acceleration.html">enable-2d-canvas-acceleration</a>
+  
     <a class="property" href="property.Settings.enable-caret-browsing.html">enable-caret-browsing</a>
   
     <a class="property" href="property.Settings.enable-developer-extras.html">enable-developer-extras</a>
@@ -475,7 +483,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp#L87">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp#L93">[src]</a>
           
         </h4>
 
@@ -661,6 +669,17 @@ contains default&nbsp;settings.</p>
       <div class="docblock">
       
         <div class="">
+          <h6><a href="method.Settings.apply_from_key_file.html">webkit_settings_apply_from_key_file</a></h6>
+          <div class="docblock">
+            <p>Reads the contents of the given <code>group_name</code> from the given <code>key_file</code> and apply the value of
+each key/value to the corresponding property on the <code>settings</code>.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.46</span></p>
+          </div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.Settings.get_allow_file_access_from_file_urls.html">webkit_settings_get_allow_file_access_from_file_urls</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitSettings:allow-file-access-from-file-urls</code> property.</p>
@@ -777,6 +796,16 @@ contains default&nbsp;settings.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.Settings.get_enable_2d_canvas_acceleration.html">webkit_settings_get_enable_2d_canvas_acceleration</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WebKitSettings:enable-2d-canvas-acceleration</code> property.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       
@@ -1317,6 +1346,16 @@ contains default&nbsp;settings.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.Settings.set_enable_2d_canvas_acceleration.html">webkit_settings_set_enable_2d_canvas_acceleration</a></h6>
+          <div class="docblock">
+            <p>Set the <code>WebKitSettings:enable-2d-canvas-acceleration</code> property.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       
@@ -1920,6 +1959,19 @@ to web content that is composited with the <span class="caps">GPU</span>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="property.Settings.enable-2d-canvas-acceleration.html">WPEWebKit.Settings:enable-2d-canvas-acceleration</a></h6>
+          <div class="docblock">
+            <p>Enable or disable 2D canvas acceleration.
+If this setting is enabled, the 2D canvas will be accelerated even if Skia <span class="caps">CPU</span>
+is used for rendering. However, the canvas can be unaccelerated even when this setting
+is enabled, for other reasons like its size or when willReadFrequently property is&nbsp;used.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       

@@ -182,13 +182,13 @@ static RefPtr<WebImage> imageForRect(LocalFrameView* frameView, const IntRect& p
     graphicsContext.translate(-paintingRect.location());
 
     auto shouldPaintSelection = LocalFrameView::IncludeSelection;
-    if (options & SnapshotOptionsExcludeSelectionHighlighting)
+    if (options.contains(SnapshotOption::ExcludeSelectionHighlighting))
         shouldPaintSelection = LocalFrameView::ExcludeSelection;
 
     auto paintBehavior = frameView->paintBehavior() | PaintBehavior::FlattenCompositingLayers | PaintBehavior::Snapshotting;
-    if (options & SnapshotOptionsForceBlackText)
+    if (options.contains(SnapshotOption::ForceBlackText))
         paintBehavior.add(PaintBehavior::ForceBlackText);
-    if (options & SnapshotOptionsForceWhiteText)
+    if (options.contains(SnapshotOption::ForceWhiteText))
         paintBehavior.add(PaintBehavior::ForceWhiteText);
 
     auto oldPaintBehavior = frameView->paintBehavior();
@@ -419,7 +419,7 @@ bool InjectedBundleNodeHandle::isSelectableTextNode() const
         return false;
 
     auto renderer = m_node->renderer();
-    return renderer && renderer->style().effectiveUserSelect() != UserSelect::None;
+    return renderer && renderer->style().usedUserSelect() != UserSelect::None;
 }
 
 RefPtr<InjectedBundleNodeHandle> InjectedBundleNodeHandle::htmlTableCellElementCellAbove()
@@ -464,11 +464,6 @@ void InjectedBundleNodeHandle::stop()
         domNodeHandleCache().remove(*m_node);
         m_node = nullptr;
     }
-}
-
-const char* InjectedBundleNodeHandle::activeDOMObjectName() const
-{
-    return "InjectedBundleNodeHandle";
 }
 
 } // namespace WebKit

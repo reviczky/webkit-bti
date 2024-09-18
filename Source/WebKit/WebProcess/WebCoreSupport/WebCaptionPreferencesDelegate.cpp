@@ -28,14 +28,19 @@
 
 #if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
 
+#include <WebCore/CaptionUserPreferencesMediaAF.h>
 #include "WebProcess.h"
 #include "WebProcessProxyMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebCaptionPreferencesDelegate);
 
 void WebCaptionPreferencesDelegate::setDisplayMode(WebCore::CaptionUserPreferences::CaptionDisplayMode displayMode)
 {
     WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessProxy::SetCaptionDisplayMode(displayMode), 0);
+    WebCore::CaptionUserPreferencesMediaAF::setCachedCaptionDisplayMode(displayMode);
 }
 
 void WebCaptionPreferencesDelegate::setPreferredLanguage(const String& language)

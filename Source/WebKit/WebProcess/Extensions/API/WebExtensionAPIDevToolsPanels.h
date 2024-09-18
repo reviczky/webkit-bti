@@ -28,28 +28,31 @@
 #if ENABLE(WK_WEB_EXTENSIONS) && ENABLE(INSPECTOR_EXTENSIONS)
 
 #include "JSWebExtensionAPIDevToolsPanels.h"
-#include "WebExtensionAPIDevToolsElementsPanel.h"
+#include "WebExtensionAPIDevToolsExtensionPanel.h"
 #include "WebExtensionAPIEvent.h"
 #include "WebExtensionAPIObject.h"
 
 namespace WebKit {
 
+class WebPage;
+
 class WebExtensionAPIDevToolsPanels : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsPanels, devToolsPanels);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIDevToolsPanels, devToolsPanels, devtools.panels);
 
 public:
 #if PLATFORM(COCOA)
-    void createTab(NSString *title, NSString *iconPath, NSString *pagePath, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+    RefPtr<WebExtensionAPIDevToolsExtensionPanel> extensionPanel(Inspector::ExtensionTabID) const;
 
-    WebExtensionAPIDevToolsElementsPanel& elements();
+    void createPanel(WebPage&, NSString *title, NSString *iconPath, NSString *pagePath, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
+
     NSString *themeName();
 
     WebExtensionAPIEvent& onThemeChanged();
 #endif
 
 private:
-    RefPtr<WebExtensionAPIDevToolsElementsPanel> m_elements;
     RefPtr<WebExtensionAPIEvent> m_onThemeChanged;
+    HashMap<Inspector::ExtensionTabID, Ref<WebExtensionAPIDevToolsExtensionPanel>> m_extensionPanels;
 };
 
 } // namespace WebKit

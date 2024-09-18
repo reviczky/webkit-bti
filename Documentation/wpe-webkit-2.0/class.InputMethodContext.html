@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -633,7 +633,7 @@ its value set through g_object_set_property(), g_object_set(), et&nbsp;al.</p>
   );
   gboolean (* filter_key_event) (
     WebKitInputMethodContext* context,
-    wpe_input_keyboard_event* key_event
+    gpointer key_event
   );
   void (* notify_focus_in) (
     WebKitInputMethodContext* context
@@ -767,7 +767,7 @@ void
         
           <dt><code>filter_key_event: gboolean (* filter_key_event) (
     WebKitInputMethodContext* context,
-    wpe_input_keyboard_event* key_event
+    gpointer key_event
   )</code></dt>
           <dd>No description available.</dd>
         

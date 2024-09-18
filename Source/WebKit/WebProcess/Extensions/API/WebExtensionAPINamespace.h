@@ -42,6 +42,8 @@
 #include "WebExtensionAPIPermissions.h"
 #include "WebExtensionAPIRuntime.h"
 #include "WebExtensionAPIScripting.h"
+#include "WebExtensionAPISidePanel.h"
+#include "WebExtensionAPISidebarAction.h"
 #include "WebExtensionAPIStorage.h"
 #include "WebExtensionAPITabs.h"
 #include "WebExtensionAPITest.h"
@@ -55,11 +57,11 @@ class WebExtensionAPIExtension;
 class WebExtensionAPIRuntime;
 
 class WebExtensionAPINamespace : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPINamespace, namespace);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPINamespace, namespace, browser);
 
 public:
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage*);
 
     WebExtensionAPIAction& action();
     WebExtensionAPIAlarms& alarms();
@@ -77,8 +79,12 @@ public:
     WebExtensionAPINotifications& notifications();
     WebExtensionAPIAction& pageAction() { return action(); }
     WebExtensionAPIPermissions& permissions();
-    WebExtensionAPIRuntime& runtime() final;
+    WebExtensionAPIRuntime& runtime() const final;
     WebExtensionAPIScripting& scripting();
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+    WebExtensionAPISidePanel& sidePanel();
+    WebExtensionAPISidebarAction& sidebarAction();
+#endif
     WebExtensionAPIStorage& storage();
     WebExtensionAPITabs& tabs();
     WebExtensionAPITest& test();
@@ -101,8 +107,12 @@ private:
     RefPtr<WebExtensionAPIMenus> m_menus;
     RefPtr<WebExtensionAPINotifications> m_notifications;
     RefPtr<WebExtensionAPIPermissions> m_permissions;
-    RefPtr<WebExtensionAPIRuntime> m_runtime;
+    mutable RefPtr<WebExtensionAPIRuntime> m_runtime;
     RefPtr<WebExtensionAPIScripting> m_scripting;
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+    RefPtr<WebExtensionAPISidePanel> m_sidePanel;
+    RefPtr<WebExtensionAPISidebarAction> m_sidebarAction;
+#endif
     RefPtr<WebExtensionAPIStorage> m_storage;
     RefPtr<WebExtensionAPITabs> m_tabs;
     RefPtr<WebExtensionAPITest> m_test;

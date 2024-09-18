@@ -30,6 +30,7 @@
 #include "WebFramePolicyListenerProxy.h"
 #include "WebProcessProxy.h"
 #include <WebCore/FrameLoaderTypes.h>
+#include <WebCore/LayerHostingContextIdentifier.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
 #include <wtf/ListHashSet.h>
@@ -49,14 +50,14 @@ class URL;
 namespace IPC {
 class Connection;
 class Decoder;
-using DataReference = std::span<const uint8_t>;
 }
 
 namespace WebKit {
 
+class BrowsingContextGroup;
+class FrameProcess;
 class ProvisionalFrameProxy;
-class RemotePageProxy;
-class SafeBrowsingWarning;
+class BrowsingWarning;
 class UserData;
 class WebFramePolicyListenerProxy;
 class WebPageProxy;
@@ -75,9 +76,10 @@ struct WebsitePoliciesData;
 
 class WebFrameProxy : public API::ObjectImpl<API::Object::Type::Frame>, public CanMakeWeakPtr<WebFrameProxy> {
 public:
-    static Ref<WebFrameProxy> create(WebPageProxy& page, WebProcessProxy& process, WebCore::FrameIdentifier frameID)
+    enum class IsMainFrame : bool { No, Yes };
+    static Ref<WebFrameProxy> create(WebPageProxy& page, FrameProcess& process, WebCore::FrameIdentifier frameID, IsMainFrame isMainFrame)
     {
-        return adoptRef(*new WebFrameProxy(page, process, frameID));
+        return adoptRef(*new WebFrameProxy(page, process, frameID, isMainFrame));
     }
 
     static WebFrameProxy* webFrame(WebCore::FrameIdentifier);
@@ -87,6 +89,7 @@ public:
 
     WebCore::FrameIdentifier frameID() const { return m_frameID; }
     WebPageProxy* page() const;
+    RefPtr<WebPageProxy> protectedPage() const;
 
     bool pageIsClosed() const { return !m_page; } // Needs to be thread-safe.
 
@@ -100,7 +103,7 @@ public:
 
     void loadURL(const URL&, const String& referrer = String());
     // Sub frames only. For main frames, use WebPageProxy::loadData.
-    void loadData(const IPC::DataReference&, const String& MIMEType, const String& encodingName, const URL& baseURL);
+    void loadData(std::span<const uint8_t>, const String& MIMEType, const String& encodingName, const URL& baseURL);
 
     const URL& url() const { return m_frameLoadState.url(); }
     const URL& provisionalURL() const { return m_frameLoadState.provisionalURL(); }
@@ -136,7 +139,7 @@ public:
     void didSameDocumentNavigation(const URL&); // eg. anchor navigation, session state change.
     void didChangeTitle(const String&);
 
-    WebFramePolicyListenerProxy& setUpPolicyListenerProxy(CompletionHandler<void(WebCore::PolicyAction, API::WebsitePolicies*, ProcessSwapRequestedByClient, RefPtr<SafeBrowsingWarning>&&, std::optional<NavigatingToAppBoundDomain>, WasNavigationIntercepted)>&&, ShouldExpectSafeBrowsingResult, ShouldExpectAppBoundDomainResult, ShouldWaitForInitialLinkDecorationFilteringData);
+    WebFramePolicyListenerProxy& setUpPolicyListenerProxy(CompletionHandler<void(WebCore::PolicyAction, API::WebsitePolicies*, ProcessSwapRequestedByClient, RefPtr<BrowsingWarning>&&, std::optional<NavigatingToAppBoundDomain>, WasNavigationIntercepted)>&&, ShouldExpectSafeBrowsingResult, ShouldExpectAppBoundDomainResult, ShouldWaitForInitialLinkDecorationFilteringData);
 
 #if ENABLE(CONTENT_FILTERING)
     void contentFilterDidBlockLoad(WebCore::ContentFilterUnblockHandler contentFilterUnblockHandler) { m_contentFilterUnblockHandler = WTFMove(contentFilterUnblockHandler); }
@@ -153,24 +156,29 @@ public:
     void disconnect();
     void didCreateSubframe(WebCore::FrameIdentifier, const String& frameName);
     ProcessID processID() const;
-    void prepareForProvisionalNavigationInProcess(WebProcessProxy&, const API::Navigation&, CompletionHandler<void()>&&);
+    void prepareForProvisionalLoadInProcess(WebProcessProxy&, API::Navigation&, BrowsingContextGroup&, CompletionHandler<void()>&&);
 
-    void commitProvisionalFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
+    void commitProvisionalFrame(IPC::Connection&, WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, std::optional<WebCore::NavigationIdentifier>, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
 
     void getFrameInfo(CompletionHandler<void(FrameTreeNodeData&&)>&&);
     FrameTreeCreationParameters frameTreeCreationParameters() const;
 
     WebFrameProxy* parentFrame() const { return m_parentFrame.get(); }
-    Ref<WebFrameProxy> rootFrame();
-    WebProcessProxy& process() const { return m_process.get(); }
+    WebFrameProxy& rootFrame();
+    WebProcessProxy& process() const;
     Ref<WebProcessProxy> protectedProcess() const { return process(); }
-    void setProcess(WebProcessProxy& process) { m_process = process; }
+    void setProcess(FrameProcess&);
+    const FrameProcess& frameProcess() const { return m_frameProcess.get(); }
+    FrameProcess& frameProcess() { return m_frameProcess.get(); }
+    void removeChildFrames();
     ProvisionalFrameProxy* provisionalFrame() { return m_provisionalFrame.get(); }
     std::unique_ptr<ProvisionalFrameProxy> takeProvisionalFrame();
-    RefPtr<RemotePageProxy> remotePageProxy();
-    void remoteProcessDidTerminate();
+    WebProcessProxy& provisionalLoadProcess();
+    void remoteProcessDidTerminate(WebProcessProxy&);
     std::optional<WebCore::PageIdentifier> webPageIDInCurrentProcess();
     void notifyParentOfLoadCompletion(WebProcessProxy&);
+    void removeRemotePagesForSuspension();
+    void bindAccessibilityFrameWithData(std::span<const uint8_t>);
 
     bool isFocused() const;
 
@@ -182,19 +190,25 @@ public:
     TraversalResult traverseNext(CanWrap) const;
     TraversalResult traversePrevious(CanWrap);
 
+    void setHasPendingBackForwardItem(bool hasPendingBackForwardItem) { m_hasPendingBackForwardItem = hasPendingBackForwardItem; }
+    bool hasPendingBackForwardItem() { return m_hasPendingBackForwardItem; }
+
+    WebCore::LayerHostingContextIdentifier layerHostingContextIdentifier() const { return m_layerHostingContextIdentifier; }
+    void setRemoteFrameSize(WebCore::IntSize size) { m_remoteFrameSize = size; }
+
 private:
-    WebFrameProxy(WebPageProxy&, WebProcessProxy&, WebCore::FrameIdentifier);
+    WebFrameProxy(WebPageProxy&, FrameProcess&, WebCore::FrameIdentifier, IsMainFrame);
 
     std::optional<WebCore::PageIdentifier> pageIdentifier() const;
 
-    RefPtr<WebFrameProxy> deepLastChild();
-    RefPtr<WebFrameProxy> firstChild() const;
-    RefPtr<WebFrameProxy> lastChild() const;
-    RefPtr<WebFrameProxy> nextSibling() const;
-    RefPtr<WebFrameProxy> previousSibling() const;
+    WebFrameProxy* deepLastChild();
+    WebFrameProxy* firstChild() const;
+    WebFrameProxy* lastChild() const;
+    WebFrameProxy* nextSibling() const;
+    WebFrameProxy* previousSibling() const;
 
     WeakPtr<WebPageProxy> m_page;
-    Ref<WebProcessProxy> m_process;
+    Ref<FrameProcess> m_frameProcess;
 
     FrameLoadState m_frameLoadState;
 
@@ -208,11 +222,14 @@ private:
     ListHashSet<Ref<WebFrameProxy>> m_childFrames;
     WeakPtr<WebFrameProxy> m_parentFrame;
     std::unique_ptr<ProvisionalFrameProxy> m_provisionalFrame;
-    RefPtr<RemotePageProxy> m_remotePageProxy;
 #if ENABLE(CONTENT_FILTERING)
     WebCore::ContentFilterUnblockHandler m_contentFilterUnblockHandler;
 #endif
     CompletionHandler<void(std::optional<WebCore::PageIdentifier>, std::optional<WebCore::FrameIdentifier>)> m_navigateCallback;
+    const WebCore::LayerHostingContextIdentifier m_layerHostingContextIdentifier;
+    bool m_hasPendingBackForwardItem { false };
+    const IsMainFrame m_isMainFrame;
+    std::optional<WebCore::IntSize> m_remoteFrameSize;
 };
 
 } // namespace WebKit

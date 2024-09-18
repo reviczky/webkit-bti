@@ -30,6 +30,7 @@
 #include <wtf/Deque.h>
 #include <wtf/Function.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -38,10 +39,19 @@ OBJC_CLASS NSError;
 OBJC_CLASS NSString;
 OBJC_CLASS NSDictionary;
 
+namespace WebKit {
+class PushServiceConnection;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PushServiceConnection> : std::true_type { };
+}
+
 namespace WebPushD {
 
 class PushServiceConnection : public CanMakeWeakPtr<PushServiceConnection> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PushServiceConnection);
 public:
     using IncomingPushMessageHandler = Function<void(NSString *, NSDictionary *)>;
 

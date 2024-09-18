@@ -37,9 +37,19 @@
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
 OBJC_CLASS LAContext;
+
+namespace WebKit {
+class AuthenticatorManager;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::AuthenticatorManager> : std::true_type { };
+}
 
 namespace API {
 class WebAuthenticationPanel;
@@ -47,17 +57,17 @@ class WebAuthenticationPanel;
 
 namespace WebKit {
 
-class AuthenticatorManager : public AuthenticatorTransportService::Observer, public Authenticator::Observer {
-    WTF_MAKE_FAST_ALLOCATED;
+class AuthenticatorManager : public AuthenticatorTransportServiceObserver, public AuthenticatorObserver {
+    WTF_MAKE_TZONE_ALLOCATED(AuthenticatorManager);
     WTF_MAKE_NONCOPYABLE(AuthenticatorManager);
 public:
     using Respond = std::variant<Ref<WebCore::AuthenticatorResponse>, WebCore::ExceptionData>;
     using Callback = CompletionHandler<void(Respond&&)>;
     using TransportSet = HashSet<WebCore::AuthenticatorTransport, WTF::IntHash<WebCore::AuthenticatorTransport>, WTF::StrongEnumHashTraits<WebCore::AuthenticatorTransport>>;
 
-    using AuthenticatorTransportService::Observer::weakPtrFactory;
-    using AuthenticatorTransportService::Observer::WeakValueType;
-    using AuthenticatorTransportService::Observer::WeakPtrImplType;
+    using AuthenticatorTransportServiceObserver::weakPtrFactory;
+    using AuthenticatorTransportServiceObserver::WeakValueType;
+    using AuthenticatorTransportServiceObserver::WeakPtrImplType;
 
     const static size_t maxTransportNumber;
 
@@ -92,11 +102,11 @@ private:
         Native,
     };
 
-    // AuthenticatorTransportService::Observer
+    // AuthenticatorTransportServiceObserver
     void authenticatorAdded(Ref<Authenticator>&&) final;
     void serviceStatusUpdated(WebAuthenticationStatus) final;
 
-    // Authenticator::Observer
+    // AuthenticatorObserver
     void respondReceived(Respond&&) final;
     void downgrade(Authenticator* id, Ref<Authenticator>&& downgradedAuthenticator) final;
     void authenticatorStatusUpdated(WebAuthenticationStatus) final;
@@ -105,7 +115,7 @@ private:
     void cancelRequest() final;
 
     // Overriden by MockAuthenticatorManager.
-    virtual UniqueRef<AuthenticatorTransportService> createService(WebCore::AuthenticatorTransport, AuthenticatorTransportService::Observer&) const;
+    virtual UniqueRef<AuthenticatorTransportService> createService(WebCore::AuthenticatorTransport, AuthenticatorTransportServiceObserver&) const;
     // Overriden to return every exception for tests to confirm.
     virtual void respondReceivedInternal(Respond&&) { }
     virtual void filterTransports(TransportSet&) const;

@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -110,6 +110,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   
     <a class="signal" href="signal.AutomationSession.create-web-view.html">create-web-view</a>
   
+    <a class="signal" href="signal.AutomationSession.will-close.html">will-close</a>
+  
   </div>
 </div>
 
@@ -144,7 +146,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp#L40">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitAutomationSession.cpp#L42">[src]</a>
           
         </h4>
 
@@ -360,6 +362,17 @@ property set if&nbsp;needed.</p>
           </div>
           <div class="docblock">
             <p><span class="emblem available">since: 2.18</span></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="signal.AutomationSession.will-close.html">WPEWebKit.AutomationSession::will-close</a></h6>
+          <div class="docblock">
+            <p>This signal is emitted when the given automation session is about to finish.
+It allows clients to perform any cleanup tasks before the session is&nbsp;destroyed.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.46</span></p>
           </div>
         </div>
       

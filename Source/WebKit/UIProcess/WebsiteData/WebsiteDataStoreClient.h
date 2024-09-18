@@ -31,8 +31,11 @@
 #include "BackgroundFetchChange.h"
 #include <WebCore/NotificationData.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/Seconds.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+enum class WasPrivateRelayed : bool;
 enum class WindowProxyProperty : uint8_t;
 struct NotificationData;
 class RegistrableDomain;
@@ -45,7 +48,7 @@ class WebPageProxy;
 class WebsiteDataStore;
 
 class WebsiteDataStoreClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(WebsiteDataStoreClient);
 public:
     virtual ~WebsiteDataStoreClient() { }
 
@@ -114,6 +117,15 @@ public:
 
     virtual void didAllowPrivateTokenUsageByThirdPartyForTesting(bool, URL&&)
     {
+    }
+
+    enum class CanSuspend : bool { No, Yes };
+    virtual void didExceedMemoryFootprintThreshold(size_t, const String&, unsigned, Seconds, bool, WebCore::WasPrivateRelayed, CanSuspend)
+    {
+    }
+    virtual void webCryptoMasterKey(CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&& completionHandler)
+    {
+        return completionHandler(std::nullopt);
     }
 };
 

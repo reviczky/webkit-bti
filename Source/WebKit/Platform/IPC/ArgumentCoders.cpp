@@ -28,7 +28,6 @@
 
 #include "DaemonDecoder.h"
 #include "DaemonEncoder.h"
-#include "DataReference.h"
 #include "StreamConnectionEncoder.h"
 #include <wtf/text/AtomString.h>
 #include <wtf/text/CString.h>
@@ -45,15 +44,13 @@ void ArgumentCoder<String>::encode(Encoder& encoder, const String& string)
         return;
     }
 
-    unsigned length = string.length();
     bool is8Bit = string.is8Bit();
-
-    encoder << length << is8Bit;
+    encoder << string.length() << is8Bit;
 
     if (is8Bit)
-        encoder.encodeSpan(std::span(string.characters8(), length));
+        encoder.encodeSpan(string.span8());
     else
-        encoder.encodeSpan(std::span(string.characters16(), length));
+        encoder.encodeSpan(string.span16());
 }
 template
 void ArgumentCoder<String>::encode<Encoder>(Encoder&, const String&);

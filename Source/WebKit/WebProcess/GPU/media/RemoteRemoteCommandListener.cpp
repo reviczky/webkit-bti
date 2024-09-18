@@ -33,10 +33,13 @@
 #include "RemoteRemoteCommandListenerMessages.h"
 #include "RemoteRemoteCommandListenerProxyMessages.h"
 #include "WebProcess.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteRemoteCommandListener);
 
 Ref<RemoteRemoteCommandListener> RemoteRemoteCommandListener::create(RemoteCommandListenerClient& client)
 {
@@ -45,7 +48,6 @@ Ref<RemoteRemoteCommandListener> RemoteRemoteCommandListener::create(RemoteComma
 
 RemoteRemoteCommandListener::RemoteRemoteCommandListener(RemoteCommandListenerClient& client)
     : RemoteCommandListener(client)
-    , m_identifier(RemoteRemoteCommandListenerIdentifier::generate())
 {
     ensureGPUProcessConnection();
 }
@@ -54,7 +56,7 @@ RemoteRemoteCommandListener::~RemoteRemoteCommandListener()
 {
     if (auto gpuProcessConnection = m_gpuProcessConnection.get()) {
         gpuProcessConnection->messageReceiverMap().removeMessageReceiver(*this);
-        gpuProcessConnection->connection().send(Messages::GPUConnectionToWebProcess::ReleaseRemoteCommandListener(m_identifier), 0);
+        gpuProcessConnection->connection().send(Messages::GPUConnectionToWebProcess::ReleaseRemoteCommandListener(identifier()), 0);
     }
 }
 
@@ -65,8 +67,8 @@ GPUProcessConnection& RemoteRemoteCommandListener::ensureGPUProcessConnection()
         gpuProcessConnection = &WebProcess::singleton().ensureGPUProcessConnection();
         m_gpuProcessConnection = gpuProcessConnection;
         gpuProcessConnection->addClient(*this);
-        gpuProcessConnection->messageReceiverMap().addMessageReceiver(Messages::RemoteRemoteCommandListener::messageReceiverName(), m_identifier.toUInt64(), *this);
-        gpuProcessConnection->connection().send(Messages::GPUConnectionToWebProcess::CreateRemoteCommandListener(m_identifier), { });
+        gpuProcessConnection->messageReceiverMap().addMessageReceiver(Messages::RemoteRemoteCommandListener::messageReceiverName(), identifier().toUInt64(), *this);
+        gpuProcessConnection->connection().send(Messages::GPUConnectionToWebProcess::CreateRemoteCommandListener(identifier()), { });
     }
     return *gpuProcessConnection;
 }
@@ -94,7 +96,7 @@ void RemoteRemoteCommandListener::updateSupportedCommands()
     m_currentCommands = supportedCommands;
     m_currentSupportSeeking = supportsSeeking();
 
-    ensureGPUProcessConnection().connection().send(Messages::RemoteRemoteCommandListenerProxy::UpdateSupportedCommands { copyToVector(supportedCommands), m_currentSupportSeeking }, m_identifier);
+    ensureGPUProcessConnection().connection().send(Messages::RemoteRemoteCommandListenerProxy::UpdateSupportedCommands { copyToVector(supportedCommands), m_currentSupportSeeking }, identifier());
 }
 
 }

@@ -26,12 +26,12 @@
 #include "config.h"
 #include "IDBDatabaseInfo.h"
 
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(IDBDatabaseInfo);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(IDBDatabaseInfo);
 
 IDBDatabaseInfo::IDBDatabaseInfo(const String& name, uint64_t version, uint64_t maxIndexID, uint64_t maxObjectStoreID, HashMap<uint64_t, IDBObjectStoreInfo>&& objectStoreMap)
     : m_name(name)
@@ -158,7 +158,7 @@ void IDBDatabaseInfo::deleteObjectStore(uint64_t objectStoreIdentifier)
 String IDBDatabaseInfo::loggingString() const
 {
     StringBuilder builder;
-    builder.append("Database:", m_name, " version ", m_version, '\n');
+    builder.append("Database:"_s, m_name, " version "_s, m_version, '\n');
     for (auto& objectStore : m_objectStoreMap.values())
         builder.append(objectStore.loggingString(1), '\n');
     return builder.toString();

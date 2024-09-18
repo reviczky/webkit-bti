@@ -31,6 +31,7 @@
 #include "WebPageProxy.h"
 #include "WebProcessProxy.h"
 #include <WebCore/ScrollView.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(COCOA)
 #include "MessageSenderInlines.h"
@@ -40,9 +41,10 @@
 namespace WebKit {
 using namespace WebCore;
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DrawingAreaProxy);
+
 DrawingAreaProxy::DrawingAreaProxy(DrawingAreaType type, WebPageProxy& webPageProxy, WebProcessProxy& webProcessProxy)
     : m_type(type)
-    , m_identifier(DrawingAreaIdentifier::generate())
     , m_webPageProxy(webPageProxy)
     , m_webProcessProxy(webProcessProxy)
     , m_size(webPageProxy.viewSize())
@@ -62,13 +64,13 @@ Ref<WebPageProxy> DrawingAreaProxy::protectedWebPageProxy() const
 void DrawingAreaProxy::startReceivingMessages(WebProcessProxy& process)
 {
     for (auto& name : messageReceiverNames())
-        process.addMessageReceiver(name, m_identifier, *this);
+        process.addMessageReceiver(name, identifier(), *this);
 }
 
 void DrawingAreaProxy::stopReceivingMessages(WebProcessProxy& process)
 {
     for (auto& name : messageReceiverNames())
-        process.removeMessageReceiver(name, m_identifier);
+        process.removeMessageReceiver(name, identifier());
 }
 
 std::span<IPC::ReceiverName> DrawingAreaProxy::messageReceiverNames() const
@@ -79,7 +81,7 @@ std::span<IPC::ReceiverName> DrawingAreaProxy::messageReceiverNames() const
 
 IPC::Connection* DrawingAreaProxy::messageSenderConnection() const
 {
-    return m_webProcessProxy->connection();
+    return &m_webProcessProxy->connection();
 }
 
 bool DrawingAreaProxy::sendMessage(UniqueRef<IPC::Encoder>&& encoder, OptionSet<IPC::SendOption> sendOptions)

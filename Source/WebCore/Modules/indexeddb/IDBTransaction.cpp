@@ -53,12 +53,12 @@
 #include "TransactionOperation.h"
 #include "WebCoreOpaqueRootInlines.h"
 #include <wtf/CompletionHandler.h>
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 using namespace JSC;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(IDBTransaction);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(IDBTransaction);
 
 std::atomic<unsigned> IDBTransaction::numberOfIDBTransactions { 0 };
 
@@ -317,12 +317,6 @@ void IDBTransaction::abortOnServerAndCancelRequests(IDBClient::TransactionOperat
     ASSERT(m_pendingTransactionOperationQueue.isEmpty());
 }
 
-const char* IDBTransaction::activeDOMObjectName() const
-{
-    ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
-    return "IDBTransaction";
-}
-
 bool IDBTransaction::virtualHasPendingActivity() const
 {
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()) || Thread::mayBeGCThread());
@@ -458,6 +452,7 @@ void IDBTransaction::finishedDispatchEventForRequest(IDBRequest& request)
 
     ASSERT_UNUSED(request, !m_currentlyCompletingRequest || m_currentlyCompletingRequest == &request);
 
+    ++m_handledRequestResultsCount;
     m_currentlyCompletingRequest = nullptr;
     handleOperationsCompletedOnServer();
 }
@@ -489,21 +484,20 @@ void IDBTransaction::commitInternal()
 
     LOG(IndexedDBOperations, "IDB commit operation: Transaction %s", info().identifier().loggingString().utf8().data());
 
-    auto pendingRequestCount = std::count_if(m_openRequests.begin(), m_openRequests.end(), [](auto& request) {
-        return !request->isDone();
-    });
-
-    scheduleOperation(IDBClient::TransactionOperationImpl::create(*this, nullptr, [protectedThis = Ref { *this }, pendingRequestCount] (auto& operation) {
-        protectedThis->commitOnServer(operation, pendingRequestCount);
+    uint64_t handledRequestResultsCount = m_handledRequestResultsCount;
+    if (m_currentlyCompletingRequest && m_currentlyCompletingRequest->isEventBeingDispatched())
+        ++handledRequestResultsCount;
+    scheduleOperation(IDBClient::TransactionOperationImpl::create(*this, nullptr, [protectedThis = Ref { *this }, handledRequestResultsCount] (auto& operation) {
+        protectedThis->commitOnServer(operation, handledRequestResultsCount);
     }));
 }
 
-void IDBTransaction::commitOnServer(IDBClient::TransactionOperation& operation, uint64_t pendingRequestCount)
+void IDBTransaction::commitOnServer(IDBClient::TransactionOperation& operation, uint64_t handledRequestResultsCount)
 {
     LOG(IndexedDB, "IDBTransaction::commitOnServer");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
 
-    m_database->connectionProxy().commitTransaction(*this, pendingRequestCount);
+    m_database->connectionProxy().commitTransaction(*this, handledRequestResultsCount);
 
     ASSERT(!m_transactionOperationsInProgressQueue.isEmpty());
     ASSERT(m_transactionOperationsInProgressQueue.last() == &operation);

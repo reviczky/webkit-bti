@@ -33,12 +33,17 @@
 #include "RemoteWebInspectorUIProxy.h"
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/Base64.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebKit {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteInspectorProxy);
+
 class RemoteInspectorProxy final : public RemoteWebInspectorUIProxyClient {
-    WTF_MAKE_FAST_ALLOCATED();
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(RemoteInspectorProxy);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RemoteInspectorProxy);
 public:
     RemoteInspectorProxy(RemoteInspectorClient& inspectorClient, ConnectionID connectionID, TargetID targetID, Inspector::DebuggableType debuggableType)
         : m_proxy(RemoteWebInspectorUIProxy::create())
@@ -124,8 +129,7 @@ void RemoteInspectorClient::sendWebInspectorEvent(const String& event)
 {
     ASSERT(isMainRunLoop());
     ASSERT(m_connectionID);
-    auto message = event.utf8();
-    send(m_connectionID.value(), message.dataAsUInt8Ptr(), message.length());
+    send(m_connectionID.value(), event.utf8().span());
 }
 
 HashMap<String, Inspector::RemoteInspectorConnectionClient::CallHandler>& RemoteInspectorClient::dispatchMap()
@@ -207,7 +211,7 @@ void RemoteInspectorClient::setBackendCommands(const Event& event)
     if (!event.message || event.message->isEmpty())
         return;
 
-    m_backendCommandsURL = makeString("data:text/javascript;base64,", base64Encoded(event.message->utf8()));
+    m_backendCommandsURL = makeString("data:text/javascript;base64,"_s, base64Encoded(event.message->utf8().span()));
 }
 
 void RemoteInspectorClient::setTargetList(const Event& event)

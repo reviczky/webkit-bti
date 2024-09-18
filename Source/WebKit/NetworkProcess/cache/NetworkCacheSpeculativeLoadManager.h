@@ -32,8 +32,20 @@
 #include "NetworkCacheStorage.h"
 #include <WebCore/ResourceRequest.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+namespace NetworkCache {
+class SpeculativeLoadManager;
+}
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::NetworkCache::SpeculativeLoadManager> : std::true_type { };
+}
 
 namespace WebCore {
 enum class AdvancedPrivacyProtections : uint16_t;
@@ -49,7 +61,7 @@ class SubresourceInfo;
 class SubresourcesEntry;
 
 class SpeculativeLoadManager : public CanMakeWeakPtr<SpeculativeLoadManager> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(SpeculativeLoadManager);
 public:
     explicit SpeculativeLoadManager(Cache&, Storage&);
     ~SpeculativeLoadManager();

@@ -28,12 +28,9 @@
     ReturnsPromiseWhenCallbackIsOmitted,
 ] interface WebExtensionAPIDevToolsPanels {
 
-    [RaisesException, ImplementedAs=createTab] void create(DOMString title, DOMString iconPath, DOMString pagePath, [Optional, CallbackHandler] function callback);
-
-    readonly attribute WebExtensionAPIDevToolsElementsPanel elements;
+    [RaisesException, ImplementedAs=createPanel, NeedsPage] void create([CannotBeEmpty] DOMString title, [CannotBeEmpty] DOMString iconPath, [CannotBeEmpty] DOMString pagePath, [Optional, CallbackHandler] function callback);
 
     readonly attribute DOMString themeName;
     readonly attribute WebExtensionAPIEvent onThemeChanged;
 
 };
-

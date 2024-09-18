@@ -31,6 +31,7 @@
 #include "MessageReceiver.h"
 #include "RemoteAudioSessionConfiguration.h"
 #include <WebCore/AudioSession.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace IPC {
 class Connection;
@@ -43,11 +44,11 @@ class WebProcess;
 
 class RemoteAudioSession final
     : public WebCore::AudioSession
-    , public WebCore::AudioSession::InterruptionObserver
+    , public WebCore::AudioSessionInterruptionObserver
     , public GPUProcessConnection::Client
     , IPC::MessageReceiver
     , public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioSession> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteAudioSession);
 public:
     static UniqueRef<RemoteAudioSession> create();
     ~RemoteAudioSession();
@@ -88,8 +89,8 @@ private:
     size_t preferredBufferSize() const final { return configuration().preferredBufferSize; }
     void setPreferredBufferSize(size_t) final;
         
-    void addConfigurationChangeObserver(ConfigurationChangeObserver&) final;
-    void removeConfigurationChangeObserver(ConfigurationChangeObserver&) final;
+    void addConfigurationChangeObserver(WebCore::AudioSessionConfigurationChangeObserver&) final;
+    void removeConfigurationChangeObserver(WebCore::AudioSessionConfigurationChangeObserver&) final;
 
     void setIsPlayingToBluetoothOverride(std::optional<bool>) final;
 
@@ -101,6 +102,12 @@ private:
     void endInterruptionForTesting() final;
     void clearInterruptionFlagForTesting() final { m_isInterruptedForTesting = false; }
 
+    void setSceneIdentifier(const String&) final;
+    const String& sceneIdentifier() const final { return configuration().sceneIdentifier; }
+
+    void setSoundStageSize(SoundStageSize) final;
+    SoundStageSize soundStageSize() const final { return configuration().soundStageSize; }
+
     const RemoteAudioSessionConfiguration& configuration() const;
     RemoteAudioSessionConfiguration& configuration();
     void initializeConfigurationIfNecessary();
@@ -110,9 +117,9 @@ private:
 
     // InterruptionObserver
     void beginAudioSessionInterruption() final;
-    void endAudioSessionInterruption(WebCore::AudioSession::MayResume) final;
+    void endAudioSessionInterruption(MayResume) final;
 
-    WeakHashSet<ConfigurationChangeObserver> m_configurationChangeObservers;
+    WeakHashSet<WebCore::AudioSessionConfigurationChangeObserver> m_configurationChangeObservers;
     CategoryType m_category { CategoryType::None };
     Mode m_mode { Mode::Default };
     WebCore::RouteSharingPolicy m_routeSharingPolicy { WebCore::RouteSharingPolicy::Default };

@@ -27,6 +27,7 @@
 #include "config.h"
 #include "WKImageCairo.h"
 
+#if USE(CAIRO)
 #include "WKSharedAPICast.h"
 #include "WebImage.h"
 #include <WebCore/GraphicsContextCairo.h>
@@ -55,3 +56,5 @@ WKImageRef WKImageCreateFromCairoSurface(cairo_surface_t* surface, WKImageOption
 
     return toAPI(webImage.leakRef());
 }
+
+#endif // USE(CAIRO)

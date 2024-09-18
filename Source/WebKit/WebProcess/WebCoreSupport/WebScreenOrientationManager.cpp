@@ -31,8 +31,11 @@
 #include "WebProcess.h"
 #include "WebScreenOrientationManagerMessages.h"
 #include "WebScreenOrientationManagerProxyMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebScreenOrientationManager);
 
 WebScreenOrientationManager::WebScreenOrientationManager(WebPage& page)
     : m_page(page)
@@ -74,7 +77,7 @@ void WebScreenOrientationManager::unlock()
     m_page.send(Messages::WebScreenOrientationManagerProxy::Unlock { });
 }
 
-void WebScreenOrientationManager::addObserver(Observer& observer)
+void WebScreenOrientationManager::addObserver(WebCore::ScreenOrientationManagerObserver& observer)
 {
     bool wasEmpty = m_observers.isEmptyIgnoringNullReferences();
     m_observers.add(observer);
@@ -82,7 +85,7 @@ void WebScreenOrientationManager::addObserver(Observer& observer)
         m_page.send(Messages::WebScreenOrientationManagerProxy::SetShouldSendChangeNotification { true });
 }
 
-void WebScreenOrientationManager::removeObserver(Observer& observer)
+void WebScreenOrientationManager::removeObserver(WebCore::ScreenOrientationManagerObserver& observer)
 {
     m_observers.remove(observer);
     if (m_observers.isEmptyIgnoringNullReferences()) {

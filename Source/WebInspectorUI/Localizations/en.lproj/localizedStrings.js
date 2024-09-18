@@ -177,6 +177,7 @@ localizedStrings["All items in \u0022%s\u0022 must be valid DOM nodes"] = "All i
 /* Label for setting that allows the user to inspect the Web Inspector user interface. */
 localizedStrings["Allow Inspecting Web Inspector @ Experimental Settings"] = "Allow Inspecting Web Inspector";
 localizedStrings["Allow media capture on insecure sites"] = "Allow media capture on insecure sites";
+localizedStrings["Allow page to clear Console"] = "Allow page to clear Console";
 /* Label for checkbox that controls whether network throttling functionality is enabled. */
 localizedStrings["Allow throttling"] = "Allow throttling";
 localizedStrings["Also defer evaluating breakpoint conditions, ignore counts, and actions until execution has continued outside of the related script instead of at the breakpoint\u2019s location."] = "Also defer evaluating breakpoint conditions, ignore counts, and actions until execution has continued outside of the related script instead of at the breakpoint\u2019s location.";
@@ -366,6 +367,7 @@ localizedStrings["Clear log (%s or %s)"] = "Clear log (%s or %s)";
 localizedStrings["Clear object store"] = "Clear object store";
 localizedStrings["Clear samples"] = "Clear samples";
 localizedStrings["Clear watch expressions"] = "Clear watch expressions";
+localizedStrings["Clear:"] = "Clear:";
 localizedStrings["Click Listener"] = "Click Listener";
 localizedStrings["Click to create a Local Override from this content"] = "Click to create a Local Override from this content";
 localizedStrings["Click to import a file and create a Local Override\nShift-click to create a Local Override from this content"] = "Click to import a file and create a Local Override\nShift-click to create a Local Override from this content";
@@ -1188,6 +1190,8 @@ localizedStrings["Observer Callback"] = "Observer Callback";
 localizedStrings["Observer Handlers:"] = "Observer Handlers:";
 localizedStrings["Observers:"] = "Observers:";
 localizedStrings["Off"] = "Off";
+/* Label indicating that an input of type switch is off. */
+localizedStrings["Off @ Switch State"] = "Off";
 /* Label for a preference that is turned off. */
 localizedStrings["Off @ User Preferences Overrides"] = "Off";
 /* Input label for the x-axis of the offset of a CSS box shadow */
@@ -1196,6 +1200,8 @@ localizedStrings["Offset X @ Box Shadow Editor"] = "Offset X";
 localizedStrings["Offset Y @ Box Shadow Editor"] = "Offset Y";
 /* Property value for `font-variant-numeric: oldstyle-nums`. */
 localizedStrings["Old-Style Numerals @ Font Details Sidebar Property Value"] = "Old-Style Numerals";
+/* Label indicating that an input of type switch is on. */
+localizedStrings["On @ Switch State"] = "On";
 /* Label for a preference that is turned on. */
 localizedStrings["On @ User Preferences Overrides"] = "On";
 localizedStrings["Once"] = "Once";
@@ -1839,7 +1845,6 @@ localizedStrings["Ungrouped @ Computed Style variables grouping mode"] = "Ungrou
 /* Property value for `font-variant-capitals: unicase`. */
 localizedStrings["Unicase @ Font Details Sidebar Property Value"] = "Unicase";
 localizedStrings["Unique"] = "Unique";
-localizedStrings["Unknown"] = "Unknown";
 localizedStrings["Unknown Location"] = "Unknown Location";
 localizedStrings["Unknown error"] = "Unknown error";
 localizedStrings["Unknown node"] = "Unknown node";
@@ -1852,7 +1857,9 @@ localizedStrings["Update Font"] = "Update Font";
 localizedStrings["Update Image"] = "Update Image";
 localizedStrings["Update Local Override"] = "Update Local Override";
 localizedStrings["Usage: %s"] = "Usage: %s";
+localizedStrings["Use case sensitive autocomplete"] = "Use case sensitive autocomplete";
 localizedStrings["Use default media styles"] = "Use default media styles";
+localizedStrings["Use fuzzy matching for CSS code completion"] = "Use fuzzy matching for CSS code completion";
 localizedStrings["Use mock capture devices"] = "Use mock capture devices";
 localizedStrings["User Agent"] = "User Agent";
 localizedStrings["User Agent Style Sheet"] = "User Agent Style Sheet";

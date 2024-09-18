@@ -40,6 +40,7 @@
 #include "WebSharedWorkerServer.h"
 #include <WebCore/ScriptExecutionContextIdentifier.h>
 #include <wtf/MemoryPressureHandler.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -48,6 +49,8 @@ namespace WebKit {
 // We terminate the context connection after 5 seconds if it is no longer used by any SharedWorker objects,
 // as a performance optimization.
 constexpr Seconds idleTerminationDelay { 5_s };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSharedWorkerServerToContextConnection);
 
 WebSharedWorkerServerToContextConnection::WebSharedWorkerServerToContextConnection(NetworkConnectionToWebProcess& connection, const WebCore::RegistrableDomain& registrableDomain, WebSharedWorkerServer& server)
     : m_connection(connection)
@@ -108,10 +111,7 @@ void WebSharedWorkerServerToContextConnection::sharedWorkerTerminated(WebCore::S
 
 void WebSharedWorkerServerToContextConnection::launchSharedWorker(WebSharedWorker& sharedWorker)
 {
-    auto domain = WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorker.origin().topOrigin.host());
-    if (auto* connection = m_connection.networkProcess().webProcessConnection(webProcessIdentifier()))
-        connection->addAllowedFirstPartyForCookies(domain);
-    m_connection.networkProcess().addAllowedFirstPartyForCookies(m_connection.webProcessIdentifier(), WTFMove(domain), LoadedWebArchive::No, [] { });
+    m_connection.networkProcess().addAllowedFirstPartyForCookies(m_connection.webProcessIdentifier(), WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorker.origin().topOrigin.host()), LoadedWebArchive::No, [] { });
 
     CONTEXT_CONNECTION_RELEASE_LOG("launchSharedWorker: sharedWorkerIdentifier=%" PRIu64, sharedWorker.identifier().toUInt64());
     sharedWorker.markAsRunning();

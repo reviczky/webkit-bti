@@ -29,6 +29,7 @@
 #include "AbortableTaskQueue.h"
 #include "GStreamerCommon.h"
 #include "GStreamerEMEUtilities.h"
+#include "GStreamerQuirks.h"
 #include "ImageOrientation.h"
 #include "Logging.h"
 #include "MainThreadNotifier.h"
@@ -48,6 +49,7 @@
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RunLoop.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomStringHash.h>
 
@@ -110,8 +112,7 @@ void registerWebKitGStreamerElements();
 // Use eager initialization for the WeakPtrFactory since we construct WeakPtrs on another thread.
 class MediaPlayerPrivateGStreamer
     : public MediaPlayerPrivateInterface
-    , public CanMakeWeakPtr<MediaPlayerPrivateGStreamer, WeakPtrFactoryInitialization::Eager>
-    , public RefCounted<MediaPlayerPrivateGStreamer>
+    , public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<MediaPlayerPrivateGStreamer, WTF::DestructionThread::Main>
 #if !RELEASE_LOG_DISABLED
     , private LoggerHelper
 #endif
@@ -128,11 +129,13 @@ public:
     MediaPlayerPrivateGStreamer(MediaPlayer*);
     virtual ~MediaPlayerPrivateGStreamer();
 
-    void ref() final { RefCounted::ref(); }
-    void deref() final { RefCounted::deref(); }
+    void ref() final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::ref(); }
+    void deref() final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::deref(); }
 
     static void registerMediaEngine(MediaEngineRegistrar);
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
+
+    void mediaPlayerWillBeDestroyed() final;
 
     bool hasVideo() const final { return m_hasVideo; }
     bool hasAudio() const final { return m_hasAudio; }
@@ -161,21 +164,14 @@ public:
     void setMuted(bool) final;
     MediaPlayer::NetworkState networkState() const final;
     MediaPlayer::ReadyState readyState() const final;
-    void setPageIsVisible(bool visible, String&&) final { m_visible = visible; }
+    void setPageIsVisible(bool visible) final { m_visible = visible; }
     void setVisibleInViewport(bool isVisible) final;
     void setPresentationSize(const IntSize&) final;
-    // Prefer MediaTime based methods over float based.
-    float duration() const final { return durationMediaTime().toFloat(); }
-    double durationDouble() const final { return durationMediaTime().toDouble(); }
-    MediaTime durationMediaTime() const override;
-    float currentTime() const final { return currentMediaTime().toFloat(); }
-    double currentTimeDouble() const final { return currentMediaTime().toDouble(); }
-    MediaTime currentMediaTime() const override;
+    MediaTime duration() const override;
+    MediaTime currentTime() const override;
     const PlatformTimeRanges& buffered() const override;
-    float maxTimeSeekable() const final { return maxMediaTimeSeekable().toFloat(); }
-    MediaTime maxMediaTimeSeekable() const override;
-    double minTimeSeekable() const final { return minMediaTimeSeekable().toFloat(); }
-    MediaTime minMediaTimeSeekable() const final { return MediaTime::zeroTime(); }
+    MediaTime maxTimeSeekable() const override;
+    MediaTime minTimeSeekable() const final { return MediaTime::zeroTime(); }
     bool didLoadingProgress() const final;
     unsigned long long totalBytes() const final;
     std::optional<bool> isCrossOrigin(const SecurityOrigin&) const final;
@@ -192,17 +188,14 @@ public:
     unsigned decodedFrameCount() const final;
     unsigned droppedFrameCount() const final;
     void acceleratedRenderingStateChanged() final;
-    bool performTaskAtMediaTime(Function<void()>&&, const MediaTime&) override;
+    bool performTaskAtTime(Function<void()>&&, const MediaTime&) override;
     void isLoopingChanged() final;
+
+    GstElement* pipeline() const { return m_pipeline.get(); }
 
 #if USE(TEXTURE_MAPPER)
     PlatformLayer* platformLayer() const override;
-#if PLATFORM(WIN)
-    // FIXME: Accelerated rendering has not been implemented for WinCairo yet.
-    bool supportsAcceleratedRendering() const override { return false; }
-#else
     bool supportsAcceleratedRendering() const override { return true; }
-#endif
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
@@ -234,11 +227,11 @@ public:
     void flushCurrentBuffer();
 #endif
 
-    void handleTextSample(GstSample*, const char* streamId);
+    void handleTextSample(GRefPtr<GstSample>&&, const String& streamId);
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger; }
-    const char* logClassName() const override { return "MediaPlayerPrivateGStreamer"; }
+    ASCIILiteral logClassName() const override { return "MediaPlayerPrivateGStreamer"_s; }
     const void* logIdentifier() const final { return reinterpret_cast<const void*>(m_logIdentifier); }
     WTFLogChannel& logChannel() const override;
 
@@ -286,11 +279,10 @@ protected:
     virtual void sourceSetup(GstElement*);
     virtual void updatePlaybackRate();
 
-#if USE(GSTREAMER_HOLEPUNCH)
+    bool isHolePunchRenderingEnabled() const;
     GstElement* createHolePunchVideoSink();
     void pushNextHolePunchBuffer();
-    bool shouldIgnoreIntrinsicSize() final { return true; }
-#endif
+    bool shouldIgnoreIntrinsicSize() final;
 
 #if USE(TEXTURE_MAPPER_DMABUF)
     GstElement* createVideoSinkDMABuf();
@@ -316,8 +308,6 @@ protected:
     GstElement* videoSink() const { return m_videoSink.get(); }
 
     void setStreamVolumeElement(GstStreamVolume*);
-
-    GstElement* pipeline() const { return m_pipeline.get(); }
 
     void repaint();
     void cancelRepaint(bool destroying = false);
@@ -526,9 +516,8 @@ private:
     void configureAudioDecoder(GstElement*);
     void configureVideoDecoder(GstElement*);
     void configureElement(GstElement*);
-#if PLATFORM(BROADCOM) || USE(WESTEROS_SINK) || PLATFORM(AMLOGIC) || PLATFORM(REALTEK)
+
     void configureElementPlatformQuirks(GstElement*);
-#endif
 
     void setPlaybinURL(const URL& urlString);
 
@@ -662,7 +651,9 @@ private:
 
     bool isSeamlessSeekingEnabled() const { return m_seekFlags & (1 << GST_SEEK_FLAG_SEGMENT); }
 
-    RefPtr<PlatformMediaResourceLoader> m_loader;
+    Ref<PlatformMediaResourceLoader> m_loader;
+
+    RefPtr<GStreamerQuirksManager> m_quirksManagerForTesting;
 };
 
 }

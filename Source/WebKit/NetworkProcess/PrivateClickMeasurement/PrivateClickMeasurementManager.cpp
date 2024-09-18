@@ -41,6 +41,8 @@
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <pal/crypto/CryptoDigest.h>
 #include <wtf/CryptographicallyRandomNumber.h>
+#include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringHash.h>
 
@@ -53,6 +55,8 @@ using AttributionTriggerData = WebCore::PCM::AttributionTriggerData;
 using EphemeralNonce = WebCore::PCM::EphemeralNonce;
 
 constexpr Seconds debugModeSecondsUntilSend { 10_s };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PrivateClickMeasurementManager);
 
 PrivateClickMeasurementManager::PrivateClickMeasurementManager(UniqueRef<PCM::Client>&& client, const String& storageDirectory)
     : m_firePendingAttributionRequestsTimer(RunLoop::main(), this, &PrivateClickMeasurementManager::firePendingAttributionRequests)
@@ -497,10 +501,9 @@ void PrivateClickMeasurementManager::fireConversionRequest(const PrivateClickMea
                 return;
 
             auto crypto = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
-            crypto->addBytes(publicKeyData->data(), publicKeyData->size());
-            auto publicKeyDataHash = crypto->computeHash();
+            crypto->addBytes(publicKeyData->span());
 
-            auto keyID = base64URLEncodeToString(publicKeyDataHash.data(), publicKeyDataHash.size());
+            auto keyID = base64URLEncodeToString(crypto->computeHash());
             if (keyID != attribution.sourceSecretToken()->keyIDBase64URL)
                 return;
 
@@ -517,10 +520,9 @@ void PrivateClickMeasurementManager::fireConversionRequest(const PrivateClickMea
                         return;
 
                     auto crypto = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
-                    crypto->addBytes(publicKeyData->data(), publicKeyData->size());
-                    auto publicKeyDataHash = crypto->computeHash();
+                    crypto->addBytes(publicKeyData->span());
 
-                    auto keyID = base64URLEncodeToString(publicKeyDataHash.data(), publicKeyDataHash.size());
+                    auto keyID = base64URLEncodeToString(crypto->computeHash());
                     if (keyID != attribution.attributionTriggerData()->destinationSecretToken->keyIDBase64URL)
                         return;
 
@@ -543,10 +545,9 @@ void PrivateClickMeasurementManager::fireConversionRequest(const PrivateClickMea
             return;
 
         auto crypto = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
-        crypto->addBytes(publicKeyData->data(), publicKeyData->size());
-        auto publicKeyDataHash = crypto->computeHash();
+        crypto->addBytes(publicKeyData->span());
 
-        auto keyID = base64URLEncodeToString(publicKeyDataHash.data(), publicKeyDataHash.size());
+        auto keyID = base64URLEncodeToString(crypto->computeHash());
         if (!attribution.attributionTriggerData()->destinationSecretToken || keyID != attribution.attributionTriggerData()->destinationSecretToken->keyIDBase64URL)
             return;
 

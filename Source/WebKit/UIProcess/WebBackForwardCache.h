@@ -29,6 +29,7 @@
 #include <pal/SessionID.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakListHashSet.h>
 
 namespace WebKit {
@@ -40,8 +41,9 @@ class WebPageProxy;
 class WebProcessPool;
 class WebProcessProxy;
 
-class WebBackForwardCache : public CanMakeCheckedPtr {
-    WTF_MAKE_FAST_ALLOCATED;
+class WebBackForwardCache final : public CanMakeCheckedPtr<WebBackForwardCache> {
+    WTF_MAKE_TZONE_ALLOCATED(WebBackForwardCache);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebBackForwardCache);
 public:
     explicit WebBackForwardCache(WebProcessPool&);
     ~WebBackForwardCache();

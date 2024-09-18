@@ -30,6 +30,7 @@
 #include "FileSystemStorageManager.h"
 #include "SharedFileHandle.h"
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -41,6 +42,8 @@ constexpr char pathSeparator = '/';
 constexpr uint64_t defaultInitialCapacity = 1 * MB;
 constexpr uint64_t defaultMaxCapacityForExponentialGrowth = 256 * MB;
 constexpr uint64_t defaultCapacityStep = 128 * MB;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FileSystemStorageHandle);
 
 std::unique_ptr<FileSystemStorageHandle> FileSystemStorageHandle::create(FileSystemStorageManager& manager, Type type, String&& path, String&& name)
 {
@@ -66,8 +69,7 @@ std::unique_ptr<FileSystemStorageHandle> FileSystemStorageHandle::create(FileSys
 }
 
 FileSystemStorageHandle::FileSystemStorageHandle(FileSystemStorageManager& manager, Type type, String&& path, String&& name)
-    : m_identifier(WebCore::FileSystemHandleIdentifier::generate())
-    , m_manager(manager)
+    : m_manager(manager)
     , m_type(type)
     , m_path(WTFMove(path))
     , m_name(WTFMove(name))
@@ -185,7 +187,7 @@ Expected<FileSystemSyncAccessHandleInfo, FileSystemStorageError> FileSystemStora
     if (!m_manager)
         return makeUnexpected(FileSystemStorageError::Unknown);
 
-    bool acquired = m_manager->acquireLockForFile(m_path, m_identifier);
+    bool acquired = m_manager->acquireLockForFile(m_path, identifier());
     if (!acquired)
         return makeUnexpected(FileSystemStorageError::InvalidState);
 
@@ -213,7 +215,7 @@ std::optional<FileSystemStorageError> FileSystemStorageHandle::closeSyncAccessHa
     if (!m_manager)
         return FileSystemStorageError::Unknown;
 
-    m_manager->releaseLockForFile(m_path, m_identifier);
+    m_manager->releaseLockForFile(m_path, identifier());
     m_activeSyncAccessHandle = std::nullopt;
 
     return std::nullopt;

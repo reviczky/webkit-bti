@@ -21,15 +21,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-additional_forward_declaration: namespace WebCore { using BackForwardItemIdentifierID = ObjectIdentifier<BackForwardItemIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using DOMCacheIdentifierID = AtomicObjectIdentifier<DOMCacheIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using FrameIdentifierID = ObjectIdentifier<FrameIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using OpaqueOriginIdentifier = AtomicObjectIdentifier<OpaqueOriginIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using PlatformLayerIdentifierID = ObjectIdentifier<PlatformLayerIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using SharedWorkerObjectIdentifierID = ObjectIdentifier<SharedWorkerObjectIdentifierType>; }
-additional_forward_declaration: namespace WebCore { using WebLockIdentifierID = AtomicObjectIdentifier<WebLockIdentifierType>; }
-
-
+additional_forward_declaration: namespace WebCore { using BackForwardItemIdentifierID = LegacyNullableObjectIdentifier<BackForwardItemIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using DOMCacheIdentifierID = LegacyNullableAtomicObjectIdentifier<DOMCacheIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using FrameIdentifierID = LegacyNullableObjectIdentifier<FrameIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using OpaqueOriginIdentifier = LegacyNullableAtomicObjectIdentifier<OpaqueOriginIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using PlatformLayerIdentifierID = LegacyNullableObjectIdentifier<PlatformLayerIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using ScrollingNodeIdentifier = LegacyNullableObjectIdentifier<ScrollingNodeIDType>; }
+additional_forward_declaration: namespace WebCore { using SharedWorkerObjectIdentifierID = LegacyNullableObjectIdentifier<SharedWorkerObjectIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using UserGestureTokenIdentifierID = LegacyNullableObjectIdentifier<UserGestureTokenIdentifierType>; }
+additional_forward_declaration: namespace WebCore { using WebLockIdentifierID = LegacyNullableAtomicObjectIdentifier<WebLockIdentifierType>; }
 
 header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<BackForwardItemIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::BackForwardItemIdentifier {
@@ -37,38 +37,47 @@ header: <WebCore/ProcessQualified.h>
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<DOMCacheIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::DOMCacheIdentifier {
     WebCore::DOMCacheIdentifierID object();
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<FrameIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::FrameIdentifier {
     WebCore::FrameIdentifierID object();
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<OpaqueOriginIdentifier>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::OpaqueOriginIdentifierProcessQualified {
     WebCore::OpaqueOriginIdentifier object();
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<PlatformLayerIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::PlatformLayerIdentifier {
     WebCore::PlatformLayerIdentifierID object();
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
 [Alias=class ProcessQualified<SharedWorkerObjectIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::SharedWorkerObjectIdentifier {
     WebCore::SharedWorkerObjectIdentifierID object();
     WebCore::ProcessIdentifier processIdentifier();
 };
 
-header: <WebCore/ProcessQualified.h>
+[Alias=class ProcessQualified<UserGestureTokenIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::UserGestureTokenIdentifier {
+    WebCore::UserGestureTokenIdentifierID object();
+    WebCore::ProcessIdentifier processIdentifier();
+};
+
 [Alias=class ProcessQualified<WebLockIdentifierID>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::WebLockIdentifier {
     WebCore::WebLockIdentifierID object();
+    WebCore::ProcessIdentifier processIdentifier();
+};
+
+[Alias=class ProcessQualified<ScrollingNodeIdentifier>, AdditionalEncoder=StreamConnectionEncoder, CustomHeader] alias WebCore::ScrollingNodeID {
+    WebCore::ScrollingNodeIdentifier object();
+    WebCore::ProcessIdentifier processIdentifier();
+};
+
+[Alias=class ProcessQualified<WTF::UUID>, CustomHeader] alias WebCore::ScriptExecutionContextIdentifier {
+    WTF::UUID object();
     WebCore::ProcessIdentifier processIdentifier();
 };

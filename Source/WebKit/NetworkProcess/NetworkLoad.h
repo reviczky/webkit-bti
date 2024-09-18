@@ -28,7 +28,17 @@
 #include "DownloadID.h"
 #include "NetworkDataTask.h"
 #include "NetworkLoadParameters.h"
+#include <wtf/TZoneMalloc.h>
 #include <wtf/text/WTFString.h>
+
+namespace WebKit {
+class NetworkLoad;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::NetworkLoad> : std::true_type { };
+}
 
 namespace WebCore {
 class AuthenticationChallenge;
@@ -41,7 +51,7 @@ class NetworkLoadScheduler;
 class NetworkProcess;
 
 class NetworkLoad final : public NetworkDataTaskClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NetworkLoad);
 public:
     NetworkLoad(NetworkLoadClient&, NetworkLoadParameters&&, NetworkSession&);
     NetworkLoad(NetworkLoadClient&, NetworkSession&, const Function<RefPtr<NetworkDataTask>(NetworkDataTaskClient&)>&);
@@ -71,6 +81,11 @@ public:
 
     String description() const;
     void setH2PingCallback(const URL&, CompletionHandler<void(Expected<WTF::Seconds, WebCore::ResourceError>&&)>&&);
+
+    void setTimingAllowFailedFlag();
+    std::optional<WebCore::FrameIdentifier> webFrameID() const;
+    std::optional<WebCore::PageIdentifier> webPageID() const;
+    Ref<NetworkProcess> networkProcess();
 
 private:
     // NetworkDataTaskClient

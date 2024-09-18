@@ -32,6 +32,7 @@
 #include "ImageBufferShareableAllocator.h"
 #include "RemoteDisplayListRecorderMessages.h"
 #include "RemoteImageBuffer.h"
+#include "RemoteSharedResourceCache.h"
 #include "SharedVideoFrame.h"
 #include <WebCore/BitmapImage.h>
 #include <WebCore/FEImage.h>
@@ -54,8 +55,11 @@ RemoteDisplayListRecorder::RemoteDisplayListRecorder(ImageBuffer& imageBuffer, R
     : m_imageBuffer(imageBuffer)
     , m_imageBufferIdentifier(imageBufferIdentifier)
     , m_renderingBackend(&renderingBackend)
+    , m_sharedResourceCache(renderingBackend.sharedResourceCache())
 {
 }
+
+RemoteDisplayListRecorder::~RemoteDisplayListRecorder() = default;
 
 RemoteResourceCache& RemoteDisplayListRecorder::resourceCache() const
 {
@@ -273,7 +277,7 @@ void RemoteDisplayListRecorder::drawFilteredImageBuffer(std::optional<RenderingR
     RefPtr svgFilter = dynamicDowncast<SVGFilter>(filter);
 
     if (!svgFilter || !svgFilter->hasValidRenderingResourceIdentifier()) {
-        FilterResults results(makeUnique<ImageBufferShareableAllocator>(m_renderingBackend->resourceOwner()));
+        FilterResults results(makeUnique<ImageBufferShareableAllocator>(m_sharedResourceCache->resourceOwner()));
         drawFilteredImageBufferInternal(sourceImageIdentifier, sourceImageRect, filter, results);
         return;
     }
@@ -288,7 +292,7 @@ void RemoteDisplayListRecorder::drawFilteredImageBuffer(std::optional<RenderingR
     cachedSVGFilter->mergeEffects(svgFilter->effects());
 
     auto& results = cachedSVGFilter->ensureResults([&]() {
-        auto allocator = makeUnique<ImageBufferShareableAllocator>(m_renderingBackend->resourceOwner());
+        auto allocator = makeUnique<ImageBufferShareableAllocator>(m_sharedResourceCache->resourceOwner());
         return makeUnique<FilterResults>(WTFMove(allocator));
     });
 
@@ -354,14 +358,13 @@ void RemoteDisplayListRecorder::drawNativeImage(RenderingResourceIdentifier imag
 void RemoteDisplayListRecorder::drawSystemImage(Ref<SystemImage> systemImage, const FloatRect& destinationRect)
 {
 #if USE(SYSTEM_PREVIEW)
-    if (is<ARKitBadgeSystemImage>(systemImage.get())) {
-        ARKitBadgeSystemImage& badge = downcast<ARKitBadgeSystemImage>(systemImage.get());
-        RefPtr nativeImage = resourceCache().cachedNativeImage(badge.imageIdentifier());
+    if (auto* badge = dynamicDowncast<ARKitBadgeSystemImage>(systemImage.get())) {
+        RefPtr nativeImage = resourceCache().cachedNativeImage(badge->imageIdentifier());
         if (!nativeImage) {
             ASSERT_NOT_REACHED();
             return;
         }
-        badge.setImage(BitmapImage::create(nativeImage.releaseNonNull()));
+        badge->setImage(BitmapImage::create(nativeImage.releaseNonNull()));
     }
 #endif
     handleItem(DisplayList::DrawSystemImage(systemImage, destinationRect));
@@ -381,6 +384,11 @@ void RemoteDisplayListRecorder::drawPattern(RenderingResourceIdentifier imageIde
 void RemoteDisplayListRecorder::beginTransparencyLayer(float opacity)
 {
     handleItem(DisplayList::BeginTransparencyLayer(opacity));
+}
+
+void RemoteDisplayListRecorder::beginTransparencyLayerWithCompositeMode(CompositeMode compositeMode)
+{
+    handleItem(DisplayList::BeginTransparencyLayerWithCompositeMode(compositeMode));
 }
 
 void RemoteDisplayListRecorder::endTransparencyLayer()
@@ -428,9 +436,9 @@ void RemoteDisplayListRecorder::drawFocusRingRects(const Vector<FloatRect>& rect
     handleItem(DisplayList::DrawFocusRingRects(rects, outlineOffset, outlineWidth, color));
 }
 
-void RemoteDisplayListRecorder::fillRect(const FloatRect& rect)
+void RemoteDisplayListRecorder::fillRect(const FloatRect& rect, GraphicsContext::RequiresClipToRect requiresClipToRect)
 {
-    handleItem(DisplayList::FillRect(rect));
+    handleItem(DisplayList::FillRect(rect, requiresClipToRect));
 }
 
 void RemoteDisplayListRecorder::fillRectWithColor(const FloatRect& rect, const Color& color)

@@ -27,10 +27,10 @@
 #include "Encoder.h"
 
 #include "ArgumentCoders.h"
-#include "DataReference.h"
 #include "MessageFlags.h"
 #include <algorithm>
 #include <wtf/OptionSet.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/UniqueRef.h>
 
 #if OS(DARWIN)
@@ -62,6 +62,8 @@ static inline void freeBuffer(void* addr, size_t size)
     fastFree(addr);
 #endif
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Encoder);
 
 Encoder::Encoder(MessageName messageName, uint64_t destinationID)
     : m_messageName(messageName)
@@ -124,7 +126,7 @@ void Encoder::wrapForTesting(UniqueRef<Encoder>&& original)
 
     original->setShouldDispatchMessageWhenWaitingForSyncReply(ShouldDispatchWhenWaitingForSyncReply::Yes);
 
-    *this << DataReference(original->buffer(), original->bufferSize());
+    *this << original->span();
 
     Vector<Attachment> attachments = original->releaseAttachments();
     reserve(attachments.size());
@@ -170,12 +172,12 @@ OptionSet<MessageFlags>& Encoder::messageFlags()
 {
     // FIXME: We should probably pass an OptionSet<MessageFlags> into the Encoder constructor instead of encoding defaultMessageFlags then using this to change it later.
     static_assert(sizeof(OptionSet<MessageFlags>::StorageType) == 1, "Encoder uses the first byte of the buffer for message flags.");
-    return *reinterpret_cast<OptionSet<MessageFlags>*>(buffer());
+    return *reinterpret_cast<OptionSet<MessageFlags>*>(m_buffer);
 }
 
 const OptionSet<MessageFlags>& Encoder::messageFlags() const
 {
-    return *reinterpret_cast<OptionSet<MessageFlags>*>(buffer());
+    return *reinterpret_cast<OptionSet<MessageFlags>*>(m_buffer);
 }
 
 uint8_t* Encoder::grow(size_t alignment, size_t size)

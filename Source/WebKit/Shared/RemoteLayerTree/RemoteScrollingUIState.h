@@ -27,6 +27,7 @@
 
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace IPC {
 class Decoder;
@@ -34,7 +35,8 @@ class Encoder;
 }
 
 namespace WebCore {
-using ScrollingNodeID = uint64_t;
+struct ScrollingNodeIDType;
+using ScrollingNodeID = ProcessQualified<LegacyNullableObjectIdentifier<ScrollingNodeIDType>>;
 }
 
 namespace WebKit {
@@ -46,7 +48,7 @@ enum class RemoteScrollingUIStateChanges : uint8_t {
 };
 
 class RemoteScrollingUIState {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteScrollingUIState);
 public:
     using Changes = RemoteScrollingUIStateChanges;
 

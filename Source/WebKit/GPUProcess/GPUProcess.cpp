@@ -31,12 +31,10 @@
 #include "ArgumentCoders.h"
 #include "Attachment.h"
 #include "AuxiliaryProcessMessages.h"
-#include "DataReference.h"
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcessConnectionParameters.h"
 #include "GPUProcessCreationParameters.h"
 #include "GPUProcessPreferences.h"
-#include "GPUProcessPreferencesForWebProcess.h"
 #include "GPUProcessProxyMessages.h"
 #include "GPUProcessSessionParameters.h"
 #include "LogInitialization.h"
@@ -83,7 +81,7 @@
 #endif
 
 #if USE(GBM)
-#include <WebCore/GBMDevice.h>
+#include <WebCore/DRMDeviceManager.h>
 #endif
 
 namespace WebKit {
@@ -94,15 +92,20 @@ namespace WebKit {
 // work in the GPUProcess.
 constexpr Seconds minimumLifetimeBeforeIdleExit { 5_s };
 
-GPUProcess::GPUProcess(AuxiliaryProcessInitializationParameters&& parameters)
+GPUProcess::GPUProcess()
     : m_idleExitTimer(*this, &GPUProcess::tryExitIfUnused)
 {
-    initialize(WTFMove(parameters));
     RELEASE_LOG(Process, "%p - GPUProcess::GPUProcess:", this);
 }
 
 GPUProcess::~GPUProcess()
 {
+}
+
+GPUProcess& GPUProcess::singleton()
+{
+    static NeverDestroyed<GPUProcess> gpuProcess;
+    return gpuProcess.get();
 }
 
 void GPUProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -143,6 +146,13 @@ void GPUProcess::createGPUConnectionToWebProcess(WebCore::ProcessIdentifier iden
 
     ASSERT(!m_webProcessConnections.contains(identifier));
     m_webProcessConnections.add(identifier, WTFMove(newConnection));
+}
+
+void GPUProcess::sharedPreferencesForWebProcessDidChange(WebCore::ProcessIdentifier identifier, SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess, CompletionHandler<void()>&& completionHandler)
+{
+    if (RefPtr connection = m_webProcessConnections.get(identifier))
+        connection->updateSharedPreferencesForWebProcess(WTFMove(sharedPreferencesForWebProcess));
+    completionHandler();
 }
 
 void GPUProcess::removeGPUConnectionToWebProcess(GPUConnectionToWebProcess& connection)
@@ -204,7 +214,7 @@ void GPUProcess::tryExitIfUnused()
     m_idleExitTimer.stop();
 
     RELEASE_LOG(Process, "GPUProcess::tryExitIfUnused: GPUProcess is exiting because we are under memory pressure and the process is no longer useful.");
-    parentProcessConnection()->send(Messages::GPUProcessProxy::ProcessIsReadyToExit(), 0);
+    protectedParentProcessConnection()->send(Messages::GPUProcessProxy::ProcessIsReadyToExit(), 0);
 }
 
 void GPUProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
@@ -218,8 +228,10 @@ void GPUProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
     WebCore::releaseGraphicsMemory(critical, synchronous);
 }
 
-void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
+void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters, CompletionHandler<void()>&& completionHandler)
 {
+    CompletionHandlerCallingScope callCompletionHandler(WTFMove(completionHandler));
+
     applyProcessCreationParameters(parameters.auxiliaryProcessParameters);
     RELEASE_LOG(Process, "%p - GPUProcess::initializeGPUProcess:", this);
     WTF::Thread::setCurrentThreadIsUserInitiated();
@@ -270,7 +282,10 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
 #endif
 
 #if USE(GBM)
-    WebCore::GBMDevice::singleton().initialize(parameters.renderDeviceFile);
+    WebCore::DRMDeviceManager::singleton().initializeMainDevice(parameters.renderDeviceFile);
+
+    // Ensure that the GBM device is also initialized before WebGL worker threads try using it.
+    RELEASE_ASSERT(WebCore::DRMDeviceManager::singleton().mainGBMDeviceNode(WebCore::DRMDeviceManager::NodeType::Render));
 #endif
 
     m_applicationVisibleName = WTFMove(parameters.applicationVisibleName);
@@ -356,12 +371,19 @@ void GPUProcess::updateGPUProcessPreferences(GPUProcessPreferences&& preferences
         }
 #endif
     }
-    if (updatePreference(m_preferences.vp9SWDecoderEnabled, preferences.vp9SWDecoderEnabled)) {
-        PlatformMediaSessionManager::setShouldEnableVP9SWDecoder(*m_preferences.vp9SWDecoderEnabled);
+    if (preferences.swVPDecodersAlwaysEnabled != std::exchange(m_preferences.swVPDecodersAlwaysEnabled, preferences.swVPDecodersAlwaysEnabled)) {
+        PlatformMediaSessionManager::setSWVPDecodersAlwaysEnabled(m_preferences.swVPDecodersAlwaysEnabled);
 #if PLATFORM(COCOA)
-        if (!m_haveEnabledVP9SWDecoder && *m_preferences.vp9SWDecoderEnabled) {
-            m_haveEnabledVP9SWDecoder = true;
-            WebCore::registerWebKitVP9Decoder();
+        if (!m_haveEnabledSWVPDecoders && m_preferences.swVPDecodersAlwaysEnabled) {
+            m_haveEnabledSWVPDecoders = true;
+            if (!m_haveEnabledVP9Decoder) {
+                WebCore::registerWebKitVP9Decoder();
+                m_haveEnabledVP9Decoder = true;
+            }
+            if (!m_haveEnabledVP8Decoder) {
+                WebCore::registerWebKitVP8Decoder();
+                m_haveEnabledVP8Decoder = true;
+            }
         }
 #endif
     }
@@ -448,7 +470,7 @@ void GPUProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapt
     ensureAVCaptureServerConnection();
 #endif
 
-    if (auto* connection = webProcessConnection(processID)) {
+    if (RefPtr connection = webProcessConnection(processID)) {
         connection->updateCaptureAccess(allowAudioCapture, allowVideoCapture, allowDisplayCapture);
         return completionHandler();
     }
@@ -463,7 +485,7 @@ void GPUProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapt
 
 void GPUProcess::updateCaptureOrigin(const WebCore::SecurityOriginData& originData, WebCore::ProcessIdentifier processID)
 {
-    if (auto* connection = webProcessConnection(processID))
+    if (RefPtr connection = webProcessConnection(processID))
         connection->updateCaptureOrigin(originData);
 }
 
@@ -508,15 +530,13 @@ void GPUProcess::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType type
 {
     WebCore::ScreenCaptureKitSharingSessionManager::singleton().promptForGetDisplayMedia(type, WTFMove(completionHandler));
 }
-#endif // HAVE(SCREEN_CAPTURE_KIT)
 
-#if PLATFORM(MAC)
-void GPUProcess::displayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
+void GPUProcess::cancelGetDisplayMediaPrompt()
 {
-    for (auto& connection : m_webProcessConnections.values())
-        connection->displayConfigurationChanged(displayID, flags);
+    WebCore::ScreenCaptureKitSharingSessionManager::singleton().cancelGetDisplayMediaPrompt();
 }
-#endif
+
+#endif // HAVE(SCREEN_CAPTURE_KIT)
 
 void GPUProcess::addSession(PAL::SessionID sessionID, GPUProcessSessionParameters&& parameters)
 {
@@ -528,7 +548,7 @@ void GPUProcess::addSession(PAL::SessionID sessionID, GPUProcessSessionParameter
 
     m_sessions.add(sessionID, GPUSession {
         WTFMove(parameters.mediaCacheDirectory)
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA) || ENABLE(ENCRYPTED_MEDIA)
         , WTFMove(parameters.mediaKeysStorageDirectory)
 #endif
     });
@@ -546,7 +566,7 @@ const String& GPUProcess::mediaCacheDirectory(PAL::SessionID sessionID) const
     return m_sessions.find(sessionID)->value.mediaCacheDirectory;
 }
 
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA) || ENABLE(ENCRYPTED_MEDIA)
 const String& GPUProcess::mediaKeysStorageDirectory(PAL::SessionID sessionID) const
 {
     ASSERT(m_sessions.contains(sessionID));
@@ -574,7 +594,7 @@ RemoteAudioSessionProxyManager& GPUProcess::audioSessionManager() const
 WorkQueue& GPUProcess::videoMediaStreamTrackRendererQueue()
 {
     if (!m_videoMediaStreamTrackRendererQueue)
-        m_videoMediaStreamTrackRendererQueue = WorkQueue::create("RemoteVideoMediaStreamTrackRenderer", WorkQueue::QOS::UserInitiated);
+        m_videoMediaStreamTrackRendererQueue = WorkQueue::create("RemoteVideoMediaStreamTrackRenderer"_s, WorkQueue::QOS::UserInitiated);
     return *m_videoMediaStreamTrackRendererQueue;
 }
 #endif
@@ -583,7 +603,7 @@ WorkQueue& GPUProcess::videoMediaStreamTrackRendererQueue()
 WorkQueue& GPUProcess::libWebRTCCodecsQueue()
 {
     if (!m_libWebRTCCodecsQueue)
-        m_libWebRTCCodecsQueue = WorkQueue::create("LibWebRTCCodecsQueue", WorkQueue::QOS::UserInitiated);
+        m_libWebRTCCodecsQueue = WorkQueue::create("LibWebRTCCodecsQueue"_s, WorkQueue::QOS::UserInitiated);
     return *m_libWebRTCCodecsQueue;
 }
 #endif
@@ -611,6 +631,19 @@ void GPUProcess::requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier pro
     }
 
     completion(iterator->value->remoteMediaPlayerManagerProxy().bitmapImageForCurrentTime(playerIdentifier));
+}
+#endif
+
+#if ENABLE(WEBXR)
+std::optional<WebCore::ProcessIdentity> GPUProcess::immersiveModeProcessIdentity() const
+{
+    return m_processIdentity;
+}
+
+void GPUProcess::webXRPromptAccepted(std::optional<WebCore::ProcessIdentity> processIdentity, CompletionHandler<void(bool)>&& completionHandler)
+{
+    m_processIdentity = processIdentity;
+    completionHandler(true);
 }
 #endif
 

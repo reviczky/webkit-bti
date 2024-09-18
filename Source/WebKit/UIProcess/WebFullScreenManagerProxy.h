@@ -27,14 +27,21 @@
 
 #if ENABLE(FULLSCREEN_API)
 
+#include "FullScreenMediaDetails.h"
 #include "MessageReceiver.h"
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/HTMLMediaElementEnums.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
+
+namespace WebKit {
+class WebFullScreenManagerProxy;
+}
 
 namespace WebCore {
 class FloatSize;
@@ -49,6 +56,7 @@ using FloatBoxExtent = RectEdges<float>;
 namespace WebKit {
 
 class WebPageProxy;
+struct SharedPreferencesForWebProcess;
 
 class WebFullScreenManagerProxyClient {
 public:
@@ -57,7 +65,7 @@ public:
     virtual void closeFullScreenManager() = 0;
     virtual bool isFullScreen() = 0;
 #if PLATFORM(IOS_FAMILY)
-    virtual void enterFullScreen(WebCore::FloatSize videoDimensions) = 0;
+    virtual void enterFullScreen(WebCore::FloatSize mediaDimensions) = 0;
 #else
     virtual void enterFullScreen() = 0;
 #endif
@@ -69,17 +77,24 @@ public:
     virtual void unlockFullscreenOrientation() { }
 };
 
-class WebFullScreenManagerProxy : public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+class WebFullScreenManagerProxy : public IPC::MessageReceiver, public CanMakeCheckedPtr<WebFullScreenManagerProxy> {
+    WTF_MAKE_TZONE_ALLOCATED(WebFullScreenManagerProxy);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebFullScreenManagerProxy);
 public:
     WebFullScreenManagerProxy(WebPageProxy&, WebFullScreenManagerProxyClient&);
     virtual ~WebFullScreenManagerProxy();
 
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
+
     bool isFullScreen();
     bool blocksReturnToFullscreenFromPictureInPicture() const;
-#if PLATFORM(VISION)
-    bool isVideoElement() const;
+#if ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
+    bool isVideoElement() const { return m_isVideoElement; }
 #endif
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    bool isImageElement() const { return m_imageBuffer; }
+    void prepareQuickLookImageURL(CompletionHandler<void(URL&&)>&&) const;
+#endif // QUICKLOOK_FULLSCREEN
     void close();
 
     enum class FullscreenState : uint8_t {
@@ -94,7 +109,7 @@ public:
     void willExitFullScreen();
     void didExitFullScreen();
     void setAnimatingFullScreen(bool);
-    void requestRestoreFullScreen();
+    void requestRestoreFullScreen(CompletionHandler<void(bool)>&&);
     void requestExitFullScreen();
     void saveScrollPosition();
     void restoreScrollPosition();
@@ -106,7 +121,7 @@ public:
 
 private:
     void supportsFullScreen(bool withKeyboard, CompletionHandler<void(bool)>&&);
-    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, bool isVideoElement, WebCore::FloatSize videoDimensions);
+    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&&);
     void exitFullScreen();
     void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
@@ -118,7 +133,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "WebFullScreenManagerProxy"; }
+    ASCIILiteral logClassName() const { return "WebFullScreenManagerProxy"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 
@@ -126,9 +141,13 @@ private:
     WebFullScreenManagerProxyClient& m_client;
     FullscreenState m_fullscreenState { FullscreenState::NotInFullscreen };
     bool m_blocksReturnToFullscreenFromPictureInPicture { false };
-#if PLATFORM(VISION)
+#if ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
     bool m_isVideoElement { false };
 #endif
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    String m_imageMIMEType;
+    RefPtr<WebCore::SharedBuffer> m_imageBuffer;
+#endif // QUICKLOOK_FULLSCREEN
     Vector<CompletionHandler<void()>> m_closeCompletionHandlers;
 
 #if !RELEASE_LOG_DISABLED

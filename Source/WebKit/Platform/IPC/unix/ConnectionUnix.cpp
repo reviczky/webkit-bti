@@ -28,7 +28,6 @@
 #include "config.h"
 #include "Connection.h"
 
-#include "DataReference.h"
 #include "IPCUtilities.h"
 #include "UnixMessage.h"
 #include <WebCore/SharedMemory.h>
@@ -40,6 +39,7 @@
 #include <wtf/Assertions.h>
 #include <wtf/SafeStrerror.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/UniStdExtras.h>
 
 #if USE(GLIB)
@@ -68,7 +68,7 @@ static const size_t messageMaxSize = 4096;
 static const size_t attachmentMaxAmount = 254;
 
 class AttachmentInfo {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(AttachmentInfo);
 public:
     AttachmentInfo()
     {
@@ -206,7 +206,7 @@ bool Connection::processMessage()
 
     uint8_t* messageBody = messageData;
     if (messageInfo.isBodyOutOfLine())
-        messageBody = reinterpret_cast<uint8_t*>(oolMessageBody->data());
+        messageBody = oolMessageBody->mutableSpan().data();
 
     auto decoder = Decoder::create({ messageBody, messageInfo.bodySize() }, WTFMove(attachments));
     ASSERT(decoder);
@@ -365,7 +365,7 @@ void Connection::platformOpen()
 #endif
 
 #if PLATFORM(PLAYSTATION)
-    m_socketMonitor = Thread::create("SocketMonitor", [protectedThis] {
+    m_socketMonitor = Thread::create("SocketMonitor"_s, [protectedThis] {
         {
             int fd;
             while ((fd = protectedThis->m_socketDescriptor) != -1) {
@@ -408,7 +408,7 @@ bool Connection::sendOutgoingMessage(UniqueRef<Encoder>&& encoder)
 
     size_t messageSizeWithBodyInline = sizeof(MessageInfo) + (outputMessage.attachments().size() * sizeof(AttachmentInfo)) + outputMessage.bodySize();
     if (messageSizeWithBodyInline > messageMaxSize && outputMessage.bodySize()) {
-        RefPtr<WebCore::SharedMemory> oolMessageBody = WebCore::SharedMemory::allocate(outputMessage.bodySize());
+        RefPtr oolMessageBody = WebCore::SharedMemory::allocate(outputMessage.bodySize());
         if (!oolMessageBody)
             return false;
 
@@ -418,7 +418,7 @@ bool Connection::sendOutgoingMessage(UniqueRef<Encoder>&& encoder)
 
         outputMessage.messageInfo().setBodyOutOfLine();
 
-        memcpy(oolMessageBody->data(), outputMessage.body(), outputMessage.bodySize());
+        memcpySpan(oolMessageBody->mutableSpan(), outputMessage.body());
 
         outputMessage.appendAttachment(handle->releaseHandle());
     }
@@ -486,7 +486,7 @@ bool Connection::sendOutputMessage(UnixMessage& outputMessage)
     }
 
     if (!messageInfo.isBodyOutOfLine() && outputMessage.bodySize()) {
-        iov[iovLength].iov_base = reinterpret_cast<void*>(outputMessage.body());
+        iov[iovLength].iov_base = reinterpret_cast<void*>(outputMessage.body().data());
         iov[iovLength].iov_len = outputMessage.bodySize();
         ++iovLength;
     }
@@ -549,14 +549,16 @@ SocketPair createPlatformConnection(unsigned options)
 {
     int sockets[2];
 
-    auto setPasscredIfNeeded = [options, &sockets] {
 #if USE(GLIB) && OS(LINUX)
+    auto setPasscredIfNeeded = [options, &sockets] {
         if (options & SetPasscredOnServer) {
             int enable = 1;
             RELEASE_ASSERT(!setsockopt(sockets[1], SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable)));
         }
-#endif
     };
+#else
+    auto setPasscredIfNeeded = [] { };
+#endif
 
 #if OS(LINUX)
     if ((options & SetCloexecOnServer) || (options & SetCloexecOnClient)) {

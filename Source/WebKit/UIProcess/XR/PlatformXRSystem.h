@@ -33,6 +33,16 @@
 #include "WebCoreArgumentCoders.h"
 #include <WebCore/PlatformXR.h>
 #include <WebCore/SecurityOriginData.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class PlatformXRSystem;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PlatformXRSystem> : std::true_type { };
+}
 
 namespace WebCore {
 class SecurityOriginData;
@@ -43,17 +53,20 @@ namespace WebKit {
 class PlatformXRCoordinator;
 class WebPageProxy;
 
+struct SharedPreferencesForWebProcess;
 struct XRDeviceInfo;
 
-class PlatformXRSystem : public IPC::MessageReceiver, public PlatformXRCoordinator::SessionEventClient {
-    WTF_MAKE_FAST_ALLOCATED;
+class PlatformXRSystem : public IPC::MessageReceiver, public PlatformXRCoordinatorSessionEventClient {
+    WTF_MAKE_TZONE_ALLOCATED(PlatformXRSystem);
 public:
     PlatformXRSystem(WebPageProxy&);
     virtual ~PlatformXRSystem();
 
-    using PlatformXRCoordinator::SessionEventClient::weakPtrFactory;
-    using PlatformXRCoordinator::SessionEventClient::WeakValueType;
-    using PlatformXRCoordinator::SessionEventClient::WeakPtrImplType;
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
+
+    using PlatformXRCoordinatorSessionEventClient::weakPtrFactory;
+    using PlatformXRCoordinatorSessionEventClient::WeakValueType;
+    using PlatformXRCoordinatorSessionEventClient::WeakPtrImplType;
 
     void invalidate();
 
@@ -75,8 +88,9 @@ private:
     void shutDownTrackingAndRendering();
     void requestFrame(CompletionHandler<void(PlatformXR::FrameData&&)>&&);
     void submitFrame();
+    void didCompleteShutdownTriggeredBySystem();
 
-    // PlatformXRCoordinator::SessionEventClient
+    // PlatformXRCoordinatorSessionEventClient
     void sessionDidEnd(XRDeviceIdentifier) final;
     void sessionDidUpdateVisibilityState(XRDeviceIdentifier, PlatformXR::VisibilityState) final;
 
@@ -87,11 +101,13 @@ private:
         Idle,
         RequestingPermissions,
         PermissionsGranted,
-        SessionRunning
+        SessionRunning,
+        SessionEndingFromWebContent,
+        SessionEndingFromSystem,
     };
     ImmersiveSessionState m_immersiveSessionState { ImmersiveSessionState::Idle };
-    void setImmersiveSessionState(ImmersiveSessionState);
-    void invalidateImmersiveSessionState();
+    void setImmersiveSessionState(ImmersiveSessionState, CompletionHandler<void(bool)>&&);
+    void invalidateImmersiveSessionState(ImmersiveSessionState nextSessionState = ImmersiveSessionState::Idle);
 
     WebPageProxy& m_page;
     std::unique_ptr<ProcessThrottler::ForegroundActivity> m_immersiveSessionActivity;

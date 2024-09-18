@@ -39,10 +39,10 @@
 #include <WebCore/LayoutMilestone.h>
 #include <WebCore/MediaPlayerEnums.h>
 #include <WebCore/PlatformCALayer.h>
-#include <WebCore/ProcessIdentifier.h>
 #include <WebCore/ScrollTypes.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
@@ -76,7 +76,7 @@ struct ChangedLayers {
 };
 
 class RemoteLayerTreeTransaction {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeTransaction);
 public:
     struct LayerCreationProperties {
         struct NoAdditionalData { };
@@ -126,9 +126,6 @@ public:
     void setCreatedLayers(Vector<LayerCreationProperties>);
     void setDestroyedLayerIDs(Vector<WebCore::PlatformLayerIdentifier>);
     void setLayerIDsWithNewlyUnreachableBackingStore(Vector<WebCore::PlatformLayerIdentifier>);
-
-    WebCore::ProcessIdentifier processIdentifier() const { return m_processIdentifier; }
-    void setProcessIdentifier(WebCore::ProcessIdentifier processIdentifier) { m_processIdentifier = processIdentifier; }
 
 #if !defined(NDEBUG) || !LOG_DISABLED
     String description() const;
@@ -184,10 +181,10 @@ public:
     void setScaleWasSetByUIProcess(bool scaleWasSetByUIProcess) { m_scaleWasSetByUIProcess = scaleWasSetByUIProcess; }
 
 #if PLATFORM(MAC)
-    WebCore::PlatformLayerIdentifier pageScalingLayerID() const { return m_pageScalingLayerID.value(); }
+    WebCore::PlatformLayerIdentifier pageScalingLayerID() const { return m_pageScalingLayerID.unsafeValue(); }
     void setPageScalingLayerID(WebCore::PlatformLayerIdentifier layerID) { m_pageScalingLayerID = layerID; }
 
-    WebCore::PlatformLayerIdentifier scrolledContentsLayerID() const { return m_scrolledContentsLayerID.value(); }
+    WebCore::PlatformLayerIdentifier scrolledContentsLayerID() const { return m_scrolledContentsLayerID.unsafeValue(); }
     void setScrolledContentsLayerID(WebCore::PlatformLayerIdentifier layerID) { m_scrolledContentsLayerID = layerID; }
 #endif
 
@@ -252,7 +249,6 @@ private:
     friend struct IPC::ArgumentCoder<RemoteLayerTreeTransaction, void>;
 
     WebCore::PlatformLayerIdentifier m_rootLayerID;
-    WebCore::ProcessIdentifier m_processIdentifier;
     ChangedLayers m_changedLayers;
 
     Markable<WebCore::LayerHostingContextIdentifier> m_remoteContextHostedIdentifier;

@@ -36,7 +36,6 @@ struct ResourceLoadStatisticsParameters {
     String directory;
     SandboxExtension::Handle directoryExtensionHandle;
     bool enabled { false };
-    bool isTrackingPreventionStateExplicitlySet { false };
     bool enableLogTestingEvent { false };
     bool shouldIncludeLocalhost { true };
     bool enableDebugMode { false };
@@ -46,6 +45,7 @@ struct ResourceLoadStatisticsParameters {
     WebCore::RegistrableDomain standaloneApplicationDomain;
     HashSet<WebCore::RegistrableDomain> appBoundDomains;
     HashSet<WebCore::RegistrableDomain> managedDomains;
+    HashSet<WebCore::RegistrableDomain> persistedDomains;
     WebCore::RegistrableDomain manualPrevalentResource;
 };
 

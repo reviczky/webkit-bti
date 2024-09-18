@@ -36,6 +36,7 @@
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -46,8 +47,8 @@ namespace WebKit {
 
 class WebPage;
 
-class WebFoundTextRangeController : private WebCore::PageOverlay::Client {
-    WTF_MAKE_FAST_ALLOCATED;
+class WebFoundTextRangeController : private WebCore::PageOverlayClient {
+    WTF_MAKE_TZONE_ALLOCATED(WebFoundTextRangeController);
     WTF_MAKE_NONCOPYABLE(WebFoundTextRangeController);
 
 public:
@@ -72,7 +73,7 @@ public:
     void redraw();
 
 private:
-    // PageOverlay::Client.
+    // PageOverlayClient.
     void willMoveToPage(WebCore::PageOverlay&, WebCore::Page*) override;
     void didMoveToPage(WebCore::PageOverlay&, WebCore::Page*) override;
     bool mouseEvent(WebCore::PageOverlay&, const WebCore::PlatformMouseEvent&) override;

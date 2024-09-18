@@ -32,9 +32,14 @@
 #include <WebCore/ProcessIdentifier.h>
 #include <wtf/HashMap.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 
 OBJC_CLASS CAAnimation;
 OBJC_CLASS WKAnimationDelegate;
+
+namespace IPC {
+class Connection;
+}
 
 namespace WebKit {
 
@@ -42,7 +47,7 @@ class RemoteLayerTreeDrawingAreaProxy;
 class WebPageProxy;
 
 class RemoteLayerTreeHost {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeHost);
 public:
     explicit RemoteLayerTreeHost(RemoteLayerTreeDrawingAreaProxy&);
     ~RemoteLayerTreeHost();
@@ -56,7 +61,7 @@ public:
     RemoteLayerTreeDrawingAreaProxy& drawingArea() const;
 
     // Returns true if the root layer changed.
-    bool updateLayerTree(const RemoteLayerTreeTransaction&, float indicatorScaleFactor  = 1);
+    bool updateLayerTree(const IPC::Connection&, const RemoteLayerTreeTransaction&, float indicatorScaleFactor  = 1);
     void asyncSetLayerContents(WebCore::PlatformLayerIdentifier, ImageBufferBackendHandle&&, const WebCore::RenderingResourceIdentifier&);
 
     void setIsDebugLayerTreeHost(bool flag) { m_isDebugLayerTreeHost = flag; }
@@ -86,15 +91,16 @@ public:
     CALayer *layerWithIDForTesting(WebCore::PlatformLayerIdentifier) const;
 
     bool replayDynamicContentScalingDisplayListsIntoBackingStore() const;
-    bool css3DTransformInteroperabilityEnabled() const;
     bool threadedAnimationResolutionEnabled() const;
+
+    bool cssUnprefixedBackdropFilterEnabled() const;
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     Seconds acceleratedTimelineTimeOrigin() const;
     MonotonicTime animationCurrentTime() const;
 #endif
 
-    void remotePageProcessCrashed(WebCore::ProcessIdentifier);
+    void remotePageProcessDidTerminate(WebCore::ProcessIdentifier);
 
 private:
     void createLayer(const RemoteLayerTreeTransaction::LayerCreationProperties&);

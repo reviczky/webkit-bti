@@ -34,6 +34,8 @@
 #include <WebCore/FloatRect.h>
 #include <WebCore/IntSize.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/WeakRef.h>
 
 namespace IPC {
 class Decoder;
@@ -49,7 +51,7 @@ class GPUConnectionToWebProcess;
 class RemoteSampleBufferDisplayLayer;
 
 class RemoteSampleBufferDisplayLayerManager final : public IPC::WorkQueueMessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteSampleBufferDisplayLayerManager);
 public:
     static Ref<RemoteSampleBufferDisplayLayerManager> create(GPUConnectionToWebProcess& connection)
     {
@@ -74,14 +76,14 @@ private:
     bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
 
     using LayerCreationCallback = CompletionHandler<void(std::optional<LayerHostingContextID>)>&&;
-    void createLayer(SampleBufferDisplayLayerIdentifier, bool hideRootLayer, WebCore::IntSize, bool shouldMaintainAspectRatio, LayerCreationCallback);
+    void createLayer(SampleBufferDisplayLayerIdentifier, bool hideRootLayer, WebCore::IntSize, bool shouldMaintainAspectRatio, bool canShowWhileLocked, LayerCreationCallback);
     void releaseLayer(SampleBufferDisplayLayerIdentifier);
 
-    GPUConnectionToWebProcess& m_connectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
     Ref<IPC::Connection> m_connection;
     Ref<WorkQueue> m_queue;
     mutable Lock m_layersLock;
-    HashMap<SampleBufferDisplayLayerIdentifier, std::unique_ptr<RemoteSampleBufferDisplayLayer>> m_layers WTF_GUARDED_BY_LOCK(m_layersLock);
+    HashMap<SampleBufferDisplayLayerIdentifier, Ref<RemoteSampleBufferDisplayLayer>> m_layers WTF_GUARDED_BY_LOCK(m_layersLock);
 };
 
 }

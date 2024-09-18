@@ -37,10 +37,13 @@
 #include "MockNfcService.h"
 #include "NfcService.h"
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
-UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::create(WebCore::AuthenticatorTransport transport, Observer& observer)
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AuthenticatorTransportService);
+
+UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::create(WebCore::AuthenticatorTransport transport, AuthenticatorTransportServiceObserver& observer)
 {
     switch (transport) {
     case WebCore::AuthenticatorTransport::Internal:
@@ -57,7 +60,7 @@ UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::create(W
     }
 }
 
-UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::createMock(WebCore::AuthenticatorTransport transport, Observer& observer, const WebCore::MockWebAuthenticationConfiguration& configuration)
+UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::createMock(WebCore::AuthenticatorTransport transport, AuthenticatorTransportServiceObserver& observer, const WebCore::MockWebAuthenticationConfiguration& configuration)
 {
     switch (transport) {
     case WebCore::AuthenticatorTransport::Internal:
@@ -74,7 +77,7 @@ UniqueRef<AuthenticatorTransportService> AuthenticatorTransportService::createMo
     }
 }
 
-AuthenticatorTransportService::AuthenticatorTransportService(Observer& observer)
+AuthenticatorTransportService::AuthenticatorTransportService(AuthenticatorTransportServiceObserver& observer)
     : m_observer(observer)
 {
 }

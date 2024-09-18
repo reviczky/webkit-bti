@@ -39,6 +39,7 @@
 #include "WebProcessProxy.h"
 #include <WebCore/Region.h>
 #include <optional>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(GTK)
 #include <gtk/gtk.h>
@@ -46,10 +47,6 @@
 
 #if USE(GLIB_EVENT_LOOP)
 #include <wtf/glib/RunLoopSourcePriority.h>
-#endif
-
-#if !PLATFORM(WPE)
-#include "BackingStore.h"
 #endif
 
 namespace WebKit {
@@ -74,7 +71,7 @@ DrawingAreaProxyCoordinatedGraphics::~DrawingAreaProxyCoordinatedGraphics()
 }
 
 #if !PLATFORM(WPE)
-void DrawingAreaProxyCoordinatedGraphics::paint(cairo_t* cr, const IntRect& rect, Region& unpaintedRegion)
+void DrawingAreaProxyCoordinatedGraphics::paint(PlatformPaintContextPtr cr, const IntRect& rect, Region& unpaintedRegion)
 {
     unpaintedRegion = rect;
 
@@ -108,7 +105,7 @@ bool DrawingAreaProxyCoordinatedGraphics::forceUpdateIfNeeded()
 
     SetForScope inForceUpdate(m_inForceUpdate, true);
     send(Messages::DrawingArea::ForceUpdate());
-    m_webProcessProxy->connection()->waitForAndDispatchImmediately<Messages::DrawingAreaProxy::Update>(m_identifier, 500_ms);
+    m_webProcessProxy->connection().waitForAndDispatchImmediately<Messages::DrawingAreaProxy::Update>(identifier(), 500_ms);
     return !!m_backingStore;
 }
 
@@ -143,7 +140,7 @@ void DrawingAreaProxyCoordinatedGraphics::incorporateUpdate(UpdateInfo&& updateI
 std::optional<WebCore::FramesPerSecond> DrawingAreaProxyCoordinatedGraphics::displayNominalFramesPerSecond()
 {
     if (auto displayId = m_webPageProxy->displayID())
-        return m_webPageProxy->process().nominalFramesPerSecondForDisplay(displayId.value());
+        return m_webPageProxy->legacyMainFrameProcess().nominalFramesPerSecondForDisplay(displayId.value());
     return std::nullopt;
 }
 #endif
@@ -303,6 +300,8 @@ void DrawingAreaProxyCoordinatedGraphics::discardBackingStore()
     send(Messages::DrawingArea::DidDiscardBackingStore());
 }
 #endif
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(DrawingAreaProxyCoordinatedGraphicsDrawingMonitor, DrawingAreaProxyCoordinatedGraphics::DrawingMonitor);
 
 DrawingAreaProxyCoordinatedGraphics::DrawingMonitor::DrawingMonitor(WebPageProxy& webPage)
     : m_timer(RunLoop::main(), this, &DrawingMonitor::stop)

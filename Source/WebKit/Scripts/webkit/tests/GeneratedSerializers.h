@@ -88,6 +88,9 @@ class MoveOnlyBaseClass;
 class MoveOnlyDerivedClass;
 class ScrollingStateFrameHostingNode;
 class ScrollingStateFrameHostingNodeWithStuffAfterTuple;
+#if USE(APPKIT)
+class AppKitControlSystemImage;
+#endif
 struct Amazing;
 }
 
@@ -338,6 +341,24 @@ template<> struct ArgumentCoder<RetainPtr<CFBarRef>> {
 };
 #endif
 
+#if USE(CFSTRING)
+template<> struct ArgumentCoder<CFStringRef> {
+    static void encode(Encoder&, CFStringRef);
+    static void encode(StreamConnectionEncoder&, CFStringRef);
+};
+template<> struct ArgumentCoder<RetainPtr<CFStringRef>> {
+    static void encode(Encoder& encoder, const RetainPtr<CFStringRef>& retainPtr)
+    {
+        ArgumentCoder<CFStringRef>::encode(encoder, retainPtr.get());
+    }
+    static void encode(StreamConnectionEncoder& encoder, const RetainPtr<CFStringRef>& retainPtr)
+    {
+        ArgumentCoder<CFStringRef>::encode(encoder, retainPtr.get());
+    }
+    static std::optional<RetainPtr<CFStringRef>> decode(Decoder&);
+};
+#endif
+
 template<> struct ArgumentCoder<WebKit::RValueWithFunctionCalls> {
     static void encode(Encoder&, WebKit::RValueWithFunctionCalls&&);
     static std::optional<WebKit::RValueWithFunctionCalls> decode(Decoder&);
@@ -366,6 +387,14 @@ template<> struct ArgumentCoder<Namespace::OuterClass> {
 template<> struct ArgumentCoder<Namespace::OtherOuterClass> {
     static void encode(Encoder&, const Namespace::OtherOuterClass&);
     static std::optional<Namespace::OtherOuterClass> decode(Decoder&);
+};
+#endif
+
+#if USE(APPKIT)
+template<> struct ArgumentCoder<WebCore::AppKitControlSystemImage> {
+    static void encode(Encoder&, const WebCore::AppKitControlSystemImage&);
+    static void encode(StreamConnectionEncoder&, const WebCore::AppKitControlSystemImage&);
+    static std::optional<Ref<WebCore::AppKitControlSystemImage>> decode(Decoder&);
 };
 #endif
 

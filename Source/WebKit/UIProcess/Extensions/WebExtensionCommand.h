@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +37,7 @@
 #include <UIKit/UIKeyCommand.h>
 #endif
 
-OBJC_CLASS _WKWebExtensionCommand;
+OBJC_CLASS WKWebExtensionCommand;
 
 #if USE(APPKIT)
 OBJC_CLASS NSEvent;
@@ -50,13 +50,9 @@ using CocoaMenuItem = UIMenuElement;
 #endif
 
 #if defined(__OBJC__) && PLATFORM(IOS_FAMILY)
-using WebExtensionKeyCommandHandlerBlock = void (^)(void);
-
 @interface _WKWebExtensionKeyCommand : UIKeyCommand
 
-+ (instancetype)commandWithTitle:(NSString *)title image:(UIImage *)image input:(NSString *)input modifierFlags:(UIKeyModifierFlags)modifierFlags handler:(WebExtensionKeyCommandHandlerBlock)handler;
-
-@property (nonatomic, copy) WebExtensionKeyCommandHandlerBlock handler;
++ (UIKeyCommand *)commandWithTitle:(NSString *)title image:(UIImage *)image input:(NSString *)input modifierFlags:(UIKeyModifierFlags)modifierFlags identifier:(NSString *)identifier;
 
 @end
 #endif // PLATFORM(IOS_FAMILY)
@@ -103,6 +99,7 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     UIKeyCommand *keyCommand() const;
+    bool matchesKeyCommand(UIKeyCommand *) const;
 #endif
 
 #if USE(APPKIT)
@@ -110,7 +107,7 @@ public:
 #endif
 
 #ifdef __OBJC__
-    _WKWebExtensionCommand *wrapper() const { return (_WKWebExtensionCommand *)API::ObjectImpl<API::Object::Type::WebExtensionCommand>::wrapper(); }
+    WKWebExtensionCommand *wrapper() const { return (WKWebExtensionCommand *)API::ObjectImpl<API::Object::Type::WebExtensionCommand>::wrapper(); }
 #endif
 
 private:

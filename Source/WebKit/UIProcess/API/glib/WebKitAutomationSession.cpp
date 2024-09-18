@@ -28,8 +28,10 @@
 #include "WebKitWebViewPrivate.h"
 #include "WebKitWebsiteDataManagerPrivate.h"
 #include <glib/gi18n-lib.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 
 #if ENABLE(2022_GLIB_API)
 #include "WebKitNetworkSession.h"
@@ -60,6 +62,7 @@ enum {
 
 enum {
     CREATE_WEB_VIEW,
+    WILL_CLOSE,
 
     LAST_SIGNAL
 };
@@ -76,7 +79,7 @@ static guint signals[LAST_SIGNAL] = { 0, };
 WEBKIT_DEFINE_FINAL_TYPE(WebKitAutomationSession, webkit_automation_session, G_TYPE_OBJECT, GObject)
 
 class AutomationSessionClient final : public API::AutomationSessionClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(AutomationSessionClient);
 public:
     explicit AutomationSessionClient(WebKitAutomationSession* session)
         : m_session(session)
@@ -318,6 +321,26 @@ static void webkit_automation_session_class_init(WebKitAutomationSessionClass* s
         g_cclosure_marshal_generic,
         WEBKIT_TYPE_WEB_VIEW, 0,
         G_TYPE_NONE);
+
+
+    /**
+     * WebKitAutomationSession::will-close:
+     * @session: a #WebKitAutomationSession
+     *
+     * This signal is emitted when the given automation session is about to finish.
+     * It allows clients to perform any cleanup tasks before the session is destroyed.
+     *
+     * Since: 2.46
+     */
+    signals[WILL_CLOSE] = g_signal_new(
+        "will-close",
+        G_TYPE_FROM_CLASS(gObjectClass),
+        G_SIGNAL_RUN_LAST,
+        0,
+        nullptr, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_NONE, 0,
+        G_TYPE_NONE);
 }
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -384,11 +407,11 @@ WebKitAutomationSession* webkitAutomationSessionCreate(WebKitWebContext* webCont
                 settings.defaultProxyURL = capabilities.proxy->autoconfigURL->utf8();
             if (!settings.isEmpty()) {
 #if ENABLE(2022_GLIB_API)
-                auto& dataStore = webkitWebsiteDataManagerGetDataStore(webkit_network_session_get_website_data_manager(networkSession));
+                Ref dataStore = webkitWebsiteDataManagerGetDataStore(webkit_network_session_get_website_data_manager(networkSession));
 #else
-                auto& dataStore = webkitWebsiteDataManagerGetDataStore(webkit_web_context_get_website_data_manager(webContext));
+                Ref dataStore = webkitWebsiteDataManagerGetDataStore(webkit_web_context_get_website_data_manager(webContext));
 #endif
-                dataStore.setNetworkProxySettings(WTFMove(settings));
+                dataStore->setNetworkProxySettings(WTFMove(settings));
             }
         } else {
             WebKitNetworkProxySettings* proxySettings = nullptr;
@@ -431,9 +454,9 @@ String webkitAutomationSessionGetBrowserVersion(WebKitAutomationSession* session
         return String::number(major);
 
     if (!micro)
-        return makeString(String::number(major), ".", String::number(minor));
+        return makeString(major, '.', minor);
 
-    return makeString(String::number(major), ".", String::number(minor), ".", String::number(micro));
+    return makeString(major, '.', minor, '.', micro);
 }
 
 /**

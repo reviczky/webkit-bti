@@ -33,6 +33,7 @@
 #include <WebCore/CrossOriginAccessControl.h>
 #include <WebCore/CrossOriginEmbedderPolicy.h>
 #include <WebCore/FetchOptions.h>
+#include <WebCore/NavigationIdentifier.h>
 #include <WebCore/NavigationRequester.h>
 #include <WebCore/ResourceLoaderIdentifier.h>
 #include <WebCore/SecurityContext.h>
@@ -65,7 +66,7 @@ public:
         , bool shouldRestrictHTTPResponseAccess
         , WebCore::PreflightPolicy
         , bool shouldEnableCrossOriginResourcePolicy
-        , Vector<RefPtr<WebCore::SecurityOrigin>>&& frameAncestorOrigins
+        , Vector<Ref<WebCore::SecurityOrigin>>&& frameAncestorOrigins
         , bool pageHasResourceLoadClient
         , std::optional<WebCore::FrameIdentifier> parentFrameID
         , bool crossOriginAccessControlCheckEnabled
@@ -76,7 +77,7 @@ public:
         , WebCore::SandboxFlags effectiveSandboxFlags
         , URL&& openerURL
         , WebCore::CrossOriginOpenerPolicy&& sourceCrossOriginOpenerPolicy
-        , uint64_t navigationID
+        , std::optional<WebCore::NavigationIdentifier> navigationID
         , std::optional<WebCore::NavigationRequester>&&
         , WebCore::ServiceWorkersMode
         , std::optional<WebCore::ServiceWorkerRegistrationIdentifier>
@@ -87,9 +88,10 @@ public:
         , std::optional<UserContentControllerIdentifier>
 #endif
 #if ENABLE(WK_WEB_EXTENSIONS)
-        , bool pageHasExtensionController
+        , bool pageHasLoadedWebExtensions
 #endif
         , bool linkPreconnectEarlyHintsEnabled
+        , bool shouldRecordFrameLoadForStorageAccess
     );
     
     std::optional<Vector<SandboxExtension::Handle>> sandboxExtensionsIfHttpBody() const;
@@ -111,7 +113,7 @@ public:
     bool shouldRestrictHTTPResponseAccess { false };
     WebCore::PreflightPolicy preflightPolicy { WebCore::PreflightPolicy::Consider };
     bool shouldEnableCrossOriginResourcePolicy { false };
-    Vector<RefPtr<WebCore::SecurityOrigin>> frameAncestorOrigins;
+    Vector<Ref<WebCore::SecurityOrigin>> frameAncestorOrigins;
     bool pageHasResourceLoadClient { false };
     std::optional<WebCore::FrameIdentifier> parentFrameID;
     bool crossOriginAccessControlCheckEnabled { true };
@@ -123,7 +125,7 @@ public:
     WebCore::SandboxFlags effectiveSandboxFlags { WebCore::SandboxNone };
     URL openerURL;
     WebCore::CrossOriginOpenerPolicy sourceCrossOriginOpenerPolicy;
-    uint64_t navigationID { 0 };
+    std::optional<WebCore::NavigationIdentifier> navigationID;
     std::optional<WebCore::NavigationRequester> navigationRequester;
 
     WebCore::ServiceWorkersMode serviceWorkersMode { WebCore::ServiceWorkersMode::None };
@@ -137,10 +139,11 @@ public:
 #endif
 
 #if ENABLE(WK_WEB_EXTENSIONS)
-    bool pageHasExtensionController { false };
+    bool pageHasLoadedWebExtensions { false };
 #endif
 
     bool linkPreconnectEarlyHintsEnabled { false };
+    bool shouldRecordFrameLoadForStorageAccess { false };
 };
 
 } // namespace WebKit

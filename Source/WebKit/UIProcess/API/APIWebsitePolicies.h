@@ -27,8 +27,10 @@
 
 #include "APIObject.h"
 #include "WebsitePoliciesData.h"
+#include <wtf/WeakPtr.h>
 
 namespace WebKit {
+class LockdownModeObserver;
 class WebUserContentControllerProxy;
 class WebsiteDataStore;
 struct WebsitePoliciesData;
@@ -36,7 +38,7 @@ struct WebsitePoliciesData;
 
 namespace API {
 
-class WebsitePolicies final : public API::ObjectImpl<API::Object::Type::WebsitePolicies> {
+class WebsitePolicies final : public API::ObjectImpl<API::Object::Type::WebsitePolicies>, public CanMakeWeakPtr<WebsitePolicies> {
 public:
     static Ref<WebsitePolicies> create() { return adoptRef(*new WebsitePolicies); }
     WebsitePolicies();
@@ -105,9 +107,6 @@ public:
     WTF::String applicationNameForDesktopUserAgent() const { return m_data.applicationNameForDesktopUserAgent; }
     void setApplicationNameForDesktopUserAgent(const WTF::String& applicationName) { m_data.applicationNameForDesktopUserAgent = applicationName; }
 
-    bool allowContentChangeObserverQuirk() const { return m_data.allowContentChangeObserverQuirk; }
-    void setAllowContentChangeObserverQuirk(bool allow) { m_data.allowContentChangeObserverQuirk = allow; }
-
     WebCore::AllowsContentJavaScript allowsContentJavaScript() const { return m_data.allowsContentJavaScript; }
     void setAllowsContentJavaScript(WebCore::AllowsContentJavaScript allows) { m_data.allowsContentJavaScript = allows; }
 
@@ -133,11 +132,20 @@ public:
     bool allowPrivacyProxy() const { return m_data.allowPrivacyProxy; }
     void setAllowPrivacyProxy(bool allow) { m_data.allowPrivacyProxy = allow; }
 
+    WebCore::HTTPSByDefaultMode httpsByDefaultMode() const { return m_data.httpsByDefaultMode; }
+    void setHTTPSByDefault(WebCore::HTTPSByDefaultMode mode) { m_data.httpsByDefaultMode = mode; }
+
+    const Vector<Vector<HashSet<WTF::String>>>& visibilityAdjustmentSelectors() const { return m_data.visibilityAdjustmentSelectors; }
+    void setVisibilityAdjustmentSelectors(Vector<Vector<HashSet<WTF::String>>>&& selectors) { m_data.visibilityAdjustmentSelectors = WTFMove(selectors); }
+
 private:
     WebKit::WebsitePoliciesData m_data;
     RefPtr<WebKit::WebsiteDataStore> m_websiteDataStore;
     RefPtr<WebKit::WebUserContentControllerProxy> m_userContentController;
     std::optional<bool> m_lockdownModeEnabled;
+#if PLATFORM(COCOA)
+    std::unique_ptr<WebKit::LockdownModeObserver> m_lockdownModeObserver;
+#endif
 };
 
 } // namespace API

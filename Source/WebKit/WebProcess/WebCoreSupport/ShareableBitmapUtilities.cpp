@@ -52,7 +52,7 @@ RefPtr<ShareableBitmap> createShareableBitmap(RenderImage& renderImage, CreateSh
             return { };
 
         OptionSet<SnapshotFlags> snapshotFlags { SnapshotFlags::ExcludeSelectionHighlighting, SnapshotFlags::PaintEverythingExcludingSelection };
-        auto imageBuffer = snapshotFrameRect(frame.get(), snapshotRect, { snapshotFlags, PixelFormat::BGRA8, DestinationColorSpace::SRGB() });
+        auto imageBuffer = snapshotFrameRect(frame.get(), snapshotRect, { snapshotFlags, ImageBufferPixelFormat::BGRA8, DestinationColorSpace::SRGB() });
         if (!imageBuffer)
             return { };
 
@@ -73,9 +73,8 @@ RefPtr<ShareableBitmap> createShareableBitmap(RenderImage& renderImage, CreateSh
     }
 
 #if ENABLE(VIDEO)
-    if (is<RenderVideo>(renderImage)) {
-        auto& renderVideo = downcast<RenderVideo>(renderImage);
-        Ref video = renderVideo.videoElement();
+    if (auto* renderVideo = dynamicDowncast<RenderVideo>(renderImage)) {
+        Ref video = renderVideo->videoElement();
         auto image = video->nativeImageForCurrentTime();
         if (!image)
             return { };

@@ -26,8 +26,7 @@
 #pragma once
 
 #include "APIObject.h"
-
-#include "DataReference.h"
+#include "WKRetainPtr.h"
 #include <WebCore/SerializedScriptValue.h>
 #include <wtf/RefPtr.h>
 
@@ -38,6 +37,8 @@ typedef struct _GVariant GVariant;
 typedef struct _JSCContext JSCContext;
 typedef struct _JSCValue JSCValue;
 #endif
+
+typedef const void* WKTypeRef;
 
 namespace API {
 
@@ -56,7 +57,7 @@ public:
         return adoptRef(*new SerializedScriptValue(serializedValue.releaseNonNull()));
     }
     
-    static Ref<SerializedScriptValue> createFromWireBytes(IPC::DataReference buffer)
+    static Ref<SerializedScriptValue> createFromWireBytes(std::span<const uint8_t> buffer)
     {
         return adoptRef(*new SerializedScriptValue(WebCore::SerializedScriptValue::createFromWireBytes(Vector<uint8_t>(buffer))));
     }
@@ -65,9 +66,11 @@ public:
     {
         return m_serializedScriptValue->deserialize(context, exception);
     }
-    
+
+    static WKRetainPtr<WKTypeRef> deserializeWK(WebCore::SerializedScriptValue&);
+
 #if PLATFORM(COCOA) && defined(__OBJC__)
-    static id deserialize(WebCore::SerializedScriptValue&, JSValueRef* exception);
+    static id deserialize(WebCore::SerializedScriptValue&);
     static RefPtr<SerializedScriptValue> createFromNSObject(id);
 #endif
 
@@ -78,7 +81,7 @@ public:
     static RefPtr<SerializedScriptValue> createFromJSCValue(JSCValue*);
 #endif
 
-    IPC::DataReference dataReference() const { return m_serializedScriptValue->wireBytes(); }
+    std::span<const uint8_t> dataReference() const { return m_serializedScriptValue->wireBytes(); }
 
     WebCore::SerializedScriptValue& internalRepresentation() { return m_serializedScriptValue.get(); }
 

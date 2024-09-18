@@ -33,7 +33,17 @@
 #include <WebCore/NetworkLoadInformation.h>
 #include <pal/SessionID.h>
 #include <variant>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class NetworkLoadChecker;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::NetworkLoadChecker> : std::true_type { };
+}
 
 namespace WebCore {
 class ContentSecurityPolicy;
@@ -57,7 +67,7 @@ class NetworkSchemeRegistry;
 using DocumentURL = URL;
 
 class NetworkLoadChecker : public CanMakeWeakPtr<NetworkLoadChecker> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NetworkLoadChecker);
 public:
     enum class LoadType : bool { MainFrame, Other };
 
@@ -107,6 +117,8 @@ public:
 
     const WebCore::FetchOptions& options() const { return m_options; }
 
+    bool timingAllowFailedFlag() const { return m_timingAllowFailedFlag; }
+
 private:
     WebCore::ContentSecurityPolicy* contentSecurityPolicy();
     const WebCore::OriginAccessPatterns& originAccessPatterns() const;
@@ -139,6 +151,8 @@ private:
 #endif
 
     RefPtr<WebCore::SecurityOrigin> parentOrigin() const { return m_parentOrigin; }
+
+    bool checkTAO(const WebCore::ResourceResponse&);
 
     WebCore::FetchOptions m_options;
     WebCore::StoredCredentialsPolicy m_storedCredentialsPolicy;
@@ -179,6 +193,8 @@ private:
     LoadType m_requestLoadType;
     RefPtr<NetworkSchemeRegistry> m_schemeRegistry;
     WeakPtr<NetworkResourceLoader> m_networkResourceLoader;
+
+    bool m_timingAllowFailedFlag { false };
 };
 
 }

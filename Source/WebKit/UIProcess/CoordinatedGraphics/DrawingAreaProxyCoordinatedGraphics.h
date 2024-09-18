@@ -30,10 +30,20 @@
 #include "DrawingAreaProxy.h"
 #include "LayerTreeContext.h"
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 
 #if !PLATFORM(WPE)
-typedef struct _cairo cairo_t;
+#include "BackingStore.h"
 #endif
+
+namespace WebKit {
+class DrawingAreaProxyCoordinatedGraphics;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::DrawingAreaProxyCoordinatedGraphics> : std::true_type { };
+}
 
 namespace WebCore {
 class Region;
@@ -41,15 +51,13 @@ class Region;
 
 namespace WebKit {
 
-class BackingStore;
-
 class DrawingAreaProxyCoordinatedGraphics final : public DrawingAreaProxy {
 public:
     DrawingAreaProxyCoordinatedGraphics(WebPageProxy&, WebProcessProxy&);
     virtual ~DrawingAreaProxyCoordinatedGraphics();
 
 #if !PLATFORM(WPE)
-    void paint(cairo_t*, const WebCore::IntRect&, WebCore::Region& unpaintedRegion);
+    void paint(PlatformPaintContextPtr, const WebCore::IntRect&, WebCore::Region& unpaintedRegion);
 #endif
 
     bool isInAcceleratedCompositingMode() const { return !m_layerTreeContext.isEmpty(); }
@@ -96,7 +104,8 @@ private:
 #endif
 
     class DrawingMonitor {
-        WTF_MAKE_NONCOPYABLE(DrawingMonitor); WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(DrawingMonitor);
+        WTF_MAKE_NONCOPYABLE(DrawingMonitor);
     public:
         DrawingMonitor(WebPageProxy&);
         ~DrawingMonitor();

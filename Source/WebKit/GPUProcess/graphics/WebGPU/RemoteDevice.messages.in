@@ -23,9 +23,11 @@
 
 #if ENABLE(GPU_PROCESS)
 
+[EnabledBy=WebGPUEnabled]
 messages -> RemoteDevice NotRefCounted Stream {
     void Destroy()
     void Destruct()
+    void CreateXRBinding(WebKit::WebGPUIdentifier identifier)
     void CreateBuffer(WebKit::WebGPU::BufferDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateTexture(WebKit::WebGPU::TextureDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateSampler(WebKit::WebGPU::SamplerDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
@@ -35,8 +37,8 @@ messages -> RemoteDevice NotRefCounted Stream {
     void CreateShaderModule(WebKit::WebGPU::ShaderModuleDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateComputePipeline(WebKit::WebGPU::ComputePipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateRenderPipeline(WebKit::WebGPU::RenderPipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
-    void CreateComputePipelineAsync(WebKit::WebGPU::ComputePipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier) -> (bool success)
-    void CreateRenderPipelineAsync(WebKit::WebGPU::RenderPipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier) -> (bool success)
+    void CreateComputePipelineAsync(WebKit::WebGPU::ComputePipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier) -> (bool success, String error)
+    void CreateRenderPipelineAsync(WebKit::WebGPU::RenderPipelineDescriptor descriptor, WebKit::WebGPUIdentifier identifier) -> (bool success, String error)
     void CreateCommandEncoder(std::optional<WebKit::WebGPU::CommandEncoderDescriptor> descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateRenderBundleEncoder(WebKit::WebGPU::RenderBundleEncoderDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
     void CreateQuerySet(WebKit::WebGPU::QuerySetDescriptor descriptor, WebKit::WebGPUIdentifier identifier)
@@ -49,6 +51,7 @@ messages -> RemoteDevice NotRefCounted Stream {
     void SetSharedVideoFrameSemaphore(IPC::Semaphore semaphore) NotStreamEncodable
     void SetSharedVideoFrameMemory(WebCore::SharedMemory::Handle storageHandle) NotStreamEncodable
     void ImportExternalTextureFromVideoFrame(WebKit::WebGPU::ExternalTextureDescriptor descriptor, WebKit::WebGPUIdentifier identifier) NotStreamEncodable
+    void UpdateExternalTexture(WebKit::WebGPUIdentifier externalTextureIdentifier, WebCore::MediaPlayerIdentifier mediaIdentifier)
 #endif
 }
 

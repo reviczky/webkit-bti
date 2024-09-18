@@ -26,7 +26,6 @@
 #include "config.h"
 #include "WebSWClientConnection.h"
 
-#include "DataReference.h"
 #include "FormDataReference.h"
 #include "Logging.h"
 #include "MessageSenderInlines.h"
@@ -44,6 +43,7 @@
 #include "WebSWServerConnectionMessages.h"
 #include <WebCore/BackgroundFetchInformation.h>
 #include <WebCore/BackgroundFetchRequest.h>
+#include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/Document.h>
 #include <WebCore/DocumentLoader.h>
 #include <WebCore/FocusController.h>
@@ -102,8 +102,11 @@ void WebSWClientConnection::addServiceWorkerRegistrationInServer(ServiceWorkerRe
 
 void WebSWClientConnection::removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier identifier)
 {
-    if (WebProcess::singleton().removeServiceWorkerRegistration(identifier))
-        send(Messages::WebSWServerConnection::RemoveServiceWorkerRegistrationInServer { identifier });
+    if (WebProcess::singleton().removeServiceWorkerRegistration(identifier)) {
+        RunLoop::main().dispatch([identifier, connection = Ref { *this }]() {
+            connection->send(Messages::WebSWServerConnection::RemoveServiceWorkerRegistrationInServer { identifier });
+        });
+    }
 }
 
 void WebSWClientConnection::scheduleUnregisterJobInServer(ServiceWorkerRegistrationIdentifier registrationIdentifier, WebCore::ServiceWorkerOrClientIdentifier documentIdentifier, CompletionHandler<void(ExceptionOr<bool>&&)>&& completionHandler)
@@ -294,6 +297,19 @@ void WebSWClientConnection::getPushPermissionState(WebCore::ServiceWorkerRegistr
 
 void WebSWClientConnection::getNotifications(const URL& registrationURL, const String& tag, GetNotificationsCallback&& callback)
 {
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    if (DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
+        sendWithAsyncReply(Messages::WebSWServerConnection::GetNotifications { registrationURL, tag }, [callback = WTFMove(callback)](auto&& result) mutable {
+            if (!result.has_value())
+                return callback(result.error().toException());
+
+            callback(static_cast<Vector<NotificationData>>(*result));
+        });
+
+        return;
+    }
+#endif
+
     WebProcess::singleton().parentProcessConnection()->sendWithAsyncReply(Messages::WebProcessProxy::GetNotifications { registrationURL, tag }, WTFMove(callback));
 }
 

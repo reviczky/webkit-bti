@@ -1,83 +1,100 @@
 =================
-WPE WebKit 2.44.4
+WPE WebKit 2.46.0
 =================
 
+What's new in WPE WebKit 2.46.0?
+
+  - Fix rendering of images in PDF documents.
+  - Make process launching fast again.
+  - Fix webkit_web_resource_get_data() regression that caused we were always retuning empty data.
+  - Fix the build with touch events disabled.
+  - Fix the build with GLib < 2.68.
+  - Fix several crashes and rendering issues.
+
+==================
+WPE WebKit 2.45.90
+==================
+
+What's new in WPE WebKit 2.45.90?
+
+  - Add explicit fencing support when available.
+  - Add new API to WebKitAutomationSession to be notified when the session is
+    about to be closed.
+  - Add webkit://gpu/stdout to dump the information from webkit://gpu to
+    standard output stream.
+  - Add signposts to allow observing graphics tile rendering in Sysprof.
   - Add quirk to allow totale.rosettastone.com to load properly.
-  - Fix not being able to jump-to-source in Web Inspector canvas traces.
-  - Fix not being able to scroll list of WebGL shader programs in the
-    Web Inspector.
-  - Fix the build with GBM support when the WPEPlatform library is disabled.
+  - Undeprecate injected bundle frame access interfaces.
+  - Use RGBA as the pixel format for texture backed SkSurfaces.
+  - Ensure that the WPEMonitor properties "width" and "height" are set at
+    the same time.
+  - Fix WebGL with accelerated compositing disabled.
+  - Fix build with GStreamer versions < 1.22.
+  - Fix connection to the accessibility bus under Flatpak.
+  - Fix image filtering not being applied in some cases.
   - Fix linker relocation errors on Debug/RelWithDebInfo builds.
-  - Fix crashes when built with Clang with Link-Time Optimization (LTO).
+  - Fix the build in non-linux systems.
+  - Fix the build with -DUSE_TEXTURE_MAPPER_DMABUF=OFF
+  - Fix the build with Wayland and GBM disabled.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.44.3
+WPE WebKit 2.45.3
 =================
 
-What's new in WPE WebKit 2.44.3?
+What's new in WPE WebKit 2.45.3?
 
-  - Fix web process cache suspend/resume when sandbox is enabled.
-  - Fix accelerated images dissapearing after scrolling.
-  - Fix video flickering with DMA-BUF sink.
-  - Undeprecate console message API and make it available in 2022 API.
+  - Enable offscreen canvas by default.
+  - Enable ImageBitmap acceleration.
+  - Add support for accelerated offscreen canvas.
+  - Do not display WebGL front buffer before it's initialized.
+  - Add a new setting to enable or disable the 2D canvas acceleration (enabled by default).
+  - Add support for building QtWPE with Qt6.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.44.2
+WPE WebKit 2.45.2
 =================
 
-What's new in WPE WebKit 2.44.2?
+What's new in WPE WebKit 2.45.2?
 
-  - Decrease input notifications for gamepad inputs.
+  - Use Cairo on big-endian platforms for now, since Skia does not support them.
+  - Fix a crash in GIF image decoder.
+  - Revert the text scaling fix, since it caused several issues in some sites.
+  - Add new API to load settings from a config file.
+  - Fix several crashes and rendering issues.
+
+=================
+WPE WebKit 2.45.1
+=================
+
+What's new in WPE WebKit 2.45.1?
+
+  - Use Skia by default instead of Cairo for rendering. Cairo support may
+    still be built passing -DUSE_SKIA=OFF to CMake.
+  - Synchronize WebGL content using fences, where available.
   - Disable the gst-libav AAC decoder.
+  - Support AXActiveElement and AXSelectedChildren for combo boxes,
+    lists and list boxes.
+  - Decrease input notifications for gamepad inputs.
   - Make gamepads visible on axis movements, and not only on button presses.
+  - Improve DMA-BUF format negotiation and buffer allocation to facilitate
+    faster code paths in buffer handling.
   - Make user scripts and style sheets visible in the Web Inspector.
-  - Use the geolocation portal where available, with the existing geoclue
-    as fallback if the portal is not usable.
-  - Use optimized assembler BoringSSL modules with USE_LIBWEBRTC enabled.
+  - Make hole-punch media playback support video elements with rounded
+	corners.
+  - Enable by default building support for the MediaSession and WebCodecs APIs.
+  - Allow WebDriver connections to already running browsers.
+  - Support downloading files from the Web Inspector when using HTTP
+    remote connections.
+  - Replace build-time per-platform multimedia support option with quirks
+    applied at runtime. Automatic quirk detection is used by default, and
+    quirks may be overriden using the WEBKIT_GST_QUIRKS and
+    WEBKIT_GST_HOLE_PUNCH environment variables.
+  - Deprecate the WebKitWebView::insecure-content-detected signal.
   - Fix mouse location in WebDriver when output device scaling is in effect.
   - Fix touch input event propagation.
-  - Fix the build on 32-bit ARM with USE_LIBWEBRTC enabled.
-  - Fix the build with ENABLE_WEBAUDIO disabled.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.44.1
-=================
-
-What's new in WPE WebKit 2.44.1?
-
-  - Do not schedule layer flushes when drawing area size is empty.
-  - Fix videos with alpha when using the DMA-BUF sink.
-  - Fix the build with ENABLE_WEB_AUDIO=OFF.
-  - Fix the build with ENABLE_VIDEO=OFF.
-  - Fix the build with USE_GBM=OFF.
-  - Fix the build in 32bit platforms
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.44.0
-=================
-
-What's new in WPE WebKit 2.43.1?
-
-  - Add BubblewrapLauncher sandbox directory for the GStreamer user
-    registry cache directory.
-  - Fix bug causing the preferred language to not be passed to
-    NetworkProcess if set in the WebKitWebContext before creating
-    a WebKitWebView.
-  - Do not use real time priority for the display link thread.
-  - Do not special case the "sans" font family name.
-  - Use a shorter web process cache lifetime.
-  - Write bwrapinfo.json to disk for xdg-desktop-portal.
-  - Fallback to timer based vblank monitor if drmWaitVBlank fails.
-  - Show vertical blank monitor information in webkit://gpu.
-  - Fix webkit_web_context_allow_tls_certificate_for_host() for IPv6
-    URIs produced by SoupURI.
-  - Fix mixed versions of WPE and backend in webkit://gpu.
-  - Fix several memory leaks in the multimedia backend.
-  - Fix rendering after history navigation.
+  - Fix missing mouse cursor in the WPE Wayland platform support.
   - Fix several crashes and rendering issues.
 
 =================

@@ -23,9 +23,20 @@
 
 #if os(visionOS)
 
+import LinearMediaKit
 import WebKitSwift
 
 // MARK: Objective-C Implementations
+
+@_objcImplementation extension WKSLinearMediaContentMetadata {
+    let title: String?
+    let subtitle: String?
+    
+    init(title: String?, subtitle: String?) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+}
 
 @_objcImplementation extension WKSLinearMediaTimeRange {
     let lowerBound: TimeInterval
@@ -45,11 +56,16 @@ import WebKitSwift
     }
 }
 
-#if canImport(LinearMediaKit)
-
-import LinearMediaKit
-
 // MARK: LinearMediaKit Extensions
+
+extension WKSLinearMediaContentMetadata {
+    var contentMetadata: ContentMetadataContainer {
+        var container = ContentMetadataContainer()
+        container.displayTitle = title
+        container.displaySubtitle = subtitle
+        return container
+    }
+}
 
 extension WKSLinearMediaContentMode {
     init(_ contentMode: ContentMode?) {
@@ -106,26 +122,24 @@ extension WKSLinearMediaContentType {
     }
 }
 
-extension WKSLinearMediaPresentationMode {
-    var presentationMode: PresentationMode? {
+extension WKSLinearMediaPresentationState: CustomStringConvertible {
+    public var description: String {
         switch self {
-        case .none:
-            nil
         case .inline:
-            .inline
+            return "inline"
+        case .enteringFullscreen:
+            return "enteringFullscreen"
         case .fullscreen:
-            .fullscreen
-        case .fullscreenFromInline:
-            .fullscreenFromInline
-        case .pip:
-            .pip
+            return "fullscreen"
+        case .exitingFullscreen:
+            return "exitingFullscreen"
         @unknown default:
             fatalError()
         }
     }
 }
 
-extension WKSLinearMediaViewingMode {
+extension WKSLinearMediaViewingMode: CustomStringConvertible {
     init(_ viewingMode: ViewingMode?) {
         switch viewingMode {
         case .mono?:
@@ -159,6 +173,23 @@ extension WKSLinearMediaViewingMode {
             fatalError()
         }
     }
+
+    public var description: String {
+        switch self {
+        case .none:
+            return "none"
+        case .mono:
+            return "mono"
+        case .stereo:
+            return "stereo"
+        case .immersive:
+            return "immersive"
+        case .spatial:
+            return "spatial"
+        @unknown default:
+            fatalError()
+        }
+    }
 }
 
 extension WKSLinearMediaFullscreenBehaviors {
@@ -181,9 +212,9 @@ extension WKSLinearMediaTimeRange {
     }
 }
 
+#if canImport(LinearMediaKit, _version: 205)
 extension WKSLinearMediaTrack: @retroactive Track {
 }
-
-#endif // canImport(LinearMediaKit)
+#endif
 
 #endif // os(visionOS)

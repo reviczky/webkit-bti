@@ -28,7 +28,9 @@
 #if ENABLE(PDF_PLUGIN) && HAVE(INCREMENTAL_PDF_APIS)
 
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/ThreadSafeWeakHashSet.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/Threading.h>
 #include <wtf/threads/BinarySemaphore.h>
@@ -45,11 +47,14 @@ class ByteRangeRequest;
 class PDFPluginBase;
 class PDFPluginStreamLoaderClient;
 
-using ByteRangeRequestIdentifier = uint64_t;
-using DataRequestCompletionHandler = Function<void(const uint8_t*, size_t count)>;
+enum class ByteRangeRequestIdentifierType { };
+using ByteRangeRequestIdentifier = LegacyNullableObjectIdentifier<ByteRangeRequestIdentifierType>;
+using DataRequestCompletionHandler = Function<void(std::span<const uint8_t>)>;
+
+enum class CheckValidRanges : bool;
 
 class PDFIncrementalLoader : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFIncrementalLoader> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PDFIncrementalLoader);
     WTF_MAKE_NONCOPYABLE(PDFIncrementalLoader);
     friend class ByteRangeRequest;
     friend class PDFPluginStreamLoaderClient;
@@ -73,7 +78,7 @@ public:
 #endif
 
     // Only public for the callbacks
-    size_t dataProviderGetBytesAtPosition(void* buffer, off_t position, size_t count);
+    size_t dataProviderGetBytesAtPosition(std::span<uint8_t> buffer, off_t position);
     void dataProviderGetByteRanges(CFMutableArrayRef buffers, const CFRange* ranges, size_t count);
 
 private:
@@ -84,14 +89,13 @@ private:
 
     bool documentFinishedLoading() const;
 
-    void ensureDataBufferLength(uint64_t);
     void appendAccumulatedDataToDataBuffer(ByteRangeRequest&);
 
-    const uint8_t* dataPtrForRange(uint64_t position, size_t count) const;
+    std::span<const uint8_t> dataSpanForRange(uint64_t position, size_t count, CheckValidRanges) const;
     uint64_t availableDataSize() const;
 
     void getResourceBytesAtPosition(size_t count, off_t position, DataRequestCompletionHandler&&);
-    size_t getResourceBytesAtPositionAfterLoadingComplete(void* buffer, off_t position, size_t count);
+    size_t getResourceBytesAtPositionAfterLoadingComplete(std::span<uint8_t> buffer, off_t position);
 
     void unconditionalCompleteOutstandingRangeRequests();
 
@@ -115,16 +119,41 @@ private:
     void logStreamLoader(WTF::TextStream&, WebCore::NetscapePlugInStreamLoader&);
 #endif
 
+    class SemaphoreWrapper : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<SemaphoreWrapper> {
+    public:
+        static Ref<SemaphoreWrapper> create() { return adoptRef(*new SemaphoreWrapper); }
+
+        void wait() { m_semaphore.wait(); }
+        void signal()
+        {
+            m_wasSignaled = true;
+            m_semaphore.signal();
+        }
+        bool wasSignaled() const { return m_wasSignaled; }
+
+    private:
+        SemaphoreWrapper() = default;
+
+        BinarySemaphore m_semaphore;
+        std::atomic<bool> m_wasSignaled { false };
+    };
+
+    RefPtr<SemaphoreWrapper> createDataSemaphore();
+
     ThreadSafeWeakPtr<PDFPluginBase> m_plugin;
 
     RetainPtr<PDFDocument> m_backgroundThreadDocument;
     RefPtr<Thread> m_pdfThread;
-    BinarySemaphore m_dataSemaphore;
 
     Ref<PDFPluginStreamLoaderClient> m_streamLoaderClient;
 
     struct RequestData;
     std::unique_ptr<RequestData> m_requestData;
+
+    ThreadSafeWeakHashSet<SemaphoreWrapper> m_dataSemaphores WTF_GUARDED_BY_LOCK(m_wasPDFThreadTerminationRequestedLock);
+
+    Lock m_wasPDFThreadTerminationRequestedLock;
+    bool m_wasPDFThreadTerminationRequested WTF_GUARDED_BY_LOCK(m_wasPDFThreadTerminationRequestedLock) { false };
 
 #if !LOG_DISABLED
     std::atomic<size_t> m_threadsWaitingOnCallback { 0 };

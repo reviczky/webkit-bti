@@ -35,12 +35,26 @@
 #include <WebCore/PaymentHeaders.h>
 #include <wtf/Forward.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakObjCPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 
+#if PLATFORM(COCOA)
+#include "CocoaWindow.h"
+#endif
+
 OBJC_CLASS PKPaymentSetupViewController;
 OBJC_CLASS UIViewController;
+
+namespace WebKit {
+class WebPaymentCoordinatorProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebPaymentCoordinatorProxy> : std::true_type { };
+}
 
 namespace IPC {
 class Connection;
@@ -60,7 +74,6 @@ struct ApplePayShippingMethodUpdate;
 }
 
 OBJC_CLASS NSObject;
-OBJC_CLASS NSWindow;
 OBJC_CLASS PKPaymentAuthorizationViewController;
 OBJC_CLASS PKPaymentRequest;
 OBJC_CLASS UIViewController;
@@ -78,7 +91,7 @@ class WebPaymentCoordinatorProxy
     : public IPC::MessageReceiver
     , private IPC::MessageSender
     , public PaymentAuthorizationPresenter::Client {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebPaymentCoordinatorProxy);
 public:
     struct Client {
         virtual ~Client() = default;
@@ -97,9 +110,8 @@ public:
         virtual const String& paymentCoordinatorCTDataConnectionServiceType(const WebPaymentCoordinatorProxy&) = 0;
         virtual std::unique_ptr<PaymentAuthorizationPresenter> paymentCoordinatorAuthorizationPresenter(WebPaymentCoordinatorProxy&, PKPaymentRequest *) = 0;
 #endif
-#if PLATFORM(MAC)
-        virtual NSWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) = 0;
-#endif
+        virtual CocoaWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) const = 0;
+        virtual void getPaymentCoordinatorEmbeddingUserAgent(WebPageProxyIdentifier, CompletionHandler<void(const String&)>&&) = 0;
     };
 
     friend class NetworkConnectionToWebProcess;
@@ -127,6 +139,7 @@ private:
     void presenterDidChangeCouponCode(PaymentAuthorizationPresenter&, const String& couponCode) final;
 #endif
     void presenterWillValidateMerchant(PaymentAuthorizationPresenter&, const URL&) final;
+    CocoaWindow *presentingWindowForPaymentAuthorization(PaymentAuthorizationPresenter&) const final;
 
     // Message handlers
     void canMakePayments(CompletionHandler<void(bool)>&&);
@@ -171,7 +184,8 @@ private:
     void platformCompletePaymentSession(WebCore::ApplePayPaymentAuthorizationResult&&);
     void platformHidePaymentUI();
 #if PLATFORM(COCOA)
-    RetainPtr<PKPaymentRequest> platformPaymentRequest(WebPageProxyIdentifier, const URL& originatingURL, const Vector<URL>& linkIconURLs, const WebCore::ApplePaySessionPaymentRequest&);
+    RetainPtr<PKPaymentRequest> platformPaymentRequest(const URL& originatingURL, const Vector<URL>& linkIconURLs, const WebCore::ApplePaySessionPaymentRequest&);
+    void platformSetPaymentRequestUserAgent(PKPaymentRequest *, const String& userAgent);
 #endif
 
     Client& m_client;

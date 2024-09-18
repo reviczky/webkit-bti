@@ -33,6 +33,7 @@
 #include <WebCore/ResourceError.h>
 #include <wtf/BlockPtr.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 
@@ -45,6 +46,15 @@ OBJC_CLASS _WKPreviewControllerDelegate;
 OBJC_CLASS _WKSystemPreviewDataTaskDelegate;
 #endif
 
+namespace WebKit {
+class SystemPreviewController;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::SystemPreviewController> : std::true_type { };
+}
+
 namespace WebCore {
 class SecurityOriginData;
 }
@@ -54,7 +64,7 @@ namespace WebKit {
 class WebPageProxy;
 
 class SystemPreviewController : public CanMakeWeakPtr<SystemPreviewController> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(SystemPreviewController);
 public:
     explicit SystemPreviewController(WebPageProxy&);
 

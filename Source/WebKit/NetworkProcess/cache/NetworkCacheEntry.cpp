@@ -32,11 +32,14 @@
 #include "WebCoreArgumentCoders.h"
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SharedBuffer.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/persistence/PersistentEncoder.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebKit {
 namespace NetworkCache {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Entry);
 
 Entry::Entry(const Key& key, const WebCore::ResourceResponse& response, PrivateRelayed privateRelayed, RefPtr<WebCore::FragmentedSharedBuffer>&& buffer, const Vector<std::pair<String, String>>& varyingRequestHeaders)
     : m_key(key)
@@ -102,11 +105,11 @@ Storage::Record Entry::encodeAsStorageRecord() const
     
     encoder.encodeChecksum();
 
-    Data header(encoder.buffer(), encoder.bufferSize());
+    Data header(encoder.span());
     Data body;
     if (m_buffer) {
         m_buffer = m_buffer->makeContiguous();
-        body = { static_cast<WebCore::SharedBuffer*>(m_buffer.get())->data(), m_buffer->size() };
+        body = { downcast<WebCore::SharedBuffer>(*m_buffer).span() };
     }
 
     return { m_key, m_timeStamp, header, body, { } };
@@ -187,7 +190,7 @@ void Entry::initializeBufferFromStorageRecord() const
             return;
     }
 #endif
-    m_buffer = WebCore::SharedBuffer::create(m_sourceStorageRecord.body.data(), m_sourceStorageRecord.body.size());
+    m_buffer = WebCore::SharedBuffer::create(m_sourceStorageRecord.body.span());
 }
 
 WebCore::FragmentedSharedBuffer* Entry::buffer() const
@@ -231,34 +234,34 @@ void Entry::setNeedsValidation(bool value)
 
 void Entry::asJSON(StringBuilder& json, const Storage::RecordInfo& info) const
 {
-    json.append("{\n"
-        "\"hash\": ");
+    json.append("{\n"_s
+        "\"hash\": "_s);
     json.appendQuotedJSONString(m_key.hashAsString());
-    json.append(",\n"
-        "\"bodySize\": ", info.bodySize, ",\n"
-        "\"worth\": ", info.worth, ",\n"
-        "\"partition\": ");
+    json.append(",\n"_s
+        "\"bodySize\": "_s, info.bodySize, ",\n"_s
+        "\"worth\": "_s, info.worth, ",\n"_s
+        "\"partition\": "_s);
     json.appendQuotedJSONString(m_key.partition());
-    json.append(",\n"
-        "\"timestamp\": ", m_timeStamp.secondsSinceEpoch().milliseconds(), ",\n"
-        "\"URL\": ");
+    json.append(",\n"_s
+        "\"timestamp\": "_s, m_timeStamp.secondsSinceEpoch().milliseconds(), ",\n"_s
+        "\"URL\": "_s);
     json.appendQuotedJSONString(m_response.url().string());
-    json.append(",\n"
-        "\"bodyHash\": ");
+    json.append(",\n"_s
+        "\"bodyHash\": "_s);
     json.appendQuotedJSONString(info.bodyHash);
-    json.append(",\n"
-        "\"bodyShareCount\": ", info.bodyShareCount, ",\n"
-        "\"headers\": {\n");
+    json.append(",\n"_s
+        "\"bodyShareCount\": "_s, info.bodyShareCount, ",\n"_s
+        "\"headers\": {\n"_s);
     bool firstHeader = true;
     for (auto& header : m_response.httpHeaderFields()) {
-        json.append(std::exchange(firstHeader, false) ? "" : ",\n", "    ");
+        json.append(std::exchange(firstHeader, false) ? ""_s : ",\n"_s, "    "_s);
         json.appendQuotedJSONString(header.key);
-        json.append(": ");
+        json.append(": "_s);
         json.appendQuotedJSONString(header.value);
     }
-    json.append("\n"
-        "}\n"
-        "}");
+    json.append("\n"_s
+        "}\n"_s
+        "}"_s);
 }
 
 }

@@ -41,20 +41,23 @@
 #include <WebCore/MediaKeySystemRequest.h>
 #include <WebCore/SecurityOriginData.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 using namespace WebCore;
 
 #if !RELEASE_LOG_DISABLED
-static const char* logClassName()
+static ASCIILiteral logClassName()
 {
-    return "MediaKeySystemPermissionRequestManagerProxy";
+    return "MediaKeySystemPermissionRequestManagerProxy"_s;
 }
 
 static WTFLogChannel& logChannel()
 {
     return JOIN_LOG_CHANNEL_WITH_PREFIX(LOG_CHANNEL_PREFIX, EME);
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaKeySystemPermissionRequestManagerProxy);
 
 const Logger& MediaKeySystemPermissionRequestManagerProxy::logger() const
 {
@@ -91,7 +94,7 @@ void MediaKeySystemPermissionRequestManagerProxy::denyRequest(MediaKeySystemPerm
     ALWAYS_LOG(LOGIDENTIFIER, request.mediaKeySystemID().toUInt64(), ", reason: ", message);
 
 #if ENABLE(ENCRYPTED_MEDIA)
-    m_page.send(Messages::WebPage::MediaKeySystemWasDenied(request.mediaKeySystemID(), message));
+    m_page.legacyMainFrameProcess().send(Messages::WebPage::MediaKeySystemWasDenied(request.mediaKeySystemID(), message), m_page.webPageIDInMainFrameProcess());
 #else
     UNUSED_PARAM(message);
 #endif
@@ -105,7 +108,7 @@ void MediaKeySystemPermissionRequestManagerProxy::grantRequest(MediaKeySystemPer
 #if ENABLE(ENCRYPTED_MEDIA)
     ALWAYS_LOG(LOGIDENTIFIER, request.mediaKeySystemID().toUInt64(), ", keySystem: ", request.keySystem());
 
-    m_page.send(Messages::WebPage::MediaKeySystemWasGranted { request.mediaKeySystemID() });
+    m_page.legacyMainFrameProcess().send(Messages::WebPage::MediaKeySystemWasGranted { request.mediaKeySystemID() }, m_page.webPageIDInMainFrameProcess());
 #else
     UNUSED_PARAM(request);
 #endif

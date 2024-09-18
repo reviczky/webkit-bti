@@ -281,12 +281,14 @@ private:
     Vector<uint32_t> m_knownIds WTF_GUARDED_BY_LOCK(m_lock);
 };
 
-std::optional<int> payloadTypeForEncodingName(const char* encodingName);
+std::optional<int> payloadTypeForEncodingName(StringView encodingName);
 
 WARN_UNUSED_RETURN GRefPtr<GstCaps> capsFromRtpCapabilities(RefPtr<UniqueSSRCGenerator>, const RTCRtpCapabilities&, Function<void(GstStructure*)> supplementCapsCallback);
 
 GstWebRTCRTPTransceiverDirection getDirectionFromSDPMedia(const GstSDPMedia*);
 WARN_UNUSED_RETURN GRefPtr<GstCaps> capsFromSDPMedia(const GstSDPMedia*);
+
+void setSsrcAudioLevelVadOn(GstStructure*);
 
 inline gboolean mapRtpBuffer(GstBuffer* buffer, GstRTPBuffer* rtpBuffer, GstMapFlags flags)
 {

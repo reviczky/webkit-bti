@@ -48,6 +48,24 @@ namespace WebCore {
 GST_DEBUG_CATEGORY(webkit_webrtc_pc_backend_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_pc_backend_debug
 
+class WebRTCLogObserver : public WebCoreLogObserver {
+public:
+    GstDebugCategory* debugCategory() const final
+    {
+        return webkit_webrtc_pc_backend_debug;
+    }
+    bool shouldEmitLogMessage(const WTFLogChannel& channel) const final
+    {
+        return g_str_has_prefix(channel.name, "WebRTC");
+    }
+};
+
+WebRTCLogObserver& webrtcLogObserverSingleton()
+{
+    static NeverDestroyed<WebRTCLogObserver> sharedInstance;
+    return sharedInstance;
+}
+
 static std::unique_ptr<PeerConnectionBackend> createGStreamerPeerConnectionBackend(RTCPeerConnection& peerConnection)
 {
     ensureGStreamerInitialized();
@@ -69,9 +87,21 @@ GStreamerPeerConnectionBackend::GStreamerPeerConnectionBackend(RTCPeerConnection
     , m_endpoint(GStreamerMediaEndpoint::create(*this))
 {
     disableICECandidateFiltering();
+
+    // PeerConnectionBackend relies on the Document logger, so to prevent duplicate messages in case
+    // more than one PeerConnection is created, we register a single observer.
+    auto& logObserver = webrtcLogObserverSingleton();
+    logObserver.addWatch(logger());
+
+    auto logIdentifier = makeString(hex(reinterpret_cast<uintptr_t>(this->logIdentifier())));
+    GST_INFO_OBJECT(m_endpoint->pipeline(), "WebCore logs identifier for this pipeline is: %s", logIdentifier.ascii().data());
 }
 
-GStreamerPeerConnectionBackend::~GStreamerPeerConnectionBackend() = default;
+GStreamerPeerConnectionBackend::~GStreamerPeerConnectionBackend()
+{
+    auto& logObserver = webrtcLogObserverSingleton();
+    logObserver.removeWatch(logger());
+}
 
 void GStreamerPeerConnectionBackend::suspend()
 {
@@ -195,7 +225,6 @@ void GStreamerPeerConnectionBackend::close()
 void GStreamerPeerConnectionBackend::doStop()
 {
     m_endpoint->stop();
-    m_pendingReceivers.clear();
 }
 
 void GStreamerPeerConnectionBackend::doAddIceCandidate(RTCIceCandidate& candidate, AddIceCandidateCallback&& callback)
@@ -262,10 +291,10 @@ ExceptionOr<Ref<RTCRtpSender>> GStreamerPeerConnectionBackend::addTrack(MediaStr
 }
 
 template<typename T>
-ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiverFromTrackOrKind(T&& trackOrKind, const RTCRtpTransceiverInit& init)
+ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiverFromTrackOrKind(T&& trackOrKind, const RTCRtpTransceiverInit& init, IgnoreNegotiationNeededFlag ignoreNegotiationNeededFlag)
 {
     GST_DEBUG_OBJECT(m_endpoint->pipeline(), "Adding new transceiver.");
-    auto result = m_endpoint->addTransceiver(trackOrKind, init);
+    auto result = m_endpoint->addTransceiver(trackOrKind, init, ignoreNegotiationNeededFlag);
     if (result.hasException())
         return result.releaseException();
 
@@ -278,14 +307,14 @@ ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiv
     return transceiver;
 }
 
-ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiver(const String& trackKind, const RTCRtpTransceiverInit& init)
+ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiver(const String& trackKind, const RTCRtpTransceiverInit& init, IgnoreNegotiationNeededFlag ignoreNegotiationNeededFlag)
 {
-    return addTransceiverFromTrackOrKind(String { trackKind }, init);
+    return addTransceiverFromTrackOrKind(String { trackKind }, init, ignoreNegotiationNeededFlag);
 }
 
 ExceptionOr<Ref<RTCRtpTransceiver>> GStreamerPeerConnectionBackend::addTransceiver(Ref<MediaStreamTrack>&& track, const RTCRtpTransceiverInit& init)
 {
-    return addTransceiverFromTrackOrKind(WTFMove(track), init);
+    return addTransceiverFromTrackOrKind(WTFMove(track), init, IgnoreNegotiationNeededFlag::No);
 }
 
 GStreamerRtpSenderBackend::Source GStreamerPeerConnectionBackend::createLinkedSourceForTrack(MediaStreamTrack& track)
@@ -322,20 +351,6 @@ RTCRtpTransceiver& GStreamerPeerConnectionBackend::newRemoteTransceiver(std::uni
 void GStreamerPeerConnectionBackend::collectTransceivers()
 {
     m_endpoint->collectTransceivers();
-}
-
-void GStreamerPeerConnectionBackend::addPendingTrackEvent(PendingTrackEvent&& event)
-{
-    m_pendingTrackEvents.append(WTFMove(event));
-}
-
-void GStreamerPeerConnectionBackend::dispatchPendingTrackEvents(MediaStream& mediaStream)
-{
-    auto events = WTFMove(m_pendingTrackEvents);
-    for (auto& event : events) {
-        event.streams = Vector<RefPtr<MediaStream>>({ &mediaStream });
-        dispatchTrackEvent(event);
-    }
 }
 
 void GStreamerPeerConnectionBackend::removeTrack(RTCRtpSender& sender)

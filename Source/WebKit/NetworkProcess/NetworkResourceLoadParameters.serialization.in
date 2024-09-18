@@ -23,6 +23,7 @@
 headers: "NetworkResourceLoadParameters.h"
 
 enum class WebKit::PreconnectOnly : bool;
+enum class WebKit::NavigatingToAppBoundDomain : bool;
 
 class WebKit::NetworkLoadParameters {
     WebKit::WebPageProxyIdentifier webPageProxyID;
@@ -59,9 +60,9 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
     WebCore::ResourceLoaderIdentifier identifier;
     
     RefPtr<WebCore::FormData> request.httpBody();
-    std::optional<Vector<WebKit::SandboxExtension::Handle>> sandboxExtensionsIfHttpBody();
+    std::optional<Vector<WebKit::SandboxExtensionHandle>> sandboxExtensionsIfHttpBody();
 
-    std::optional<WebKit::SandboxExtension::Handle> sandboxExtensionIflocalFile();
+    std::optional<WebKit::SandboxExtensionHandle> sandboxExtensionIflocalFile();
 
     Seconds maximumBufferingTime;
     
@@ -79,7 +80,7 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
     
     bool shouldEnableCrossOriginResourcePolicy;
     
-    Vector<RefPtr<WebCore::SecurityOrigin>> frameAncestorOrigins;
+    Vector<Ref<WebCore::SecurityOrigin>> frameAncestorOrigins;
     bool pageHasResourceLoadClient;
     std::optional<WebCore::FrameIdentifier> parentFrameID;
     bool crossOriginAccessControlCheckEnabled;
@@ -93,7 +94,7 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
     URL openerURL;
     WebCore::CrossOriginOpenerPolicy sourceCrossOriginOpenerPolicy;
     
-    uint64_t navigationID;
+    std::optional<WebCore::NavigationIdentifier> navigationID;
     std::optional<WebCore::NavigationRequester> navigationRequester;
     
     WebCore::ServiceWorkersMode serviceWorkersMode;
@@ -107,8 +108,9 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
 #endif
 
 #if ENABLE(WK_WEB_EXTENSIONS)
-    bool pageHasExtensionController;
+    bool pageHasLoadedWebExtensions;
 #endif
 
     bool linkPreconnectEarlyHintsEnabled;
+    bool shouldRecordFrameLoadForStorageAccess;
 };

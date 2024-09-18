@@ -28,6 +28,7 @@
 #include "ArgumentCoders.h" // NOLINT
 #include "Decoder.h" // NOLINT
 #include "HandleMessage.h" // NOLINT
+#include "SharedPreferencesForWebProcess.h" // NOLINT
 #include "TestWithEnabledIfMessages.h" // NOLINT
 #include <wtf/text/WTFString.h> // NOLINT
 
@@ -39,6 +40,16 @@ namespace WebKit {
 
 void TestWithEnabledIf::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
+    auto& sharedPreferences = sharedPreferencesForWebProcess();
+    UNUSED_VARIABLE(sharedPreferences);
+    if (!sharedPreferences.someFeature) {
+#if ENABLE(IPC_TESTING_API)
+        if (connection.ignoreInvalidMessageForTesting())
+            return;
+#endif // ENABLE(IPC_TESTING_API)
+        ASSERT_NOT_REACHED_WITH_MESSAGE("Message received by a disabled message receiver TestWithEnabledIf");
+        return;
+    }
     Ref protectedThis { *this };
     if (decoder.messageName() == Messages::TestWithEnabledIf::AlwaysEnabled::name())
         return IPC::handleMessage<Messages::TestWithEnabledIf::AlwaysEnabled>(connection, decoder, this, &TestWithEnabledIf::alwaysEnabled);
@@ -50,7 +61,7 @@ void TestWithEnabledIf::didReceiveMessage(IPC::Connection& connection, IPC::Deco
     if (connection.ignoreInvalidMessageForTesting())
         return;
 #endif // ENABLE(IPC_TESTING_API)
-    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, IPC::description(decoder.messageName()), decoder.destinationID());
+    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, IPC::description(decoder.messageName()).characters(), decoder.destinationID());
 }
 
 } // namespace WebKit

@@ -69,6 +69,8 @@ public:
     const IntPoint& position() const { return m_position; }
     const IntPoint& globalPosition() const { return m_globalPosition; }
     const IntPoint& movementDelta() const { return m_movementDelta; }
+    // Unaccelerated pointer movement
+    const IntPoint& unadjustedMovementDelta() const { return m_unadjustedMovementDelta; }
 
     MouseButton button() const { return m_button; }
     unsigned short buttons() const { return m_buttons; }
@@ -78,6 +80,9 @@ public:
     SyntheticClickType syntheticClickType() const { return m_syntheticClickType; }
     PointerID pointerId() const { return m_pointerId; }
     const String& pointerType() const { return m_pointerType; }
+
+    Vector<PlatformMouseEvent> coalescedEvents() const { return m_coalescedEvents; }
+    Vector<PlatformMouseEvent> predictedEvents() const { return m_predictedEvents; }
 
 #if PLATFORM(MAC)
     int eventNumber() const { return m_eventNumber; }
@@ -103,12 +108,15 @@ protected:
     IntPoint m_position;
     IntPoint m_globalPosition;
     IntPoint m_movementDelta;
+    IntPoint m_unadjustedMovementDelta;
     double m_force { 0 };
     PointerID m_pointerId { mousePointerID };
     String m_pointerType { mousePointerEventType() };
     int m_clickCount { 0 };
     unsigned m_modifierFlags { 0 };
     unsigned short m_buttons { 0 };
+    Vector<PlatformMouseEvent> m_coalescedEvents;
+    Vector<PlatformMouseEvent> m_predictedEvents;
 #if PLATFORM(MAC)
     int m_eventNumber { 0 };
     int m_menuTypeForEvent { 0 };
@@ -118,19 +126,5 @@ protected:
     IsTouch m_isTouchEvent { IsTouch::No };
 #endif
 };
-
-#if COMPILER(MSVC)
-// These functions are necessary to work around the fact that MSVC will not find a most-specific
-// operator== to use after implicitly converting MouseButton to a short.
-inline bool operator==(short a, MouseButton b)
-{
-    return a == static_cast<short>(b);
-}
-
-inline bool operator!=(short a, MouseButton b)
-{
-    return a != static_cast<short>(b);
-}
-#endif
 
 } // namespace WebCore

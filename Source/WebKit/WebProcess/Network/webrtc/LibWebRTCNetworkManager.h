@@ -32,11 +32,12 @@
 #include <WebCore/ProcessQualified.h>
 #include <WebCore/RTCNetworkManager.h>
 #include <WebCore/ScriptExecutionContextIdentifier.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
-class LibWebRTCNetworkManager final : public WebCore::RTCNetworkManager, public rtc::NetworkManagerBase, public webrtc::MdnsResponderInterface, public WebRTCMonitor::Observer {
-    WTF_MAKE_FAST_ALLOCATED;
+class LibWebRTCNetworkManager final : public WebCore::RTCNetworkManager, public rtc::NetworkManagerBase, public webrtc::MdnsResponderInterface, public WebRTCMonitorObserver {
+    WTF_MAKE_TZONE_ALLOCATED(LibWebRTCNetworkManager);
 public:
     static LibWebRTCNetworkManager* getOrCreate(WebCore::ScriptExecutionContextIdentifier);
     ~LibWebRTCNetworkManager();
@@ -53,6 +54,7 @@ private:
     void setICECandidateFiltering(bool doFiltering) final { m_useMDNSCandidates = doFiltering; }
     void unregisterMDNSNames() final;
     void close() final;
+    const String& interfaceNameForTesting() const final;
 
     // webrtc::NetworkManagerBase
     void StartUpdating() final;
@@ -63,7 +65,7 @@ private:
     void CreateNameForAddress(const rtc::IPAddress&, NameCreatedCallback);
     void RemoveNameForAddress(const rtc::IPAddress&, NameRemovedCallback);
 
-    // WebRTCMonitor::Observer
+    // WebRTCMonitorObserver
     void networksChanged(const Vector<RTCNetwork>&, const RTCNetwork::IPAddress&, const RTCNetwork::IPAddress&) final;
     void networkProcessCrashed() final;
 
@@ -78,6 +80,7 @@ private:
 #endif
     bool m_enableEnumeratingAllNetworkInterfaces { false };
     bool m_enableEnumeratingVisibleNetworkInterfaces { false };
+    bool m_hasQueriedInterface { false };
     HashSet<String> m_allowedInterfaces;
 };
 

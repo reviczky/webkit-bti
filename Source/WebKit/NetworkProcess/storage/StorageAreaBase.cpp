@@ -27,8 +27,11 @@
 #include "StorageAreaBase.h"
 
 #include "StorageAreaMapMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(StorageAreaBase);
 
 uint64_t StorageAreaBase::nextMessageIdentifier()
 {
@@ -37,8 +40,7 @@ uint64_t StorageAreaBase::nextMessageIdentifier()
 }
 
 StorageAreaBase::StorageAreaBase(unsigned quota, const WebCore::ClientOrigin& origin)
-    : m_identifier(StorageAreaIdentifier::generate())
-    , m_quota(quota)
+    : m_quota(quota)
     , m_origin(origin)
 {
 }

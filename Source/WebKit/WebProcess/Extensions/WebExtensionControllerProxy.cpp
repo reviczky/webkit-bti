@@ -34,6 +34,7 @@
 #include "WebFrame.h"
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
@@ -44,6 +45,8 @@ static HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionControllerP
     static MainThreadNeverDestroyed<HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionControllerProxy>>> controllers;
     return controllers;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebExtensionControllerProxy);
 
 RefPtr<WebExtensionControllerProxy> WebExtensionControllerProxy::get(WebExtensionControllerIdentifier identifier)
 {
@@ -57,11 +60,12 @@ Ref<WebExtensionControllerProxy> WebExtensionControllerProxy::getOrCreate(const 
         WebExtensionContextProxyBaseURLMap baseURLMap;
 
         for (auto& contextParameters : parameters.contextParameters) {
-            Ref context = WebExtensionContextProxy::getOrCreate(contextParameters, newPage);
+            Ref context = WebExtensionContextProxy::getOrCreate(contextParameters, controller, newPage);
             baseURLMap.add(contextParameters.baseURL.protocolHostAndPort(), context);
             contexts.add(context);
         }
 
+        controller.m_testingMode = parameters.testingMode;
         controller.m_extensionContexts = WTFMove(contexts);
         controller.m_extensionContextBaseURLMap = WTFMove(baseURLMap);
     };
@@ -92,7 +96,7 @@ WebExtensionControllerProxy::~WebExtensionControllerProxy()
 
 void WebExtensionControllerProxy::load(const WebExtensionContextParameters& contextParameters)
 {
-    auto context = WebExtensionContextProxy::getOrCreate(contextParameters);
+    auto context = WebExtensionContextProxy::getOrCreate(contextParameters, *this);
     m_extensionContextBaseURLMap.add(contextParameters.baseURL.protocolHostAndPort(), context);
     m_extensionContexts.add(context);
 }

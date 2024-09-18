@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,15 +30,24 @@
 #include "APIObject.h"
 #include "CocoaImage.h"
 #include <wtf/Forward.h>
-#include <wtf/WeakObjCPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
 OBJC_CLASS NSError;
+OBJC_CLASS WKWebExtensionAction;
 OBJC_CLASS WKWebView;
-OBJC_CLASS _WKWebExtensionAction;
 OBJC_CLASS _WKWebExtensionActionWebView;
 OBJC_CLASS _WKWebExtensionActionWebViewDelegate;
+
+#if PLATFORM(IOS_FAMILY)
+OBJC_CLASS UIViewController;
+OBJC_CLASS _WKWebExtensionActionViewController;
+#endif
+
+#if PLATFORM(MAC)
+OBJC_CLASS NSPopover;
+OBJC_CLASS _WKWebExtensionActionPopover;
+#endif
 
 namespace WebKit {
 
@@ -60,8 +69,11 @@ public:
     explicit WebExtensionAction(WebExtensionContext&, WebExtensionTab&);
     explicit WebExtensionAction(WebExtensionContext&, WebExtensionWindow&);
 
-    enum class LoadOnFirstAccess { No, Yes };
     enum class FallbackWhenEmpty { No, Yes };
+
+#if PLATFORM(MAC)
+    enum class Appearance : uint8_t { Default, Light, Dark, Both };
+#endif
 
     bool operator==(const WebExtensionAction&) const;
 
@@ -97,29 +109,62 @@ public:
     String popupPath() const;
     void setPopupPath(String);
 
-    WKWebView *popupWebView(LoadOnFirstAccess = LoadOnFirstAccess::Yes);
+    NSString *popupWebViewInspectionName();
+    void setPopupWebViewInspectionName(const String&);
+
+#if PLATFORM(IOS_FAMILY)
+    UIViewController *popupViewController();
+#endif
+
+#if PLATFORM(MAC)
+    NSPopover *popupPopover();
+
+    Appearance popupPopoverAppearance() const { return m_popoverAppearance; }
+    void setPopupPopoverAppearance(Appearance);
+#endif
+
+    WKWebView *popupWebView();
+    bool hasPopupWebView() const { return !!m_popupWebView; }
+
+    bool presentsPopupWhenReady() const { return m_presentsPopupWhenReady; }
+    bool popupPresented() const { return m_popupPresented; }
+
     void presentPopupWhenReady();
+    void popupDidFinishDocumentLoad();
     void readyToPresentPopup();
     void popupSizeDidChange();
-    void popupDidClose();
-    void closePopupWebView();
+    void closePopup();
 
     NSArray *platformMenuItems() const;
 
 #ifdef __OBJC__
-    _WKWebExtensionAction *wrapper() const { return (_WKWebExtensionAction *)API::ObjectImpl<API::Object::Type::WebExtensionAction>::wrapper(); }
+    WKWebExtensionAction *wrapper() const { return (WKWebExtensionAction *)API::ObjectImpl<API::Object::Type::WebExtensionAction>::wrapper(); }
 #endif
 
 private:
     WebExtensionAction* fallbackAction() const;
 
+#if PLATFORM(MAC)
+    void detectPopoverColorScheme();
+#endif
+
     WeakPtr<WebExtensionContext> m_extensionContext;
     RefPtr<WebExtensionTab> m_tab;
     RefPtr<WebExtensionWindow> m_window;
 
+#if PLATFORM(IOS_FAMILY)
+    RetainPtr<_WKWebExtensionActionViewController> m_popupViewController;
+#endif
+
+#if PLATFORM(MAC)
+    RetainPtr<_WKWebExtensionActionPopover> m_popupPopover;
+    Appearance m_popoverAppearance { Appearance::Default };
+#endif
+
     RetainPtr<_WKWebExtensionActionWebView> m_popupWebView;
     RetainPtr<_WKWebExtensionActionWebViewDelegate> m_popupWebViewDelegate;
     String m_customPopupPath;
+    String m_popupWebViewInspectionName;
 
     RetainPtr<NSDictionary> m_customIcons;
     String m_customLabel;
@@ -127,6 +172,7 @@ private:
     ssize_t m_blockedResourceCount { 0 };
     std::optional<bool> m_customEnabled;
     std::optional<bool> m_hasUnreadBadgeText;
+    bool m_presentsPopupWhenReady : 1 { false };
     bool m_popupPresented : 1 { false };
 };
 

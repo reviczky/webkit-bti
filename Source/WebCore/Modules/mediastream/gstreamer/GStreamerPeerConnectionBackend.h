@@ -29,6 +29,15 @@
 #include <wtf/HashMap.h>
 
 namespace WebCore {
+class GStreamerPeerConnectionBackend;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::GStreamerPeerConnectionBackend> : std::true_type { };
+}
+
+namespace WebCore {
 
 class GStreamerMediaEndpoint;
 class GStreamerRtpReceiverBackend;
@@ -88,7 +97,7 @@ private:
     ExceptionOr<Ref<RTCRtpSender>> addTrack(MediaStreamTrack&, FixedVector<String>&&) final;
     void removeTrack(RTCRtpSender&) final;
 
-    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiver(const String&, const RTCRtpTransceiverInit&) final;
+    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiver(const String&, const RTCRtpTransceiverInit&, IgnoreNegotiationNeededFlag) final;
     ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiver(Ref<MediaStreamTrack>&&, const RTCRtpTransceiverInit&) final;
 
     GStreamerRtpSenderBackend::Source createLinkedSourceForTrack(MediaStreamTrack&);
@@ -98,13 +107,10 @@ private:
 
     void collectTransceivers() final;
 
-    void addPendingTrackEvent(PendingTrackEvent&&);
-    void dispatchPendingTrackEvents(MediaStream&);
-
     bool isLocalDescriptionSet() const final { return m_isLocalDescriptionSet; }
 
     template<typename T>
-    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiverFromTrackOrKind(T&& trackOrKind, const RTCRtpTransceiverInit&);
+    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiverFromTrackOrKind(T&& trackOrKind, const RTCRtpTransceiverInit&, IgnoreNegotiationNeededFlag);
 
     Ref<RTCRtpReceiver> createReceiver(std::unique_ptr<GStreamerRtpReceiverBackend>&&, const String& trackKind, const String& trackId);
 
@@ -119,10 +125,6 @@ private:
     Ref<GStreamerMediaEndpoint> m_endpoint;
     bool m_isLocalDescriptionSet { false };
     bool m_isRemoteDescriptionSet { false };
-
-    Vector<std::unique_ptr<GStreamerIceCandidate>> m_pendingCandidates;
-    Vector<Ref<RTCRtpReceiver>> m_pendingReceivers;
-    Vector<PendingTrackEvent> m_pendingTrackEvents;
 
     bool m_isReconfiguring { false };
 };

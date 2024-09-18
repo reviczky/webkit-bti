@@ -30,10 +30,16 @@
 #include <drm_fourcc.h>
 #include <glib.h>
 #include <string.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WPE {
 
 namespace DRM {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Crtc);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Connector);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Plane);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Buffer);
 
 static Property drmPropertyForName(int fd, drmModeObjectProperties* properties, const char* name)
 {
@@ -61,6 +67,10 @@ std::unique_ptr<Crtc> Crtc::create(int fd, drmModeCrtc* crtc, unsigned index)
 Crtc::Crtc(drmModeCrtc* crtc, unsigned index, Properties&& properties)
     : m_id(crtc->crtc_id)
     , m_index(index)
+    , m_x(crtc->x)
+    , m_y(crtc->y)
+    , m_width(crtc->width)
+    , m_height(crtc->height)
     , m_properties(WTFMove(properties))
 {
     if (crtc->mode_valid)
@@ -88,6 +98,8 @@ std::unique_ptr<Connector> Connector::create(int fd, drmModeConnector* connector
 Connector::Connector(drmModeConnector* connector, Properties&& properties)
     : m_id(connector->connector_id)
     , m_encoderID(connector->encoder_id)
+    , m_widthMM(connector->mmWidth)
+    , m_heightMM(connector->mmHeight)
     , m_properties(WTFMove(properties))
 {
     m_modes.reserveInitialCapacity(connector->count_modes);
@@ -162,7 +174,9 @@ std::unique_ptr<Plane> Plane::create(int fd, Type type, drmModePlane* plane, boo
         drmPropertyForName(fd, properties.get(), "SRC_X"),
         drmPropertyForName(fd, properties.get(), "SRC_Y"),
         drmPropertyForName(fd, properties.get(), "SRC_W"),
-        drmPropertyForName(fd, properties.get(), "SRC_H")
+        drmPropertyForName(fd, properties.get(), "SRC_H"),
+        drmPropertyForName(fd, properties.get(), "FB_DAMAGE_CLIPS"),
+        drmPropertyForName(fd, properties.get(), "IN_FENCE_FD")
     };
     return makeUnique<Plane>(plane, WTFMove(formats), WTFMove(props));
 }

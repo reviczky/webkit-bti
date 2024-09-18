@@ -41,10 +41,20 @@
 #include <WebCore/NicosiaBackingStore.h>
 #include <WebCore/NicosiaContentLayer.h>
 #include <WebCore/NicosiaImageBacking.h>
-#include <WebCore/NicosiaPaintingEngine.h>
 #include <WebCore/Page.h>
+#include <WebCore/PlatformDisplay.h>
 #include <wtf/MemoryPressureHandler.h>
+#include <wtf/NumberOfCores.h>
 #include <wtf/SetForScope.h>
+#include <wtf/SystemTracing.h>
+#include <wtf/text/StringToIntegerConversion.h>
+
+#if USE(CAIRO)
+#include <WebCore/NicosiaPaintingEngine.h>
+#elif USE(SKIA)
+#include <WebCore/ProcessCapabilities.h>
+#include <WebCore/SkiaAcceleratedBufferPool.h>
+#endif
 
 #if USE(GLIB_EVENT_LOOP)
 #include <wtf/glib/RunLoopSourcePriority.h>
@@ -53,11 +63,40 @@
 namespace WebKit {
 using namespace WebCore;
 
+#if USE(SKIA)
+static unsigned skiaNumberOfCpuPaintingThreads()
+{
+    static std::optional<unsigned> numberOfCpuPaintingThreads;
+    if (!numberOfCpuPaintingThreads.has_value()) {
+        numberOfCpuPaintingThreads = std::max(1, std::min(8, WTF::numberOfProcessorCores() / 2));
+
+        if (const char* numThreadsEnv = getenv("WEBKIT_SKIA_CPU_PAINTING_THREADS")) {
+            auto newValue = parseInteger<unsigned>(StringView::fromLatin1(numThreadsEnv));
+            if (newValue && *newValue <= 8)
+                numberOfCpuPaintingThreads = *newValue;
+            else
+                WTFLogAlways("The number of Skia/CPU painting threads is not between 0 and 8. Using the default value %u\n", numberOfCpuPaintingThreads.value());
+        }
+    }
+
+    return numberOfCpuPaintingThreads.value();
+}
+#endif
+
 CompositingCoordinator::CompositingCoordinator(WebPage& page, CompositingCoordinator::Client& client)
     : m_page(page)
     , m_client(client)
+#if USE(CAIRO)
     , m_paintingEngine(Nicosia::PaintingEngine::create())
+#endif
 {
+#if USE(SKIA)
+    if (ProcessCapabilities::canUseAcceleratedBuffers() && PlatformDisplay::sharedDisplay().skiaGLContext())
+        m_skiaAcceleratedBufferPool = makeUnique<SkiaAcceleratedBufferPool>();
+    else if (auto numberOfThreads = skiaNumberOfCpuPaintingThreads(); numberOfThreads > 0)
+        m_skiaUnacceleratedThreadedRenderingPool = WorkerPool::create("SkiaPaintingThread"_s, numberOfThreads);
+#endif
+
     m_nicosia.scene = Nicosia::Scene::create();
     m_nicosia.sceneIntegration = Nicosia::SceneIntegration::create(*m_nicosia.scene, *this);
 
@@ -83,6 +122,11 @@ void CompositingCoordinator::invalidate()
 
     m_rootLayer = nullptr;
     purgeBackingStores();
+
+#if USE(SKIA)
+    m_skiaAcceleratedBufferPool = nullptr;
+    m_skiaUnacceleratedThreadedRenderingPool = nullptr;
+#endif
 }
 
 void CompositingCoordinator::setRootCompositingLayer(GraphicsLayer* graphicsLayer)
@@ -118,6 +162,7 @@ void CompositingCoordinator::sizeDidChange(const IntSize& newSize)
 
 bool CompositingCoordinator::flushPendingLayerChanges(OptionSet<FinalizeRenderingUpdateFlags> flags)
 {
+    TraceScope traceScope(BackingStoreFlushStart, BackingStoreFlushEnd);
     SetForScope protector(m_isFlushingLayerChanges, true);
 
     bool shouldSyncFrame = initializeRootCompositingLayerIfNeeded();
@@ -125,23 +170,26 @@ bool CompositingCoordinator::flushPendingLayerChanges(OptionSet<FinalizeRenderin
     m_page.updateRendering();
     m_page.flushPendingEditorStateUpdate();
 
+    WTFBeginSignpost(this, FlushRootCompositingLayer);
     m_rootLayer->flushCompositingStateForThisLayerOnly();
     m_client.didFlushRootLayer(m_visibleContentsRect);
+    WTFEndSignpost(this, FlushRootCompositingLayer);
 
     if (m_overlayCompositingLayer)
         m_overlayCompositingLayer->flushCompositingState(FloatRect(FloatPoint(), m_rootLayer->size()));
 
     m_page.finalizeRenderingUpdate(flags);
 
+    WTFBeginSignpost(this, FinalizeCompositingStateFlush);
     auto& coordinatedLayer = downcast<CoordinatedGraphicsLayer>(*m_rootLayer);
-    coordinatedLayer.updateContentBuffersIncludingSubLayers();
-    shouldSyncFrame |= coordinatedLayer.checkPendingStateChangesIncludingSubLayers();
-
-#if !HAVE(DISPLAY_LINK)
+    auto [performLayerSync, platformLayerUpdated] = coordinatedLayer.finalizeCompositingStateFlush();
+    shouldSyncFrame |= performLayerSync;
     shouldSyncFrame |= m_forceFrameSync;
-#endif
+    WTFEndSignpost(this, FinalizeCompositingStateFlush);
 
     if (shouldSyncFrame) {
+        WTFBeginSignpost(this, SyncFrame);
+
         m_nicosia.scene->accessState(
             [this](Nicosia::Scene::State& state)
             {
@@ -169,13 +217,13 @@ bool CompositingCoordinator::flushPendingLayerChanges(OptionSet<FinalizeRenderin
             });
 
         m_client.commitSceneState(m_nicosia.scene);
-#if !HAVE(DISPLAY_LINK)
         m_forceFrameSync = false;
-#endif
+
+        WTFEndSignpost(this, SyncFrame);
     }
 #if HAVE(DISPLAY_LINK)
-    else
-        m_client.updateScene();
+    else if (platformLayerUpdated)
+        m_client.commitSceneState(nullptr);
 #endif
 
     m_page.didUpdateRendering();
@@ -287,10 +335,12 @@ void CompositingCoordinator::purgeBackingStores()
         registeredLayer->purgeBackingStores();
 }
 
+#if USE(CAIRO)
 Nicosia::PaintingEngine& CompositingCoordinator::paintingEngine()
 {
     return *m_paintingEngine;
 }
+#endif
 
 RefPtr<Nicosia::ImageBackingStore> CompositingCoordinator::imageBackingStore(uint64_t nativeImageID, Function<RefPtr<Nicosia::Buffer>()> createBuffer)
 {

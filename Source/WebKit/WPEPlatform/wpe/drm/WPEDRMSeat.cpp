@@ -31,11 +31,14 @@
 #include "WPEViewDRMPrivate.h"
 #include <linux/input.h>
 #include <wtf/MonotonicTime.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 
 namespace WPE {
 
 namespace DRM {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Seat);
 
 static struct libinput_interface s_libinputInterface = {
     // open_restricted
@@ -52,24 +55,18 @@ static struct libinput_interface s_libinputInterface = {
     }
 };
 
-std::unique_ptr<Seat> Seat::create()
+std::unique_ptr<Seat> Seat::create(struct udev* udev, Session& session)
 {
-    struct udev* udev = udev_new();
-    if (!udev)
-        return nullptr;
-
-    auto session = Session::create();
-    auto* libinput = libinput_udev_create_context(&s_libinputInterface, session.get(), udev);
-    udev_unref(udev);
+    auto* libinput = libinput_udev_create_context(&s_libinputInterface, &session, udev);
     if (!libinput)
         return nullptr;
 
-    if (libinput_udev_assign_seat(libinput, session->seatID()) == -1) {
+    if (libinput_udev_assign_seat(libinput, session.seatID()) == -1) {
         libinput_unref(libinput);
         return nullptr;
     }
 
-    return makeUnique<Seat>(libinput, WTFMove(session));
+    return makeUnique<Seat>(libinput);
 }
 
 struct EventSource {
@@ -107,9 +104,8 @@ GSourceFuncs EventSource::sourceFuncs = {
     nullptr, // closure_marshall
 };
 
-Seat::Seat(struct libinput* libinput, std::unique_ptr<Session>&& session)
+Seat::Seat(struct libinput* libinput)
     : m_libinput(libinput)
-    , m_session(WTFMove(session))
     , m_keymap(adoptGRef(wpe_keymap_xkb_new()))
 {
     // FIXME: consider moving input handling to a separate thread.

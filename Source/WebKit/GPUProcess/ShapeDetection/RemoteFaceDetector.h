@@ -34,7 +34,9 @@
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakRef.h>
 
 namespace WebCore::ShapeDetection {
 struct DetectedFace;
@@ -43,6 +45,7 @@ class FaceDetector;
 
 namespace WebKit {
 class RemoteRenderingBackend;
+struct SharedPreferencesForWebProcess;
 
 namespace ShapeDetection {
 class ObjectHeap;
@@ -50,12 +53,14 @@ class ObjectHeap;
 
 class RemoteFaceDetector : public IPC::StreamMessageReceiver {
 public:
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteFaceDetector);
 public:
     static Ref<RemoteFaceDetector> create(Ref<WebCore::ShapeDetection::FaceDetector>&& faceDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     {
         return adoptRef(*new RemoteFaceDetector(WTFMove(faceDetector), objectHeap, backend, identifier, webProcessIdentifier));
     }
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
 
     virtual ~RemoteFaceDetector();
 
@@ -74,8 +79,8 @@ private:
     void detect(WebCore::RenderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedFace>&&)>&&);
 
     Ref<WebCore::ShapeDetection::FaceDetector> m_backing;
-    ShapeDetection::ObjectHeap& m_objectHeap;
-    RemoteRenderingBackend& m_backend;
+    WeakRef<ShapeDetection::ObjectHeap> m_objectHeap;
+    WeakRef<RemoteRenderingBackend> m_backend;
     const ShapeDetectionIdentifier m_identifier;
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
 };

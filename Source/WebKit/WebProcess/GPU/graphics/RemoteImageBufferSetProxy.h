@@ -32,7 +32,9 @@
 #include "RemoteImageBufferSetIdentifier.h"
 #include "RenderingUpdateID.h"
 #include "WorkQueueMessageReceiver.h"
+#include <wtf/Identified.h>
 #include <wtf/Lock.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if ENABLE(GPU_PROCESS)
 
@@ -51,7 +53,7 @@ struct BufferSetBackendHandle;
 // the code that isn't specific to being remote, and this helper belongs
 // there.
 class ThreadSafeImageBufferSetFlusher {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ThreadSafeImageBufferSetFlusher);
     WTF_MAKE_NONCOPYABLE(ThreadSafeImageBufferSetFlusher);
 public:
     enum class FlushType {
@@ -61,7 +63,8 @@ public:
 
     ThreadSafeImageBufferSetFlusher() = default;
     virtual ~ThreadSafeImageBufferSetFlusher() = default;
-    virtual void flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
+    // Returns true if flush succeeded, false if it failed.
+    virtual bool flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
 };
 
 // A RemoteImageBufferSet is a set of three ImageBuffers (front, back,
@@ -75,12 +78,10 @@ public:
 // Usage is done through RemoteRenderingBackendProxy::prepareImageBufferSetsForDisplay,
 // so that a Vector of RemoteImageBufferSets can be used with a single
 // IPC call.
-class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver {
+class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver, public Identified<RemoteImageBufferSetIdentifier> {
 public:
     RemoteImageBufferSetProxy(RemoteRenderingBackendProxy&);
     ~RemoteImageBufferSetProxy();
-
-    RemoteImageBufferSetIdentifier identifier() const { return m_identifier; }
 
     OptionSet<BufferInSetType> requestedVolatility() { return m_requestedVolatility; }
     OptionSet<BufferInSetType> confirmedVolatility() { return m_confirmedVolatility; }
@@ -99,7 +100,7 @@ public:
 
     std::unique_ptr<ThreadSafeImageBufferSetFlusher> flushFrontBufferAsync(ThreadSafeImageBufferSetFlusher::FlushType);
 
-    void setConfiguration(WebCore::FloatSize, float, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, WebCore::RenderingMode, WebCore::RenderingPurpose);
+    void setConfiguration(WebCore::FloatSize, float, const WebCore::DestinationColorSpace&, WebCore::ImageBufferPixelFormat, WebCore::RenderingMode, WebCore::RenderingPurpose);
     void willPrepareForDisplay();
     void remoteBufferSetWasDestroyed();
 
@@ -114,13 +115,12 @@ public:
     void close();
 
 private:
-    template<typename T> void send(T&& message);
+    template<typename T> auto send(T&& message);
     template<typename T> auto sendSync(T&& message);
-
-    void createFlushFence() WTF_REQUIRES_LOCK(m_lock);
+    RefPtr<IPC::StreamClientConnection> connection() const;
+    void didBecomeUnresponsive() const;
 
     WeakPtr<RemoteRenderingBackendProxy> m_remoteRenderingBackendProxy;
-    RemoteImageBufferSetIdentifier m_identifier;
 
     WebCore::RenderingResourceIdentifier m_displayListIdentifier;
     std::unique_ptr<RemoteDisplayListRecorderProxy> m_displayListRecorder;
@@ -132,7 +132,7 @@ private:
     WebCore::FloatSize m_size;
     float m_scale { 1.0f };
     WebCore::DestinationColorSpace m_colorSpace { WebCore::DestinationColorSpace::SRGB() };
-    WebCore::PixelFormat m_pixelFormat;
+    WebCore::ImageBufferPixelFormat m_pixelFormat;
     WebCore::RenderingMode m_renderingMode { WebCore::RenderingMode::Unaccelerated };
     WebCore::RenderingPurpose m_renderingPurpose { WebCore::RenderingPurpose::Unspecified };
     unsigned m_generation { 0 };

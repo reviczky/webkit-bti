@@ -31,10 +31,15 @@
 #include "Logging.h"
 #include "NetworkCacheCoders.h"
 #include <WebCore/RegistrableDomain.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/persistence/PersistentEncoder.h>
 
 namespace WebKit {
 namespace NetworkCache {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(SubresourceInfo);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(SubresourceLoad);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(SubresourcesEntry);
 
 bool SubresourceInfo::isFirstParty() const
 {
@@ -49,7 +54,7 @@ Storage::Record SubresourcesEntry::encodeAsStorageRecord() const
 
     encoder.encodeChecksum();
 
-    return { m_key, m_timeStamp, { encoder.buffer(), encoder.bufferSize() }, { }, { }};
+    return { m_key, m_timeStamp, encoder.span(), { }, { } };
 }
 
 std::unique_ptr<SubresourcesEntry> SubresourcesEntry::decodeStorageRecord(const Storage::Record& storageEntry)

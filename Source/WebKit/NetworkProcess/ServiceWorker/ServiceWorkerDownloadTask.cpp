@@ -34,6 +34,7 @@
 #include "WebErrors.h"
 #include "WebSWContextManagerConnectionMessages.h"
 #include "WebSWServerToContextConnection.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/WorkQueue.h>
 
 namespace WebKit {
@@ -42,9 +43,11 @@ using namespace WebCore;
 
 static WorkQueue& sharedServiceWorkerDownloadTaskQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared ServiceWorkerDownloadTask Queue"));
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared ServiceWorkerDownloadTask Queue"_s));
     return queue.get();
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ServiceWorkerDownloadTask);
 
 ServiceWorkerDownloadTask::ServiceWorkerDownloadTask(NetworkSession& session, NetworkDataTaskClient& client, WebSWServerToContextConnection& serviceWorkerConnection, ServiceWorkerIdentifier serviceWorkerIdentifier, SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, const WebCore::ResourceRequest& request, const ResourceResponse& response, DownloadID downloadID)
     : NetworkDataTask(session, client, request, StoredCredentialsPolicy::DoNotUse, false, false)
@@ -190,7 +193,7 @@ void ServiceWorkerDownloadTask::didReceiveData(const IPC::SharedBufferReference&
     if (m_downloadFile == FileSystem::invalidPlatformFileHandle)
         return;
 
-    size_t bytesWritten = FileSystem::writeToFile(m_downloadFile, data.data(), data.size());
+    size_t bytesWritten = FileSystem::writeToFile(m_downloadFile, data.span());
 
     if (bytesWritten != data.size()) {
         didFailDownload();
@@ -263,7 +266,7 @@ void ServiceWorkerDownloadTask::didFailDownload(std::optional<ResourceError>&& e
 
         auto resourceError = error.value_or(cancelledError(firstRequest()));
         if (auto download = m_networkProcess->downloadManager().download(m_pendingDownloadID))
-            download->didFail(resourceError, IPC::DataReference());
+            download->didFail(resourceError, { });
 
         if (m_client)
             m_client->didCompleteWithError(resourceError);

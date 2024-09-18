@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2022-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +37,7 @@ OBJC_CLASS NSArray;
 OBJC_CLASS NSError;
 OBJC_CLASS NSSet;
 OBJC_CLASS NSString;
-OBJC_CLASS _WKWebExtensionMatchPattern;
+OBJC_CLASS WKWebExtensionMatchPattern;
 
 namespace WebKit {
 
@@ -52,20 +52,6 @@ public:
         return result && result->isValid() ? WTFMove(result) : nullptr;
     }
 
-    static RefPtr<WebExtensionMatchPattern> getOrCreate(const String& pattern);
-    static RefPtr<WebExtensionMatchPattern> getOrCreate(const String& scheme, const String& host, const String& path);
-
-    static Ref<WebExtensionMatchPattern> allURLsMatchPattern();
-    static Ref<WebExtensionMatchPattern> allHostsAndSchemesMatchPattern();
-
-    static bool patternsMatchAllHosts(HashSet<Ref<WebExtensionMatchPattern>>&);
-
-    explicit WebExtensionMatchPattern() { }
-    explicit WebExtensionMatchPattern(const String& pattern, NSError **outError = nullptr);
-    explicit WebExtensionMatchPattern(const String& scheme, const String& host, const String& path, NSError **outError = nullptr);
-
-    ~WebExtensionMatchPattern() { }
-
     using URLSchemeSet = HashSet<String>;
     using MatchPatternSet = HashSet<Ref<WebExtensionMatchPattern>>;
 
@@ -74,6 +60,29 @@ public:
         IgnorePaths          = 1 << 1, // Ignore the path component when matching.
         MatchBidirectionally = 1 << 2, // Match two patterns in either direction (A matches B, or B matches A). Invalid for matching URLs.
     };
+
+    enum class CreateOptions : uint8_t {
+        MatchExactScheme = 1 << 0, // Create a pattern that matches only the exact scheme, otherwise HTTP family URLs will be `*`.
+        MatchSubdomains  = 1 << 1, // Create a pattern that matches subdomains of the supplied host.
+        MatchAllPaths    = 1 << 2, // Create a pattern that matches all paths, ignoring the supplied path.
+    };
+
+    static RefPtr<WebExtensionMatchPattern> getOrCreate(const String& pattern);
+    static RefPtr<WebExtensionMatchPattern> getOrCreate(const String& scheme, const String& host, const String& path);
+    static RefPtr<WebExtensionMatchPattern> getOrCreate(const URL&, OptionSet<CreateOptions> = { CreateOptions::MatchSubdomains, CreateOptions::MatchAllPaths });
+
+    static Ref<WebExtensionMatchPattern> allURLsMatchPattern();
+    static Ref<WebExtensionMatchPattern> allHostsAndSchemesMatchPattern();
+
+    static bool patternsMatchAllHosts(const MatchPatternSet&);
+    static bool patternsMatchURL(const MatchPatternSet&, const URL&);
+    static bool patternsMatchPattern(const MatchPatternSet&, const WebExtensionMatchPattern&);
+
+    explicit WebExtensionMatchPattern() { }
+    explicit WebExtensionMatchPattern(const String& pattern, NSError **outError = nullptr);
+    explicit WebExtensionMatchPattern(const String& scheme, const String& host, const String& path, NSError **outError = nullptr);
+
+    ~WebExtensionMatchPattern() { }
 
     static URLSchemeSet& extensionSchemes();
     static URLSchemeSet& validSchemes();
@@ -90,6 +99,8 @@ public:
     String host() const;
     String path() const;
 
+    bool hostIsPublicSuffix() const;
+
     bool matchesAllURLs() const { return m_matchesAllURLs; }
     bool matchesAllHosts() const;
 
@@ -104,7 +115,7 @@ public:
     unsigned hash() const { return m_hash; }
 
 #ifdef __OBJC__
-    _WKWebExtensionMatchPattern *wrapper() const { return (_WKWebExtensionMatchPattern *)API::ObjectImpl<API::Object::Type::WebExtensionMatchPattern>::wrapper(); }
+    WKWebExtensionMatchPattern *wrapper() const { return (WKWebExtensionMatchPattern *)API::ObjectImpl<API::Object::Type::WebExtensionMatchPattern>::wrapper(); }
 #endif
 
 private:
@@ -124,9 +135,10 @@ private:
 
 using MatchPatternSet = HashSet<Ref<WebExtensionMatchPattern>>;
 
-NSSet *toAPI(MatchPatternSet&);
+NSSet *toAPI(const MatchPatternSet&);
+MatchPatternSet toPatterns(const HashSet<String>&);
+MatchPatternSet toPatterns(NSSet *);
 HashSet<String> toStrings(const MatchPatternSet&);
-MatchPatternSet toPatterns(HashSet<String>&);
 
 } // namespace WebKit
 

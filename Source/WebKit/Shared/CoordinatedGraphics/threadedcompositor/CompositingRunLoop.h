@@ -29,18 +29,18 @@
 
 #include <wtf/Atomics.h>
 #include <wtf/Condition.h>
-#include <wtf/FastMalloc.h>
 #include <wtf/Function.h>
 #include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
 class CompositingRunLoop {
     WTF_MAKE_NONCOPYABLE(CompositingRunLoop);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(CompositingRunLoop);
 public:
     CompositingRunLoop(Function<void ()>&&);
     ~CompositingRunLoop();
@@ -58,7 +58,7 @@ public:
     void scheduleUpdate();
     void stopUpdates();
 
-    void updateCompleted(LockHolder&);
+    void updateCompleted(Locker<Lock>&);
 
     RunLoop& runLoop() const { return m_runLoop.get(); }
 
@@ -69,7 +69,7 @@ private:
         InProgress,
     };
 
-    void scheduleUpdate(LockHolder&);
+    void scheduleUpdate(Locker<Lock>&);
     void updateTimerFired();
 
     Ref<RunLoop> m_runLoop;

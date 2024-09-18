@@ -28,6 +28,7 @@
 #include "WebPage.h"
 #include <WebCore/EditorClient.h>
 #include <WebCore/TextCheckerClient.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -43,7 +44,8 @@ namespace WebKit {
 class WebPage;
 
 class WebEditorClient final : public WebCore::EditorClient, public WebCore::TextCheckerClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebEditorClient);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebEditorClient);
 public:
     WebEditorClient(WebPage* page)
         : m_page(page)
@@ -93,7 +95,7 @@ private:
     void didEndEditing() final;
     void willWriteSelectionToPasteboard(const std::optional<WebCore::SimpleRange>&) final;
     void didWriteSelectionToPasteboard() final;
-    void getClientPasteboardData(const std::optional<WebCore::SimpleRange>&, Vector<String>& pasteboardTypes, Vector<RefPtr<WebCore::SharedBuffer>>& pasteboardData) final;
+    void getClientPasteboardData(const std::optional<WebCore::SimpleRange>&, Vector<std::pair<String, RefPtr<WebCore::SharedBuffer>>>& pasteboardTypesAndData) final;
     
     void registerUndoStep(WebCore::UndoStep&) final;
     void registerRedoStep(WebCore::UndoStep&) final;
@@ -194,6 +196,7 @@ private:
     bool shouldAllowSingleClickToChangeSelection(WebCore::Node&, const WebCore::VisibleSelection&) const final;
     bool shouldRevealCurrentSelectionAfterInsertion() const final;
     bool shouldSuppressPasswordEcho() const final;
+    bool shouldRemoveDictationAlternativesAfterEditing() const final;
 #endif
 
     void willChangeSelectionForAccessibility() final;

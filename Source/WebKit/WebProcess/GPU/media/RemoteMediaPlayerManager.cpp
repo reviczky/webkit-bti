@@ -42,6 +42,7 @@
 #include <wtf/HashFunctions.h>
 #include <wtf/HashMap.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(COCOA)
 #include <WebCore/MediaPlayerPrivateMediaStreamAVFObjC.h>
@@ -103,6 +104,8 @@ private:
     RemoteMediaPlayerManager& m_manager;
 };
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaPlayerManager);
+
 Ref<RemoteMediaPlayerManager> RemoteMediaPlayerManager::create()
 {
     return adoptRef(*new RemoteMediaPlayerManager);
@@ -160,7 +163,7 @@ Ref<MediaPlayerPrivateInterface> RemoteMediaPlayerManager::createRemoteMediaPlay
     proxyConfiguration.shouldUsePersistentCache = player->shouldUsePersistentCache();
     proxyConfiguration.isVideo = player->isVideoPlayer();
 
-#if ENABLE(AVF_CAPTIONS)
+#if PLATFORM(COCOA)
     proxyConfiguration.outOfBandTrackData = player->outOfBandTrackSources().map([](auto& track) {
         return track->data();
     });
@@ -180,26 +183,30 @@ Ref<MediaPlayerPrivateInterface> RemoteMediaPlayerManager::createRemoteMediaPlay
     proxyConfiguration.playerContentBoxRect = player->playerContentBoxRect();
 
     proxyConfiguration.prefersSandboxedParsing = player->prefersSandboxedParsing();
+#if PLATFORM(IOS_FAMILY)
+    proxyConfiguration.canShowWhileLocked = player->canShowWhileLocked();
+#endif
 
     auto identifier = MediaPlayerIdentifier::generate();
-    gpuProcessConnection().connection().send(Messages::RemoteMediaPlayerManagerProxy::CreateMediaPlayer(identifier, remoteEngineIdentifier, proxyConfiguration), 0);
+    auto clientIdentifier = player->clientIdentifier();
+    gpuProcessConnection().connection().send(Messages::RemoteMediaPlayerManagerProxy::CreateMediaPlayer(identifier, clientIdentifier, remoteEngineIdentifier, proxyConfiguration), 0);
 
     auto remotePlayer = MediaPlayerPrivateRemote::create(player, remoteEngineIdentifier, identifier, *this);
-    m_players.add(identifier, remotePlayer);
+    m_players.add(identifier, remotePlayer.get());
 
     return remotePlayer;
 }
 
 void RemoteMediaPlayerManager::deleteRemoteMediaPlayer(MediaPlayerIdentifier identifier)
 {
-    m_players.take(identifier);
+    m_players.remove(identifier);
     gpuProcessConnection().connection().send(Messages::RemoteMediaPlayerManagerProxy::DeleteMediaPlayer(identifier), 0);
 }
 
 MediaPlayerIdentifier RemoteMediaPlayerManager::findRemotePlayerId(const MediaPlayerPrivateInterface* player)
 {
     for (auto pair : m_players) {
-        if (pair.value == player)
+        if (pair.value.get() == player)
             return pair.key;
     }
 
@@ -231,7 +238,7 @@ bool RemoteMediaPlayerManager::supportsKeySystem(MediaPlayerEnums::MediaEngineId
 
 void RemoteMediaPlayerManager::didReceivePlayerMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
-    if (const auto& player = m_players.get(ObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
+    if (RefPtr player = m_players.get(LegacyNullableObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())).get())
         player->didReceiveMessage(connection, decoder);
 }
 
@@ -274,12 +281,10 @@ void RemoteMediaPlayerManager::gpuProcessConnectionDidClose(GPUProcessConnection
 
     m_gpuProcessConnection = nullptr;
 
-    auto players = m_players;
-    for (auto& player : players.values()) {
-        if (player) {
-            player->player()->reloadAndResumePlaybackIfNeeded();
-            ASSERT_WITH_MESSAGE(!player, "reloadAndResumePlaybackIfNeeded should destroy this player and construct a new one");
-        }
+    for (auto& player : copyToVector(m_players.values())) {
+        if (RefPtr protectedPlayer = player.get())
+            protectedPlayer->player()->reloadAndResumePlaybackIfNeeded();
+        ASSERT_WITH_MESSAGE(!player.get(), "reloadAndResumePlaybackIfNeeded should destroy this player and construct a new one");
     }
 }
 

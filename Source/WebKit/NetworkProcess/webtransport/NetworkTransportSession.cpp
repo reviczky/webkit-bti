@@ -32,8 +32,11 @@
 #include "NetworkTransportReceiveStream.h"
 #include "NetworkTransportSendStream.h"
 #include "WebTransportSessionMessages.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkTransportSession);
 
 void NetworkTransportSession::initialize(NetworkConnectionToWebProcess& connection, URL&&, CompletionHandler<void(std::unique_ptr<NetworkTransportSession>&&)>&& completionHandler)
 {
@@ -41,8 +44,7 @@ void NetworkTransportSession::initialize(NetworkConnectionToWebProcess& connecti
 }
 
 NetworkTransportSession::NetworkTransportSession(NetworkConnectionToWebProcess& connection)
-    : m_identifier(WebTransportSessionIdentifier::generate())
-    , m_connection(connection)
+    : m_connection(connection)
 {
 }
 
@@ -55,7 +57,7 @@ IPC::Connection* NetworkTransportSession::messageSenderConnection() const
 
 uint64_t NetworkTransportSession::messageSenderDestinationID() const
 {
-    return m_identifier.toUInt64();
+    return identifier().toUInt64();
 }
 
 void NetworkTransportSession::sendDatagram(std::span<const uint8_t>, CompletionHandler<void()>&& completionHandler)

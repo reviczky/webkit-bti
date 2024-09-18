@@ -30,14 +30,16 @@ class GStreamerIncomingTrackProcessor : public RefCounted<GStreamerIncomingTrack
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    static Ref<GStreamerIncomingTrackProcessor> create(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&& endPoint, GRefPtr<GstPad>&& pad)
+    static Ref<GStreamerIncomingTrackProcessor> create()
     {
-        return adoptRef(*new GStreamerIncomingTrackProcessor(WTFMove(endPoint), WTFMove(pad)));
+        return adoptRef(*new GStreamerIncomingTrackProcessor());
     }
     ~GStreamerIncomingTrackProcessor() = default;
 
-    GstElement* bin() const { return m_bin.get(); }
+    void configure(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&&, GRefPtr<GstPad>&&);
     GstPad* pad() const { return m_pad.get(); }
+
+    GstElement* bin() const { return m_bin.get(); }
 
     const GstStructure* stats();
 
@@ -46,7 +48,7 @@ public:
     const String& trackId() const { return m_data.trackId; }
 
 private:
-    GStreamerIncomingTrackProcessor(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&&, GRefPtr<GstPad>&&);
+    GStreamerIncomingTrackProcessor();
 
     void retrieveMediaStreamAndTrackIdFromSDP();
     String mediaStreamIdFromPad();
@@ -54,12 +56,13 @@ private:
     GRefPtr<GstElement> incomingTrackProcessor();
     GRefPtr<GstElement> createParser();
 
+    void installRtpBufferPadProbe(GRefPtr<GstPad>&&);
+
     void trackReady();
 
     ThreadSafeWeakPtr<GStreamerMediaEndpoint> m_endPoint;
     GRefPtr<GstPad> m_pad;
     GRefPtr<GstElement> m_bin;
-    GRefPtr<GstElement> m_tee;
     WebRTCTrackData m_data;
 
     std::pair<String, String> m_sdpMsIdAndTrackId;
@@ -67,8 +70,7 @@ private:
     bool m_isDecoding { false };
     FloatSize m_videoSize;
     uint64_t m_decodedVideoFrames { 0 };
-    GRefPtr<GstElement> m_queue;
-    GRefPtr<GstElement> m_fakeVideoSink;
+    GRefPtr<GstElement> m_sink;
     GUniquePtr<GstStructure> m_stats;
     bool m_isReady { false };
 };

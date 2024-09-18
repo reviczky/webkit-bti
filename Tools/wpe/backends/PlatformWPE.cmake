@@ -1,7 +1,7 @@
 find_package(Libxkbcommon 0.4.0 REQUIRED)
 find_package(Wayland 1.15 REQUIRED)
 find_package(WaylandProtocols 1.15 REQUIRED)
-find_package(WPEBackend_fdo 1.3.0 REQUIRED)
+find_package(WPEBackendFDO 1.3.0 REQUIRED)
 
 list(APPEND WPEToolingBackends_PUBLIC_HEADERS
     ${WPEToolingBackends_DERIVED_SOURCES_DIR}/xdg-shell-client-protocol.h
@@ -24,16 +24,15 @@ list(APPEND WPEToolingBackends_PRIVATE_INCLUDE_DIRECTORIES
 list(APPEND WPEToolingBackends_SYSTEM_INCLUDE_DIRECTORIES
     ${GLIB_INCLUDE_DIRS}
     ${LIBEPOXY_INCLUDE_DIRS}
-    ${WPEBACKEND_FDO_INCLUDE_DIRS}
 )
 
 list(APPEND WPEToolingBackends_LIBRARIES
+    WPE::FDO
     ${GLIB_GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${LIBEPOXY_LIBRARIES}
     ${LIBXKBCOMMON_LIBRARIES}
     ${WAYLAND_LIBRARIES}
-    ${WPEBACKEND_FDO_LIBRARIES}
 )
 
 list(APPEND WPEToolingBackends_DEFINITIONS USE_GLIB=1)

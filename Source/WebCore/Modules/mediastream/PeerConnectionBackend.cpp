@@ -52,7 +52,6 @@
 #include <wtf/EnumTraits.h>
 #include <wtf/UUID.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringConcatenateNumbers.h>
 
 #if USE(GSTREAMER_WEBRTC)
 #include "GStreamerWebRTCUtils.h"
@@ -208,7 +207,7 @@ static void setAssociatedRemoteStreams(RTCRtpReceiver& receiver, const PeerConne
 
     for (auto& stream : state.receiverStreams) {
         if (!anyOf(receiver.associatedStreams(), [&stream](auto& currentStream) { return stream->id() == currentStream->id(); }))
-            addList.append({ *stream, Ref { receiver.track() } });
+            addList.append({ stream, Ref { receiver.track() } });
     }
 
     receiver.setAssociatedStreams(WTF::map(state.receiverStreams, [](auto& stream) { return WeakPtr { stream.get() }; }));
@@ -330,7 +329,7 @@ void PeerConnectionBackend::setRemoteDescriptionSucceeded(std::optional<Descript
         DEBUG_LOG(LOGIDENTIFIER, "Transceiver states: ", *transceiverStates);
     ASSERT(m_setDescriptionCallback);
 
-    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), transceiverStates = WTFMove(transceiverStates), sctpBackend = WTFMove(sctpBackend), maxMessageSize, events = WTFMove(m_pendingTrackEvents)]() mutable {
+    m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), descriptionStates = WTFMove(descriptionStates), transceiverStates = WTFMove(transceiverStates), sctpBackend = WTFMove(sctpBackend), maxMessageSize]() mutable {
         if (m_peerConnection.isClosed())
             return;
 
@@ -351,13 +350,17 @@ void PeerConnectionBackend::setRemoteDescriptionSucceeded(std::optional<Descript
 
         if (descriptionStates) {
             m_peerConnection.updateDescriptions(WTFMove(*descriptionStates));
-            if (m_peerConnection.isClosed())
+            if (m_peerConnection.isClosed()) {
+                DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed after descriptions update");
                 return;
+            }
         }
 
         m_peerConnection.processIceTransportChanges();
-        if (m_peerConnection.isClosed())
+        if (m_peerConnection.isClosed()) {
+            DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed after ICE transport changes");
             return;
+        }
 
         if (transceiverStates) {
             // Compute track related events.
@@ -376,65 +379,56 @@ void PeerConnectionBackend::setRemoteDescriptionSucceeded(std::optional<Descript
                     processRemoteTracks(*transceiver, WTFMove(transceiverState), addList, removeList, trackEventList, muteTrackList);
             }
 
+            DEBUG_LOG(LOGIDENTIFIER, "Processing ", muteTrackList.size(), " muted tracks");
             for (auto& track : muteTrackList) {
                 track->setShouldFireMuteEventImmediately(true);
                 track->source().setMuted(true);
                 track->setShouldFireMuteEventImmediately(false);
-                if (m_peerConnection.isClosed())
+                if (m_peerConnection.isClosed()) {
+                    DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed while processing muted tracks");
                     return;
+                }
             }
 
+            DEBUG_LOG(LOGIDENTIFIER, "Removing ", removeList.size(), " tracks");
             for (auto& pair : removeList) {
                 pair.stream->privateStream().removeTrack(pair.track->privateTrack());
-                if (m_peerConnection.isClosed())
+                if (m_peerConnection.isClosed()) {
+                    DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed while removing tracks");
                     return;
+                }
             }
 
+            DEBUG_LOG(LOGIDENTIFIER, "Adding ", addList.size(), " tracks");
             for (auto& pair : addList) {
                 pair.stream->addTrackFromPlatform(pair.track.copyRef());
-                if (m_peerConnection.isClosed())
+                if (m_peerConnection.isClosed()) {
+                    DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed while adding tracks");
                     return;
+                }
             }
 
+            DEBUG_LOG(LOGIDENTIFIER, "Dispatching ", trackEventList.size(), " track events");
             for (auto& event : trackEventList) {
                 RefPtr track = event->track();
                 m_peerConnection.dispatchEvent(event);
-                if (m_peerConnection.isClosed())
+                if (m_peerConnection.isClosed()) {
+                    DEBUG_LOG(LOGIDENTIFIER, "PeerConnection closed while dispatching track events");
                     return;
+                }
 
                 track->source().setMuted(false);
             }
-        } else {
-            // FIXME: Move ports out of m_pendingTrackEvents.
-            for (auto& event : events)
-                dispatchTrackEvent(event);
         }
 
         callback({ });
     });
 }
 
-void PeerConnectionBackend::dispatchTrackEvent(PendingTrackEvent& event)
-{
-    auto& track = event.track.get();
-
-    m_peerConnection.dispatchEvent(RTCTrackEvent::create(eventNames().trackEvent, Event::CanBubble::No, Event::IsCancelable::No, WTFMove(event.receiver), WTFMove(event.track), WTFMove(event.streams), WTFMove(event.transceiver)));
-    ALWAYS_LOG(LOGIDENTIFIER, "Dispatched if feasible track of type ", track.source().type());
-
-    if (m_peerConnection.isClosed())
-        return;
-
-    // FIXME: As per spec, we should set muted to 'false' when starting to receive the content from network.
-    track.source().setMuted(false);
-}
-
 void PeerConnectionBackend::setRemoteDescriptionFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
     ALWAYS_LOG(LOGIDENTIFIER, "Set remote description failed:", exception.message());
-
-    ASSERT(m_pendingTrackEvents.isEmpty());
-    m_pendingTrackEvents.clear();
 
     ASSERT(m_setDescriptionCallback);
     m_peerConnection.queueTaskKeepingObjectAlive(m_peerConnection, TaskSource::Networking, [this, callback = WTFMove(m_setDescriptionCallback), exception = WTFMove(exception)]() mutable {
@@ -454,12 +448,6 @@ void PeerConnectionBackend::iceGatheringStateChanged(RTCIceGatheringState state)
         }
         m_peerConnection.updateIceGatheringState(state);
     });
-}
-
-void PeerConnectionBackend::addPendingTrackEvent(PendingTrackEvent&& event)
-{
-    ASSERT(!m_peerConnection.isStopped());
-    m_pendingTrackEvents.append(WTFMove(event));
 }
 
 static String extractIPAddress(StringView sdp)
@@ -499,12 +487,12 @@ void PeerConnectionBackend::addIceCandidate(RTCIceCandidate* iceCandidate, Funct
         return;
     }
 
-    doAddIceCandidate(*iceCandidate, [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](auto&& result) mutable {
+    doAddIceCandidate(*iceCandidate, [weakThis = WeakPtr { *this }, callback = WTFMove(callback)]<typename Result> (Result&& result) mutable {
         if (!weakThis)
             return;
 
         auto& peerConnection = weakThis->m_peerConnection;
-        peerConnection.queueTaskKeepingObjectAlive(peerConnection, TaskSource::Networking, [&peerConnection, callback = WTFMove(callback), result = std::forward<decltype(result)>(result)]() mutable {
+        peerConnection.queueTaskKeepingObjectAlive(peerConnection, TaskSource::Networking, [&peerConnection, callback = WTFMove(callback), result = std::forward<Result>(result)] () mutable {
             if (peerConnection.isClosed())
                 return;
 
@@ -593,8 +581,6 @@ void PeerConnectionBackend::stop()
     m_offerAnswerCallback = nullptr;
     m_setDescriptionCallback = nullptr;
 
-    m_pendingTrackEvents.clear();
-
     doStop();
 }
 
@@ -608,7 +594,7 @@ ExceptionOr<Ref<RTCRtpSender>> PeerConnectionBackend::addTrack(MediaStreamTrack&
     return Exception { ExceptionCode::NotSupportedError, "Not implemented"_s };
 }
 
-ExceptionOr<Ref<RTCRtpTransceiver>> PeerConnectionBackend::addTransceiver(const String&, const RTCRtpTransceiverInit&)
+ExceptionOr<Ref<RTCRtpTransceiver>> PeerConnectionBackend::addTransceiver(const String&, const RTCRtpTransceiverInit&, IgnoreNegotiationNeededFlag)
 {
     return Exception { ExceptionCode::NotSupportedError, "Not implemented"_s };
 }

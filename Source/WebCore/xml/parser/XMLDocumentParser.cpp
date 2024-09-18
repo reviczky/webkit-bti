@@ -53,7 +53,6 @@
 #include "ScriptSourceCode.h"
 #include "StyleScope.h"
 #include "TextResourceDecoder.h"
-#include "TreeDepthLimit.h"
 #include "XMLNSNames.h"
 #include <wtf/Ref.h>
 #include <wtf/Threading.h>
@@ -63,6 +62,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
+static constexpr unsigned maxXMLTreeDepth = 5000;
+
 void XMLDocumentParser::pushCurrentNode(ContainerNode* n)
 {
     ASSERT(n);
@@ -71,7 +72,7 @@ void XMLDocumentParser::pushCurrentNode(ContainerNode* n)
         n->ref();
     m_currentNodeStack.append(m_currentNode);
     m_currentNode = n;
-    if (m_currentNodeStack.size() > maxDOMTreeDepth)
+    if (m_currentNodeStack.size() > maxXMLTreeDepth)
         handleError(XMLErrors::fatal, "Excessive node nesting.", textPosition());
 }
 
@@ -157,8 +158,12 @@ bool XMLDocumentParser::updateLeafTextNode()
     if (!m_leafTextNode)
         return true;
 
-    // This operation might fire mutation event, see below.
-    m_leafTextNode->appendData(String::fromUTF8(m_bufferedText.data(), m_bufferedText.size()));
+    if (isXHTMLDocument())
+        m_leafTextNode->parserAppendData(String::fromUTF8(m_bufferedText.span()));
+    else {
+        // This operation might fire mutation event, see below.
+        m_leafTextNode->appendData(String::fromUTF8(m_bufferedText.span()));
+    }
     m_bufferedText = { };
 
     m_leafTextNode = nullptr;

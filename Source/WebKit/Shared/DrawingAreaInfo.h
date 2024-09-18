@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include <wtf/EnumTraits.h>
 #include <wtf/ObjectIdentifier.h>
 
 namespace WebKit {
@@ -50,6 +49,6 @@ enum {
 typedef uint64_t ActivityStateChangeID;
 
 struct DrawingAreaIdentifierType;
-using DrawingAreaIdentifier = ObjectIdentifier<DrawingAreaIdentifierType>;
+using DrawingAreaIdentifier = LegacyNullableObjectIdentifier<DrawingAreaIdentifierType>;
 
 } // namespace WebKit

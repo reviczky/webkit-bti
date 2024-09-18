@@ -151,7 +151,7 @@ void DrawingAreaCoordinatedGraphics::scroll(const IntRect& scrollRect, const Int
     m_scrollOffset += scrollDelta;
 }
 
-void DrawingAreaCoordinatedGraphics::forceRepaint()
+void DrawingAreaCoordinatedGraphics::updateRenderingWithForcedRepaint()
 {
     if (m_inUpdateGeometry)
         return;
@@ -175,10 +175,10 @@ void DrawingAreaCoordinatedGraphics::forceRepaint()
         m_layerTreeHost->forceRepaint();
 }
 
-void DrawingAreaCoordinatedGraphics::forceRepaintAsync(WebPage& page, CompletionHandler<void()>&& completionHandler)
+void DrawingAreaCoordinatedGraphics::updateRenderingWithForcedRepaintAsync(WebPage& page, CompletionHandler<void()>&& completionHandler)
 {
     if (m_layerTreeStateIsFrozen) {
-        page.forceRepaintWithoutCallback();
+        page.updateRenderingWithForcedRepaintWithoutCallback();
         return completionHandler();
     }
 
@@ -209,6 +209,10 @@ void DrawingAreaCoordinatedGraphics::setLayerTreeStateIsFrozen(bool isFrozen)
 void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore& store)
 {
     Settings& settings = m_webPage->corePage()->settings();
+#if PLATFORM(GTK)
+    if (settings.acceleratedCompositingEnabled())
+        WebProcess::singleton().initializePlatformDisplayIfNeeded();
+#endif
     settings.setForceCompositingMode(store.getBoolValueForKey(WebPreferencesKey::forceCompositingModeKey()));
     // Fixed position elements need to be composited and create stacking contexts
     // in order to be scrolled by the ScrollingCoordinator.
@@ -260,6 +264,12 @@ bool DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingModeIfNeeded()
 
     enterAcceleratedCompositingMode(nullptr);
     return true;
+}
+
+void DrawingAreaCoordinatedGraphics::backgroundColorDidChange()
+{
+    if (m_layerTreeHost)
+        m_layerTreeHost->backgroundColorDidChange();
 }
 #endif
 

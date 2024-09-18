@@ -9,10 +9,13 @@
 #ifndef LIBANGLE_ANGLETYPES_H_
 #define LIBANGLE_ANGLETYPES_H_
 
+#include <anglebase/sha1.h>
 #include "common/Color.h"
 #include "common/FixedVector.h"
+#include "common/MemoryBuffer.h"
 #include "common/PackedEnums.h"
 #include "common/bitset_utils.h"
+#include "common/hash_utils.h"
 #include "common/vector_utils.h"
 #include "libANGLE/Constants.h"
 #include "libANGLE/Error.h"
@@ -954,10 +957,61 @@ ANGLE_INLINE ComponentTypeMask GetActiveComponentTypeMask(gl::AttributesMask act
     return ComponentTypeMask(activeAttribs << kMaxComponentTypeMaskIndex | activeAttribs);
 }
 
+ANGLE_INLINE DrawBufferMask GetComponentTypeMaskDiff(ComponentTypeMask mask1,
+                                                     ComponentTypeMask mask2)
+{
+    const uint32_t diff = static_cast<uint32_t>((mask1 ^ mask2).bits());
+    return DrawBufferMask(static_cast<uint8_t>(diff | (diff >> gl::kMaxComponentTypeMaskIndex)));
+}
+
 bool ValidateComponentTypeMasks(unsigned long outputTypes,
                                 unsigned long inputTypes,
                                 unsigned long outputMask,
                                 unsigned long inputMask);
+
+// Helpers for performing WebGL 2.0 clear validation
+// Extracted component type has always one of these four values:
+// * 0x10001 - float or normalized
+// * 0x00001 - int
+// * 0x10000 - unsigned int
+// * 0x00000 - unused or disabled
+
+// The following functions rely on these.
+static_assert(kComponentMasks[ComponentType::Float] == 0x10001);
+static_assert(kComponentMasks[ComponentType::Int] == 0x00001);
+static_assert(kComponentMasks[ComponentType::UnsignedInt] == 0x10000);
+
+// Used for clearBufferuiv
+ANGLE_INLINE bool IsComponentTypeFloatOrInt(ComponentTypeMask mask, size_t index)
+{
+    ASSERT(index <= kMaxComponentTypeMaskIndex);
+    // 0x10001 or 0x00001
+    return ((mask.bits() >> index) & 0x00001) != 0;
+}
+
+// Used for clearBufferiv
+ANGLE_INLINE bool IsComponentTypeFloatOrUnsignedInt(ComponentTypeMask mask, size_t index)
+{
+    ASSERT(index <= kMaxComponentTypeMaskIndex);
+    // 0x10001 or 0x10000
+    return ((mask.bits() >> index) & 0x10000) != 0;
+}
+
+// Used for clearBufferfv
+ANGLE_INLINE bool IsComponentTypeIntOrUnsignedInt(ComponentTypeMask mask, size_t index)
+{
+    ASSERT(index <= kMaxComponentTypeMaskIndex);
+    // 0x00001 or 0x10000; this expression is more efficient than two explicit comparisons
+    return ((((mask.bits() >> kMaxComponentTypeMaskIndex) ^ mask.bits()) >> index) & 1) != 0;
+}
+
+// Used for clear
+ANGLE_INLINE DrawBufferMask GetIntOrUnsignedIntDrawBufferMask(ComponentTypeMask mask)
+{
+    static_assert(DrawBufferMask::size() <= 8);
+    return DrawBufferMask(
+        static_cast<uint8_t>((mask.bits() >> kMaxComponentTypeMaskIndex) ^ mask.bits()));
+}
 
 enum class RenderToTextureImageIndex
 {
@@ -1009,6 +1063,9 @@ using DrawBuffersVector = angle::FixedVector<T, IMPLEMENTATION_MAX_DRAW_BUFFERS>
 
 template <typename T>
 using AttribArray = std::array<T, MAX_VERTEX_ATTRIBS>;
+
+template <typename T>
+using AttribVector = angle::FixedVector<T, MAX_VERTEX_ATTRIBS>;
 
 using ActiveTextureMask = angle::BitSet<IMPLEMENTATION_MAX_ACTIVE_TEXTURES>;
 
@@ -1176,6 +1233,70 @@ inline DestT *SafeGetImplAs(SrcT *src)
 
 namespace angle
 {
+enum class NativeWindowSystem
+{
+    X11,
+    Wayland,
+    Gbm,
+    Other,
+};
+
+struct FeatureOverrides
+{
+    std::vector<std::string> enabled;
+    std::vector<std::string> disabled;
+    bool allDisabled = false;
+};
+
+// 160-bit SHA-1 hash key used for hasing a program.  BlobCache opts in using fixed keys for
+// simplicity and efficiency.
+static constexpr size_t kBlobCacheKeyLength = angle::base::kSHA1Length;
+using BlobCacheKey                          = std::array<uint8_t, kBlobCacheKeyLength>;
+class BlobCacheValue  // To be replaced with std::span when C++20 is required
+{
+  public:
+    BlobCacheValue() : mPtr(nullptr), mSize(0) {}
+    BlobCacheValue(const uint8_t *ptr, size_t size) : mPtr(ptr), mSize(size) {}
+
+    // A very basic struct to hold the pointer and size together.  The objects of this class
+    // don't own the memory.
+    const uint8_t *data() { return mPtr; }
+    size_t size() { return mSize; }
+
+    const uint8_t &operator[](size_t pos) const
+    {
+        ASSERT(pos < mSize);
+        return mPtr[pos];
+    }
+
+  private:
+    const uint8_t *mPtr;
+    size_t mSize;
+};
+
+bool CompressBlob(const size_t cacheSize, const uint8_t *cacheData, MemoryBuffer *compressedData);
+bool DecompressBlob(const uint8_t *compressedData,
+                    const size_t compressedSize,
+                    size_t maxUncompressedDataSize,
+                    MemoryBuffer *uncompressedData);
+uint32_t GenerateCRC32(const uint8_t *data, size_t size);
+}  // namespace angle
+
+namespace std
+{
+template <>
+struct hash<angle::BlobCacheKey>
+{
+    // Simple routine to hash four ints.
+    size_t operator()(const angle::BlobCacheKey &key) const
+    {
+        return angle::ComputeGenericHash(key.data(), key.size());
+    }
+};
+}  // namespace std
+
+namespace angle
+{
 // Under certain circumstances, such as for increased parallelism, the backend may defer an
 // operation to be done at the end of a call after the locks have been unlocked.  The entry point
 // function passes an |UnlockedTailCall| through the frontend to the backend.  If it is set, the
@@ -1330,9 +1451,11 @@ struct FocalPoint
                gainY == other.gainY && foveaArea == other.foveaArea;
     }
     bool operator!=(const FocalPoint &other) const { return !(*this == other); }
+
+    bool valid() const { return gainX > 0 && gainY > 0; }
 };
 
-constexpr FocalPoint kInvalidFocalPoint = FocalPoint();
+constexpr FocalPoint kDefaultFocalPoint = FocalPoint();
 
 class FoveationState
 {
@@ -1342,7 +1465,7 @@ class FoveationState
         mConfigured          = false;
         mFoveatedFeatureBits = 0;
         mMinPixelDensity     = 0.0f;
-        mFocalPoints.fill(kInvalidFocalPoint);
+        mFocalPoints.fill(kDefaultFocalPoint);
     }
     FoveationState &operator=(const FoveationState &other) = default;
 
@@ -1350,10 +1473,9 @@ class FoveationState
     bool isConfigured() const { return mConfigured; }
     bool isFoveated() const
     {
-        // Consider foveated if ANY focal point is valid
-        return std::any_of(
-            mFocalPoints.begin(), mFocalPoints.end(),
-            [](const FocalPoint &focalPoint) { return (focalPoint != kInvalidFocalPoint); });
+        // Consider foveated if at least 1 focal point is valid
+        return std::any_of(mFocalPoints.begin(), mFocalPoints.end(),
+                           [](const FocalPoint &focalPoint) { return focalPoint.valid(); });
     }
     bool operator==(const FoveationState &other) const
     {
@@ -1361,6 +1483,8 @@ class FoveationState
                mFoveatedFeatureBits == other.mFoveatedFeatureBits &&
                mMinPixelDensity == other.mMinPixelDensity && mFocalPoints == other.mFocalPoints;
     }
+    bool operator!=(const FoveationState &other) const { return !(*this == other); }
+
     void setFoveatedFeatureBits(const GLuint features) { mFoveatedFeatureBits = features; }
     GLuint getFoveatedFeatureBits() const { return mFoveatedFeatureBits; }
     void setMinPixelDensity(const GLfloat density) { mMinPixelDensity = density; }
