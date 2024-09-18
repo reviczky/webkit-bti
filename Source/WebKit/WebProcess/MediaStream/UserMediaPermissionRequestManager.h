@@ -31,6 +31,16 @@
 #include <wtf/HashMap.h>
 #include <wtf/Ref.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class UserMediaPermissionRequestManager;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::UserMediaPermissionRequestManager> : std::true_type { };
+}
 
 namespace WebKit {
 
@@ -38,10 +48,10 @@ class WebPage;
 
 class UserMediaPermissionRequestManager : public WebCore::MediaCanStartListener
 #if USE(GSTREAMER)
-                                        , public WebCore::RealtimeMediaSourceCenter::Observer
+                                        , public WebCore::RealtimeMediaSourceCenterObserver
 #endif
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(UserMediaPermissionRequestManager);
 public:
     using WebCore::MediaCanStartListener::weakPtrFactory;
     using WebCore::MediaCanStartListener::WeakValueType;
@@ -64,7 +74,7 @@ public:
 
 private:
 #if USE(GSTREAMER)
-    // WebCore::RealtimeMediaSourceCenter::Observer
+    // WebCore::RealtimeMediaSourceCenterObserver
     void devicesChanged() final;
     void deviceWillBeRemoved(const String& persistentId) final { }
 #endif

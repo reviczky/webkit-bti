@@ -33,6 +33,7 @@
 #include <WebCore/Node.h>
 #include <WebCore/RenderImage.h>
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/Text.h>
 #include <wtf/URL.h>
 #include <wtf/text/WTFString.h>
 
@@ -96,10 +97,11 @@ WebHitTestResultData::WebHitTestResultData(const HitTestResult& hitTestResult, c
     , elementBoundingBox(elementBoundingBoxInWindowCoordinates(hitTestResult))
     , isScrollbar(IsScrollbar::No)
     , isSelected(hitTestResult.isSelected())
-    , isTextNode(hitTestResult.innerNode() && hitTestResult.innerNode()->isTextNode())
+    , isTextNode(is<Text>(hitTestResult.innerNode()))
     , isOverTextInsideFormControlElement(hitTestResult.isOverTextInsideFormControlElement())
     , isDownloadableMedia(hitTestResult.isDownloadableMedia())
     , mediaIsInFullscreen(hitTestResult.mediaIsInFullscreen())
+    , isActivePDFAnnotation(false)
     , elementType(ElementType::None)
     , frameInfo(frameInfoDataFromHitTestResult(hitTestResult))
     , toolTipText(toolTipText)
@@ -126,10 +128,11 @@ WebHitTestResultData::WebHitTestResultData(const HitTestResult& hitTestResult, b
     , elementBoundingBox(elementBoundingBoxInWindowCoordinates(hitTestResult))
     , isScrollbar(IsScrollbar::No)
     , isSelected(hitTestResult.isSelected())
-    , isTextNode(hitTestResult.innerNode() && hitTestResult.innerNode()->isTextNode())
+    , isTextNode(is<Text>(hitTestResult.innerNode()))
     , isOverTextInsideFormControlElement(hitTestResult.isOverTextInsideFormControlElement())
     , isDownloadableMedia(hitTestResult.isDownloadableMedia())
     , mediaIsInFullscreen(hitTestResult.mediaIsInFullscreen())
+    , isActivePDFAnnotation(false)
     , elementType(ElementType::None)
     , frameInfo(frameInfoDataFromHitTestResult(hitTestResult))
     , hasLocalDataForLinkURL(hitTestResult.hasLocalDataForLinkURL())
@@ -151,9 +154,9 @@ WebHitTestResultData::WebHitTestResultData(const HitTestResult& hitTestResult, b
             imageSharedMemory = WebCore::SharedMemory::copyBuffer(*buffer);
     }
 
-    if (auto target = RefPtr { hitTestResult.innerNonSharedNode() }) {
+    if (RefPtr target = hitTestResult.innerNonSharedNode()) {
         if (auto renderer = dynamicDowncast<RenderImage>(target->renderer())) {
-            imageBitmap = createShareableBitmap(*downcast<RenderImage>(target->renderer()));
+            imageBitmap = createShareableBitmap(*renderer);
             if (auto* cachedImage = renderer->cachedImage()) {
                 if (auto* image = cachedImage->image())
                     sourceImageMIMEType = image->mimeType();
@@ -172,7 +175,7 @@ WebHitTestResultData::WebHitTestResultData(const HitTestResult& hitTestResult, b
     }
 }
 
-WebHitTestResultData::WebHitTestResultData(const String& absoluteImageURL, const String& absolutePDFURL, const String& absoluteLinkURL, const String& absoluteMediaURL, const String& linkLabel, const String& linkTitle, const String& linkSuggestedFilename, const String& imageSuggestedFilename, bool isContentEditable, const WebCore::IntRect& elementBoundingBox, const WebKit::WebHitTestResultData::IsScrollbar& isScrollbar, bool isSelected, bool isTextNode, bool isOverTextInsideFormControlElement, bool isDownloadableMedia, bool mediaIsInFullscreen, const WebHitTestResultData::ElementType& elementType, std::optional<FrameInfoData>&& frameInfo, const String& lookupText, const String& toolTipText, const String& imageText, std::optional<WebCore::SharedMemory::Handle>&& imageHandle, const RefPtr<WebCore::ShareableBitmap>& imageBitmap, const String& sourceImageMIMEType, const String& linkLocalDataMIMEType, bool hasLocalDataForLinkURL, bool hasEntireImage,
+WebHitTestResultData::WebHitTestResultData(const String& absoluteImageURL, const String& absolutePDFURL, const String& absoluteLinkURL, const String& absoluteMediaURL, const String& linkLabel, const String& linkTitle, const String& linkSuggestedFilename, const String& imageSuggestedFilename, bool isContentEditable, const WebCore::IntRect& elementBoundingBox, const WebKit::WebHitTestResultData::IsScrollbar& isScrollbar, bool isSelected, bool isTextNode, bool isOverTextInsideFormControlElement, bool isDownloadableMedia, bool mediaIsInFullscreen, bool isActivePDFAnnotation, const WebHitTestResultData::ElementType& elementType, std::optional<FrameInfoData>&& frameInfo, std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData, const String& lookupText, const String& toolTipText, const String& imageText, std::optional<WebCore::SharedMemory::Handle>&& imageHandle, const RefPtr<WebCore::ShareableBitmap>& imageBitmap, const String& sourceImageMIMEType, const String& linkLocalDataMIMEType, bool hasLocalDataForLinkURL, bool hasEntireImage,
 #if PLATFORM(MAC)
     const WebHitTestResultPlatformData& platformData,
 #endif
@@ -193,8 +196,10 @@ WebHitTestResultData::WebHitTestResultData(const String& absoluteImageURL, const
         , isOverTextInsideFormControlElement(isOverTextInsideFormControlElement)
         , isDownloadableMedia(isDownloadableMedia)
         , mediaIsInFullscreen(mediaIsInFullscreen)
+        , isActivePDFAnnotation(isActivePDFAnnotation)
         , elementType(elementType)
         , frameInfo(frameInfo)
+        , remoteUserInputEventData(remoteUserInputEventData)
         , lookupText(lookupText)
         , toolTipText(toolTipText)
         , imageText(imageText)
@@ -241,7 +246,7 @@ IntRect WebHitTestResultData::elementBoundingBoxInWindowCoordinates(const WebCor
 std::optional<WebCore::SharedMemory::Handle> WebHitTestResultData::getImageSharedMemoryHandle() const
 {
     std::optional<WebCore::SharedMemory::Handle> imageHandle = std::nullopt;
-    if (imageSharedMemory && imageSharedMemory->data()) {
+    if (imageSharedMemory && !imageSharedMemory->span().empty()) {
         if (auto handle = imageSharedMemory->createHandle(WebCore::SharedMemory::Protection::ReadOnly))
             imageHandle = WTFMove(*handle);
     }

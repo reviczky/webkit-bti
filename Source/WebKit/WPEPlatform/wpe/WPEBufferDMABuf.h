@@ -39,7 +39,7 @@ G_BEGIN_DECLS
 #define WPE_TYPE_BUFFER_DMA_BUF (wpe_buffer_dma_buf_get_type())
 WPE_API G_DECLARE_FINAL_TYPE (WPEBufferDMABuf, wpe_buffer_dma_buf, WPE, BUFFER_DMA_BUF, WPEBuffer)
 
-WPE_API WPEBufferDMABuf *wpe_buffer_dma_buf_new          (WPEDisplay      *display,
+WPE_API WPEBufferDMABuf *wpe_buffer_dma_buf_new          (WPEView         *view,
                                                           int              width,
                                                           int              height,
                                                           guint32          format,
@@ -57,6 +57,14 @@ WPE_API guint32          wpe_buffer_dma_buf_get_offset   (WPEBufferDMABuf *buffe
 WPE_API guint32          wpe_buffer_dma_buf_get_stride   (WPEBufferDMABuf *buffer,
                                                           guint32          plane);
 WPE_API guint64          wpe_buffer_dma_buf_get_modifier (WPEBufferDMABuf *buffer);
+WPE_API void             wpe_buffer_dma_buf_set_rendering_fence  (WPEBufferDMABuf *buffer,
+                                                                  int              fd);
+WPE_API int              wpe_buffer_dma_buf_get_rendering_fence  (WPEBufferDMABuf *buffer);
+WPE_API int              wpe_buffer_dma_buf_take_rendering_fence (WPEBufferDMABuf *buffer);
+WPE_API void             wpe_buffer_dma_buf_set_release_fence    (WPEBufferDMABuf *buffer,
+                                                                  int              fd);
+WPE_API int              wpe_buffer_dma_buf_get_release_fence    (WPEBufferDMABuf *buffer);
+WPE_API int              wpe_buffer_dma_buf_take_release_fence   (WPEBufferDMABuf *buffer);
 
 G_END_DECLS
 

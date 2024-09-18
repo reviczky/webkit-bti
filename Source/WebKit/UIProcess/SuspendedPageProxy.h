@@ -27,12 +27,13 @@
 
 #include "Connection.h"
 #include "ProcessThrottler.h"
-#include "RemotePageProxyState.h"
 #include "WebBackForwardListItem.h"
 #include "WebPageProxyMessageReceiverRegistration.h"
 #include "WebProcessProxy.h"
 #include <WebCore/FrameIdentifier.h>
+#include <WebCore/NavigationIdentifier.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -54,10 +55,11 @@ using LayerHostingContextID = uint32_t;
 
 enum class ShouldDelayClosingUntilFirstLayerFlush : bool { No, Yes };
 
-class SuspendedPageProxy final: public IPC::MessageReceiver, public CanMakeCheckedPtr {
-    WTF_MAKE_FAST_ALLOCATED;
+class SuspendedPageProxy final: public IPC::MessageReceiver, public CanMakeCheckedPtr<SuspendedPageProxy> {
+    WTF_MAKE_TZONE_ALLOCATED(SuspendedPageProxy);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(SuspendedPageProxy);
 public:
-    SuspendedPageProxy(WebPageProxy&, Ref<WebProcessProxy>&&, Ref<WebFrameProxy>&& mainFrame, Ref<BrowsingContextGroup>&&, RemotePageProxyState&&, ShouldDelayClosingUntilFirstLayerFlush);
+    SuspendedPageProxy(WebPageProxy&, Ref<WebProcessProxy>&&, Ref<WebFrameProxy>&& mainFrame, Ref<BrowsingContextGroup>&&, ShouldDelayClosingUntilFirstLayerFlush);
     ~SuspendedPageProxy();
 
     static RefPtr<WebProcessProxy> findReusableSuspendedPageProcess(WebProcessPool&, const WebCore::RegistrableDomain&, WebsiteDataStore&, WebProcessProxy::LockdownMode, const API::PageConfiguration&);
@@ -67,7 +69,6 @@ public:
     WebProcessProxy& process() const { return m_process.get(); }
     WebFrameProxy& mainFrame() { return m_mainFrame.get(); }
     BrowsingContextGroup& browsingContextGroup() { return m_browsingContextGroup.get(); }
-    RemotePageProxyState takeRemotePageProxyState() { return std::exchange(m_remotePageProxyState, { }); }
 
     WebBackForwardCache& backForwardCache() const;
 
@@ -87,7 +88,7 @@ public:
 #endif
 
 #if !LOG_DISABLED
-    const char* loggingString() const;
+    String loggingString() const;
 #endif
 
 private:
@@ -98,7 +99,7 @@ private:
     void suspensionTimedOut();
 
     void close();
-    void didDestroyNavigation(uint64_t navigationID);
+    void didDestroyNavigation(WebCore::NavigationIdentifier);
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
@@ -128,7 +129,6 @@ private:
     LayerHostingContextID m_contextIDForVisibilityPropagationInGPUProcess { 0 };
 #endif
 #endif
-    RemotePageProxyState m_remotePageProxyState;
 };
 
 } // namespace WebKit

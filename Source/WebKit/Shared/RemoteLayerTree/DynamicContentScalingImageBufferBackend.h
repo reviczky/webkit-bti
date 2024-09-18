@@ -30,12 +30,12 @@
 #include "ImageBufferBackendHandleSharing.h"
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/ImageBufferCGBackend.h>
-#include <wtf/IsoMalloc.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
 class DynamicContentScalingImageBufferBackend : public WebCore::ImageBufferCGBackend, public ImageBufferBackendHandleSharing {
-    WTF_MAKE_ISO_ALLOCATED(DynamicContentScalingImageBufferBackend);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(DynamicContentScalingImageBufferBackend);
     WTF_MAKE_NONCOPYABLE(DynamicContentScalingImageBufferBackend);
 public:
     static size_t calculateMemoryCost(const Parameters&);
@@ -43,17 +43,21 @@ public:
     static std::unique_ptr<DynamicContentScalingImageBufferBackend> create(const Parameters&, const WebCore::ImageBufferCreationContext&);
 
     DynamicContentScalingImageBufferBackend(const Parameters&, const WebCore::ImageBufferCreationContext&, WebCore::RenderingMode);
+    ~DynamicContentScalingImageBufferBackend();
 
     WebCore::GraphicsContext& context() final;
     std::optional<ImageBufferBackendHandle> createBackendHandle(WebCore::SharedMemory::Protection = WebCore::SharedMemory::Protection::ReadWrite) const final;
 
     void releaseGraphicsContext() final;
 
+    bool canMapBackingStore() const final;
+
     // NOTE: These all ASSERT_NOT_REACHED().
     RefPtr<WebCore::NativeImage> copyNativeImage() final;
     RefPtr<WebCore::NativeImage> createNativeImageReference() final;
     void getPixelBuffer(const WebCore::IntRect&, WebCore::PixelBuffer&) final;
     void putPixelBuffer(const WebCore::PixelBuffer&, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat) final;
+
 
 protected:
     unsigned bytesPerRow() const final;

@@ -37,7 +37,17 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class AuthenticationManager;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::AuthenticationManager> : std::true_type { };
+}
 
 namespace IPC {
 class MessageSender;
@@ -64,7 +74,7 @@ enum class AuthenticationChallengeDisposition : uint8_t;
 using ChallengeCompletionHandler = CompletionHandler<void(AuthenticationChallengeDisposition, const WebCore::Credential&)>;
 
 class AuthenticationManager : public NetworkProcessSupplement, public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AuthenticationManager);
     WTF_MAKE_NONCOPYABLE(AuthenticationManager);
 public:
     explicit AuthenticationManager(NetworkProcess&);
@@ -72,7 +82,7 @@ public:
 
     static ASCIILiteral supplementName();
 
-    void didReceiveAuthenticationChallenge(PAL::SessionID, WebPageProxyIdentifier, const WebCore::SecurityOriginData* , const WebCore::AuthenticationChallenge&, NegotiatedLegacyTLS, ChallengeCompletionHandler&&);
+    void didReceiveAuthenticationChallenge(PAL::SessionID, WebPageProxyIdentifier, const WebCore::SecurityOriginData*, const WebCore::AuthenticationChallenge&, NegotiatedLegacyTLS, ChallengeCompletionHandler&&);
     void didReceiveAuthenticationChallenge(IPC::MessageSender& download, const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
 
     void completeAuthenticationChallenge(AuthenticationChallengeIdentifier, AuthenticationChallengeDisposition, WebCore::Credential&&);

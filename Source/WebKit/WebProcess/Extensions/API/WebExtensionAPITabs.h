@@ -44,11 +44,11 @@ struct WebExtensionTabParameters;
 struct WebExtensionTabQueryParameters;
 
 class WebExtensionAPITabs : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPITabs, tabs);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPITabs, tabs, tabs);
 
 public:
 #if PLATFORM(COCOA)
-    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage*);
 
     void createTab(WebPage&, NSDictionary *properties, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
 

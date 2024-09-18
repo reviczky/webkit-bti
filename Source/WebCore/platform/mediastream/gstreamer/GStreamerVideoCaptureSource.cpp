@@ -27,8 +27,8 @@
 
 #include "DisplayCaptureManager.h"
 #include "GStreamerCaptureDeviceManager.h"
-
 #include <gst/app/gstappsink.h>
+#include <wtf/text/MakeString.h>
 
 namespace WebCore {
 
@@ -71,7 +71,7 @@ CaptureSourceOrError GStreamerVideoCaptureSource::create(String&& deviceID, Medi
 {
     auto device = GStreamerVideoCaptureDeviceManager::singleton().gstreamerDeviceWithUID(deviceID);
     if (!device) {
-        auto errorMessage = makeString("GStreamerVideoCaptureSource::create(): GStreamer did not find the device: ", deviceID, '.');
+        auto errorMessage = makeString("GStreamerVideoCaptureSource::create(): GStreamer did not find the device: "_s, deviceID, '.');
         return CaptureSourceOrError({ WTFMove(errorMessage), MediaAccessDenialReason::HardwareError });
     }
 
@@ -153,7 +153,7 @@ void GStreamerVideoCaptureSource::settingsDidChange(OptionSet<RealtimeMediaSourc
         if (m_deviceType == CaptureDevice::DeviceType::Window || m_deviceType == CaptureDevice::DeviceType::Screen)
             ensureIntrinsicSizeMaintainsAspectRatio();
 
-        if (m_capturer->setSize(size().width(), size().height()))
+        if (m_capturer->setSize(size()))
             reconfigure = true;
     }
 
@@ -186,7 +186,7 @@ void GStreamerVideoCaptureSource::startProducingData()
     m_capturer->setupPipeline();
 
     if (m_deviceType == CaptureDevice::DeviceType::Camera)
-        m_capturer->setSize(size().width(), size().height());
+        m_capturer->setSize(size());
 
     m_capturer->setFrameRate(frameRate());
     m_capturer->reconfigure();
@@ -302,6 +302,15 @@ void GStreamerVideoCaptureSource::generatePresets()
     }
 
     setSupportedPresets(WTFMove(presets));
+}
+
+void GStreamerVideoCaptureSource::setSizeFrameRateAndZoom(const VideoPresetConstraints& constraints)
+{
+    RealtimeVideoCaptureSource::setSizeFrameRateAndZoom(constraints);
+    if (!constraints.width || !constraints.height)
+        return;
+
+    m_capturer->setSize({ *constraints.width, *constraints.height });
 }
 
 #undef GST_CAT_DEFAULT

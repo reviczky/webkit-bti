@@ -28,10 +28,12 @@
 #include "WPEKeymap.h"
 #include "WPEView.h"
 #include <libinput.h>
-#include <wtf/FastMalloc.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GWeakPtr.h>
+
+struct udev;
 
 namespace WPE {
 
@@ -40,10 +42,10 @@ namespace DRM {
 class Session;
 
 class Seat {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Seat);
 public:
-    static std::unique_ptr<Seat> create();
-    Seat(struct libinput*, std::unique_ptr<Session>&&);
+    static std::unique_ptr<Seat> create(struct udev*, Session&);
+    explicit Seat(struct libinput*);
     ~Seat();
 
     void setView(WPEView* view);
@@ -60,7 +62,6 @@ private:
     void handleKey(uint32_t time, uint32_t key, bool pressed, bool fromRepeat);
 
     struct libinput* m_libinput { nullptr };
-    std::unique_ptr<Session> m_session;
     GRefPtr<GSource> m_inputSource;
     GRefPtr<WPEKeymap> m_keymap;
     GWeakPtr<WPEView> m_view;

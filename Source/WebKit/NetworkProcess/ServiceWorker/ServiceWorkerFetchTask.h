@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include "DownloadID.h"
 #include <WebCore/FetchIdentifier.h>
 #include <WebCore/ResourceRequest.h>
@@ -33,6 +32,7 @@
 #include <WebCore/ServiceWorkerTypes.h>
 #include <WebCore/Timer.h>
 #include <pal/SessionID.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -62,7 +62,7 @@ class WebSWServerConnection;
 class WebSWServerToContextConnection;
 
 class ServiceWorkerFetchTask : public RefCounted<ServiceWorkerFetchTask>, public CanMakeWeakPtr<ServiceWorkerFetchTask> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ServiceWorkerFetchTask);
 public:
     static RefPtr<ServiceWorkerFetchTask> fromNavigationPreloader(WebSWServerConnection&, NetworkResourceLoader&, const WebCore::ResourceRequest&, NetworkSession*);
 
@@ -117,6 +117,8 @@ private:
     void cancelPreloadIfNecessary();
     NetworkSession* session();
     void preloadResponseIsReady();
+
+    void workerClosed();
 
     template<typename Message> bool sendToServiceWorker(Message&&);
     template<typename Message> bool sendToClient(Message&&);

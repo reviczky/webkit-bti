@@ -43,11 +43,14 @@
 #include <WebCore/SWServer.h>
 #include <WebCore/SWServerWorker.h>
 #include <WebCore/ServiceWorkerContextData.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, &this->ipcConnection())
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, ipcConnection())
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSWServerToContextConnection);
 
 WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkConnectionToWebProcess& connection, WebPageProxyIdentifier webPageProxyID, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, SWServer& server)
     : SWServerToContextConnection(server, WTFMove(registrableDomain), serviceWorkerPageIdentifier)
@@ -60,12 +63,14 @@ WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkConnection
 WebSWServerToContextConnection::~WebSWServerToContextConnection()
 {
     auto fetches = WTFMove(m_ongoingFetches);
-    for (auto& fetch : fetches.values())
-        fetch->contextClosed();
+    for (auto& weakPtr : fetches.values()) {
+        if (RefPtr fetch = weakPtr.get())
+            fetch->contextClosed();
+    }
 
     auto downloads = WTFMove(m_ongoingDownloads);
     for (auto& weakPtr : downloads.values()) {
-        if (auto download = weakPtr.get())
+        if (RefPtr download = weakPtr.get())
             download->contextClosed();
     }
 
@@ -145,9 +150,9 @@ void WebSWServerToContextConnection::firePushEvent(ServiceWorkerIdentifier servi
     if (!m_processingFunctionalEventCount++)
         m_connection->networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::StartServiceWorkerBackgroundProcessing { webProcessIdentifier() }, 0);
 
-    std::optional<IPC::DataReference> ipcData;
+    std::optional<std::span<const uint8_t>> ipcData;
     if (data)
-        ipcData = IPC::DataReference { data->data(), data->size() };
+        ipcData = std::span<const uint8_t> { data->data(), data->size() };
     sendWithAsyncReply(Messages::WebSWContextManagerConnection::FirePushEvent(serviceWorkerIdentifier, ipcData, WTFMove(proposedPayload)), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](bool wasProcessed, std::optional<NotificationPayload>&& resultPayload) mutable {
         if (CheckedPtr checkedThis = weakThis.get(); checkedThis && !--checkedThis->m_processingFunctionalEventCount)
             checkedThis->m_connection->networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::EndServiceWorkerBackgroundProcessing { checkedThis->webProcessIdentifier() }, 0);
@@ -335,7 +340,7 @@ void WebSWServerToContextConnection::startFetch(ServiceWorkerFetchTask& task)
 
 void WebSWServerToContextConnection::didReceiveFetchTaskMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
-    auto iterator = m_ongoingFetches.find(ObjectIdentifier<FetchIdentifierType>(decoder.destinationID()));
+    auto iterator = m_ongoingFetches.find(LegacyNullableObjectIdentifier<FetchIdentifierType>(decoder.destinationID()));
     if (iterator == m_ongoingFetches.end())
         return;
 

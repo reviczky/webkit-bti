@@ -124,7 +124,7 @@ GstElement* GStreamerVideoCapturer::createConverter()
     return bin;
 }
 
-bool GStreamerVideoCapturer::setSize(int width, int height)
+bool GStreamerVideoCapturer::setSize(const IntSize& size)
 {
     if (isCapturingDisplay()) {
         // Pipewiresrc doesn't seem to support caps re-negotiation and framerate configuration properly.
@@ -132,6 +132,8 @@ bool GStreamerVideoCapturer::setSize(int width, int height)
         return true;
     }
 
+    int width = size.width();
+    int height = size.height();
     if (!width || !height)
         return false;
 
@@ -141,12 +143,13 @@ bool GStreamerVideoCapturer::setSize(int width, int height)
         return true;
     }
 
+    if (UNLIKELY(!m_capsfilter))
+        return false;
+
     GST_INFO_OBJECT(m_pipeline.get(), "Setting size to %dx%d", width, height);
+    m_size = size;
     m_caps = adoptGRef(gst_caps_copy(m_caps.get()));
     gst_caps_set_simple(m_caps.get(), "width", G_TYPE_INT, width, "height", G_TYPE_INT, height, nullptr);
-
-    if (!m_capsfilter)
-        return false;
 
     g_object_set(m_capsfilter.get(), "caps", m_caps.get(), nullptr);
     return true;
@@ -161,7 +164,6 @@ bool GStreamerVideoCapturer::setFrameRate(double frameRate)
     }
 
     int numerator, denominator;
-
     gst_util_double_to_fraction(frameRate, &numerator, &denominator);
 
     if (numerator < -G_MAXINT) {
@@ -174,15 +176,14 @@ bool GStreamerVideoCapturer::setFrameRate(double frameRate)
         return false;
     }
 
+    if (UNLIKELY(!m_capsfilter))
+        return false;
+
     m_caps = adoptGRef(gst_caps_copy(m_caps.get()));
     gst_caps_set_simple(m_caps.get(), "framerate", GST_TYPE_FRACTION, numerator, denominator, nullptr);
 
-    if (!m_capsfilter)
-        return false;
-
     GST_INFO_OBJECT(m_pipeline.get(), "Setting framerate to %f fps", frameRate);
     g_object_set(m_capsfilter.get(), "caps", m_caps.get(), nullptr);
-
     return true;
 }
 
@@ -277,8 +278,8 @@ void GStreamerVideoCapturer::reconfigure()
         return;
 
     struct MimeTypeSelector {
-        const char* mimeType = "video/x-raw";
-        const char* format = nullptr;
+        String mimeType = "video/x-raw"_s;
+        String format;
         int maxWidth = 0;
         int maxHeight = 0;
         double maxFrameRate = 0;
@@ -292,11 +293,8 @@ void GStreamerVideoCapturer::reconfigure()
 
     // If nothing has been specified by the user, we target at least an arbitrary resolution of 1920x1080@24fps.
     const GstStructure* capsStruct = gst_caps_get_structure(m_caps.get(), 0);
-    if (!gst_structure_get_int(capsStruct, "width", &selector.stopCondition.width))
-        selector.stopCondition.width = 1920;
-
-    if (!gst_structure_get_int(capsStruct, "height", &selector.stopCondition.height))
-        selector.stopCondition.height = 1080;
+    selector.stopCondition.width = gstStructureGet<int>(capsStruct, "width"_s).value_or(1920);
+    selector.stopCondition.height = gstStructureGet<int>(capsStruct, "height"_s).value_or(1080);
 
     int numerator = 0;
     int denominator = 1;
@@ -328,11 +326,10 @@ void GStreamerVideoCapturer::reconfigure()
                 selector->maxWidth = *width;
                 selector->maxHeight = *height;
                 selector->maxFrameRate = *frameRate;
-                selector->mimeType = gst_structure_get_name(structure);
-                selector->format = nullptr;
+                selector->mimeType = gstStructureGetName(structure).toString();
                 if (gst_structure_has_name(structure, "video/x-raw")) {
                     if (gst_structure_has_field(structure, "format"))
-                        selector->format = gst_structure_get_string(structure, "format");
+                        selector->format = makeString(gstStructureGetString(structure, "format"_s));
                     else
                         return TRUE;
                 }
@@ -343,11 +340,10 @@ void GStreamerVideoCapturer::reconfigure()
                 selector->maxWidth = *width;
                 selector->maxHeight = *height;
                 selector->maxFrameRate = *frameRate;
-                selector->mimeType = gst_structure_get_name(structure);
-                selector->format = nullptr;
+                selector->mimeType = gstStructureGetName(structure).toString();
                 if (gst_structure_has_name(structure, "video/x-raw")) {
                     if (gst_structure_has_field(structure, "format"))
-                        selector->format = gst_structure_get_string(structure, "format");
+                        selector->format = makeString(gstStructureGetString(structure, "format"_s));
                     else
                         return TRUE;
                 }
@@ -356,12 +352,12 @@ void GStreamerVideoCapturer::reconfigure()
             return TRUE;
         }), &selector);
 
-    auto caps = adoptGRef(gst_caps_new_simple(selector.mimeType, "width", G_TYPE_INT, selector.maxWidth,
+    auto caps = adoptGRef(gst_caps_new_simple(selector.mimeType.ascii().data(), "width", G_TYPE_INT, selector.maxWidth,
         "height", G_TYPE_INT, selector.maxHeight, nullptr));
 
     // Workaround for https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/1793.
-    if (selector.format)
-        gst_caps_set_simple(caps.get(), "format", G_TYPE_STRING, selector.format, nullptr);
+    if (!selector.format.isEmpty())
+        gst_caps_set_simple(caps.get(), "format", G_TYPE_STRING, selector.format.ascii().data(), nullptr);
 
     GST_INFO_OBJECT(m_pipeline.get(), "Setting video capture device caps to %" GST_PTR_FORMAT, caps.get());
     g_object_set(m_videoSrcMIMETypeFilter.get(), "caps", caps.get(), nullptr);

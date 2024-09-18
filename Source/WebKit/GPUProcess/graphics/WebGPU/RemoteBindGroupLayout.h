@@ -27,9 +27,12 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "RemoteGPU.h"
 #include "StreamMessageReceiver.h"
 #include "WebGPUIdentifier.h"
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/WeakRef.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore::WebGPU {
@@ -47,21 +50,23 @@ class ObjectHeap;
 }
 
 class RemoteBindGroupLayout final : public IPC::StreamMessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteBindGroupLayout);
 public:
-    static Ref<RemoteBindGroupLayout> create(WebCore::WebGPU::BindGroupLayout& bindGroupLayout, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+    static Ref<RemoteBindGroupLayout> create(WebCore::WebGPU::BindGroupLayout& bindGroupLayout, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, RemoteGPU& gpu, WebGPUIdentifier identifier)
     {
-        return adoptRef(*new RemoteBindGroupLayout(bindGroupLayout, objectHeap, WTFMove(streamConnection), identifier));
+        return adoptRef(*new RemoteBindGroupLayout(bindGroupLayout, objectHeap, WTFMove(streamConnection), gpu, identifier));
     }
 
     virtual ~RemoteBindGroupLayout();
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
 private:
     friend class WebGPU::ObjectHeap;
 
-    RemoteBindGroupLayout(WebCore::WebGPU::BindGroupLayout&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, WebGPUIdentifier);
+    RemoteBindGroupLayout(WebCore::WebGPU::BindGroupLayout&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, RemoteGPU&, WebGPUIdentifier);
 
     RemoteBindGroupLayout(const RemoteBindGroupLayout&) = delete;
     RemoteBindGroupLayout(RemoteBindGroupLayout&&) = delete;
@@ -76,8 +81,9 @@ private:
     void destruct();
 
     Ref<WebCore::WebGPU::BindGroupLayout> m_backing;
-    WebGPU::ObjectHeap& m_objectHeap;
+    WeakRef<WebGPU::ObjectHeap> m_objectHeap;
     Ref<IPC::StreamServerConnection> m_streamConnection;
+    WeakRef<RemoteGPU> m_gpu;
     WebGPUIdentifier m_identifier;
 };
 

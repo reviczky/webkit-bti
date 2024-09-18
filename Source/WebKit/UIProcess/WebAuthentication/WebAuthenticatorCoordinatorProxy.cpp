@@ -43,14 +43,17 @@
 #include <WebCore/WebAuthenticationUtils.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 using namespace WebCore;
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebAuthenticatorCoordinatorProxy);
+
 WebAuthenticatorCoordinatorProxy::WebAuthenticatorCoordinatorProxy(WebPageProxy& webPageProxy)
     : m_webPageProxy(webPageProxy)
 {
-    m_webPageProxy.process().addMessageReceiver(Messages::WebAuthenticatorCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageID(), *this);
+    m_webPageProxy.legacyMainFrameProcess().addMessageReceiver(Messages::WebAuthenticatorCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageIDInMainFrameProcess(), *this);
 }
 
 WebAuthenticatorCoordinatorProxy::~WebAuthenticatorCoordinatorProxy()
@@ -58,17 +61,22 @@ WebAuthenticatorCoordinatorProxy::~WebAuthenticatorCoordinatorProxy()
 #if HAVE(UNIFIED_ASC_AUTH_UI)
     cancel([]() { });
 #endif // HAVE(UNIFIED_ASC_AUTH_UI)
-    m_webPageProxy.process().removeMessageReceiver(Messages::WebAuthenticatorCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageID());
+    m_webPageProxy.legacyMainFrameProcess().removeMessageReceiver(Messages::WebAuthenticatorCoordinatorProxy::messageReceiverName(), m_webPageProxy.webPageIDInMainFrameProcess());
 }
 
-void WebAuthenticatorCoordinatorProxy::makeCredential(FrameIdentifier frameId, FrameInfoData&& frameInfo, PublicKeyCredentialCreationOptions&& options, RequestCompletionHandler&& handler)
+const SharedPreferencesForWebProcess& WebAuthenticatorCoordinatorProxy::sharedPreferencesForWebProcess() const
 {
-    handleRequest({ { }, WTFMove(options), m_webPageProxy, WebAuthenticationPanelResult::Unavailable, nullptr, GlobalFrameIdentifier { m_webPageProxy.webPageID(), frameId }, WTFMove(frameInfo), String(), nullptr, std::nullopt, std::nullopt }, WTFMove(handler));
+    return m_webPageProxy.legacyMainFrameProcess().sharedPreferencesForWebProcess();
+}
+
+void WebAuthenticatorCoordinatorProxy::makeCredential(FrameIdentifier frameId, FrameInfoData&& frameInfo, PublicKeyCredentialCreationOptions&& options, MediationRequirement mediation, RequestCompletionHandler&& handler)
+{
+    handleRequest({ { }, WTFMove(options), m_webPageProxy, WebAuthenticationPanelResult::Unavailable, nullptr, GlobalFrameIdentifier { m_webPageProxy.webPageIDInMainFrameProcess(), frameId }, WTFMove(frameInfo), String(), nullptr, mediation, std::nullopt }, WTFMove(handler));
 }
 
 void WebAuthenticatorCoordinatorProxy::getAssertion(FrameIdentifier frameId, FrameInfoData&& frameInfo, PublicKeyCredentialRequestOptions&& options, MediationRequirement mediation, std::optional<WebCore::SecurityOriginData> parentOrigin, RequestCompletionHandler&& handler)
 {
-    handleRequest({ { }, WTFMove(options), m_webPageProxy, WebAuthenticationPanelResult::Unavailable, nullptr, GlobalFrameIdentifier { m_webPageProxy.webPageID(), frameId }, WTFMove(frameInfo), String(), nullptr, mediation, parentOrigin }, WTFMove(handler));
+    handleRequest({ { }, WTFMove(options), m_webPageProxy, WebAuthenticationPanelResult::Unavailable, nullptr, GlobalFrameIdentifier { m_webPageProxy.webPageIDInMainFrameProcess(), frameId }, WTFMove(frameInfo), String(), nullptr, mediation, parentOrigin }, WTFMove(handler));
 }
 
 void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestData&& data, RequestCompletionHandler&& handler)
@@ -86,7 +94,7 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
             return;
         auto& authenticatorManager = m_webPageProxy.websiteDataStore().authenticatorManager();
         if (result) {
-#if HAVE(UNIFIED_ASC_AUTH_UI)
+#if HAVE(UNIFIED_ASC_AUTH_UI) || HAVE(WEB_AUTHN_AS_MODERN)
             if (!authenticatorManager.isMock() && !authenticatorManager.isVirtual()) {
                 if (!isASCAvailable()) {
                     handler({ }, AuthenticatorAttachment::Platform, ExceptionData { ExceptionCode::NotSupportedError, "Not implemented."_s });
@@ -104,7 +112,7 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
                 RELEASE_LOG_ERROR(WebAuthn, "The origin of the document is not the same as its ancestors.");
                 return;
             }
-#endif // HAVE(UNIFIED_ASC_AUTH_UI)
+#endif // not HAVE(UNIFIED_ASC_AUTH_UI) || HAVE(WEB_AUTHN_AS_MODERN)
 
             RefPtr<ArrayBuffer> clientDataJSON;
             // AS API makes no difference between SameSite vs CrossOrigin
@@ -133,7 +141,8 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
         }
     };
 
-    if (shouldRequestConditionalRegistration) {
+    auto& authenticatorManager = m_webPageProxy.websiteDataStore().authenticatorManager();
+    if (shouldRequestConditionalRegistration && !authenticatorManager.isMock() && !authenticatorManager.isVirtual()) {
         m_webPageProxy.uiClient().requestWebAuthenticationConditonalMediationRegistration(WTFMove(username), WTFMove(afterConsent));
         return;
     }
@@ -142,7 +151,7 @@ void WebAuthenticatorCoordinatorProxy::handleRequest(WebAuthenticationRequestDat
 }
 
 
-#if !HAVE(UNIFIED_ASC_AUTH_UI)
+#if !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN)
 void WebAuthenticatorCoordinatorProxy::cancel(CompletionHandler<void()>&& completionHandler)
 {
     completionHandler();
@@ -157,7 +166,7 @@ void WebAuthenticatorCoordinatorProxy::isConditionalMediationAvailable(const Sec
 {
     handler(false);
 }
-#endif // !HAVE(UNIFIED_ASC_AUTH_UI)
+#endif // !HAVE(UNIFIED_ASC_AUTH_UI) && !HAVE(WEB_AUTHN_AS_MODERN)
 
 } // namespace WebKit
 

@@ -41,10 +41,13 @@
 #include <WebCore/SharedBuffer.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkLoad);
 
 NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkLoadParameters&& parameters, NetworkSession& networkSession)
     : m_client(client)
@@ -63,6 +66,25 @@ NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkSession& networkSessi
     , m_networkProcess(networkSession.networkProcess())
     , m_task(createTask(*this))
 {
+}
+
+std::optional<WebCore::FrameIdentifier> NetworkLoad::webFrameID() const
+{
+    if (parameters().webFrameID)
+        return parameters().webFrameID;
+    return std::nullopt;
+}
+
+std::optional<WebCore::PageIdentifier> NetworkLoad::webPageID() const
+{
+    if (parameters().webPageID)
+        return parameters().webPageID;
+    return std::nullopt;
+}
+
+Ref<NetworkProcess> NetworkLoad::networkProcess()
+{
+    return m_networkProcess;
 }
 
 void NetworkLoad::start()
@@ -174,12 +196,12 @@ void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse
         m_task = nullptr;
         WebCore::NetworkLoadMetrics emptyMetrics;
         didCompleteWithError(ResourceError { errorDomainWebKitInternal, 0, url(), "FTP URLs are disabled"_s, ResourceError::Type::AccessControl }, emptyMetrics);
-        
+
         if (completionHandler)
             completionHandler({ });
         return;
     }
-    
+
     redirectResponse.setSource(ResourceResponse::Source::Network);
 
     auto oldRequest = WTFMove(m_currentRequest);
@@ -321,6 +343,12 @@ void NetworkLoad::setH2PingCallback(const URL& url, CompletionHandler<void(Expec
         m_task->setH2PingCallback(url, WTFMove(completionHandler));
     else
         completionHandler(makeUnexpected(internalError(url)));
+}
+
+void NetworkLoad::setTimingAllowFailedFlag()
+{
+    if (m_task)
+        m_task->setTimingAllowFailedFlag();
 }
 
 String NetworkLoad::attributedBundleIdentifier(WebPageProxyIdentifier pageID)

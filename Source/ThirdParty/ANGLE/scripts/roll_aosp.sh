@@ -100,6 +100,21 @@ function generate_Android_bp_file() {
         --output=Android.bp
 }
 
+function generate_angle_commit_file() {
+    # Output chromium ANGLE git hash during ANGLE to Android roll into
+    # {AndroidANGLERoot}/angle_commit.h.
+    # In Android repos, we stop generating the angle_commit.h at compile time,
+    # because in Android repos, access to .git is not guaranteed, running
+    # commit_id.py at compile time will generate "unknown hash" for ANGLE_COMMIT_HASH.
+    # Instead, we generate angle_commit.h during ANGLE to Android roll time.
+    # Before roll_aosp.sh is called during the roll, ANGLE_UPSTREAM_HASH environment
+    # variable is set to {rolling_to} git hash, and that can be used by below
+    # script commit_id.py as the ANGLE_COMMIT_HASH written to the angle_commit.h.
+    # See b/348044346.
+    python3 src/commit_id.py \
+        gen \
+        angle_commit.h
+}
 
 if [[ "$1" == "--genAndroidBp" ]];then
     generate_Android_bp_file "$2"
@@ -115,10 +130,10 @@ export PATH=`pwd`/${DEPOT_TOOLS_DIR}:$PATH
 third_party_deps=(
     "build"
     "third_party/abseil-cpp"
-    "third_party/vulkan-deps/glslang/src"
-    "third_party/vulkan-deps/spirv-headers/src"
-    "third_party/vulkan-deps/spirv-tools/src"
-    "third_party/vulkan-deps/vulkan-headers/src"
+    "third_party/glslang/src"
+    "third_party/spirv-headers/src"
+    "third_party/spirv-tools/src"
+    "third_party/vulkan-headers/src"
     "third_party/vulkan_memory_allocator"
 )
 
@@ -127,9 +142,7 @@ root_add_deps=(
   "third_party"
 )
 
-# Only add the parts of NDK and vulkan-deps that are required by ANGLE. The entire dep is too large.
 delete_only_deps=(
-    "third_party/vulkan-deps"
     "third_party/zlib"  # Replaced by Android's zlib; delete for gclient to work https://crbug.com/skia/14155#c3
 )
 
@@ -138,7 +151,7 @@ for dep in "${third_party_deps[@]}" "${delete_only_deps[@]}"; do
     rm -rf "$dep"
 done
 
-# Remove cruft from any previous bad rolls (https://anglebug.com/8352)
+# Remove cruft from any previous bad rolls (https://anglebug.com/42266781)
 extra_third_party_removal_patterns=(
    "*/_gclient_*"
 )
@@ -148,13 +161,17 @@ for removal_dir in "${extra_third_party_removal_patterns[@]}"; do
 done
 
 # Sync all of ANGLE's deps so that 'gn gen' works
-python scripts/bootstrap.py
+python3 scripts/bootstrap.py
 gclient sync --reset --force --delete_unversioned_trees
 
 # Delete outdir to ensure a clean gn run.
 rm -rf ${GN_OUTPUT_DIRECTORY}
 
 generate_Android_bp_file
+git add Android.bp
+
+generate_angle_commit_file
+git add angle_commit.h
 
 # Delete outdir to cleanup after gn.
 rm -rf ${GN_OUTPUT_DIRECTORY}
@@ -162,18 +179,17 @@ rm -rf ${GN_OUTPUT_DIRECTORY}
 # Delete all unsupported 3rd party dependencies. Do this after generate_Android_bp_file, so
 # it has access to all of the necessary BUILD.gn files.
 unsupported_third_party_deps=(
-   "third_party/jdk"
-   "third_party/llvm-build"
    "third_party/android_build_tools"
    "third_party/android_sdk"
    "third_party/android_toolchain"
+   "third_party/jdk"
+   "third_party/llvm-build"
+   "third_party/rust-toolchain"
    "third_party/zlib"  # Replaced by Android's zlib
 )
 for unsupported_third_party_dep in "${unsupported_third_party_deps[@]}"; do
    rm -rf "$unsupported_third_party_dep"
 done
-
-git add Android.bp
 
 # Delete the .git files in each dep so that it can be added to this repo. Some deps like jsoncpp
 # have multiple layers of deps so delete everything before adding them.
@@ -192,10 +208,10 @@ extra_removal_files=(
    # Remove Android.mk files to prevent automated CLs:
    #   "[LSC] Add LOCAL_LICENSE_KINDS to external/angle"
    "Android.mk"
-   "third_party/vulkan-deps/glslang/src/Android.mk"
-   "third_party/vulkan-deps/glslang/src/ndk_test/Android.mk"
-   "third_party/vulkan-deps/spirv-tools/src/Android.mk"
-   "third_party/vulkan-deps/spirv-tools/src/android_test/Android.mk"
+   "third_party/glslang/src/Android.mk"
+   "third_party/glslang/src/ndk_test/Android.mk"
+   "third_party/spirv-tools/src/Android.mk"
+   "third_party/spirv-tools/src/android_test/Android.mk"
    "third_party/siso" # Not needed
 )
 

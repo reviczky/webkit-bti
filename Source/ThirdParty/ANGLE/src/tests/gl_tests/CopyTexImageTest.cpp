@@ -266,6 +266,58 @@ class CopyTexImageTest : public ANGLETest<>
                       kFboSizes[0]);
     }
 
+    void testBGRAToRGBAConversion()
+    {
+        GLFramebuffer framebuffer;
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+        GLColor bgraInputData(128, 64, 255, 255);
+        GLColor bgraExpectedData(255, 64, 128, 255);
+
+        GLTexture bgraTexture;
+        glBindTexture(GL_TEXTURE_2D, bgraTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA_EXT, 1, 1, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+                     &bgraInputData);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bgraTexture, 0);
+        EXPECT_PIXEL_COLOR_EQ(0, 0, bgraExpectedData);
+
+        // Copy BGRA framebuffer -> RGBA texture
+        GLTexture rgbaTexture;
+        glBindTexture(GL_TEXTURE_2D, rgbaTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, 1, 1);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbaTexture, 0);
+        EXPECT_PIXEL_COLOR_EQ(0, 0, bgraExpectedData);
+    }
+
+    void testRGBAToBGRAConversion()
+    {
+        GLFramebuffer framebuffer;
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+        GLColor rgbaData(255, 128, 64, 255);
+
+        GLTexture rgbaTexture;
+        glBindTexture(GL_TEXTURE_2D, rgbaTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &rgbaData);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbaTexture, 0);
+        EXPECT_PIXEL_COLOR_EQ(0, 0, rgbaData);
+
+        // Copy RGBA framebuffer -> BGRA Texture
+        GLTexture bgraTexture;
+        glBindTexture(GL_TEXTURE_2D, bgraTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA_EXT, 1, 1, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+                     nullptr);
+
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, 1, 1);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bgraTexture, 0);
+        EXPECT_PIXEL_COLOR_EQ(0, 0, rgbaData);
+    }
+
     GLuint mTextureProgram;
     GLint mTextureUniformLocation;
 
@@ -542,7 +594,7 @@ TEST_P(CopyTexImageTest, CopyTexSubImageToNonCubeCompleteDestination)
     }
 }
 
-// Deleting textures after copying to them. http://anglebug.com/4267
+// Deleting textures after copying to them. http://anglebug.com/40644715
 TEST_P(CopyTexImageTest, DeleteAfterCopyingToTextures)
 {
     GLTexture texture;
@@ -593,11 +645,11 @@ TEST_P(CopyTexImageTest, DeleteAfterCopyingToTextures)
 TEST_P(CopyTexImageTest, CopyTexSubImageFrom3DTexureOES)
 {
     ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_OES_texture_3D"));
-    // TODO(anglebug.com/3801)
+    // TODO(anglebug.com/42262446)
     // Seems to fail on D3D11 Windows.
     ANGLE_SKIP_TEST_IF(IsD3D11() && IsWindows());
 
-    // http://anglebug.com/4927
+    // http://anglebug.com/42263501
     ANGLE_SKIP_TEST_IF((IsPixel2() || IsNexus5X()) && IsOpenGLES());
 
     constexpr GLsizei kDepth = 6;
@@ -901,7 +953,7 @@ TEST_P(CopyTexImageTestES3, 2DArraySubImage)
 // GL_TEXTURE_2D.
 TEST_P(CopyTexImageTestES3, CopyTexSubImageFromTexture3D)
 {
-    // TODO(anglebug.com/3801)
+    // TODO(anglebug.com/42262446)
     // Seems to fail on D3D11 Windows.
     ANGLE_SKIP_TEST_IF(IsD3D11() && IsWindows());
 
@@ -934,10 +986,50 @@ TEST_P(CopyTexImageTestES3, CopyTexSubImageFromTexture3D)
     ASSERT_GL_NO_ERROR();
 }
 
+// Test that copying a 3D texture slice into another 3D texture slice via framebuffer works
+TEST_P(CopyTexImageTestES3, CopyTexSubImage3DFromTexture3D)
+{
+    constexpr GLsizei kTexSize = 4;
+    constexpr GLsizei kLayers  = 2;
+    std::vector<GLColor> red(kTexSize * kTexSize, GLColor::red);
+    std::vector<GLColor> green(kTexSize * kTexSize, GLColor::green);
+
+    GLTexture srcTex;
+    glBindTexture(GL_TEXTURE_3D, srcTex);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, kTexSize, kTexSize, kLayers, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, nullptr);
+    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, kTexSize, kTexSize, 1, GL_RGBA, GL_UNSIGNED_BYTE,
+                    red.data());
+    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 1, kTexSize, kTexSize, 1, GL_RGBA, GL_UNSIGNED_BYTE,
+                    green.data());
+    ASSERT_GL_NO_ERROR();
+
+    GLFramebuffer fbo;
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+
+    GLTexture dstTex;
+    glBindTexture(GL_TEXTURE_3D, dstTex);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, kTexSize, kTexSize, kLayers, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, nullptr);
+    ASSERT_GL_NO_ERROR();
+
+    // Copy while swapping the layers
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, srcTex, 0, 0);
+    glCopyTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 1, 0, 0, kTexSize, kTexSize);
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, srcTex, 0, 1);
+    glCopyTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, 0, 0, kTexSize, kTexSize);
+    ASSERT_GL_NO_ERROR();
+
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dstTex, 0, 0);
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
+    glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dstTex, 0, 1);
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::red);
+}
+
 // Test that copying from a non-zero base texture works.
 TEST_P(CopyTexImageTestES3, CopyTexSubImageFromNonZeroBase)
 {
-    // http://anglebug.com/5000
+    // http://anglebug.com/40644750
     ANGLE_SKIP_TEST_IF(IsOpenGL() && IsIntel() && IsWindows());
 
     constexpr GLsizei kTexSize = 4;
@@ -991,7 +1083,7 @@ TEST_P(CopyTexImageTestES3, CopyTexSubImageFromNonZeroBase)
 // Test that copying into a non-zero base texture works.
 TEST_P(CopyTexImageTestES3, CopyTexSubImageToNonZeroBase)
 {
-    // http://anglebug.com/5000
+    // http://anglebug.com/40644750
     ANGLE_SKIP_TEST_IF(IsOpenGL() && IsIntel() && IsWindows());
 
     constexpr GLsizei kTexSize = 4;
@@ -1172,9 +1264,6 @@ TEST_P(CopyTexImageTestES3, 3DSubImageRawTextureData)
 // Test glCopyTexSubImage3D with initialized texture data that was drawn to
 TEST_P(CopyTexImageTestES3, 3DSubImageDrawTextureData)
 {
-    // TODO(anglebug.com/3801)
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsD3D11());
-
     GLFramebuffer fbo;
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
@@ -1219,10 +1308,7 @@ TEST_P(CopyTexImageTestES3, 3DSubImageDrawTextureData)
 // Test glCopyTexSubImage3D with mismatched texture formats
 TEST_P(CopyTexImageTestES3, 3DSubImageDrawMismatchedTextureTypes)
 {
-    // TODO(anglebug.com/3801)
-    ANGLE_SKIP_TEST_IF(IsWindows() && IsD3D11());
-
-    // TODO(anglebug.com/5491)
+    // TODO(anglebug.com/42264029)
     ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     GLFramebuffer fbo;
@@ -1432,6 +1518,23 @@ TEST_P(CopyTexImagePreRotationTest, NonZeroNonSquare)
         }
     }
     ASSERT_GL_NO_ERROR();
+}
+
+// ANGLE allows BGRA <-> RGBA copies. Test that these work and correctly swizzle the channels.
+TEST_P(CopyTexImageTest, BGRAAndRGBAConversions)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_texture_format_BGRA8888"));
+    testBGRAToRGBAConversion();
+    testRGBAToBGRAConversion();
+}
+
+// ANGLE allows BGRA <-> RGBA copies. Test that these work and correctly swizzle the channels.
+// ES3 uses different validation code for glCopyTexImage.
+TEST_P(CopyTexImageTestES3, BGRAAndRGBAConversions)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_texture_format_BGRA8888"));
+    testBGRAToRGBAConversion();
+    testRGBAToBGRAConversion();
 }
 
 ANGLE_INSTANTIATE_TEST_ES2_AND(

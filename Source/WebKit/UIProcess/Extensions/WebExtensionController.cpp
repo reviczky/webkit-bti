@@ -52,10 +52,11 @@ WebExtensionController* WebExtensionController::get(WebExtensionControllerIdenti
 
 WebExtensionController::WebExtensionController(Ref<WebExtensionControllerConfiguration> configuration)
     : m_configuration(configuration)
-    , m_identifier(WebExtensionControllerIdentifier::generate())
 {
-    ASSERT(!get(m_identifier));
-    webExtensionControllers().add(m_identifier, *this);
+    ASSERT(!get(identifier()));
+    webExtensionControllers().add(identifier(), *this);
+
+    initializePlatform();
 
     // A freshly created extension controller will be used to determine if the startup event
     // should be fired for any loaded extensions during a brief time window. Start a timer
@@ -79,6 +80,7 @@ WebExtensionControllerParameters WebExtensionController::parameters() const
     WebExtensionControllerParameters parameters;
 
     parameters.identifier = identifier();
+    parameters.testingMode = inTestingMode();
     parameters.contextParameters = WTF::map(extensionContexts(), [](auto& context) {
         return context->parameters();
     });
@@ -90,7 +92,7 @@ WebExtensionController::WebProcessProxySet WebExtensionController::allProcesses(
 {
     WebProcessProxySet processes;
     for (auto& page : m_pages)
-        processes.add(page.process());
+        processes.add(page.legacyMainFrameProcess());
     return processes;
 }
 

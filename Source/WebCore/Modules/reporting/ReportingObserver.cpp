@@ -36,11 +36,11 @@
 #include "ReportingScope.h"
 #include "ScriptExecutionContext.h"
 #include "WorkerGlobalScope.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(ReportingObserver);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(ReportingObserver);
 
 static bool isVisibleToReportingObservers(const String& type)
 {
@@ -56,6 +56,7 @@ static bool isVisibleToReportingObservers(const String& type)
 Ref<ReportingObserver> ReportingObserver::create(ScriptExecutionContext& scriptExecutionContext, Ref<ReportingObserverCallback>&& callback, Options&& options)
 {
     auto reportingObserver = adoptRef(*new ReportingObserver(scriptExecutionContext, WTFMove(callback), WTFMove(options)));
+    reportingObserver->suspendIfNeeded();
     return reportingObserver;
 }
 
@@ -71,7 +72,7 @@ static WeakPtr<ReportingScope> reportingScopeForContext(ScriptExecutionContext& 
 }
 
 ReportingObserver::ReportingObserver(ScriptExecutionContext& scriptExecutionContext, Ref<ReportingObserverCallback>&& callback, Options&& options)
-    : ContextDestructionObserver(&scriptExecutionContext)
+    : ActiveDOMObject(&scriptExecutionContext)
     , m_reportingScope(reportingScopeForContext(scriptExecutionContext))
     , m_callback(WTFMove(callback))
     , m_options(WTFMove(options))
@@ -144,6 +145,11 @@ void ReportingObserver::appendQueuedReportIfCorrectType(const Ref<Report>& repor
         protectedCallback->handleEvent(reports, *protectedThis);
         InspectorInstrumentation::didFireObserverCallback(*context);
     });
+}
+
+bool ReportingObserver::virtualHasPendingActivity() const
+{
+    return m_reportingScope && m_reportingScope->containsObserver(*this);
 }
 
 ReportingObserverCallback& ReportingObserver::callbackConcurrently()

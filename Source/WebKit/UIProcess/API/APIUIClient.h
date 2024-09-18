@@ -36,6 +36,7 @@
 #include <WebCore/PermissionState.h>
 #include <WebCore/ScreenOrientationType.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(COCOA)
 #include <WebCore/PlatformViewController.h>
@@ -52,6 +53,7 @@ OBJC_CLASS UIViewController;
 #endif
 
 #if ENABLE(WEBXR) && PLATFORM(COCOA)
+#include "PlatformXRSessionEnums.h"
 #include <WebCore/PlatformXR.h>
 #endif
 
@@ -89,15 +91,16 @@ class Dictionary;
 class NavigationAction;
 class Object;
 class OpenPanelParameters;
+class PageConfiguration;
 class SecurityOrigin;
 class WebAuthenticationPanel;
 
 class UIClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(UIClient);
 public:
     virtual ~UIClient() { }
 
-    virtual void createNewPage(WebKit::WebPageProxy&, WebCore::WindowFeatures&&, Ref<NavigationAction>&&, CompletionHandler<void(RefPtr<WebKit::WebPageProxy>&&)>&&);
+    virtual void createNewPage(WebKit::WebPageProxy&, Ref<API::PageConfiguration>&&, WebCore::WindowFeatures&&, Ref<NavigationAction>&&, CompletionHandler<void(RefPtr<WebKit::WebPageProxy>&&)>&&);
     virtual void showPage(WebKit::WebPageProxy*) { }
     virtual void fullscreenMayReturnToInline(WebKit::WebPageProxy*) { }
     virtual void didEnterFullscreen(WebKit::WebPageProxy*) { }
@@ -137,11 +140,6 @@ public:
     virtual void pageDidScroll(WebKit::WebPageProxy*) { }
 
     virtual void exceededDatabaseQuota(WebKit::WebPageProxy*, WebKit::WebFrameProxy*, SecurityOrigin*, const WTF::String&, const WTF::String&, unsigned long long currentQuota, unsigned long long, unsigned long long, unsigned long long, Function<void (unsigned long long)>&& completionHandler)
-    {
-        completionHandler(currentQuota);
-    }
-
-    virtual void reachedApplicationCacheOriginQuota(WebKit::WebPageProxy*, const WebCore::SecurityOrigin&, uint64_t currentQuota, uint64_t, Function<void (unsigned long long)>&& completionHandler)
     {
         completionHandler(currentQuota);
     }
@@ -235,15 +233,23 @@ public:
 
 #if ENABLE(WEBXR) && PLATFORM(COCOA)
     virtual void requestPermissionOnXRSessionFeatures(WebKit::WebPageProxy&, const WebCore::SecurityOriginData&, PlatformXR::SessionMode, const PlatformXR::Device::FeatureList& granted, const PlatformXR::Device::FeatureList& /* consentRequired */, const PlatformXR::Device::FeatureList& /* consentOptional */, const PlatformXR::Device::FeatureList& /* requiredFeaturesRequested */, const PlatformXR::Device::FeatureList& /* optionalFeaturesRequested */, CompletionHandler<void(std::optional<PlatformXR::Device::FeatureList>&&)>&& completionHandler) { completionHandler(granted); }
+    virtual void supportedXRSessionFeatures(PlatformXR::Device::FeatureList& vrFeatures, PlatformXR::Device::FeatureList& arFeatures) { }
 
 #if PLATFORM(IOS_FAMILY)
     virtual void startXRSession(WebKit::WebPageProxy&, const PlatformXR::Device::FeatureList&, CompletionHandler<void(RetainPtr<id>, PlatformViewController *)>&& completionHandler) { completionHandler(nil, nil); }
-    virtual void endXRSession(WebKit::WebPageProxy&) { }
+    virtual void endXRSession(WebKit::WebPageProxy&, WebKit::PlatformXRSessionEndReason) { }
 #endif
 #endif
 
     virtual void updateAppBadge(WebKit::WebPageProxy&, const WebCore::SecurityOriginData&, std::optional<uint64_t>) { }
     virtual void updateClientBadge(WebKit::WebPageProxy&, const WebCore::SecurityOriginData&, std::optional<uint64_t>) { }
+
+    virtual void didAdjustVisibilityWithSelectors(WebKit::WebPageProxy&, Vector<WTF::String>&&) { }
+
+#if ENABLE(GAMEPAD)
+    virtual void recentlyAccessedGamepadsForTesting(WebKit::WebPageProxy&) { }
+    virtual void stoppedAccessingGamepadsForTesting(WebKit::WebPageProxy&) { }
+#endif
 };
 
 } // namespace API

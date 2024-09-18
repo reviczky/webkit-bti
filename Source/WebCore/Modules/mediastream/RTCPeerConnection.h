@@ -77,7 +77,7 @@ struct RTCSessionDescriptionInit;
 
 struct RTCRtpTransceiverInit {
     RTCRtpTransceiverDirection direction { RTCRtpTransceiverDirection::Sendrecv };
-    Vector<RefPtr<MediaStream>> streams;
+    Vector<Ref<MediaStream>> streams;
     Vector<RTCRtpEncodingParameters> sendEncodings;
 };
 
@@ -89,10 +89,10 @@ class RTCPeerConnection final
     , private LoggerHelper
 #endif
 {
-    WTF_MAKE_ISO_ALLOCATED(RTCPeerConnection);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED_EXPORT(RTCPeerConnection, WEBCORE_EXPORT);
 public:
     static ExceptionOr<Ref<RTCPeerConnection>> create(Document&, RTCConfiguration&&);
-    virtual ~RTCPeerConnection();
+    WEBCORE_EXPORT virtual ~RTCPeerConnection();
 
     using DataChannelInit = RTCDataChannelInit;
 
@@ -163,11 +163,12 @@ public:
     WEBCORE_EXPORT void gatherDecoderImplementationName(Function<void(String&&)>&&);
 
     // EventTarget
-    EventTargetInterface eventTargetInterface() const final { return RTCPeerConnectionEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::RTCPeerConnection; }
     ScriptExecutionContext* scriptExecutionContext() const final { return ActiveDOMObject::scriptExecutionContext(); }
 
-    using RefCounted::ref;
-    using RefCounted::deref;
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     // Used for testing with a mock
     WEBCORE_EXPORT void emulatePlatformEvent(const String& action);
@@ -204,14 +205,19 @@ public:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
     const void* logIdentifier() const final { return m_logIdentifier; }
-    const char* logClassName() const final { return "RTCPeerConnection"; }
+    ASCIILiteral logClassName() const final { return "RTCPeerConnection"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
+
+    void startGatheringStatLogs(Function<void(String&&)>&&);
+    void stopGatheringStatLogs();
 
 private:
     RTCPeerConnection(Document&);
 
     ExceptionOr<void> initializeConfiguration(RTCConfiguration&&);
+
+    ExceptionOr<Ref<RTCRtpTransceiver>> addReceiveOnlyTransceiver(String&&);
 
     void registerToController(RTCController&);
     void unregisterFromController();
@@ -225,7 +231,6 @@ private:
 
     // ActiveDOMObject
     WEBCORE_EXPORT void stop() final;
-    const char* activeDOMObjectName() const final;
     void suspend(ReasonForSuspension) final;
     void resume() final;
     bool virtualHasPendingActivity() const final;

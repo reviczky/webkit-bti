@@ -71,7 +71,7 @@
 #include <wpe/WebKitColor.h>
 #include <wpe/WebKitRectangle.h>
 #include <wpe/WebKitWebViewBackend.h>
-#if ENABLE(2022_GLIB_API) && ENABLE(WPE_PLATFORM)
+#if ENABLE(2022_GLIB_API)
 #include <wpe/wpe-platform.h>
 #endif
 #endif
@@ -175,8 +175,11 @@ typedef enum {
  * detected by trying to display any kind of resource (e.g. an image)
  * from an untrusted source.
  *
- * Enum values used to denote the different events which can trigger
- * the detection of insecure content.
+ * Enum values previously used to denote the different events which can trigger
+ * the detection of insecure content. Since 2.46, WebKit generally no longer
+ * loads insecure content in secure contexts.
+ *
+ * Deprecated: 2.46
  */
 typedef enum {
     WEBKIT_INSECURE_CONTENT_RUN,
@@ -472,12 +475,15 @@ webkit_web_view_new_with_user_content_manager        (WebKitWebViewBackend      
 WEBKIT_API WebKitWebViewBackend *
 webkit_web_view_get_backend                          (WebKitWebView             *web_view);
 
-#if ENABLE(2022_GLIB_API) && ENABLE(WPE_PLATFORM)
+#if ENABLE(2022_GLIB_API)
 WEBKIT_API WPEDisplay *
 webkit_web_view_get_display                          (WebKitWebView             *web_view);
 
 WEBKIT_API WPEView *
 webkit_web_view_get_wpe_view                         (WebKitWebView             *web_view);
+
+WEBKIT_API void
+webkit_web_view_toggle_inspector                     (WebKitWebView             *web_view);
 #endif
 #endif
 

@@ -37,9 +37,11 @@
 #include "RemoteVideoFrameObjectHeap.h"
 #include "ScopedRenderingResourcesRequest.h"
 #include "WebCoreArgumentCoders.h"
+#include <WebCore/GraphicsContext.h>
 #include <WebCore/MediaPlayer.h>
 #include <WebCore/MediaPlayerPrivate.h>
 #include <wtf/Logger.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/UniqueRef.h>
 
 #if PLATFORM(COCOA)
@@ -49,6 +51,8 @@
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMediaPlayerManagerProxy);
 
 RemoteMediaPlayerManagerProxy::RemoteMediaPlayerManagerProxy(GPUConnectionToWebProcess& connection)
     : m_gpuConnectionToWebProcess(connection)
@@ -68,13 +72,15 @@ void RemoteMediaPlayerManagerProxy::clear()
         proxy->invalidate();
 }
 
-void RemoteMediaPlayerManagerProxy::createMediaPlayer(MediaPlayerIdentifier identifier, MediaPlayerEnums::MediaEngineIdentifier engineIdentifier, RemoteMediaPlayerProxyConfiguration&& proxyConfiguration)
+void RemoteMediaPlayerManagerProxy::createMediaPlayer(MediaPlayerIdentifier identifier, MediaPlayerClientIdentifier clientIdentifier, MediaPlayerEnums::MediaEngineIdentifier engineIdentifier, RemoteMediaPlayerProxyConfiguration&& proxyConfiguration)
 {
+    auto connection = m_gpuConnectionToWebProcess.get();
+    if (!connection)
+        return;
     ASSERT(RunLoop::isMain());
-    ASSERT(m_gpuConnectionToWebProcess);
     ASSERT(!m_proxies.contains(identifier));
 
-    auto proxy = RemoteMediaPlayerProxy::create(*this, identifier, m_gpuConnectionToWebProcess->protectedConnection(), engineIdentifier, WTFMove(proxyConfiguration), Ref { m_gpuConnectionToWebProcess->videoFrameObjectHeap() }, m_gpuConnectionToWebProcess->webProcessIdentity());
+    auto proxy = RemoteMediaPlayerProxy::create(*this, identifier, clientIdentifier, connection->protectedConnection(), engineIdentifier, WTFMove(proxyConfiguration), Ref { connection->videoFrameObjectHeap() }, connection->webProcessIdentity());
     m_proxies.add(identifier, WTFMove(proxy));
 }
 
@@ -85,8 +91,12 @@ void RemoteMediaPlayerManagerProxy::deleteMediaPlayer(MediaPlayerIdentifier iden
     if (auto proxy = m_proxies.take(identifier))
         proxy->invalidate();
 
-    if (m_gpuConnectionToWebProcess && !hasOutstandingRenderingResourceUsage())
-        m_gpuConnectionToWebProcess->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
+    auto connection = m_gpuConnectionToWebProcess.get();
+    if (!connection)
+        return;
+
+    if (!hasOutstandingRenderingResourceUsage())
+        connection->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
 }
 
 void RemoteMediaPlayerManagerProxy::getSupportedTypes(MediaPlayerEnums::MediaEngineIdentifier engineIdentifier, CompletionHandler<void(Vector<String>&&)>&& completionHandler)
@@ -136,14 +146,14 @@ void RemoteMediaPlayerManagerProxy::supportsKeySystem(MediaPlayerEnums::MediaEng
 void RemoteMediaPlayerManagerProxy::didReceivePlayerMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     ASSERT(RunLoop::isMain());
-    if (auto* player = m_proxies.get(ObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
+    if (auto* player = m_proxies.get(LegacyNullableObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
         player->didReceiveMessage(connection, decoder);
 }
 
 bool RemoteMediaPlayerManagerProxy::didReceiveSyncPlayerMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& encoder)
 {
     ASSERT(RunLoop::isMain());
-    if (auto* player = m_proxies.get(ObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
+    if (auto* player = m_proxies.get(LegacyNullableObjectIdentifier<MediaPlayerIdentifierType>(decoder.destinationID())))
         return player->didReceiveSyncMessage(connection, decoder, encoder);
     return false;
 }
@@ -151,6 +161,8 @@ bool RemoteMediaPlayerManagerProxy::didReceiveSyncPlayerMessage(IPC::Connection&
 RefPtr<MediaPlayer> RemoteMediaPlayerManagerProxy::mediaPlayer(const MediaPlayerIdentifier& identifier)
 {
     ASSERT(RunLoop::isMain());
+    if (!identifier.isValid())
+        return nullptr;
     auto results = m_proxies.find(identifier);
     if (results != m_proxies.end())
         return results->value->mediaPlayer();
@@ -162,7 +174,8 @@ Logger& RemoteMediaPlayerManagerProxy::logger()
 {
     if (!m_logger) {
         m_logger = Logger::create(this);
-        m_logger->setEnabled(this, m_gpuConnectionToWebProcess ? m_gpuConnectionToWebProcess->sessionID().isAlwaysOnLoggingAllowed() : false);
+        auto connection = m_gpuConnectionToWebProcess.get();
+        m_logger->setEnabled(this, connection ? connection->sessionID().isAlwaysOnLoggingAllowed() : false);
     }
 
     return *m_logger;

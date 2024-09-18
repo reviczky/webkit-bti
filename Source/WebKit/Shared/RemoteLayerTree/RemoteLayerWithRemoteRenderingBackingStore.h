@@ -28,13 +28,22 @@
 #include "RemoteLayerBackingStore.h"
 
 namespace WebKit {
+class RemoteLayerWithRemoteRenderingBackingStore;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLayerWithRemoteRenderingBackingStore> : std::true_type { };
+}
+
+namespace WebKit {
 
 class RemoteDisplayListRecorderProxy;
 class RemoteImageBufferSetProxy;
 
 class RemoteLayerWithRemoteRenderingBackingStore : public RemoteLayerBackingStore {
 public:
-    RemoteLayerWithRemoteRenderingBackingStore(PlatformCALayerRemote*);
+    RemoteLayerWithRemoteRenderingBackingStore(PlatformCALayerRemote&);
     ~RemoteLayerWithRemoteRenderingBackingStore();
 
     bool isRemoteLayerWithRemoteRenderingBackingStore() const final { return true; }

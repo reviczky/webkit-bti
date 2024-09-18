@@ -32,6 +32,7 @@
 #include <WebCore/FrameIdentifier.h>
 #include <wtf/Expected.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 
@@ -46,7 +47,7 @@ class WebPageProxy;
 class WebInspectorUIExtensionControllerProxy final
     : public RefCounted<WebInspectorUIExtensionControllerProxy>
     , public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebInspectorUIExtensionControllerProxy);
     WTF_MAKE_NONCOPYABLE(WebInspectorUIExtensionControllerProxy);
 public:
     static Ref<WebInspectorUIExtensionControllerProxy> create(WebPageProxy& inspectorPage);
@@ -60,7 +61,7 @@ public:
     void unregisterExtension(const Inspector::ExtensionID&, WTF::CompletionHandler<void(Expected<void, Inspector::ExtensionError>)>&&);
     void createTabForExtension(const Inspector::ExtensionID&, const String& tabName, const URL& tabIconURL, const URL& sourceURL, WTF::CompletionHandler<void(Expected<Inspector::ExtensionTabID, Inspector::ExtensionError>)>&&);
     void evaluateScriptForExtension(const Inspector::ExtensionID&, const String& scriptSource, const std::optional<URL>& frameURL, const std::optional<URL>& contextSecurityOrigin, const std::optional<bool>& useContentScriptContext, WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
-    void reloadForExtension(const Inspector::ExtensionID&, const std::optional<bool>& ignoreCache, const std::optional<String>& userAgent, const std::optional<String>& injectedScript, WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
+    void reloadForExtension(const Inspector::ExtensionID&, const std::optional<bool>& ignoreCache, const std::optional<String>& userAgent, const std::optional<String>& injectedScript, WTF::CompletionHandler<void(Inspector::ExtensionVoidResult)>&&);
     void showExtensionTab(const Inspector::ExtensionTabID&, CompletionHandler<void(Expected<void, Inspector::ExtensionError>)>&&);
     void navigateTabForExtension(const Inspector::ExtensionTabID&, const URL& sourceURL, CompletionHandler<void(const std::optional<Inspector::ExtensionError>)>&&);
     // API for testing.
@@ -75,6 +76,7 @@ public:
     // Notifications.
     void inspectorFrontendLoaded();
     void inspectorFrontendWillClose();
+    void effectiveAppearanceDidChange(Inspector::ExtensionAppearance);
 
 private:
     explicit WebInspectorUIExtensionControllerProxy(WebPageProxy& inspectorPage);

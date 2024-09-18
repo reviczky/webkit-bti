@@ -35,6 +35,7 @@
 #include <WebCore/LayerPool.h>
 #include <WebCore/PlatformCALayer.h>
 #include <wtf/CheckedPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
 namespace WebKit {
@@ -46,9 +47,14 @@ class WebFrame;
 class WebPage;
 
 // FIXME: This class doesn't do much now. Roll into RemoteLayerTreeDrawingArea?
-class RemoteLayerTreeContext : public WebCore::GraphicsLayerFactory {
+class RemoteLayerTreeContext : public WebCore::GraphicsLayerFactory,  public RefCounted<RemoteLayerTreeContext>, public CanMakeWeakPtr<RemoteLayerTreeContext> {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeContext);
 public:
-    explicit RemoteLayerTreeContext(WebPage&);
+    static Ref<RemoteLayerTreeContext> create(WebPage& webpage)
+    {
+        return adoptRef(*new RemoteLayerTreeContext(webpage));
+    }
+
     ~RemoteLayerTreeContext();
 
     void layerDidEnterContext(PlatformCALayerRemote&, WebCore::PlatformCALayer::LayerType);
@@ -101,6 +107,8 @@ public:
     WebPage& webPage() { return m_webPage; }
 
 private:
+    explicit RemoteLayerTreeContext(WebPage&);
+
     // WebCore::GraphicsLayerFactory
     Ref<WebCore::GraphicsLayer> createGraphicsLayer(WebCore::GraphicsLayer::Type, WebCore::GraphicsLayerClient&) override;
 

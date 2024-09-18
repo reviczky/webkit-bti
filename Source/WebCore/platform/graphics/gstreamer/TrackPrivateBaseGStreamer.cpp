@@ -264,8 +264,6 @@ bool TrackPrivateBaseGStreamer::getTag(GstTagList* tags, const gchar* tagName, S
 
 void TrackPrivateBaseGStreamer::notifyTrackOfTagsChanged()
 {
-    TrackPrivateBaseClient* client = m_owner->client();
-
     GRefPtr<GstTagList> tags;
     {
         Locker locker { m_tagMutex };
@@ -277,8 +275,11 @@ void TrackPrivateBaseGStreamer::notifyTrackOfTagsChanged()
 
     tagsChanged(GRefPtr<GstTagList>(tags));
 
-    if (getTag(tags.get(), GST_TAG_TITLE, m_label) && client)
-        client->labelChanged(m_label);
+    if (getTag(tags.get(), GST_TAG_TITLE, m_label)) {
+        m_owner->notifyMainThreadClient([&](auto& client) {
+            client.labelChanged(m_label);
+        });
+    }
 
     AtomString language;
     if (!getLanguageCode(tags.get(), language))
@@ -288,8 +289,9 @@ void TrackPrivateBaseGStreamer::notifyTrackOfTagsChanged()
         return;
 
     m_language = language;
-    if (client)
-        client->languageChanged(m_language);
+    m_owner->notifyMainThreadClient([&](auto& client) {
+        client.languageChanged(m_language);
+    });
 }
 
 void TrackPrivateBaseGStreamer::notifyTrackOfStreamChanged()
@@ -395,6 +397,22 @@ GRefPtr<GstTagList> TrackPrivateBaseGStreamer::getAllTags(const GRefPtr<GstPad>&
         allTags = adoptGRef(gst_tag_list_merge(allTags.get(), taglist, GST_TAG_MERGE_APPEND));
     }
     return allTags;
+}
+
+bool TrackPrivateBaseGStreamer::updateTrackIDFromTags(const GRefPtr<GstTagList>& tags)
+{
+    GUniqueOutPtr<char> trackIDString;
+    if (!gst_tag_list_get_string(tags.get(), "container-specific-track-id", &trackIDString.outPtr()))
+        return false;
+
+    auto trackID = WTF::parseInteger<TrackID>(StringView { std::span { trackIDString.get(), strlen(trackIDString.get()) } });
+    if (trackID && *trackID != m_trackID.value_or(0)) {
+        m_trackID = *trackID;
+        m_stringId = AtomString::number(static_cast<unsigned long long>(*m_trackID));
+        ASSERT(m_trackID);
+        return true;
+    }
+    return false;
 }
 
 #undef GST_CAT_DEFAULT

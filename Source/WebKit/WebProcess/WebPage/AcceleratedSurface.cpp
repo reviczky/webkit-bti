@@ -28,26 +28,35 @@
 
 #include "WebPage.h"
 #include <WebCore/PlatformDisplay.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if USE(WPE_RENDERER)
 #include "AcceleratedSurfaceLibWPE.h"
 #endif
 
-#if (PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))) && USE(EGL)
+#if (PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM)))
 #include "AcceleratedSurfaceDMABuf.h"
+#endif
+
+#if USE(LIBEPOXY)
+#include <epoxy/gl.h>
+#else
+#include <GLES2/gl2.h>
 #endif
 
 namespace WebKit {
 using namespace WebCore;
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedSurface);
+
 std::unique_ptr<AcceleratedSurface> AcceleratedSurface::create(WebPage& webPage, Client& client)
 {
-#if (PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))) && USE(EGL)
+#if (PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM)))
 #if USE(GBM)
-    if (PlatformDisplay::sharedDisplayForCompositing().type() == PlatformDisplay::Type::GBM)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::GBM)
         return AcceleratedSurfaceDMABuf::create(webPage, client);
 #endif
-    if (PlatformDisplay::sharedDisplayForCompositing().type() == PlatformDisplay::Type::Surfaceless)
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Surfaceless)
         return AcceleratedSurfaceDMABuf::create(webPage, client);
 #endif
 #if USE(WPE_RENDERER)
@@ -62,6 +71,7 @@ AcceleratedSurface::AcceleratedSurface(WebPage& webPage, Client& client)
     : m_webPage(webPage)
     , m_client(client)
     , m_size(webPage.size())
+    , m_isOpaque(!webPage.backgroundColor().has_value() || webPage.backgroundColor()->isOpaque())
 {
     m_size.scale(m_webPage.deviceScaleFactor());
 }
@@ -75,6 +85,26 @@ bool AcceleratedSurface::hostResize(const IntSize& size)
 
     m_size = scaledSize;
     return true;
+}
+
+bool AcceleratedSurface::backgroundColorDidChange()
+{
+    const auto& color = m_webPage.backgroundColor();
+    auto isOpaque = !color.has_value() || color->isOpaque();
+    if (m_isOpaque == isOpaque)
+        return false;
+
+    m_isOpaque = isOpaque;
+    return true;
+}
+
+void AcceleratedSurface::clearIfNeeded()
+{
+    if (m_isOpaque)
+        return;
+
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
 }
 
 } // namespace WebKit

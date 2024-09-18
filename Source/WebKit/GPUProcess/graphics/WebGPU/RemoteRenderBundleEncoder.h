@@ -27,11 +27,14 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "RemoteGPU.h"
 #include "StreamMessageReceiver.h"
 #include "WebGPUIdentifier.h"
 #include <WebCore/WebGPUIndexFormat.h>
 #include <WebCore/WebGPUIntegralTypes.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/WeakRef.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore::WebGPU {
@@ -39,10 +42,13 @@ class RenderBundleEncoder;
 }
 
 namespace IPC {
+class Connection;
 class StreamServerConnection;
 }
 
 namespace WebKit {
+
+class GPUConnectionToWebProcess;
 
 namespace WebGPU {
 class ObjectHeap;
@@ -50,21 +56,23 @@ struct RenderBundleDescriptor;
 }
 
 class RemoteRenderBundleEncoder final : public IPC::StreamMessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteRenderBundleEncoder);
 public:
-    static Ref<RemoteRenderBundleEncoder> create(WebCore::WebGPU::RenderBundleEncoder& renderBundleEncoder, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
+    static Ref<RemoteRenderBundleEncoder> create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::WebGPU::RenderBundleEncoder& renderBundleEncoder, WebGPU::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebGPUIdentifier identifier)
     {
-        return adoptRef(*new RemoteRenderBundleEncoder(renderBundleEncoder, objectHeap, WTFMove(streamConnection), identifier));
+        return adoptRef(*new RemoteRenderBundleEncoder(gpuConnectionToWebProcess, gpu, renderBundleEncoder, objectHeap, WTFMove(streamConnection), identifier));
     }
 
     ~RemoteRenderBundleEncoder();
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
 private:
     friend class WebGPU::ObjectHeap;
 
-    RemoteRenderBundleEncoder(WebCore::WebGPU::RenderBundleEncoder&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, WebGPUIdentifier);
+    RemoteRenderBundleEncoder(GPUConnectionToWebProcess&, RemoteGPU&, WebCore::WebGPU::RenderBundleEncoder&, WebGPU::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, WebGPUIdentifier);
 
     RemoteRenderBundleEncoder(const RemoteRenderBundleEncoder&) = delete;
     RemoteRenderBundleEncoder(RemoteRenderBundleEncoder&&) = delete;
@@ -72,6 +80,8 @@ private:
     RemoteRenderBundleEncoder& operator=(RemoteRenderBundleEncoder&&) = delete;
 
     WebCore::WebGPU::RenderBundleEncoder& backing() { return m_backing; }
+
+    RefPtr<IPC::Connection> connection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 
@@ -104,9 +114,11 @@ private:
     void destruct();
 
     Ref<WebCore::WebGPU::RenderBundleEncoder> m_backing;
-    WebGPU::ObjectHeap& m_objectHeap;
+    WeakRef<WebGPU::ObjectHeap> m_objectHeap;
     Ref<IPC::StreamServerConnection> m_streamConnection;
     WebGPUIdentifier m_identifier;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
+    WeakRef<RemoteGPU> m_gpu;
 };
 
 } // namespace WebKit

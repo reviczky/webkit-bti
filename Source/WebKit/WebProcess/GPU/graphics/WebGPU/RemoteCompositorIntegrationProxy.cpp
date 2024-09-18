@@ -32,8 +32,12 @@
 #include "RemoteGPUProxy.h"
 #include "WebGPUConvertToBackingContext.h"
 #include <WebCore/ImageBuffer.h>
+#include <WebCore/WebGPUTextureFormat.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit::WebGPU {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteCompositorIntegrationProxy);
 
 RemoteCompositorIntegrationProxy::RemoteCompositorIntegrationProxy(RemoteGPUProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
     : m_backing(identifier)
@@ -49,9 +53,10 @@ RemoteCompositorIntegrationProxy::~RemoteCompositorIntegrationProxy()
 }
 
 #if PLATFORM(COCOA)
-Vector<MachSendRight> RemoteCompositorIntegrationProxy::recreateRenderBuffers(int height, int width)
+Vector<MachSendRight> RemoteCompositorIntegrationProxy::recreateRenderBuffers(int width, int height, WebCore::DestinationColorSpace&& destinationColorSpace, WebCore::AlphaPremultiplication alphaMode, WebCore::WebGPU::TextureFormat textureFormat, WebCore::WebGPU::Device& device)
 {
-    auto sendResult = sendSync(Messages::RemoteCompositorIntegration::RecreateRenderBuffers(height, width));
+    RemoteDeviceProxy& proxyDevice = static_cast<RemoteDeviceProxy&>(device);
+    auto sendResult = sendSync(Messages::RemoteCompositorIntegration::RecreateRenderBuffers(width, height, WTFMove(destinationColorSpace), alphaMode, textureFormat, proxyDevice.backing()));
     if (!sendResult.succeeded())
         return { };
 
@@ -77,7 +82,7 @@ void RemoteCompositorIntegrationProxy::paintCompositedResultsToCanvas(WebCore::I
     UNUSED_VARIABLE(sendResult);
 }
 
-void RemoteCompositorIntegrationProxy::withDisplayBufferAsNativeImage(uint32_t, Function<void(WebCore::NativeImage&)>)
+void RemoteCompositorIntegrationProxy::withDisplayBufferAsNativeImage(uint32_t, Function<void(WebCore::NativeImage*)>)
 {
     RELEASE_ASSERT_NOT_REACHED();
 }

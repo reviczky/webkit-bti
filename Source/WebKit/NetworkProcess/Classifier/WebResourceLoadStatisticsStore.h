@@ -33,9 +33,9 @@
 #include "WebsiteDataType.h"
 #include <WebCore/DocumentStorageAccess.h>
 #include <WebCore/FrameIdentifier.h>
+#include <WebCore/IsLoggedIn.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PageIdentifier.h>
-#include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceLoadObserver.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Condition.h>
@@ -64,6 +64,7 @@ class ResourceLoadStatisticsStore;
 class WebFrameProxy;
 class WebProcessProxy;
 enum class CanRequestStorageAccessWithoutUserInteraction : bool;
+enum class DidFilterKnownLinkDecoration : bool;
 enum class ShouldGrandfatherStatistics : bool;
 
 enum class ShouldIncludeLocalhost : bool { No, Yes };
@@ -78,7 +79,7 @@ struct RegistrableDomainsToBlockCookiesFor {
     Vector<WebCore::RegistrableDomain> domainsToBlockAndDeleteCookiesFor;
     Vector<WebCore::RegistrableDomain> domainsToBlockButKeepCookiesFor;
     Vector<WebCore::RegistrableDomain> domainsWithUserInteractionAsFirstParty;
-    HashMap<TopFrameDomain, SubResourceDomain> domainsWithStorageAccess;
+    HashMap<TopFrameDomain, Vector<SubResourceDomain>> domainsWithStorageAccess;
     RegistrableDomainsToBlockCookiesFor isolatedCopy() const & { return { crossThreadCopy(domainsToBlockAndDeleteCookiesFor), crossThreadCopy(domainsToBlockButKeepCookiesFor), crossThreadCopy(domainsWithUserInteractionAsFirstParty), crossThreadCopy(domainsWithStorageAccess) }; }
     RegistrableDomainsToBlockCookiesFor isolatedCopy() && { return { crossThreadCopy(WTFMove(domainsToBlockAndDeleteCookiesFor)), crossThreadCopy(WTFMove(domainsToBlockButKeepCookiesFor)), crossThreadCopy(WTFMove(domainsWithUserInteractionAsFirstParty)), crossThreadCopy(WTFMove(domainsWithStorageAccess)) }; }
 };
@@ -92,7 +93,7 @@ struct RegistrableDomainsToDeleteOrRestrictWebsiteDataFor {
     bool isEmpty() const { return domainsToDeleteAllCookiesFor.isEmpty() && domainsToDeleteAllButHttpOnlyCookiesFor.isEmpty() && domainsToDeleteAllScriptWrittenStorageFor.isEmpty() && domainsToEnforceSameSiteStrictFor.isEmpty(); }
 };
 
-class WebResourceLoadStatisticsStore final : public ThreadSafeRefCounted<WebResourceLoadStatisticsStore, WTF::DestructionThread::Main> {
+class WebResourceLoadStatisticsStore final : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<WebResourceLoadStatisticsStore, WTF::DestructionThread::Main> {
 public:
     using ResourceLoadStatistics = WebCore::ResourceLoadStatistics;
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -110,6 +111,7 @@ public:
     using StorageAccessPromptWasShown = WebCore::StorageAccessPromptWasShown;
     using StorageAccessScope = WebCore::StorageAccessScope;
     using RequestStorageAccessResult = WebCore::RequestStorageAccessResult;
+    using IsLoggedIn = WebCore::IsLoggedIn;
 
     static Ref<WebResourceLoadStatisticsStore> create(NetworkSession&, const String& resourceLoadStatisticsDirectory, ShouldIncludeLocalhost, ResourceLoadStatistics::IsEphemeral);
 
@@ -129,7 +131,7 @@ public:
 
     void logFrameNavigation(NavigatedToDomain&&, TopFrameDomain&&, NavigatedFromDomain&&, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser);
     void logUserInteraction(TopFrameDomain&&, CompletionHandler<void()>&&);
-    void logCrossSiteLoadWithLinkDecoration(NavigatedFromDomain&&, NavigatedToDomain&&, CompletionHandler<void()>&&);
+    void logCrossSiteLoadWithLinkDecoration(NavigatedFromDomain&&, NavigatedToDomain&&, DidFilterKnownLinkDecoration, CompletionHandler<void()>&&);
     void clearUserInteraction(TopFrameDomain&&, CompletionHandler<void()>&&);
     void setTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
     void removeDataForDomain(const RegistrableDomain, CompletionHandler<void()>&&);
@@ -143,6 +145,8 @@ public:
     void hasStorageAccess(SubFrameDomain&&, TopFrameDomain&&, std::optional<WebCore::FrameIdentifier>, WebCore::PageIdentifier, CompletionHandler<void(bool)>&&);
     bool hasStorageAccessForFrame(const SubFrameDomain&, const TopFrameDomain&, WebCore::FrameIdentifier, WebCore::PageIdentifier);
     void requestStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebPageProxyIdentifier, StorageAccessScope,  CompletionHandler<void(RequestStorageAccessResult)>&&);
+    void setLoginStatus(RegistrableDomain&&, IsLoggedIn, CompletionHandler<void()>&&);
+    void isLoggedIn(RegistrableDomain&&, CompletionHandler<void(bool)>&&);
     void setLastSeen(RegistrableDomain&&, Seconds, CompletionHandler<void()>&&);
     void mergeStatisticForTesting(RegistrableDomain&&, TopFrameDomain&& topFrameDomain1, TopFrameDomain&& topFrameDomain2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&&);
     void isRelationshipOnlyInDatabaseOnce(RegistrableDomain&& subDomain, RegistrableDomain&& topDomain, CompletionHandler<void(bool)>&&);
@@ -205,6 +209,7 @@ public:
 #if ENABLE(MANAGED_DOMAINS)
     void setManagedDomains(HashSet<RegistrableDomain>&&, CompletionHandler<void()>&&);
 #endif
+    void setPersistedDomains(const HashSet<RegistrableDomain>&);
     void didCreateNetworkProcess();
 
     void notifyResourceLoadStatisticsProcessed();
@@ -220,6 +225,9 @@ public:
     
     bool isEphemeral() const { return m_isEphemeral == WebCore::ResourceLoadStatistics::IsEphemeral::Yes; };
     void insertExpiredStatisticForTesting(RegistrableDomain&&, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
+    void recordFrameLoadForStorageAccess(WebPageProxyIdentifier, WebCore::FrameIdentifier, const WebCore::RegistrableDomain&);
+    void clearFrameLoadRecordsForStorageAccess(WebCore::FrameIdentifier);
+    void clearFrameLoadRecordsForStorageAccess(WebPageProxyIdentifier);
 
 private:
     explicit WebResourceLoadStatisticsStore(NetworkSession&, const String&, ShouldIncludeLocalhost, WebCore::ResourceLoadStatistics::IsEphemeral);
@@ -241,6 +249,7 @@ private:
     StorageAccessStatus storageAccessStatus(const String& subFramePrimaryDomain, const String& topFramePrimaryDomain);
 
     void destroyResourceLoadStatisticsStore(CompletionHandler<void()>&&);
+    StorageAccessWasGranted storageAccessWasGrantedValueForFrame(WebCore::FrameIdentifier, const WebCore::RegistrableDomain&);
 
     WeakPtr<NetworkSession> m_networkSession;
     Ref<SuspendableWorkQueue> m_statisticsQueue;
@@ -252,11 +261,19 @@ private:
     HashSet<RegistrableDomain> m_domainsWithEphemeralUserInteraction;
 
     HashSet<RegistrableDomain> m_domainsWithUserInteractionQuirk;
-    HashMap<TopFrameDomain, SubResourceDomain> m_domainsWithCrossPageStorageAccessQuirk;
+    HashMap<TopFrameDomain, Vector<SubResourceDomain>> m_domainsWithCrossPageStorageAccessQuirk;
+    HashMap<RegistrableDomain, IsLoggedIn> m_loginStatus;
 
     bool m_hasScheduledProcessStats { false };
-
     bool m_firstNetworkProcessCreated { false };
+
+    struct StorageAccessRequestRecordValue {
+        WebPageProxyIdentifier webPageProxyID;
+        Markable<WallTime> lastRequestTime;
+        WallTime lastLoadTime;
+    };
+    using StorageAccessRequestRecordKey = std::pair<WebCore::FrameIdentifier, RegistrableDomain>;
+    HashMap<StorageAccessRequestRecordKey, StorageAccessRequestRecordValue> m_storageAccessRequestRecords;
 };
 
 } // namespace WebKit

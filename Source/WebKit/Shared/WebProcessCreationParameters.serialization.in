@@ -20,16 +20,16 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[RValue] struct WebKit::WebProcessCreationParameters {
+[RValue, DebugDecodingFailure] struct WebKit::WebProcessCreationParameters {
     WebKit::AuxiliaryProcessCreationParameters auxiliaryProcessParameters;
     String injectedBundlePath;
-    WebKit::SandboxExtension::Handle injectedBundlePathExtensionHandle;
-    Vector<WebKit::SandboxExtension::Handle> additionalSandboxExtensionHandles;
+    WebKit::SandboxExtensionHandle injectedBundlePathExtensionHandle;
+    Vector<WebKit::SandboxExtensionHandle> additionalSandboxExtensionHandles;
 
     WebKit::UserData initializationUserData;
 
 #if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
-    Vector<WebKit::SandboxExtension::Handle> enableRemoteWebInspectorExtensionHandles;
+    Vector<WebKit::SandboxExtensionHandle> enableRemoteWebInspectorExtensionHandles;
 #endif
 
     Vector<String> urlSchemesRegisteredAsEmptyDocument;
@@ -43,6 +43,10 @@
     Vector<String> urlSchemesRegisteredAsAlwaysRevalidated;
     Vector<String> urlSchemesRegisteredAsCachePartitioned;
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    Vector<String> urlSchemesRegisteredAsWebExtensions;
+#endif
 
     Vector<String> fontAllowList;
     Vector<String> overrideLanguages;
@@ -70,7 +74,6 @@
     bool attrStyleEnabled;
     bool shouldThrowExceptionForGlobalConstantRedeclaration;
     WebCore::CrossOriginMode crossOriginMode;
-    bool isLockdownModeEnabled;
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices;
@@ -90,10 +93,8 @@
     ProcessID presentingApplicationPID;
 
 #if PLATFORM(COCOA)
-    WTF::MachSendRight acceleratedCompositingPort;
-
     String uiProcessBundleResourcePath;
-    WebKit::SandboxExtension::Handle uiProcessBundleResourcePathExtensionHandle;
+    WebKit::SandboxExtensionHandle uiProcessBundleResourcePathExtensionHandle;
 
     bool shouldEnableJIT;
     bool shouldEnableFTLJIT;
@@ -139,13 +140,13 @@
     std::optional<WebKit::WebProcessDataStoreParameters> websiteDataStoreParameters;
     
 #if PLATFORM(IOS) || PLATFORM(VISION)
-    Vector<WebKit::SandboxExtension::Handle> compilerServiceExtensionHandles;
+    Vector<WebKit::SandboxExtensionHandle> compilerServiceExtensionHandles;
 #endif
 
-    std::optional<WebKit::SandboxExtension::Handle> mobileGestaltExtensionHandle;
-    std::optional<WebKit::SandboxExtension::Handle> launchServicesExtensionHandle;
+    std::optional<WebKit::SandboxExtensionHandle> mobileGestaltExtensionHandle;
+    std::optional<WebKit::SandboxExtensionHandle> launchServicesExtensionHandle;
 #if PLATFORM(MAC) && HAVE(VIDEO_RESTRICTED_DECODING)
-    WebKit::SandboxExtension::Handle trustdExtensionHandle;
+    WebKit::SandboxExtensionHandle trustdExtensionHandle;
 #endif
 #if HAVE(VIDEO_RESTRICTED_DECODING)
     bool enableDecodingHEIC;
@@ -153,11 +154,11 @@
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    Vector<WebKit::SandboxExtension::Handle> dynamicIOKitExtensionHandles;
+    Vector<WebKit::SandboxExtensionHandle> dynamicIOKitExtensionHandles;
 #endif
 
 #if PLATFORM(VISION)
-    Vector<WebKit::SandboxExtension::Handle> metalCacheDirectoryExtensionHandles;
+    Vector<WebKit::SandboxExtensionHandle> metalCacheDirectoryExtensionHandles;
 #endif
 
 #if PLATFORM(COCOA)
@@ -222,4 +223,7 @@
 
     HashMap<WebCore::RegistrableDomain, String> storageAccessUserAgentStringQuirksData;
     HashSet<WebCore::RegistrableDomain> storageAccessPromptQuirksDomains;
+
+    Seconds memoryFootprintPollIntervalForTesting;
+    Vector<size_t> memoryFootprintNotificationThresholds;
 };

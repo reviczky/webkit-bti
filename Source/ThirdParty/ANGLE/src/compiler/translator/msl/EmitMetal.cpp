@@ -10,6 +10,7 @@
 #include "common/system_utils.h"
 #include "compiler/translator/BaseTypes.h"
 #include "compiler/translator/ImmutableStringBuilder.h"
+#include "compiler/translator/OutputTree.h"
 #include "compiler/translator/SymbolTable.h"
 #include "compiler/translator/msl/AstHelpers.h"
 #include "compiler/translator/msl/DebugSink.h"
@@ -1254,8 +1255,8 @@ void GenMetalTraverser::emitFieldDeclaration(const TField &field,
                         // Put fragment inouts in their own raster order group for better
                         // parallelism.
                         // NOTE: this is not required for the reads to be ordered and coherent.
-                        // TODO(anglebug.com/7279): Consider making raster order groups a PLS layout
-                        // qualifier?
+                        // TODO(anglebug.com/40096838): Consider making raster order groups a PLS
+                        // layout qualifier?
                         mOut << ", raster_order_group(0)";
                     }
                     mOut << "]]";
@@ -1776,7 +1777,7 @@ bool GenMetalTraverser::visitBinary(Visit, TIntermBinary *binaryNode)
             groupedTraverse(leftNode);
             mOut << "[";
             const TConstantUnion *constIndex = rightNode.getConstantValue();
-            // TODO(anglebug.com/8491): Convert type and bound checks to
+            // TODO(anglebug.com/42266914): Convert type and bound checks to
             // assertions after AST validation is enabled for MSL translation.
             if (!leftType.isUnsizedArray() && constIndex != nullptr &&
                 constIndex->getType() == EbtInt && constIndex->getIConst() >= 0 &&
@@ -1870,6 +1871,11 @@ bool GenMetalTraverser::visitUnary(Visit, TIntermUnary *unaryNode)
 
     TIntermTyped &arg    = *unaryNode->getOperand();
     const TType &argType = arg.getType();
+
+    if (op == TOperator::EOpIsnan || op == TOperator::EOpIsinf)
+    {
+        mtl::getTranslatorMetalReflection(&mCompiler)->hasIsnanOrIsinf = true;
+    }
 
     const char *name = GetOperatorString(op, resultType, &argType, nullptr, nullptr);
 
@@ -2576,8 +2582,6 @@ bool GenMetalTraverser::visitForLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(bodyNode);
 
     mOut << "for (";
 
@@ -2606,7 +2610,7 @@ bool GenMetalTraverser::visitForLoop(TIntermLoop *loopNode)
 
     mOut << ")\n";
 
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
 
     return false;
 }
@@ -2618,15 +2622,14 @@ bool GenMetalTraverser::visitWhileLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(condNode && bodyNode);
+    ASSERT(condNode);
     ASSERT(!initNode && !exprNode);
 
     emitIndentation();
     mOut << "while (";
     condNode->traverse(this);
     mOut << ")\n";
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
 
     return false;
 }
@@ -2638,13 +2641,12 @@ bool GenMetalTraverser::visitDoWhileLoop(TIntermLoop *loopNode)
     TIntermNode *initNode  = loopNode->getInit();
     TIntermTyped *condNode = loopNode->getCondition();
     TIntermTyped *exprNode = loopNode->getExpression();
-    TIntermBlock *bodyNode = loopNode->getBody();
-    ASSERT(condNode && bodyNode);
+    ASSERT(condNode);
     ASSERT(!initNode && !exprNode);
 
     emitIndentation();
     mOut << "do\n";
-    emitLoopBody(bodyNode);
+    emitLoopBody(loopNode->getBody());
     mOut << "\n";
     emitIndentation();
     mOut << "while (";

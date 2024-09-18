@@ -27,6 +27,8 @@
 #pragma once
 
 #include <WebCore/ChromeClient.h>
+#include <WebCore/HTMLVideoElement.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakRef.h>
 
 namespace WebCore {
@@ -34,8 +36,9 @@ class HTMLImageElement;
 class RegistrableDomain;
 enum class CookieConsentDecisionResult : uint8_t;
 enum class DidFilterLinkDecoration : bool;
+enum class IsLoggedIn : uint8_t;
 enum class StorageAccessPromptWasShown : bool;
-enum class StorageAccessWasGranted : bool;
+enum class StorageAccessWasGranted : uint8_t;
 struct TextRecognitionOptions;
 }
 
@@ -45,7 +48,7 @@ class WebFrame;
 class WebPage;
 
 class WebChromeClient final : public WebCore::ChromeClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebChromeClient);
 public:
     WebChromeClient(WebPage&);
     ~WebChromeClient();
@@ -152,9 +155,6 @@ private:
     void print(WebCore::LocalFrame&, const WebCore::StringWithDirection&) final;
 
     void exceededDatabaseQuota(WebCore::LocalFrame&, const String& databaseName, WebCore::DatabaseDetails) final { }
-
-    void reachedMaxAppCacheSize(int64_t spaceNeeded) final;
-    void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin&, int64_t spaceNeeded) final;
     
 #if ENABLE(INPUT_TYPE_COLOR)
     std::unique_ptr<WebCore::ColorChooser> createColorChooser(WebCore::ColorChooserClient&, const WebCore::Color&) final;
@@ -238,7 +238,8 @@ private:
     void triggerRenderingUpdate() final;
     bool scheduleRenderingUpdate() final;
     void renderingUpdateFramesPerSecondChanged() final;
-    unsigned remoteImagesCountForTesting() const final; 
+    unsigned remoteImagesCountForTesting() const final;
+    void registerBlobPathForTesting(const String& path, CompletionHandler<void()>&&) final;
 
     void contentRuleListNotification(const URL&, const WebCore::ContentRuleListResults&) final;
 
@@ -260,7 +261,7 @@ private:
     WebCore::DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const final;
 
 #if ENABLE(GPU_PROCESS)
-    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, OptionSet<WebCore::ImageBufferOptions>) const final;
+    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::ImageBufferPixelFormat, OptionSet<WebCore::ImageBufferOptions>) const final;
     RefPtr<WebCore::ImageBuffer> sinkIntoImageBuffer(std::unique_ptr<WebCore::SerializedImageBuffer>) final;
 #endif
     std::unique_ptr<WebCore::WorkerClient> createWorkerClient(SerialFunctionDispatcher&) final;
@@ -299,7 +300,7 @@ private:
 #endif
 
 #if PLATFORM(MAC)
-    std::unique_ptr<WebCore::ScrollbarsController> createScrollbarsController(WebCore::Page&, WebCore::ScrollableArea&) const final;
+    void ensureScrollbarsController(WebCore::Page&, WebCore::ScrollableArea&, bool update = false) const final;
 #endif
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
@@ -312,7 +313,7 @@ private:
     void exitVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&, WTF::CompletionHandler<void(bool)>&& = [](bool) { }) final;
     void setUpPlaybackControlsManager(WebCore::HTMLMediaElement&) final;
     void clearPlaybackControlsManager() final;
-    void playbackControlsMediaEngineChanged() final;
+    void mediaEngineChanged(WebCore::HTMLMediaElement&) final;
 #endif
 
 #if ENABLE(MEDIA_USAGE)
@@ -323,6 +324,8 @@ private:
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     void exitVideoFullscreenToModeWithoutAnimation(WebCore::HTMLVideoElement&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode) final;
+    void setVideoFullscreenMode(WebCore::HTMLVideoElement&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode);
+    void clearVideoFullscreenMode(WebCore::HTMLVideoElement&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode);
 #endif
 
 #if ENABLE(FULLSCREEN_API)
@@ -349,6 +352,7 @@ private:
     WebCore::FloatSize screenSize() const final;
     WebCore::FloatSize availableScreenSize() const final;
     WebCore::FloatSize overrideScreenSize() const final;
+    WebCore::FloatSize overrideAvailableScreenSize() const final;
 #endif
 
     void dispatchDisabledAdaptationsDidChange(const OptionSet<WebCore::DisabledAdaptations>&) const final;
@@ -387,14 +391,7 @@ private:
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags) final;
     void handleAutoplayEvent(WebCore::AutoplayEvent, OptionSet<WebCore::AutoplayEventFlags>) final;
 
-#if ENABLE(APP_HIGHLIGHTS)
-    void storeAppHighlight(WebCore::AppHighlight&&) const final;
-#endif
-
     void setTextIndicator(const WebCore::TextIndicatorData&) const final;
-
-    bool wrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
-    bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
     void handleTelephoneNumberClick(const String& number, const WebCore::IntPoint&, const WebCore::IntRect&) final;
@@ -439,6 +436,9 @@ private:
     void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebCore::LocalFrame&, WebCore::StorageAccessScope, WTF::CompletionHandler<void(WebCore::RequestStorageAccessResult)>&&) final;
     bool hasPageLevelStorageAccess(const WebCore::RegistrableDomain& topLevelDomain, const WebCore::RegistrableDomain& resourceDomain) const final;
 
+    void setLoginStatus(WebCore::RegistrableDomain&&, WebCore::IsLoggedIn, WTF::CompletionHandler<void()>&&) final;
+    void isLoggedIn(WebCore::RegistrableDomain&&, WTF::CompletionHandler<void(bool)>&&) final;
+
 #if ENABLE(DEVICE_ORIENTATION)
     void shouldAllowDeviceOrientationAndMotionAccess(WebCore::LocalFrame&, bool mayPrompt, CompletionHandler<void(WebCore::DeviceOrientationOrMotionPermissionState)>&&) final;
 #endif
@@ -473,6 +473,12 @@ private:
     void textAutosizingUsesIdempotentModeChanged() final;
 #endif
 
+    void didAddOrRemoveViewportConstrainedObjects() final;
+
+#if ENABLE(META_VIEWPORT)
+    double baseViewportLayoutSizeScaleFactor() const final;
+#endif
+
     std::pair<URL, WebCore::DidFilterLinkDecoration> applyLinkDecorationFilteringWithResult(const URL&, WebCore::LinkDecorationFilteringTrigger) const final;
     URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&) const final;
 
@@ -501,6 +507,40 @@ private:
     bool isInStableState() const final;
 
     WebCore::FloatSize screenSizeForFingerprintingProtections(const WebCore::LocalFrame&, WebCore::FloatSize defaultSize) const final;
+
+    void didAdjustVisibilityWithSelectors(Vector<String>&&) final;
+
+#if ENABLE(GAMEPAD)
+    void gamepadsRecentlyAccessed() final;
+#endif
+
+#if ENABLE(WRITING_TOOLS)
+    void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) final;
+
+    void proofreadingSessionUpdateStateForSuggestionWithID(WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) final;
+#endif
+
+#if ENABLE(WRITING_TOOLS_UI)
+    void removeTextAnimationForAnimationID(const WTF::UUID&) final;
+
+    void removeInitialTextAnimationForActiveWritingToolsSession() final;
+
+    void addInitialTextAnimationForActiveWritingToolsSession() final;
+
+    void removeTransparentMarkersForActiveWritingToolsSession() final;
+
+    void addSourceTextAnimationForActiveWritingToolsSession(const WebCore::CharacterRange&, const String&, CompletionHandler<void(WebCore::TextAnimationRunMode)>&&) final;
+
+    void addDestinationTextAnimationForActiveWritingToolsSession(const std::optional<WebCore::CharacterRange>&, const String&) final;
+
+    void clearAnimationsForActiveWritingToolsSession() final;
+#endif
+
+    void hasActiveNowPlayingSessionChanged(bool) final;
+
+#if ENABLE(GPU_PROCESS)
+    void getImageBufferResourceLimitsForTesting(CompletionHandler<void(std::optional<WebCore::ImageBufferResourceLimits>)>&&) const final;
+#endif
 
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };
     mutable bool m_cachedMainFrameHasVerticalScrollbar { false };

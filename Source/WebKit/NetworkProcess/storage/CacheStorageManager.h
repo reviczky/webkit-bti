@@ -27,7 +27,17 @@
 
 #include "Connection.h"
 #include <WebCore/DOMCacheEngine.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class CacheStorageManager;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::CacheStorageManager> : std::true_type { };
+}
 
 namespace WebCore {
 struct ClientOrigin;
@@ -42,7 +52,7 @@ struct CacheStorageRecordInformation;
 
 
 class CacheStorageManager : public CanMakeWeakPtr<CacheStorageManager> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(CacheStorageManager);
 public:
     static String cacheStorageOriginDirectory(const String& rootDirectory, const WebCore::ClientOrigin&);
     static void copySaltFileToOriginDirectory(const String& rootDirectory, const String& originDirectory);

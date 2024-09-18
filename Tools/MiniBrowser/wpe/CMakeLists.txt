@@ -13,13 +13,10 @@ set(MiniBrowser_PRIVATE_INCLUDE_DIRECTORIES
 set(MiniBrowser_SYSTEM_INCLUDE_DIRECTORIES
     ${GLIB_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
-    ${WPEBACKEND_FDO_INCLUDE_DIRS}
 )
 
 set(MiniBrowser_PRIVATE_LIBRARIES
     ${JavaScriptCore_LIBRARY_NAME}
-    ${WPEBACKEND_FDO_LIBRARIES}
-    WPE::libwpe
     WebKit::WPEToolingBackends
     WebKit::WebKit
 )
@@ -60,5 +57,9 @@ WEBKIT_EXECUTABLE(MiniBrowser)
 install(TARGETS MiniBrowser DESTINATION "${LIBEXEC_INSTALL_DIR}")
 
 if (ENABLE_WPE_QT_API)
-    add_subdirectory(qt)
+    if (USE_QT6)
+        add_subdirectory(qt6)
+    else ()
+        add_subdirectory(qt5)
+    endif ()
 endif ()

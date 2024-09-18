@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,16 +35,19 @@
 #include <WebCore/AuthenticationExtensionsClientOutputs.h>
 #include <WebCore/AuthenticatorAttachment.h>
 #include <WebCore/CryptoKeyAES.h>
-#include <WebCore/CryptoKeyEC.h>
 #include <WebCore/CryptoKeyHMAC.h>
 #include <WebCore/DeviceRequestConverter.h>
 #include <WebCore/DeviceResponseConverter.h>
 #include <WebCore/ExceptionData.h>
 #include <WebCore/Pin.h>
 #include <WebCore/U2fCommandConstructor.h>
+#include <WebCore/WebAuthenticationUtils.h>
 #include <wtf/EnumTraits.h>
 #include <wtf/RunLoop.h>
-#include <wtf/text/StringConcatenateNumbers.h>
+#include <wtf/text/Base64.h>
+#include <wtf/text/MakeString.h>
+
+#define CTAP_RELEASE_LOG(fmt, ...) RELEASE_LOG(WebAuthn, "%p [aaguid=%s, transport=%s] - CtapAuthenticator::" fmt, this, aaguidForDebugging().utf8().data(), transportForDebugging().utf8().data(), ##__VA_ARGS__)
 
 namespace WebKit {
 using namespace WebCore;
@@ -53,6 +56,21 @@ using namespace fido;
 using UVAvailability = AuthenticatorSupportedOptions::UserVerificationAvailability;
 
 namespace {
+
+static Vector<Vector<PublicKeyCredentialDescriptor>> batchesForCredentials(Vector<PublicKeyCredentialDescriptor> credentials, uint32_t maxBatchSize, std::optional<uint32_t> maxCredentialIDLength)
+{
+    Vector<Vector<PublicKeyCredentialDescriptor>> batches;
+    for (auto credential : credentials) {
+        if (maxCredentialIDLength && credential.id.length() > *maxCredentialIDLength)
+            continue;
+        if (!batches.size() || batches.last().size() >= maxBatchSize)
+            batches.append({ });
+        batches.last().append(credential);
+    }
+
+    return batches;
+}
+
 WebAuthenticationStatus toStatus(const CtapDeviceResponseCode& error)
 {
     switch (error) {
@@ -93,9 +111,69 @@ CtapAuthenticator::CtapAuthenticator(std::unique_ptr<CtapDriver>&& driver, Authe
 
 void CtapAuthenticator::makeCredential()
 {
+    CTAP_RELEASE_LOG("makeCredential");
     ASSERT(!m_isDowngraded);
+
+    auto& options = std::get<PublicKeyCredentialCreationOptions>(requestData().options);
+    if (options.excludeCredentials.size() > 1) {
+        uint32_t maxBatchSize = 1;
+        if (m_info.maxCredentialIDLength() && m_info.maxCredentialCountInList())
+            maxBatchSize = *m_info.maxCredentialCountInList();
+        m_batches = batchesForCredentials(options.excludeCredentials, maxBatchSize, m_info.maxCredentialIDLength());
+        ASSERT(m_batches.size());
+        if (!m_batches.size())
+            return continueMakeCredentialAfterCheckExcludedCredentials();
+        m_currentBatch = 0;
+        Vector<uint8_t> cborCmd = encodeSilentGetAssertion(*options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+        driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
+            ASSERT(RunLoop::isMain());
+            if (!weakThis)
+                return;
+            weakThis->continueSilentlyCheckCredentials(WTFMove(data), [weakThis = WTFMove(weakThis)] (bool foundMatch) mutable {
+                if (!weakThis)
+                    return;
+                weakThis->continueMakeCredentialAfterCheckExcludedCredentials(foundMatch);
+            });
+        });
+    } else
+        continueMakeCredentialAfterCheckExcludedCredentials();
+}
+
+void CtapAuthenticator::continueSilentlyCheckCredentials(Vector<uint8_t>&& data, CompletionHandler<void(bool)>&& completionHandler)
+{
+    auto error = getResponseCode(data);
+    if (error == CtapDeviceResponseCode::kSuccess)
+        return completionHandler(true);
+    if (error == CtapDeviceResponseCode::kCtap2ErrNoCredentials) {
+        if (m_currentBatch + 1 >= m_batches.size())
+            return completionHandler(false);
+        m_currentBatch += 1;
+    }
+    Vector<uint8_t> cborCmd;
+    WTF::switchOn(requestData().options, [&](const PublicKeyCredentialCreationOptions& options) {
+        cborCmd = encodeSilentGetAssertion(*options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+    }, [&](const PublicKeyCredentialRequestOptions& options) {
+        cborCmd = encodeSilentGetAssertion(options.rpId, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+    });
+
+    auto response = readCTAPGetAssertionResponse(data, AuthenticatorAttachment::CrossPlatform);
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)](Vector<uint8_t>&& data) mutable {
+        ASSERT(RunLoop::isMain());
+        if (!weakThis)
+            return completionHandler(false);
+        weakThis->continueSilentlyCheckCredentials(WTFMove(data), WTFMove(completionHandler));
+    });
+}
+
+void CtapAuthenticator::continueMakeCredentialAfterCheckExcludedCredentials(bool includeCurrentBatch)
+{
     Vector<uint8_t> cborCmd;
     auto& options = std::get<PublicKeyCredentialCreationOptions>(requestData().options);
+    Vector<PublicKeyCredentialDescriptor> overrideExcludeCredentials;
+    if (includeCurrentBatch) {
+        ASSERT(m_currentBatch < m_batches.size());
+        overrideExcludeCredentials = m_batches[m_currentBatch];
+    }
     auto internalUVAvailability = m_info.options().userVerificationAvailability();
     auto residentKeyAvailability = m_info.options().residentKeyAvailability();
     Vector<String> authenticatorSupportedExtensions;
@@ -106,13 +184,15 @@ void CtapAuthenticator::makeCredential()
         }
         residentKeyAvailability = AuthenticatorSupportedOptions::ResidentKeyAvailability::kNotSupported;
     }
+
     // If UV is required, then either built-in uv or a pin will work.
     if (internalUVAvailability == UVAvailability::kSupportedAndConfigured && (!options.authenticatorSelection || options.authenticatorSelection->userVerification != UserVerificationRequirement::Discouraged) && m_pinAuth.isEmpty())
-        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions);
+        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions, std::nullopt, WTFMove(overrideExcludeCredentials));
     else if (m_info.options().clientPinAvailability() == AuthenticatorSupportedOptions::ClientPinAvailability::kSupportedAndPinSet)
-        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions, PinParameters { pin::kProtocolVersion, m_pinAuth });
+        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions, PinParameters { pin::kProtocolVersion, m_pinAuth }, WTFMove(overrideExcludeCredentials));
     else
-        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions);
+        cborCmd = encodeMakeCredentialRequestAsCBOR(requestData().hash, options, internalUVAvailability, residentKeyAvailability, authenticatorSupportedExtensions, std::nullopt, WTFMove(overrideExcludeCredentials));
+    CTAP_RELEASE_LOG("makeCredential: Sending %s", base64EncodeToString(cborCmd).utf8().data());
     driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
@@ -123,10 +203,11 @@ void CtapAuthenticator::makeCredential()
 
 void CtapAuthenticator::continueMakeCredentialAfterResponseReceived(Vector<uint8_t>&& data)
 {
+    auto error = getResponseCode(data);
+    CTAP_RELEASE_LOG("continueMakeCredentialAfterResponseReceived: Got error code: %hhu from authenticator.", enumToUnderlyingType(error));
     auto response = readCTAPMakeCredentialResponse(data, AuthenticatorAttachment::CrossPlatform, transports(), std::get<PublicKeyCredentialCreationOptions>(requestData().options).attestation);
     if (!response) {
-        auto error = getResponseCode(data);
-        RELEASE_LOG_DEBUG(WebAuthn, "Got error code: %hhu from authenticator.", enumToUnderlyingType(error));
+        CTAP_RELEASE_LOG("makeCredential: Failed to parse response %s", base64EncodeToString(data).utf8().data());
 
         if (error == CtapDeviceResponseCode::kCtap2ErrActionTimeout) {
             makeCredential();
@@ -155,7 +236,7 @@ void CtapAuthenticator::continueMakeCredentialAfterResponseReceived(Vector<uint8
                 return;
         }
 
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
     auto& options = std::get<PublicKeyCredentialCreationOptions>(requestData().options);
@@ -172,18 +253,52 @@ void CtapAuthenticator::continueMakeCredentialAfterResponseReceived(Vector<uint8
 
 void CtapAuthenticator::getAssertion()
 {
+    CTAP_RELEASE_LOG("getAssertion");
+
+    auto& options = std::get<PublicKeyCredentialRequestOptions>(requestData().options);
+    if (options.allowCredentials.size() > 1) {
+        uint32_t maxBatchSize = 1;
+        if (m_info.maxCredentialIDLength() && m_info.maxCredentialCountInList())
+            maxBatchSize = *m_info.maxCredentialCountInList();
+        m_batches = batchesForCredentials(options.allowCredentials, maxBatchSize, m_info.maxCredentialIDLength());
+        ASSERT(m_batches.size());
+        if (!m_batches.size())
+            return continueGetAssertionAfterCheckAllowCredentials();
+        m_currentBatch = 0;
+        Vector<uint8_t> cborCmd = encodeSilentGetAssertion(options.rpId, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+        driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
+            ASSERT(RunLoop::isMain());
+            if (!weakThis)
+                return;
+            weakThis->continueSilentlyCheckCredentials(WTFMove(data), [weakThis = WTFMove(weakThis)] (bool) mutable {
+                if (!weakThis)
+                    return;
+                weakThis->continueGetAssertionAfterCheckAllowCredentials();
+            });
+        });
+    } else
+        continueGetAssertionAfterCheckAllowCredentials();
+}
+
+void CtapAuthenticator::continueGetAssertionAfterCheckAllowCredentials()
+{
     ASSERT(!m_isDowngraded);
     Vector<uint8_t> cborCmd;
     auto& options = std::get<PublicKeyCredentialRequestOptions>(requestData().options);
+    std::optional<Vector<PublicKeyCredentialDescriptor>> overrideAllowCredentials;
+    if (m_currentBatch < m_batches.size())
+        overrideAllowCredentials = m_batches[m_currentBatch];
+
     auto internalUVAvailability = m_info.options().userVerificationAvailability();
     Vector<String> authenticatorSupportedExtensions;
     // If UV is required, then either built-in uv or a pin will work.
     if (internalUVAvailability == UVAvailability::kSupportedAndConfigured && options.userVerification != UserVerificationRequirement::Discouraged && m_pinAuth.isEmpty())
-        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions);
+        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions, std::nullopt, WTFMove(overrideAllowCredentials));
     else if (m_info.options().clientPinAvailability() == AuthenticatorSupportedOptions::ClientPinAvailability::kSupportedAndPinSet && options.userVerification != UserVerificationRequirement::Discouraged)
-        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions, PinParameters { pin::kProtocolVersion, m_pinAuth });
+        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions, PinParameters { pin::kProtocolVersion, m_pinAuth }, WTFMove(overrideAllowCredentials));
     else
-        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions);
+        cborCmd = encodeGetAssertionRequestAsCBOR(requestData().hash, options, internalUVAvailability, authenticatorSupportedExtensions, std::nullopt, WTFMove(overrideAllowCredentials));
+    CTAP_RELEASE_LOG("getAssertion: Sending %s", base64EncodeToString(cborCmd).utf8().data());
     driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
@@ -195,9 +310,10 @@ void CtapAuthenticator::getAssertion()
 void CtapAuthenticator::continueGetAssertionAfterResponseReceived(Vector<uint8_t>&& data)
 {
     auto response = readCTAPGetAssertionResponse(data, AuthenticatorAttachment::CrossPlatform);
+    auto error = getResponseCode(data);
+    CTAP_RELEASE_LOG("continueGetAssertionAfterResponseReceived: errorcode: %hhu", enumToUnderlyingType(error));
     if (!response) {
-        auto error = getResponseCode(data);
-
+        CTAP_RELEASE_LOG("continueGetAssertionAfterResponseReceived: Failed to parse response %s", base64EncodeToString(data).utf8().data());
         if (error == CtapDeviceResponseCode::kCtap2ErrActionTimeout) {
             getAssertion();
             return;
@@ -216,9 +332,11 @@ void CtapAuthenticator::continueGetAssertionAfterResponseReceived(Vector<uint8_t
         if (error == CtapDeviceResponseCode::kCtap2ErrNoCredentials && observer())
             observer()->authenticatorStatusUpdated(WebAuthenticationStatus::NoCredentialsFound);
 
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        CTAP_RELEASE_LOG("continueGetAssertionAfterResponseReceived: No credentials found.");
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
+    CTAP_RELEASE_LOG("continueGetAssertionAfterResponseReceived: Get %lu credentials back.", response->numberOfCredentials());
 
     if (response->numberOfCredentials() <= 1) {
         receiveRespond(response.releaseNonNull());
@@ -228,7 +346,9 @@ void CtapAuthenticator::continueGetAssertionAfterResponseReceived(Vector<uint8_t
     m_remainingAssertionResponses = response->numberOfCredentials() - 1;
     m_assertionResponses.reserveInitialCapacity(response->numberOfCredentials());
     m_assertionResponses.append(response.releaseNonNull());
-    driver().transact(encodeEmptyAuthenticatorRequest(CtapRequestCommand::kAuthenticatorGetNextAssertion), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
+    auto cborCmd = encodeEmptyAuthenticatorRequest(CtapRequestCommand::kAuthenticatorGetNextAssertion);
+    CTAP_RELEASE_LOG("continueGetAssertionAfterResponseReceived: Sending %s", base64EncodeToString(cborCmd).utf8().data());
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
             return;
@@ -238,14 +358,17 @@ void CtapAuthenticator::continueGetAssertionAfterResponseReceived(Vector<uint8_t
 
 void CtapAuthenticator::continueGetNextAssertionAfterResponseReceived(Vector<uint8_t>&& data)
 {
+    auto error = getResponseCode(data);
+    CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived: errorcode: %hhu", enumToUnderlyingType(error));
     auto response = readCTAPGetAssertionResponse(data, AuthenticatorAttachment::CrossPlatform);
     if (!response) {
-        auto error = getResponseCode(data);
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived: Unable to parse response: %s", base64EncodeToString(data).utf8().data());
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
     m_remainingAssertionResponses--;
     m_assertionResponses.append(response.releaseNonNull());
+    CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived: Remaining responses: %lu", m_remainingAssertionResponses);
 
     if (!m_remainingAssertionResponses) {
         if (auto* observer = this->observer()) {
@@ -264,7 +387,9 @@ void CtapAuthenticator::continueGetNextAssertionAfterResponseReceived(Vector<uin
         return;
     }
 
-    driver().transact(encodeEmptyAuthenticatorRequest(CtapRequestCommand::kAuthenticatorGetNextAssertion), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
+    auto cborCmd = encodeEmptyAuthenticatorRequest(CtapRequestCommand::kAuthenticatorGetNextAssertion);
+    CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived: Sending %s", base64EncodeToString(cborCmd).utf8().data());
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
             return;
@@ -275,46 +400,54 @@ void CtapAuthenticator::continueGetNextAssertionAfterResponseReceived(Vector<uin
 void CtapAuthenticator::getRetries()
 {
     auto cborCmd = encodeAsCBOR(pin::RetriesRequest { });
-    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
+    CTAP_RELEASE_LOG("getRetries: Sending %s", base64EncodeToString(cborCmd).utf8().data());
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, this](Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
             return;
+        CTAP_RELEASE_LOG("getRetries: Response %s", base64EncodeToString(data).utf8().data());
         weakThis->continueGetKeyAgreementAfterGetRetries(WTFMove(data));
     });
 }
 
 void CtapAuthenticator::continueGetKeyAgreementAfterGetRetries(Vector<uint8_t>&& data)
 {
+    CTAP_RELEASE_LOG("continueGetKeyAgreementAfterGetRetries");
     auto retries = pin::RetriesResponse::parse(data);
     if (!retries) {
         auto error = getResponseCode(data);
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
 
     auto cborCmd = encodeAsCBOR(pin::KeyAgreementRequest { });
-    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, retries = retries->retries] (Vector<uint8_t>&& data) {
+    CTAP_RELEASE_LOG("continueGetKeyAgreementAfterGetRetries: Sending %s", base64EncodeToString(cborCmd).utf8().data());
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, this, retries = retries->retries] (Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
             return;
+        CTAP_RELEASE_LOG("continueGetKeyAgreementAfterGetRetries: Response %s", base64EncodeToString(data).utf8().data());
         weakThis->continueRequestPinAfterGetKeyAgreement(WTFMove(data), retries);
     });
 }
 
 void CtapAuthenticator::continueRequestPinAfterGetKeyAgreement(Vector<uint8_t>&& data, uint64_t retries)
 {
+    CTAP_RELEASE_LOG("continueRequestPinAfterGetKeyAgreement");
     auto keyAgreement = pin::KeyAgreementResponse::parse(data);
     if (!keyAgreement) {
         auto error = getResponseCode(data);
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
 
     if (auto* observer = this->observer()) {
-        observer->requestPin(retries, [weakThis = WeakPtr { *this }, keyAgreement = WTFMove(*keyAgreement)] (const String& pin) {
+        CTAP_RELEASE_LOG("continueRequestPinAfterGetKeyAgreement: Requesting pin from observer.");
+        observer->requestPin(retries, [weakThis = WeakPtr { *this }, this, keyAgreement = WTFMove(*keyAgreement)] (const String& pin) {
             RELEASE_ASSERT(RunLoop::isMain());
             if (!weakThis)
                 return;
+            CTAP_RELEASE_LOG("continueRequestPinAfterGetKeyAgreement: Got pin from observer.");
             weakThis->continueGetPinTokenAfterRequestPin(pin, keyAgreement.peerKey);
         });
     }
@@ -322,6 +455,7 @@ void CtapAuthenticator::continueRequestPinAfterGetKeyAgreement(Vector<uint8_t>&&
 
 void CtapAuthenticator::continueGetPinTokenAfterRequestPin(const String& pin, const CryptoKeyEC& peerKey)
 {
+    CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived");
     if (pin.isNull()) {
         receiveRespond(ExceptionData { ExceptionCode::UnknownError, "Pin is null."_s });
         return;
@@ -342,16 +476,19 @@ void CtapAuthenticator::continueGetPinTokenAfterRequestPin(const String& pin, co
     }
 
     auto cborCmd = encodeAsCBOR(*tokenRequest);
-    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, tokenRequest = WTFMove(*tokenRequest)] (Vector<uint8_t>&& data) {
+    CTAP_RELEASE_LOG("continueGetPinTokenAfterRequestPin: Sending %s", base64EncodeToString(cborCmd).utf8().data());
+    driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }, this, tokenRequest = WTFMove(*tokenRequest)] (Vector<uint8_t>&& data) {
         ASSERT(RunLoop::isMain());
         if (!weakThis)
             return;
+        CTAP_RELEASE_LOG("continueGetPinTokenAfterRequestPin: Response %s", base64EncodeToString(data).utf8().data());
         weakThis->continueRequestAfterGetPinToken(WTFMove(data), tokenRequest);
     });
 }
 
 void CtapAuthenticator::continueRequestAfterGetPinToken(Vector<uint8_t>&& data, const fido::pin::TokenRequest& tokenRequest)
 {
+    CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived");
     auto token = pin::TokenResponse::parse(tokenRequest.sharedKey(), data);
     if (!token) {
         auto error = getResponseCode(data);
@@ -363,7 +500,7 @@ void CtapAuthenticator::continueRequestAfterGetPinToken(Vector<uint8_t>&& data, 
                 return;
         }
 
-        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: ", static_cast<uint8_t>(error)) });
+        receiveRespond(ExceptionData { ExceptionCode::UnknownError, makeString("Unknown internal error. Error code: "_s, static_cast<uint8_t>(error)) });
         return;
     }
 
@@ -377,6 +514,7 @@ void CtapAuthenticator::continueRequestAfterGetPinToken(Vector<uint8_t>&& data, 
 
 bool CtapAuthenticator::tryRestartPin(const CtapDeviceResponseCode& error)
 {
+    CTAP_RELEASE_LOG("tryRestartPin: Error code: %hhu", enumToUnderlyingType(error));
     switch (error) {
     case CtapDeviceResponseCode::kCtap2ErrPinAuthInvalid:
     case CtapDeviceResponseCode::kCtap2ErrPinInvalid:
@@ -390,6 +528,7 @@ bool CtapAuthenticator::tryRestartPin(const CtapDeviceResponseCode& error)
 
 bool CtapAuthenticator::tryDowngrade()
 {
+    CTAP_RELEASE_LOG("tryDowngrade");
     if (m_info.versions().find(ProtocolVersion::kU2f) == m_info.versions().end())
         return false;
     if (!observer())
@@ -404,6 +543,7 @@ bool CtapAuthenticator::tryDowngrade()
     if (!isConvertible)
         return false;
 
+    CTAP_RELEASE_LOG("tryDowngrade: Downgrading to U2F.");
     m_isDowngraded = true;
     driver().setProtocol(ProtocolVersion::kU2f);
     observer()->downgrade(this, U2fAuthenticator::create(releaseDriver()));
@@ -416,6 +556,11 @@ Vector<AuthenticatorTransport> CtapAuthenticator::transports() const
     if (auto& infoTransports = m_info.transports())
         return *infoTransports;
     return Vector { driver().transport() };
+}
+
+String CtapAuthenticator::aaguidForDebugging() const
+{
+    return WTF::UUID { std::span<const uint8_t, 16> { m_info.aaguid() } }.toString();
 }
 
 } // namespace WebKit

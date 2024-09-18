@@ -1,6 +1,12 @@
 include(platform/Adwaita.cmake)
-include(platform/Cairo.cmake)
-include(platform/FreeType.cmake)
+
+if (USE_CAIRO)
+    include(platform/Cairo.cmake)
+    include(platform/FreeType.cmake)
+elseif (USE_SKIA)
+    include(platform/Skia.cmake)
+endif ()
+
 include(platform/GCrypt.cmake)
 include(platform/GStreamer.cmake)
 include(platform/ImageDecoders.cmake)
@@ -46,11 +52,12 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/glib/ApplicationGLib.h
 
+    platform/graphics/egl/PlatformDisplaySurfaceless.h
+
     platform/graphics/gbm/GBMVersioning.h
+    platform/graphics/gbm/PlatformDisplayGBM.h
 
     platform/graphics/libwpe/PlatformDisplayLibWPE.h
-
-    platform/graphics/wayland/PlatformDisplayWayland.h
 )
 
 set(CSS_VALUE_PLATFORM_DEFINES "HAVE_OS_DARK_MODE_SUPPORT=1")
@@ -73,12 +80,6 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${LIBTASN1_INCLUDE_DIRS}
     ${UPOWERGLIB_INCLUDE_DIRS}
 )
-
-if (USE_WPEBACKEND_FDO_AUDIO_EXTENSION)
-    list(APPEND WebCore_LIBRARIES ${WPEBACKEND_FDO_LIBRARIES})
-    list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES ${WPE_INCLUDE_DIRS})
-    list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES ${WPEBACKEND_FDO_INCLUDE_DIRS})
-endif ()
 
 if (USE_OPENXR)
     list(APPEND WebCore_LIBRARIES ${OPENXR_LIBRARIES})
@@ -147,3 +148,11 @@ if (ENABLE_SPEECH_SYNTHESIS)
         ${Flite_LIBRARIES}
     )
 endif ()
+
+# This sets the maximum amount of memory that BitmapTexturePool can hold before being more
+# aggressive trying to release the unused textures.
+# Use a big value as the default size limit (80MB, enough for ten 1920x1080 layers).
+# Embedded users will want to set this limit depending on the capabilities of their platform.
+list(APPEND WebCore_PRIVATE_DEFINITIONS
+     BITMAP_TEXTURE_POOL_MAX_SIZE_IN_MB=80
+)

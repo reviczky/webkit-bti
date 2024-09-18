@@ -32,6 +32,16 @@
 #include <WebCore/TransferredMessagePort.h>
 #include <WebCore/WorkerInitializationData.h>
 #include <pal/SessionID.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class WebSharedWorkerServerConnection;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebSharedWorkerServerConnection> : std::true_type { };
+}
 
 namespace WebCore {
 class ResourceError;
@@ -50,7 +60,7 @@ class WebSharedWorkerServerToContextConnection;
 class NetworkSession;
 
 class WebSharedWorkerServerConnection : public IPC::MessageSender, public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebSharedWorkerServerConnection);
 public:
     WebSharedWorkerServerConnection(NetworkProcess&, WebSharedWorkerServer&, IPC::Connection&, WebCore::ProcessIdentifier);
     ~WebSharedWorkerServerConnection();

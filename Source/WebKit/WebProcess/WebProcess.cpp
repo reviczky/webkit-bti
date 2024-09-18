@@ -34,10 +34,12 @@
 #include "InjectedBundle.h"
 #include "LibWebRTCNetwork.h"
 #include "Logging.h"
+#include "ModelProcessModelPlayerManager.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkProcessConnection.h"
 #include "NetworkProcessConnectionInfo.h"
 #include "NetworkSession.h"
+#include "NotificationManagerMessageHandlerMessages.h"
 #include "RemoteAudioHardwareListener.h"
 #include "RemoteAudioSession.h"
 #include "RemoteLegacyCDMFactory.h"
@@ -53,7 +55,6 @@
 #include "WebBroadcastChannelRegistry.h"
 #include "WebCacheStorageProvider.h"
 #include "WebChromeClient.h"
-#include "WebConnectionToUIProcess.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebFileSystemStorageConnection.h"
@@ -69,6 +70,7 @@
 #include "WebPageCreationParameters.h"
 #include "WebPageGroupProxy.h"
 #include "WebPageInlines.h"
+#include "WebPageProxy.h"
 #include "WebPaymentCoordinator.h"
 #include "WebPermissionController.h"
 #include "WebPlatformStrategies.h"
@@ -91,7 +93,6 @@
 #include <JavaScriptCore/MemoryStatistics.h>
 #include <JavaScriptCore/WasmFaultSignalHandler.h>
 #include <WebCore/AXObjectCache.h>
-#include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/AuthenticationChallenge.h>
 #include <WebCore/BackForwardCache.h>
 #include <WebCore/CPUMonitor.h>
@@ -109,7 +110,6 @@
 #include <WebCore/GCController.h>
 #include <WebCore/GlyphPage.h>
 #include <WebCore/HTMLMediaElement.h>
-#include <WebCore/JSLocalDOMWindow.h>
 #include <WebCore/LegacySchemeRegistry.h>
 #include <WebCore/LocalDOMWindow.h>
 #include <WebCore/LocalFrame.h>
@@ -118,6 +118,7 @@
 #include <WebCore/MemoryRelease.h>
 #include <WebCore/MessagePort.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
+#include <WebCore/NavigatorGamepad.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageGroup.h>
@@ -147,6 +148,7 @@
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URLParser.h>
 #include <wtf/WTFProcess.h>
 #include <wtf/text/StringHash.h>
@@ -161,7 +163,6 @@
 #endif
 
 #if PLATFORM(COCOA)
-#include "ObjCObjectGraph.h"
 #include "UserMediaCaptureManager.h"
 #endif
 
@@ -171,10 +172,6 @@
 
 #if HAVE(DISPLAY_LINK)
 #include <WebCore/DisplayRefreshMonitorManager.h>
-#endif
-
-#if USE(RUNNINGBOARD)
-#include "WebSQLiteDatabaseTracker.h"
 #endif
 
 #if ENABLE(NOTIFICATIONS)
@@ -260,6 +257,8 @@ namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebProcess);
+
 #if !PLATFORM(GTK) && !PLATFORM(WPE)
 NO_RETURN static void callExit(IPC::Connection*)
 {
@@ -272,7 +271,7 @@ static void crashAfter10Seconds(IPC::Connection*)
 {
     // If the connection has been closed and we haven't responded in the main thread for 10 seconds the process will exit forcibly.
     static const auto watchdogDelay = 10_s;
-    WorkQueue::create("WebKit.WebProcess.WatchDogQueue")->dispatchAfter(watchdogDelay, [] {
+    WorkQueue::create("WebKit.WebProcess.WatchDogQueue"_s)->dispatchAfter(watchdogDelay, [] {
         // We use g_error() here to cause a crash and allow debugging this unexpected late exit.
         g_error("WebProcess didn't exit as expected after the UI process connection was closed");
     });
@@ -290,6 +289,9 @@ WebProcess::WebProcess()
 #if PLATFORM(COCOA) && USE(LIBWEBRTC) && ENABLE(WEB_CODECS)
     , m_remoteVideoCodecFactory(*this)
 #endif
+#if ENABLE(MODEL_PROCESS)
+    , m_modelProcessModelPlayerManager(ModelProcessModelPlayerManager::create())
+#endif
     , m_cacheStorageProvider(WebCacheStorageProvider::create())
     , m_badgeClient(WebBadgeClient::create())
 #if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
@@ -303,9 +305,6 @@ WebProcess::WebProcess()
     , m_dnsPrefetchHystereris([this](PAL::HysteresisState state) { if (state == PAL::HysteresisState::Stopped) m_dnsPrefetchedHosts.clear(); })
 #if ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER)
     , m_nonVisibleProcessMemoryCleanupTimer(*this, &WebProcess::nonVisibleProcessMemoryCleanupTimerFired)
-#endif
-#if USE(RUNNINGBOARD)
-    , m_webSQLiteDatabaseTracker([this](bool isHoldingLockedFiles) { parentProcessConnection()->send(Messages::WebProcessProxy::SetIsHoldingLockedFiles(isHoldingLockedFiles), 0); })
 #endif
 {
     // Initialize our platform strategies.
@@ -361,6 +360,8 @@ WebProcess::~WebProcess()
 
 void WebProcess::initializeProcess(const AuxiliaryProcessInitializationParameters& parameters)
 {
+    m_isLockdownModeEnabled = parameters.extraInitializationData.get<HashTranslatorASCIILiteral>("enable-lockdown-mode"_s) == "1"_s;
+
     WTF::setProcessPrivileges({ });
 
     {
@@ -404,8 +405,6 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
 
     for (auto& supplement : m_supplements.values())
         supplement->initializeConnection(connection);
-
-    m_webConnection = WebConnectionToUIProcess::create(this);
 }
 
 static void scheduleLogMemoryStatistics(LogMemoryStatisticsReason reason)
@@ -416,9 +415,11 @@ static void scheduleLogMemoryStatistics(LogMemoryStatisticsReason reason)
     });
 }
 
-void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
+void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters, CompletionHandler<void(ProcessIdentity)>&& completionHandler)
 {    
     TraceScope traceScope(InitializeWebProcessStart, InitializeWebProcessEnd);
+    // Reply immediately so that the identity is available as soon as possible.
+    completionHandler(ProcessIdentity { ProcessIdentity::CurrentProcess });
 
     ASSERT(m_pageMap.isEmpty());
 
@@ -467,6 +468,8 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
                 page->releaseMemory(critical);
         });
 #if ENABLE(PERIODIC_MEMORY_MONITOR)
+        if (auto pollInterval = parameters.memoryFootprintPollIntervalForTesting)
+            memoryPressureHandler.setMemoryFootprintPollIntervalForTesting(pollInterval);
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
         memoryPressureHandler.setMemoryKillCallback([this] () {
             WebCore::logMemoryStatistics(LogMemoryStatisticsReason::OutOfMemoryDeath);
@@ -474,6 +477,9 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
                 parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedActiveMemoryLimit(), 0);
             else
                 parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedInactiveMemoryLimit(), 0);
+        });
+        memoryPressureHandler.setMemoryFootprintNotificationThresholds(WTFMove(parameters.memoryFootprintNotificationThresholds), [this](size_t footprint) {
+            parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedMemoryFootprintThreshold(footprint), 0);
         });
 #endif
         memoryPressureHandler.setMemoryPressureStatusChangedCallback([this]() {
@@ -507,7 +513,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
             WTF::TextStream activityStateStream(WTF::TextStream::LineMode::SingleLine);
             activityStateStream << page->activityState();
 
-            RELEASE_LOG(ActivityState, "WebPage %p - load_time: %lld, visible: %d, throttleable: %d , suspended: %d , websam_state: %" PUBLIC_LOG_STRING ", activity_state: %" PUBLIC_LOG_STRING ", url: %" PRIVATE_LOG_STRING, page.get(), loadCommitTime, page->isVisible(), page->isThrottleable(), page->isSuspended(), MemoryPressureHandler::processStateDescription().characters(), activityStateStream.release().utf8().data(), page->mainWebFrame().url().string().utf8().data());
+            RELEASE_LOG(ActivityState, "WebPage %p - load_time: %" PRId64 ", visible: %d, throttleable: %d , suspended: %d , websam_state: %" PUBLIC_LOG_STRING ", activity_state: %" PUBLIC_LOG_STRING ", url: %" PRIVATE_LOG_STRING, page.get(), loadCommitTime, page->isVisible(), page->isThrottleable(), page->isSuspended(), MemoryPressureHandler::processStateDescription().characters(), activityStateStream.release().utf8().data(), page->mainWebFrame().url().string().utf8().data());
         }
     });
 #endif
@@ -579,6 +585,11 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     for (auto& scheme : parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest)
         registerURLSchemeAsCanDisplayOnlyIfCanRequest(scheme);
 
+#if ENABLE(WK_WEB_EXTENSIONS)
+    for (auto& scheme : parameters.urlSchemesRegisteredAsWebExtensions)
+        WebExtensionMatchPattern::registerCustomURLScheme(scheme);
+#endif
+
     setDefaultRequestTimeoutInterval(parameters.defaultRequestTimeoutInterval);
 
     setBackForwardCacheCapacity(parameters.backForwardCacheCapacity);
@@ -594,8 +605,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     commonVM().setGlobalConstRedeclarationShouldThrow(parameters.shouldThrowExceptionForGlobalConstantRedeclaration);
 
     ScriptExecutionContext::setCrossOriginMode(parameters.crossOriginMode);
-    m_isLockdownModeEnabled = parameters.isLockdownModeEnabled;
-    DeprecatedGlobalSettings::setArePDFImagesEnabled(!m_isLockdownModeEnabled);
+    DeprecatedGlobalSettings::setArePDFImagesEnabled(!isLockdownModeEnabled());
 
 #if ENABLE(SERVICE_CONTROLS)
     setEnabledServices(parameters.hasImageServices, parameters.hasSelectionServices, parameters.hasRichContentServices);
@@ -606,6 +616,12 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         RetainPtr<CFDataRef> auditData = adoptCF(CFDataCreate(nullptr, (const UInt8*)&*auditToken, sizeof(*auditToken)));
         Inspector::RemoteInspector::singleton().setParentProcessInformation(WebCore::presentingApplicationPID(), auditData);
     }
+    // We need to connect to webinspectord before the first page load for the XPC connection to be successfully opened.
+    // This is because we block launchd before the first page load, and launchd is required to establish the connection.
+    // This is only done if Web Inspector is enabled, which is determined by the size of the Web Inspector extension vector.
+    // See WebProcessProxy::shouldEnableRemoteInspector().
+    if (parameters.enableRemoteWebInspectorExtensionHandles.size())
+        Inspector::RemoteInspector::singleton().connectToWebInspector();
 #endif
 
 #if ENABLE(GAMEPAD)
@@ -627,6 +643,13 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     updateStorageAccessUserAgentStringQuirks(WTFMove(parameters.storageAccessUserAgentStringQuirksData));
     updateDomainsWithStorageAccessQuirks(WTFMove(parameters.storageAccessPromptQuirksDomains));
 
+#if ENABLE(GAMEPAD)
+    // Web processes need to periodically notify the UI process of gamepad access at least as frequently
+    // as the WebPageProxy::gamepadsRecentlyAccessedThreshold value.
+    // 3-times-as-often seems like it will guarantee proper behavior for almost all web pages.
+    WebCore::NavigatorGamepad::setGamepadsRecentlyAccessedThreshold(WebPageProxy::gamepadsRecentlyAccessedThreshold / 3);
+#endif
+
     WEBPROCESS_RELEASE_LOG(Process, "initializeWebProcess: Presenting processPID=%d", WebCore::presentingApplicationPID());
 }
 
@@ -634,12 +657,6 @@ void WebProcess::setWebsiteDataStoreParameters(WebProcessDataStoreParameters&& p
 {
     ASSERT(!m_sessionID);
     m_sessionID = parameters.sessionID;
-
-    // FIXME: This should be constructed per data store, not per process.
-    m_applicationCacheStorage = ApplicationCacheStorage::create(parameters.applicationCacheDirectory, parameters.applicationCacheFlatFileSubdirectoryName);
-#if PLATFORM(IOS_FAMILY)
-    m_applicationCacheStorage->setDefaultOriginQuota(25ULL * 1024 * 1024);
-#endif
 
 #if ENABLE(VIDEO)
     if (!parameters.mediaCacheDirectory.isEmpty())
@@ -679,6 +696,17 @@ bool WebProcess::areAllPagesSuspended() const
             return false;
     }
     return true;
+}
+
+void WebProcess::updateIsWebTransportEnabled()
+{
+    for (auto& page : m_pageMap.values()) {
+        if (page->isWebTransportEnabled()) {
+            m_isWebTransportEnabled = true;
+            return;
+        }
+    }
+    m_isWebTransportEnabled = false;
 }
 
 void WebProcess::setHasSuspendedPageProxy(bool hasSuspendedPageProxy)
@@ -786,6 +814,13 @@ void WebProcess::registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String& url
     LegacySchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(urlScheme);
 }
 
+#if ENABLE(WK_WEB_EXTENSIONS)
+void WebProcess::registerURLSchemeAsWebExtension(const String& urlScheme) const
+{
+    WebExtensionMatchPattern::registerCustomURLScheme(urlScheme);
+}
+#endif
+
 void WebProcess::setDefaultRequestTimeoutInterval(double timeoutInterval)
 {
     ResourceRequest::setDefaultTimeoutInterval(timeoutInterval);
@@ -873,6 +908,7 @@ void WebProcess::createWebPage(PageIdentifier pageID, WebPageCreationParameters&
         // Balanced by an enableTermination in removeWebPage.
         disableTermination();
         updateCPULimit();
+        updateIsWebTransportEnabled();
 #if OS(LINUX)
         RealTimeThreads::singleton().setEnabled(hasVisibleWebPage());
 #endif
@@ -897,6 +933,7 @@ void WebProcess::removeWebPage(PageIdentifier pageID)
 
     enableTermination();
     updateCPULimit();
+    updateIsWebTransportEnabled();
 #if OS(LINUX)
     RealTimeThreads::singleton().setEnabled(hasVisibleWebPage());
 #endif
@@ -920,9 +957,6 @@ void WebProcess::terminate()
     FontCache::invalidateAllFontCaches();
     MemoryCache::singleton().setDisabled(true);
 #endif
-
-    m_webConnection->invalidate();
-    m_webConnection = nullptr;
 
     platformTerminate();
 
@@ -965,7 +999,7 @@ void WebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& de
         return;
     }
 
-    LOG_ERROR("Unhandled web process message '%s' (destination: %" PRIu64 " pid: %d)", description(decoder.messageName()), decoder.destinationID(), static_cast<int>(getCurrentProcessID()));
+    LOG_ERROR("Unhandled web process message '%s' (destination: %" PRIu64 " pid: %d)", description(decoder.messageName()).characters(), decoder.destinationID(), static_cast<int>(getCurrentProcessID()));
 }
 
 void WebProcess::didClose(IPC::Connection& connection)
@@ -973,8 +1007,6 @@ void WebProcess::didClose(IPC::Connection& connection)
 #if ENABLE(VIDEO)
     FileSystem::markPurgeable(WebCore::HTMLMediaElement::mediaCacheDirectory());
 #endif
-    if (m_applicationCacheStorage)
-        FileSystem::markPurgeable(m_applicationCacheStorage->cacheDirectory());
 #if ENABLE(ARKIT_INLINE_PREVIEW_MAC)
     FileSystem::markPurgeable(ARKitInlinePreviewModelPlayerMac::modelElementCacheDirectory());
 #endif
@@ -993,7 +1025,9 @@ void WebProcess::addWebFrame(FrameIdentifier frameID, WebFrame* frame)
 
 void WebProcess::removeWebFrame(FrameIdentifier frameID, std::optional<WebPageProxyIdentifier> pageID)
 {
-    m_frameMap.remove(frameID);
+    auto frame = m_frameMap.take(frameID);
+    if (frame && frame->coreLocalFrame() && m_networkProcessConnection)
+        m_networkProcessConnection->connection().send(Messages::NetworkConnectionToWebProcess::ClearFrameLoadRecordsForStorageAccess(frameID), 0);
 
     // We can end up here after our connection has closed when WebCore's frame life-support timer
     // fires when the application is shutting down. There's no need (and no way) to update the UI
@@ -1007,21 +1041,6 @@ void WebProcess::removeWebFrame(FrameIdentifier frameID, std::optional<WebPagePr
     parentProcessConnection()->send(Messages::WebProcessProxy::DidDestroyFrame(frameID, *pageID), 0);
 }
 
-WebPageGroupProxy* WebProcess::webPageGroup(PageGroup* pageGroup)
-{
-    for (auto& page : m_pageGroupMap.values()) {
-        if (page->corePageGroup() == pageGroup)
-            return page.get();
-    }
-
-    return 0;
-}
-
-WebPageGroupProxy* WebProcess::webPageGroup(PageGroupIdentifier pageGroupID)
-{
-    return m_pageGroupMap.get(pageGroupID);
-}
-
 WebPageGroupProxy* WebProcess::webPageGroup(const WebPageGroupData& pageGroupData)
 {
     auto result = m_pageGroupMap.add(pageGroupData.pageGroupID, nullptr);
@@ -1033,21 +1052,17 @@ WebPageGroupProxy* WebProcess::webPageGroup(const WebPageGroupData& pageGroupDat
     return result.iterator->value.get();
 }
 
-static uint64_t nextUserGestureTokenIdentifier()
-{
-    static uint64_t identifier = 1;
-    return identifier++;
-}
-
-uint64_t WebProcess::userGestureTokenIdentifier(std::optional<PageIdentifier> pageID, RefPtr<UserGestureToken> token)
+std::optional<WebCore::UserGestureTokenIdentifier> WebProcess::userGestureTokenIdentifier(std::optional<PageIdentifier> pageID, RefPtr<UserGestureToken> token)
 {
     if (!pageID)
-        return 0;
+        return std::nullopt;
 
     if (!token || !token->processingUserGesture())
-        return 0;
+        return std::nullopt;
 
-    auto result = m_userGestureTokens.ensure(*token, [] { return nextUserGestureTokenIdentifier(); });
+    auto result = m_userGestureTokens.ensure(*token, [] {
+        return UserGestureTokenIdentifier::generate();
+    });
     if (result.isNewEntry) {
         result.iterator->key.addDestructionObserver([pageID] (UserGestureToken& tokenBeingDestroyed) {
             WebProcess::singleton().userGestureTokenDestroyed(*pageID, tokenBeingDestroyed);
@@ -1144,7 +1159,7 @@ void WebProcess::handleInjectedBundleMessage(const String& messageName, const Us
     injectedBundle->didReceiveMessage(messageName, transformHandlesToObjects(messageBody.object()));
 }
 
-void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataReference& value)
+void WebProcess::setInjectedBundleParameter(const String& key, std::span<const uint8_t> value)
 {
     RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
@@ -1153,7 +1168,7 @@ void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataRe
     injectedBundle->setBundleParameter(key, value);
 }
 
-void WebProcess::setInjectedBundleParameters(const IPC::DataReference& value)
+void WebProcess::setInjectedBundleParameters(std::span<const uint8_t> value)
 {
     RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
@@ -1182,7 +1197,7 @@ static NetworkProcessConnectionInfo getNetworkProcessConnection(IPC::Connection&
     auto requestConnection = [&]() -> bool {
         auto sendResult = connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), 0, IPC::Timeout::infinity(), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
         if (!sendResult.succeeded()) {
-            RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed to send message or receive invalid message: error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error()));
+            RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed to send message or receive invalid message: error %" PUBLIC_LOG_STRING, IPC::errorAsString(sendResult.error()).characters());
             failedToGetNetworkProcessConnection();
         }
         std::tie(connectionInfo) = sendResult.takeReply();
@@ -1339,9 +1354,17 @@ GPUProcessConnection& WebProcess::ensureGPUProcessConnection()
 
     // If we've lost our connection to the GPU process (e.g. it crashed) try to re-establish it.
     if (!m_gpuProcessConnection) {
-        m_gpuProcessConnection = GPUProcessConnection::create(Ref { *parentProcessConnection() });
-        if (!m_gpuProcessConnection)
+        auto connectionIdentifiers = IPC::Connection::createConnectionIdentifierPair();
+        if (!connectionIdentifiers)
             CRASH();
+
+        Ref gpuConnection = IPC::Connection::createServerConnection(WTFMove(connectionIdentifiers->server));
+#if ENABLE(IPC_TESTING_API)
+        if (gpuConnection->ignoreInvalidMessageForTesting())
+            gpuConnection->setIgnoreInvalidMessageForTesting();
+#endif
+        m_gpuProcessConnection = GPUProcessConnection::create(WTFMove(gpuConnection));
+        protectedParentProcessConnection()->send(Messages::WebProcessProxy::CreateGPUProcessConnection(m_gpuProcessConnection->identifier(),  WTFMove(connectionIdentifiers->client)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
         for (auto& page : m_pageMap.values()) {
             // If page is null, then it is currently being constructed.
             if (page)
@@ -1351,11 +1374,15 @@ GPUProcessConnection& WebProcess::ensureGPUProcessConnection()
     return *m_gpuProcessConnection;
 }
 
-void WebProcess::gpuProcessConnectionClosed(GPUProcessConnection& connection)
+Seconds WebProcess::gpuProcessTimeoutDuration() const
+{
+    constexpr Seconds defaultTimeoutDuration = 15_s;
+    return m_childProcessDebuggabilityEnabled ? Seconds::infinity() : defaultTimeoutDuration;
+}
+
+void WebProcess::gpuProcessConnectionClosed()
 {
     ASSERT(m_gpuProcessConnection);
-    ASSERT_UNUSED(connection, m_gpuProcessConnection == &connection);
-
     m_gpuProcessConnection = nullptr;
 
     for (auto& page : m_pageMap.values()) {
@@ -1367,6 +1394,12 @@ void WebProcess::gpuProcessConnectionClosed(GPUProcessConnection& connection)
     if (m_audioMediaStreamTrackRendererInternalUnitManager)
         m_audioMediaStreamTrackRendererInternalUnitManager->restartAllUnits();
 #endif
+}
+
+void WebProcess::gpuProcessConnectionDidBecomeUnresponsive()
+{
+    ASSERT(m_gpuProcessConnection);
+    parentProcessConnection()->send(Messages::WebProcessProxy::GPUProcessConnectionDidBecomeUnresponsive(m_gpuProcessConnection->identifier()), 0);
 }
 
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
@@ -1556,6 +1589,10 @@ void WebProcess::updateCPUMonitorState(CPUMonitorUpdateReason)
 {
 }
 
+void WebProcess::bindAccessibilityFrameWithData(WebCore::FrameIdentifier, std::span<const uint8_t>)
+{
+}
+
 #endif
 
 void WebProcess::pageActivityStateDidChange(PageIdentifier, OptionSet<WebCore::ActivityState> changed)
@@ -1613,15 +1650,10 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
 
 #if PLATFORM(COCOA)
     destroyRenderingResources();
-#endif
-
-#if USE(RUNNINGBOARD)
-    m_webSQLiteDatabaseTracker.setIsSuspended(true);
-    SQLiteDatabase::setIsDatabaseOpeningForbidden(true);
+    accessibilityRelayProcessSuspended(true);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    accessibilityRelayProcessSuspended(true);
     updateFreezerStatus();
 #endif
 
@@ -1693,13 +1725,8 @@ void WebProcess::processDidResume()
 
     cancelMarkAllLayersVolatile();
     unfreezeAllLayerTrees();
-    
-#if USE(RUNNINGBOARD)
-    m_webSQLiteDatabaseTracker.setIsSuspended(false);
-    SQLiteDatabase::setIsDatabaseOpeningForbidden(false);
-#endif
 
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(COCOA)
     accessibilityRelayProcessSuspended(false);
 #endif
 
@@ -1861,11 +1888,6 @@ RefPtr<API::Object> WebProcess::transformHandlesToObjects(API::Object* object)
             case API::Object::Type::PageHandle:
                 return static_cast<const API::PageHandle&>(object).isAutoconverting();
 
-#if PLATFORM(COCOA)
-            case API::Object::Type::ObjCObjectGraph:
-#endif
-                return true;
-
             default:
                 return false;
             }
@@ -1880,10 +1902,6 @@ RefPtr<API::Object> WebProcess::transformHandlesToObjects(API::Object* object)
             case API::Object::Type::PageHandle:
                 return WebProcess::singleton().webPage(static_cast<const API::PageHandle&>(object).webPageID());
 
-#if PLATFORM(COCOA)
-            case API::Object::Type::ObjCObjectGraph:
-                return WebProcess::singleton().transformHandlesToObjects(static_cast<ObjCObjectGraph&>(object));
-#endif
             default:
                 return &object;
             }
@@ -1901,9 +1919,6 @@ RefPtr<API::Object> WebProcess::transformObjectsToHandles(API::Object* object)
             switch (object.type()) {
             case API::Object::Type::BundleFrame:
             case API::Object::Type::BundlePage:
-#if PLATFORM(COCOA)
-            case API::Object::Type::ObjCObjectGraph:
-#endif
                 return true;
 
             default:
@@ -1919,11 +1934,6 @@ RefPtr<API::Object> WebProcess::transformObjectsToHandles(API::Object* object)
 
             case API::Object::Type::BundlePage:
                 return API::PageHandle::createAutoconverting(static_cast<const WebPage&>(object).webPageProxyIdentifier(), static_cast<const WebPage&>(object).identifier());
-
-#if PLATFORM(COCOA)
-            case API::Object::Type::ObjCObjectGraph:
-                return transformObjectsToHandles(static_cast<ObjCObjectGraph&>(object));
-#endif
 
             default:
                 return &object;
@@ -2137,6 +2147,14 @@ bool WebProcess::areAllPagesThrottleable() const
 
 void WebProcess::setAppBadge(std::optional<WebPageProxyIdentifier> pageIdentifier, const WebCore::SecurityOriginData& origin, std::optional<uint64_t> badge)
 {
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    if (DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
+        if (m_sessionID)
+            ensureNetworkProcessConnection().connection().send(Messages::NotificationManagerMessageHandler::SetAppBadge({ origin, badge }), m_sessionID->toUInt64());
+        return;
+    }
+#endif
+
     parentProcessConnection()->send(Messages::WebProcessProxy::SetAppBadge(pageIdentifier, origin, badge), 0);
 }
 
@@ -2169,11 +2187,13 @@ void WebProcess::setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomai
     ResourceLoadObserver::shared().setDomainsWithUserInteraction(WTFMove(domains));
 }
 
-void WebProcess::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubResourceDomain>&& domains, CompletionHandler<void()>&& completionHandler)
+void WebProcess::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, Vector<SubResourceDomain>>&& domains, CompletionHandler<void()>&& completionHandler)
 {
-    for (auto& domain : domains.keys()) {
-        for (auto& webPage : m_pageMap.values())
-            webPage->addDomainWithPageLevelStorageAccess(domain, domains.get(domain));
+    for (auto& [domain, subResourceDomains] : domains) {
+        for (auto& subResourceDomain : subResourceDomains) {
+            for (auto& webPage : m_pageMap.values())
+                webPage->addDomainWithPageLevelStorageAccess(domain, subResourceDomain);
+        }
     }
     ResourceLoadObserver::shared().setDomainsWithCrossPageStorageAccess(WTFMove(domains), WTFMove(completionHandler));
 }
@@ -2193,6 +2213,11 @@ void WebProcess::updateDomainsWithStorageAccessQuirks(HashSet<WebCore::Registrab
     m_domainsWithStorageAccessQuirks.clear();
     for (auto&& domain : domainsWithStorageAccessQuirks)
         m_domainsWithStorageAccessQuirks.add(domain);
+}
+
+void WebProcess::setChildProcessDebuggabilityEnabled(bool childProcessDebuggabilityEnabled)
+{
+    m_childProcessDebuggabilityEnabled = childProcessDebuggabilityEnabled;
 }
 
 #if ENABLE(GPU_PROCESS)
@@ -2357,21 +2382,6 @@ void WebProcess::setNetworkProcessConnectionID(IPC::Connection::UniqueID uniqueI
     Locker lock { m_lockNetworkProcessConnectionID };
     m_networkProcessConnectionID = uniqueID;
 
-}
-
-void WebProcess::addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&& firstPartyForCookies)
-{
-    if (!HashSet<WebCore::RegistrableDomain>::isValidValue(firstPartyForCookies))
-        return;
-
-    m_allowedFirstPartiesForCookies.add(WTFMove(firstPartyForCookies));
-}
-
-bool WebProcess::allowsFirstPartyForCookies(const URL& firstParty)
-{
-    return AuxiliaryProcess::allowsFirstPartyForCookies(firstParty, [&] {
-        return AuxiliaryProcess::allowsFirstPartyForCookies(WebCore::RegistrableDomain { firstParty }, m_allowedFirstPartiesForCookies);
-    });
 }
 
 WebTransportSession* WebProcess::webTransportSession(WebTransportSessionIdentifier identifier)

@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -145,7 +145,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
 
   <section>
     <div class="docblock">
-      <p></p>
+      <p><span class="emblem deprecated">deprecated: 2.46</span>&nbsp;</p>
     </div>
     <div class="declaration toggle-wrapper">
       <h4 id="declaration">
@@ -170,18 +170,14 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L2235">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L2289">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>This signal is emitted when insecure content has been detected
-in a page loaded through a secure connection. This typically
-means that a external resource from an unstrusted source has
-been run or displayed, resulting in a mix of <span class="caps">HTTPS</span> and
-non-<span class="caps">HTTPS</span>&nbsp;content.</p>
-<p>You can check the <code>event</code> parameter to know exactly which kind
-of event has been detected (see <code>WebKitInsecureContentEvent</code>).</p>
+        <p>Prior to 2.46, this signal was emitted when insecure content was
+loaded in a secure content. Since 2.46, this signal is generally
+no longer&nbsp;emitted.</p>
       </div>
 
       <div class="docblock">
@@ -193,6 +189,9 @@ of event has been detected (see <code>WebKitInsecureContentEvent</code>).</p>
           
           
           
+          
+          <tr><td>Deprecated since: 2.46</td></tr>
+          <tr><td><p>Please do not use it in newly written&nbsp;code.</p></td></tr>
           
         </table>
       </div>

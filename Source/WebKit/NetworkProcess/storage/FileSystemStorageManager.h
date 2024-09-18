@@ -27,6 +27,16 @@
 
 #include "FileSystemStorageHandle.h"
 #include <WebCore/FileSystemHandleIdentifier.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WebKit {
+class FileSystemStorageManager;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::FileSystemStorageManager> : std::true_type { };
+}
 
 namespace WebKit {
 
@@ -34,7 +44,7 @@ class FileSystemStorageHandle;
 class FileSystemStorageHandleRegistry;
 
 class FileSystemStorageManager : public CanMakeWeakPtr<FileSystemStorageManager> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(FileSystemStorageManager);
 public:
     using QuotaCheckFunction = Function<void(uint64_t spaceRequested, CompletionHandler<void(bool)>&&)>;
     FileSystemStorageManager(String&& path, FileSystemStorageHandleRegistry&, QuotaCheckFunction&&);

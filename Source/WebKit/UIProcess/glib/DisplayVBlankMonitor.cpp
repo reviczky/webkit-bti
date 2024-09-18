@@ -28,6 +28,7 @@
 
 #include "DisplayVBlankMonitorTimer.h"
 #include "Logging.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Threading.h>
 #include <wtf/Vector.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
@@ -37,6 +38,8 @@
 #endif
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DisplayVBlankMonitor);
 
 std::unique_ptr<DisplayVBlankMonitor> DisplayVBlankMonitor::create(PlatformDisplayID displayID)
 {
@@ -71,7 +74,7 @@ bool DisplayVBlankMonitor::startThreadIfNeeded()
     if (m_thread)
         return false;
 
-    m_thread = Thread::create("VBlankMonitor", [this] {
+    m_thread = Thread::create("VBlankMonitor"_s, [this] {
         while (true) {
             {
                 Locker locker { m_lock };

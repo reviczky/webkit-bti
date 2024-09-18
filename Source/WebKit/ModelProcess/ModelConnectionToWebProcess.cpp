@@ -28,7 +28,6 @@
 
 #if ENABLE(MODEL_PROCESS)
 
-#include "DataReference.h"
 #include "LayerHostingContext.h"
 #include "Logging.h"
 #include "MessageSenderInlines.h"
@@ -38,6 +37,10 @@
 #include "ModelProcessConnectionMessages.h"
 #include "ModelProcessConnectionParameters.h"
 #include "ModelProcessMessages.h"
+#include "ModelProcessModelPlayerManagerProxy.h"
+#include "ModelProcessModelPlayerManagerProxyMessages.h"
+#include "ModelProcessModelPlayerProxy.h"
+#include "ModelProcessModelPlayerProxyMessages.h"
 #include "ModelProcessProxyMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
@@ -48,7 +51,7 @@
 #include "IPCTesterMessages.h"
 #endif
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, (&connection()))
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, connection())
 
 namespace WebKit {
 using namespace WebCore;
@@ -59,7 +62,8 @@ Ref<ModelConnectionToWebProcess> ModelConnectionToWebProcess::create(ModelProces
 }
 
 ModelConnectionToWebProcess::ModelConnectionToWebProcess(ModelProcess& modelProcess, WebCore::ProcessIdentifier webProcessIdentifier, PAL::SessionID sessionID, IPC::Connection::Handle&& connectionHandle, ModelProcessConnectionParameters&& parameters)
-    : m_connection(IPC::Connection::createClientConnection(IPC::Connection::Identifier { WTFMove(connectionHandle) }))
+    : m_modelProcessModelPlayerManagerProxy(makeUniqueRef<ModelProcessModelPlayerManagerProxy>(*this))
+    , m_connection(IPC::Connection::createClientConnection(IPC::Connection::Identifier { WTFMove(connectionHandle) }))
     , m_modelProcess(modelProcess)
     , m_webProcessIdentifier(webProcessIdentifier)
     , m_webProcessIdentity(WTFMove(parameters.webProcessIdentity))
@@ -158,13 +162,14 @@ Logger& ModelConnectionToWebProcess::logger()
     return *m_logger;
 }
 
-void ModelConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void ModelConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t)
 {
 #if ENABLE(IPC_TESTING_API)
     if (connection.ignoreInvalidMessageForTesting())
         return;
 #endif
-    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ".", description(messageName), m_webProcessIdentifier.toUInt64());
+    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ".", description(messageName).characters(), m_webProcessIdentifier.toUInt64());
+    m_modelProcess->parentProcessConnection()->send(Messages::ModelProcessProxy::TerminateWebProcess(m_webProcessIdentifier), 0);
 }
 
 void ModelConnectionToWebProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
@@ -173,6 +178,15 @@ void ModelConnectionToWebProcess::lowMemoryHandler(Critical critical, Synchronou
 
 bool ModelConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
+    if (decoder.messageReceiverName() == Messages::ModelProcessModelPlayerManagerProxy::messageReceiverName()) {
+        modelProcessModelPlayerManagerProxy().didReceiveMessageFromWebProcess(connection, decoder);
+        return true;
+    }
+    if (decoder.messageReceiverName() == Messages::ModelProcessModelPlayerProxy::messageReceiverName()) {
+        modelProcessModelPlayerManagerProxy().didReceivePlayerMessage(connection, decoder);
+        return true;
+    }
+
 #if ENABLE(IPC_TESTING_API)
     if (decoder.messageReceiverName() == Messages::IPCTester::messageReceiverName()) {
         m_ipcTester.didReceiveMessage(connection, decoder);

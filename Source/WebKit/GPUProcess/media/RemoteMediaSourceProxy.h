@@ -34,6 +34,8 @@
 #include <WebCore/MediaSourcePrivateClient.h>
 #include <wtf/MediaTime.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 
 namespace IPC {
@@ -55,7 +57,7 @@ class RemoteMediaPlayerProxy;
 class RemoteMediaSourceProxy final
     : public WebCore::MediaSourcePrivateClient
     , private IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteMediaSourceProxy);
 public:
     RemoteMediaSourceProxy(GPUConnectionToWebProcess&, RemoteMediaSourceIdentifier, bool webMParserEnabled, RemoteMediaPlayerProxy&);
     virtual ~RemoteMediaSourceProxy();
@@ -88,7 +90,7 @@ private:
     void setTimeFudgeFactor(const MediaTime&);
     void disconnect();
 
-    WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
+    ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
     RemoteMediaSourceIdentifier m_identifier;
     bool m_webMParserEnabled { false };
     RefPtr<WebCore::MediaSourcePrivate> m_private;

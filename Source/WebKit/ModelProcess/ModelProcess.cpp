@@ -31,7 +31,6 @@
 #include "ArgumentCoders.h"
 #include "Attachment.h"
 #include "AuxiliaryProcessMessages.h"
-#include "DataReference.h"
 #include "LogInitialization.h"
 #include "ModelConnectionToWebProcess.h"
 #include "ModelProcessConnectionParameters.h"
@@ -176,8 +175,10 @@ void ModelProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
     WebCore::releaseGraphicsMemory(critical, synchronous);
 }
 
-void ModelProcess::initializeModelProcess(ModelProcessCreationParameters&& parameters)
+void ModelProcess::initializeModelProcess(ModelProcessCreationParameters&& parameters, CompletionHandler<void()>&& completionHandler)
 {
+    CompletionHandlerCallingScope callCompletionHandler(WTFMove(completionHandler));
+
     applyProcessCreationParameters(parameters.auxiliaryProcessParameters);
     RELEASE_LOG(Process, "%p - ModelProcess::initializeModelProcess:", this);
     WTF::Thread::setCurrentThreadIsUserInitiated();

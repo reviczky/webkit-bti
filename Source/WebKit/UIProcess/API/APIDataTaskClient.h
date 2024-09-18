@@ -27,8 +27,8 @@
 
 #include "AuthenticationChallengeDisposition.h"
 #include "AuthenticationChallengeProxy.h"
-#include "DataReference.h"
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 class Credential;
@@ -42,7 +42,7 @@ namespace API {
 class Data;
 
 class DataTaskClient : public RefCounted<DataTaskClient> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(DataTaskClient);
 public:
     static Ref<DataTaskClient> create() { return adoptRef(*new DataTaskClient); }
     virtual ~DataTaskClient() { }
@@ -50,7 +50,7 @@ public:
     virtual void didReceiveChallenge(DataTask&, WebCore::AuthenticationChallenge&&, CompletionHandler<void(WebKit::AuthenticationChallengeDisposition, WebCore::Credential&&)>&& completionHandler) const { completionHandler(WebKit::AuthenticationChallengeDisposition::RejectProtectionSpaceAndContinue, { }); }
     virtual void willPerformHTTPRedirection(DataTask&, WebCore::ResourceResponse&&, WebCore::ResourceRequest&&, CompletionHandler<void(bool)>&& completionHandler) const { completionHandler(true); }
     virtual void didReceiveResponse(DataTask&, WebCore::ResourceResponse&&, CompletionHandler<void(bool)>&& completionHandler) const { completionHandler(true); }
-    virtual void didReceiveData(DataTask&, const IPC::DataReference&) const { }
+    virtual void didReceiveData(DataTask&, std::span<const uint8_t>) const { }
     virtual void didCompleteWithError(DataTask&, WebCore::ResourceError&&) const { }
 };
 

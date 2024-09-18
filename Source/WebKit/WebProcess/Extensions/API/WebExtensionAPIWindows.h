@@ -41,14 +41,14 @@ namespace WebKit {
 class WebPage;
 
 class WebExtensionAPIWindows : public WebExtensionAPIObject, public JSWebExtensionWrappable {
-    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIWindows, windows);
+    WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIWindows, windows, windows);
 
 public:
 #if PLATFORM(COCOA)
     using PopulateTabs = WebExtensionWindow::PopulateTabs;
     using WindowTypeFilter = WebExtensionWindow::TypeFilter;
 
-    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage&);
+    bool isPropertyAllowed(const ASCIILiteral& propertyName, WebPage*);
 
     void createWindow(NSDictionary *data, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
 

@@ -25,13 +25,15 @@
 
 #pragma once
 
+#include "SharedPreferencesForWebProcess.h"
+
 namespace WebKit {
 
 struct NetworkProcessConnectionParameters {
-    bool allowTestOnlyIPC { false };
+    SharedPreferencesForWebProcess sharedPreferencesForWebProcess;
 #if ENABLE(IPC_TESTING_API)
     bool ignoreInvalidMessageForTesting { false };
 #endif
 };
 
-}; // namespace WebKit
+} // namespace WebKit

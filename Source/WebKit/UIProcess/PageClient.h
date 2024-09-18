@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "DataReference.h"
 #include "IdentifierTypes.h"
 #include "LayerTreeContext.h"
 #include "PDFPluginIdentifier.h"
@@ -43,19 +42,23 @@
 #include <WebCore/DragActions.h>
 #include <WebCore/EditorClient.h>
 #include <WebCore/FocusDirection.h>
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/InputMode.h>
 #include <WebCore/MediaControlsContextMenuItem.h>
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/ShareableBitmap.h>
+#include <WebCore/TextAnimationTypes.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
 #include <WebCore/ValidationBubble.h>
 #include <variant>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
+#include "CocoaWindow.h"
 #include "WKBrowserEngineDefinitions.h"
 #include "WKFoundation.h"
 
@@ -81,6 +84,7 @@ OBJC_CLASS NSTextAlternatives;
 OBJC_CLASS UIGestureRecognizer;
 OBJC_CLASS UIScrollView;
 OBJC_CLASS UIView;
+OBJC_CLASS UIViewController;
 OBJC_CLASS WKBaseScrollView;
 OBJC_CLASS WKBEScrollViewScrollUpdate;
 OBJC_CLASS _WKRemoteObjectRegistry;
@@ -90,6 +94,15 @@ OBJC_CLASS NSWindow;
 OBJC_CLASS WKView;
 #endif
 #endif
+
+namespace WebKit {
+class PageClient;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PageClient> : std::true_type { };
+}
 
 namespace API {
 class Attachment;
@@ -121,6 +134,7 @@ enum class TextIndicatorLifetime : uint8_t;
 enum class TextIndicatorDismissalAnimation : uint8_t;
 enum class DOMPasteAccessCategory : uint8_t;
 enum class DOMPasteAccessResponse : uint8_t;
+enum class DOMPasteRequiresInteraction : bool;
 enum class ScrollIsAnimated : bool;
 
 struct AppHighlight;
@@ -144,11 +158,28 @@ struct PromisedAttachmentInfo;
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 struct TranslationContextMenuInfo;
 #endif
+
+#if ENABLE(WRITING_TOOLS)
+namespace WritingTools {
+enum class Action : uint8_t;
+enum class RequestedTool : uint16_t;
+enum class TextSuggestionState : uint8_t;
+
+struct Context;
+struct TextSuggestion;
+struct Session;
+
+using TextSuggestionID = WTF::UUID;
+using SessionID = WTF::UUID;
+}
+#endif
+
 }
 
 namespace WebKit {
 
 enum class UndoOrRedo : bool;
+enum class ForceSoftwareCapturingViewportSnapshot : bool;
 enum class TapHandlingResult : uint8_t;
 
 class ContextMenuContextData;
@@ -159,7 +190,7 @@ class NativeWebMouseEvent;
 class NativeWebWheelEvent;
 class RemoteLayerTreeNode;
 class RemoteLayerTreeTransaction;
-class SafeBrowsingWarning;
+class BrowsingWarning;
 class UserData;
 class ViewSnapshot;
 class WebBackForwardListItem;
@@ -212,7 +243,7 @@ class WebKitWebResourceLoadManager;
 #endif
 
 class PageClient : public CanMakeWeakPtr<PageClient> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(PageClient);
 public:
     virtual ~PageClient() { }
 
@@ -242,6 +273,9 @@ public:
 
     // Return whether the view is visible.
     virtual bool isViewVisible() = 0;
+
+    // Called when the activity state of the page transitions from non-visible to visible.
+    virtual void viewIsBecomingVisible() { }
 
 #if PLATFORM(COCOA)
     virtual bool canTakeForegroundAssertions() = 0;
@@ -294,9 +328,9 @@ public:
 
     virtual void topContentInsetDidChange() { }
 
-    virtual void showSafeBrowsingWarning(const SafeBrowsingWarning&, CompletionHandler<void(std::variant<ContinueUnsafeLoad, URL>&&)>&& completionHandler) { completionHandler(ContinueUnsafeLoad::Yes); }
-    virtual void clearSafeBrowsingWarning() { }
-    virtual void clearSafeBrowsingWarningIfForMainFrameNavigation() { }
+    virtual void showBrowsingWarning(const BrowsingWarning&, CompletionHandler<void(std::variant<ContinueUnsafeLoad, URL>&&)>&& completionHandler) { completionHandler(ContinueUnsafeLoad::Yes); }
+    virtual void clearBrowsingWarning() { }
+    virtual void clearBrowsingWarningIfForMainFrameNavigation() { }
     
 #if ENABLE(DRAG_SUPPORT)
 #if PLATFORM(GTK)
@@ -319,7 +353,7 @@ public:
     virtual void executeUndoRedo(UndoOrRedo) = 0;
     virtual void wheelEventWasNotHandledByWebCore(const NativeWebWheelEvent&) = 0;
 #if PLATFORM(COCOA)
-    virtual void accessibilityWebProcessTokenReceived(const IPC::DataReference&) = 0;
+    virtual void accessibilityWebProcessTokenReceived(std::span<const uint8_t>, WebCore::FrameIdentifier, pid_t) = 0;
     virtual bool executeSavedCommandBySelector(const String& selector) = 0;
     virtual void updateSecureInputState() = 0;
     virtual void resetSecureInputState() = 0;
@@ -346,6 +380,10 @@ public:
     virtual RefPtr<ViewSnapshot> takeViewSnapshot(std::optional<WebCore::IntRect>&&) = 0;
 #endif
 
+#if PLATFORM(MAC)
+    virtual RefPtr<ViewSnapshot> takeViewSnapshot(std::optional<WebCore::IntRect>&&, ForceSoftwareCapturingViewportSnapshot) = 0;
+#endif
+
 #if USE(APPKIT)
     virtual void setPromisedDataForImage(const String& pasteboardName, Ref<WebCore::FragmentedSharedBuffer>&& imageBuffer, const String& filename, const String& extension, const String& title, const String& url, const String& visibleURL, RefPtr<WebCore::FragmentedSharedBuffer>&& archiveBuffer, const String& originIdentifier) = 0;
 #endif
@@ -353,6 +391,8 @@ public:
     virtual WebCore::FloatRect convertToDeviceSpace(const WebCore::FloatRect&) = 0;
     virtual WebCore::FloatRect convertToUserSpace(const WebCore::FloatRect&) = 0;
     virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) = 0;
+    virtual WebCore::FloatRect rootViewToWebView(const WebCore::FloatRect& rect) const { return rect; }
+    virtual WebCore::FloatPoint webViewToRootView(const WebCore::FloatPoint& point) const { return point; }
     virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) = 0;
     virtual WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) = 0;
     virtual WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) = 0;
@@ -481,7 +521,6 @@ public:
     virtual void showPlatformContextMenu(NSMenu *, WebCore::IntPoint) = 0;
 
     virtual void startWindowDrag() = 0;
-    virtual NSWindow *platformWindow() = 0;
     virtual void setShouldSuppressFirstResponderChanges(bool) = 0;
 
     virtual NSView *inspectorAttachmentView() = 0;
@@ -497,6 +536,10 @@ public:
 #if PLATFORM(COCOA)
     virtual void didCommitLayerTree(const RemoteLayerTreeTransaction&) = 0;
     virtual void layerTreeCommitComplete() = 0;
+
+    virtual void scrollingNodeScrollViewDidScroll(WebCore::ScrollingNodeID) = 0;
+
+    virtual CocoaWindow *platformWindow() const = 0;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -524,10 +567,11 @@ public:
     virtual double minimumZoomScale() const = 0;
     virtual WebCore::FloatRect documentRect() const = 0;
     virtual void scrollingNodeScrollViewWillStartPanGesture(WebCore::ScrollingNodeID) = 0;
-    virtual void scrollingNodeScrollViewDidScroll(WebCore::ScrollingNodeID) = 0;
     virtual void scrollingNodeScrollWillStartScroll(WebCore::ScrollingNodeID) = 0;
     virtual void scrollingNodeScrollDidEndScroll(WebCore::ScrollingNodeID) = 0;
     virtual Vector<String> mimeTypesWithCustomContentProviders() = 0;
+
+    virtual void hardwareKeyboardAvailabilityChanged() = 0;
 
     virtual void showInspectorHighlight(const WebCore::InspectorOverlay::Highlight&) = 0;
     virtual void hideInspectorHighlight() = 0;
@@ -546,6 +590,7 @@ public:
 
     virtual WebCore::Color contentViewBackgroundColor() = 0;
     virtual WebCore::Color insertionPointColor() = 0;
+    virtual bool isScreenBeingCaptured() = 0;
 
     virtual String sceneID() = 0;
 
@@ -565,7 +610,7 @@ public:
 #endif
 
     // Custom representations.
-    virtual void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, const IPC::DataReference&) = 0;
+    virtual void didFinishLoadingDataForCustomContentProvider(const String& suggestedFilename, std::span<const uint8_t>) = 0;
 
     virtual void navigationGestureDidBegin() = 0;
     virtual void navigationGestureWillEnd(bool willNavigate, WebBackForwardListItem&) = 0;
@@ -573,6 +618,9 @@ public:
     virtual void navigationGestureDidEnd() = 0;
     virtual void willRecordNavigationSnapshot(WebBackForwardListItem&) = 0;
     virtual void didRemoveNavigationGestureSnapshot() = 0;
+
+    virtual void willBeginViewGesture() { }
+    virtual void didEndViewGesture() { }
 
     virtual void didFirstVisuallyNonEmptyLayoutForMainFrame() = 0;
     virtual void didFinishNavigation(API::Navigation*) = 0;
@@ -596,7 +644,7 @@ public:
     virtual void drawPageBorderForPrinting(WebCore::FloatSize&& size) { }
     virtual bool scrollingUpdatesDisabledForTesting() { return false; }
 
-    virtual bool hasSafeBrowsingWarning() const { return false; }
+    virtual bool hasBrowsingWarning() const { return false; }
 
     virtual void setMouseEventPolicy(WebCore::MouseEventPolicy) { }
 
@@ -660,7 +708,7 @@ public:
     virtual void didReceiveEditDragSnapshot(std::optional<WebCore::TextIndicatorData>) = 0;
 #endif
 
-    virtual void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) = 0;
+    virtual void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, WebCore::DOMPasteRequiresInteraction, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) = 0;
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     virtual void didInsertAttachment(API::Attachment&, const String& source) { }
@@ -678,6 +726,13 @@ public:
 #if ENABLE(APP_HIGHLIGHTS)
     virtual void storeAppHighlight(const WebCore::AppHighlight&) = 0;
 #endif
+
+#if ENABLE(WRITING_TOOLS_UI)
+    virtual void addTextAnimationForAnimationID(const WTF::UUID&, const WebCore::TextAnimationData&) = 0;
+    virtual void removeTextAnimationForAnimationID(const WTF::UUID&) = 0;
+    virtual void didEndPartialIntelligenceTextPonderingAnimation() = 0;
+#endif
+
     virtual void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin) { }
 
 #if PLATFORM(COCOA)
@@ -696,6 +751,21 @@ public:
     virtual void handleContextMenuTranslation(const WebCore::TranslationContextMenuInfo&) = 0;
 #endif
 
+#if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
+    virtual bool canHandleContextMenuWritingTools() const = 0;
+    virtual void handleContextMenuWritingTools(WebCore::WritingTools::RequestedTool, WebCore::IntRect) { }
+#endif
+
+#if ENABLE(WRITING_TOOLS)
+    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) = 0;
+
+    virtual void proofreadingSessionUpdateStateForSuggestionWithID(WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) = 0;
+
+    virtual void writingToolsActiveWillChange() = 0;
+
+    virtual void writingToolsActiveDidChange() = 0;
+#endif
+
 #if ENABLE(DATA_DETECTION)
     virtual void handleClickForDataDetectionResult(const WebCore::DataDetectorElementInfo&, const WebCore::IntPoint&) { }
 #endif
@@ -707,11 +777,36 @@ public:
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     virtual void didEnterFullscreen() = 0;
     virtual void didExitFullscreen() = 0;
+    virtual void didCleanupFullscreen() = 0;
 #endif
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     virtual WebKitWebResourceLoadManager* webResourceLoadManager() = 0;
 #endif
+
+#if PLATFORM(IOS_FAMILY)
+    virtual UIViewController *presentingViewController() const = 0;
+#endif
+
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    virtual const String& spatialTrackingLabel() const = 0;
+#endif
+
+#if ENABLE(GAMEPAD)
+    enum class GamepadsRecentlyAccessed : bool {
+        No,
+        Yes
+    };
+    virtual void setGamepadsRecentlyAccessed(GamepadsRecentlyAccessed) { }
+
+#if PLATFORM(VISION)
+    virtual void gamepadsConnectedStateChanged() { }
+#endif
+#endif // ENABLE(GAMEPAD)
+
+    virtual void hasActiveNowPlayingSessionChanged(bool) { }
+
+    virtual void scheduleVisibleContentRectUpdate() { }
 };
 
 } // namespace WebKit

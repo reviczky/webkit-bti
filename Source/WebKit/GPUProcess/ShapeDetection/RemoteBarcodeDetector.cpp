@@ -31,11 +31,15 @@
 #include "ArgumentCoders.h"
 #include "RemoteRenderingBackend.h"
 #include "RemoteResourceCache.h"
+#include "ShapeDetectionObjectHeap.h"
 #include <WebCore/BarcodeDetectorInterface.h>
 #include <WebCore/DetectedBarcodeInterface.h>
 #include <WebCore/ImageBuffer.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteBarcodeDetector);
 
 RemoteBarcodeDetector::RemoteBarcodeDetector(Ref<WebCore::ShapeDetection::BarcodeDetector>&& barcodeDetector, ShapeDetection::ObjectHeap& objectHeap, RemoteRenderingBackend& backend, ShapeDetectionIdentifier identifier, WebCore::ProcessIdentifier webProcessIdentifier)
     : m_backing(WTFMove(barcodeDetector))
@@ -48,15 +52,30 @@ RemoteBarcodeDetector::RemoteBarcodeDetector(Ref<WebCore::ShapeDetection::Barcod
 
 RemoteBarcodeDetector::~RemoteBarcodeDetector() = default;
 
+const SharedPreferencesForWebProcess& RemoteBarcodeDetector::sharedPreferencesForWebProcess() const
+{
+    return m_backend->sharedPreferencesForWebProcess();
+}
+
+Ref<WebCore::ShapeDetection::BarcodeDetector> RemoteBarcodeDetector::protectedBacking()
+{
+    return backing();
+}
+
+Ref<RemoteRenderingBackend> RemoteBarcodeDetector::protectedBackend()
+{
+    return m_backend.get();
+}
+
 void RemoteBarcodeDetector::detect(WebCore::RenderingResourceIdentifier renderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedBarcode>&&)>&& completionHandler)
 {
-    auto sourceImage = m_backend.imageBuffer(renderingResourceIdentifier);
+    auto sourceImage = protectedBackend()->imageBuffer(renderingResourceIdentifier);
     if (!sourceImage) {
         completionHandler({ });
         return;
     }
 
-    m_backing->detect(*sourceImage, WTFMove(completionHandler));
+    protectedBacking()->detect(*sourceImage, WTFMove(completionHandler));
 }
 
 } // namespace WebKit

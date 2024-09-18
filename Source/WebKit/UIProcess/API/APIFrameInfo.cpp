@@ -41,10 +41,7 @@ Ref<FrameInfo> FrameInfo::create(WebKit::FrameInfoData&& frameInfoData, RefPtr<W
 
 FrameInfo::FrameInfo(WebKit::FrameInfoData&& data, RefPtr<WebKit::WebPageProxy>&& page)
     : m_data(WTFMove(data))
-    , m_page(WTFMove(page))
-{
-    ASSERT(m_data.frameID.object().isValid());
-}
+    , m_page(WTFMove(page)) { }
 
 FrameInfo::~FrameInfo() = default;
 
@@ -58,6 +55,17 @@ RefPtr<FrameHandle> FrameInfo::parentFrameHandle() const
     if (!m_data.parentFrameID)
         return nullptr;
     return FrameHandle::create(*m_data.parentFrameID);
+}
+
+WTF::String FrameInfo::title() const
+{
+    if (!m_page)
+        return { };
+
+    if (RefPtr frame = WebKit::WebFrameProxy::webFrame(m_data.frameID); frame && frame->page() == m_page)
+        return frame->title();
+
+    return { };
 }
 
 } // namespace API

@@ -26,10 +26,20 @@
 #pragma once
 
 #include <WebCore/CertificateInfo.h>
+#include <WebCore/NavigationIdentifier.h>
 #include <WebCore/SecurityOriginData.h>
 #include <wtf/URL.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/text/WTFString.h>
+
+namespace WebKit {
+class PageLoadStateObserverBase;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PageLoadStateObserverBase> : std::true_type { };
+}
 
 namespace WebKit {
 
@@ -118,7 +128,7 @@ public:
     };
 
     struct PendingAPIRequest {
-        uint64_t navigationID { 0 };
+        Markable<WebCore::NavigationIdentifier> navigationID;
         String url;
     };
 
@@ -178,7 +188,7 @@ public:
 
     const String& title() const;
     void setTitle(const Transaction::Token&, const String&);
-    void setTitleFromSafeBrowsingWarning(const Transaction::Token&, const String&);
+    void setTitleFromBrowsingWarning(const Transaction::Token&, const String&);
 
     bool canGoBack() const;
     void setCanGoBack(const Transaction::Token&, bool);
@@ -223,7 +233,7 @@ private:
         String unreachableURL;
 
         String title;
-        String titleFromSafeBrowsingWarning;
+        String titleFromBrowsingWarning;
 
         URL resourceDirectoryURL;
 

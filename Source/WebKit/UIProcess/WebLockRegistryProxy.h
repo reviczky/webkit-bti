@@ -26,9 +26,16 @@
 #pragma once
 
 #include "MessageReceiver.h"
+#include "WebProcessProxy.h"
 #include <WebCore/ScriptExecutionContextIdentifier.h>
 #include <WebCore/WebLockIdentifier.h>
 #include <WebCore/WebLockMode.h>
+#include <wtf/TZoneMalloc.h>
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebLockRegistryProxy> : std::true_type { };
+}
 
 namespace WebCore {
 struct ClientOrigin;
@@ -37,13 +44,16 @@ struct WebLockManagerSnapshot;
 
 namespace WebKit {
 
-class WebProcessProxy;
+class WebLockRegistryProxy;
+struct SharedPreferencesForWebProcess;
 
 class WebLockRegistryProxy final : public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebLockRegistryProxy);
 public:
     explicit WebLockRegistryProxy(WebProcessProxy&);
     ~WebLockRegistryProxy();
+
+    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() { return m_process.sharedPreferencesForWebProcess(); }
 
     void processDidExit();
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;

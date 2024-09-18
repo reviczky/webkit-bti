@@ -25,9 +25,11 @@
 
 #pragma once
 
+#include "WebNotificationIdentifier.h"
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -44,18 +46,18 @@ class WebNotification;
 
 class NotificationService {
     WTF_MAKE_NONCOPYABLE(NotificationService);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NotificationService);
     friend LazyNeverDestroyed<NotificationService>;
 public:
     static NotificationService& singleton();
 
     bool showNotification(const WebNotification&, const RefPtr<WebCore::NotificationResources>&);
-    void cancelNotification(uint64_t);
+    void cancelNotification(WebNotificationIdentifier);
 
     class Observer {
     public:
-        virtual void didClickNotification(uint64_t) = 0;
-        virtual void didCloseNotification(uint64_t) = 0;
+        virtual void didClickNotification(WebNotificationIdentifier) = 0;
+        virtual void didCloseNotification(WebNotificationIdentifier) = 0;
     };
     void addObserver(Observer&);
     void removeObserver(Observer&);
@@ -84,17 +86,17 @@ private:
     };
     void processCapabilities(GVariant*);
 
-    void setNotificationID(uint64_t, uint32_t);
-    uint64_t findNotification(uint32_t);
-    uint64_t findNotification(const String&);
+    void setNotificationID(WebNotificationIdentifier, uint32_t);
+    WebNotificationIdentifier findNotification(uint32_t);
+    WebNotificationIdentifier findNotification(const String&);
 
     static void handleSignal(GDBusProxy*, char*, char*, GVariant*, NotificationService*);
-    void didClickNotification(uint64_t);
-    void didCloseNotification(uint64_t);
+    void didClickNotification(WebNotificationIdentifier);
+    void didCloseNotification(WebNotificationIdentifier);
 
     GRefPtr<GDBusProxy> m_proxy;
     OptionSet<Capabilities> m_capabilities;
-    HashMap<uint64_t, Notification> m_notifications;
+    HashMap<WebNotificationIdentifier, Notification> m_notifications;
     HashSet<Observer*> m_observers;
 };
 

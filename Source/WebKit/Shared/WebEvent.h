@@ -33,9 +33,9 @@
 #include "WebEventModifier.h"
 #include "WebEventType.h"
 
-#include <wtf/EnumTraits.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WallTime.h>
 #include <wtf/text/WTFString.h>
@@ -48,7 +48,7 @@ class Encoder;
 namespace WebKit {
 
 class WebEvent {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebEvent);
 public:
     WebEvent(WebEventType, OptionSet<WebEventModifier>, WallTime timestamp, WTF::UUID authorizationToken);
     WebEvent(WebEventType, OptionSet<WebEventModifier>, WallTime timestamp);
@@ -65,6 +65,7 @@ public:
 
     WallTime timestamp() const { return m_timestamp; }
 
+    bool isActivationTriggeringEvent() const;
     WTF::UUID authorizationToken() const { return m_authorizationToken; }
 
 private:

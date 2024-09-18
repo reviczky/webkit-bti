@@ -36,6 +36,7 @@
 #include <WebCore/SoupVersioning.h>
 #include <WebCore/ThreadableWebSocketChannel.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/StringBuilder.h>
@@ -54,6 +55,8 @@ static inline bool isConnectionError(GError* error, SoupMessage* message)
     return error && !g_error_matches(error, SOUP_WEBSOCKET_ERROR, SOUP_WEBSOCKET_ERROR_NOT_WEBSOCKET);
 #endif
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSocketTask);
 
 WebSocketTask::WebSocketTask(NetworkSocketChannel& channel, const WebCore::ResourceRequest& request, SoupSession* session, SoupMessage* msg, const String& protocol)
     : m_channel(channel)
@@ -134,7 +137,7 @@ String WebSocketTask::acceptedExtensions() const
         auto* extension = SOUP_WEBSOCKET_EXTENSION(it->data);
 
         if (!result.isEmpty())
-            result.append(", ");
+            result.append(", "_s);
         result.append(String::fromUTF8(SOUP_WEBSOCKET_EXTENSION_GET_CLASS(extension)->name));
 
         GUniquePtr<char> params(soup_websocket_extension_get_response_params(extension));
@@ -175,13 +178,14 @@ void WebSocketTask::didReceiveMessageCallback(WebSocketTask* task, SoupWebsocket
 
     gsize dataSize;
     const auto* data = g_bytes_get_data(message, &dataSize);
+    std::span dataSpan { static_cast<const uint8_t*>(data), dataSize };
 
     switch (dataType) {
     case SOUP_WEBSOCKET_DATA_TEXT:
-        task->m_channel.didReceiveText(String::fromUTF8(static_cast<const char*>(data), dataSize));
+        task->m_channel.didReceiveText(String::fromUTF8(dataSpan));
         break;
     case SOUP_WEBSOCKET_DATA_BINARY:
-        task->m_channel.didReceiveBinaryData(static_cast<const uint8_t*>(data), dataSize);
+        task->m_channel.didReceiveBinaryData(dataSpan);
         break;
     }
 }
@@ -234,7 +238,7 @@ void WebSocketTask::didClose(unsigned short code, const String& reason)
     m_channel.didClose(code, reason);
 }
 
-void WebSocketTask::sendString(const IPC::DataReference& utf8, CompletionHandler<void()>&& callback)
+void WebSocketTask::sendString(std::span<const uint8_t> utf8, CompletionHandler<void()>&& callback)
 {
     if (m_connection && soup_websocket_connection_get_state(m_connection.get()) == SOUP_WEBSOCKET_STATE_OPEN) {
 #if SOUP_CHECK_VERSION(2, 67, 3)
@@ -248,7 +252,7 @@ void WebSocketTask::sendString(const IPC::DataReference& utf8, CompletionHandler
     callback();
 }
 
-void WebSocketTask::sendData(const IPC::DataReference& data, CompletionHandler<void()>&& callback)
+void WebSocketTask::sendData(std::span<const uint8_t> data, CompletionHandler<void()>&& callback)
 {
     if (m_connection && soup_websocket_connection_get_state(m_connection.get()) == SOUP_WEBSOCKET_STATE_OPEN)
         soup_websocket_connection_send_binary(m_connection.get(), data.data(), data.size());

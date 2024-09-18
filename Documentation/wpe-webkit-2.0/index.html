@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -139,7 +139,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
 
     <div class="meta info">
       <table>
-        <tr><td><em>Version</em></td><td>2.44.4</td></tr>
+        <tr><td><em>Version</em></td><td>2.46.0</td></tr>
         <tr><td><em>Authors</em></td><td>The WebKit GTK and WPE teams</td></tr>
         <tr><td><em>License</em></td><td>BSD, LGPL-2.1</td></tr>
         <tr><td><em>Website</em></td><td><a href="https://webkit.org" class="external">https://webkit.org</a></td></tr>
@@ -203,6 +203,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
             <td></td>
             <td><a href="https://libsoup.org/libsoup-3.0" class="external">Browse documentation</a></td>
           </tr>
+          
+        
           
         
           
@@ -1093,9 +1095,10 @@ undefined value with be&nbsp;sent.</p>
             <td><a title="InsecureContentEvent" class="symbol" href="enum.InsecureContentEvent.html">InsecureContentEvent</a></td>
             
             <td class="docblock-summary">
-            <p>Enum values used to denote the different events which can trigger
-the detection of insecure&nbsp;content.</p>
-            <p></p>
+            <p>Enum values previously used to denote the different events which can trigger
+the detection of insecure content. Since 2.46, WebKit generally no longer
+loads insecure content in secure&nbsp;contexts.</p>
+            <p><span class="emblem deprecated">deprecated: 2.46</span>&nbsp;</p>
             </td>
             
           </tr>

@@ -41,6 +41,7 @@
 #include <WebCore/Page.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/Settings.h>
+#include <wtf/TZoneMallocInlines.h>
 
 ALLOW_COMMA_BEGIN
 
@@ -85,8 +86,20 @@ void LibWebRTCProvider::disableNonLocalhostConnections()
     WebProcess::singleton().libWebRTCNetwork().disableNonLocalhostConnections();
 }
 
+#if PLATFORM(COCOA) && USE(LIBWEBRTC)
+bool LibWebRTCProvider::isSupportingVP9HardwareDecoder() const
+{
+    return WebProcess::singleton().libWebRTCCodecs().isSupportingVP9HardwareDecoder();
+}
+
+void LibWebRTCProvider::setVP9HardwareSupportForTesting(std::optional<bool> value)
+{
+    WebProcess::singleton().libWebRTCCodecs().setVP9HardwareSupportForTesting(value);
+}
+#endif
+
 class RTCSocketFactory final : public LibWebRTCProvider::SuspendableSocketFactory {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RTCSocketFactory);
 public:
     RTCSocketFactory(WebPageProxyIdentifier, String&& userAgent, ScriptExecutionContextIdentifier, bool isFirstParty, RegistrableDomain&&);
 
@@ -96,7 +109,7 @@ private:
     // SuspendableSocketFactory
     rtc::AsyncPacketSocket* CreateUdpSocket(const rtc::SocketAddress&, uint16_t minPort, uint16_t maxPort) final;
     rtc::AsyncListenSocket* CreateServerTcpSocket(const rtc::SocketAddress&, uint16_t minPort, uint16_t maxPort, int options) final { return nullptr; }
-    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketTcpOptions&) final;
+    rtc::AsyncPacketSocket* CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::PacketSocketTcpOptions&) final;
     std::unique_ptr<webrtc::AsyncDnsResolverInterface> CreateAsyncDnsResolver() final;
     void suspend() final;
     void resume() final;
@@ -109,6 +122,8 @@ private:
     bool m_isRelayDisabled { false };
     RegistrableDomain m_domain;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RTCSocketFactory);
 
 RTCSocketFactory::RTCSocketFactory(WebPageProxyIdentifier pageIdentifier, String&& userAgent, ScriptExecutionContextIdentifier identifier, bool isFirstParty, RegistrableDomain&& domain)
     : m_pageIdentifier(pageIdentifier)
@@ -124,7 +139,7 @@ rtc::AsyncPacketSocket* RTCSocketFactory::CreateUdpSocket(const rtc::SocketAddre
     return WebProcess::singleton().libWebRTCNetwork().socketFactory().createUdpSocket(m_contextIdentifier, address, minPort, maxPort, m_pageIdentifier, m_isFirstParty, m_isRelayDisabled, m_domain);
 }
 
-rtc::AsyncPacketSocket* RTCSocketFactory::CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::ProxyInfo&, const std::string&, const rtc::PacketSocketTcpOptions& options)
+rtc::AsyncPacketSocket* RTCSocketFactory::CreateClientTcpSocket(const rtc::SocketAddress& localAddress, const rtc::SocketAddress& remoteAddress, const rtc::PacketSocketTcpOptions& options)
 {
     return WebProcess::singleton().libWebRTCNetwork().socketFactory().createClientTcpSocket(m_contextIdentifier, localAddress, remoteAddress, String { m_userAgent }, options, m_pageIdentifier, m_isFirstParty, m_isRelayDisabled, m_domain);
 }
@@ -186,8 +201,6 @@ void LibWebRTCProvider::willCreatePeerConnectionFactory()
 {
 #if ENABLE(GPU_PROCESS) && PLATFORM(COCOA) && !PLATFORM(MACCATALYST)
     LibWebRTCCodecs::initializeIfNeeded();
-    if (isSupportingVP9VTB())
-        WebProcess::singleton().libWebRTCCodecs().setVP9VTBSupport(true);
 #endif
 }
 

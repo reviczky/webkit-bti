@@ -30,6 +30,7 @@
 #include "MessageReceiver.h"
 #include <WebCore/AudioSession.h>
 #include <wtf/CheckedRef.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WallTime.h>
 #include <wtf/WeakPtr.h>
 
@@ -38,12 +39,21 @@
 #endif
 
 namespace WebKit {
+class AudioSessionRoutingArbitratorProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::AudioSessionRoutingArbitratorProxy> : std::true_type { };
+}
+
+namespace WebKit {
 
 class WebProcessProxy;
 
 class AudioSessionRoutingArbitratorProxy
     : public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AudioSessionRoutingArbitratorProxy);
 public:
     AudioSessionRoutingArbitratorProxy(WebProcessProxy&);
     virtual ~AudioSessionRoutingArbitratorProxy();
@@ -69,7 +79,7 @@ public:
 protected:
     Logger& logger();
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "AudioSessionRoutingArbitrator"; }
+    ASCIILiteral logClassName() const { return "AudioSessionRoutingArbitrator"_s; }
     WTFLogChannel& logChannel() const;
 
 private:
@@ -89,7 +99,7 @@ private:
     const void* m_logIdentifier;
 
 #if HAVE(AVAUDIO_ROUTING_ARBITER)
-    UniqueRef<WebCore::SharedRoutingArbitrator::Token> m_token;
+    UniqueRef<WebCore::SharedRoutingArbitratorToken> m_token;
 #endif
 };
 

@@ -177,16 +177,6 @@ bool WKPreferencesGetDatabasesEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->databasesEnabled();
 }
 
-void WKPreferencesSetPluginsEnabled(WKPreferencesRef preferencesRef, bool pluginsEnabled)
-{
-    toImpl(preferencesRef)->setPluginsEnabled(pluginsEnabled);
-}
-
-bool WKPreferencesGetPluginsEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->pluginsEnabled();
-}
-
 void WKPreferencesSetJavaScriptCanOpenWindowsAutomatically(WKPreferencesRef preferencesRef, bool javaScriptCanOpenWindowsAutomatically)
 {
     toImpl(preferencesRef)->setJavaScriptCanOpenWindowsAutomatically(javaScriptCanOpenWindowsAutomatically);
@@ -368,15 +358,6 @@ bool WKPreferencesGetTextAreasAreResizable(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->textAreasAreResizable();
 }
 
-void WKPreferencesSetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-}
-
-bool WKPreferencesGetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef preferencesRef)
-{
-    return false;
-}
-
 void WKPreferencesSetAcceleratedDrawingEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setAcceleratedDrawingEnabled(flag);
@@ -555,15 +536,6 @@ void WKPreferencesSetPageCacheEnabled(WKPreferencesRef preferencesRef, bool enab
 bool WKPreferencesGetPageCacheEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->usesBackForwardCache();
-}
-
-void WKPreferencesSetPageCacheSupportsPlugins(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetPageCacheSupportsPlugins(WKPreferencesRef)
-{
-    return false;
 }
 
 void WKPreferencesSetDOMPasteAllowed(WKPreferencesRef preferencesRef, bool enabled)
@@ -936,33 +908,6 @@ bool WKPreferencesGetDiagnosticLoggingEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->diagnosticLoggingEnabled();
 }
 
-void WKPreferencesSetAsynchronousPluginInitializationEnabled(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetAsynchronousPluginInitializationEnabled(WKPreferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetAsynchronousPluginInitializationEnabledForAllPlugins(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetAsynchronousPluginInitializationEnabledForAllPlugins(WKPreferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetArtificialPluginInitializationDelayEnabled(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetArtificialPluginInitializationDelayEnabled(WKPreferencesRef)
-{
-    return false;
-}
-
 void WKPreferencesSetInteractiveFormValidationEnabled(WKPreferencesRef preferencesRef, bool enabled)
 {
     toImpl(preferencesRef)->setInteractiveFormValidationEnabled(enabled);
@@ -981,51 +926,6 @@ void WKPreferencesSetScrollingPerformanceLoggingEnabled(WKPreferencesRef prefere
 bool WKPreferencesGetScrollingPerformanceLoggingEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->scrollingPerformanceTestingEnabled();
-}
-
-void WKPreferencesSetPlugInSnapshottingEnabled(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetPlugInSnapshottingEnabled(WKPreferencesRef preferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetSnapshotAllPlugIns(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetSnapshotAllPlugIns(WKPreferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetAutostartOriginPlugInSnapshottingEnabled(WKPreferencesRef, bool)
-{
-}
-
-bool WKPreferencesGetAutostartOriginPlugInSnapshottingEnabled(WKPreferencesRef preferencesRef)
-{
-    return false;
-}
-
-void WKPreferencesSetPrimaryPlugInSnapshotDetectionEnabled(WKPreferencesRef preferencesRef, bool enabled)
-{
-}
-
-bool WKPreferencesGetPrimaryPlugInSnapshotDetectionEnabled(WKPreferencesRef preferencesRef)
-{
-    return false;
 }
 
 void WKPreferencesSetPDFPluginEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -1468,14 +1368,14 @@ bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef prefe
     return toImpl(preferencesRef)->mediaCaptureRequiresSecureConnection();
 }
 
-void WKPreferencesSetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef, double interval)
+void WKPreferencesSetInactiveMediaCaptureStreamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef, double interval)
 {
-    toImpl(preferencesRef)->setInactiveMediaCaptureSteamRepromptIntervalInMinutes(interval);
+    toImpl(preferencesRef)->setInactiveMediaCaptureStreamRepromptIntervalInMinutes(interval);
 }
 
-double WKPreferencesGetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef)
+double WKPreferencesGetInactiveMediaCaptureStreamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->inactiveMediaCaptureSteamRepromptIntervalInMinutes();
+    return toImpl(preferencesRef)->inactiveMediaCaptureStreamRepromptIntervalInMinutes();
 }
 
 void WKPreferencesSetDataTransferItemsEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1496,6 +1396,16 @@ void WKPreferencesSetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef
 bool WKPreferencesGetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->customPasteboardDataEnabled();
+}
+
+void WKPreferencesSetWriteRichTextDataWhenCopyingOrDragging(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setWriteRichTextDataWhenCopyingOrDragging(flag);
+}
+
+bool WKPreferencesGetWriteRichTextDataWhenCopyingOrDragging(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->writeRichTextDataWhenCopyingOrDragging();
 }
 
 void WKPreferencesSetWebShareEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1821,20 +1731,119 @@ bool WKPreferencesGetRequestVideoFrameCallbackEnabled(WKPreferencesRef preferenc
 
 // The following are all deprecated and do nothing. They should be removed when possible.
 
-void WKPreferencesSetAllowCrossOriginSubresourcesToAskForCredentials(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetPluginsEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetAllowCrossOriginSubresourcesToAskForCredentials(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetPluginsEnabled(WKPreferencesRef)
 {
     return false;
 }
 
-void WKPreferencesSetPaintTimingEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetPaintTimingEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetPageCacheSupportsPlugins(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetPageCacheSupportsPlugins(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetAsynchronousPluginInitializationEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetAsynchronousPluginInitializationEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetAsynchronousPluginInitializationEnabledForAllPlugins(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetAsynchronousPluginInitializationEnabledForAllPlugins(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetArtificialPluginInitializationDelayEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetArtificialPluginInitializationDelayEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetPlugInSnapshottingEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetPlugInSnapshottingEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetSnapshotAllPlugIns(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetSnapshotAllPlugIns(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetAutostartOriginPlugInSnapshottingEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetAutostartOriginPlugInSnapshottingEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetPrimaryPlugInSnapshotDetectionEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetPrimaryPlugInSnapshotDetectionEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetAllowCrossOriginSubresourcesToAskForCredentials(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetAllowCrossOriginSubresourcesToAskForCredentials(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetPaintTimingEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetPaintTimingEnabled(WKPreferencesRef)
 {
     return true;
 }
@@ -1857,11 +1866,11 @@ bool WKPreferencesGetAVFoundationNSURLSessionEnabled(WKPreferencesRef)
     return true;
 }
 
-void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef)
 {
     return true;
 }
@@ -1888,7 +1897,7 @@ void WKPreferencesSetKeygenElementEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetKeygenElementEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetKeygenElementEnabled(WKPreferencesRef)
 {
     return false;
 }
@@ -1938,7 +1947,7 @@ bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef)
     return true;
 }
 
-void WKPreferencesSetFetchAPIKeepAliveEnabled(WKPreferencesRef preferencesRef, bool)
+void WKPreferencesSetFetchAPIKeepAliveEnabled(WKPreferencesRef, bool)
 {
 }
 
@@ -1947,11 +1956,11 @@ bool WKPreferencesGetFetchAPIKeepAliveEnabled(WKPreferencesRef)
     return true;
 }
 
-void WKPreferencesSetIntersectionObserverEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetIntersectionObserverEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef)
 {
     return true;
 }
@@ -2005,7 +2014,7 @@ void WKPreferencesSetWebSQLDisabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetWebSQLDisabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetWebSQLDisabled(WKPreferencesRef)
 {
     return true;
 }
@@ -2055,38 +2064,38 @@ bool WKPreferencesGetOfflineWebApplicationCacheEnabled(WKPreferencesRef)
     return false;
 }
 
-void WKPreferencesSetMenuItemElementEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetMenuItemElementEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetMenuItemElementEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetMenuItemElementEnabled(WKPreferencesRef)
 {
     return false;
 }
 
-void WKPreferencesSetSyntheticEditingCommandsEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetSyntheticEditingCommandsEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetSyntheticEditingCommandsEnabled(WKPreferencesRef preferencesRef)
-{
-    return true;
-}
-
-void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-}
-
-bool WKPreferencesGetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetSyntheticEditingCommandsEnabled(WKPreferencesRef)
 {
     return true;
 }
 
-void WKPreferencesSetServerTimingEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef, bool)
 {
 }
 
-bool WKPreferencesGetServerTimingEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetReferrerPolicyAttributeEnabled(WKPreferencesRef)
+{
+    return true;
+}
+
+void WKPreferencesSetServerTimingEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetServerTimingEnabled(WKPreferencesRef)
 {
     return true;
 }

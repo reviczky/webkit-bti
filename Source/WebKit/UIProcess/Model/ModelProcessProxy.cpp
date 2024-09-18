@@ -48,8 +48,9 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/LogInitialization.h>
 #include <wtf/MachSendRight.h>
+#include <wtf/TZoneMallocInlines.h>
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, connection())
 
 namespace WebKit {
 using namespace WebCore;
@@ -59,6 +60,8 @@ static WeakPtr<ModelProcessProxy>& singleton()
     static NeverDestroyed<WeakPtr<ModelProcessProxy>> singleton;
     return singleton;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ModelProcessProxy);
 
 Ref<ModelProcessProxy> ModelProcessProxy::getOrCreate()
 {
@@ -78,8 +81,7 @@ ModelProcessProxy* ModelProcessProxy::singletonIfCreated()
 }
 
 ModelProcessProxy::ModelProcessProxy()
-    : AuxiliaryProcessProxy()
-    , m_throttler(*this, WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion())
+    : AuxiliaryProcessProxy(WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion() ? ShouldTakeUIBackgroundAssertion::Yes : ShouldTakeUIBackgroundAssertion::No)
 {
     connect();
 
@@ -88,12 +90,18 @@ ModelProcessProxy::ModelProcessProxy()
     parameters.parentPID = getCurrentProcessID();
 
     // Initialize the model process.
-    send(Messages::ModelProcess::InitializeModelProcess(WTFMove(parameters)), 0);
+    sendWithAsyncReply(Messages::ModelProcess::InitializeModelProcess(WTFMove(parameters)), [initializationActivityAndGrant = initializationActivityAndGrant()] () { }, 0);
 
     updateProcessAssertion();
 }
 
 ModelProcessProxy::~ModelProcessProxy() = default;
+
+void ModelProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProcessIdentifier)
+{
+    if (auto process = WebProcessProxy::processForIdentifier(webProcessIdentifier))
+        process->requestTermination(ProcessTerminationReason::RequestedByModelProcess);
+}
 
 void ModelProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
@@ -107,7 +115,7 @@ void ModelProcessProxy::connectionWillOpen(IPC::Connection&)
 
 void ModelProcessProxy::processWillShutDown(IPC::Connection& connection)
 {
-    ASSERT_UNUSED(connection, this->connection() == &connection);
+    ASSERT_UNUSED(connection, &this->connection() == &connection);
 }
 
 void ModelProcessProxy::createModelProcessConnection(WebProcessProxy& webProcessProxy, IPC::Connection::Handle&& connectionIdentifier, ModelProcessConnectionParameters&& parameters)
@@ -135,12 +143,15 @@ void ModelProcessProxy::modelProcessExited(ProcessTerminationReason reason)
     case ProcessTerminationReason::IdleExit:
     case ProcessTerminationReason::Unresponsive:
     case ProcessTerminationReason::Crash:
-        RELEASE_LOG_ERROR(Process, "%p - ModelProcessProxy::modelProcessExited: reason=%{public}s", this, processTerminationReasonToString(reason));
+        RELEASE_LOG_ERROR(Process, "%p - ModelProcessProxy::modelProcessExited: reason=%{public}s", this, processTerminationReasonToString(reason).characters());
         break;
     case ProcessTerminationReason::ExceededProcessCountLimit:
     case ProcessTerminationReason::NavigationSwap:
     case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::RequestedByGPUProcess:
+    case ProcessTerminationReason::RequestedByModelProcess:
+    case ProcessTerminationReason::GPUProcessCrashedTooManyTimes:
+    case ProcessTerminationReason::ModelProcessCrashedTooManyTimes:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -196,7 +207,7 @@ void ModelProcessProxy::didClose(IPC::Connection&)
     modelProcessExited(ProcessTerminationReason::Crash); // May cause |this| to get deleted.
 }
 
-void ModelProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void ModelProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t)
 {
     logInvalidMessage(connection, messageName);
 
@@ -218,10 +229,6 @@ void ModelProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Conne
         modelProcessExited(ProcessTerminationReason::Crash);
         return;
     }
-
-#if USE(RUNNINGBOARD)
-    m_throttler.didConnectToProcess(*this);
-#endif
 
 #if PLATFORM(COCOA)
     if (auto networkProcess = NetworkProcessProxy::defaultNetworkProcess())
@@ -281,7 +288,7 @@ void ModelProcessProxy::didCreateContextForVisibilityPropagation(WebPageProxyIde
         RELEASE_LOG(Process, "ModelProcessProxy::didCreateContextForVisibilityPropagation() No WebPageProxy with this identifier");
         return;
     }
-    if (page->webPageID() == pageID) {
+    if (page->webPageIDInMainFrameProcess() == pageID) {
         page->didCreateContextInModelProcessForVisibilityPropagation(contextID);
         return;
     }

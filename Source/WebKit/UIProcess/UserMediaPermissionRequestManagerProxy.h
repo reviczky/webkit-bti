@@ -33,7 +33,17 @@
 #include <wtf/LoggerHelper.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class UserMediaPermissionRequestManagerProxy;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::UserMediaPermissionRequestManagerProxy> : std::true_type { };
+}
 
 namespace WebCore {
 class CaptureDevice;
@@ -53,7 +63,7 @@ namespace WebKit {
 class WebPageProxy;
 
 enum class MediaDevicePermissionRequestIdentifierType { };
-using MediaDevicePermissionRequestIdentifier = ObjectIdentifier<MediaDevicePermissionRequestIdentifierType>;
+using MediaDevicePermissionRequestIdentifier = LegacyNullableObjectIdentifier<MediaDevicePermissionRequestIdentifierType>;
 
 class UserMediaPermissionRequestManagerProxy
     : public CanMakeWeakPtr<UserMediaPermissionRequestManagerProxy>
@@ -61,12 +71,13 @@ class UserMediaPermissionRequestManagerProxy
     , private LoggerHelper
 #endif
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(UserMediaPermissionRequestManagerProxy);
 public:
     explicit UserMediaPermissionRequestManagerProxy(WebPageProxy&);
     ~UserMediaPermissionRequestManagerProxy();
 
-    WebPageProxy& page() const { return m_page; }
+    WebPageProxy& page() const;
+    Ref<WebPageProxy> protectedPage() const;
 
 #if ENABLE(MEDIA_STREAM)
     static void forEach(const WTF::Function<void(UserMediaPermissionRequestManagerProxy&)>&);
@@ -132,7 +143,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final;
     const void* logIdentifier() const final { return m_logIdentifier; }
-    const char* logClassName() const override { return "UserMediaPermissionRequestManagerProxy"; }
+    ASCIILiteral logClassName() const override { return "UserMediaPermissionRequestManagerProxy"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
 
@@ -180,7 +191,7 @@ private:
     Deque<Ref<UserMediaPermissionRequestProxy>> m_pendingUserMediaRequests;
     HashSet<MediaDevicePermissionRequestIdentifier> m_pendingDeviceRequests;
 
-    WebPageProxy& m_page;
+    WeakRef<WebPageProxy> m_page;
 
     RunLoop::Timer m_rejectionTimer;
     Deque<Ref<UserMediaPermissionRequestProxy>> m_pendingRejections;

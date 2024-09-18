@@ -29,7 +29,6 @@
 #if ENABLE(APPLE_PAY)
 
 #include "ApplePayPaymentSetupFeaturesWebKit.h"
-#include "DataReference.h"
 #include "MessageSenderInlines.h"
 #include "PaymentSetupConfigurationWebKit.h"
 #include "WebCoreArgumentCoders.h"
@@ -44,9 +43,12 @@
 #include <WebCore/ApplePayShippingMethodUpdate.h>
 #include <WebCore/LocalFrame.h>
 #include <WebCore/PaymentCoordinator.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebPaymentCoordinator);
 
 WebPaymentCoordinator::WebPaymentCoordinator(WebPage& webPage)
     : m_webPage(webPage)
@@ -220,7 +222,7 @@ void WebPaymentCoordinator::getSetupFeatures(const WebCore::ApplePaySetupConfigu
     m_webPage.sendWithAsyncReply(Messages::WebPaymentCoordinatorProxy::GetSetupFeatures(PaymentSetupConfiguration { configuration, url }), WTFMove(completionHandler));
 }
 
-void WebPaymentCoordinator::beginApplePaySetup(const WebCore::ApplePaySetupConfiguration& configuration, const URL& url, Vector<RefPtr<WebCore::ApplePaySetupFeature>>&& features, CompletionHandler<void(bool)>&& completionHandler)
+void WebPaymentCoordinator::beginApplePaySetup(const WebCore::ApplePaySetupConfiguration& configuration, const URL& url, Vector<Ref<WebCore::ApplePaySetupFeature>>&& features, CompletionHandler<void(bool)>&& completionHandler)
 {
     m_webPage.sendWithAsyncReply(Messages::WebPaymentCoordinatorProxy::BeginApplePaySetup(PaymentSetupConfiguration { configuration, url }, PaymentSetupFeatures { WTFMove(features) }), WTFMove(completionHandler));
 }

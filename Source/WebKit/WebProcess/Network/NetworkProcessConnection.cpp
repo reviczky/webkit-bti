@@ -26,7 +26,6 @@
 #include "config.h"
 #include "NetworkProcessConnection.h"
 
-#include "DataReference.h"
 #include "LibWebRTCNetwork.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcessMessages.h"
@@ -69,6 +68,7 @@
 #include <WebCore/InspectorInstrumentationWebKit.h>
 #include <WebCore/MemoryCache.h>
 #include <WebCore/MessagePort.h>
+#include <WebCore/NavigationScheduler.h>
 #include <WebCore/Page.h>
 #include <WebCore/SharedBuffer.h>
 #include <pal/SessionID.h>
@@ -98,7 +98,7 @@ NetworkProcessConnection::~NetworkProcessConnection()
 void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     if (decoder.messageReceiverName() == Messages::WebResourceLoader::messageReceiverName()) {
-        if (auto* webResourceLoader = WebProcess::singleton().webLoaderStrategy().webResourceLoaderForIdentifier(AtomicObjectIdentifier<WebCore::ResourceLoader>(decoder.destinationID())))
+        if (auto* webResourceLoader = WebProcess::singleton().webLoaderStrategy().webResourceLoaderForIdentifier(LegacyNullableAtomicObjectIdentifier<WebCore::ResourceLoader>(decoder.destinationID())))
             webResourceLoader->didReceiveWebResourceLoaderMessage(connection, decoder);
         return;
     }
@@ -111,12 +111,12 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
         return;
     }
     if (decoder.messageReceiverName() == Messages::WebPage::messageReceiverName()) {
-        if (auto* webPage = WebProcess::singleton().webPage(ObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
+        if (auto* webPage = WebProcess::singleton().webPage(LegacyNullableObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
             webPage->didReceiveWebPageMessage(connection, decoder);
         return;
     }
     if (decoder.messageReceiverName() == Messages::StorageAreaMap::messageReceiverName()) {
-        if (auto storageAreaMap = WebProcess::singleton().storageAreaMap(ObjectIdentifier<StorageAreaMapIdentifierType>(decoder.destinationID())))
+        if (auto storageAreaMap = WebProcess::singleton().storageAreaMap(LegacyNullableObjectIdentifier<StorageAreaMapIdentifierType>(decoder.destinationID())))
             storageAreaMap->didReceiveMessage(connection, decoder);
         return;
     }
@@ -124,7 +124,7 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
         WebProcess::singleton().fileSystemStorageConnection().didReceiveMessage(connection, decoder);
         return;
     }
-    if (decoder.messageReceiverName() == Messages::WebTransportSession::messageReceiverName()) {
+    if (decoder.messageReceiverName() == Messages::WebTransportSession::messageReceiverName() && WebProcess::singleton().isWebTransportEnabled()) {
         if (auto* webTransportSession = WebProcess::singleton().webTransportSession(WebTransportSessionIdentifier(decoder.destinationID())))
             webTransportSession->didReceiveMessage(connection, decoder);
         return;
@@ -142,7 +142,7 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
     if (decoder.messageReceiverName() == Messages::WebRTCResolver::messageReceiverName()) {
         auto& network = WebProcess::singleton().libWebRTCNetwork();
         if (network.isActive())
-            network.resolver(AtomicObjectIdentifier<LibWebRTCResolverIdentifierType>(decoder.destinationID())).didReceiveMessage(connection, decoder);
+            network.resolver(LegacyNullableAtomicObjectIdentifier<LibWebRTCResolverIdentifierType>(decoder.destinationID())).didReceiveMessage(connection, decoder);
         else
             RELEASE_LOG_ERROR(WebRTC, "Received WebRTCResolver message while libWebRTCNetwork is not active");
         return;
@@ -178,7 +178,7 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
 
 #if ENABLE(APPLE_PAY_REMOTE_UI)
     if (decoder.messageReceiverName() == Messages::WebPaymentCoordinator::messageReceiverName()) {
-        if (auto webPage = WebProcess::singleton().webPage(ObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
+        if (auto webPage = WebProcess::singleton().webPage(LegacyNullableObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
             webPage->paymentCoordinator()->didReceiveMessage(connection, decoder);
         return;
     }
@@ -198,7 +198,7 @@ bool NetworkProcessConnection::didReceiveSyncMessage(IPC::Connection& connection
 
 #if ENABLE(APPLE_PAY_REMOTE_UI)
     if (decoder.messageReceiverName() == Messages::WebPaymentCoordinator::messageReceiverName()) {
-        if (auto webPage = WebProcess::singleton().webPage(ObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
+        if (auto webPage = WebProcess::singleton().webPage(LegacyNullableObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
             return webPage->paymentCoordinator()->didReceiveSyncMessage(connection, decoder, replyEncoder);
         return false;
     }
@@ -221,7 +221,7 @@ void NetworkProcessConnection::didClose(IPC::Connection&)
         swConnection->connectionToServerLost();
 }
 
-void NetworkProcessConnection::didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName)
+void NetworkProcessConnection::didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t)
 {
 }
 
@@ -335,16 +335,22 @@ void NetworkProcessConnection::broadcastConsoleMessage(MessageSource source, Mes
     });
 }
 
+void NetworkProcessConnection::loadCancelledDownloadRedirectRequestInFrame(WebCore::ResourceRequest&& request, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID)
+{
+    if (RefPtr webPage = WebProcess::singleton().webPage(pageID); webPage && WebProcess::singleton().webFrame(frameID)) {
+        LoadParameters loadParameters;
+        loadParameters.frameIdentifier = frameID;
+        loadParameters.request = request;
+        webPage->loadRequest(WTFMove(loadParameters));
+    } else
+        RELEASE_LOG_ERROR(Process, "Trying to load Invalid page or frame for %s", request.url().string().utf8().data());
+}
+
 #if ENABLE(WEB_RTC)
 void NetworkProcessConnection::connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier localIdentifier, WebCore::RTCDataChannelIdentifier remoteIdentifier, CompletionHandler<void(std::optional<bool>)>&& callback)
 {
     callback(RTCDataChannelRemoteManager::sharedManager().connectToRemoteSource(localIdentifier, remoteIdentifier));
 }
 #endif
-
-void NetworkProcessConnection::addAllowedFirstPartyForCookies(WebCore::RegistrableDomain&& firstPartyForCookies)
-{
-    WebProcess::singleton().addAllowedFirstPartyForCookies(WTFMove(firstPartyForCookies));
-}
 
 } // namespace WebKit

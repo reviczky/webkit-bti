@@ -35,6 +35,7 @@
 #include <wtf/MonotonicTime.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
@@ -47,8 +48,6 @@
 
 #if USE(GTK4)
 #include <WebCore/GRefPtrGtk.h>
-#else
-#include <WebCore/CairoUtilities.h>
 #endif
 #endif
 
@@ -93,6 +92,15 @@ typedef void* PlatformScrollEvent;
 #endif
 
 namespace WebKit {
+class ViewGestureController;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::ViewGestureController> : std::true_type { };
+}
+
+namespace WebKit {
 
 class ViewSnapshot;
 class WebBackForwardListItem;
@@ -100,7 +108,7 @@ class WebPageProxy;
 class WebProcessProxy;
 
 class ViewGestureController : public IPC::MessageReceiver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ViewGestureController);
     WTF_MAKE_NONCOPYABLE(ViewGestureController);
 public:
 
@@ -316,7 +324,7 @@ private:
         bool handleEvent(PlatformScrollEvent);
         void eventWasNotHandledByWebCore(PlatformScrollEvent);
 
-        void reset(const char* resetReasonForLogging);
+        void reset(ASCIILiteral resetReasonForLogging);
 
         bool shouldIgnorePinnedState() { return m_shouldIgnorePinnedState; }
         void setShouldIgnorePinnedState(bool ignore) { m_shouldIgnorePinnedState = ignore; }
@@ -335,7 +343,7 @@ private:
             WaitingForWebCore,
             InsufficientMagnitude
         };
-        static const char* stateToString(State);
+        static ASCIILiteral stateToString(State);
 
         State m_state { State::None };
         SwipeDirection m_direction;

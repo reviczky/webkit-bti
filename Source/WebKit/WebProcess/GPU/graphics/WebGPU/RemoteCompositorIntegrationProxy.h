@@ -31,10 +31,14 @@
 #include "RemotePresentationContextProxy.h"
 #include "WebGPUIdentifier.h"
 #include <WebCore/WebGPUCompositorIntegration.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 class ImageBuffer;
 class NativeImage;
+namespace WebGPU {
+class Device;
+}
 }
 
 namespace WebKit::WebGPU {
@@ -42,7 +46,7 @@ namespace WebKit::WebGPU {
 class ConvertToBackingContext;
 
 class RemoteCompositorIntegrationProxy final : public WebCore::WebGPU::CompositorIntegration {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RemoteCompositorIntegrationProxy);
 public:
     static Ref<RemoteCompositorIntegrationProxy> create(RemoteGPUProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
     {
@@ -61,7 +65,7 @@ public:
     }
 
     void paintCompositedResultsToCanvas(WebCore::ImageBuffer&, uint32_t) final;
-    void withDisplayBufferAsNativeImage(uint32_t, Function<void(WebCore::NativeImage&)>) final;
+    void withDisplayBufferAsNativeImage(uint32_t, Function<void(WebCore::NativeImage*)>) final;
 
 private:
     friend class DowncastConvertToBackingContext;
@@ -75,20 +79,19 @@ private:
 
     WebGPUIdentifier backing() const { return m_backing; }
     
-    static inline constexpr Seconds defaultSendTimeout = 30_s;
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
     {
-        return root().streamClientConnection().send(WTFMove(message), backing(), defaultSendTimeout);
+        return root().streamClientConnection().send(WTFMove(message), backing());
     }
     template<typename T>
     WARN_UNUSED_RETURN IPC::Connection::SendSyncResult<T> sendSync(T&& message)
     {
-        return root().streamClientConnection().sendSync(WTFMove(message), backing(), defaultSendTimeout);
+        return root().streamClientConnection().sendSync(WTFMove(message), backing());
     }
 
 #if PLATFORM(COCOA)
-    Vector<MachSendRight> recreateRenderBuffers(int width, int height) override;
+    Vector<MachSendRight> recreateRenderBuffers(int width, int height, WebCore::DestinationColorSpace&&, WebCore::AlphaPremultiplication, WebCore::WebGPU::TextureFormat, WebCore::WebGPU::Device&) override;
 #endif
 
     void prepareForDisplay(CompletionHandler<void()>&&) override;

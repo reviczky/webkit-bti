@@ -60,14 +60,12 @@ public:
     static Ref<WebInspectorUI> create(WebPage&);
     virtual ~WebInspectorUI();
 
-    static void enableFrontendFeatures(WebPage&);
-
     // Implemented in generated WebInspectorUIMessageReceiver.cpp
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
     // IPC::Connection::Client
     void didClose(IPC::Connection&) override { /* Do nothing, the inspected page process may have crashed and may be getting replaced. */ }
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override { closeWindow(); }
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override { closeWindow(); }
 
     // Called by WebInspectorUI messages
     void establishConnection(WebPageProxyIdentifier inspectedPageIdentifier, const DebuggableInfoData&, bool underTest, unsigned inspectionLevel);
@@ -126,6 +124,7 @@ public:
     void resetState() override;
 
     void setForcedAppearance(WebCore::InspectorFrontendClient::Appearance) override;
+    void effectiveAppearanceDidChange(WebCore::InspectorFrontendClient::Appearance);
 
     WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() const override;
 
@@ -178,6 +177,8 @@ public:
 
 private:
     explicit WebInspectorUI(WebPage&);
+
+    void didEstablishConnection();
 
     WebPage& m_page;
     Ref<WebCore::InspectorFrontendAPIDispatcher> m_frontendAPIDispatcher;

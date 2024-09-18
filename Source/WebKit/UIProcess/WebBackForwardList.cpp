@@ -31,6 +31,7 @@
 #include "SessionState.h"
 #include "WebBackForwardCache.h"
 #include "WebBackForwardListCounts.h"
+#include "WebFrameProxy.h"
 #include "WebPageProxy.h"
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
@@ -171,6 +172,20 @@ void WebBackForwardList::addItem(Ref<WebBackForwardListItem>&& newItem)
     page->didChangeBackForwardList(newItemPtr, WTFMove(removedItems));
 }
 
+void WebBackForwardList::addRootChildFrameItem(Ref<WebBackForwardListItem>&& newItem) const
+{
+    if (!m_page || !m_page->mainFrame())
+        return;
+    auto mainFrameID = m_page->mainFrame()->frameID();
+    for (int itemIndex = 0; auto* item = itemAtIndex(itemIndex); --itemIndex) {
+        if (item->frameID() == mainFrameID) {
+            newItem->setMainFrameItem(item);
+            item->addRootChildFrameItem(WTFMove(newItem));
+            break;
+        }
+    }
+}
+
 void WebBackForwardList::goToItem(WebBackForwardListItem& item)
 {
     ASSERT(!m_currentIndex || *m_currentIndex < m_entries.size());
@@ -179,9 +194,10 @@ void WebBackForwardList::goToItem(WebBackForwardListItem& item)
     if (!m_entries.size() || !page || !m_currentIndex)
         return;
 
+    auto* targetItem = item.mainFrameItem() ? item.mainFrameItem() : &item;
     size_t targetIndex = notFound;
     for (size_t i = 0; i < m_entries.size(); ++i) {
-        if (m_entries[i].ptr() == &item) {
+        if (m_entries[i].ptr() == targetItem) {
             targetIndex = i;
             break;
         }
@@ -189,7 +205,7 @@ void WebBackForwardList::goToItem(WebBackForwardListItem& item)
 
     // If the target item wasn't even in the list, there's nothing else to do.
     if (targetIndex == notFound) {
-        LOG(BackForward, "(Back/Forward) WebBackForwardList %p could not go to item %s (%s) because it was not found", this, item.itemID().toString().utf8().data(), item.url().utf8().data());
+        LOG(BackForward, "(Back/Forward) WebBackForwardList %p could not go to item %s (%s) because it was not found", this, targetItem->itemID().toString().utf8().data(), targetItem->url().utf8().data());
         return;
     }
 
@@ -203,7 +219,7 @@ void WebBackForwardList::goToItem(WebBackForwardListItem& item)
     // item should remain in the list.
     auto& currentItem = m_entries[*m_currentIndex];
     bool shouldKeepCurrentItem = true;
-    if (currentItem.ptr() != &item) {
+    if (currentItem.ptr() != targetItem) {
         page->recordAutomaticNavigationSnapshot();
         shouldKeepCurrentItem = page->shouldKeepCurrentBackForwardListItemInList(m_entries[*m_currentIndex]);
     }
@@ -215,7 +231,7 @@ void WebBackForwardList::goToItem(WebBackForwardListItem& item)
         m_entries.remove(*m_currentIndex);
         targetIndex = notFound;
         for (size_t i = 0; i < m_entries.size(); ++i) {
-            if (m_entries[i].ptr() == &item) {
+            if (m_entries[i].ptr() == targetItem) {
                 targetIndex = i;
                 break;
             }
@@ -225,7 +241,7 @@ void WebBackForwardList::goToItem(WebBackForwardListItem& item)
 
     m_currentIndex = targetIndex;
 
-    LOG(BackForward, "(Back/Forward) WebBackForwardList %p going to item %s, is now at index %zu", this, item.itemID().toString().utf8().data(), targetIndex);
+    LOG(BackForward, "(Back/Forward) WebBackForwardList %p going to item %s, is now at index %zu", this, targetItem->itemID().toString().utf8().data(), targetIndex);
     page->didChangeBackForwardList(nullptr, WTFMove(removedItems));
 }
 
@@ -550,22 +566,22 @@ RefPtr<WebPageProxy> WebBackForwardList::protectedPage()
 
 #if !LOG_DISABLED
 
-const char* WebBackForwardList::loggingString()
+String WebBackForwardList::loggingString()
 {
     StringBuilder builder;
 
-    builder.append("WebBackForwardList 0x", hex(reinterpret_cast<uintptr_t>(this)), " - ", m_entries.size(), " entries, has current index ", m_currentIndex ? "YES" : "NO", " (", m_currentIndex ? *m_currentIndex : 0, ')');
+    builder.append("\nWebBackForwardList 0x"_s, hex(reinterpret_cast<uintptr_t>(this)), " - "_s, m_entries.size(), " entries, has current index "_s, m_currentIndex ? "YES"_s : "NO"_s, " ("_s, m_currentIndex ? *m_currentIndex : 0, ')');
 
     for (size_t i = 0; i < m_entries.size(); ++i) {
-        const char* prefix;
+        ASCIILiteral prefix;
         if (m_currentIndex && *m_currentIndex == i)
-            prefix = " * ";
+            prefix = " * "_s;
         else
-            prefix = " - ";
+            prefix = " - "_s;
         builder.append('\n', prefix, m_entries[i]->loggingString());
     }
 
-    return debugString("\n", builder.toString());
+    return builder.toString();
 }
 
 #endif // !LOG_DISABLED

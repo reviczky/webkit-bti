@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.44.4</p>
+        <p>Library Version: 2.46.0</p>
         
       </div>
       
@@ -133,6 +133,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   
     <a class="method" href="method.WebView.get_default_content_security_policy.html">get_default_content_security_policy</a>
   
+    <a class="method" href="method.WebView.get_display.html">get_display</a>
+  
     <a class="method" href="method.WebView.get_display_capture_state.html">get_display_capture_state</a>
   
     <a class="method" href="method.WebView.get_editor_state.html">get_editor_state</a>
@@ -172,6 +174,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.WebView.get_website_policies.html">get_website_policies</a>
   
     <a class="method" href="method.WebView.get_window_properties.html">get_window_properties</a>
+  
+    <a class="method" href="method.WebView.get_wpe_view.html">get_wpe_view</a>
   
     <a class="method" href="method.WebView.get_zoom_level.html">get_zoom_level</a>
   
@@ -247,6 +251,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   
     <a class="method" href="method.WebView.terminate_web_process.html">terminate_web_process</a>
   
+    <a class="method" href="method.WebView.toggle_inspector.html">toggle_inspector</a>
+  
     <a class="method" href="method.WebView.try_close.html">try_close</a>
   
   </div>
@@ -265,6 +271,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="property" href="property.WebView.camera-capture-state.html">camera-capture-state</a>
   
     <a class="property" href="property.WebView.default-content-security-policy.html">default-content-security-policy</a>
+  
+    <a class="property" href="property.WebView.display.html">display</a>
   
     <a class="property" href="property.WebView.display-capture-state.html">display-capture-state</a>
   
@@ -458,7 +466,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L119">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L124">[src]</a>
           
         </h4>
 
@@ -811,6 +819,16 @@ When not provided, the document <span class="caps">URL</span> is&nbsp;used.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.WebView.get_display.html">webkit_web_view_get_display</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WPEDisplay</code> of <code>web_view</code>.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.44</span></p>
+          </div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.WebView.get_display_capture_state.html">webkit_web_view_get_display_capture_state</a></h6>
           <div class="docblock">
             <p>Get the display capture state of a <code>WebKitWebView</code>.</p>
@@ -1008,6 +1026,16 @@ the <code>WebKitWebView</code>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.get_wpe_view.html">webkit_web_view_get_wpe_view</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WPEView</code> of <code>web_view</code>.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.44</span></p>
           </div>
         </div>
       
@@ -1384,6 +1412,16 @@ using any cached&nbsp;data.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.WebView.toggle_inspector.html">webkit_web_view_toggle_inspector</a></h6>
+          <div class="docblock">
+            No description available.
+          </div>
+          <div class="docblock">
+            <p></p>
+          </div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.WebView.try_close.html">webkit_web_view_try_close</a></h6>
           <div class="docblock">
             <p>Tries to close the <code>web_view</code>.</p>
@@ -1466,6 +1504,16 @@ by an <span class="caps">HTTP</span>&nbsp;header.</p>
           </div>
           <div class="docblock">
             <p><span class="emblem available">since: 2.38</span></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="property.WebView.display.html">WPEWebKit.WebView:display</a></h6>
+          <div class="docblock">
+            <p>The <code>WPEDisplay</code> of the&nbsp;view.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.44</span></p>
           </div>
         </div>
       
@@ -1814,17 +1862,15 @@ full screen&nbsp;window).</p>
           </div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.WebView.insecure-content-detected.html">WPEWebKit.WebView::insecure-content-detected</a></h6>
           <div class="docblock">
-            <p>This signal is emitted when insecure content has been detected
-in a page loaded through a secure connection. This typically
-means that a external resource from an unstrusted source has
-been run or displayed, resulting in a mix of <span class="caps">HTTPS</span> and
-non-<span class="caps">HTTPS</span>&nbsp;content.</p>
+            <p>Prior to 2.46, this signal was emitted when insecure content was
+loaded in a secure content. Since 2.46, this signal is generally
+no longer&nbsp;emitted.</p>
           </div>
           <div class="docblock">
-            <p></p>
+            <p><span class="emblem deprecated">deprecated: 2.46</span>&nbsp;</p>
           </div>
         </div>
       

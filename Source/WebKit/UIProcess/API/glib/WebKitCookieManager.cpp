@@ -32,6 +32,7 @@
 #include <WebCore/HTTPCookieAcceptPolicy.h>
 #include <glib/gi18n-lib.h>
 #include <pal/SessionID.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
@@ -56,8 +57,8 @@ enum {
     LAST_SIGNAL
 };
 
-class CookieStoreObserver : public API::HTTPCookieStore::Observer {
-    WTF_MAKE_FAST_ALLOCATED;
+class CookieStoreObserver : public API::HTTPCookieStoreObserver {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(CookieStoreObserver);
 public:
     CookieStoreObserver(Function<void()>&& callback)
         : m_callback(WTFMove(callback)) { }
@@ -196,8 +197,8 @@ void webkit_cookie_manager_set_persistent_storage(WebKitCookieManager* manager, 
     if (sessionID.isEphemeral())
         return;
 
-    auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(manager->priv->dataManager);
-    websiteDataStore.setCookiePersistentStorage(String::fromUTF8(filename), toSoupCookiePersistentStorageType(storage));
+    Ref websiteDataStore = webkitWebsiteDataManagerGetDataStore(manager->priv->dataManager);
+    websiteDataStore->setCookiePersistentStorage(String::fromUTF8(filename), toSoupCookiePersistentStorageType(storage));
 }
 
 /**
@@ -216,8 +217,8 @@ void webkit_cookie_manager_set_accept_policy(WebKitCookieManager* manager, WebKi
 {
     g_return_if_fail(WEBKIT_IS_COOKIE_MANAGER(manager));
 
-    auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(manager->priv->dataManager);
-    websiteDataStore.setHTTPCookieAcceptPolicy(toHTTPCookieAcceptPolicy(policy));
+    Ref websiteDataStore = webkitWebsiteDataManagerGetDataStore(manager->priv->dataManager);
+    websiteDataStore->setHTTPCookieAcceptPolicy(toHTTPCookieAcceptPolicy(policy));
 }
 
 /**

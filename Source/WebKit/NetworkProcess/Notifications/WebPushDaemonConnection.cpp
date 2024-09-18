@@ -26,13 +26,16 @@
 #include "config.h"
 #include "WebPushDaemonConnection.h"
 
-#if ENABLE(BUILT_IN_NOTIFICATIONS)
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
 
 #include "DaemonDecoder.h"
 #include "DaemonEncoder.h"
 #include "NetworkSession.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit::WebPushD {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Connection);
 
 Connection::Connection(CString&& machServiceName, NetworkNotificationManager& manager, WebPushDaemonConnectionConfiguration&& configuration)
     : Daemon::ConnectionToMachService<ConnectionTraits>(WTFMove(machServiceName))
@@ -54,4 +57,4 @@ void Connection::debugMessage(const String& message)
 
 } // namespace WebKit::WebPushD
 
-#endif // ENABLE(BUILT_IN_NOTIFICATIONS)
+#endif // ENABLE(WEB_PUSH_NOTIFICATIONS)

@@ -92,7 +92,7 @@ public:
 
     void open(StreamConnectionWorkQueue&);
     void invalidate();
-    template<typename T> Error send(T&& message, const ObjectIdentifierGenericBase& destinationID);
+    template<typename T, typename RawValue> Error send(T&& message, const ObjectIdentifierGenericBase<RawValue>& destinationID);
 
     template<typename T, typename... Arguments>
     void sendSyncReply(Connection::SyncRequestID, Arguments&&...);
@@ -116,11 +116,13 @@ private:
     void didReceiveMessage(Connection&, Decoder&) final;
     bool didReceiveSyncMessage(Connection&, Decoder&, UniqueRef<Encoder>&) final;
     void didClose(Connection&) final;
-    void didReceiveInvalidMessage(Connection&, MessageName) final;
+    void didReceiveInvalidMessage(Connection&, MessageName, int32_t indexOfObjectFailingDecoding) final;
 
     bool processSetStreamDestinationID(Decoder&&, RefPtr<StreamMessageReceiver>& currentReceiver);
     bool dispatchStreamMessage(Decoder&&, StreamMessageReceiver&);
     bool dispatchOutOfStreamMessage(Decoder&&);
+
+    RefPtr<StreamConnectionWorkQueue> protectedWorkQueue() const;
 
     using WakeUpClient = StreamServerConnectionBuffer::WakeUpClient;
     const Ref<IPC::Connection> m_connection;
@@ -140,8 +142,8 @@ private:
     friend class StreamConnectionWorkQueue;
 };
 
-template<typename T>
-Error StreamServerConnection::send(T&& message, const ObjectIdentifierGenericBase& destinationID)
+template<typename T, typename RawValue>
+Error StreamServerConnection::send(T&& message, const ObjectIdentifierGenericBase<RawValue>& destinationID)
 {
     return m_connection->send(std::forward<T>(message), destinationID);
 }

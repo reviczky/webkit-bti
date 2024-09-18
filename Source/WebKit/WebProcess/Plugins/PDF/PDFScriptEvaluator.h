@@ -29,7 +29,17 @@
 
 #include <wtf/Noncopyable.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
+
+namespace WebKit {
+class PDFScriptEvaluatorClient;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
+template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::PDFScriptEvaluatorClient> : std::true_type { };
+}
 
 typedef const struct OpaqueJSContext* JSContextRef;
 typedef struct OpaqueJSValue* JSObjectRef;
@@ -38,28 +48,28 @@ typedef struct OpaqueJSClass* JSClassRef;
 
 namespace WebKit {
 
+class PDFScriptEvaluatorClient : public CanMakeWeakPtr<PDFScriptEvaluatorClient> {
+public:
+    virtual ~PDFScriptEvaluatorClient() = default;
+
+    virtual void print() = 0;
+};
+
 class PDFScriptEvaluator : public RefCounted<PDFScriptEvaluator> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PDFScriptEvaluator);
     WTF_MAKE_NONCOPYABLE(PDFScriptEvaluator);
 public:
-    class Client : public CanMakeWeakPtr<Client> {
-    public:
-        virtual ~Client() = default;
-
-        virtual void print() = 0;
-    };
-
-    static void runScripts(CGPDFDocumentRef, Client&);
+    static void runScripts(CGPDFDocumentRef, PDFScriptEvaluatorClient&);
 
 private:
     PDFScriptEvaluator() = delete;
-    PDFScriptEvaluator(CGPDFDocumentRef pdfDocument, Client& client)
+    PDFScriptEvaluator(CGPDFDocumentRef pdfDocument, PDFScriptEvaluatorClient& client)
         : m_pdfDocument(pdfDocument)
         , m_client(client)
     {
     }
 
-    static Ref<PDFScriptEvaluator> create(CGPDFDocumentRef pdfDocument, Client& client)
+    static Ref<PDFScriptEvaluator> create(CGPDFDocumentRef pdfDocument, PDFScriptEvaluatorClient& client)
     {
         return adoptRef(*new PDFScriptEvaluator(pdfDocument, client));
     }
@@ -70,7 +80,7 @@ private:
     void print();
 
     RetainPtr<CGPDFDocumentRef> m_pdfDocument;
-    WeakPtr<Client> m_client;
+    WeakPtr<PDFScriptEvaluatorClient> m_client;
 };
 
 }

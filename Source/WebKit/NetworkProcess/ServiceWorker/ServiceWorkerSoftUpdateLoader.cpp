@@ -36,10 +36,13 @@
 #include <WebCore/TextResourceDecoder.h>
 #include <WebCore/WorkerFetchResult.h>
 #include <WebCore/WorkerScriptLoader.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ServiceWorkerSoftUpdateLoader);
 
 ServiceWorkerSoftUpdateLoader::ServiceWorkerSoftUpdateLoader(NetworkSession& session, ServiceWorkerJobData&& jobData, bool shouldRefreshCache, ResourceRequest&& request, Handler&& completionHandler)
     : m_completionHandler(WTFMove(completionHandler))
@@ -182,9 +185,9 @@ void ServiceWorkerSoftUpdateLoader::didReceiveBuffer(const WebCore::FragmentedSh
             m_decoder = TextResourceDecoder::create("text/javascript"_s, "UTF-8");
     }
 
-    buffer.forEachSegment([&](auto& segment) {
+    buffer.forEachSegment([&](auto segment) {
         if (segment.size())
-            m_script.append(m_decoder->decode(segment.data(), segment.size()));
+            m_script.append(m_decoder->decode(segment));
     });
 }
 
