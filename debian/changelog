@@ -12,6 +12,8 @@ wpewebkit (2.46.0-1) UNRELEASED; urgency=medium
     - debian/rules: Build with -DENABLE_WPE_PLATFORM=OFF.
     - debian/patches/disable-wpe-platform-build.patch: Fix build with
       ENABLE_WPE_PLATFORM=OFF.
+  * debian/libwpewebkit-2.0-1.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Sep 2024 09:06:35 +0200
 

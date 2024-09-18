@@ -532,6 +532,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_security_origin_ref@Base 2.24.1
  webkit_security_origin_to_string@Base 2.24.1
  webkit_security_origin_unref@Base 2.24.1
+ webkit_settings_apply_from_key_file@Base 2.46.0
  webkit_settings_get_all_features@Base 2.42.0
  webkit_settings_get_allow_file_access_from_file_urls@Base 2.24.1
  webkit_settings_get_allow_modal_dialogs@Base 2.24.1
@@ -547,6 +548,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_settings_get_disable_web_security@Base 2.39.91
  webkit_settings_get_draw_compositing_indicators@Base 2.24.1
  webkit_settings_get_enable_caret_browsing@Base 2.24.1
+ webkit_settings_get_enable_2d_canvas_acceleration@Base 2.46.0
  webkit_settings_get_enable_developer_extras@Base 2.24.1
  webkit_settings_get_enable_dns_prefetching@Base 2.24.1
  webkit_settings_get_enable_encrypted_media@Base 2.24.1
@@ -604,6 +606,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_settings_set_default_monospace_font_size@Base 2.24.1
  webkit_settings_set_disable_web_security@Base 2.39.91
  webkit_settings_set_draw_compositing_indicators@Base 2.24.1
+ webkit_settings_set_enable_2d_canvas_acceleration@Base 2.46.0
  webkit_settings_set_enable_caret_browsing@Base 2.24.1
  webkit_settings_set_enable_developer_extras@Base 2.24.1
  webkit_settings_set_enable_dns_prefetching@Base 2.24.1
