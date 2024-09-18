@@ -6,6 +6,7 @@ wpewebkit (2.46.0-1) UNRELEASED; urgency=medium
     - reduce-memory-overheads.patch: Override LDFLAGS instead.
   * debian/patches/dont-detect-sse2.patch:
     - Update this patch.
+  * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Sep 2024 09:06:35 +0200
 
