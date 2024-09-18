@@ -30,6 +30,9 @@ endif
 CFLAGS := $(CFLAGS:-g=-g1)
 CXXFLAGS := $(CXXFLAGS:-g=-g1)
 
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=949621
+LDFLAGS += -Wl,--reduce-memory-overheads
+
 # Don't build with -gsplit-dwarf (see #1016936)
 EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
 

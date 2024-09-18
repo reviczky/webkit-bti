@@ -1,6 +1,4 @@
 fix-ftbfs-sparc64.patch
 fix-ftbfs-x32.patch
-prefer-pthread.patch
 dont-detect-sse2.patch
-reduce-memory-overheads.patch
 fix-ftbfs-riscv64.patch

@@ -1,6 +1,11 @@
 wpewebkit (2.46.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Remove the following patches:
+    - prefer-pthread.patch: this should not be needed anymore.
+    - reduce-memory-overheads.patch: Override LDFLAGS instead.
+  * debian/patches/dont-detect-sse2.patch:
+    - Update this patch.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Sep 2024 09:06:35 +0200
 
