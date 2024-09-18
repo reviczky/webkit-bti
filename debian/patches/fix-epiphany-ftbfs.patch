@@ -1,0 +1,42 @@
+From: Michael Catanzaro <mcatanzaro@redhat.com>
+Subject: Disable webkit_settings_set_enable_2d_canvas_acceleration on non-Skia builds
+Bug: https://bugs.webkit.org/show_bug.cgi?id=279220
+Bug-Debian: https://bugs.debian.org/1082149
+Origin: https://commits.webkit.org/283863@main
+Index: webkitgtk/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml
+===================================================================
+--- webkitgtk.orig/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml
++++ webkitgtk/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml
+@@ -1634,6 +1634,7 @@ CanvasUsesAcceleratedDrawing:
+   type: bool
+   status: embedder
+   humanReadableName: "Canvas uses accelerated drawing"
++  condition: USE(CA) || USE(SKIA)
+   defaultValue:
+     WebKitLegacy:
+       "PLATFORM(IOS_FAMILY) && !PLATFORM(IOS_FAMILY_SIMULATOR)": true
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp
+@@ -1307,7 +1307,7 @@ static void webkit_settings_class_init(W
+             "enable-accelerated-2d-canvas",
+             _("Enable accelerated 2D canvas"),
+             _("Whether to enable accelerated 2D canvas"),
+-            FEATURE_DEFAULT(CanvasUsesAcceleratedDrawing),
++            FALSE,
+             static_cast<GParamFlags>(readWriteConstructParamFlags | G_PARAM_DEPRECATED));
+ #endif
+ 
+@@ -1326,7 +1326,11 @@ static void webkit_settings_class_init(W
+             "enable-2d-canvas-acceleration",
+             _("Enable 2D canvas acceleration"),
+             _("Whether to enable 2D canvas acceleration"),
++#if USE(SKIA)
+             FEATURE_DEFAULT(CanvasUsesAcceleratedDrawing),
++#else
++            FALSE,
++#endif
+             readWriteConstructParamFlags);
+ 
+     /**

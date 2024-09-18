@@ -2,6 +2,10 @@ webkit2gtk (2.46.0-2) UNRELEASED; urgency=medium
 
   * debian/rules:
     - Use -DUSE_SYSPROF_CAPTURE=OFF in unsupported arches.
+  * debian/patches/fix-epiphany-ftbfs.patch:
+    - Disable webkit_settings_set_enable_2d_canvas_acceleration on
+      non-Skia builds. This fixes a FTBFS in epiphany-browser
+      (Closes: #1082149).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 17 Sep 2024 17:28:50 +0200
 
