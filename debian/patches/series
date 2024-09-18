@@ -4,3 +4,4 @@ fix-ftbfs-x32.patch
 dont-detect-sse2.patch
 fix-ftbfs-hurd.patch
 fix-epiphany-ftbfs.patch
+disable-nvidia-dmabuf.patch
