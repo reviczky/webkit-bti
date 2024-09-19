@@ -2,12 +2,16 @@ webkit2gtk (2.46.0-2) UNRELEASED; urgency=medium
 
   * debian/rules:
     - Use -DUSE_SYSPROF_CAPTURE=OFF in unsupported arches.
+    - Enable bmalloc on armhf, using the system malloc is crashing the web
+      process (Closes: #1082148)
   * debian/patches/fix-epiphany-ftbfs.patch:
     - Disable webkit_settings_set_enable_2d_canvas_acceleration on
       non-Skia builds. This fixes a FTBFS in epiphany-browser
       (Closes: #1082149).
   * debian/patches/disable-dmabuf-nvidia.patch:
     - Bring back this patch (Closes: #1082139), see also #1039720.
+  * debian/patches/fix-bmalloc-armhf.patch:
+    - Fix the armhf build if bmalloc is enabled.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 17 Sep 2024 17:28:50 +0200
 
