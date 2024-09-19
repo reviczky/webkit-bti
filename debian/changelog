@@ -1,4 +1,4 @@
-webkit2gtk (2.46.0-2) UNRELEASED; urgency=medium
+webkit2gtk (2.46.0-2) unstable; urgency=medium
 
   * debian/rules:
     - Use -DUSE_SYSPROF_CAPTURE=OFF in unsupported arches.
@@ -13,7 +13,7 @@ webkit2gtk (2.46.0-2) UNRELEASED; urgency=medium
   * debian/patches/fix-bmalloc-armhf.patch:
     - Fix the armhf build if bmalloc is enabled.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 17 Sep 2024 17:28:50 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 19 Sep 2024 19:11:43 +0200
 
 webkit2gtk (2.46.0-1) unstable; urgency=medium
 
