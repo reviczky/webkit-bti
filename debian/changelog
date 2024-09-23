@@ -1,8 +1,9 @@
-webkit2gtk (2.46.0-3) unstable; urgency=medium
+webkit2gtk (2.46.0-3) UNRELEASED; urgency=medium
 
   * debian/rules:
     - Remove compiler overrides for sh4 (Closes: #1082305)
       (thanks, John Paul Adrian Glaubitz).
+    - Build with -DENALE_WEBGL=OFF in the Hurd.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 20 Sep 2024 10:43:09 +0200
 

@@ -70,8 +70,8 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 endif
 
 # These are not available in the Hurd (#1033999)
-ifneq (,$(filter $(DEB_HOST_ARCH),hurd-i386))
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_GBM=OFF -DUSE_LIBDRM=OFF
+ifneq (,$(filter $(DEB_HOST_ARCH),hurd-i386 hurd-amd64))
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GBM=OFF -DUSE_LIBDRM=OFF -DENALE_WEBGL=OFF
 endif
 
 # Systemd/elogind and libmanette are Linux-only
