@@ -1,5 +1,6 @@
-webkit2gtk (2.46.0-3) UNRELEASED; urgency=medium
+webkit2gtk (2.46.1-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/rules:
     - Remove compiler overrides for sh4 (Closes: #1082305)
       (thanks, John Paul Adrian Glaubitz).
