@@ -2590,6 +2590,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBcmNexus.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.cpp

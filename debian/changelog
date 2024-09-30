@@ -6,6 +6,8 @@ webkit2gtk (2.46.1-1) UNRELEASED; urgency=medium
       (thanks, John Paul Adrian Glaubitz).
     - Build with -DENALE_WEBGL=OFF in the Hurd.
   * Drop debian/patches/fix-epiphany-ftbfs.patch.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 20 Sep 2024 10:43:09 +0200
 
