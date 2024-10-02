@@ -7,11 +7,6 @@ wpewebkit (2.46.1-1) UNRELEASED; urgency=medium
   * debian/patches/dont-detect-sse2.patch:
     - Update this patch.
   * Update copyright information of all files.
-  * Disable WPEPlatform, its API is still unstable and we don't need it at
-    the moment.
-    - debian/rules: Build with -DENABLE_WPE_PLATFORM=OFF.
-    - debian/patches/disable-wpe-platform-build.patch: Fix build with
-      ENABLE_WPE_PLATFORM=OFF.
   * debian/libwpewebkit-2.0-1.symbols:
     - Update symbols.
   * debian/source/lintian-overrides:
