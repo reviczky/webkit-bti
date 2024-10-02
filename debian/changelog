@@ -1,4 +1,4 @@
-wpewebkit (2.46.0-1) UNRELEASED; urgency=medium
+wpewebkit (2.46.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Remove the following patches:
