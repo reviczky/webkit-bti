@@ -1,4 +1,4 @@
-wpewebkit (2.46.1-1) UNRELEASED; urgency=medium
+wpewebkit (2.46.1-1) unstable; urgency=medium
 
   * New upstream release.
   * Remove the following patches:
@@ -15,7 +15,7 @@ wpewebkit (2.46.1-1) UNRELEASED; urgency=medium
     - Remove compiler overrides for sh4 (see #1082305).
     - Stop limiting parallel builds on Ubuntu.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 18 Sep 2024 09:06:35 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 02 Oct 2024 18:54:49 +0200
 
 wpewebkit (2.44.4-1) unstable; urgency=medium
 
