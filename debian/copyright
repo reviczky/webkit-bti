@@ -1450,6 +1450,7 @@ Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/ThirdParty/ANGLE/third_party/renderdoc/src/renderdoc_app.h
        Source/WTF/wtf/simde/arm/*
+       Source/WTF/wtf/simde/wasm/simd128.h
        Source/WebCore/xml/XSLTExtensions.cpp
 Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2007 Alexey Proskuryakov <ap@webkit.org>
@@ -2584,6 +2585,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBcmNexus.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.cpp
