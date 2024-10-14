@@ -11,6 +11,7 @@ Build-Depends: debhelper-compat (= 13),
                bubblewrap [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa ppc64 x32],
                xdg-dbus-proxy [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa ppc64 x32],
                libseccomp-dev [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa ppc64 x32],
+               clang [amd64],
                cmake (>= 3.20),
                libglib2.0-dev,
                libharfbuzz-dev,
@@ -21,13 +22,11 @@ Build-Depends: debhelper-compat (= 13),
                libicu-dev,
                libgcrypt20-dev,
                libhyphen-dev,
-               libjxl-dev,
                liblcms2-dev,
                libmanette-0.2-dev (>= 0.2.4),
-               libsysprof-capture-4-dev (>= 3.38.0) [amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4],
                libxslt1-dev,
                libxml2-dev,
-               libsoup-3.0-dev,libgtk-3-dev,libgtk-4-dev,
+               libsoup2.4-dev,libgtk-3-dev,
                libsqlite3-dev,
                libsystemd-dev,
                libgudev-1.0-dev,
@@ -37,7 +36,6 @@ Build-Depends: debhelper-compat (= 13),
                flex,
                ruby:native,
                unifdef,
-               libavif-dev,
                libjpeg-dev,
                libopenjp2-7-dev,
                libpng-dev,
@@ -46,7 +44,6 @@ Build-Depends: debhelper-compat (= 13),
                libxt-dev,
                libgstreamer1.0-dev,
                libgstreamer-plugins-base1.0-dev,
-               libgstreamer-plugins-bad1.0-dev (>= 1.20.0),
                libenchant-2-dev,
                libsecret-1-dev,
                gobject-introspection,
@@ -55,18 +52,18 @@ Build-Depends: debhelper-compat (= 13),
                libegl-dev,
                libgl-dev,
                libgles-dev
-Build-Depends-Indep: gi-docgen, libglib2.0-doc, libgtk-3-doc, libsoup-3.0-doc, jdupes
+Build-Depends-Indep: jdupes
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git
 Homepage: https://webkitgtk.org/
 
-Package: libjavascriptcoregtk-bin
+Package: libjavascriptcoregtk-4.0-bin
 Section: interpreters
 Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Conflicts: ${jscbin:Conflicts}
@@ -80,7 +77,7 @@ Description: JavaScript engine library from WebKitGTK - command-line interpreter
  .
  This package provides jsc, a command-line JavaScript interpreter.
 
-Package: libwebkitgtk-doc
+Package: libwebkit2gtk-4.0-doc
 Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
@@ -102,10 +99,10 @@ Description: Web content engine library for GTK - documentation
  .
  This package contains the documentation.
 
-Package: webkitgtk-webdriver
+Package: webkit2gtk-driver
 Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
+Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Conflicts: ${wkwebdriver:Conflicts}
@@ -124,30 +121,7 @@ Description: WebKitGTK WebDriver support
  This package provides the WebDriver service implementation for
  WebKitGTK.
 
-Package: libwebkit2gtk-4.0-doc
-Build-Profiles: <!nodoc>
-Section: oldlibs
-Architecture: all
-Multi-Arch: foreign
-Depends: libwebkitgtk-doc, ${misc:Depends}
-Description: WebKitGTK documentation (transitional dummy package)
- This is a transitional dummy package, it can be safely removed.
-
-Package: libjavascriptcoregtk-4.0-bin
-Section: oldlibs
-Architecture: all
-Depends: libjavascriptcoregtk-bin, ${misc:Depends}
-Description: WebKitGTK JavaScript command-line interpreter (transitional dummy package)
- This is a transitional dummy package, it can be safely removed.
-
-Package: webkit2gtk-driver
-Section: oldlibs
-Architecture: all
-Depends: webkitgtk-webdriver, ${misc:Depends}
-Description: WebKitGTK WebDriver support (transitional dummy package)
- This is a transitional dummy package, it can be safely removed.
-
-Package: libjavascriptcoregtk-4.1-0
+Package: libjavascriptcoregtk-4.0-18
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
@@ -160,15 +134,16 @@ Description: JavaScript engine library from WebKitGTK
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 4.1).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the shared libraries.
 
-Package: libjavascriptcoregtk-4.1-dev
+Package: libjavascriptcoregtk-4.0-dev
 Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
-Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
+         gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
          libglib2.0-dev,
          ${gir:Depends},
          ${misc:Depends}
@@ -179,15 +154,15 @@ Description: JavaScript engine library from WebKitGTK - development files
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 4.1).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the development files.
 
-Package: gir1.2-javascriptcoregtk-4.1
+Package: gir1.2-javascriptcoregtk-4.0
 Section: introspection
 Architecture: linux-any
 Multi-Arch: same
-Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
 Provides: ${gir:Provides}
@@ -197,17 +172,17 @@ Description: JavaScript engine library from WebKitGTK - GObject introspection da
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 4.1).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
-Package: libwebkit2gtk-4.1-0
+Package: libwebkit2gtk-4.0-37
 Section: libs
 Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          gstreamer1.0-plugins-base,
          gstreamer1.0-plugins-good,
          libgles2,
@@ -230,18 +205,19 @@ Description: Web content engine library for GTK
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 4.1 of the API and uses libsoup v3 for
+ This build provides version 4.0 of the API and uses libsoup v2 for
  the networking stack and the GTK 3 widget toolkit.
  .
  This package contains the shared libraries.
 
-Package: libwebkit2gtk-4.1-dev
+Package: libwebkit2gtk-4.0-dev
 Section: libdevel
 Architecture: linux-any
-Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
+Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
+         gir1.2-webkit2-4.0 (= ${binary:Version}),
          libgtk-3-dev,
-         libsoup-3.0-dev,
-         libjavascriptcoregtk-4.1-dev (= ${binary:Version}),
+         libsoup2.4-dev,
+         libjavascriptcoregtk-4.0-dev (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
 Provides: ${gir:Provides}
@@ -254,16 +230,16 @@ Description: Web content engine library for GTK - development files
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 4.1 of the API and uses libsoup v3 for
+ This build provides version 4.0 of the API and uses libsoup v2 for
  the networking stack and the GTK 3 widget toolkit.
  .
  This package contains the development files.
 
-Package: gir1.2-webkit2-4.1
+Package: gir1.2-webkit2-4.0
 Section: introspection
 Architecture: linux-any
 Multi-Arch: same
-Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
+Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
 Provides: ${gir:Provides}
@@ -276,143 +252,8 @@ Description: Web content engine library for GTK - GObject introspection data
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 4.1 of the API and uses libsoup v3 for
+ This build provides version 4.0 of the API and uses libsoup v2 for
  the networking stack and the GTK 3 widget toolkit.
- .
- This package contains introspection data, which can be used by
- packages using the GIRepository format to generate dynamic bindings.
-
-Package: libjavascriptcoregtk-6.0-1
-Section: libs
-Architecture: linux-any
-Multi-Arch: same
-Pre-Depends: ${misc:Pre-Depends}
-Depends: ${shlibs:Depends},
-         ${misc:Depends}
-Description: JavaScript engine library from WebKitGTK
- JavaScriptCore is the JavaScript engine used in WebKit. It consists
- of the following building blocks: lexer, parser, start-up interpreter
- (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
- high-throughput optimizing JIT (FTL).
- .
- This build comes from the GTK port of WebKit (API version 6.0).
- .
- This package contains the shared libraries.
-
-Package: libjavascriptcoregtk-6.0-dev
-Section: libdevel
-Architecture: linux-any
-Multi-Arch: same
-Depends: libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
-         libglib2.0-dev,
-         ${gir:Depends},
-         ${misc:Depends}
-Provides: ${gir:Provides}
-Description: JavaScript engine library from WebKitGTK - development files
- JavaScriptCore is the JavaScript engine used in WebKit. It consists
- of the following building blocks: lexer, parser, start-up interpreter
- (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
- high-throughput optimizing JIT (FTL).
- .
- This build comes from the GTK port of WebKit (API version 6.0).
- .
- This package contains the development files.
-
-Package: gir1.2-javascriptcoregtk-6.0
-Section: introspection
-Architecture: linux-any
-Multi-Arch: same
-Depends: libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
-         ${gir:Depends},
-         ${misc:Depends}
-Provides: ${gir:Provides}
-Description: JavaScript engine library from WebKitGTK - GObject introspection data
- JavaScriptCore is the JavaScript engine used in WebKit. It consists
- of the following building blocks: lexer, parser, start-up interpreter
- (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
- high-throughput optimizing JIT (FTL).
- .
- This build comes from the GTK port of WebKit (API version 6.0).
- .
- This package contains the introspection data, which can be used by
- packages using the GIRepository format to generate dynamic bindings.
-
-Package: libwebkitgtk-6.0-4
-Section: libs
-Architecture: linux-any
-Multi-Arch: same
-Pre-Depends: ${misc:Pre-Depends}
-Depends: libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
-         gstreamer1.0-plugins-base,
-         gstreamer1.0-plugins-good,
-         libgles2,
-         ${bwrap:Depends},
-         ${shlibs:Depends},
-         ${gles:Depends},
-         ${misc:Depends}
-Recommends: gstreamer1.0-gl,
-            libgl1-mesa-dri,
-            ${bwrap:Recommends},
-            ${gst:Recommends}
-Suggests: ${gst:Suggests},
-         gstreamer1.0-alsa
-Description: Web content engine library for GTK
- WebKit is a web content engine, derived from KHTML and KJS from KDE, and
- used primarily in Apple's Safari browser.  It is made to be embedded in
- other applications, such as mail readers, or web browsers.
- .
- It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
- .
- WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 6.0 of the API and uses libsoup v3 for
- the networking stack and the GTK 4 widget toolkit.
- .
- This package contains the shared libraries.
-
-Package: libwebkitgtk-6.0-dev
-Section: libdevel
-Architecture: linux-any
-Depends: libwebkitgtk-6.0-4 (= ${binary:Version}),
-         libgtk-4-dev,
-         libsoup-3.0-dev,
-         libjavascriptcoregtk-6.0-dev (= ${binary:Version}),
-         ${gir:Depends},
-         ${misc:Depends}
-Provides: ${gir:Provides}
-Description: Web content engine library for GTK - development files
- WebKit is a web content engine, derived from KHTML and KJS from KDE, and
- used primarily in Apple's Safari browser.  It is made to be embedded in
- other applications, such as mail readers, or web browsers.
- .
- It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
- .
- WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 6.0 of the API and uses libsoup v3 for
- the networking stack and the GTK 4 widget toolkit.
- .
- This package contains the development files.
-
-Package: gir1.2-webkit-6.0
-Section: introspection
-Architecture: linux-any
-Multi-Arch: same
-Depends: libwebkitgtk-6.0-4 (= ${binary:Version}),
-         ${gir:Depends},
-         ${misc:Depends}
-Provides: ${gir:Provides}
-Description: Web content engine library for GTK - GObject introspection data
- WebKit is a web content engine, derived from KHTML and KJS from KDE, and
- used primarily in Apple's Safari browser.  It is made to be embedded in
- other applications, such as mail readers, or web browsers.
- .
- It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
- .
- WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 6.0 of the API and uses libsoup v3 for
- the networking stack and the GTK 4 widget toolkit.
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.

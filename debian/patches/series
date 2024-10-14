@@ -3,5 +3,5 @@ fix-ftbfs-sparc64.patch
 fix-ftbfs-x32.patch
 dont-detect-sse2.patch
 fix-ftbfs-hurd.patch
-disable-nvidia-dmabuf.patch
+disable-dmabuf.patch
 fix-bmalloc-armhf.patch

@@ -11,17 +11,20 @@ export CCACHE_DIR=$(CURDIR)/ccache
 # soup2 build -> 4.0 API packages
 # soup3 build -> 4.1 API packages
 # gtk4 build  -> 6.0 API packages
-ENABLE_SOUP2=NO
-ENABLE_SOUP3=YES
-ENABLE_GTK4=YES
+ENABLE_SOUP2=YES
+ENABLE_SOUP3=NO
+ENABLE_GTK4=NO
+# Set to YES to use the docs from the tarball instead of generating them.
+# Use only if gi-docgen is not available.
+USE_PREBUILT_DOCS=YES
 # Set to YES to build libwebkit2gtk-4.0-doc instead of libwebkitgtk-doc
-USE_OLD_DOC_PKG=NO
+USE_OLD_DOC_PKG=YES
 
 # Set to YES to build libjavascriptcoregtk-4.0-bin instead of libjavascriptcoregtk-bin
-USE_OLD_JSCBIN_PKG=NO
+USE_OLD_JSCBIN_PKG=YES
 
 # Set to YES to build webkit2gtk-driver instead of webkitgtk-webdriver
-USE_OLD_WEBDRIVER_PKG=NO
+USE_OLD_WEBDRIVER_PKG=YES
 
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
@@ -32,14 +35,21 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
 	   -DUSE_LIBBACKTRACE=OFF \
+	   -DUSE_AVIF=OFF \
+	   -DUSE_GBM=OFF \
+	   -DUSE_GSTREAMER_TRANSCODER=OFF \
+	   -DUSE_JPEGXL=OFF \
+	   -DUSE_SYSPROF_CAPTURE=OFF \
 	   -DENABLE_MINIBROWSER=ON
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
-ifneq ($(filter amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x hppa loong64 powerpc ppc64 sh4,$(DEB_HOST_ARCH)),)
-EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=ON
-else
-EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=OFF
+# gcc 10 segfaults when building webkit in amd64 (#1008098) so use clang
+# However in i386, mipsel and arm64 clang is the buggy one (#1010329, #1016811)
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64))
+	EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++
 endif
 
 # Sacrifice speed in order to make it more likely resource limits
