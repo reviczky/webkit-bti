@@ -1,4 +1,4 @@
-webkit2gtk (2.46.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.46.1-2) unstable; urgency=medium
 
   * Make the package Linux-only.
     - debian/control*.in: Set Architecture: linux-any.
@@ -8,7 +8,7 @@ webkit2gtk (2.46.1-2) UNRELEASED; urgency=medium
   * debian/control.in:
     - Require cmake 3.20.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 03 Oct 2024 16:06:11 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 17 Oct 2024 16:52:26 +0200
 
 webkit2gtk (2.46.1-1) unstable; urgency=medium
 
