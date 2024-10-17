@@ -5,3 +5,5 @@ dont-detect-sse2.patch
 fix-ftbfs-hurd.patch
 disable-nvidia-dmabuf.patch
 fix-bmalloc-armhf.patch
+socket-monitor-crash.patch
+
