@@ -5,6 +5,8 @@ webkit2gtk (2.46.1-2) UNRELEASED; urgency=medium
     - debian/rules: Remove non-Linux quirks.
   * debian/patches/socket-monitor-crash.patch:
     - Fix crash due to a regression in 2.46.1 (WebKit bug #281495).
+  * debian/control.in:
+    - Require cmake 3.20.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 03 Oct 2024 16:06:11 +0200
 
