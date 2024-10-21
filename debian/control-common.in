@@ -89,7 +89,6 @@ Description: Web content engine library for GTK
 Package: lib@WEBKIT@gtk-@WK_API_VERSION@-dev
 Section: libdevel
 Architecture: linux-any
-Multi-Arch: same
 Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
          libgtk-@GTK_VERSION@-dev,
          @SOUPDEV_PKG@,

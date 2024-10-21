@@ -238,7 +238,6 @@ Description: Web content engine library for GTK
 Package: libwebkit2gtk-4.1-dev
 Section: libdevel
 Architecture: linux-any
-Multi-Arch: same
 Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
          libgtk-3-dev,
          libsoup-3.0-dev,
@@ -374,7 +373,6 @@ Description: Web content engine library for GTK
 Package: libwebkitgtk-6.0-dev
 Section: libdevel
 Architecture: linux-any
-Multi-Arch: same
 Depends: libwebkitgtk-6.0-4 (= ${binary:Version}),
          libgtk-4-dev,
          libsoup-3.0-dev,

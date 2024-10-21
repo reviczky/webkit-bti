@@ -2,6 +2,10 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Drop socket-monitor-crash.patch (included in this release).
+  * debian/control-common.in:
+    - The libwebkit*-dev packages are no longer Multi-Arch: same.
+      The s390x versions of the WebKit*.gir files are different due to a
+      change in a default value (WebKit bug #279220).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
 
