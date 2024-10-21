@@ -174,9 +174,16 @@ void WebProcess::initializePlatformDisplayIfNeeded() const
 void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
 #if USE(SKIA)
-    const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
-    if (enableCPURendering && strcmp(enableCPURendering, "0"))
-        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
+#if PLATFORM(WPE)
+    bool useAcceleratedBuffers = false;
+#else
+    bool useAcceleratedBuffers = true;
+#endif
+
+    if (const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING"))
+        useAcceleratedBuffers = (enableCPURendering == "0"_s);
+
+    ProcessCapabilities::setCanUseAcceleratedBuffers(useAcceleratedBuffers);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -223,7 +230,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
 
 #if USE(ATSPI)
-    AccessibilityAtspi::singleton().connect(parameters.accessibilityBusAddress);
+    AccessibilityAtspi::singleton().connect(parameters.accessibilityBusAddress, parameters.accessibilityBusName);
 #endif
 
     if (parameters.disableFontHintingForTesting)

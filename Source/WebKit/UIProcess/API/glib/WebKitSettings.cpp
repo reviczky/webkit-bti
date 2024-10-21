@@ -43,6 +43,7 @@
 #include <cmath>
 #include <glib/gi18n-lib.h>
 #include <pal/text/TextEncodingRegistry.h>
+#include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
 
@@ -1071,7 +1072,11 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
             "enable-fullscreen",
             _("Enable Fullscreen"),
             _("Whether to enable the Javascript Fullscreen API"),
+#if ENABLE(FULLSCREEN_API)
             FEATURE_DEFAULT(FullScreenEnabled),
+#else
+            FALSE,
+#endif
             readWriteConstructParamFlags);
 
     /**
@@ -1101,7 +1106,11 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
             "enable-webaudio",
             _("Enable WebAudio"),
             _("Whether WebAudio content should be handled"),
+#if ENABLE(WEB_AUDIO)
             FEATURE_DEFAULT(WebAudioEnabled),
+#else
+            FALSE,
+#endif
             readWriteConstructParamFlags);
 
     /**
