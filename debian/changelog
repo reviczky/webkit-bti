@@ -8,6 +8,8 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
       change in a default value (WebKit bug #279220).
   * debian/copyright:
     - Update copyright information of all files.
+  * debian/rules:
+    - Stop disabling jpeg-xl in Ubuntu (Jeremy Bícha).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
 
