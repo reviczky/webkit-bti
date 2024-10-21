@@ -14,9 +14,6 @@ export CCACHE_DIR=$(CURDIR)/ccache
 ENABLE_SOUP2=NO
 ENABLE_SOUP3=YES
 ENABLE_GTK4=YES
-# Set to YES to use the docs from the tarball instead of generating them.
-# Use only if gi-docgen is not available.
-USE_PREBUILT_DOCS=NO
 # Set to YES to build libwebkit2gtk-4.0-doc instead of libwebkitgtk-doc
 USE_OLD_DOC_PKG=NO
 
@@ -81,11 +78,7 @@ endif
 
 ifeq (,$(filter %-doc,$(shell dh_listpackages)))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
-	USE_PREBUILT_DOCS=NO
 else ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
-	USE_PREBUILT_DOCS=NO
-else ifeq ($(USE_PREBUILT_DOCS),YES)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=ON
@@ -179,9 +172,7 @@ else
 endif
 ifneq ($(ENABLE_GTK4),YES)
 	GTK4_BUILD = @:
-ifeq ($(USE_PREBUILT_DOCS),NO)
 	EXTRA_DH_ARGUMENTS += -N$(LIBWEBKITGTKDOC_PKG)
-endif
 else
 	SOUP3_BUILD_DEP=libsoup-3.0-dev,
 	GTK4_BUILD_DEP=libgtk-4-dev,
@@ -261,9 +252,6 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 		    -e 's/@WEBDRIVER_PKG@/$(WEBDRIVER_PKG)/' \
 		    -e 's/@WEBDRIVER_DEP_PKG@/$(WEBDRIVER_DEP_PKG)/' \
 		>> debian/control
-ifeq ($(USE_PREBUILT_DOCS),YES)
-	sed -i -e 's/^\(Build-Depends-Indep:\).*/\1 jdupes/' debian/control
-endif
 ifeq ($(USE_OLD_DOC_PKG),NO)
 	cat debian/control-doc.in >> debian/control
 endif
@@ -362,18 +350,10 @@ override_dh_auto_clean: debian/control
 	find Source Tools -depth -type d -name __pycache__ -exec rmdir {} \;
 	rm -rf ccache
 
-# If USE_PREBUILT_DOCS=YES then install them.
-# Otherwise create a dummy doc directory in case the "nodoc" build option is set.
+# Create a dummy doc directory in case the "nodoc" build option is set.
 override_dh_install-indep:
-ifeq ($(USE_PREBUILT_DOCS),YES)
-	mkdir -p debian/tmp/usr/share/doc
-	cp -r Documentation/webkitgtk-6.0 debian/tmp/usr/share/doc/
-	cp -r Documentation/jsc-glib-6.0 debian/tmp/usr/share/doc/javascriptcoregtk-6.0
-	cp -r Documentation/webkitgtk-web-process-extension-6.0 debian/tmp/usr/share/doc/
-else
 	mkdir -p debian/tmp/usr/share/doc/webkitgtk-6.0
 	touch debian/tmp/usr/share/doc/webkitgtk-6.0/index.html
-endif
 	dh_install -i
 	jdupes -rl debian/$(LIBWEBKITGTKDOC_PKG)/usr
 

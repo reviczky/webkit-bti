@@ -10,6 +10,8 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
     - Update copyright information of all files.
   * debian/rules:
     - Stop disabling jpeg-xl in Ubuntu (Jeremy Bícha).
+    - Remove the USE_PREBUILT_DOCS variable, we can always build the
+      documentation now.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
 
