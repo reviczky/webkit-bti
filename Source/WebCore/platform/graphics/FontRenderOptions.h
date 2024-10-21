@@ -75,9 +75,12 @@ public:
     SkFontHinting hinting() const { return m_hinting; }
     SkFont::Edging antialias() const { return m_antialias; }
     SkPixelGeometry subpixelOrder() const { return m_subpixelOrder; }
+    void setUseSubpixelPositioning(bool enable) { m_useSubpixelPositioning = enable; }
+    bool useSubpixelPositioning() const { return m_useSubpixelPositioning; }
 #endif
 
     WEBCORE_EXPORT void disableHintingForTesting();
+    bool isHintingDisabledForTesting() const { return m_isHintingDisabledForTesting; }
 
 private:
     FontRenderOptions();
@@ -89,6 +92,7 @@ private:
     SkFontHinting m_hinting { SkFontHinting::kNormal };
     SkFont::Edging m_antialias { SkFont::Edging::kAntiAlias };
     SkPixelGeometry m_subpixelOrder { kUnknown_SkPixelGeometry };
+    bool m_useSubpixelPositioning { false };
 #endif
     bool m_isHintingDisabledForTesting { false };
 };

@@ -729,7 +729,8 @@ HTMLMediaElement::~HTMLMediaElement()
     }
 
 #if ENABLE(MEDIA_SOURCE)
-    detachMediaSource();
+    if (RefPtr mediaSource = std::exchange(m_mediaSource, { }))
+        mediaSource->elementIsShuttingDown();
 #endif
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
@@ -7747,8 +7748,10 @@ void HTMLMediaElement::privateBrowsingStateDidChange(PAL::SessionID sessionID)
 
 bool HTMLMediaElement::shouldForceControlsDisplay() const
 {
+#if PLATFORM(APPLETV)
     if (isFullscreen() && videoUsesElementFullscreen())
         return true;
+#endif
 
     // Always create controls for autoplay video that requires user gesture due to being in low power mode.
     return isVideo() && autoplay() && mediaSession().hasBehaviorRestriction(MediaElementSession::RequireUserGestureForVideoDueToLowPowerMode);
@@ -9707,6 +9710,11 @@ String HTMLMediaElement::localizedSourceType() const
 
     ASSERT_NOT_REACHED();
     return { };
+}
+
+bool HTMLMediaElement::isActiveNowPlayingSession() const
+{
+    return m_mediaSession && m_mediaSession->isActiveNowPlayingSession();
 }
 
 void HTMLMediaElement::isActiveNowPlayingSessionChanged()
