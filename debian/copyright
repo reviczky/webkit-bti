@@ -199,7 +199,8 @@ Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/EnumTraits.h
        Source/WTF/wtf/Float16.h
        Source/WTF/wtf/RobinHoodHashTable.h
-Copyright: 2015-2024 Apple Inc
+Copyright: 2011 the V8 project authors
+           2015-2024 Apple Inc
 License: BSD-2-clause or Expat
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
@@ -1453,6 +1454,7 @@ Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/ThirdParty/ANGLE/third_party/renderdoc/src/renderdoc_app.h
        Source/WTF/wtf/simde/arm/*
+       Source/WTF/wtf/simde/wasm/simd128.h
        Source/WebCore/xml/XSLTExtensions.cpp
 Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2007 Alexey Proskuryakov <ap@webkit.org>

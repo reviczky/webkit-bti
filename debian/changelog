@@ -6,6 +6,8 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
     - The libwebkit*-dev packages are no longer Multi-Arch: same.
       The s390x versions of the WebKit*.gir files are different due to a
       change in a default value (WebKit bug #279220).
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
 
