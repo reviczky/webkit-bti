@@ -12,6 +12,7 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
     - Stop disabling jpeg-xl in Ubuntu (Jeremy Bícha).
     - Remove the USE_PREBUILT_DOCS variable, we can always build the
       documentation now.
+    - Fix build with -Nlibwebkitgtk-doc.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
 

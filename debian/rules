@@ -355,7 +355,9 @@ override_dh_install-indep:
 	mkdir -p debian/tmp/usr/share/doc/webkitgtk-6.0
 	touch debian/tmp/usr/share/doc/webkitgtk-6.0/index.html
 	dh_install -i
+ifneq (,$(filter $(LIBWEBKITGTKDOC_PKG),$(shell dh_listpackages)))
 	jdupes -rl debian/$(LIBWEBKITGTKDOC_PKG)/usr
+endif
 
 override_dh_makeshlibs:
 	$(SOUP2_BUILD) dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
