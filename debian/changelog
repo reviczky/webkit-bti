@@ -1,3 +1,9 @@
+wpewebkit (2.46.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 22 Oct 2024 09:28:11 +0200
+
 wpewebkit (2.46.1-1) unstable; urgency=medium
 
   * New upstream release.
