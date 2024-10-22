@@ -181,7 +181,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
 
     if (const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING"))
-        useAcceleratedBuffers = !(enableCPURendering == "0"_s);
+        useAcceleratedBuffers = (enableCPURendering == "0"_s);
 
     ProcessCapabilities::setCanUseAcceleratedBuffers(useAcceleratedBuffers);
 #endif
@@ -230,7 +230,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #endif
 
 #if USE(ATSPI)
-    AccessibilityAtspi::singleton().connect(parameters.accessibilityBusAddress);
+    AccessibilityAtspi::singleton().connect(parameters.accessibilityBusAddress, parameters.accessibilityBusName);
 #endif
 
     if (parameters.disableFontHintingForTesting)
