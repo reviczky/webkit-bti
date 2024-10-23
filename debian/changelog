@@ -1,4 +1,4 @@
-webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.46.2-1) unstable; urgency=medium
 
   * New upstream release.
   * Drop socket-monitor-crash.patch (included in this release).
@@ -15,7 +15,7 @@ webkit2gtk (2.46.2-1) UNRELEASED; urgency=medium
     - Fix build with -Nlibwebkitgtk-doc.
     - Disable Skia on loong64 (Closes: #1082740).
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 21 Oct 2024 12:31:31 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 23 Oct 2024 11:57:14 +0200
 
 webkit2gtk (2.46.1-2) unstable; urgency=medium
 
