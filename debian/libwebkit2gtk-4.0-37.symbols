@@ -1,5 +1,6 @@
 libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
 * Build-Depends-Package: libwebkit2gtk-4.0-dev
+ (c++)"WebKit::GPUProcessMain(int, char**)@Base" 2.47.1
  (c++)"WebKit::NetworkProcessMain(int, char**)@Base" 2.27.90
  (c++)"WebKit::WebProcessExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.39.91
  (c++)"WebKit::WebProcessExtensionManager::singleton()@Base" 2.39.91
@@ -1860,6 +1861,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_serif_font_family@Base 2.5.3
  webkit_settings_get_type@Base 2.5.3
  webkit_settings_get_user_agent@Base 2.5.3
+ webkit_settings_get_webrtc_udp_ports_range@Base 2.47.1
  webkit_settings_get_zoom_text_only@Base 2.5.3
  webkit_settings_new@Base 2.5.3
  webkit_settings_new_with_settings@Base 2.5.3
@@ -1926,6 +1928,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_serif_font_family@Base 2.5.3
  webkit_settings_set_user_agent@Base 2.5.3
  webkit_settings_set_user_agent_with_application_details@Base 2.5.3
+ webkit_settings_set_webrtc_udp_ports_range@Base 2.47.1
  webkit_settings_set_zoom_text_only@Base 2.5.3
  webkit_snapshot_error_get_type@Base 2.5.3
  webkit_snapshot_error_quark@Base 2.5.3
