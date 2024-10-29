@@ -4,6 +4,8 @@ webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
   * debian/watch, debian/gbp.conf:
     - Branch for 2.47.x in experimental.
   * Drop fix-ftbfs-hurd.patch, I forgot to do it in 2.46.1-2.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 29 Oct 2024 10:38:41 +0100
 
