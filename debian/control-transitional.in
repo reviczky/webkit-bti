@@ -1,0 +1,23 @@
+Package: libwebkit2gtk-4.0-doc
+Build-Profiles: <!nodoc>
+Section: oldlibs
+Architecture: all
+Multi-Arch: foreign
+Depends: libwebkitgtk-doc, ${misc:Depends}
+Description: WebKitGTK documentation (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+
+Package: libjavascriptcoregtk-4.0-bin
+Section: oldlibs
+Architecture: all
+Depends: libjavascriptcoregtk-bin, ${misc:Depends}
+Description: WebKitGTK JavaScript command-line interpreter (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+
+Package: webkit2gtk-driver
+Section: oldlibs
+Architecture: all
+Depends: webkitgtk-webdriver, ${misc:Depends}
+Description: WebKitGTK WebDriver support (transitional dummy package)
+ This is a transitional dummy package, it can be safely removed.
+
