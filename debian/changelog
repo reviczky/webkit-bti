@@ -7,6 +7,8 @@ webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
   * Replace USE_OLD_*_PKG with USE_OLD_PKG_NAMES.
+  * debian/control.in:
+    - Remove build dependencies on all lib*-doc packages.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 29 Oct 2024 10:38:41 +0100
 
