@@ -37,6 +37,14 @@ else
 EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSPROF_CAPTURE=OFF
 endif
 
+# Skia strongly recommends using clang
+# https://skia.org/docs/user/build/#supported-and-preferred-compilers
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x))
+	EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++
+endif
+
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)

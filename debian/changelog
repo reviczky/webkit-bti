@@ -13,6 +13,7 @@ webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
       where they are very old.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
+  * Enable clang again in the architectures where it's available.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 29 Oct 2024 10:38:41 +0100
 
