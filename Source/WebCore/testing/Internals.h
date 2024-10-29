@@ -48,6 +48,7 @@
 #include "VP9Utilities.h"
 #include <JavaScriptCore/Forward.h>
 #include <wtf/CheckedRef.h>
+#include <wtf/TZoneMalloc.h>
 
 #if ENABLE(VIDEO)
 #include "MediaElementSession.h"
@@ -180,6 +181,10 @@ class HTMLModelElement;
 class PlatformSpeechSynthesizerMock;
 #endif
 
+#if ENABLE(WEB_CODECS)
+class WebCodecsVideoDecoder;
+#endif
+
 template<typename IDLType> class DOMPromiseDeferred;
 
 struct MockWebAuthenticationConfiguration;
@@ -194,7 +199,7 @@ class Internals final
     , private RealtimeMediaSource::VideoFrameObserver
 #endif
     {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Internals);
 #if ENABLE(MEDIA_STREAM)
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(Internals);
 #endif
@@ -260,6 +265,10 @@ public:
     unsigned remoteImagesCountForTesting() const;
     void setAsyncDecodingEnabledForTesting(HTMLImageElement&, bool enabled);
     void setForceUpdateImageDataEnabledForTesting(HTMLImageElement&, bool enabled);
+
+#if ENABLE(WEB_CODECS)
+    bool hasPendingActivity(const WebCodecsVideoDecoder&) const;
+#endif
 
     void setGridMaxTracksLimit(unsigned);
 
@@ -331,6 +340,7 @@ public:
     ExceptionOr<Ref<DOMRect>> absoluteLineRectFromPoint(int x, int y);
 
     ExceptionOr<Ref<DOMRect>> absoluteCaretBounds();
+    ExceptionOr<bool> isCaretVisible();
     ExceptionOr<bool> isCaretBlinkingSuspended();
     ExceptionOr<bool> isCaretBlinkingSuspended(Document&);
 
@@ -367,6 +377,7 @@ public:
 
     ExceptionOr<String> viewBaseBackgroundColor();
     ExceptionOr<void> setViewBaseBackgroundColor(const String& colorValue);
+    ExceptionOr<void> setUnderPageBackgroundColorOverride(const String& colorValue);
 
     ExceptionOr<String> documentBackgroundColor();
 
@@ -451,6 +462,7 @@ public:
 #if ENABLE(WRITING_TOOLS)
     bool hasWritingToolsTextSuggestionMarker(int from, int length);
 #endif
+    bool hasTransparentContentMarker(int from, int length);
     void setContinuousSpellCheckingEnabled(bool);
     void setAutomaticQuoteSubstitutionEnabled(bool);
     void setAutomaticLinkDetectionEnabled(bool);
@@ -459,6 +471,8 @@ public:
     void setAutomaticSpellingCorrectionEnabled(bool);
 
     bool isSpellcheckDisabledExceptTextReplacement(const HTMLInputElement&) const;
+
+    ExceptionOr<void> setMarkerFor(const String& markerTypeString, int from, int length, const String&);
 
     void handleAcceptedCandidate(const String& candidate, unsigned location, unsigned length);
     void changeSelectionListType();
@@ -498,7 +512,7 @@ public:
         LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED = 128,
         LAYER_TREE_INCLUDES_ROOT_LAYER_PROPERTIES = 256,
         LAYER_TREE_INCLUDES_EVENT_REGION = 512,
-        LAYER_TREE_INCLUDES_DEEP_COLOR = 1024,
+        LAYER_TREE_INCLUDES_EXTENDED_COLOR = 1024,
         LAYER_TREE_INCLUDES_DEVICE_SCALE = 2048,
     };
     ExceptionOr<String> layerTreeAsText(Document&, unsigned short flags) const;
@@ -666,6 +680,12 @@ public:
     ExceptionOr<unsigned> styleRecalcCount();
     unsigned lastStyleUpdateSize() const;
 
+    ExceptionOr<void> startTrackingLayoutUpdates();
+    ExceptionOr<unsigned> layoutUpdateCount();
+
+    ExceptionOr<void> startTrackingRenderLayerPositionUpdates();
+    ExceptionOr<unsigned> renderLayerPositionUpdateCount();
+
     ExceptionOr<void> startTrackingCompositingUpdates();
     ExceptionOr<unsigned> compositingUpdateCount();
 
@@ -678,9 +698,8 @@ public:
 
     ExceptionOr<void> setAllowAnimationControlsOverride(bool);
 
-    void updateLayoutAndStyleForAllFrames();
+    void updateLayoutAndStyleForAllFrames() const;
     ExceptionOr<void> updateLayoutIgnorePendingStylesheetsAndRunPostLayoutTasks(Node*);
-    unsigned layoutCount() const;
 
     Ref<ArrayBuffer> serializeObject(const RefPtr<SerializedScriptValue>&) const;
     Ref<SerializedScriptValue> deserializeBuffer(ArrayBuffer&) const;
@@ -1247,6 +1266,7 @@ public:
     using AV1CodecConfigurationRecord = WebCore::AV1CodecConfigurationRecord;
     std::optional<AV1CodecConfigurationRecord> parseAV1CodecParameters(const String&);
     String createAV1CodecParametersString(const AV1CodecConfigurationRecord&);
+    bool validateAV1ConfigurationRecord(const String&);
     bool validateAV1PerLevelConstraints(const String&, const VideoConfiguration&);
 
     struct CookieData {
@@ -1462,7 +1482,6 @@ public:
         
     bool isUsingUISideCompositing() const;
 
-    bool readyToRetrieveComputedRoleOrLabel(Element&) const;
     String getComputedLabel(Element&) const;
     String getComputedRole(Element&) const;
 
@@ -1477,15 +1496,15 @@ public:
     };
 
     Vector<PDFAnnotationRect> pdfAnnotationRectsForTesting(Element& pluginElement) const;
+    void setPDFTextAnnotationValueForTesting(Element& pluginElement, unsigned pageIndex, unsigned annotationIndex, const String& value);
     void setPDFDisplayModeForTesting(Element&, const String&) const;
+    void unlockPDFDocumentForTesting(Element&, const String&) const;
     bool sendEditingCommandToPDFForTesting(Element&, const String& commandName, const String& argument) const;
     void registerPDFTest(Ref<VoidCallback>&&, Element&);
 
     const String& defaultSpatialTrackingLabel() const;
 
-#if ENABLE(VIDEO)
     bool isEffectivelyMuted(const HTMLMediaElement&);
-#endif
 
     using RenderingMode = WebCore::RenderingMode;
     std::optional<RenderingMode> getEffectiveRenderingModeOfNewlyCreatedAcceleratedImageBuffer();
@@ -1550,7 +1569,7 @@ private:
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;
     RefPtr<CacheStorageConnection> m_cacheStorageConnection;
 
-    HashMap<unsigned, std::unique_ptr<WebCore::SleepDisabler>> m_sleepDisablers;
+    UncheckedKeyHashMap<unsigned, std::unique_ptr<WebCore::SleepDisabler>> m_sleepDisablers;
 
     std::unique_ptr<TextIterator> m_textIterator;
 

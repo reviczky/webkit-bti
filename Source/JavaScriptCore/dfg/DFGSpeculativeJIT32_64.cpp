@@ -2921,8 +2921,8 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
-    case ArraySpliceExtract: {
-        compileArraySpliceExtract(node);
+    case ArraySplice: {
+        compileArraySplice(node);
         break;
     }
 
@@ -3172,6 +3172,11 @@ void SpeculativeJIT::compile(Node* node)
 
     case NewArrayWithSpecies: {
         compileNewArrayWithSpecies(node);
+        break;
+    }
+
+    case NewArrayWithSizeAndStructure: {
+        compileNewArrayWithSizeAndStructure(node);
         break;
     }
 

@@ -35,6 +35,7 @@ class TextStream;
 
 namespace WebCore {
 
+class ControlFactory;
 class GraphicsContext;
 
 namespace DisplayList {
@@ -111,9 +112,6 @@ class StrokeArc;
 class StrokeClosedArc;
 class StrokeQuadCurve;
 class StrokeBezierCurve;
-#endif
-#if ENABLE(VIDEO)
-class PaintFrameForMedia;
 #endif
 #if USE(CG)
 class ApplyFillPattern;
@@ -192,9 +190,6 @@ using Item = std::variant
     , StrokeQuadCurve
     , StrokeBezierCurve
 #endif
-#if ENABLE(VIDEO)
-    , PaintFrameForMedia
-#endif
 #if USE(CG)
     , ApplyFillPattern
     , ApplyStrokePattern
@@ -220,7 +215,7 @@ enum class AsTextFlag : uint8_t {
 
 bool isValid(const Item&);
 
-ApplyItemResult applyItem(GraphicsContext&, const ResourceHeap&, const Item&);
+ApplyItemResult applyItem(GraphicsContext&, const ResourceHeap&, ControlFactory&, const Item&);
 
 bool shouldDumpItem(const Item&, OptionSet<AsTextFlag>);
 

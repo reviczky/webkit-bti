@@ -184,7 +184,8 @@ public:
     void didAllowPrivateTokenUsageByThirdPartyForTesting(bool wasAllowed, URL&& resourceURL);
 
     bool isBlobRegistryPartitioningEnabled() const;
-    void updateBlobRegistryPartitioningState();
+    bool isOptInCookiePartitioningEnabled() const;
+    void propagateSettingUpdatesToNetworkProcess();
 
 #if PLATFORM(IOS_FAMILY)
     String resolvedCookieStorageDirectory();
@@ -235,7 +236,6 @@ public:
     void statisticsDatabaseHasAllTables(CompletionHandler<void(bool)>&&);
     void mergeStatisticForTesting(const URL&, const URL& topFrameUrl1, const URL& topFrameUrl2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&&);
     void insertExpiredStatisticForTesting(const URL&, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
-    void setNotifyPagesWhenDataRecordsWereScanned(bool, CompletionHandler<void()>&&);
     void setResourceLoadStatisticsTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
     void setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, Vector<String>&& triggerPages, CompletionHandler<void()>&&);
     void grantStorageAccessForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&&);
@@ -324,8 +324,10 @@ public:
 
 #if ENABLE(WEB_AUTHN)
     AuthenticatorManager& authenticatorManager() { return m_authenticatorManager.get(); }
+    Ref<AuthenticatorManager> protectedAuthenticatorManager();
     void setMockWebAuthenticationConfiguration(WebCore::MockWebAuthenticationConfiguration&&);
     VirtualAuthenticatorManager& virtualAuthenticatorManager();
+    Ref<VirtualAuthenticatorManager> protectedVirtualAuthenticatorManager();
 #endif
 
     const WebsiteDataStoreConfiguration& configuration() const { return m_configuration.get(); }
@@ -334,7 +336,9 @@ public:
     void setClient(UniqueRef<WebsiteDataStoreClient>&& client) { m_client = WTFMove(client); }
 
     API::HTTPCookieStore& cookieStore();
+    Ref<API::HTTPCookieStore> protectedCookieStore();
     WebCore::LocalWebLockRegistry& webLockRegistry() { return m_webLockRegistry.get(); }
+    Ref<WebCore::LocalWebLockRegistry> protectedWebLockRegistry();
 
     void renameOriginInWebsiteData(WebCore::SecurityOriginData&&, WebCore::SecurityOriginData&&, OptionSet<WebsiteDataType>, CompletionHandler<void()>&&);
     void originDirectoryForTesting(WebCore::ClientOrigin&&, OptionSet<WebsiteDataType>, CompletionHandler<void(const String&)>&&);
@@ -343,6 +347,7 @@ public:
 
 #if ENABLE(DEVICE_ORIENTATION)
     WebDeviceOrientationAndMotionAccessController& deviceOrientationAndMotionAccessController() { return m_deviceOrientationAndMotionAccessController; }
+    Ref<WebDeviceOrientationAndMotionAccessController> protectedDeviceOrientationAndMotionAccessController() { return m_deviceOrientationAndMotionAccessController; }
 #endif
 
 #if HAVE(APP_SSO)
@@ -585,7 +590,7 @@ private:
 #endif
 
 #if ENABLE(WEB_AUTHN)
-    UniqueRef<AuthenticatorManager> m_authenticatorManager;
+    Ref<AuthenticatorManager> m_authenticatorManager;
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION)
@@ -608,6 +613,7 @@ private:
 
     bool m_inspectionForServiceWorkersAllowed { true };
     bool m_isBlobRegistryPartitioningEnabled { false };
+    bool m_isOptInCookiePartitioningEnabled { false };
 
     HashMap<WebCore::RegistrableDomain, RestrictedOpenerType> m_restrictedOpenerTypesForTesting;
 

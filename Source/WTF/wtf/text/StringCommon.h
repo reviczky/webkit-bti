@@ -33,6 +33,7 @@
 #include <wtf/MathExtras.h>
 #include <wtf/NotFound.h>
 #include <wtf/SIMDHelpers.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/UnalignedAccess.h>
 #include <wtf/text/ASCIIFastPath.h>
 #include <wtf/text/ASCIILiteral.h>
@@ -41,30 +42,37 @@ namespace WTF {
 
 inline std::span<const LChar> span(const LChar& character)
 {
-    return { &character, 1 };
+    return unsafeForgeSpan(&character, 1);
 }
 
 inline std::span<const UChar> span(const UChar& character)
 {
-    return { &character, 1 };
+    return unsafeForgeSpan(&character, 1);
 }
 
 inline std::span<const LChar> span8(const char* string)
 {
-    return { byteCast<LChar>(string), string ? strlen(string) : 0 };
+    return unsafeForgeSpan(byteCast<LChar>(string), string ? strlen(string) : 0);
+}
+
+inline std::span<const LChar> span8IncludingNullTerminator(const char* string)
+{
+    return unsafeForgeSpan(byteCast<LChar>(string), string ? strlen(string) + 1 : 0);
 }
 
 inline std::span<const char> span(const char* string)
 {
-    return { string, string ? strlen(string) : 0 };
+    return unsafeForgeSpan(string, string ? strlen(string) : 0);
 }
 
 #if !HAVE(MISSING_U8STRING)
 inline std::span<const char8_t> span(const std::u8string& string)
 {
-    return { string.data(), string.length() };
+    return unsafeForgeSpan(string.data(), string.length());
 }
 #endif
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 template<typename CharacterType> inline constexpr bool isLatin1(CharacterType character)
 {
@@ -1116,6 +1124,7 @@ inline void copyElements(uint8_t* __restrict destination, const uint64_t* __rest
         *destination++ = *source++;
 }
 
+#ifndef __swift__ // FIXME: rdar://136156228
 inline void copyElements(UChar* __restrict destination, const LChar* __restrict source, size_t length)
 {
     copyElements(bitwise_cast<uint16_t*>(destination), bitwise_cast<const uint8_t*>(source), length);
@@ -1125,6 +1134,7 @@ inline void copyElements(LChar* __restrict destination, const UChar* __restrict 
 {
     copyElements(bitwise_cast<uint8_t*>(destination), bitwise_cast<const uint16_t*>(source), length);
 }
+#endif
 
 template<typename CharacterType, CharacterType... characters>
 ALWAYS_INLINE bool compareEach(CharacterType input)
@@ -1163,6 +1173,8 @@ ALWAYS_INLINE bool charactersContain(std::span<const CharacterType> span)
     return false;
 }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+
 }
 
 using WTF::equalIgnoringASCIICase;
@@ -1172,4 +1184,5 @@ using WTF::equalLettersIgnoringASCIICaseWithLength;
 using WTF::isLatin1;
 using WTF::span;
 using WTF::span8;
+using WTF::span8IncludingNullTerminator;
 using WTF::charactersContain;

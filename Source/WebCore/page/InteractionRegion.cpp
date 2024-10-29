@@ -26,6 +26,7 @@
 #include "config.h"
 #include "InteractionRegion.h"
 
+#include "BorderShape.h"
 #include "Document.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "ElementInlines.h"
@@ -500,7 +501,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     } else if (iconImage && originalElement) {
         auto size = boundingSize(regionRenderer, transform);
         LayoutRect imageRect(FloatPoint(), size);
-        Ref shape = Shape::createRasterShape(iconImage.get(), 0, imageRect, imageRect, WritingMode::HorizontalTb, 0);
+        Ref shape = Shape::createRasterShape(iconImage.get(), 0, imageRect, imageRect, WritingMode(), 0);
         Shape::DisplayPaths paths;
         shape->buildDisplayPaths(paths);
         auto path = paths.shape;
@@ -536,8 +537,8 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
 
         clipPath = path;
     } else if (const auto& renderBox = dynamicDowncast<RenderBox>(regionRenderer)) {
-        auto roundedRect = renderBox->borderRoundedRect();
-        auto borderRadii = roundedRect.radii();
+        auto borderShape = BorderShape::shapeForBorderRect(renderBox->style(), renderBox->borderBoxRect());
+        auto borderRadii = borderShape.radii();
         auto minRadius = borderRadii.minimumRadius();
         auto maxRadius = borderRadii.maximumRadius();
 
@@ -564,9 +565,8 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
             if (borderRadii.bottomRight().minDimension() == maxRadius)
                 maskedCorners.add(InteractionRegion::CornerMask::MaxXMaxYCorner);
         } else {
-            Path path;
-            path.addRoundedRect(roundedRect);
-            clipPath = path;
+            clipPath = borderShape.pathForOuterShape(renderBox->document().deviceScaleFactor());
+            WTF_ALWAYS_LOG("interactionRegionForRenderedRegion - rounded rect" << borderShape.deprecatedRoundedRect() << " device scale " << renderBox->document().deviceScaleFactor() << " " << clipPath);
         }
     }
 

@@ -47,7 +47,7 @@ public:
     bool isColumnHeader() const override;
     bool isRowHeader() const override;
 
-    AXID rowGroupAncestorID() const final;
+    std::optional<AXID> rowGroupAncestorID() const final;
 
     virtual AccessibilityTable* parentTable() const;
 
@@ -86,7 +86,7 @@ protected:
 private:
     // If a table cell is not exposed as a table cell, a TH element can serve as its title UI element.
     AccessibilityObject* titleUIElement() const final;
-    bool computeAccessibilityIsIgnored() const final;
+    bool computeIsIgnored() const final;
     String expandedTextValue() const final;
     bool supportsExpandedTextValue() const final;
     AccessibilityTableRow* ariaOwnedByParent() const;

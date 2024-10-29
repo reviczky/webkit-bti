@@ -54,6 +54,7 @@
 #include "ElementAnimationRareData.h"
 #include "ElementChildIteratorInlines.h"
 #include "ElementRareData.h"
+#include "ElementTextDirection.h"
 #include "EventDispatcher.h"
 #include "EventHandler.h"
 #include "EventLoop.h"
@@ -165,6 +166,10 @@
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
+#if PLATFORM(MAC)
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#endif
+
 namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Element);
@@ -179,9 +184,9 @@ static_assert(sizeof(Element) == sizeof(SameSizeAsElement), "Element should stay
 using namespace HTMLNames;
 using namespace XMLNames;
 
-static HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>& attrNodeListMap()
+static UncheckedKeyHashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>& attrNodeListMap()
 {
-    static NeverDestroyed<HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>> map;
+    static NeverDestroyed<UncheckedKeyHashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>> map;
     return map;
 }
 
@@ -230,7 +235,7 @@ static bool shouldAutofocus(const Element& element)
     if (!element.isInDocumentTree() || !document->hasBrowsingContext())
         return false;
 
-    if (document->isSandboxed(SandboxAutomaticFeatures)) {
+    if (document->isSandboxed(SandboxFlag::AutomaticFeatures)) {
         // FIXME: This message should be moved off the console once a solution to https://bugs.webkit.org/show_bug.cgi?id=103274 exists.
         document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Blocked autofocusing on a form control because the form's frame is sandboxed and the 'allow-scripts' permission is not set."_s);
         return false;
@@ -246,9 +251,9 @@ static bool shouldAutofocus(const Element& element)
     return true;
 }
 
-static HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>& elementIdentifiersMap()
+static UncheckedKeyHashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>& elementIdentifiersMap()
 {
-    static MainThreadNeverDestroyed<HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>> map;
+    static MainThreadNeverDestroyed<UncheckedKeyHashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>> map;
     return map;
 }
 
@@ -461,13 +466,15 @@ static ShouldIgnoreMouseEvent dispatchPointerEventIfNeeded(Element& element, con
 #else
         UNUSED_PARAM(platformEvent);
 #endif
-        if (platformEvent.syntheticClickType() != SyntheticClickType::NoTap)
+
+        if (platformEvent.syntheticClickType() != SyntheticClickType::NoTap && !isAnyClick(mouseEvent) && mouseEvent.type() != eventNames().contextmenuEvent)
             return ShouldIgnoreMouseEvent::No;
 
         if (RefPtr pointerEvent = pointerCaptureController.pointerEventForMouseEvent(mouseEvent, platformEvent.pointerId(), platformEvent.pointerType())) {
             pointerCaptureController.dispatchEvent(*pointerEvent, &element);
             if (isCompatibilityMouseEvent(mouseEvent) && pointerCaptureController.preventsCompatibilityMouseEventsForIdentifier(pointerEvent->pointerId()))
                 return ShouldIgnoreMouseEvent::Yes;
+
             if (pointerEvent->defaultPrevented() || pointerEvent->defaultHandled()) {
                 didNotSwallowEvent = false;
                 if (pointerEvent->type() == eventNames().pointerdownEvent)
@@ -516,17 +523,20 @@ Element::DispatchMouseEventResult Element::dispatchMouseEvent(const PlatformMous
     if (RefPtr frame = document().frame())
         isParentProcessAFullWebBrowser = frame->loader().client().isParentProcessAFullWebBrowser();
 #elif PLATFORM(MAC)
-    isParentProcessAFullWebBrowser = MacApplication::isSafari();
+    isParentProcessAFullWebBrowser = WTF::MacApplication::isSafari();
 #endif
     if (Quirks::StorageAccessResult::ShouldCancelEvent == protectedDocument()->quirks().triggerOptionalStorageAccessQuirk(*this, platformEvent, eventType, detail, relatedTarget, isParentProcessAFullWebBrowser, isSyntheticClick))
         return { Element::EventIsDispatched::No, eventIsDefaultPrevented };
 
-    ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
-    dispatchEvent(mouseEvent);
-    if (mouseEvent->defaultPrevented())
-        eventIsDefaultPrevented = Element::EventIsDefaultPrevented::Yes;
-    if (mouseEvent->defaultPrevented() || mouseEvent->defaultHandled())
-        didNotSwallowEvent = false;
+    bool shouldNotDispatchMouseEvent = isAnyClick(mouseEvent) || mouseEvent->type() == eventNames().contextmenuEvent;
+    if (!shouldNotDispatchMouseEvent) {
+        ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
+        dispatchEvent(mouseEvent);
+        if (mouseEvent->defaultPrevented())
+            eventIsDefaultPrevented = Element::EventIsDefaultPrevented::Yes;
+        if (mouseEvent->defaultPrevented() || mouseEvent->defaultHandled())
+            didNotSwallowEvent = false;
+    }
 
     // The document should not receive dblclick for non-primary buttons.
     if (mouseEvent->type() == eventNames().clickEvent && mouseEvent->detail() == 2) {
@@ -991,19 +1001,18 @@ void Element::setBeingDragged(bool value)
     protectedDocument()->userActionElements().setBeingDragged(*this, value);
 }
 
-inline ScrollAlignment toScrollAlignmentForInlineDirection(std::optional<ScrollLogicalPosition> position, WritingMode writingMode, bool isLTR)
+inline ScrollAlignment toScrollAlignmentForInlineDirection(std::optional<ScrollLogicalPosition> position, WritingMode writingMode)
 {
-    auto blockFlowDirection = writingModeToBlockFlowDirection(writingMode);
     switch (position.value_or(ScrollLogicalPosition::Nearest)) {
     case ScrollLogicalPosition::Start: {
-        switch (blockFlowDirection) {
-        case BlockFlowDirection::TopToBottom:
-        case BlockFlowDirection::BottomToTop: {
-            return isLTR ? ScrollAlignment::alignLeftAlways : ScrollAlignment::alignRightAlways;
+        switch (writingMode.blockDirection()) {
+        case FlowDirection::TopToBottom:
+        case FlowDirection::BottomToTop: {
+            return writingMode.isInlineLeftToRight() ? ScrollAlignment::alignLeftAlways : ScrollAlignment::alignRightAlways;
         }
-        case BlockFlowDirection::LeftToRight:
-        case BlockFlowDirection::RightToLeft: {
-            return isLTR ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignBottomAlways;
+        case FlowDirection::LeftToRight:
+        case FlowDirection::RightToLeft: {
+            return writingMode.isInlineTopToBottom() ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignBottomAlways;
         }
         default:
             ASSERT_NOT_REACHED();
@@ -1013,14 +1022,14 @@ inline ScrollAlignment toScrollAlignmentForInlineDirection(std::optional<ScrollL
     case ScrollLogicalPosition::Center:
         return ScrollAlignment::alignCenterAlways;
     case ScrollLogicalPosition::End: {
-        switch (blockFlowDirection) {
-        case BlockFlowDirection::TopToBottom:
-        case BlockFlowDirection::BottomToTop: {
-            return isLTR ? ScrollAlignment::alignRightAlways : ScrollAlignment::alignLeftAlways;
+        switch (writingMode.blockDirection()) {
+        case FlowDirection::TopToBottom:
+        case FlowDirection::BottomToTop: {
+            return writingMode.isInlineLeftToRight() ? ScrollAlignment::alignRightAlways : ScrollAlignment::alignLeftAlways;
         }
-        case BlockFlowDirection::LeftToRight:
-        case BlockFlowDirection::RightToLeft: {
-            return isLTR ? ScrollAlignment::alignBottomAlways : ScrollAlignment::alignTopAlways;
+        case FlowDirection::LeftToRight:
+        case FlowDirection::RightToLeft: {
+            return writingMode.isInlineTopToBottom() ? ScrollAlignment::alignBottomAlways : ScrollAlignment::alignTopAlways;
         }
         default:
             ASSERT_NOT_REACHED();
@@ -1037,17 +1046,16 @@ inline ScrollAlignment toScrollAlignmentForInlineDirection(std::optional<ScrollL
 
 inline ScrollAlignment toScrollAlignmentForBlockDirection(std::optional<ScrollLogicalPosition> position, WritingMode writingMode)
 {
-    auto blockFlowDirection = writingModeToBlockFlowDirection(writingMode);
     switch (position.value_or(ScrollLogicalPosition::Start)) {
     case ScrollLogicalPosition::Start: {
-        switch (blockFlowDirection) {
-        case BlockFlowDirection::TopToBottom:
+        switch (writingMode.blockDirection()) {
+        case FlowDirection::TopToBottom:
             return ScrollAlignment::alignTopAlways;
-        case BlockFlowDirection::BottomToTop:
+        case FlowDirection::BottomToTop:
             return ScrollAlignment::alignBottomAlways;
-        case BlockFlowDirection::LeftToRight:
+        case FlowDirection::LeftToRight:
             return ScrollAlignment::alignLeftAlways;
-        case BlockFlowDirection::RightToLeft:
+        case FlowDirection::RightToLeft:
             return ScrollAlignment::alignRightAlways;
         default:
             ASSERT_NOT_REACHED();
@@ -1057,14 +1065,14 @@ inline ScrollAlignment toScrollAlignmentForBlockDirection(std::optional<ScrollLo
     case ScrollLogicalPosition::Center:
         return ScrollAlignment::alignCenterAlways;
     case ScrollLogicalPosition::End: {
-        switch (blockFlowDirection) {
-        case BlockFlowDirection::TopToBottom:
+        switch (writingMode.blockDirection()) {
+        case FlowDirection::TopToBottom:
             return ScrollAlignment::alignBottomAlways;
-        case BlockFlowDirection::BottomToTop:
+        case FlowDirection::BottomToTop:
             return ScrollAlignment::alignTopAlways;
-        case BlockFlowDirection::LeftToRight:
+        case FlowDirection::LeftToRight:
             return ScrollAlignment::alignRightAlways;
-        case BlockFlowDirection::RightToLeft:
+        case FlowDirection::RightToLeft:
             return ScrollAlignment::alignLeftAlways;
         default:
             ASSERT_NOT_REACHED();
@@ -1143,12 +1151,12 @@ void Element::scrollIntoView(std::optional<std::variant<bool, ScrollIntoViewOpti
             options.blockPosition = ScrollLogicalPosition::End;
     }
 
-    auto writingMode = renderer->style().writingMode();
-    auto alignX = toScrollAlignmentForInlineDirection(options.inlinePosition, writingMode, renderer->style().isLeftToRightDirection());
+    auto writingMode = renderer->writingMode();
+    auto alignX = toScrollAlignmentForInlineDirection(options.inlinePosition, writingMode);
     auto alignY = toScrollAlignmentForBlockDirection(options.blockPosition, writingMode);
     alignX.disableLegacyHorizontalVisibilityThreshold();
 
-    bool isHorizontal = renderer->style().isHorizontalWritingMode();
+    bool isHorizontal = writingMode.isHorizontal();
     auto visibleOptions = ScrollRectToVisibleOptions {
         SelectionRevealMode::Reveal,
         isHorizontal ? alignX : alignY,
@@ -1919,7 +1927,8 @@ std::optional<std::pair<CheckedPtr<RenderObject>, FloatRect>> Element::boundingA
 FloatRect Element::boundingClientRect()
 {
     Ref document = this->document();
-    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout, LayoutOptions::CanDeferUpdateLayerPositions }, this);
+    LocalFrameView::AutoPreventLayerAccess preventAccess(document->view());
     auto pair = boundingAbsoluteRectWithoutLayout();
     if (!pair)
         return { };
@@ -2730,230 +2739,51 @@ void Element::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
     updateEffectiveLangState();
 }
 
-enum class TextDirectionDirective {
-    Invalid,
-    LTR,
-    RTL,
-    Auto,
-};
-
-static inline TextDirectionDirective parseTextDirection(const AtomString& value)
+bool Element::hasValidTextDirectionState() const
 {
-    if (equalLettersIgnoringASCIICase(value, "ltr"_s))
-        return TextDirectionDirective::LTR;
-    if (equalLettersIgnoringASCIICase(value, "rtl"_s))
-        return TextDirectionDirective::RTL;
-    if (equalLettersIgnoringASCIICase(value, "auto"_s))
-        return TextDirectionDirective::Auto;
-    return TextDirectionDirective::Invalid;
+    return elementHasValidTextDirectionState(*this);
 }
 
-static bool isValidDirValue(const AtomString& value)
+bool Element::hasAutoTextDirectionState() const
 {
-    return parseTextDirection(value) != TextDirectionDirective::Invalid;
+    return elementHasAutoTextDirectionState(*this);
 }
 
-static bool elementAffectsDirectionality(const Element& element)
+void Element::updateEffectiveTextDirection()
 {
-    return is<HTMLBDIElement>(element) || isValidDirValue(element.attributeWithoutSynchronization(dirAttr));
+    auto textDirectionState = elementTextDirectionState(*this);
+    updateEffectiveTextDirectionState(*this, textDirectionState);
 }
 
-static bool elementAffectsDirectionality(const Node& node)
+void Element::updateEffectiveTextDirectionIfNeeded()
 {
-    auto* element = dynamicDowncast<Element>(node);
-    return element && elementAffectsDirectionality(*element);
-}
-
-static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
-{
-    firstNode->setSelfOrPrecedingNodesAffectDirAuto(flag);
-
-    RefPtr node = firstNode->firstChild();
-
-    while (node) {
-        if (elementAffectsDirectionality(*node)) {
-            if (node == lastNode)
-                return;
-            node = NodeTraversal::nextSkippingChildren(*node, firstNode);
-            continue;
-        }
-        node->setSelfOrPrecedingNodesAffectDirAuto(flag);
-        if (node == lastNode)
-            return;
-        node = NodeTraversal::next(*node, firstNode);
+    if (UNLIKELY(selfOrPrecedingNodesAffectDirAuto())) {
+        updateEffectiveTextDirection();
+        return;
     }
-}
 
-bool Element::hasDirectionAuto() const
-{
-    const AtomString& direction = attributeWithoutSynchronization(dirAttr);
-    return (hasTagName(bdiTag) && !isValidDirValue(direction)) || equalLettersIgnoringASCIICase(direction, "auto"_s);
-}
-
-std::optional<TextDirection> Element::directionalityIfDirIsAuto() const
-{
-    if (!(selfOrPrecedingNodesAffectDirAuto() && hasDirectionAuto()))
-        return std::nullopt;
-    return computeDirectionalityFromText().direction;
-}
-
-void Element::dirAttributeChanged(const AtomString& value)
-{
     RefPtr parent = parentOrShadowHostElement();
-    bool isValid = true;
-
-    protectedDocument()->setIsDirAttributeDirty();
-
-    auto direction = parseTextDirection(value);
-    switch (direction) {
-    case TextDirectionDirective::Invalid:
-        isValid = false;
-        if (selfOrPrecedingNodesAffectDirAuto() && (!parent || !parent->selfOrPrecedingNodesAffectDirAuto()) && !is<HTMLBDIElement>(*this))
-            setHasDirAutoFlagRecursively(this, false);
-        if (auto* input = dynamicDowncast<HTMLInputElement>(*this); parent && parent->usesEffectiveTextDirection() && !(input && input->isTelephoneField()))
-            updateEffectiveDirectionality(parent->effectiveTextDirection());
-        else
-            updateEffectiveDirectionality(std::nullopt);
-        break;
-    case TextDirectionDirective::LTR:
-        if (selfOrPrecedingNodesAffectDirAuto())
-            setHasDirAutoFlagRecursively(this, false);
-        updateEffectiveDirectionality(TextDirection::LTR);
-        break;
-    case TextDirectionDirective::RTL:
-        if (selfOrPrecedingNodesAffectDirAuto())
-            setHasDirAutoFlagRecursively(this, false);
-        updateEffectiveDirectionality(TextDirection::RTL);
-        break;
-    case TextDirectionDirective::Auto:
-        setUsesEffectiveTextDirection(true);
-        updateEffectiveDirectionalityOfDirAuto();
-        break;
-    }
-
-    if (parent && parent->selfOrPrecedingNodesAffectDirAuto()) {
-        if (isValid && direction != TextDirectionDirective::Auto)
-            setHasDirAutoFlagRecursively(this, false);
-        parent->adjustDirectionalityIfNeededAfterChildAttributeChanged(this);
-    }
-}
-
-void Element::updateEffectiveDirectionality(std::optional<TextDirection> direction)
-{
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
-    auto effectiveDirection = direction.value_or(TextDirection::LTR);
-    setUsesEffectiveTextDirection(!!direction);
-    if (direction)
-        setEffectiveTextDirection(effectiveDirection);
-    auto updateEffectiveTextDirectionOfShadowRoot = [&](Element& element) {
-        if (RefPtr shadowRootOfElement = element.shadowRoot()) {
-            for (Ref element : childrenOfType<Element>(*shadowRootOfElement))
-                element->updateEffectiveDirectionality(direction);
-        }
-    };
-    updateEffectiveTextDirectionOfShadowRoot(*this);
-    for (auto it = descendantsOfType<Element>(*this).begin(); it;) {
-        Ref element = *it;
-        if (isValidDirValue(element->attributeWithoutSynchronization(dirAttr))) {
-            it.traverseNextSkippingChildren();
-            continue;
-        }
-        updateEffectiveTextDirectionOfShadowRoot(element);
-        Style::PseudoClassChangeInvalidation styleInvalidation(element, CSSSelector::PseudoClass::Dir, Style::PseudoClassChangeInvalidation::AnyValue);
-        element->setUsesEffectiveTextDirection(!!direction);
-        if (direction)
-            element->setEffectiveTextDirection(effectiveDirection);
-        it.traverseNext();
-    }
-}
-
-void Element::adjustDirectionalityIfNeededAfterChildrenChanged(Element* beforeChange, ChildChange::Type changeType)
-{
-    // FIXME: This function looks suspicious.
-
-    if (!selfOrPrecedingNodesAffectDirAuto())
+    if (!(parent && parent->usesEffectiveTextDirection()))
         return;
 
-    RefPtr<Node> oldMarkedNode;
-    if (beforeChange)
-        oldMarkedNode = changeType == ChildChange::Type::ElementInserted ? ElementTraversal::nextSibling(*beforeChange) : beforeChange->nextSibling();
-
-    while (oldMarkedNode && elementAffectsDirectionality(*oldMarkedNode))
-        oldMarkedNode = oldMarkedNode->nextSibling();
-    if (oldMarkedNode)
-        setHasDirAutoFlagRecursively(oldMarkedNode.get(), false);
-
-    for (Ref elementToAdjust : lineageOfType<HTMLElement>(*this)) {
-        if (elementAffectsDirectionality(elementToAdjust)) {
-            ASSERT(elementToAdjust->hasDirectionAuto());
-            elementToAdjust->updateEffectiveDirectionalityOfDirAuto();
-            return;
-        }
-    }
-}
-
-void Element::updateTextDirectionalityAfterInputTypeChange()
-{
-    dirAttributeChanged(attributeWithoutSynchronization(dirAttr));
-}
-
-void Element::updateEffectiveDirectionalityOfDirAuto()
-{
-    auto result = computeDirectionalityFromText();
-    setHasDirAutoFlagRecursively(this, true, result.strongDirectionalityNode.get());
-    updateEffectiveDirectionality(result.direction);
-    if (renderer() && renderer()->style().direction() != result.direction)
-        invalidateStyleForSubtree();
-}
-
-auto Element::computeDirectionalityFromText() const -> TextDirectionWithStrongDirectionalityNode
-{
-    if (RefPtr textControl = dynamicDowncast<HTMLTextFormControlElement>(const_cast<Element*>(this))) {
-        if (textControl->dirAutoUsesValue()) {
-            auto direction = textControl->value().defaultWritingDirection();
-            if (!direction)
-                return { TextDirection::LTR, nullptr };
-            return { *direction == U_LEFT_TO_RIGHT ? TextDirection::LTR : TextDirection::RTL, WTFMove(textControl) };
-        }
+    if (hasAttributeWithoutSynchronization(HTMLNames::dirAttr) || shadowRoot() || firstChild()) {
+        updateEffectiveTextDirection();
+        return;
     }
 
-    RefPtr node = firstChild();
-    while (node) {
-        // Skip bdi, script, style and text form controls.
-        auto* element = dynamicDowncast<Element>(*node);
-        if (node->hasTagName(bdiTag) || node->hasTagName(scriptTag) || node->hasTagName(styleTag)
-            || (element && element->isTextField())) {
-            node = NodeTraversal::nextSkippingChildren(*node, this);
-            continue;
-        }
-
-        // Skip elements with valid dir attribute
-        if (element) {
-            if (isValidDirValue(element->attributeWithoutSynchronization(dirAttr))) {
-                node = NodeTraversal::nextSkippingChildren(*element, this);
-                continue;
-            }
-        }
-
-        if (node->isTextNode()) {
-            if (auto direction = node->textContent(true).defaultWritingDirection())
-                return { *direction == U_LEFT_TO_RIGHT ? TextDirection::LTR : TextDirection::RTL, node };
-        }
-        node = NodeTraversal::next(*node, this);
+    if (auto* input = dynamicDowncast<HTMLInputElement>(*this); input && input->isTelephoneField()) {
+        updateEffectiveTextDirection();
+        return;
     }
-    return { TextDirection::LTR, nullptr };
+
+    setUsesEffectiveTextDirection(parent->usesEffectiveTextDirection());
+    setEffectiveTextDirection(parent->effectiveTextDirection());
 }
 
-void Element::adjustDirectionalityIfNeededAfterChildAttributeChanged(Element*)
+void Element::dirAttributeChanged(const AtomString& newValue)
 {
-    ASSERT(selfOrPrecedingNodesAffectDirAuto());
-    for (Ref element : lineageOfType<Element>(*this)) {
-        if (elementAffectsDirectionality(element)) {
-            ASSERT(element->hasDirectionAuto());
-            element->updateEffectiveDirectionalityOfDirAuto();
-            break;
-        }
-    }
+    auto textDirectionState = parseTextDirectionState(newValue);
+    textDirectionStateChanged(*this, textDirectionState);
 }
 
 void Element::updateEffectiveLangStateFromParent()
@@ -3092,13 +2922,8 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
     } else if (!hasLanguageAttribute())
         updateEffectiveLangStateFromParent();
 
-    if (RefPtr parent = parentOrShadowHostElement(); parent && UNLIKELY(parent->usesEffectiveTextDirection())) {
-        auto* input = dynamicDowncast<HTMLInputElement>(*this);
-        if (!elementAffectsDirectionality(*this) && !(input && input->isTelephoneField())) {
-            setUsesEffectiveTextDirection(true);
-            setEffectiveTextDirection(parent->effectiveTextDirection());
-        }
-    }
+    if (!is<HTMLSlotElement>(*this))
+        updateEffectiveTextDirectionIfNeeded();
 
     return InsertedIntoAncestorResult::Done;
 }
@@ -3131,7 +2956,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
 {
     ContainerNode::removedFromAncestor(removalType, oldParentOfRemovedTree);
 
-    if (RefPtrAllowingPartiallyDestroyed<Page> page = document().page()) {
+    if (RefPtr<Page> page = document().page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().elementWasRemoved(*this);
 #endif
@@ -3144,7 +2969,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
 
     if (removalType.treeScopeChanged) {
         auto& oldTreeScope = oldParentOfRemovedTree.treeScope();
-        RefPtrAllowingPartiallyDestroyed<HTMLDocument> oldHTMLDocument = removalType.disconnectedFromDocument
+        RefPtr<HTMLDocument> oldHTMLDocument = removalType.disconnectedFromDocument
             && oldParentOfRemovedTree.isInDocumentTree() ? dynamicDowncast<HTMLDocument>(oldTreeScope.documentScope()) : nullptr;
 
         if (auto& idValue = getIdAttribute(); !idValue.isEmpty()) {
@@ -3160,7 +2985,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
     }
 
     if (removalType.disconnectedFromDocument) {
-        RefAllowingPartiallyDestroyed<Document> oldDocument = oldParentOfRemovedTree.treeScope().documentScope();
+        Ref<Document> oldDocument = oldParentOfRemovedTree.treeScope().documentScope();
         ASSERT(&document() == oldDocument.ptr());
 
         if (lastRememberedLogicalWidth() || lastRememberedLogicalHeight()) {
@@ -3205,7 +3030,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
 
     document().userActionElements().clearAllForElement(*this);
 
-    if (UNLIKELY(usesEffectiveTextDirection()) && !isValidDirValue(attributeWithoutSynchronization(dirAttr))) {
+    if (UNLIKELY(usesEffectiveTextDirection()) && !hasValidTextDirectionState()) {
         if (auto* parent = parentOrShadowHostElement(); !(parent && parent->usesEffectiveTextDirection()))
             setUsesEffectiveTextDirection(false);
     }
@@ -3537,8 +3362,10 @@ void Element::childrenChanged(const ChildChange& change)
         }
     }
 
-    if (UNLIKELY(document().isDirAttributeDirty()))
-        adjustDirectionalityIfNeededAfterChildrenChanged(change.previousSiblingElement, change.type);
+    if (UNLIKELY(document().isDirAttributeDirty())) {
+        if (selfOrPrecedingNodesAffectDirAuto())
+            updateEffectiveTextDirection();
+    }
 }
 
 void Element::setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue)
@@ -5693,7 +5520,7 @@ String Element::completeURLsInAttributeValue(const URL& base, const Attribute& a
     return resolveURLStringIfNeeded(attribute.value(), resolveURLs, base);
 }
 
-Attribute Element::replaceURLsInAttributeValue(const Attribute& attribute, const HashMap<String, String>&) const
+Attribute Element::replaceURLsInAttributeValue(const Attribute& attribute, const UncheckedKeyHashMap<String, String>&) const
 {
     return attribute;
 }
@@ -5850,6 +5677,8 @@ ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::JSGlobalObject& lexicalGlob
     std::optional<RefPtr<AnimationTimeline>> timeline;
     std::variant<FramesPerSecond, AnimationFrameRatePreset> frameRate = AnimationFrameRatePreset::Auto;
     std::optional<std::variant<double, KeyframeEffectOptions>> keyframeEffectOptions;
+    TimelineRangeValue animationRangeStart;
+    TimelineRangeValue animationRangeEnd;
     if (options) {
         auto optionsValue = options.value();
         std::variant<double, KeyframeEffectOptions> keyframeEffectOptionsVariant;
@@ -5860,6 +5689,8 @@ ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::JSGlobalObject& lexicalGlob
             id = keyframeEffectOptions.id;
             frameRate = keyframeEffectOptions.frameRate;
             timeline = keyframeEffectOptions.timeline;
+            animationRangeStart = keyframeEffectOptions.rangeStart;
+            animationRangeEnd = keyframeEffectOptions.rangeEnd;
             keyframeEffectOptionsVariant = WTFMove(keyframeEffectOptions);
         }
         keyframeEffectOptions = keyframeEffectOptionsVariant;
@@ -5875,6 +5706,8 @@ ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::JSGlobalObject& lexicalGlob
     if (timeline)
         animation->setTimeline(timeline->get());
     animation->setBindingsFrameRate(WTFMove(frameRate));
+    animation->setBindingsRangeStart(WTFMove(animationRangeStart));
+    animation->setBindingsRangeEnd(WTFMove(animationRangeEnd));
 
     auto animationPlayResult = animation->play();
     if (animationPlayResult.hasException())
@@ -6062,9 +5895,6 @@ AtomString Element::makeTargetBlankIfHasDanglingMarkup(const AtomString& target)
 
 bool Element::hasCustomState(const AtomString& state) const
 {
-    if (!document().settings().customStateSetEnabled())
-        return false;
-
     if (hasRareData()) {
         RefPtr customStates = elementRareData()->customStateSet();
         return customStates && customStates->has(state);
@@ -6144,7 +5974,7 @@ TextStream& operator<<(TextStream& ts, ContentRelevancy relevancy)
 HTMLElement* Element::topmostPopoverAncestor(TopLayerElementType topLayerType)
 {
     // Store positions to avoid having to do O(n) search for every popover invoker.
-    HashMap<Ref<const Element>, size_t> topLayerPositions;
+    UncheckedKeyHashMap<Ref<const Element>, size_t> topLayerPositions;
     size_t i = 0;
     for (auto& element : document().autoPopoverList())
         topLayerPositions.add(element, i++);

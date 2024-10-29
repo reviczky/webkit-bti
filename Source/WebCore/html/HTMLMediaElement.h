@@ -70,6 +70,7 @@
 
 namespace WTF {
 class MachSendRight;
+class Stopwatch;
 }
 
 namespace JSC {
@@ -181,9 +182,7 @@ class HTMLMediaElement
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(HTMLMediaElement);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLMediaElement);
 public:
-    using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::weakPtrFactory;
-    using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::WeakValueType;
-    using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(SINGLE_ARG(CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>));
 
     // ActiveDOMObject.
     void ref() const final { HTMLElement::ref(); }
@@ -243,7 +242,7 @@ public:
     
     bool inActiveDocument() const { return m_inActiveDocument; }
 
-    MediaSessionGroupIdentifier mediaSessionGroupIdentifier() const final;
+    std::optional<MediaSessionGroupIdentifier> mediaSessionGroupIdentifier() const final;
 
     WEBCORE_EXPORT bool isActiveNowPlayingSession() const;
     void isActiveNowPlayingSessionChanged() final;
@@ -613,7 +612,7 @@ public:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return *m_logger.get(); }
     Ref<Logger> protectedLogger() const;
-    const void* logIdentifier() const final { return m_logIdentifier; }
+    uint64_t logIdentifier() const final { return m_logIdentifier; }
     ASCIILiteral logClassName() const final { return "HTMLMediaElement"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
@@ -879,7 +878,7 @@ private:
     FloatSize mediaPlayerVideoLayerSize() const final { return videoLayerSize(); }
     void mediaPlayerVideoLayerSizeDidChange(const FloatSize& size) final { m_videoLayerSize = size; }
 
-    MediaPlayerClientIdentifier mediaPlayerClientIdentifier() const final { return identifier(); }
+    std::optional<MediaPlayerClientIdentifier> mediaPlayerClientIdentifier() const final { return identifier(); }
 
     void pendingActionTimerFired();
     void progressEventTimerFired();
@@ -1103,16 +1102,24 @@ private:
     bool videoUsesElementFullscreen() const;
 
 #if !RELEASE_LOG_DISABLED
-    const void* mediaPlayerLogIdentifier() final { return logIdentifier(); }
+    uint64_t mediaPlayerLogIdentifier() final { return logIdentifier(); }
     const Logger& mediaPlayerLogger() final { return logger(); }
 #endif
 
     bool shouldDisableHDR() const;
+
+    bool shouldLogWatchtimeEvent() const;
     bool isWatchtimeTimerActive() const;
     void startWatchtimeTimer();
     void pauseWatchtimeTimer();
     void invalidateWatchtimeTimer();
     void watchtimeTimerFired();
+    void startBufferingStopwatch();
+    void invalidateBufferingStopwatch();
+
+    enum ForceMuteChange { False, True };
+    void setMutedInternal(bool muted, ForceMuteChange);
+    bool implicitlyMuted() const { return m_implicitlyMuted.value_or(false); }
 
     Timer m_progressEventTimer;
     Timer m_playbackProgressTimer;
@@ -1229,6 +1236,8 @@ private:
 
     BufferingPolicy m_bufferingPolicy { BufferingPolicy::Default };
 
+    std::optional<bool> m_implicitlyMuted;
+
     bool m_firstTimePlaying : 1;
     bool m_playing : 1;
     bool m_isWaitingUntilMediaCanStart : 1;
@@ -1238,7 +1247,6 @@ private:
     bool m_autoplaying : 1;
     bool m_muted : 1;
     bool m_explicitlyMuted : 1;
-    bool m_initiallyMuted : 1;
     bool m_paused : 1;
     bool m_seeking : 1;
     bool m_buffering : 1;
@@ -1408,7 +1416,7 @@ private:
 
 #if !RELEASE_LOG_DISABLED
     RefPtr<Logger> m_logger;
-    const void* m_logIdentifier;
+    const uint64_t m_logIdentifier;
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -1419,6 +1427,7 @@ private:
     Atomic<unsigned> m_remainingReadyStateChangedAttempts;
 
     std::unique_ptr<PausableIntervalTimer> m_watchtimeTimer;
+    RefPtr<WTF::Stopwatch> m_bufferingStopwatch;
 };
 
 String convertEnumerationToString(HTMLMediaElement::AutoplayEventPlaybackState);

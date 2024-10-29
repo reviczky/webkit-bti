@@ -68,7 +68,7 @@ void lowerMacros(Code& code)
                 };
                 for (unsigned i = 1; i < value->numChildren(); ++i) {
                     Value* child = value->child(i);
-                    for (unsigned j = 0; j < cCallArgumentRegisterCount(child); j++)
+                    for (unsigned j = 0; j < cCallArgumentRegisterCount(child->type()); j++)
                         addNextPair(cCallArgumentRegisterWidth(child->type()));
                 }
                 ASSERT(offset = inst.args.size());
@@ -424,7 +424,8 @@ void lowerMacros(Code& code)
 
             switch (inst.kind.opcode) {
             case ColdCCall:
-                if (code.optLevel() < 2)
+                // FIXME: ARM can't currently handle ColdCCalls.
+                if (code.optLevel() < 2 || isARM_THUMB2())
                     handleCall();
                 break;
             case CCall:

@@ -83,10 +83,8 @@ RenderLayerModelObject::RenderLayerModelObject(Type type, Document& document, Re
     ASSERT(isRenderLayerModelObject());
 }
 
-RenderLayerModelObject::~RenderLayerModelObject()
-{
-    // Do not add any code here. Add it to willBeDestroyed() instead.
-}
+// Do not add any code in below destructor. Add it to willBeDestroyed() instead.
+RenderLayerModelObject::~RenderLayerModelObject() = default;
 
 void RenderLayerModelObject::willBeDestroyed()
 {
@@ -111,7 +109,7 @@ void RenderLayerModelObject::createLayer()
     ASSERT(!m_layer);
     m_layer = makeUnique<RenderLayer>(*this);
     setHasLayer(true);
-    m_layer->insertOnlyThisLayer(RenderLayer::LayerChangeTiming::StyleChange);
+    m_layer->insertOnlyThisLayer();
 }
 
 bool RenderLayerModelObject::hasSelfPaintingLayer() const
@@ -175,7 +173,7 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
         if (layer()->isSelfPaintingLayer() && layer()->repaintStatus() == RepaintStatus::NeedsFullRepaint && layer()->cachedClippedOverflowRect())
             repaintUsingContainer(containerForRepaint().renderer.get(), *(layer()->cachedClippedOverflowRect()));
 
-        layer()->removeOnlyThisLayer(RenderLayer::LayerChangeTiming::StyleChange); // calls destroyLayer() which clears m_layer
+        layer()->removeOnlyThisLayer(); // calls destroyLayer() which clears m_layer
         if (s_wasFloating && isFloating())
             setChildNeedsLayout();
         if (s_wasTransformed)
@@ -213,7 +211,7 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
     bool scrollAlignChanged = oldStyle && oldStyle->scrollSnapAlign() != newStyle.scrollSnapAlign();
     bool scrollSnapStopChanged = oldStyle && oldStyle->scrollSnapStop() != newStyle.scrollSnapStop();
     if (scrollMarginChanged || scrollAlignChanged || scrollSnapStopChanged) {
-        if (auto* scrollSnapBox = enclosingScrollableContainerForSnapping())
+        if (auto* scrollSnapBox = enclosingScrollableContainer())
             scrollSnapBox->setNeedsLayout();
     }
 }

@@ -52,7 +52,7 @@
 #include "AccessibilityMenuListPopup.h"
 #include "AccessibilityProgressIndicator.h"
 #include "AccessibilityRenderObject.h"
-#include "AccessibilitySVGElement.h"
+#include "AccessibilitySVGObject.h"
 #include "AccessibilitySVGRoot.h"
 #include "AccessibilityScrollView.h"
 #include "AccessibilityScrollbar.h"
@@ -67,6 +67,7 @@
 #include "AccessibilityTreeItem.h"
 #include "CaretRectComputation.h"
 #include "CustomElementDefaultARIA.h"
+#include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "Editing.h"
 #include "Editor.h"
@@ -109,6 +110,7 @@
 #include "RenderMeter.h"
 #include "RenderObjectInlines.h"
 #include "RenderProgress.h"
+#include "RenderSVGInlineText.h"
 #include "RenderSlider.h"
 #include "RenderTable.h"
 #include "RenderTableCell.h"
@@ -171,7 +173,7 @@ AccessibilityObjectInclusion AXComputedObjectAttributeCache::getIgnored(AXID id)
 
 void AXComputedObjectAttributeCache::setIgnored(AXID id, AccessibilityObjectInclusion inclusion)
 {
-    HashMap<AXID, CachedAXObjectAttributes>::iterator it = m_idMapping.find(id);
+    UncheckedKeyHashMap<AXID, CachedAXObjectAttributes>::iterator it = m_idMapping.find(id);
     if (it != m_idMapping.end())
         it->value.ignored = inclusion;
     else {
@@ -272,7 +274,7 @@ AXObjectCache::AXObjectCache(Document& document)
 
 #if ENABLE(AX_THREAD_TEXT_APIS)
     if (auto* frame = document.frame(); frame && frame->isMainFrame())
-        gAccessibilityThreadTextApisEnabled = document.settings().accessibilityThreadTextApisEnabled();
+        gAccessibilityThreadTextApisEnabled = DeprecatedGlobalSettings::accessibilityThreadTextApisEnabled();
 #endif
 
     // If loading completed before the cache was created, loading progress will have been reset to zero.
@@ -334,24 +336,25 @@ void AXObjectCache::findModalNodes()
 bool AXObjectCache::modalElementHasAccessibleContent(Element& element)
 {
     // Unless you're trying to compute the new modal node, determining whether an element
-    // has accessible content is as easy as !getOrCreate(element)->children().isEmpty().
+    // has accessible content is as easy as !getOrCreate(element)->unignoredChildren().isEmpty().
     // So don't call this method on anything besides modal elements.
     ASSERT(isModalElement(element));
 
-    // Because computing any object's children() is dependent on whether a modal is on the page,
+    // Because computing any object's unignored children is dependent on whether a modal is on the page,
     // we'll need to walk the DOM and find non-ignored AX objects manually.
     Vector<Node*> nodeStack = { element.firstChild() };
     while (!nodeStack.isEmpty()) {
         for (auto* node = nodeStack.takeLast(); node; node = node->nextSibling()) {
             if (auto* axObject = getOrCreate(*node)) {
-                if (!axObject->computeAccessibilityIsIgnored())
+                if (!axObject->computeIsIgnored())
                     return true;
 
 #if USE(ATSPI)
                 // When using ATSPI, an accessibility object with 'StaticText' role is ignored.
                 // Its content is exposed by its parent.
                 // Treat such elements as having accessible content.
-                if (axObject->roleValue() == AccessibilityRole::StaticText)
+                // FIXME: This may not be sufficient for visibility:hidden or inert (https://bugs.webkit.org/show_bug.cgi?id=280914).
+                if (axObject->roleValue() == AccessibilityRole::StaticText && !axObject->isAXHidden())
                     return true;
 #endif
             }
@@ -380,10 +383,11 @@ void AXObjectCache::updateCurrentModalNode(WillRecomputeFocus willRecomputeFocus
 
         SetForScope retrievingCurrentModalNode(m_isRetrievingCurrentModalNode, true);
         // If any of the modal nodes contains the keyboard focus, we want to pick that one.
-        // If not, we want to pick the last visible dialog in the DOM.
+        // If multiple contain the keyboard focus, we want the deepest.
+        // If no modal contains focus, we want to pick the last visible dialog in the DOM.
         RefPtr<Element> focusedElement = document().focusedElement();
-        bool focusedElementIsOutsideModals = focusedElement;
-        RefPtr<Element> lastVisible;
+        RefPtr<Element> modalElementToReturn;
+        bool foundModalWithFocusInside = false;
         for (auto& element : m_modalElements) {
             // Elements in m_modalElementsSet may have become un-modal since we added them, but not yet removed
             // as part of the asynchronous m_deferredModalChangedList handling. Skip these.
@@ -394,18 +398,29 @@ void AXObjectCache::updateCurrentModalNode(WillRecomputeFocus willRecomputeFocus
             if (!isNodeVisible(element.get()) || !modalElementHasAccessibleContent(*element))
                 continue;
 
-            lastVisible = element.get();
-            if (focusedElement && focusedElement->isDescendantOf(*element)) {
-                focusedElementIsOutsideModals = false;
-                break;
-            }
+            bool focusIsInsideElement = focusedElement && focusedElement->isDescendantOf(*element);
+
+            // If the modal we found previously is a descendant of this one, prefer the descendant and skip this one.
+            if (modalElementToReturn && foundModalWithFocusInside && modalElementToReturn->isDescendantOf(*element))
+                continue;
+
+            // If we already found a modal that focus is inside, and this one doesn't have focus inside, skip in favor of the one with focus inside.
+            if (modalElementToReturn && foundModalWithFocusInside && !focusIsInsideElement)
+                continue;
+
+            modalElementToReturn = element.get();
+            if (focusIsInsideElement)
+                foundModalWithFocusInside = true;
         }
+
+        bool focusedElementIsOutsideModals = focusedElement && !foundModalWithFocusInside;
 
         // If there is a focused element, and it's not inside any of the modals, we should
         // consider all modals inactive to allow the user to freely navigate.
         if (focusedElementIsOutsideModals && willRecomputeFocus == WillRecomputeFocus::No)
             return nullptr;
-        return lastVisible.get();
+
+        return modalElementToReturn.get();
     };
 
     auto* previousModal = m_currentModalElement.get();
@@ -422,7 +437,8 @@ void AXObjectCache::updateCurrentModalNode(WillRecomputeFocus willRecomputeFocus
 
 bool AXObjectCache::isNodeVisible(Node* node) const
 {
-    if (!is<Element>(node))
+    RefPtr element = dynamicDowncast<Element>(node);
+    if (!element)
         return false;
 
     RenderObject* renderer = node->renderer();
@@ -446,10 +462,7 @@ bool AXObjectCache::isNodeVisible(Node* node) const
     }
 
     // We also need to consider aria hidden status.
-    if (!isNodeAriaVisible(*node))
-        return false;
-
-    return true;
+    return !equalLettersIgnoringASCIICase(element->attributeWithDefaultARIA(aria_hiddenAttr), "true"_s) || element->focused();
 }
 
 // This function returns the valid aria modal node.
@@ -483,7 +496,7 @@ AccessibilityObject* AXObjectCache::focusedImageMapUIElement(HTMLAreaElement& ar
     if (!axRenderImage)
         return nullptr;
     
-    for (const auto& child : axRenderImage->children()) {
+    for (const auto& child : axRenderImage->unignoredChildren()) {
         auto* imageMapLink = dynamicDowncast<AccessibilityImageMapLink>(*child);
         if (imageMapLink && imageMapLink->areaElement() == &areaElement)
             return imageMapLink;
@@ -527,7 +540,7 @@ AccessibilityObject* AXObjectCache::focusedObjectForNode(Node* focusedNode)
             return dynamicDowncast<AccessibilityObject>(descendant);
     }
 
-    if (focus->accessibilityIsIgnored())
+    if (focus->isIgnored())
         return focus->parentObjectUnignored();
     return focus;
 }
@@ -538,37 +551,31 @@ void AXObjectCache::setIsolatedTreeFocusedObject(AccessibilityObject* focus)
     ASSERT(isMainThread());
 
     if (auto tree = AXIsolatedTree::treeForPageID(m_pageID))
-        tree->setFocusedNodeID(focus ? focus->objectID() : AXID());
+        tree->setFocusedNodeID(focus ? focus->objectID() : std::nullopt);
 }
 #endif
 
 AccessibilityObject* AXObjectCache::get(Widget& widget) const
 {
-    AXID axID = m_widgetObjectMapping.get(widget);
-    ASSERT(!axID.isHashTableDeletedValue());
-
-    return axID ? m_objects.get(axID) : nullptr;
+    auto axID = m_widgetObjectMapping.getOptional(widget);
+    return axID ? m_objects.get(*axID) : nullptr;
 }
 
 AccessibilityObject* AXObjectCache::get(RenderObject& renderer) const
 {
-    AXID axID = m_renderObjectMapping.get(renderer);
-    ASSERT(!axID.isHashTableDeletedValue());
-
-    return axID ? m_objects.get(axID) : nullptr;
+    auto axID = m_renderObjectMapping.getOptional(renderer);
+    return axID ? m_objects.get(*axID) : nullptr;
 }
 
 AccessibilityObject* AXObjectCache::get(Node& node) const
 {
     auto* renderer = node.renderer();
-    AXID renderID = renderer ? m_renderObjectMapping.get(renderer) : AXID();
-    ASSERT(!renderID.isHashTableDeletedValue());
-    if (renderID.isValid())
-        return m_objects.get(renderID);
+    auto renderID = renderer ? m_renderObjectMapping.getOptional(*renderer) : std::nullopt;
+    if (renderID)
+        return m_objects.get(*renderID);
 
-    AXID nodeID = m_nodeObjectMapping.get(node);
-    ASSERT(!nodeID.isHashTableDeletedValue());
-    return nodeID.isValid() ? m_objects.get(nodeID) : nullptr;
+    auto nodeID = m_nodeObjectMapping.getOptional(node);
+    return nodeID ? m_objects.get(*nodeID) : nullptr;
 }
 
 // FIXME: This probably belongs on Node.
@@ -595,6 +602,19 @@ bool nodeHasTableRole(Node* node)
 bool nodeHasCellRole(Node* node)
 {
     return node && (nodeHasRole(node, "gridcell"_s) || nodeHasRole(node, "cell"_s) || nodeHasRole(node, "columnheader"_s) || nodeHasRole(node, "rowheader"_s));
+}
+
+ContainerNode* composedParentIgnoringDocumentFragments(Node& node)
+{
+    RefPtr ancestor = node.parentInComposedTree();
+    while (is<DocumentFragment>(ancestor.get()))
+        ancestor = ancestor->parentInComposedTree();
+    return ancestor.get();
+}
+
+ContainerNode* composedParentIgnoringDocumentFragments(Node* node)
+{
+    return node ? composedParentIgnoringDocumentFragments(*node) : nullptr;
 }
 
 bool hasAccNameAttribute(Element& element)
@@ -723,8 +743,8 @@ Ref<AccessibilityObject> AXObjectCache::createObjectFromRenderer(RenderObject& r
     if (renderer.isRenderOrLegacyRenderSVGRoot())
         return AccessibilitySVGRoot::create(renderer, this);
 
-    if (is<SVGElement>(node))
-        return AccessibilitySVGElement::create(renderer, this);
+    if (is<SVGElement>(node) || is<RenderSVGInlineText>(renderer))
+        return AccessibilitySVGObject::create(renderer, this);
 
     if (auto* renderImage = toSimpleImage(renderer))
         return AXImage::create(*renderImage);
@@ -743,15 +763,20 @@ Ref<AccessibilityObject> AXObjectCache::createObjectFromRenderer(RenderObject& r
     if (auto* renderMenuList = dynamicDowncast<RenderMenuList>(renderer))
         return AccessibilityMenuList::create(*renderMenuList);
 
-
+    bool isAnonymous = false;
+#if USE(ATSPI)
+    // This branch is only necessary because ATSPI walks the render tree rather than the DOM to build the accessiblity tree.
+    // FIXME: Consider removing this with https://bugs.webkit.org/show_bug.cgi?id=282117.
+    isAnonymous = renderer.isAnonymous();
+#endif
     // Some websites put display:table on tbody / thead / tfoot, resulting in a RenderTable being generated.
     // We don't want to consider these tables (since they are typically wrapped by an actual <table> element),
     // so only create an AccessibilityTable when !is<HTMLTableSectionElement>.
-    if ((is<RenderTable>(renderer) && !renderer.isAnonymous() && !is<HTMLTableSectionElement>(node.get())) || isAccessibilityTable(node.get()))
+    if ((is<RenderTable>(renderer) && !isAnonymous && !is<HTMLTableSectionElement>(node.get())) || isAccessibilityTable(node.get()))
         return AccessibilityTable::create(renderer);
-    if ((is<RenderTableRow>(renderer) && !renderer.isAnonymous()) || isAccessibilityTableRow(node.get()))
+    if ((is<RenderTableRow>(renderer) && !isAnonymous) || isAccessibilityTableRow(node.get()))
         return AccessibilityTableRow::create(renderer);
-    if ((is<RenderTableCell>(renderer) && !renderer.isAnonymous()) || isAccessibilityTableCell(node.get()))
+    if ((is<RenderTableCell>(renderer) && !isAnonymous) || isAccessibilityTableCell(node.get()))
         return AccessibilityTableCell::create(renderer);
 
     // Progress indicator.
@@ -797,7 +822,6 @@ static Ref<AccessibilityObject> createFromNode(Node& node)
 void AXObjectCache::cacheAndInitializeWrapper(AccessibilityObject& newObject, DOMObjectVariant domObject)
 {
     AXID axID = getAXID(newObject);
-    ASSERT(axID.isValid());
 
     WTF::switchOn(domObject,
         [&axID, this] (RenderObject* typedValue) {
@@ -851,7 +875,8 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node& node, IsPartOfRelation isP
     if (auto* renderer = node.renderer())
         return getOrCreate(*renderer);
 
-    if (!node.parentElement())
+    RefPtr composedParent = node.parentElementInComposedTree();
+    if (!composedParent)
         return nullptr;
 
     Ref protectedNode { node };
@@ -875,14 +900,23 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node& node, IsPartOfRelation isP
         return object.get();
     }
 
-    bool inCanvasSubtree = lineageOfType<HTMLCanvasElement>(*node.parentElement()).first();
+    bool inCanvasSubtree = lineageOfType<HTMLCanvasElement>(*composedParent).first();
+    if (inCanvasSubtree) {
+        // Don't include objects that are descendants of user agent shadow trees. For example, in this HTML:
+        //     <canvas><input type="text"></canvas>
+        // <input type="text"> generates a user agent shadow root to host a <div contenteditable>.
+        // We already handle elements that host user agent shadows specially, so don't include their
+        // descendants (like this <div>) just because they happen to be within <canvas>.
+        if (auto* shadowRoot = composedParent->shadowRoot())
+            inCanvasSubtree = !shadowRoot->isUserAgentShadowRoot();
+    }
     // If node is the target of a relationship or a descendant of one, create an AX object unconditionally.
     if (isPartOfRelation == IsPartOfRelation::No && !isDescendantOfRelatedNode(node)) {
-        bool insideMeterElement = is<HTMLMeterElement>(*node.parentElement());
+        bool insideMeterElement = is<HTMLMeterElement>(*composedParent);
         auto* element = dynamicDowncast<Element>(node);
         bool hasDisplayContents = element && element->hasDisplayContents();
         bool isPopover = element && element->hasAttributeWithoutSynchronization(popoverAttr);
-        if (!inCanvasSubtree && !insideMeterElement && !hasDisplayContents && !isPopover && !isNodeAriaVisible(node))
+        if (!inCanvasSubtree && !insideMeterElement && !hasDisplayContents && !isPopover && !isNodeFocused(node))
             return nullptr;
     }
 
@@ -902,7 +936,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node& node, IsPartOfRelation isP
     cacheAndInitializeWrapper(*newObject, &node);
     // Compute the object's initial ignored status.
     newObject->recomputeIsIgnored();
-    // Sometimes asking accessibilityIsIgnored() will cause the newObject to be deallocated, and then
+    // Sometimes asking isIgnored() will cause the newObject to be deallocated, and then
     // it will disappear when this function is finished, leading to a use-after-free.
     if (newObject->isDetached())
         return nullptr;
@@ -926,7 +960,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(RenderObject& renderer)
     cacheAndInitializeWrapper(object.get(), &renderer);
     // Compute the object's initial ignored status.
     object->recomputeIsIgnored();
-    // Sometimes asking accessibilityIsIgnored() will cause the newObject to be deallocated, and then
+    // Sometimes asking isIgnored() will cause the newObject to be deallocated, and then
     // it will disappear when this function is finished, leading to a use-after-free.
     if (object->isDetached())
         return nullptr;
@@ -1066,15 +1100,15 @@ AccessibilityObject* AXObjectCache::create(AccessibilityRole role)
     return obj.get();
 }
 
-void AXObjectCache::remove(AXID axID)
+void AXObjectCache::remove(std::optional<AXID> axID)
 {
     AXTRACE(makeString("AXObjectCache::remove 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
-    AXLOG(makeString("AXID "_s, axID.loggingString()));
+    AXLOG(makeString("AXID "_s, axID ? axID->loggingString() : ""_s));
 
-    if (!axID.isValid())
+    if (!axID)
         return;
 
-    auto object = m_objects.take(axID);
+    auto object = m_objects.take(*axID);
     if (!object)
         return;
 
@@ -1083,12 +1117,12 @@ void AXObjectCache::remove(AXID axID)
         tree->removeNode(*object);
 #endif
 
-    removeAllRelations(axID);
+    removeAllRelations(*axID);
     object->detach(AccessibilityDetachmentType::ElementDestroyed);
 
-    m_idsInUse.remove(axID);
+    m_idsInUse.remove(*axID);
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    m_geometryManager->remove(axID);
+    m_geometryManager->remove(*axID);
 #endif
     ASSERT(m_objects.size() >= m_idsInUse.size());
 }
@@ -1097,16 +1131,15 @@ void AXObjectCache::remove(RenderObject* renderer)
 {
     AXTRACE(makeString("AXObjectCache::remove RenderObject* 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
 
-    if (!renderer)
-        return;
-    remove(m_renderObjectMapping.take(renderer));
+    if (renderer)
+        remove(m_renderObjectMapping.takeOptional(*renderer));
 }
 
 void AXObjectCache::remove(Node& node)
 {
     AXTRACE(makeString("AXObjectCache::remove Node& 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
 
-    remove(m_nodeObjectMapping.take(&node));
+    remove(m_nodeObjectMapping.takeOptional(node));
     remove(node.renderer());
 
     // If we're in the middle of a cache update, don't modify any of these vectors because we are currently
@@ -1139,30 +1172,29 @@ void AXObjectCache::remove(Widget* view)
 {
     if (!view)
         return;
-    remove(m_widgetObjectMapping.take(view));
-    if (auto* scrollView = dynamicDowncast<ScrollView>(view))
+    remove(m_widgetObjectMapping.takeOptional(*view));
+    if (auto* scrollView = dynamicDowncast<ScrollView>(*view))
         m_deferredScrollbarUpdateChangeList.remove(*scrollView);
 }
 
 AXID AXObjectCache::generateNewObjectID() const
 {
-    AXID axID;
+    std::optional<AXID> axID;
     do {
         axID = AXID::generate();
-    } while (!axID.isValid() || m_idsInUse.contains(axID));
-    return axID;
+    } while (m_idsInUse.contains(*axID));
+    return *axID;
 }
 
 AXID AXObjectCache::getAXID(AccessibilityObject& object)
 {
     // check for already-assigned ID
-    AXID objectID = object.objectID();
-    if (objectID.isValid()) {
-        ASSERT(m_idsInUse.contains(objectID));
-        return objectID;
+    if (auto objectID = object.objectID()) {
+        ASSERT(m_idsInUse.contains(*objectID));
+        return *objectID;
     }
 
-    objectID = generateNewObjectID();
+    auto objectID = generateNewObjectID();
     m_idsInUse.add(objectID);
     object.setObjectID(objectID);
     return objectID;
@@ -1221,13 +1253,12 @@ void AXObjectCache::onRendererCreated(Element& element)
 
     // If there is already an AXObject that was created for this element,
     // remove it since there will be a new AXRenderObject created using the renderer.
-    AXID axID = m_nodeObjectMapping.get(&element);
-    if (axID.isValid()) {
+    if (auto axID = m_nodeObjectMapping.getOptional(element)) {
         // The removal needs to be async because this is called during a RenderTree
         // update and remove(AXID) updates the isolated tree, that in turn calls
         // parentObjectUnignored() on the object being removed, that may result
         // in a call to textUnderElement, that can not be called during a layout.
-        m_deferredReplacedObjects.add(axID);
+        m_deferredReplacedObjects.add(*axID);
         if (!m_performCacheUpdateTimer.isActive())
             m_performCacheUpdateTimer.startOneShot(0_s);
     }
@@ -1290,7 +1321,7 @@ void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
 
     // Handle MenuLists and MenuListPopups as special cases.
     if (is<AccessibilityMenuList>(object)) {
-        auto& children = object.children(false);
+        const auto& children = object.unignoredChildren(/* updateChildrenIfNeeded */ false);
         if (children.isEmpty())
             return;
 
@@ -1304,6 +1335,17 @@ void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
     else if (auto* axRow = dynamicDowncast<AccessibilityTableRow>(object)) {
         if (auto* parentTable = axRow->parentTable())
             deferRecomputeTableCellSlots(*parentTable);
+    } else if (auto* scrollView = dynamicDowncast<AccessibilityScrollView>(object)) {
+        // When the children of an iframe change, e.g., because its visibility changes,
+        // then we need to dirty the web area's subtree since the scroll area doesn't
+        // have a node nor renderer, thus, failing the check below and returning early.
+
+        // Only do this when the web area is not the root web area, as this indicates
+        // we are in an iframe.
+        if (RefPtr webArea = scrollView->webAreaObject(); webArea && webArea != rootWebArea()) {
+            webArea->setNeedsToUpdateSubtree();
+            webArea->setNeedsToUpdateChildren();
+        }
     }
 
     if (!object.node() && !object.renderer())
@@ -1317,7 +1359,7 @@ void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
     // Go up the existing ancestors chain and fire the appropriate notifications.
     bool shouldUpdateParent = true;
     bool foundTableCaption = false;
-    for (RefPtr parent = &object; parent; parent = parent->parentObjectIfExists()) {
+    for (RefPtr parent = &object; parent; parent = parent->parentObject()) {
         if (shouldUpdateParent)
             parent->setNeedsToUpdateChildren();
 
@@ -1340,6 +1382,9 @@ void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
             // A label's descendant was added or removed. Update its LabelFor relationships.
             handleLabelChanged(parent.get());
         }
+
+        for (const auto& describedObject : parent->descriptionForObjects())
+            postNotification(downcast<AccessibilityObject>(describedObject.get()), nullptr, AXExtendedDescriptionChanged);
 
         if (parent->hasTagName(captionTag))
             foundTableCaption = true;
@@ -1844,6 +1889,18 @@ void AXObjectCache::onSelectedChanged(Node& node)
     handleTabPanelSelected(nullptr, &node);
 }
 
+void AXObjectCache::onStyleChange(Element& element, Style::Change change, const RenderStyle* newStyle, const RenderStyle* oldStyle)
+{
+    if (change == Style::Change::None)
+        return;
+
+    if (!element.renderer() && oldStyle && newStyle && oldStyle->usedVisibility() != newStyle->usedVisibility()) {
+        // We only need to do this when the given element doesn't have a renderer, as if it did, we would get a normal
+        // children-changed event through the render tree.
+        childrenChanged(&element);
+    }
+}
+
 void AXObjectCache::onTextSecurityChanged(HTMLInputElement& inputElement)
 {
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
@@ -2065,7 +2122,7 @@ void AXObjectCache::postTextStateChangeNotification(const Position& position, co
 
 #if PLATFORM(COCOA) || USE(ATSPI)
     AccessibilityObject* object = getOrCreate(*node);
-    if (object && object->accessibilityIsIgnored()) {
+    if (object && object->isIgnored()) {
 #if PLATFORM(COCOA)
         if (position.atLastEditingPositionForNode()) {
             if (AccessibilityObject* nextSibling = object->nextSiblingUnignored(1))
@@ -2691,8 +2748,14 @@ void AXObjectCache::handleAttributeChange(Element* element, const QualifiedName&
     }
     else if (attrName == aria_invalidAttr)
         postNotification(element, AXInvalidStatusChanged);
-    else if (attrName == aria_modalAttr)
+    else if (attrName == aria_modalAttr) {
+        // aria-modal changed, so the element may have become modal or un-modal.
+        if (isModalElement(*element))
+            m_modalElements.appendIfNotContains(element);
+        else
+            m_modalElements.removeAll(element);
         deferModalChange(*element);
+    }
     else if (attrName == aria_currentAttr)
         postNotification(element, AXCurrentStateChanged);
     else if (attrName == aria_disabledAttr)
@@ -2771,7 +2834,7 @@ void AXObjectCache::dirtyIsolatedTreeRelations()
 #endif
 }
 
-void AXObjectCache::recomputeIsIgnored(RenderObject* renderer)
+void AXObjectCache::recomputeIsIgnored(RenderObject& renderer)
 {
     if (auto* object = get(renderer))
         object->recomputeIsIgnored();
@@ -2818,7 +2881,7 @@ VisiblePosition AXObjectCache::visiblePositionForTextMarkerData(const TextMarker
         return { };
 
     auto* cache = renderer->document().axObjectCache();
-    if (cache && !cache->m_idsInUse.contains(textMarkerData.axObjectID()))
+    if (cache && !cache->m_idsInUse.contains(*textMarkerData.axObjectID()))
         return { };
 
     return visiblePosition;
@@ -2860,7 +2923,7 @@ CharacterOffset AXObjectCache::traverseToOffsetInRange(const SimpleRange& range,
         behaviors.add(TextIteratorBehavior::EntersTextControls);
     TextIterator iterator(range, behaviors);
     
-    // Enable the cache here for accessibilityIsIgnored calls in replacedNodeNeedsCharacter
+    // Enable the cache here for isIgnored calls in replacedNodeNeedsCharacter.
     AXAttributeCacheEnabler enableCache(this);
 
     // When the range has zero length, there might be replaced node or brTag that we need to increment the characterOffset.
@@ -2868,7 +2931,7 @@ CharacterOffset AXObjectCache::traverseToOffsetInRange(const SimpleRange& range,
         currentNode = range.start.container.ptr();
         lastStartOffset = range.start.offset;
         if (offset > 0 || toNodeEnd) {
-            if (AccessibilityObject::replacedNodeNeedsCharacter(currentNode) || (currentNode->renderer() && currentNode->renderer()->isBR()))
+            if (AccessibilityObject::replacedNodeNeedsCharacter(*currentNode) || (currentNode->renderer() && currentNode->renderer()->isBR()))
                 cumulativeOffset++;
             lastLength = cumulativeOffset;
             
@@ -2896,7 +2959,7 @@ CharacterOffset AXObjectCache::traverseToOffsetInRange(const SimpleRange& range,
         // If not, we skip the node with no length.
         if (!currentLength) {
             Node* childNode = iterator.node();
-            if (AccessibilityObject::replacedNodeNeedsCharacter(childNode)) {
+            if (AccessibilityObject::replacedNodeNeedsCharacter(*childNode)) {
                 cumulativeOffset++;
                 currentLength++;
                 currentNode = childNode;
@@ -2975,7 +3038,7 @@ unsigned AXObjectCache::lengthForRange(const SimpleRange& range)
         if (it.text().length())
             length += it.text().length();
         else {
-            if (AccessibilityObject::replacedNodeNeedsCharacter(it.node()))
+            if (AccessibilityObject::replacedNodeNeedsCharacter(*it.node()))
                 ++length;
         }
     }
@@ -2984,7 +3047,7 @@ unsigned AXObjectCache::lengthForRange(const SimpleRange& range)
 
 SimpleRange AXObjectCache::rangeForNodeContents(Node& node)
 {
-    if (AccessibilityObject::replacedNodeNeedsCharacter(&node)) {
+    if (AccessibilityObject::replacedNodeNeedsCharacter(node)) {
         // For replaced nodes without children, the node itself is included in the range.
         if (auto range = makeRangeSelectingNode(node))
             return *range;
@@ -3020,9 +3083,9 @@ std::optional<SimpleRange> AXObjectCache::rangeMatchesTextNearRange(const Simple
     return findClosestPlainText(*searchRange, matchText, { }, targetOffset);
 }
 
-static bool isReplacedNodeOrBR(Node* node)
+static bool isReplacedNodeOrBR(Node& node)
 {
-    return node && (AccessibilityObject::replacedNodeNeedsCharacter(node) || node->hasTagName(brTag));
+    return AccessibilityObject::replacedNodeNeedsCharacter(node) || node.hasTagName(brTag);
 }
 
 static bool characterOffsetsInOrder(const CharacterOffset& characterOffset1, const CharacterOffset& characterOffset2)
@@ -3038,9 +3101,9 @@ static bool characterOffsetsInOrder(const CharacterOffset& characterOffset1, con
     
     RefPtr node1 = characterOffset1.node;
     RefPtr node2 = characterOffset2.node;
-    if (!node1->isCharacterDataNode() && !isReplacedNodeOrBR(node1.get()) && node1->hasChildNodes())
+    if (!node1->isCharacterDataNode() && !isReplacedNodeOrBR(*node1) && node1->hasChildNodes())
         node1 = node1->traverseToChildAt(characterOffset1.offset);
-    if (!node2->isCharacterDataNode() && !isReplacedNodeOrBR(node2.get()) && node2->hasChildNodes())
+    if (!node2->isCharacterDataNode() && !isReplacedNodeOrBR(*node2) && node2->hasChildNodes())
         node2 = node2->traverseToChildAt(characterOffset2.offset);
     if (!node1 || !node2)
         return false;
@@ -3065,9 +3128,9 @@ static std::optional<BoundaryPoint> boundaryPoint(const CharacterOffset& charact
         return std::nullopt;
 
     int offset = characterOffset.startIndex + characterOffset.offset;
+    // Guaranteed to be non-null by checking CharacterOffset::isNull.
     RefPtr node = characterOffset.node;
-    ASSERT(node);
-    if (isReplacedNodeOrBR(node.get()))
+    if (isReplacedNodeOrBR(*node))
         node = resetNodeAndOffsetForReplacedNode(*node, offset, characterOffset.offset);
 
     if (!node)
@@ -3369,7 +3432,7 @@ AccessibilityObject* AXObjectCache::objectForTextMarkerData(const TextMarkerData
     if (textMarkerData.ignored)
         return nullptr;
 
-    RefPtr object = m_objects.get(textMarkerData.axObjectID());
+    RefPtr object = m_objects.get(*textMarkerData.axObjectID());
     if (!object)
         return nullptr;
 
@@ -3419,7 +3482,7 @@ CharacterOffset AXObjectCache::nextCharacterOffset(const CharacterOffset& charac
     
     // To be consistent with VisiblePosition, we should consider the case that current node end to next node start counts 1 offset.
     RefPtr nextNode = next.node;
-    if (!ignoreNextNodeStart && !next.isNull() && !isReplacedNodeOrBR(nextNode.get()) && nextNode != node) {
+    if (!ignoreNextNodeStart && !next.isNull() && !isReplacedNodeOrBR(*nextNode) && nextNode != node) {
         if (auto range = rangeForUnorderedCharacterOffsets(characterOffset, next)) {
             auto length = characterCount(*range);
             if (length > nextOffset - characterOffset.offset)
@@ -3671,11 +3734,12 @@ CharacterOffset AXObjectCache::previousBoundary(const CharacterOffset& character
     auto& node = (it.atEnd() ? searchRange : it.range()).start.container.get();
 
     // SimplifiedBackwardsTextIterator ignores replaced elements.
-    RefPtr characterOffsetNode = characterOffset.node;
-    if (AccessibilityObject::replacedNodeNeedsCharacter(characterOffsetNode.get()))
-        return characterOffsetForNodeAndOffset(*characterOffsetNode, 0);
+    // Subsequent *characterOffset.node dereferences are safe because we called CharacterOffset.isNull()
+    // at the top of the method.
+    if (AccessibilityObject::replacedNodeNeedsCharacter(*characterOffset.node))
+        return characterOffsetForNodeAndOffset(*characterOffset.node, 0);
     Node* nextSibling = node.nextSibling();
-    if (&node != characterOffsetNode && AccessibilityObject::replacedNodeNeedsCharacter(nextSibling))
+    if (&node != characterOffset.node.get() && nextSibling && AccessibilityObject::replacedNodeNeedsCharacter(*nextSibling))
         return startOrEndCharacterOffsetForRange(rangeForNodeContents(*nextSibling), false);
 
     if ((!suffixLength && node.isTextNode() && next <= node.length()) || (node.renderer() && node.renderer()->isBR() && !next)) {
@@ -3691,7 +3755,7 @@ CharacterOffset AXObjectCache::previousBoundary(const CharacterOffset& character
     // We don't want to go to the previous node if the node is at the start of a new line.
     if (characterCount < 0 && (characterOffsetNodeIsBR(characterOffset) || string[string.size() - suffixLength - 1] == '\n'))
         characterCount = 0;
-    return characterOffsetForNodeAndOffset(*characterOffsetNode, characterCount, TraverseOptionIncludeStart);
+    return characterOffsetForNodeAndOffset(*characterOffset.node, characterCount, TraverseOptionIncludeStart);
 }
 
 CharacterOffset AXObjectCache::startCharacterOffsetOfParagraph(const CharacterOffset& characterOffset, EditingBoundaryCrossingRule boundaryCrossingRule)
@@ -3984,7 +4048,7 @@ static void filterVectorPairForRemoval(const Vector<std::pair<T, T>>& list, cons
 }
     
 template<typename T, typename U>
-static void filterMapForRemoval(const HashMap<T, U>& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
+static void filterMapForRemoval(const UncheckedKeyHashMap<T, U>& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
 {
     for (auto& entry : list)
         conditionallyAddNodeToFilterList(entry.key, document, nodesToRemove);
@@ -4175,7 +4239,7 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
     AXLOGDeferredCollection("RecomputeIsIgnoredList"_s, m_deferredRecomputeIsIgnoredList);
     m_deferredRecomputeIsIgnoredList.forEach([this] (auto& element) {
         if (auto* renderer = element.renderer())
-            recomputeIsIgnored(renderer);
+            recomputeIsIgnored(*renderer);
     });
     m_deferredRecomputeIsIgnoredList.clear();
 
@@ -4325,29 +4389,29 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityO
         DependentProperties = 1 << 1,
         Node = 1 << 2,
     };
-    HashMap<AXID, OptionSet<Field>> updatedObjects;
+    UncheckedKeyHashMap<AXID, OptionSet<Field>> updatedObjects;
     auto updateChildren = [&] (const Ref<AccessibilityObject>& axObject) {
-        auto updatedFields = updatedObjects.get(axObject->objectID());
+        auto updatedFields = updatedObjects.get(*axObject->objectID());
         if (!updatedFields.contains(Field::Children)) {
             updatedFields.add(Field::Children);
-            updatedObjects.set(axObject->objectID(), updatedFields);
-            tree->queueNodeUpdate(axObject->objectID(), NodeUpdateOptions::childrenUpdate());
+            updatedObjects.set(*axObject->objectID(), updatedFields);
+            tree->queueNodeUpdate(*axObject->objectID(), NodeUpdateOptions::childrenUpdate());
         }
     };
     auto updateDependentProperties = [&] (const Ref<AccessibilityObject>& axObject) {
-        auto updatedFields = updatedObjects.get(axObject->objectID());
+        auto updatedFields = updatedObjects.get(*axObject->objectID());
         if (!updatedFields.contains(Field::DependentProperties)) {
             updatedFields.add(Field::DependentProperties);
-            updatedObjects.set(axObject->objectID(), updatedFields);
+            updatedObjects.set(*axObject->objectID(), updatedFields);
             tree->updateDependentProperties(axObject.get());
         }
     };
     auto updateNode = [&] (const Ref<AccessibilityObject>& axObject) {
-        auto updatedFields = updatedObjects.get(axObject->objectID());
+        auto updatedFields = updatedObjects.get(*axObject->objectID());
         if (!updatedFields.contains(Field::Node)) {
             updatedFields.add(Field::Node);
-            updatedObjects.set(axObject->objectID(), updatedFields);
-            tree->queueNodeUpdate(axObject->objectID(), NodeUpdateOptions::nodeUpdate());
+            updatedObjects.set(*axObject->objectID(), updatedFields);
+            tree->queueNodeUpdate(*axObject->objectID(), NodeUpdateOptions::nodeUpdate());
         }
     };
 
@@ -4358,142 +4422,142 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityO
 
         switch (notification.second) {
         case AXAccessKeyChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::AccessKey });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::AccessKey });
             break;
         case AXAutofillTypeChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::ValueAutofillButtonType });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::ValueAutofillButtonType });
             break;
         case AXARIAColumnIndexChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::AXColumnIndex });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::AXColumnIndex });
             break;
         case AXARIARowIndexChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::AXRowIndex });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::AXRowIndex });
             break;
         case AXBrailleLabelChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::BrailleLabel });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::BrailleLabel });
             break;
         case AXBrailleRoleDescriptionChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::BrailleRoleDescription });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::BrailleRoleDescription });
             break;
         case AXCellSlotsChanged:
             ASSERT(notification.first->isTable());
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::CellSlots });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::CellSlots });
             break;
         case AXCheckedStateChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsChecked });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsChecked });
             break;
         case AXCurrentStateChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::CurrentState });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::CurrentState });
             break;
         case AXColumnCountChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::AXColumnCount });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::AXColumnCount });
             break;
         case AXColumnIndexChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::ColumnIndexRange, AXPropertyName::ColumnIndex } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::ColumnIndexRange, AXPropertyName::ColumnIndex } });
             break;
         case AXColumnSpanChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::ColumnIndexRange });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::ColumnIndexRange });
             break;
         case AXDisabledStateChanged:
             tree->updatePropertiesForSelfAndDescendants(notification.first.get(), { { AXPropertyName::CanSetFocusAttribute, AXPropertyName::IsEnabled } });
             break;
         case AXExpandedChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsExpanded });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsExpanded });
             break;
         case AXExtendedDescriptionChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::ExtendedDescription });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::AccessibilityText, AXPropertyName::ExtendedDescription } });
             break;
         case AXFocusableStateChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::CanSetFocusAttribute });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::CanSetFocusAttribute });
             break;
         case AXMaximumValueChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::MaxValueForRange, AXPropertyName::ValueForRange } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::MaxValueForRange, AXPropertyName::ValueForRange } });
             break;
         case AXMenuListItemSelected: {
             RefPtr ancestor = Accessibility::findAncestor<AccessibilityObject>(notification.first.get(), false, [] (const auto& object) {
                 return object.isMenu() || object.isMenuBar();
             });
             if (ancestor) {
-                tree->queueNodeUpdate(ancestor->objectID(), { AXPropertyName::SelectedChildren });
-                tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsSelected });
+                tree->queueNodeUpdate(*ancestor->objectID(), { AXPropertyName::SelectedChildren });
+                tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsSelected });
             }
             break;
         }
         case AXMinimumValueChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::MinValueForRange, AXPropertyName::ValueForRange } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::MinValueForRange, AXPropertyName::ValueForRange } });
             break;
         case AXNameChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::NameAttribute });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::NameAttribute });
             break;
         case AXOrientationChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::Orientation });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::Orientation });
             break;
         case AXPositionInSetChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::PosInSet, AXPropertyName::SupportsPosInSet } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::PosInSet, AXPropertyName::SupportsPosInSet } });
             break;
         case AXPopoverTargetChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::SupportsExpanded, AXPropertyName::IsExpanded } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::SupportsExpanded, AXPropertyName::IsExpanded } });
             break;
         case AXSelectedTextChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::SelectedTextRange });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::SelectedTextRange });
             break;
         case AXSortDirectionChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::SortDirection });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::SortDirection });
             break;
         case AXIdAttributeChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IdentifierAttribute });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IdentifierAttribute });
             break;
         case AXReadOnlyStatusChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::CanSetValueAttribute });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::CanSetValueAttribute });
             break;
         case AXRequiredStatusChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsRequired });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsRequired });
             break;
         case AXRoleDescriptionChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::RoleDescription });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::RoleDescription });
             break;
         case AXRowIndexChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::RowIndexRange, AXPropertyName::RowIndex } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::RowIndexRange, AXPropertyName::RowIndex } });
             break;
         case AXRowSpanChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::RowIndexRange });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::RowIndexRange });
             break;
         case AXCellScopeChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::CellScope, AXPropertyName::IsColumnHeader, AXPropertyName::IsRowHeader } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::CellScope, AXPropertyName::IsColumnHeader, AXPropertyName::IsRowHeader } });
             break;
         //  FIXME: Contrary to the name "AXSelectedCellsChanged", this notification can be posted on a cell
         //  who has changed selected state, not just on table or grid who has changed its selected cells.
         case AXSelectedCellsChanged:
         case AXSelectedStateChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsSelected });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsSelected });
             break;
         case AXSetSizeChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::SetSize, AXPropertyName::SupportsSetSize } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::SetSize, AXPropertyName::SupportsSetSize } });
             break;
         case AXTableHeadersChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::ColumnHeaders });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::ColumnHeaders });
             break;
         case AXTextCompositionChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::TextInputMarkedTextMarkerRange });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::TextInputMarkedTextMarkerRange });
             break;
         case AXTextUnderElementChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::AccessibilityText, AXPropertyName::Title } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::AccessibilityText, AXPropertyName::Title } });
             if (notification.first->isAccessibilityLabelInstance())
-                tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::StringValue });
+                tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::StringValue });
             break;
 #if ENABLE(AX_THREAD_TEXT_APIS)
         case AXTextRunsChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::TextRuns });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::TextRuns });
             break;
 #endif
         case AXURLChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { { AXPropertyName::URL, AXPropertyName::InternalLinkElement } });
+            tree->queueNodeUpdate(*notification.first->objectID(), { { AXPropertyName::URL, AXPropertyName::InternalLinkElement } });
             break;
         case AXKeyShortcutsChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::KeyShortcuts });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::KeyShortcuts });
             break;
         case AXVisibilityChanged:
-            tree->queueNodeUpdate(notification.first->objectID(), { AXPropertyName::IsVisible });
+            tree->queueNodeUpdate(*notification.first->objectID(), { AXPropertyName::IsVisible });
             break;
         case AXActiveDescendantChanged:
         case AXRoleChanged:
@@ -4547,7 +4611,7 @@ void AXObjectCache::updateIsolatedTree(AccessibilityObject* axObject, AXProperty
 void AXObjectCache::updateIsolatedTree(AccessibilityObject& axObject, AXPropertyName property) const
 {
     if (RefPtr tree = AXIsolatedTree::treeForPageID(m_pageID))
-        tree->queueNodeUpdate(axObject.objectID(), { property });
+        tree->queueNodeUpdate(*axObject.objectID(), { property });
 }
 
 void AXObjectCache::startUpdateTreeSnapshotTimer()
@@ -4560,14 +4624,14 @@ void AXObjectCache::onPaint(const RenderObject& renderer, IntRect&& paintRect) c
 {
     if (!m_pageID)
         return;
-    m_geometryManager->cacheRect(m_renderObjectMapping.get(const_cast<RenderObject*>(&renderer)), WTFMove(paintRect));
+    m_geometryManager->cacheRect(m_renderObjectMapping.getOptional(const_cast<RenderObject&>(renderer)), WTFMove(paintRect));
 }
 
 void AXObjectCache::onPaint(const Widget& widget, IntRect&& paintRect) const
 {
     if (!m_pageID)
         return;
-    m_geometryManager->cacheRect(m_widgetObjectMapping.get(const_cast<Widget*>(&widget)), WTFMove(paintRect));
+    m_geometryManager->cacheRect(m_widgetObjectMapping.getOptional(const_cast<Widget&>(widget)), WTFMove(paintRect));
 }
 #endif // ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 
@@ -4576,11 +4640,12 @@ void AXObjectCache::deferRecomputeIsIgnoredIfNeeded(Element* element)
     if (!nodeAndRendererAreValid(element))
         return;
     
-    if (rendererNeedsDeferredUpdate(*element->renderer())) {
+    SingleThreadWeakRef<RenderObject> renderer = *element->renderer();
+    if (rendererNeedsDeferredUpdate(renderer.get())) {
         m_deferredRecomputeIsIgnoredList.add(*element);
         return;
     }
-    recomputeIsIgnored(element->renderer());
+    recomputeIsIgnored(renderer.get());
 }
 
 void AXObjectCache::deferRecomputeIsIgnored(Element* element)
@@ -4658,44 +4723,9 @@ void AXObjectCache::deferTextReplacementNotificationForTextControl(HTMLTextFormC
     m_deferredTextFormControlValue.add(formControlElement, previousValue);
 }
 
-bool isNodeAriaVisible(Node* node)
+bool isNodeFocused(Node& node)
 {
-    return node ? isNodeAriaVisible(*node) : false;
-}
-
-bool isNodeAriaVisible(Node& node)
-{
-    // If an element is focused, it should not be hidden.
-    if (RefPtr element = dynamicDowncast<Element>(node); element && element->focused())
-        return true;
-
-    // ARIA Node visibility is controlled by aria-hidden
-    //  1) if aria-hidden=true, the whole subtree is hidden
-    //  2) if aria-hidden=false, and the object is rendered, there's no effect
-    //  3) if aria-hidden=false, and the object is NOT rendered, then it must have
-    //     aria-hidden=false on each parent until it gets to a rendered object
-    //  3b) a text node inherits a parents aria-hidden value
-    bool requiresAriaHiddenFalse = !node.renderer();
-    bool ariaHiddenFalsePresent = false;
-    for (auto* testNode = &node; testNode; testNode = testNode->parentNode()) {
-        if (RefPtr element = dynamicDowncast<Element>(*testNode)) {
-            const auto& ariaHiddenValue = element->attributeWithoutSynchronization(aria_hiddenAttr);
-            if (equalLettersIgnoringASCIICase(ariaHiddenValue, "true"_s))
-                return false;
-
-            // We should break early when it gets to the body.
-            if (testNode->hasTagName(bodyTag))
-                break;
-
-            bool ariaHiddenFalse = equalLettersIgnoringASCIICase(ariaHiddenValue, "false"_s);
-            if (!testNode->renderer() && !ariaHiddenFalse)
-                return false;
-            if (!ariaHiddenFalsePresent && ariaHiddenFalse)
-                ariaHiddenFalsePresent = true;
-        }
-    }
-    
-    return !requiresAriaHiddenFalse || ariaHiddenFalsePresent;
+    return is<Element>(node) && uncheckedDowncast<Element>(node).focused();
 }
 
 // DOM component of hidden definition.
@@ -4907,8 +4937,8 @@ bool AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject
             childrenChanged(targetParent.get());
     }
 
-    AXID originID = origin->objectID();
-    AXID targetID = target->objectID();
+    AXID originID = *origin->objectID();
+    AXID targetID = *target->objectID();
     auto relationsIterator = m_relations.find(originID);
     if (relationsIterator == m_relations.end()) {
         // No relations for this object, add the first one.
@@ -4950,9 +4980,9 @@ bool AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
         if (auto tree = AXIsolatedTree::treeForPageID(m_pageID)) {
-            if (origin && origin->accessibilityIsIgnored())
+            if (origin && origin->isIgnored())
                 deferAddUnconnectedNode(*origin);
-            if (target && target->accessibilityIsIgnored())
+            if (target && target->isIgnored())
                 deferAddUnconnectedNode(*target);
         }
 #endif
@@ -4994,7 +5024,7 @@ bool AXObjectCache::removeRelation(Element& origin, AXRelationType relationType)
     if (!object)
         return false;
 
-    auto relationsIterator = m_relations.find(object->objectID());
+    auto relationsIterator = m_relations.find(*object->objectID());
     if (relationsIterator == m_relations.end())
         return false;
 
@@ -5004,7 +5034,7 @@ bool AXObjectCache::removeRelation(Element& origin, AXRelationType relationType)
     auto symmetric = symmetricRelation(relationType);
     if (symmetric != AXRelationType::None) {
         for (AXID targetID : targetIDs)
-            removeRelationByID(targetID, object->objectID(), symmetric);
+            removeRelationByID(targetID, *object->objectID(), symmetric);
     }
 
     if (removedRelation && relationType == AXRelationType::OwnerFor)
@@ -5155,7 +5185,7 @@ void AXObjectCache::relationsNeedUpdate(bool needUpdate)
         dirtyIsolatedTreeRelations();
 }
 
-HashMap<AXID, AXRelations> AXObjectCache::relations()
+UncheckedKeyHashMap<AXID, AXRelations> AXObjectCache::relations()
 {
     updateRelationsIfNeeded();
     return m_relations;
@@ -5172,7 +5202,7 @@ bool AXObjectCache::isDescendantOfRelatedNode(Node& node)
     auto& targetIDs = relationTargetIDs();
     for (auto* parent = node.parentNode(); parent; parent = parent->parentNode()) {
         auto* object = get(*parent);
-        if (object && (m_relations.contains(object->objectID()) || targetIDs.contains(object->objectID())))
+        if (object && (m_relations.contains(*object->objectID()) || targetIDs.contains(*object->objectID())))
             return true;
     }
     return false;
@@ -5183,7 +5213,7 @@ std::optional<ListHashSet<AXID>> AXObjectCache::relatedObjectIDsFor(const AXCore
     if (updateRelations == UpdateRelations::Yes)
         updateRelationsIfNeeded();
 
-    auto relationsIterator = m_relations.find(object.objectID());
+    auto relationsIterator = m_relations.find(*object.objectID());
     if (relationsIterator == m_relations.end())
         return std::nullopt;
 
@@ -5252,14 +5282,14 @@ void AXObjectCache::selectedTextRangeTimerFired()
 
     m_selectedTextRangeTimer.stop();
 
-    if (m_lastDebouncedTextRangeObject.isValid()) {
-        for (auto* axObject = objectForID(m_lastDebouncedTextRangeObject); axObject; axObject = axObject->parentObject()) {
+    if (m_lastDebouncedTextRangeObject) {
+        for (auto* axObject = objectForID(*m_lastDebouncedTextRangeObject); axObject; axObject = axObject->parentObject()) {
             if (axObject->isTextControl())
                 postNotification(*axObject, AXSelectedTextChanged);
         }
     }
 
-    m_lastDebouncedTextRangeObject = { };
+    m_lastDebouncedTextRangeObject = std::nullopt;
 }
 
 void AXObjectCache::updateTreeSnapshotTimerFired()

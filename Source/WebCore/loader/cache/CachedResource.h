@@ -91,6 +91,7 @@ public:
         SVGFontResource,
         MediaResource,
 #if ENABLE(MODEL_ELEMENT)
+        EnvironmentMapResource,
         ModelResource,
 #endif
         RawResource,
@@ -309,7 +310,7 @@ public:
     WEBCORE_EXPORT void tryReplaceEncodedData(SharedBuffer&);
 #endif
 
-    ResourceLoaderIdentifier identifierForLoadWithoutResourceLoader() const { return m_identifierForLoadWithoutResourceLoader; }
+    std::optional<ResourceLoaderIdentifier> identifierForLoadWithoutResourceLoader() const { return m_identifierForLoadWithoutResourceLoader; }
 
     void setOriginalRequest(std::unique_ptr<ResourceRequest>&& originalRequest) { m_originalRequest = WTFMove(originalRequest); }
     const std::unique_ptr<ResourceRequest>& originalRequest() const { return m_originalRequest; }
@@ -390,7 +391,7 @@ private:
     PAL::SessionID m_sessionID;
     RefPtr<const CookieJar> m_cookieJar;
     WallTime m_responseTimestamp { WallTime::now() };
-    ResourceLoaderIdentifier m_identifierForLoadWithoutResourceLoader;
+    Markable<ResourceLoaderIdentifier> m_identifierForLoadWithoutResourceLoader;
 
     SingleThreadWeakHashMap<CachedResourceClient, std::unique_ptr<Callback>> m_clientsAwaitingCallback;
 
@@ -463,6 +464,7 @@ inline bool CachedResource::isMainOrMediaOrIconOrRawResource() const
     return type() == Type::MainResource
         || type() == Type::MediaResource
 #if ENABLE(MODEL_ELEMENT)
+        || type() == Type::EnvironmentMapResource
         || type() == Type::ModelResource
 #endif
         || type() == Type::Icon

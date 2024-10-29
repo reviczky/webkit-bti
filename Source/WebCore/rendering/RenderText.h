@@ -2,6 +2,7 @@
  * (C) 1999 Lars Knoll (knoll@kde.org)
  * (C) 2000 Dirk Mueller (mueller@kde.org)
  * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2013 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -74,16 +75,16 @@ public:
 
     virtual String originalText() const;
 
-    void extractTextBox(LegacyInlineTextBox& box) { m_lineBoxes.extract(box); }
-    void attachTextBox(LegacyInlineTextBox& box) { m_lineBoxes.attach(box); }
-    void removeTextBox(LegacyInlineTextBox& box) { m_lineBoxes.remove(box); }
+    void extractTextBox(LegacyInlineTextBox& box) { m_legacyLineBoxes.extract(box); }
+    void attachTextBox(LegacyInlineTextBox& box) { m_legacyLineBoxes.attach(box); }
+    void removeTextBox(LegacyInlineTextBox& box) { m_legacyLineBoxes.remove(box); }
 
     const String& text() const { return m_text; }
     String textWithoutConvertingBackslashToYenSymbol() const;
 
-    LegacyInlineTextBox* createInlineTextBox() { return m_lineBoxes.createAndAppendLineBox(*this); }
-    void dirtyLineBoxes(bool fullLayout);
-    void deleteLineBoxes();
+    LegacyInlineTextBox* createInlineTextBox() { return m_legacyLineBoxes.createAndAppendLineBox(*this); }
+    void dirtyLegacyLineBoxes(bool fullLayout);
+    void deleteLegacyLineBoxes();
 
     void boundingRects(Vector<LayoutRect>&, const LayoutPoint& accumulatedOffset) const final;
     Vector<IntRect> absoluteRectsForRange(unsigned startOffset = 0, unsigned endOffset = UINT_MAX, bool useSelectionHeight = false, bool* wasFixed = nullptr) const;
@@ -97,6 +98,8 @@ public:
     Vector<FloatQuad> absoluteQuadsClippedToEllipsis() const;
 
     Position positionForPoint(const LayoutPoint&, HitTestSource) final;
+
+    bool hasEmptyText() const { return m_text.isEmpty(); }
 
     UChar characterAt(unsigned) const;
     unsigned length() const final { return text().length(); }
@@ -144,8 +147,7 @@ public:
     inline LayoutUnit marginLeft() const;
     inline LayoutUnit marginRight() const;
 
-    LegacyInlineTextBox* firstTextBox() const { return m_lineBoxes.first(); }
-    LegacyInlineTextBox* lastTextBox() const { return m_lineBoxes.last(); }
+    LegacyInlineTextBox* firstLegacyTextBox() const { return m_legacyLineBoxes.first(); }
 
     int caretMinOffset() const final;
     int caretMaxOffset() const final;
@@ -168,7 +170,7 @@ public:
 
     bool canUseSimpleFontCodePath() const { return m_canUseSimpleFontCodePath; }
 
-    void removeAndDestroyTextBoxes();
+    void removeAndDestroyLegacyTextBoxes();
 
     virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
@@ -213,7 +215,7 @@ protected:
 
     virtual void setTextInternal(const String&, bool force);
 
-    RenderTextLineBoxes m_lineBoxes;
+    RenderTextLineBoxes m_legacyLineBoxes;
 
 private:
     RenderText(Type, Node&, const String&);

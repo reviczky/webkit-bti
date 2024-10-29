@@ -58,7 +58,7 @@ private:
 
     void renderBuffersWereRecreated(NSArray<IOSurface *> *renderBuffers);
     void onSubmittedWorkScheduled(Function<void()>&&);
-    RetainPtr<CGImageRef> getTextureAsNativeImage(uint32_t bufferIndex) final;
+    RetainPtr<CGImageRef> getTextureAsNativeImage(uint32_t bufferIndex, bool& isIOSurfaceSupportedFormat) final;
 
     NSArray<IOSurface *> *m_ioSurfaces { nil };
     struct RenderBuffer {
@@ -75,6 +75,7 @@ private:
     std::optional<const MachSendRight> m_webProcessID;
 #endif
     WGPUColorSpace m_colorSpace { WGPUColorSpace::SRGB };
+    WGPUToneMappingMode m_toneMappingMode { WGPUToneMappingMode_Standard };
     WGPUCompositeAlphaMode m_alphaMode { WGPUCompositeAlphaMode_Premultiplied };
 };
 

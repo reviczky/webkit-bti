@@ -35,6 +35,8 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace IPC {
 
 enum class MessageFlags : uint8_t;
@@ -66,9 +68,6 @@ public:
     void setShouldMaintainOrderingWithAsyncMessages();
     bool isAllowedWhenWaitingForSyncReply() const { return messageAllowedWhenWaitingForSyncReply(messageName()) || isFullySynchronousModeForTesting(); }
     bool isAllowedWhenWaitingForUnboundedSyncReply() const { return messageAllowedWhenWaitingForUnboundedSyncReply(messageName()); }
-#if ENABLE(IPC_TESTING_API)
-    void setSyncMessageDeserializationFailure();
-#endif
 
     void wrapForTesting(UniqueRef<Encoder>&&);
 
@@ -88,7 +87,7 @@ public:
         return *this;
     }
 
-    std::span<const uint8_t> span() const { return { m_buffer, m_bufferSize }; }
+    std::span<const uint8_t> span() const { return m_capacityBuffer.first(m_bufferSize); }
 
     void addAttachment(Attachment&&);
     Vector<Attachment> releaseAttachments();
@@ -97,7 +96,7 @@ public:
     static constexpr bool isIPCEncoder = true;
 
 private:
-    uint8_t* grow(size_t alignment, size_t);
+    std::span<uint8_t> grow(size_t alignment, size_t);
 
     bool hasAttachments() const;
 
@@ -105,16 +104,15 @@ private:
     const OptionSet<MessageFlags>& messageFlags() const;
     OptionSet<MessageFlags>& messageFlags();
 
+    void freeBufferIfNecessary();
+
     MessageName m_messageName;
     uint64_t m_destinationID;
 
-    uint8_t m_inlineBuffer[512];
+    std::array<uint8_t, 512> m_inlineBuffer;
 
-    uint8_t* m_buffer { m_inlineBuffer };
-    uint8_t* m_bufferPointer { m_inlineBuffer };
-    
+    std::span<uint8_t> m_capacityBuffer { m_inlineBuffer };
     size_t m_bufferSize { 0 };
-    size_t m_bufferCapacity { sizeof(m_inlineBuffer) };
 
     Vector<Attachment> m_attachments;
 };
@@ -126,8 +124,8 @@ inline void Encoder::encodeSpan(std::span<T, Extent> span)
     constexpr size_t alignment = alignof(T);
     ASSERT(!(reinterpret_cast<uintptr_t>(bytes.data()) % alignment));
 
-    uint8_t* buffer = grow(alignment, bytes.size());
-    memcpy(buffer, bytes.data(), bytes.size());
+    auto buffer = grow(alignment, bytes.size());
+    memcpySpan(buffer, bytes);
 }
 
 template<typename T>
@@ -138,3 +136,5 @@ inline void Encoder::encodeObject(const T& object)
 }
 
 } // namespace IPC
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

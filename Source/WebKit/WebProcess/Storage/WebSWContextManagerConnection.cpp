@@ -177,12 +177,14 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         if (effectiveUserAgent.isNull())
             effectiveUserAgent = m_userAgent;
 
-        auto loaderClientForMainFrame = makeUniqueRef<RemoteWorkerFrameLoaderClient>(m_webPageProxyID, m_pageID, effectiveUserAgent);
-        if (contextData.serviceWorkerPageIdentifier)
-            loaderClientForMainFrame->setServiceWorkerPageIdentifier(*contextData.serviceWorkerPageIdentifier);
-        pageConfiguration.clientCreatorForMainFrame = CompletionHandler<UniqueRef<WebCore::LocalFrameLoaderClient>(WebCore::LocalFrame&)> { [client = WTFMove(loaderClientForMainFrame)] (auto&) mutable {
-            return WTFMove(client);
-        } };
+        pageConfiguration.mainFrameCreationParameters = PageConfiguration::LocalMainFrameCreationParameters {
+            CompletionHandler<UniqueRef<WebCore::LocalFrameLoaderClient>(WebCore::LocalFrame&, WebCore::FrameLoader&)> { [webPageProxyID = m_webPageProxyID, pageID = m_pageID, effectiveUserAgent, serviceWorkerPageIdentifier = contextData.serviceWorkerPageIdentifier] (auto&, auto& frameLoader) mutable {
+                auto client = makeUniqueRefWithoutRefCountedCheck<RemoteWorkerFrameLoaderClient>(frameLoader, webPageProxyID, pageID, effectiveUserAgent);
+                if (serviceWorkerPageIdentifier)
+                    client->setServiceWorkerPageIdentifier(*serviceWorkerPageIdentifier);
+                return client;
+            } }, SandboxFlags { }
+        };
 
 #if !RELEASE_LOG_DISABLED
         auto serviceWorkerIdentifier = contextData.serviceWorkerIdentifier;

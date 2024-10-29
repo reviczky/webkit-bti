@@ -49,9 +49,7 @@ class HTMLLinkElement final : public HTMLElement, public CachedStyleSheetClient,
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(HTMLLinkElement);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(HTMLLinkElement);
 public:
-    using HTMLElement::weakPtrFactory;
-    using HTMLElement::WeakValueType;
-    using HTMLElement::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(HTMLElement);
 
     static Ref<HTMLLinkElement> create(const QualifiedName&, Document&, bool createdByParser);
     virtual ~HTMLLinkElement();
@@ -110,7 +108,9 @@ private:
     static void processCallback(Node*);
     void clearSheet();
 
+    void potentiallyBlockRendering();
     void unblockRendering();
+    bool isImplicitlyPotentiallyRenderBlocking() const;
 
     InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) final;
     void didFinishInsertingNode() final;
@@ -141,7 +141,7 @@ private:
 
     String debugDescription() const final;
 
-    enum PendingSheetType : uint8_t { Unknown, ActiveSheet, InactiveSheet };
+    enum class PendingSheetType : uint8_t { Unknown, Active, Inactive };
     void addPendingSheet(PendingSheetType);
 
     void removePendingSheet();

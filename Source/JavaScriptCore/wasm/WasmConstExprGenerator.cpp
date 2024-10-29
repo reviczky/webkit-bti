@@ -140,6 +140,7 @@ public:
 
     using ExpressionType = ConstExprValue;
     using ResultList = Vector<ExpressionType, 8>;
+    using ArgumentList = Vector<ExpressionType, 8>;
 
     // Structured blocks should not appear in the constant expression except
     // for a dummy top-level block from parseBody() that cannot be jumped to.
@@ -170,12 +171,14 @@ public:
     using ControlStack = FunctionParser<ConstExprGenerator>::ControlStack;
     using Stack = FunctionParser<ConstExprGenerator>::Stack;
     using TypedExpression = FunctionParser<ConstExprGenerator>::TypedExpression;
+    using CatchHandler = FunctionParser<ConstExprGenerator>::CatchHandler;
 
     enum class Mode : uint8_t {
         Validate,
         Evaluate
     };
 
+    static constexpr bool shouldFuseBranchCompare = false;
     static constexpr bool tierSupportsSIMD = true;
     static ExpressionType emptyExpression() { return 0; };
 
@@ -209,7 +212,7 @@ public:
     }
 
     ExpressionType result() const { return m_result; }
-    const Vector<uint32_t>& declaredFunctions() const { return m_declaredFunctions; }
+    const Vector<FunctionSpaceIndex>& declaredFunctions() const { return m_declaredFunctions; }
     void setParser(FunctionParser<ConstExprGenerator>* parser) { m_parser = parser; };
 
     bool addArguments(const TypeDefinition&) { RELEASE_ASSERT_NOT_REACHED(); }
@@ -227,6 +230,7 @@ public:
         case TypeKind::Structref:
         case TypeKind::Arrayref:
         case TypeKind::Funcref:
+        case TypeKind::Exn:
         case TypeKind::Externref:
         case TypeKind::Eqref:
         case TypeKind::Anyref:
@@ -346,7 +350,7 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addArrayNewFixed(uint32_t typeIndex, Vector<ExpressionType>& args, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addArrayNewFixed(uint32_t typeIndex, ArgumentList& args, ExpressionType& result)
     {
         WASM_PARSER_FAIL_IF(!Options::useWasmGC(), "Wasm GC is not enabled"_s);
 
@@ -402,7 +406,7 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addStructNew(uint32_t typeIndex, Vector<ExpressionType>& args, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addStructNew(uint32_t typeIndex, ArgumentList& args, ExpressionType& result)
     {
         WASM_PARSER_FAIL_IF(!Options::useWasmGC(), "Wasm GC is not enabled"_s);
 
@@ -619,7 +623,7 @@ public:
     PartialResult WARN_UNUSED_RETURN addRefAsNonNull(ExpressionType, ExpressionType&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addRefEq(ExpressionType, ExpressionType, ExpressionType&) CONST_EXPR_STUB
 
-    PartialResult WARN_UNUSED_RETURN addRefFunc(uint32_t index, ExpressionType& result)
+    PartialResult WARN_UNUSED_RETURN addRefFunc(FunctionSpaceIndex index, ExpressionType& result)
     {
         if (m_mode == Mode::Evaluate) {
             VM& vm = m_instance->vm();
@@ -643,19 +647,25 @@ public:
     PartialResult WARN_UNUSED_RETURN addElse(ControlData&, Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addElseToUnreachable(ControlData&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addTry(BlockSignature, Stack&, ControlType&, Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addTryTable(BlockSignature, Stack&, const Vector<CatchHandler>&, ControlType&, Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addCatch(unsigned, const TypeDefinition&, Stack&, ControlType&, ResultList&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addCatchToUnreachable(unsigned, const TypeDefinition&, ControlType&, ResultList&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addCatchAll(Stack&, ControlType&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addCatchAllToUnreachable(ControlType&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addDelegate(ControlType&, ControlType&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addDelegateToUnreachable(ControlType&, ControlType&) CONST_EXPR_STUB
-    PartialResult WARN_UNUSED_RETURN addThrow(unsigned, Vector<ExpressionType>&, Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addThrow(unsigned, ArgumentList&, Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addRethrow(unsigned, ControlType&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addThrowRef(ExpressionType, Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addReturn(const ControlData&, const Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addBranch(ControlData&, ExpressionType, Stack&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addBranchNull(ControlType&, ExpressionType, Stack&, bool, ExpressionType&) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addBranchCast(ControlType&, ExpressionType, Stack&, bool, int32_t, bool) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addSwitch(ExpressionType, const Vector<ControlData*>&, ControlData&, Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addFusedBranchCompare(OpType, ControlType&, ExpressionType, const Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addFusedBranchCompare(OpType, ControlType&, ExpressionType, ExpressionType, const Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addFusedIfCompare(OpType, ExpressionType, BlockSignature, Stack&, ControlType&, Stack&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addFusedIfCompare(OpType, ExpressionType, ExpressionType, BlockSignature, Stack&, ControlType&, Stack&) CONST_EXPR_STUB
 
     PartialResult WARN_UNUSED_RETURN endBlock(ControlEntry& entry, Stack& expressionStack)
     {
@@ -676,9 +686,9 @@ public:
         return { };
     }
 
-    PartialResult WARN_UNUSED_RETURN addCall(unsigned, const TypeDefinition&, Vector<ExpressionType>&, ResultList&, CallType = CallType::Call) CONST_EXPR_STUB
-    PartialResult WARN_UNUSED_RETURN addCallIndirect(unsigned, const TypeDefinition&, Vector<ExpressionType>&, ResultList&, CallType = CallType::Call) CONST_EXPR_STUB
-    PartialResult WARN_UNUSED_RETURN addCallRef(const TypeDefinition&, Vector<ExpressionType>&, ResultList&) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addCall(unsigned, const TypeDefinition&, ArgumentList&, ResultList&, CallType = CallType::Call) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addCallIndirect(unsigned, const TypeDefinition&, ArgumentList&, ResultList&, CallType = CallType::Call) CONST_EXPR_STUB
+    PartialResult WARN_UNUSED_RETURN addCallRef(const TypeDefinition&, ArgumentList&, ResultList&, CallType = CallType::Call) CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addUnreachable() CONST_EXPR_STUB
     PartialResult WARN_UNUSED_RETURN addCrash() CONST_EXPR_STUB
     bool usesSIMD() { return false; }
@@ -730,7 +740,7 @@ private:
     const ModuleInformation& m_info;
     JSWebAssemblyInstance* m_instance { nullptr };
     bool m_shouldError = false;
-    Vector<uint32_t> m_declaredFunctions;
+    Vector<FunctionSpaceIndex> m_declaredFunctions;
 };
 
 Expected<void, String> parseExtendedConstExpr(std::span<const uint8_t> source, size_t offsetInSource, size_t& offset, ModuleInformation& info, Type expectedType)

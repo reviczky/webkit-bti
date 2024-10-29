@@ -310,8 +310,10 @@ public:
 
     void add64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
     {
-        m_assembler.add_S(destLo, op1Lo, op2Lo);
+        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        m_assembler.add_S(scratch, op1Lo, op2Lo);
         m_assembler.adc(destHi, op1Hi, op2Hi);
+        move(scratch, destLo);
     }
 
     void and16(Address src, RegisterID dest)
@@ -384,6 +386,14 @@ public:
     void lshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
         m_assembler.lsl(dest, src, imm.m_value & 0x1f);
+    }
+
+    void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        // Clamp the shift to the range 0..31
+        m_assembler.ARM_and(dest, shiftAmount, ARMThumbImmediate::makeEncodedImm(0x1f));
+        move(imm, getCachedDataTempRegisterIDAndInvalidate());
+        m_assembler.lsl(dest, dataTempRegister, dest);
     }
 
     void lshift32(RegisterID shiftAmount, RegisterID dest)
@@ -477,6 +487,13 @@ public:
         load32(setupArmAddress(dest), dataTempRegister);
         or32(src, dataTempRegister);
         store32(dataTempRegister, Address(addressTempRegister));
+    }
+
+    void or32(RegisterID src, Address dest)
+    {
+        load32(dest, dataTempRegister);
+        or32(src, dataTempRegister);
+        store32(dataTempRegister, dest);
     }
 
     void or32(TrustedImm32 imm, AbsoluteAddress address)
@@ -696,8 +713,10 @@ public:
 
     void sub64(RegisterID leftHi, RegisterID leftLo, RegisterID rightHi, RegisterID rightLo, RegisterID destHi, RegisterID destLo)
     {
-        m_assembler.sub_S(destLo, leftLo, rightLo);
+        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        m_assembler.sub_S(scratch, leftLo, rightLo);
         m_assembler.sbc(destHi, leftHi, rightHi);
+        move(scratch, destLo);
     }
 
     void xor32(RegisterID op1, RegisterID op2, RegisterID dest)
@@ -1551,6 +1570,30 @@ public:
     {
         if (src != dest)
             m_assembler.vmov(dest, src);
+    }
+
+    void move32ToFloat(TrustedImm32 imm, FPRegisterID dest)
+    {
+        if (!imm.m_value) {
+            moveZeroToFloat(dest);
+            return;
+        }
+        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+        move(imm, scratch);
+        move32ToFloat(scratch, dest);
+    }
+
+    void move64ToDouble(TrustedImm64 imm, FPRegisterID dest)
+    {
+        if (!imm.m_value) {
+            moveZeroToDouble(dest);
+            return;
+        }
+        RegisterID scratch1 = getCachedDataTempRegisterIDAndInvalidate();
+        RegisterID scratch2 = getCachedAddressTempRegisterIDAndInvalidate();
+        move(TrustedImm32(static_cast<uint32_t>(static_cast<uint64_t>(imm.m_value))), scratch1);
+        move(TrustedImm32(static_cast<uint32_t>(static_cast<uint64_t>(imm.m_value) >> 32)), scratch2);
+        move64ToDouble(scratch2, scratch1, dest);
     }
 
     void moveDoubleOrNop(FPRegisterID src, FPRegisterID dest)

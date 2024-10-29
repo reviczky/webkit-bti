@@ -50,8 +50,11 @@
 #include "RenderBlock.h"
 #include "Settings.h"
 #include <wtf/LoggerHelper.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FullscreenManager);
 
 using namespace HTMLNames;
 
@@ -67,7 +70,7 @@ FullscreenManager::~FullscreenManager() = default;
 
 Element* FullscreenManager::fullscreenElement() const
 {
-    for (auto& element : makeReversedRange(document().topLayerElements())) {
+    for (Ref element : makeReversedRange(document().topLayerElements())) {
         if (element->hasFullscreenFlag())
             return element.ptr();
     }
@@ -132,7 +135,7 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
     }
 
     // There is a previously-established user preference, security risk, or platform limitation.
-    if (!page() || !page()->settings().fullScreenEnabled()) {
+    if (!page() || !page()->isFullscreenManagerEnabled()) {
         handleError("Fullscreen API is disabled."_s, EmitErrorEvent::Yes, WTFMove(element), WTFMove(promise), WTFMove(completionHandler));
         return;
     }
@@ -230,7 +233,7 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
                 return;
             }
 
-            auto page = this->page();
+            RefPtr page = this->page();
             if (!page || (this->document().hidden() && mode != HTMLMediaElementEnums::VideoFullscreenModeInWindow) || m_pendingFullscreenElement != element.ptr() || !element->isConnected()) {
                 handleError("Invalid state when requesting fullscreen."_s, EmitErrorEvent::Yes, WTFMove(element), WTFMove(promise), WTFMove(completionHandler));
                 return;
@@ -420,23 +423,23 @@ void FullscreenManager::finishExitFullscreen(Document& currentDocument, ExitMode
 
     auto unfullscreenDocument = [](const Ref<Document>& document) {
         Vector<Ref<Element>> toRemove;
-        for (auto& element : document->topLayerElements()) {
+        for (Ref element : document->topLayerElements()) {
             if (!element->hasFullscreenFlag())
                 continue;
             clearFullscreenFlags(element);
             toRemove.append(element);
         }
-        for (auto& element : toRemove)
+        for (Ref element : toRemove)
             element->removeFromTopLayer();
     };
 
     auto exitDocuments = documentsToUnfullscreen(currentDocument);
-    for (auto& exitDocument : exitDocuments) {
+    for (Ref exitDocument : exitDocuments) {
         addDocumentToFullscreenChangeEventQueue(exitDocument);
         if (mode == ExitMode::Resize)
             unfullscreenDocument(exitDocument);
         else {
-            auto fullscreenElement = exitDocument->fullscreenManager().fullscreenElement();
+            RefPtr fullscreenElement = exitDocument->fullscreenManager().fullscreenElement();
             clearFullscreenFlags(*fullscreenElement);
             fullscreenElement->removeFromTopLayer();
         }
@@ -459,10 +462,6 @@ bool FullscreenManager::isFullscreenEnabled() const
 
 bool FullscreenManager::willEnterFullscreen(Element& element, HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
-#if !ENABLE(VIDEO)
-    UNUSED_PARAM(mode);
-#endif
-
     if (backForwardCacheState() != Document::NotInBackForwardCache) {
         ERROR_LOG(LOGIDENTIFIER, "Document in the BackForwardCache; bailing");
         return false;
@@ -489,7 +488,7 @@ bool FullscreenManager::willEnterFullscreen(Element& element, HTMLMediaElementEn
     }
 
     INFO_LOG(LOGIDENTIFIER);
-    ASSERT(page()->settings().fullScreenEnabled());
+    ASSERT(page()->isFullscreenManagerEnabled());
 
 #if ENABLE(VIDEO)
     if (RefPtr mediaElement = dynamicDowncast<HTMLMediaElement>(element))
@@ -753,7 +752,7 @@ void FullscreenManager::addDocumentToFullscreenChangeEventQueue(Document& docume
 bool FullscreenManager::isSimpleFullscreenDocument() const
 {
     bool foundFullscreenFlag = false;
-    for (auto& element : document().topLayerElements()) {
+    for (Ref element : document().topLayerElements()) {
         if (element->hasFullscreenFlag()) {
             if (foundFullscreenFlag)
                 return false;

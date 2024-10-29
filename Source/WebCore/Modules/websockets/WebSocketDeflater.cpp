@@ -34,14 +34,16 @@
 #include "Logging.h"
 #include <array>
 #include <wtf/CheckedArithmetic.h>
-#include <wtf/FastMalloc.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <zlib.h>
 
 namespace WebCore {
 
 static const int defaultMemLevel = 8;
 static const size_t bufferIncrementUnit = 4096;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSocketDeflater);
 
 WebSocketDeflater::WebSocketDeflater(int windowBits, ContextTakeOverMode contextTakeOverMode)
     : m_windowBits(windowBits)
@@ -129,6 +131,8 @@ void WebSocketDeflater::reset()
     if (m_contextTakeOverMode == DoNotTakeOverContext)
         deflateReset(m_stream.get());
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSocketInflater);
 
 WebSocketInflater::WebSocketInflater(int windowBits)
     : m_windowBits(windowBits)

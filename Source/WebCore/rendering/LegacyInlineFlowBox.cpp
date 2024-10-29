@@ -182,7 +182,7 @@ void LegacyInlineFlowBox::deleteLine()
 
 void LegacyInlineFlowBox::removeLineBoxFromRenderObject()
 {
-    downcast<RenderInline>(renderer()).lineBoxes().removeLineBox(this);
+    downcast<RenderInline>(renderer()).legacyLineBoxes().removeLineBox(this);
 }
 
 void LegacyInlineFlowBox::extractLine()
@@ -195,7 +195,7 @@ void LegacyInlineFlowBox::extractLine()
 
 void LegacyInlineFlowBox::extractLineBoxFromRenderObject()
 {
-    downcast<RenderInline>(renderer()).lineBoxes().extractLineBox(this);
+    downcast<RenderInline>(renderer()).legacyLineBoxes().extractLineBox(this);
 }
 
 void LegacyInlineFlowBox::attachLine()
@@ -208,7 +208,7 @@ void LegacyInlineFlowBox::attachLine()
 
 void LegacyInlineFlowBox::attachLineBoxToRenderObject()
 {
-    downcast<RenderInline>(renderer()).lineBoxes().attachLineBox(this);
+    downcast<RenderInline>(renderer()).legacyLineBoxes().attachLineBox(this);
 }
 
 void LegacyInlineFlowBox::adjustPosition(float dx, float dy)
@@ -229,7 +229,7 @@ inline void LegacyInlineFlowBox::addTextBoxVisualOverflow(LegacyInlineTextBox& t
     
     GlyphOverflowAndFallbackFontsMap::iterator it = textBoxDataMap.find(&textBox);
     GlyphOverflow* glyphOverflow = it == textBoxDataMap.end() ? nullptr : &it->value.second;
-    bool isFlippedLine = lineStyle.isFlippedLinesWritingMode();
+    bool isFlippedLine = lineStyle.writingMode().isLineInverted();
 
     auto topGlyphEdge = glyphOverflow ? (isFlippedLine ? glyphOverflow->bottom : glyphOverflow->top) : 0_lu;
     auto bottomGlyphEdge = glyphOverflow ? (isFlippedLine ? glyphOverflow->top : glyphOverflow->bottom) : 0_lu;
@@ -245,7 +245,7 @@ inline void LegacyInlineFlowBox::addTextBoxVisualOverflow(LegacyInlineTextBox& t
 
     if (auto markExistsAndIsAbove = RenderText::emphasisMarkExistsAndIsAbove(textBox.renderer(), lineStyle)) {
         LayoutUnit emphasisMarkHeight = lineStyle.fontCascade().emphasisMarkHeight(lineStyle.textEmphasisMarkString());
-        if (*markExistsAndIsAbove == !lineStyle.isFlippedLinesWritingMode())
+        if (*markExistsAndIsAbove == !lineStyle.writingMode().isBlockFlipped())
             topGlyphOverflow = std::min(topGlyphOverflow, -emphasisMarkHeight);
         else
             bottomGlyphOverflow = std::max(bottomGlyphOverflow, emphasisMarkHeight);

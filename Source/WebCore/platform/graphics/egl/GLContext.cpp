@@ -21,6 +21,7 @@
 
 #include "GraphicsContextGL.h"
 #include "Logging.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
@@ -35,6 +36,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GLContext);
 
 const char* GLContext::errorString(int statusCode)
 {
@@ -371,7 +374,6 @@ GLContext::~GLContext()
 {
     EGLDisplay display = m_display.eglDisplay();
     if (m_context) {
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
         eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         eglDestroyContext(display, m_context);
     }

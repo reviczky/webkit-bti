@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,13 +46,17 @@ enum class BlockType {
     Loop,
     TopLevel,
     Try,
+    TryTable,
     Catch,
 };
 
 enum class CatchKind {
-    Catch,
-    CatchAll,
+    Catch = 0x00,
+    CatchRef = 0x01,
+    CatchAll = 0x02,
+    CatchAllRef = 0x03,
 };
+OVERLOAD_RELATIONAL_OPERATORS_FOR_ENUM_CLASS_WITH_INTEGRALS(CatchKind);
 
 template<typename EnclosingStack, typename NewStack>
 void splitStack(BlockSignature signature, EnclosingStack& enclosingStack, NewStack& newStack)
@@ -86,6 +90,7 @@ struct FunctionParserTypes {
         }
 
         Type type() const { return m_type; }
+        void setType(Type type) { m_type = type; }
 
         ExpressionType& value() { return m_value; }
         ExpressionType value() const { return m_value; }
@@ -113,6 +118,15 @@ struct FunctionParserTypes {
     using ControlStack = Vector<ControlEntry, 16>;
 
     using ResultList = Vector<ExpressionType, 8>;
+
+    using ArgumentList = Vector<ExpressionType, 8>;
+
+    struct CatchHandler {
+        CatchKind type;
+        uint32_t tag;
+        const TypeDefinition* exceptionSignature;
+        ControlType* target;
+    };
 };
 
 template<typename Context>
@@ -127,6 +141,8 @@ public:
     using TypedExpression = typename FunctionParser::TypedExpression;
     using Stack = typename FunctionParser::Stack;
     using ResultList = typename FunctionParser::ResultList;
+    using ArgumentList = typename FunctionParser::ArgumentList;
+    using CatchHandler = typename FunctionParser::CatchHandler;
 
     FunctionParser(Context&, std::span<const uint8_t> function, const TypeDefinition&, const ModuleInformation&);
 
@@ -177,10 +193,16 @@ private:
     PartialResult WARN_UNUSED_RETURN parseBody();
     PartialResult WARN_UNUSED_RETURN parseExpression();
     PartialResult WARN_UNUSED_RETURN parseUnreachableExpression();
-    PartialResult WARN_UNUSED_RETURN unifyControl(Vector<ExpressionType>&, unsigned level);
-    PartialResult WARN_UNUSED_RETURN checkBranchTarget(const ControlType&);
+    PartialResult WARN_UNUSED_RETURN unifyControl(ArgumentList&, unsigned level);
     PartialResult WARN_UNUSED_RETURN checkLocalInitialized(uint32_t);
     PartialResult WARN_UNUSED_RETURN unify(const ControlType&);
+
+    enum BranchConditionalityTag {
+        Unconditional,
+        Conditional
+    };
+
+    PartialResult WARN_UNUSED_RETURN checkBranchTarget(const ControlType&, BranchConditionalityTag);
 
     PartialResult WARN_UNUSED_RETURN parseNestedBlocksEagerly(bool&);
     void switchToBlock(ControlType&&, Stack&&);
@@ -193,8 +215,10 @@ private:
 
     using UnaryOperationHandler = PartialResult (Context::*)(ExpressionType, ExpressionType&);
     PartialResult WARN_UNUSED_RETURN unaryCase(OpType, UnaryOperationHandler, Type returnType, Type operandType);
+    PartialResult WARN_UNUSED_RETURN unaryCompareCase(OpType, UnaryOperationHandler, Type returnType, Type operandType);
     using BinaryOperationHandler = PartialResult (Context::*)(ExpressionType, ExpressionType, ExpressionType&);
     PartialResult WARN_UNUSED_RETURN binaryCase(OpType, BinaryOperationHandler, Type returnType, Type lhsType, Type rhsType);
+    PartialResult WARN_UNUSED_RETURN binaryCompareCase(OpType, BinaryOperationHandler, Type returnType, Type lhsType, Type rhsType);
 
     PartialResult WARN_UNUSED_RETURN store(Type memoryType);
     PartialResult WARN_UNUSED_RETURN load(Type memoryType);
@@ -222,7 +246,7 @@ private:
 
     PartialResult WARN_UNUSED_RETURN parseIndexForLocal(uint32_t&);
     PartialResult WARN_UNUSED_RETURN parseIndexForGlobal(uint32_t&);
-    PartialResult WARN_UNUSED_RETURN parseFunctionIndex(uint32_t&);
+    PartialResult WARN_UNUSED_RETURN parseFunctionIndex(FunctionSpaceIndex&);
     PartialResult WARN_UNUSED_RETURN parseExceptionIndex(uint32_t&);
     PartialResult WARN_UNUSED_RETURN parseBranchTarget(uint32_t&, uint32_t = 0);
     PartialResult WARN_UNUSED_RETURN parseDelegateTarget(uint32_t&, uint32_t);
@@ -527,12 +551,130 @@ auto FunctionParser<Context>::binaryCase(OpType op, BinaryOperationHandler handl
 }
 
 template<typename Context>
+auto FunctionParser<Context>::binaryCompareCase(OpType op, BinaryOperationHandler handler, Type returnType, Type lhsType, Type rhsType) -> PartialResult
+{
+    TypedExpression right;
+    TypedExpression left;
+
+    WASM_TRY_POP_EXPRESSION_STACK_INTO(right, "binary right"_s);
+    WASM_TRY_POP_EXPRESSION_STACK_INTO(left, "binary left"_s);
+
+    WASM_VALIDATOR_FAIL_IF(left.type() != lhsType, op, " left value type mismatch"_s);
+    WASM_VALIDATOR_FAIL_IF(right.type() != rhsType, op, " right value type mismatch"_s);
+
+    uint8_t nextOpcode;
+    if (Context::shouldFuseBranchCompare && peekUInt8(nextOpcode)) {
+        if (nextOpcode == OpType::BrIf) {
+            m_currentOpcodeStartingOffset = m_offset;
+            m_currentOpcode = static_cast<OpType>(nextOpcode);
+            bool didParseNextOpcode = parseUInt8(nextOpcode); // We're going to fuse this compare to the branch, so we consume the opcode.
+            ASSERT_UNUSED(didParseNextOpcode, didParseNextOpcode);
+            m_context.willParseOpcode();
+
+            uint32_t target;
+            WASM_FAIL_IF_HELPER_FAILS(parseBranchTarget(target));
+
+            ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
+            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, Conditional));
+            WASM_TRY_ADD_TO_CONTEXT(addFusedBranchCompare(op, data, left, right, m_expressionStack));
+            m_context.didParseOpcode();
+            return { };
+        }
+        if (nextOpcode == OpType::If) {
+            m_currentOpcodeStartingOffset = m_offset;
+            m_currentOpcode = static_cast<OpType>(nextOpcode);
+            bool didParseNextOpcode = parseUInt8(nextOpcode); // We're going to fuse this compare to the branch, so we consume the opcode.
+            ASSERT_UNUSED(didParseNextOpcode, didParseNextOpcode);
+            m_context.willParseOpcode();
+
+            BlockSignature inlineSignature;
+            WASM_PARSER_FAIL_IF(!parseBlockSignatureAndNotifySIMDUseIfNeeded(inlineSignature), "can't get if's signature"_s);
+
+            WASM_VALIDATOR_FAIL_IF(m_expressionStack.size() < inlineSignature->argumentCount(), "Too few arguments on stack for if block. If expects ", inlineSignature->argumentCount(), ", but only ", m_expressionStack.size(), " were present. If block has signature: ", inlineSignature->toString());
+            unsigned offset = m_expressionStack.size() - inlineSignature->argumentCount();
+            for (unsigned i = 0; i < inlineSignature->argumentCount(); ++i)
+                WASM_VALIDATOR_FAIL_IF(!isSubtype(m_expressionStack[offset + i].type(), inlineSignature->argumentType(i)), "Loop expects the argument at index", i, " to be ", inlineSignature->argumentType(i), " but argument has type ", m_expressionStack[i].type());
+
+            int64_t oldSize = m_expressionStack.size();
+            Stack newStack;
+            ControlType control;
+            WASM_TRY_ADD_TO_CONTEXT(addFusedIfCompare(op, left, right, inlineSignature, m_expressionStack, control, newStack));
+            ASSERT_UNUSED(oldSize, oldSize - m_expressionStack.size() == inlineSignature->argumentCount());
+            ASSERT(newStack.size() == inlineSignature->argumentCount());
+
+            m_controlStack.append({ WTFMove(m_expressionStack), newStack, getLocalInitStackHeight(), WTFMove(control) });
+            m_expressionStack = WTFMove(newStack);
+            m_context.didParseOpcode();
+            return { };
+        }
+    }
+
+    ExpressionType result;
+    WASM_FAIL_IF_HELPER_FAILS((m_context.*handler)(left, right, result));
+    m_expressionStack.constructAndAppend(returnType, result);
+    return { };
+}
+
+template<typename Context>
 auto FunctionParser<Context>::unaryCase(OpType op, UnaryOperationHandler handler, Type returnType, Type operandType) -> PartialResult
 {
     TypedExpression value;
     WASM_TRY_POP_EXPRESSION_STACK_INTO(value, "unary"_s);
 
     WASM_VALIDATOR_FAIL_IF(value.type() != operandType, op, " value type mismatch"_s);
+
+    ExpressionType result;
+    WASM_FAIL_IF_HELPER_FAILS((m_context.*handler)(value, result));
+    m_expressionStack.constructAndAppend(returnType, result);
+    return { };
+}
+
+template<typename Context>
+auto FunctionParser<Context>::unaryCompareCase(OpType op, UnaryOperationHandler handler, Type returnType, Type operandType) -> PartialResult
+{
+    TypedExpression value;
+    WASM_TRY_POP_EXPRESSION_STACK_INTO(value, "unary"_s);
+
+    WASM_VALIDATOR_FAIL_IF(value.type() != operandType, op, " value type mismatch"_s);
+
+    uint8_t nextOpcode;
+    if (Context::shouldFuseBranchCompare && peekUInt8(nextOpcode)) {
+        if (nextOpcode == OpType::BrIf) {
+            bool didParseNextOpcode = parseUInt8(nextOpcode); // We're going to fuse this compare to the branch, so we consume the opcode.
+            ASSERT_UNUSED(didParseNextOpcode, didParseNextOpcode);
+
+            uint32_t target;
+            WASM_FAIL_IF_HELPER_FAILS(parseBranchTarget(target));
+
+            ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
+            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, Conditional));
+            WASM_TRY_ADD_TO_CONTEXT(addFusedBranchCompare(op, data, value, m_expressionStack));
+            return { };
+        }
+        if (nextOpcode == OpType::If) {
+            bool didParseNextOpcode = parseUInt8(nextOpcode); // We're going to fuse this compare to the if, so we consume the opcode.
+            ASSERT_UNUSED(didParseNextOpcode, didParseNextOpcode);
+
+            BlockSignature inlineSignature;
+            WASM_PARSER_FAIL_IF(!parseBlockSignatureAndNotifySIMDUseIfNeeded(inlineSignature), "can't get if's signature"_s);
+
+            WASM_VALIDATOR_FAIL_IF(m_expressionStack.size() < inlineSignature->argumentCount(), "Too few arguments on stack for if block. If expects ", inlineSignature->argumentCount(), ", but only ", m_expressionStack.size(), " were present. If block has signature: ", inlineSignature->toString());
+            unsigned offset = m_expressionStack.size() - inlineSignature->argumentCount();
+            for (unsigned i = 0; i < inlineSignature->argumentCount(); ++i)
+                WASM_VALIDATOR_FAIL_IF(!isSubtype(m_expressionStack[offset + i].type(), inlineSignature->argumentType(i)), "Loop expects the argument at index", i, " to be ", inlineSignature->argumentType(i), " but argument has type ", m_expressionStack[i].type());
+
+            int64_t oldSize = m_expressionStack.size();
+            Stack newStack;
+            ControlType control;
+            WASM_TRY_ADD_TO_CONTEXT(addFusedIfCompare(op, value, inlineSignature, m_expressionStack, control, newStack));
+            ASSERT_UNUSED(oldSize, oldSize - m_expressionStack.size() == inlineSignature->argumentCount());
+            ASSERT(newStack.size() == inlineSignature->argumentCount());
+
+            m_controlStack.append({ WTFMove(m_expressionStack), newStack, getLocalInitStackHeight(), WTFMove(control) });
+            m_expressionStack = WTFMove(newStack);
+            return { };
+        }
+    }
 
     ExpressionType result;
     WASM_FAIL_IF_HELPER_FAILS((m_context.*handler)(value, result));
@@ -1372,12 +1514,12 @@ auto FunctionParser<Context>::parseIndexForGlobal(uint32_t& resultIndex) -> Part
 }
 
 template<typename Context>
-auto FunctionParser<Context>::parseFunctionIndex(uint32_t& resultIndex) -> PartialResult
+auto FunctionParser<Context>::parseFunctionIndex(FunctionSpaceIndex& resultIndex) -> PartialResult
 {
     uint32_t functionIndex;
     WASM_PARSER_FAIL_IF(!parseVarUInt32(functionIndex), "can't parse function index"_s);
     WASM_PARSER_FAIL_IF(functionIndex >= m_info.functionIndexSpaceSize(), "function index "_s, functionIndex, " exceeds function index space "_s, m_info.functionIndexSpaceSize());
-    resultIndex = functionIndex;
+    resultIndex = FunctionSpaceIndex(functionIndex);
     return { };
 }
 
@@ -1590,17 +1732,25 @@ auto FunctionParser<Context>::parseStructFieldManipulation(StructFieldManipulati
 }
 
 template<typename Context>
-auto FunctionParser<Context>::checkBranchTarget(const ControlType& target) -> PartialResult
+auto FunctionParser<Context>::checkBranchTarget(const ControlType& target, BranchConditionalityTag conditionality) -> PartialResult
 {
     if (!target.branchTargetArity())
         return { };
 
     WASM_VALIDATOR_FAIL_IF(m_expressionStack.size() < target.branchTargetArity(), ControlType::isTopLevel(target) ? "branch out of function"_s : "branch to block"_s, " on expression stack of size "_s, m_expressionStack.size(), ", but block, "_s, target.signature()->toString() , " expects "_s, target.branchTargetArity(), " values"_s);
 
-
     unsigned offset = m_expressionStack.size() - target.branchTargetArity();
-    for (unsigned i = 0; i < target.branchTargetArity(); ++i)
+    for (unsigned i = 0; i < target.branchTargetArity(); ++i) {
         WASM_VALIDATOR_FAIL_IF(!isSubtype(m_expressionStack[offset + i].type(), target.branchTargetType(i)), "branch's stack type is not a subtype of block's type branch target type. Stack value has type "_s, m_expressionStack[offset + i].type(), " but branch target expects a value of "_s, target.branchTargetType(i), " at index "_s, i);
+
+        if (conditionality == Conditional) {
+            // Types must widen to the branch target type via subtyping. See https://github.com/WebAssembly/gc/issues/516.
+            // We only do this for conditional branches, because in unconditional branches we cannot observe the
+            // broadening of our local values after the branch - we instead jump to a different block with exactly its
+            // parameter types.
+            m_expressionStack[offset + i].setType(target.branchTargetType(i));
+        }
+    }
 
     return { };
 }
@@ -1637,7 +1787,7 @@ void FunctionParser<Context>::addReferencedFunctions(const Element& segment)
     // wrappers will be created for GC.
     for (uint32_t i = 0; i < segment.length(); i++) {
         if (segment.initTypes[i] == Element::InitializationType::FromRefFunc)
-            m_info.addReferencedFunction(segment.initialBitsOrIndices[i]);
+            m_info.addReferencedFunction(FunctionSpaceIndex(segment.initialBitsOrIndices[i]));
     }
 }
 
@@ -1726,11 +1876,19 @@ auto FunctionParser<Context>::parseExpression() -> PartialResult
 {
     switch (m_currentOpcode) {
 #define CREATE_CASE(name, id, b3op, inc, lhsType, rhsType, returnType) case OpType::name: return binaryCase(OpType::name, &Context::add##name, Types::returnType, Types::lhsType, Types::rhsType);
-        FOR_EACH_WASM_BINARY_OP(CREATE_CASE)
+        FOR_EACH_WASM_NON_COMPARE_BINARY_OP(CREATE_CASE)
+#undef CREATE_CASE
+
+#define CREATE_CASE(name, id, b3op, inc, lhsType, rhsType, returnType) case OpType::name: return binaryCompareCase(OpType::name, &Context::add##name, Types::returnType, Types::lhsType, Types::rhsType);
+        FOR_EACH_WASM_COMPARE_BINARY_OP(CREATE_CASE)
 #undef CREATE_CASE
 
 #define CREATE_CASE(name, id, b3op, inc, operandType, returnType) case OpType::name: return unaryCase(OpType::name, &Context::add##name, Types::returnType, Types::operandType);
-        FOR_EACH_WASM_UNARY_OP(CREATE_CASE)
+        FOR_EACH_WASM_NON_COMPARE_UNARY_OP(CREATE_CASE)
+#undef CREATE_CASE
+
+#define CREATE_CASE(name, id, b3op, inc, operandType, returnType) case OpType::name: return unaryCompareCase(OpType::name, &Context::add##name, Types::returnType, Types::operandType);
+        FOR_EACH_WASM_COMPARE_UNARY_OP(CREATE_CASE)
 #undef CREATE_CASE
 
     case Select: {
@@ -2121,7 +2279,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
             WASM_VALIDATOR_FAIL_IF(argc > m_expressionStack.size(), "array_new_fixed: found ", m_expressionStack.size(), " operands on stack; expected ", argc, " operands");
 
             // Allocate stack space for arguments
-            Vector<ExpressionType> args;
+            ArgumentList args;
             size_t firstArgumentIndex = m_expressionStack.size() - argc;
             WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(argc), "can't allocate enough memory for array.new_fixed "_s, argc, " values"_s);
             args.grow(argc);
@@ -2419,7 +2577,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
             const auto* structType = typeDefinition->expand().template as<StructType>();
             WASM_PARSER_FAIL_IF(structType->fieldCount() > m_expressionStack.size(), "struct.new "_s, typeIndex, " requires "_s, structType->fieldCount(), " values, but the expression stack currently holds "_s, m_expressionStack.size(), " values"_s);
 
-            Vector<ExpressionType> args;
+            ArgumentList args;
             size_t firstArgumentIndex = m_expressionStack.size() - structType->fieldCount();
             WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(structType->fieldCount()), "can't allocate enough memory for struct.new "_s, structType->fieldCount(), " values"_s);
             args.grow(structType->fieldCount());
@@ -2614,7 +2772,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
             // Put the ref back on the stack to check the branch type.
             m_expressionStack.constructAndAppend(branchTargetType, ref.value());
             ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
-            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data));
+            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, Conditional));
 
             m_expressionStack.takeLast();
             m_expressionStack.constructAndAppend(nonTakenType, ref.value());
@@ -2718,9 +2876,8 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
     }
 
     case RefFunc: {
-        uint32_t index;
-        WASM_PARSER_FAIL_IF(!parseVarUInt32(index), "can't get index for ref.func"_s);
-        WASM_VALIDATOR_FAIL_IF(index >= m_info.functionIndexSpaceSize(), "ref.func index "_s, index, " is too large, max is "_s, m_info.functionIndexSpaceSize());
+        FunctionSpaceIndex index;
+        WASM_PARSER_FAIL_IF(!parseFunctionIndex(index), "can't get index for ref.func"_s);
         // Function references don't need to be declared in constant expression contexts.
         if constexpr (!std::is_same<Context, ConstExprGenerator>())
             WASM_VALIDATOR_FAIL_IF(!m_info.isDeclaredFunction(index), "ref.func index "_s, index, " isn't declared"_s);
@@ -2756,7 +2913,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
 
         ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
 
-        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data));
+        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, Conditional));
 
         ExpressionType result;
         WASM_TRY_ADD_TO_CONTEXT(addBranchNull(data, ref, m_expressionStack, false, result));
@@ -2777,7 +2934,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         WASM_VALIDATOR_FAIL_IF(!isRefType(ref.type()), "br_on_non_null ref to type "_s, ref.type(), " expected a reference type"_s);
 
         ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
-        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data));
+        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, Conditional));
 
         ExpressionType unused;
         WASM_TRY_ADD_TO_CONTEXT(addBranchNull(data, ref, m_expressionStack, true, unused));
@@ -2891,7 +3048,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         WASM_PARSER_FAIL_IF(!Options::useWasmTailCalls(), "wasm tail calls are not enabled"_s);
         FALLTHROUGH;
     case Call: {
-        uint32_t functionIndex;
+        FunctionSpaceIndex functionIndex;
         WASM_FAIL_IF_HELPER_FAILS(parseFunctionIndex(functionIndex));
 
         TypeIndex calleeTypeIndex = m_info.typeIndexFromFunctionIndexSpace(functionIndex);
@@ -2900,7 +3057,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         WASM_PARSER_FAIL_IF(calleeSignature.argumentCount() > m_expressionStack.size(), "call function index "_s, functionIndex, " has "_s, calleeSignature.argumentCount(), " arguments, but the expression stack currently holds "_s, m_expressionStack.size(), " values"_s);
 
         size_t firstArgumentIndex = m_expressionStack.size() - calleeSignature.argumentCount();
-        Vector<ExpressionType> args;
+        ArgumentList args;
         WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(calleeSignature.argumentCount()), "can't allocate enough memory for call's "_s, calleeSignature.argumentCount(), " arguments"_s);
         args.grow(calleeSignature.argumentCount());
         for (size_t i = 0; i < calleeSignature.argumentCount(); ++i) {
@@ -2969,7 +3126,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
 
         WASM_VALIDATOR_FAIL_IF(!m_expressionStack.last().type().isI32(), "non-i32 call_indirect index "_s, m_expressionStack.last().type());
 
-        Vector<ExpressionType> args;
+        ArgumentList args;
         WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(argumentCount), "can't allocate enough memory for "_s, argumentCount, " call_indirect arguments"_s);
         args.grow(argumentCount);
         size_t firstArgumentIndex = m_expressionStack.size() - argumentCount;
@@ -3017,6 +3174,9 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         return { };
     }
 
+    case TailCallRef:
+        WASM_PARSER_FAIL_IF(!Options::useWasmTailCalls(), "wasm tail calls are not enabled"_s);
+        FALLTHROUGH;
     case CallRef: {
         uint32_t typeIndex;
         WASM_PARSER_FAIL_IF(!parseVarUInt32(typeIndex), "can't get call_ref's signature index"_s);
@@ -3034,7 +3194,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         size_t argumentCount = calleeSignature.argumentCount() + 1; // Add the callee's value.
         WASM_PARSER_FAIL_IF(argumentCount > m_expressionStack.size(), "call_ref expects ", argumentCount, " arguments, but the expression stack currently holds ", m_expressionStack.size(), " values");
 
-        Vector<ExpressionType> args;
+        ArgumentList args;
         WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(argumentCount), "can't allocate enough memory for ", argumentCount, " call_indirect arguments");
         args.grow(argumentCount);
         size_t firstArgumentIndex = m_expressionStack.size() - argumentCount;
@@ -3049,6 +3209,22 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         m_expressionStack.shrink(firstArgumentIndex);
 
         ResultList results;
+
+        if (m_currentOpcode == TailCallRef) {
+            const auto& callerSignature = *m_signature.as<FunctionSignature>();
+
+            WASM_PARSER_FAIL_IF(calleeSignature.returnCount() != callerSignature.returnCount(), "tail call indirect function with return count "_s, calleeSignature.returnCount(), "_s, but the caller's signature has "_s, callerSignature.returnCount(), " return values"_s);
+
+            for (unsigned i = 0; i < calleeSignature.returnCount(); ++i)
+                WASM_VALIDATOR_FAIL_IF(!isSubtype(calleeSignature.returnType(i), callerSignature.returnType(i)), "tail call ref return type mismatch: "_s , "expected "_s, callerSignature.returnType(i), ", got "_s, calleeSignature.returnType(i));
+
+            WASM_TRY_ADD_TO_CONTEXT(addCallRef(typeDefinition, args, results, CallType::TailCall));
+
+            m_unreachableBlocks = 1;
+
+            return { };
+        }
+
         WASM_TRY_ADD_TO_CONTEXT(addCallRef(typeDefinition, args, results));
 
         for (unsigned i = 0; i < calleeSignature.returnCount(); ++i) {
@@ -3221,6 +3397,86 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         return { };
     }
 
+    case TryTable: {
+        BlockSignature inlineSignature;
+        WASM_PARSER_FAIL_IF(!parseBlockSignatureAndNotifySIMDUseIfNeeded(inlineSignature), "can't get try_table's signature"_s);
+
+        uint32_t numberOfCatches;
+        Vector<CatchHandler> targets;
+        WASM_PARSER_FAIL_IF(!parseVarUInt32(numberOfCatches), "can't get the number of catch statements for try_table"_s);
+        WASM_PARSER_FAIL_IF(numberOfCatches == std::numeric_limits<uint32_t>::max(), "try_table's number of catch targets is too big "_s, numberOfCatches);
+
+        WASM_PARSER_FAIL_IF(!targets.tryReserveCapacity(numberOfCatches), "can't allocate try_table target"_s);
+
+        for (size_t i = 0; i < numberOfCatches; ++i) {
+            // catch = (opcode), (tag?), (label)
+            uint8_t catchOpcode = 0;
+            uint32_t exceptionTag = std::numeric_limits<uint32_t>::max();
+            uint32_t exceptionLabel;
+            const TypeDefinition* signature = nullptr;
+
+            WASM_PARSER_FAIL_IF(!parseUInt8(catchOpcode), "can't read opcode of try_table catch at index "_s, i);
+            WASM_PARSER_FAIL_IF(catchOpcode > CatchKind::CatchAllRef, "invalid opcode of try_table catch at index "_s, i, ",  opcode "_s, catchOpcode, " is invalid"_s);
+
+            if (catchOpcode < CatchKind::CatchAll) {
+                WASM_PARSER_FAIL_IF(!parseExceptionIndex(exceptionTag), "can't read tag of try_table catch at index "_s, i);
+                TypeIndex typeIndex = m_info.typeIndexFromExceptionIndexSpace(exceptionTag);
+                const TypeDefinition& exceptionSignature = TypeInformation::get(typeIndex).expand();
+                signature = &exceptionSignature;
+                for (unsigned i = 0; i < exceptionSignature.as<FunctionSignature>()->argumentCount(); ++i) {
+                    Type argumentType = exceptionSignature.as<FunctionSignature>()->argumentType(i);
+                    if (argumentType.isV128()) {
+                        m_context.notifyFunctionUsesSIMD();
+                        if constexpr (!Context::tierSupportsSIMD)
+                            WASM_TRY_ADD_TO_CONTEXT(addCrash());
+                    }
+                }
+            }
+            WASM_PARSER_FAIL_IF(!parseVarUInt32(exceptionLabel), "can't read label of try_table catch at index "_s, i);
+
+            WASM_PARSER_FAIL_IF(exceptionLabel >= m_controlStack.size(), "try_table's catch target "_s, exceptionLabel, " exceeds control stack size "_s, m_controlStack.size());
+
+            // Type checking
+            targets.append({
+                static_cast<CatchKind>(catchOpcode),
+                exceptionTag,
+                signature,
+                &m_controlStack[m_controlStack.size() - 1 - exceptionLabel].controlData
+            });
+        }
+
+        ControlType control;
+        Stack newStack;
+
+        for (auto& catchTarget : targets) {
+            ControlType* target = catchTarget.target;
+
+            Stack results;
+            results.reserveInitialCapacity(target->branchTargetArity());
+            if (catchTarget.type == CatchKind::Catch || catchTarget.type == CatchKind::CatchRef) {
+                for (unsigned arg = 0; arg < catchTarget.exceptionSignature->template as<FunctionSignature>()->argumentCount(); ++arg) {
+                    ExpressionType exp;
+                    results.constructAndAppend(catchTarget.exceptionSignature->template as<FunctionSignature>()->argumentType(arg), exp);
+                }
+            }
+            if (catchTarget.type == CatchKind::CatchRef || catchTarget.type == CatchKind::CatchAllRef) {
+                ExpressionType exp;
+                results.constructAndAppend(Type { TypeKind::Ref, static_cast<TypeIndex>(TypeKind::Exn) }, exp);
+            }
+
+            WASM_VALIDATOR_FAIL_IF(results.size() != target->branchTargetArity());
+            for (unsigned i = 0; i < target->branchTargetArity(); ++i)
+                WASM_VALIDATOR_FAIL_IF(!isSubtype(results[i].type(), target->branchTargetType(i)), "try_table target type mismatch");
+        }
+
+        WASM_TRY_ADD_TO_CONTEXT(addTryTable(inlineSignature, m_expressionStack, targets, control, newStack));
+
+        m_controlStack.append({ WTFMove(m_expressionStack), { }, getLocalInitStackHeight(), WTFMove(control) });
+        m_expressionStack = WTFMove(newStack);
+
+        return { };
+    }
+
     case Delegate: {
         WASM_PARSER_FAIL_IF(m_controlStack.size() == 1, "can't use delegate at the top-level of a function"_s);
 
@@ -3249,7 +3505,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
 
         WASM_VALIDATOR_FAIL_IF(m_expressionStack.size() < exceptionSignature.argumentCount(), "Too few arguments on stack for the exception being thrown. The exception expects ", exceptionSignature.argumentCount(), ", but only ", m_expressionStack.size(), " were present. Exception has signature: ", exceptionSignature.toString());
         unsigned offset = m_expressionStack.size() - exceptionSignature.argumentCount();
-        Vector<ExpressionType> args;
+        ArgumentList args;
         WASM_PARSER_FAIL_IF(!args.tryReserveInitialCapacity(exceptionSignature.argumentCount()), "can't allocate enough memory for throw's "_s, exceptionSignature.argumentCount(), " arguments"_s);
         args.grow(exceptionSignature.argumentCount());
         for (unsigned i = 0; i < exceptionSignature.argumentCount(); ++i) {
@@ -3261,6 +3517,16 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         m_expressionStack.shrink(offset);
 
         WASM_TRY_ADD_TO_CONTEXT(addThrow(exceptionIndex, args, m_expressionStack));
+        m_unreachableBlocks = 1;
+        return { };
+    }
+
+    case ThrowRef: {
+        TypedExpression exn;
+        WASM_TRY_POP_EXPRESSION_STACK_INTO(exn, "exception reference"_s);
+        WASM_VALIDATOR_FAIL_IF(exn.type() != exnrefType(), "throw_ref expected an exception reference"_s);
+
+        WASM_TRY_ADD_TO_CONTEXT(addThrowRef(exn, m_expressionStack));
         m_unreachableBlocks = 1;
         return { };
     }
@@ -3292,7 +3558,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         }
 
         ControlType& data = m_controlStack[m_controlStack.size() - 1 - target].controlData;
-        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data));
+        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(data, m_currentOpcode == BrIf ? Conditional : Unconditional));
         WASM_TRY_ADD_TO_CONTEXT(addBranch(data, condition, m_expressionStack));
         return { };
     }
@@ -3335,10 +3601,10 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
             ControlType* target = targets[i];
             WASM_VALIDATOR_FAIL_IF(defaultTarget.branchTargetArity() != target->branchTargetArity(), "br_table target type size mismatch. Default has size: ", defaultTarget.branchTargetArity(), "but target: ", i, " has size: ", target->branchTargetArity());
             // In the presence of subtyping, we need to check each branch target.
-            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(*target));
+            WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(*target, Unconditional));
         }
 
-        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(defaultTarget));
+        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(defaultTarget, Unconditional));
         WASM_TRY_ADD_TO_CONTEXT(addSwitch(condition, targets, defaultTarget, m_expressionStack));
 
         m_unreachableBlocks = 1;
@@ -3346,7 +3612,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
     }
 
     case Return: {
-        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(m_controlStack[0].controlData));
+        WASM_FAIL_IF_HELPER_FAILS(checkBranchTarget(m_controlStack[0].controlData, Unconditional));
         WASM_TRY_ADD_TO_CONTEXT(addReturn(m_controlStack[0].controlData, m_expressionStack));
         m_unreachableBlocks = 1;
         return { };
@@ -3581,6 +3847,26 @@ auto FunctionParser<Context>::parseUnreachableExpression() -> PartialResult
         return { };
     }
 
+    case TryTable: {
+        BlockSignature unused;
+        uint32_t numberOfCatches;
+        WASM_PARSER_FAIL_IF(!parseBlockSignatureAndNotifySIMDUseIfNeeded(unused), "can't get try_table's signature in unreachable context"_s);
+        WASM_PARSER_FAIL_IF(!parseVarUInt32(numberOfCatches), "can't get the number of catch statements for try_table in unreachable context"_s);
+
+        for (uint32_t i = 0; i < numberOfCatches; ++i) {
+            uint8_t catchOpcode = 0;
+            uint32_t unusedTag;
+            uint32_t unusedLabel;
+
+            WASM_PARSER_FAIL_IF(!parseUInt8(catchOpcode), "can't get catch opcode for try_table in unreachable context"_s);
+            WASM_PARSER_FAIL_IF(catchOpcode > 0x03, "invalid catch opcode for try_table in unreachable context"_s);
+            if (catchOpcode < 2)
+                WASM_PARSER_FAIL_IF(!parseExceptionIndex(unusedTag), "invalid exception tag for try_table in unreachable context"_s);
+            WASM_PARSER_FAIL_IF(!parseVarUInt32(unusedLabel), "invalid destination label for try_table in unreachable context"_s);
+        }
+        return { };
+    }
+
     case TailCallIndirect:
         WASM_PARSER_FAIL_IF(!Options::useWasmTailCalls(), "wasm tail calls are not enabled"_s);
         FALLTHROUGH;
@@ -3592,6 +3878,9 @@ auto FunctionParser<Context>::parseUnreachableExpression() -> PartialResult
         return { };
     }
 
+    case TailCallRef:
+        WASM_PARSER_FAIL_IF(!Options::useWasmTailCalls(), "wasm tail calls are not enabled"_s);
+        FALLTHROUGH;
     case CallRef: {
         uint32_t unused;
         WASM_PARSER_FAIL_IF(!parseVarUInt32(unused), "can't call_ref's signature index in unreachable context"_s);
@@ -3645,7 +3934,7 @@ auto FunctionParser<Context>::parseUnreachableExpression() -> PartialResult
         WASM_PARSER_FAIL_IF(!Options::useWasmTailCalls(), "wasm tail calls are not enabled"_s);
         FALLTHROUGH;
     case Call: {
-        uint32_t functionIndex;
+        FunctionSpaceIndex functionIndex;
         WASM_FAIL_IF_HELPER_FAILS(parseFunctionIndex(functionIndex));
         return { };
     }
@@ -3670,6 +3959,10 @@ auto FunctionParser<Context>::parseUnreachableExpression() -> PartialResult
         uint32_t exceptionIndex;
         WASM_FAIL_IF_HELPER_FAILS(parseExceptionIndex(exceptionIndex));
 
+        return { };
+    }
+
+    case ThrowRef: {
         return { };
     }
 

@@ -125,6 +125,8 @@ private:
     bool requestModuleScript(const TextPosition& scriptStartPosition);
     bool requestImportMap(LocalFrame&, const String& sourceURL);
 
+    void updateTaintedOriginFromSourceURL();
+
     virtual String sourceAttributeValue() const = 0;
     virtual String charsetAttributeValue() const = 0;
     virtual String typeAttributeValue() const = 0;
@@ -154,7 +156,7 @@ private:
     RefPtr<LoadableScript> m_loadableScript;
 
     // https://html.spec.whatwg.org/multipage/scripting.html#preparation-time-document
-    ScriptExecutionContextIdentifier m_preparationTimeDocumentIdentifier;
+    Markable<ScriptExecutionContextIdentifier> m_preparationTimeDocumentIdentifier;
 
     MonotonicTime m_creationTime;
     RefPtr<UserGestureToken> m_userGestureToken;

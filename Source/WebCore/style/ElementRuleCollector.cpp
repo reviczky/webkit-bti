@@ -39,6 +39,7 @@
 #include "ContainerQueryEvaluator.h"
 #include "ElementInlines.h"
 #include "ElementRareData.h"
+#include "ElementTextDirection.h"
 #include "HTMLElement.h"
 #include "HTMLSlotElement.h"
 #include "SVGElement.h"
@@ -823,10 +824,10 @@ void ElementRuleCollector::matchAllRules(bool matchAuthorAndUserStyles, bool inc
         addElementStyleProperties(styledElement->additionalPresentationalHintStyle(), RuleSet::cascadeLayerPriorityForPresentationalHints);
 
         if (auto* htmlElement = dynamicDowncast<HTMLElement>(*styledElement)) {
-            auto result = htmlElement->directionalityIfDirIsAuto();
-            auto& properties = result.value_or(TextDirection::LTR) == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
-            if (result)
+            if (auto textDirection = computeTextDirectionIfDirIsAuto(*htmlElement)) {
+                auto& properties = *textDirection == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
                 addMatchedProperties({ properties }, DeclarationOrigin::Author);
+            }
         }
     }
 

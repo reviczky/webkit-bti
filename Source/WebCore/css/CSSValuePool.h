@@ -56,7 +56,7 @@ private:
     static constexpr int maximumCacheableIntegerValue = 255;
 
     LazyNeverDestroyed<CSSPrimitiveValue> m_pixelValues[maximumCacheableIntegerValue + 1];
-    LazyNeverDestroyed<CSSPrimitiveValue> m_percentValues[maximumCacheableIntegerValue + 1];
+    LazyNeverDestroyed<CSSPrimitiveValue> m_percentageValues[maximumCacheableIntegerValue + 1];
     LazyNeverDestroyed<CSSPrimitiveValue> m_numberValues[maximumCacheableIntegerValue + 1];
     LazyNeverDestroyed<CSSPrimitiveValue> m_identifierValues[numCSSValueKeywords];
 };
@@ -77,9 +77,9 @@ public:
     Ref<CSSPrimitiveValue> createFontFamilyValue(const AtomString&);
 
 private:
-    HashMap<Color, Ref<CSSPrimitiveValue>> m_colorValueCache;
-    HashMap<AtomString, RefPtr<CSSValueList>> m_fontFaceValueCache;
-    HashMap<AtomString, Ref<CSSPrimitiveValue>> m_fontFamilyValueCache;
+    UncheckedKeyHashMap<Color, Ref<CSSPrimitiveValue>> m_colorValueCache;
+    UncheckedKeyHashMap<AtomString, RefPtr<CSSValueList>> m_fontFaceValueCache;
+    UncheckedKeyHashMap<AtomString, Ref<CSSPrimitiveValue>> m_fontFamilyValueCache;
 };
 
 inline CSSPrimitiveValue& CSSPrimitiveValue::implicitInitialValue()

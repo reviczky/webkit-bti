@@ -2236,6 +2236,13 @@ private:
                 break;
             }
 
+            if (m_value->child(0)->isInteger() && m_value->child(0) == m_value->child(1)) {
+                auto* constant = m_proc.addBoolConstant(m_value->origin(), TriState::True);
+                ASSERT(constant);
+                replaceWithNewValue(constant);
+                break;
+            }
+
             // Turn this: Equal(const1, const2)
             // Into this: const1 == const2
             replaceWithNewValue(
@@ -2263,6 +2270,13 @@ private:
                         m_insertionSet.insertIntConstant(m_index, m_value->origin(), Int32, 0));
                     break;
                 }
+            }
+
+            if (m_value->child(0)->isInteger() && m_value->child(0) == m_value->child(1)) {
+                auto* constant = m_proc.addBoolConstant(m_value->origin(), TriState::False);
+                ASSERT(constant);
+                replaceWithNewValue(constant);
+                break;
             }
 
             // Turn this: NotEqual(const1, const2)
@@ -2317,9 +2331,127 @@ private:
                 replaceWithNewValue(constant);
                 break;
             }
+
             if (comparison.opcode != m_value->opcode()) {
                 replaceWithNew<Value>(comparison.opcode, m_value->origin(), comparison.operands[0], comparison.operands[1]);
                 break;
+            }
+
+            if (m_value->child(0)->isInteger() && m_value->child(0) == m_value->child(1)) {
+                switch (m_value->opcode()) {
+                case LessThan:
+                case GreaterThan:
+                case Above:
+                case Below: {
+                    auto* constant = m_proc.addBoolConstant(m_value->origin(), TriState::False);
+                    ASSERT(constant);
+                    replaceWithNewValue(constant);
+                    break;
+                }
+                case LessEqual:
+                case GreaterEqual:
+                case AboveEqual:
+                case BelowEqual: {
+                    auto* constant = m_proc.addBoolConstant(m_value->origin(), TriState::True);
+                    ASSERT(constant);
+                    replaceWithNewValue(constant);
+                    break;
+                }
+                default:
+                    RELEASE_ASSERT_NOT_REACHED();
+                    break;
+                }
+                break;
+            }
+
+            // Turn this: Compare(SShr(value, n), const)
+            // Into this: Compare(value, (const << n))
+            //     where const does not overflow.
+            if (m_value->child(1)->hasInt()
+                && m_value->child(0)->opcode() == SShr
+                && m_value->child(0)->child(1)->hasInt32()) {
+                switch (m_value->opcode()) {
+                case LessThan:
+                case GreaterThan:
+                case LessEqual:
+                case GreaterEqual: {
+                    break;
+                }
+                case Above:
+                case Below:
+                case AboveEqual:
+                case BelowEqual: {
+                    auto tryOptimize = [&]<typename UIntType>(uint32_t shiftAmount, UIntType constant) {
+                        auto opcode = m_value->opcode();
+                        if (opcode == AboveEqual) {
+                            // Convert AboveEqual => Above
+                            // x >= constant => x > (constant - 1)
+                            if (!constant)
+                                return false;
+                            constant -= 1;
+                            opcode = Above;
+                        } else if (opcode == BelowEqual) {
+                            // Convert BelowEqual => Below
+                            // x <= constant => x < (constant + 1)
+                            if (constant == std::numeric_limits<UIntType>::max())
+                                return false;
+                            constant += 1;
+                            opcode = Below;
+                        }
+
+                        if (!constant)
+                            return false;
+
+                        unsigned bit = getMSBSet(constant);
+                        unsigned remaining = (sizeof(UIntType) * 8) - 1 - bit;
+                        if (shiftAmount >= remaining)
+                            return false;
+
+                        if (opcode == Above) {
+                            // (value >> n) > const
+                            // => value > (const << n)
+                            //
+                            // 0b1111 >> 2 > 0b11 => false
+                            // 0b1111 > 0b1111 => false
+                            //
+                            // 0b1100 >> 2 > 0b11 => false
+                            // 0b1100 > 0b1111 => false
+                            //
+                            UIntType shiftedConstant = constant << shiftAmount;
+                            shiftedConstant |= ((static_cast<UIntType>(1) << shiftAmount) - 1);
+                            replaceWithNew<Value>(Above, m_value->origin(), m_value->child(0)->child(0), m_insertionSet.insertValue(m_index, m_proc.addIntConstant(m_value->child(1), shiftedConstant)));
+                            return true;
+                        }
+
+                        ASSERT(opcode == Below);
+                        // (value >> n) < const
+                        // => value < (const << n)
+                        //
+                        // 0b1111 >> 2 < 0b11 => false
+                        // 0b1111 < 0b1111 => false
+                        //
+                        // 0b1100 >> 2 < 0b11 => false
+                        // 0b1100 < 0b1100 => false
+                        //
+                        UIntType shiftedConstant = constant << shiftAmount;
+                        replaceWithNew<Value>(Below, m_value->origin(), m_value->child(0)->child(0), m_insertionSet.insertValue(m_index, m_proc.addIntConstant(m_value->child(1), shiftedConstant)));
+                        return true;
+                    };
+
+                    uint32_t shiftAmount = static_cast<uint32_t>(m_value->child(0)->child(1)->asInt32());
+                    if (m_value->child(1)->hasInt32()) {
+                        if (tryOptimize.operator()<uint32_t>(shiftAmount, m_value->child(1)->asInt32()))
+                            return;
+                    } else if (m_value->child(1)->hasInt64()) {
+                        if (tryOptimize.operator()<uint64_t>(shiftAmount, m_value->child(1)->asInt64()))
+                            return;
+                    }
+                    break;
+                }
+                default:
+                    RELEASE_ASSERT_NOT_REACHED();
+                    break;
+                }
             }
             break;
         }
@@ -3052,7 +3184,7 @@ private:
         for (unsigned i = 0; i < numCases; ++i)
             cases[i] = m_blockInsertionSet.insertBefore(m_block);
 
-        HashMap<Value*, Value*> mappings[2];
+        UncheckedKeyHashMap<Value*, Value*> mappings[2];
 
         // Save things we want to know about the source.
         Value* predicate = source->child(0);
@@ -3637,7 +3769,7 @@ private:
     Procedure& m_proc;
     InsertionSet m_insertionSet;
     BlockInsertionSet m_blockInsertionSet;
-    HashMap<ValueKey, Value*> m_valueForConstant;
+    UncheckedKeyHashMap<ValueKey, Value*> m_valueForConstant;
     BasicBlock* m_root { nullptr };
     BasicBlock* m_block { nullptr };
     unsigned m_index { 0 };

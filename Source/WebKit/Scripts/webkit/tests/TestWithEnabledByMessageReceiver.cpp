@@ -40,15 +40,28 @@ namespace WebKit {
 
 void TestWithEnabledBy::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
-    auto& sharedPreferences = sharedPreferencesForWebProcess(connection);
+    bool runtimeEnablementCheckFailed = false;
+    UNUSED_VARIABLE(runtimeEnablementCheckFailed);
+    auto sharedPreferences = sharedPreferencesForWebProcess(connection);
     UNUSED_VARIABLE(sharedPreferences);
     Ref protectedThis { *this };
     if (decoder.messageName() == Messages::TestWithEnabledBy::AlwaysEnabled::name())
         return IPC::handleMessage<Messages::TestWithEnabledBy::AlwaysEnabled>(connection, decoder, this, &TestWithEnabledBy::alwaysEnabled);
-    if (decoder.messageName() == Messages::TestWithEnabledBy::ConditionallyEnabled::name() && sharedPreferences.someFeature)
-        return IPC::handleMessage<Messages::TestWithEnabledBy::ConditionallyEnabled>(connection, decoder, this, &TestWithEnabledBy::conditionallyEnabled);
-    if (decoder.messageName() == Messages::TestWithEnabledBy::MultiConditionallyEnabled::name() && sharedPreferences.someFeature && sharedPreferences.otherFeature)
-        return IPC::handleMessage<Messages::TestWithEnabledBy::MultiConditionallyEnabled>(connection, decoder, this, &TestWithEnabledBy::multiConditionallyEnabled);
+    if (decoder.messageName() == Messages::TestWithEnabledBy::ConditionallyEnabled::name()) {
+        if (sharedPreferences && sharedPreferences->someFeature)
+            return IPC::handleMessage<Messages::TestWithEnabledBy::ConditionallyEnabled>(connection, decoder, this, &TestWithEnabledBy::conditionallyEnabled);
+        runtimeEnablementCheckFailed = true;
+    }
+    if (decoder.messageName() == Messages::TestWithEnabledBy::ConditionallyEnabledAnd::name()) {
+        if (sharedPreferences && (sharedPreferences->someFeature && sharedPreferences->otherFeature))
+            return IPC::handleMessage<Messages::TestWithEnabledBy::ConditionallyEnabledAnd>(connection, decoder, this, &TestWithEnabledBy::conditionallyEnabledAnd);
+        runtimeEnablementCheckFailed = true;
+    }
+    if (decoder.messageName() == Messages::TestWithEnabledBy::ConditionallyEnabledOr::name()) {
+        if (sharedPreferences && (sharedPreferences->someFeature || sharedPreferences->otherFeature))
+            return IPC::handleMessage<Messages::TestWithEnabledBy::ConditionallyEnabledOr>(connection, decoder, this, &TestWithEnabledBy::conditionallyEnabledOr);
+        runtimeEnablementCheckFailed = true;
+    }
     UNUSED_PARAM(connection);
     UNUSED_PARAM(decoder);
 #if ENABLE(IPC_TESTING_API)
@@ -56,6 +69,8 @@ void TestWithEnabledBy::didReceiveMessage(IPC::Connection& connection, IPC::Deco
         return;
 #endif // ENABLE(IPC_TESTING_API)
     ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, IPC::description(decoder.messageName()).characters(), decoder.destinationID());
+    if (runtimeEnablementCheckFailed)
+        connection.markCurrentlyDispatchedMessageAsInvalid();
 }
 
 } // namespace WebKit
@@ -72,9 +87,13 @@ template<> std::optional<JSC::JSValue> jsValueForDecodedMessage<MessageName::Tes
 {
     return jsValueForDecodedArguments<Messages::TestWithEnabledBy::ConditionallyEnabled::Arguments>(globalObject, decoder);
 }
-template<> std::optional<JSC::JSValue> jsValueForDecodedMessage<MessageName::TestWithEnabledBy_MultiConditionallyEnabled>(JSC::JSGlobalObject* globalObject, Decoder& decoder)
+template<> std::optional<JSC::JSValue> jsValueForDecodedMessage<MessageName::TestWithEnabledBy_ConditionallyEnabledAnd>(JSC::JSGlobalObject* globalObject, Decoder& decoder)
 {
-    return jsValueForDecodedArguments<Messages::TestWithEnabledBy::MultiConditionallyEnabled::Arguments>(globalObject, decoder);
+    return jsValueForDecodedArguments<Messages::TestWithEnabledBy::ConditionallyEnabledAnd::Arguments>(globalObject, decoder);
+}
+template<> std::optional<JSC::JSValue> jsValueForDecodedMessage<MessageName::TestWithEnabledBy_ConditionallyEnabledOr>(JSC::JSGlobalObject* globalObject, Decoder& decoder)
+{
+    return jsValueForDecodedArguments<Messages::TestWithEnabledBy::ConditionallyEnabledOr::Arguments>(globalObject, decoder);
 }
 
 }

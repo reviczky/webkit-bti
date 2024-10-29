@@ -37,6 +37,7 @@
 #include <wtf/FileSystem.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/text/MakeString.h>
 
@@ -267,6 +268,8 @@ static std::unique_ptr<SQLiteDatabase> openAndMigrateDatabase(const String& path
     return database.moveToUniquePtr();
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PushDatabase);
+
 void PushDatabase::create(const String& path, CreationHandler&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
@@ -280,7 +283,7 @@ void PushDatabase::create(const String& path, CreationHandler&& completionHandle
                 return;
             }
 
-            completionHandler(std::unique_ptr<PushDatabase>(new PushDatabase(WTFMove(queue), makeUniqueRefFromNonNullUniquePtr(WTFMove(database)))));
+            completionHandler(adoptRef(*new PushDatabase(WTFMove(queue), makeUniqueRefFromNonNullUniquePtr(WTFMove(database)))));
         });
     });
 }
@@ -514,7 +517,7 @@ void PushDatabase::insertRecord(const PushRecord& record, CompletionHandler<void
             if (!sql || sql->step() != SQLITE_DONE)
                 return completeOnMainQueue(WTFMove(completionHandler), std::optional<PushRecord> { });
 
-            record.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(m_db->lastInsertRowID());
+            record.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(m_db->lastInsertRowID());
         }
 
         transaction.commit();
@@ -572,7 +575,7 @@ void PushDatabase::removeRecordByIdentifier(PushSubscriptionIdentifier identifie
 static PushRecord makePushRecordFromRow(SQLiteStatementAutoResetScope& sql, int columnIndex)
 {
     return PushRecord {
-        .identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt64(columnIndex)),
+        .identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt64(columnIndex)),
         .subscriptionSetIdentifier = {
             .bundleIdentifier = sql->columnText(columnIndex + 1),
             .pushPartition = sql->columnText(columnIndex + 2),
@@ -632,7 +635,7 @@ void PushDatabase::getIdentifiers(CompletionHandler<void(HashSet<PushSubscriptio
         HashSet<PushSubscriptionIdentifier> result;
         auto sql = cachedStatementOnQueue("SELECT rowid FROM Subscriptions"_s);
         while (sql && sql->step() == SQLITE_ROW)
-            result.add(LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt64(0)));
+            result.add(ObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt64(0)));
 
         completeOnMainQueue(WTFMove(completionHandler), WTFMove(result));
     });
@@ -751,7 +754,7 @@ void PushDatabase::removeRecordsBySubscriptionSet(const PushSubscriptionSetIdent
                 return;
 
             while (sql->step() == SQLITE_ROW) {
-                auto identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt(1));
+                auto identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt(1));
                 auto topic = sql->columnText(2);
                 auto serverVAPIDPublicKey = sql->columnBlob(3);
                 removedPushRecords.append({ identifier, WTFMove(topic), WTFMove(serverVAPIDPublicKey) });
@@ -814,7 +817,7 @@ void PushDatabase::removeRecordsBySubscriptionSetAndSecurityOrigin(const PushSub
 
             while (sql->step() == SQLITE_ROW) {
                 subscriptionSetID = sql->columnInt(0);
-                auto identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt(1));
+                auto identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt(1));
                 auto topic = sql->columnText(2);
                 auto serverVAPIDPublicKey = sql->columnBlob(3);
                 removedPushRecords.append({ identifier, WTFMove(topic), WTFMove(serverVAPIDPublicKey) });
@@ -829,6 +832,67 @@ void PushDatabase::removeRecordsBySubscriptionSetAndSecurityOrigin(const PushSub
 
         {
             auto sql = bindStatementOnQueue("DELETE FROM SubscriptionSets WHERE rowid = ?"_s, subscriptionSetID);
+            if (!sql || sql->step() != SQLITE_DONE)
+                return;
+        }
+
+        transaction.commit();
+
+        scope.release();
+        completeOnMainQueue(WTFMove(completionHandler), WTFMove(removedPushRecords));
+    });
+}
+
+void PushDatabase::removeRecordsByBundleIdentifierAndDataStore(const String& bundleIdentifier, const std::optional<WTF::UUID>& dataStoreIdentifier, CompletionHandler<void(Vector<RemovedPushRecord>&&)>&& completionHandler)
+{
+    dispatchOnWorkQueue([this, bundleIdentifier = crossThreadCopy(bundleIdentifier), dataStoreIdentifier, completionHandler = WTFMove(completionHandler)]() mutable {
+        auto scope = makeScopeExit([&completionHandler] {
+            completeOnMainQueue(WTFMove(completionHandler), Vector<RemovedPushRecord> { });
+        });
+
+        Vector<RemovedPushRecord> removedPushRecords;
+        SQLiteTransaction transaction(m_db);
+        transaction.begin();
+
+        {
+            auto sql = bindStatementOnQueue(
+                "SELECT sub.subscriptionSetID, sub.rowid, sub.topic, sub.serverVAPIDPublicKey "
+                "FROM SubscriptionSets ss "
+                "JOIN Subscriptions sub "
+                "ON ss.rowid = sub.subscriptionSetID "
+                "WHERE ss.bundleID = ? AND ss.dataStoreUUID = ?"_s,
+                !bundleIdentifier.isNull() ? bundleIdentifier : emptyString(),
+                uuidToSpan(dataStoreIdentifier));
+            if (!sql)
+                return;
+
+            while (sql->step() == SQLITE_ROW) {
+                auto identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(sql->columnInt(1));
+                auto topic = sql->columnText(2);
+                auto serverVAPIDPublicKey = sql->columnBlob(3);
+                removedPushRecords.append({ identifier, WTFMove(topic), WTFMove(serverVAPIDPublicKey) });
+            }
+        }
+
+        {
+            auto sql = bindStatementOnQueue(
+                "DELETE FROM Subscriptions "
+                "WHERE subscriptionSetID IN ("
+                "    SELECT rowid FROM SubscriptionSets "
+                "    WHERE bundleID = ? AND dataStoreUUID = ? "
+                ")"_s,
+                !bundleIdentifier.isNull() ? bundleIdentifier : emptyString(),
+                uuidToSpan(dataStoreIdentifier));
+            if (!sql || sql->step() != SQLITE_DONE)
+                return;
+        }
+
+        {
+            auto sql = bindStatementOnQueue(
+                "DELETE FROM SubscriptionSets "
+                "WHERE bundleID = ? AND dataStoreUUID = ?"_s,
+                !bundleIdentifier.isNull() ? bundleIdentifier : emptyString(),
+                uuidToSpan(dataStoreIdentifier));
             if (!sql || sql->step() != SQLITE_DONE)
                 return;
         }

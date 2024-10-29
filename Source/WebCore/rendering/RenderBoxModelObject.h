@@ -34,31 +34,26 @@ namespace WebCore {
 enum LinePositionMode { PositionOnContainingLine, PositionOfInteriorLineBoxes };
 enum LineDirectionMode { HorizontalLine, VerticalLine };
 
-enum BackgroundBleedAvoidance {
-    BackgroundBleedNone,
-    BackgroundBleedShrinkBackground,
-    BackgroundBleedUseTransparencyLayer,
-    BackgroundBleedBackgroundOverBorder
+enum class BleedAvoidance : uint8_t {
+    None,
+    ShrinkBackground,
+    UseTransparencyLayer,
+    BackgroundOverBorder
 };
 
-enum BaseBackgroundColorUsage {
-    BaseBackgroundColorUse,
-    BaseBackgroundColorOnly,
-    BaseBackgroundColorSkip
-};
-
-enum ContentChangeType {
-    ImageChanged,
-    MaskImageChanged,
-    BackgroundImageChanged,
-    CanvasChanged,
-    CanvasPixelsChanged,
-    VideoChanged,
-    FullScreenChanged,
-    ModelChanged
+enum class ContentChangeType : uint8_t {
+    Image,
+    MaskImage,
+    BackgroundIImage,
+    Canvas,
+    CanvasPixels,
+    Video,
+    FullScreen,
+    Model
 };
 
 class BorderEdge;
+class BorderShape;
 class ImageBuffer;
 class RenderTextFragment;
 class StickyPositionViewportConstraints;
@@ -182,7 +177,7 @@ public:
     LayoutUnit marginLogicalHeight() const { return marginBefore() + marginAfter(); }
     LayoutUnit marginLogicalWidth() const { return marginStart() + marginEnd(); }
 
-    RoundedRect roundedContentBoxRect(const LayoutRect& borderBoxRect, bool includeLeftEdge = true, bool includeRightEdge = true) const;
+    BorderShape borderShapeForContentClipping(const LayoutRect& borderBoxRect, bool includeLeftEdge = true, bool includeRightEdge = true) const;
 
     inline bool hasInlineDirectionBordersPaddingOrMargin() const;
     inline bool hasInlineDirectionBordersOrPadding() const;
@@ -214,11 +209,15 @@ public:
 
     void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption>) const override;
 
+    enum class UpdatePercentageHeightDescendants : bool { No, Yes };
+
 protected:
     RenderBoxModelObject(Type, Element&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);
     RenderBoxModelObject(Type, Document&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);
 
     void willBeDestroyed() override;
+
+    void styleWillChange(StyleDifference, const RenderStyle& newStyle) override;
 
     LayoutPoint adjustedPositionRelativeToOffsetParent(const LayoutPoint&) const;
 
@@ -226,7 +225,6 @@ protected:
     bool borderObscuresBackgroundEdge(const FloatSize& contextScale) const;
     bool borderObscuresBackground() const;
 
-    enum class UpdatePercentageHeightDescendants : bool { No, Yes };
     bool hasAutoHeightOrContainingBlockWithAutoHeight(UpdatePercentageHeightDescendants = UpdatePercentageHeightDescendants::Yes) const;
 
 public:
@@ -234,7 +232,7 @@ public:
     InterpolationQuality chooseInterpolationQuality(GraphicsContext&, Image&, const void*, const LayoutSize&) const;
     DecodingMode decodingModeForImageDraw(const Image&, const PaintInfo&) const;
 
-    void paintMaskForTextFillBox(ImageBuffer*, const FloatRect&, const InlineIterator::InlineBoxIterator&, const LayoutRect&);
+    void paintMaskForTextFillBox(GraphicsContext&, const FloatRect&, const InlineIterator::InlineBoxIterator&, const LayoutRect&);
 
     // For RenderBlocks and RenderInlines with m_style->pseudoElementType() == PseudoId::FirstLetter, this tracks their remaining text fragments
     RenderTextFragment* firstLetterRemainingText() const;

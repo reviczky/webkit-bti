@@ -62,7 +62,7 @@ void GPUQueue::setLabel(String&& label)
 
 void GPUQueue::submit(Vector<Ref<GPUCommandBuffer>>&& commandBuffers)
 {
-    auto result = WTF::map(commandBuffers, [](auto& commandBuffer) -> std::reference_wrapper<WebGPU::CommandBuffer> {
+    auto result = WTF::map(commandBuffers, [](auto& commandBuffer) -> Ref<WebGPU::CommandBuffer> {
         return commandBuffer->backing();
     });
     m_backing->submit(WTFMove(result));
@@ -414,7 +414,7 @@ static void imageBytesForSource(const auto& sourceDescriptor, const auto& destin
             return callback({ }, 0, 0);
 
         auto sizeInBytes = height * CGImageGetBytesPerRow(platformImage.get());
-        auto bytePointer = reinterpret_cast<const uint8_t*>(CFDataGetBytePtr(pixelDataCfData.get()));
+        auto bytePointer = CFDataGetBytePtr(pixelDataCfData.get());
         auto requiredSize = width * height * 4;
         auto alphaInfo = CGImageGetAlphaInfo(platformImage.get());
         bool channelLayoutIsRGB = false;

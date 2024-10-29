@@ -207,7 +207,7 @@ MarkupAccumulator::MarkupAccumulator(Vector<Ref<Node>>* nodes, ResolveURLs resol
 
 MarkupAccumulator::~MarkupAccumulator() = default;
 
-void MarkupAccumulator::enableURLReplacement(HashMap<String, String>&& replacementURLStrings, HashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet)
+void MarkupAccumulator::enableURLReplacement(UncheckedKeyHashMap<String, String>&& replacementURLStrings, UncheckedKeyHashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet)
 {
     m_urlReplacementData = URLReplacementData { WTFMove(replacementURLStrings), WTFMove(replacementURLStringsForCSSStyleSheet) };
 }
@@ -289,7 +289,7 @@ void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, Serialize
         if (shouldAppendNode)
             startAppendingNode(*current, &namespaceStack.last());
 
-        bool shouldEmitCloseTag = !(targetNode.document().isHTMLDocument() && elementCannotHaveEndTag(*current));
+        bool shouldEmitCloseTag = m_serializationSyntax == SerializationSyntax::XML || !(targetNode.document().isHTMLDocument() && elementCannotHaveEndTag(*current));
         shouldSkipNode = shouldSkipNode || !shouldEmitCloseTag;
         if (!shouldSkipNode) {
             if (shouldIncludeShadowRoots()) {
@@ -342,7 +342,7 @@ void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, Serialize
                 break;
 
             shouldAppendNode = !(current == &targetNode && root != SerializedNodes::SubtreeIncludingNode);
-            shouldEmitCloseTag = !(targetNode.document().isHTMLDocument() && elementCannotHaveEndTag(*current));
+            shouldEmitCloseTag = m_serializationSyntax == SerializationSyntax::XML || !(targetNode.document().isHTMLDocument() && elementCannotHaveEndTag(*current));
             if (shouldAppendNode && shouldEmitCloseTag)
                 endAppendingNode(*current);
         }
@@ -487,7 +487,7 @@ void MarkupAccumulator::appendNamespace(StringBuilder& result, const AtomString&
         return;
     }
 
-    // Use emptyAtom()s's impl() for null strings since this HashMap can't handle nullptr as a key
+    // Use emptyAtom()s's impl() for null strings since this UncheckedKeyHashMap can't handle nullptr as a key
     auto addResult = namespaces.add(prefix.isNull() ? emptyAtom().impl() : prefix.impl(), namespaceURI.impl());
     if (!addResult.isNewEntry) {
         if (addResult.iterator->value == namespaceURI.impl())
@@ -860,7 +860,7 @@ static bool isElementExcludedByRule(const MarkupExclusionRule& rule, const Eleme
                 continue;
             }
 
-            // FIXME: We might optimize this by using a HashMap when there are too many attributes.
+            // FIXME: We might optimize this by using a UncheckedKeyHashMap when there are too many attributes.
             for (const Attribute& attribute : element.attributesIterator()) {
                 if (!equalIgnoringASCIICase(attribute.localName(), attributeLocalName))
                     continue;

@@ -29,6 +29,7 @@
 #include <gst/video/video-info.h>
 #include <wtf/Logger.h>
 #include <wtf/MediaTime.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
@@ -204,7 +205,7 @@ private:
 };
 
 class GstMappedFrame {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(GstMappedFrame);
     WTF_MAKE_NONCOPYABLE(GstMappedFrame);
 public:
     GstMappedFrame(GstBuffer*, GstVideoInfo*, GstMapFlags);
@@ -310,7 +311,7 @@ void registerActivePipeline(const GRefPtr<GstElement>&);
 void unregisterPipeline(const GRefPtr<GstElement>&);
 
 class WebCoreLogObserver : public Logger::Observer {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebCoreLogObserver);
     WTF_MAKE_NONCOPYABLE(WebCoreLogObserver);
     friend NeverDestroyed<WebCoreLogObserver>;
 public:
@@ -326,6 +327,18 @@ public:
 private:
     Atomic<uint64_t> m_totalObservers;
 };
+
+#if GST_CHECK_VERSION(1, 25, 0)
+using GstId = const GstIdStr*;
+#else
+using GstId = GQuark;
+#endif
+
+bool gstStructureForeach(const GstStructure*, Function<bool(GstId, const GValue*)>&&);
+void gstStructureIdSetValue(GstStructure*, GstId, const GValue*);
+bool gstStructureMapInPlace(GstStructure*, Function<bool(GstId, GValue*)>&&);
+StringView gstIdToString(GstId);
+void gstStructureFilterAndMapInPlace(GstStructure*, Function<bool(GstId, GValue*)>&&);
 
 } // namespace WebCore
 

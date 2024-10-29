@@ -104,8 +104,8 @@ String WebAutomationSession::Debuggable::name() const
 {
     String name;
     callOnMainRunLoopAndWait([this, protectedThis = Ref { *this }, &name] {
-        if (m_session)
-            name = m_session->name().isolatedCopy();
+        if (RefPtr session = m_session.get())
+            name = session->name().isolatedCopy();
     });
     return name;
 }
@@ -113,24 +113,24 @@ String WebAutomationSession::Debuggable::name() const
 void WebAutomationSession::Debuggable::dispatchMessageFromRemote(String&& message)
 {
     callOnMainRunLoopAndWait([this, protectedThis = Ref { *this }, message = WTFMove(message).isolatedCopy()]() mutable {
-        if (m_session)
-            m_session->dispatchMessageFromRemote(WTFMove(message));
+        if (RefPtr session = m_session.get())
+            session->dispatchMessageFromRemote(WTFMove(message));
     });
 }
 
 void WebAutomationSession::Debuggable::connect(Inspector::FrontendChannel& channel, bool isAutomaticConnection, bool immediatelyPause)
 {
     callOnMainRunLoopAndWait([this, protectedThis = Ref { *this }, &channel, isAutomaticConnection, immediatelyPause] {
-        if (m_session)
-            m_session->connect(channel, isAutomaticConnection, immediatelyPause);
+        if (RefPtr session = m_session.get())
+            session->connect(channel, isAutomaticConnection, immediatelyPause);
     });
 }
 
 void WebAutomationSession::Debuggable::disconnect(Inspector::FrontendChannel& channel)
 {
     callOnMainRunLoopAndWait([this, protectedThis = Ref { *this }, &channel] {
-        if (m_session)
-            m_session->disconnect(channel);
+        if (RefPtr session = m_session.get())
+            session->disconnect(channel);
     });
 }
 #endif // ENABLE(REMOTE_INSPECTOR)
@@ -146,6 +146,9 @@ WebAutomationSession::WebAutomationSession()
     , m_debuggable(Debuggable::create(*this))
 #endif
 {
+#if ENABLE(WEBDRIVER_MOUSE_INTERACTIONS)
+    m_mouseButtonsCurrentlyDown.reserveInitialCapacity(3);
+#endif
 }
 
 WebAutomationSession::~WebAutomationSession()
@@ -153,7 +156,7 @@ WebAutomationSession::~WebAutomationSession()
     ASSERT(!m_client);
     ASSERT(!m_processPool);
 #if ENABLE(REMOTE_INSPECTOR)
-    m_debuggable->sessionDestroyed();
+    protectedDebuggable()->sessionDestroyed();
 #endif
 }
 
@@ -185,7 +188,7 @@ RefPtr<WebProcessPool> WebAutomationSession::protectedProcessPool() const
 
 void WebAutomationSession::dispatchMessageFromRemote(String&& message)
 {
-    m_backendDispatcher->dispatch(WTFMove(message));
+    protectedBackendDispatcher()->dispatch(WTFMove(message));
 }
 
 void WebAutomationSession::connect(Inspector::FrontendChannel& channel, bool isAutomaticConnection, bool immediatelyPause)
@@ -194,9 +197,9 @@ void WebAutomationSession::connect(Inspector::FrontendChannel& channel, bool isA
     UNUSED_PARAM(immediatelyPause);
 
     m_remoteChannel = &channel;
-    m_frontendRouter->connectFrontend(channel);
+    protectedFrontendRouter()->connectFrontend(channel);
 
-    m_debuggable->setIsPaired(true);
+    protectedDebuggable()->setIsPaired(true);
 }
 
 void WebAutomationSession::disconnect(Inspector::FrontendChannel& channel)
@@ -207,7 +210,7 @@ void WebAutomationSession::disconnect(Inspector::FrontendChannel& channel)
 
 void WebAutomationSession::init()
 {
-    m_debuggable->init();
+    protectedDebuggable()->init();
 }
 
 bool WebAutomationSession::isPaired() const
@@ -248,10 +251,10 @@ void WebAutomationSession::terminate()
 #if ENABLE(REMOTE_INSPECTOR)
     if (Inspector::FrontendChannel* channel = m_remoteChannel) {
         m_remoteChannel = nullptr;
-        m_frontendRouter->disconnectFrontend(*channel);
+        protectedFrontendRouter()->disconnectFrontend(*channel);
     }
 
-    m_debuggable->setIsPaired(false);
+    protectedDebuggable()->setIsPaired(false);
 #endif
 
     if (m_client)
@@ -306,10 +309,10 @@ std::optional<FrameIdentifier> WebAutomationSession::webFrameIDForHandle(const S
 
 String WebAutomationSession::handleForWebFrameID(std::optional<FrameIdentifier> frameID)
 {
-    if (!frameID || !*frameID)
+    if (!frameID)
         return emptyString();
 
-    if (auto* frame = WebFrameProxy::webFrame(*frameID); frame && frame->isMainFrame())
+    if (RefPtr frame = WebFrameProxy::webFrame(*frameID); frame && frame->isMainFrame())
         return emptyString();
 
     auto iter = m_webFrameHandleMap.find(*frameID);
@@ -350,7 +353,7 @@ Ref<Inspector::Protocol::Automation::BrowsingContext> WebAutomationSession::buil
     return Inspector::Protocol::Automation::BrowsingContext::create()
         .setHandle(handle)
         .setActive(isActive)
-        .setUrl(page.pageLoadState().activeURL())
+        .setUrl(page.protectedPageLoadState()->activeURL())
         .setWindowOrigin(WTFMove(originObject))
         .setWindowSize(WTFMove(sizeObject))
         .release();
@@ -448,8 +451,10 @@ Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::closeBrowsingCont
 
 Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::deleteSession()
 {
+#if ENABLE(REMOTE_INSPECTOR)
     if (!isPaired())
         SYNC_FAIL_WITH_PREDEFINED_ERROR(InternalError);
+#endif
 
     terminate();
     return { };
@@ -540,7 +545,7 @@ void WebAutomationSession::waitForNavigationToComplete(const Inspector::Protocol
     // we return without waiting since we know it will timeout for sure. We want to check
     // arguments first, though.
     bool shouldTimeoutDueToUnexpectedAlert = pageLoadStrategy == Inspector::Protocol::Automation::PageLoadStrategy::Normal
-        && page->pageLoadState().isLoading() && m_client->isShowingJavaScriptDialogOnPage(*this, *page);
+        && page->protectedPageLoadState()->isLoading() && m_client->isShowingJavaScriptDialogOnPage(*this, *page);
 
     if (!optionalFrameHandle.isEmpty()) {
         bool frameNotFound = false;
@@ -570,7 +575,9 @@ void WebAutomationSession::waitForNavigationToComplete(const Inspector::Protocol
 void WebAutomationSession::waitForNavigationToCompleteOnPage(WebPageProxy& page, Inspector::Protocol::Automation::PageLoadStrategy loadStrategy, Seconds timeout, Ref<Inspector::BackendDispatcher::CallbackBase>&& callback)
 {
     ASSERT(!m_loadTimer.isActive());
-    if (loadStrategy == Inspector::Protocol::Automation::PageLoadStrategy::None || (!page.pageLoadState().isLoading() && !page.pageLoadState().hasUncommittedLoad())) {
+    Ref pageLoadState = page.pageLoadState();
+
+    if (loadStrategy == Inspector::Protocol::Automation::PageLoadStrategy::None || (!pageLoadState->isLoading() && !pageLoadState->hasUncommittedLoad())) {
         callback->sendSuccess(JSON::Object::create());
         return;
     }
@@ -624,7 +631,7 @@ void WebAutomationSession::respondToPendingPageNavigationCallbacksWithTimeout(Ha
 
 static WebPageProxy* findPageForFrameID(const WebProcessPool& processPool, FrameIdentifier frameID)
 {
-    if (auto* frame = WebFrameProxy::webFrame(frameID))
+    if (RefPtr frame = WebFrameProxy::webFrame(frameID))
         return frame->page();
     return nullptr;
 }
@@ -726,11 +733,11 @@ void WebAutomationSession::willShowJavaScriptDialog(WebPageProxy& page)
     // the load in case of normal strategy, so we want to dispatch all pending navigation callbacks.
     // If the dialog was shown during a script execution, we want to finish the evaluateJavaScriptFunction
     // operation with an unexpected alert open error.
-    RunLoop::main().dispatch([this, protectedThis = Ref { *this }, page = Ref { page }] {
+    RunLoop::protectedMain()->dispatch([this, protectedThis = Ref { *this }, page = Ref { page }] {
         if (!page->hasRunningProcess() || !m_client || !m_client->isShowingJavaScriptDialogOnPage(*this, page))
             return;
 
-        if (page->pageLoadState().isLoading()) {
+        if (page->protectedPageLoadState()->isLoading()) {
             m_loadTimer.stop();
             respondToPendingFrameNavigationCallbacksWithTimeout(m_pendingNormalNavigationInBrowsingContextCallbacksPerFrame);
             respondToPendingPageNavigationCallbacksWithTimeout(m_pendingNormalNavigationInBrowsingContextCallbacksPerPage);
@@ -856,7 +863,7 @@ void WebAutomationSession::navigationOccurredForFrame(const WebFrameProxy& frame
             m_loadTimer.stop();
             callback->sendSuccess(JSON::Object::create());
         }
-        m_domainNotifier->browsingContextCleared(handleForWebPageProxy(*frame.page()));
+        m_domainNotifier->browsingContextCleared(handleForWebPageProxy(*frame.protectedPage()));
     } else {
         if (auto callback = m_pendingNormalNavigationInBrowsingContextCallbacksPerFrame.take(frame.frameID())) {
             m_loadTimer.stop();
@@ -1003,12 +1010,12 @@ void WebAutomationSession::handleRunOpenPanel(const WebPageProxy& page, const We
 
     HashSet<String> allowedMIMETypes;
     auto acceptMIMETypes = parameters.acceptMIMETypes();
-    for (auto type : acceptMIMETypes->elementsOfType<API::String>())
+    for (RefPtr type : acceptMIMETypes->elementsOfType<API::String>())
         allowedMIMETypes.add(type->string());
 
     HashSet<String> allowedFileExtensions;
     auto acceptFileExtensions = parameters.acceptFileExtensions();
-    for (auto type : acceptFileExtensions->elementsOfType<API::String>()) {
+    for (RefPtr type : acceptFileExtensions->elementsOfType<API::String>()) {
         // WebCore vends extensions with leading periods. Strip these to simplify matching later.
         String extension = type->string();
         ASSERT(extension.characterAt(0) == '.');
@@ -1034,7 +1041,7 @@ void WebAutomationSession::handleRunOpenPanel(const WebPageProxy& page, const We
     m_domainNotifier->fileChooserDismissed(browsingContextHandle, false, WTFMove(selectedFiles));
 }
 
-void WebAutomationSession::evaluateJavaScriptFunction(const Inspector::Protocol::Automation::BrowsingContextHandle& browsingContextHandle, const Inspector::Protocol::Automation::FrameHandle& frameHandle, const String& function, Ref<JSON::Array>&& arguments, std::optional<bool>&& expectsImplicitCallbackArgument, std::optional<double>&& callbackTimeout, Ref<EvaluateJavaScriptFunctionCallback>&& callback)
+void WebAutomationSession::evaluateJavaScriptFunction(const Inspector::Protocol::Automation::BrowsingContextHandle& browsingContextHandle, const Inspector::Protocol::Automation::FrameHandle& frameHandle, const String& function, Ref<JSON::Array>&& arguments, std::optional<bool>&& expectsImplicitCallbackArgument, std::optional<bool>&& forceUserGesture, std::optional<double>&& callbackTimeout, Ref<EvaluateJavaScriptFunctionCallback>&& callback)
 {
     auto page = webPageProxyForHandle(browsingContextHandle);
     if (!page)
@@ -1052,7 +1059,7 @@ void WebAutomationSession::evaluateJavaScriptFunction(const Inspector::Protocol:
     uint64_t callbackID = m_nextEvaluateJavaScriptCallbackID++;
     m_evaluateJavaScriptFunctionCallbacks.set(callbackID, WTFMove(callback));
 
-    page->sendToProcessContainingFrame(frameID, Messages::WebAutomationSessionProxy::EvaluateJavaScriptFunction(page->webPageIDInMainFrameProcess(), frameID, function, argumentsVector, expectsImplicitCallbackArgument.value_or(false), WTFMove(callbackTimeout), callbackID));
+    page->sendToProcessContainingFrame(frameID, Messages::WebAutomationSessionProxy::EvaluateJavaScriptFunction(page->webPageIDInMainFrameProcess(), frameID, function, argumentsVector, expectsImplicitCallbackArgument.value_or(false), forceUserGesture.value_or(false), WTFMove(callbackTimeout), callbackID));
 }
 
 void WebAutomationSession::didEvaluateJavaScriptFunction(uint64_t callbackID, const String& result, const String& errorType)
@@ -1503,7 +1510,7 @@ void WebAutomationSession::getAllCookies(const Inspector::Protocol::Automation::
         callback->sendSuccess(buildArrayForCookies(cookies));
     };
 
-    page->legacyMainFrameProcess().sendWithAsyncReply(Messages::WebAutomationSessionProxy::GetCookiesForFrame(page->webPageIDInMainFrameProcess(), std::nullopt), WTFMove(completionHandler));
+    page->protectedLegacyMainFrameProcess()->sendWithAsyncReply(Messages::WebAutomationSessionProxy::GetCookiesForFrame(page->webPageIDInMainFrameProcess(), std::nullopt), WTFMove(completionHandler));
 }
 
 void WebAutomationSession::deleteSingleCookie(const Inspector::Protocol::Automation::BrowsingContextHandle& browsingContextHandle, const String& cookieName, Ref<DeleteSingleCookieCallback>&& callback)
@@ -1521,7 +1528,7 @@ void WebAutomationSession::deleteSingleCookie(const Inspector::Protocol::Automat
         callback->sendSuccess();
     };
 
-    page->legacyMainFrameProcess().sendWithAsyncReply(Messages::WebAutomationSessionProxy::DeleteCookie(page->webPageIDInMainFrameProcess(), std::nullopt, cookieName), WTFMove(completionHandler));
+    page->protectedLegacyMainFrameProcess()->sendWithAsyncReply(Messages::WebAutomationSessionProxy::DeleteCookie(page->webPageIDInMainFrameProcess(), std::nullopt, cookieName), WTFMove(completionHandler));
 }
 
 static String domainByAddingDotPrefixIfNeeded(String domain)
@@ -1538,11 +1545,11 @@ static String domainByAddingDotPrefixIfNeeded(String domain)
     
 void WebAutomationSession::addSingleCookie(const Inspector::Protocol::Automation::BrowsingContextHandle& browsingContextHandle, Ref<JSON::Object>&& cookieObject, Ref<AddSingleCookieCallback>&& callback)
 {
-    auto page = webPageProxyForHandle(browsingContextHandle);
+    RefPtr page = webPageProxyForHandle(browsingContextHandle);
     if (!page)
         ASYNC_FAIL_WITH_PREDEFINED_ERROR(WindowNotFound);
 
-    URL activeURL { page->pageLoadState().activeURL() };
+    URL activeURL { page->protectedPageLoadState()->activeURL() };
     ASSERT(activeURL.isValid());
 
     WebCore::Cookie cookie;
@@ -1603,25 +1610,25 @@ void WebAutomationSession::addSingleCookie(const Inspector::Protocol::Automation
 
     cookie.sameSite = toWebCoreSameSitePolicy(*parsedSameSite);
 
-    auto& cookieStore = page->websiteDataStore().cookieStore();
-    cookieStore.setCookies({ cookie }, [callback]() {
+    Ref cookieStore = page->protectedWebsiteDataStore()->cookieStore();
+    cookieStore->setCookies({ cookie }, [callback]() {
         callback->sendSuccess();
     });
 }
 
 Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::deleteAllCookies(const Inspector::Protocol::Automation::BrowsingContextHandle& browsingContextHandle)
 {
-    auto page = webPageProxyForHandle(browsingContextHandle);
+    RefPtr page = webPageProxyForHandle(browsingContextHandle);
     if (!page)
         SYNC_FAIL_WITH_PREDEFINED_ERROR(WindowNotFound);
 
-    URL activeURL { page->pageLoadState().activeURL() };
+    URL activeURL { page->protectedPageLoadState()->activeURL() };
     ASSERT(activeURL.isValid());
 
     String host = activeURL.host().toString();
 
-    auto& cookieStore = page->websiteDataStore().cookieStore();
-    cookieStore.deleteCookiesForHostnames({ host, domainByAddingDotPrefixIfNeeded(host) }, [] { });
+    Ref cookieStore = page->protectedWebsiteDataStore()->cookieStore();
+    cookieStore->deleteCookiesForHostnames({ host, domainByAddingDotPrefixIfNeeded(host) }, [] { });
 
     return { };
 }
@@ -1640,8 +1647,8 @@ Inspector::Protocol::ErrorStringOr<Ref<JSON::ArrayOf<Inspector::Protocol::Automa
 
 Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::setSessionPermissions(Ref<JSON::Array>&& permissions)
 {
-    for (auto it = permissions->begin(); it != permissions->end(); ++it) {
-        auto permission = it->get().asObject();
+    for (auto& value : permissions.get()) {
+        auto permission = value->asObject();
         if (!permission)
             SYNC_FAIL_WITH_PREDEFINED_ERROR_AND_DETAILS(InvalidParameter, "The parameter 'permissions' is invalid."_s);
 
@@ -1714,7 +1721,7 @@ Inspector::Protocol::ErrorStringOr<String /* authenticatorId */> WebAutomationSe
     auto page = webPageProxyForHandle(browsingContextHandle);
     if (!page)
         SYNC_FAIL_WITH_PREDEFINED_ERROR(WindowNotFound);
-    return page->websiteDataStore().virtualAuthenticatorManager().createAuthenticator({
+    return page->protectedWebsiteDataStore()->protectedVirtualAuthenticatorManager()->createAuthenticator({
         .protocol = protocol,
         .transport = toAuthenticatorTransport(parsedTransport.value()),
         .hasResidentKey = *hasResidentKey,
@@ -1733,7 +1740,7 @@ Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::removeVirtualAuth
     auto page = webPageProxyForHandle(browsingContextHandle);
     if (!page)
         SYNC_FAIL_WITH_PREDEFINED_ERROR(WindowNotFound);
-    if (!page->websiteDataStore().virtualAuthenticatorManager().removeAuthenticator(authenticatorId))
+    if (!page->protectedWebsiteDataStore()->protectedVirtualAuthenticatorManager()->removeAuthenticator(authenticatorId))
         SYNC_FAIL_WITH_PREDEFINED_ERROR_AND_DETAILS(InvalidParameter, "No such authenticator exists."_s);
     return { };
 #else
@@ -2009,8 +2016,8 @@ void WebAutomationSession::performMouseInteraction(const Inspector::Protocol::Au
     auto floatY = static_cast<float>(*y);
 
     OptionSet<WebEventModifier> keyModifiers;
-    for (auto it = keyModifierStrings->begin(); it != keyModifierStrings->end(); ++it) {
-        auto modifierString = it->get().asString();
+    for (auto& value : keyModifierStrings.get()) {
+        auto modifierString = value->asString();
         if (!modifierString)
             ASYNC_FAIL_WITH_PREDEFINED_ERROR_AND_DETAILS(InvalidParameter, "The parameter 'modifiers' is invalid."_s);
 
@@ -2345,8 +2352,8 @@ void WebAutomationSession::performInteractionSequence(const Inspector::Protocol:
             if (auto pressedVirtualKeysArray = stateObject->getArray("pressedVirtualKeys"_s)) {
                 VirtualKeyMap pressedVirtualKeys;
 
-                for (auto it = pressedVirtualKeysArray->begin(); it != pressedVirtualKeysArray->end(); ++it) {
-                    auto pressedVirtualKeyString = (*it)->asString();
+                for (auto& value : *pressedVirtualKeysArray) {
+                    auto pressedVirtualKeyString = value->asString();
                     if (!pressedVirtualKeyString)
                         ASYNC_FAIL_WITH_PREDEFINED_ERROR_AND_DETAILS(InvalidParameter, "Encountered a non-string virtual key value."_s);
 
@@ -2365,6 +2372,10 @@ void WebAutomationSession::performInteractionSequence(const Inspector::Protocol:
                 auto protocolButton = Inspector::Protocol::AutomationHelpers::parseEnumValueFromString<Inspector::Protocol::Automation::MouseButton>(pressedButtonString);
                 sourceState.pressedMouseButton = protocolButton.value_or(MouseButton::None);
             }
+
+            auto mouseInteractionString = stateObject->getString("mouseInteraction"_s);
+            if (!!mouseInteractionString)
+                sourceState.mouseInteraction = Inspector::Protocol::AutomationHelpers::parseEnumValueFromString<Inspector::Protocol::Automation::MouseInteraction>(mouseInteractionString);
 
             auto originString = stateObject->getString("origin"_s);
             if (!!originString)
@@ -2534,6 +2545,21 @@ void WebAutomationSession::didTakeScreenshot(uint64_t callbackID, std::optional<
         ASYNC_FAIL_WITH_PREDEFINED_ERROR(InternalError);
 
     callback->sendSuccess(base64EncodedData.value());
+}
+
+Ref<Inspector::FrontendRouter> WebAutomationSession::protectedFrontendRouter() const
+{
+    return m_frontendRouter;
+}
+
+Ref<Inspector::BackendDispatcher> WebAutomationSession::protectedBackendDispatcher() const
+{
+    return m_backendDispatcher;
+}
+
+Ref<WebAutomationSession::Debuggable> WebAutomationSession::protectedDebuggable() const
+{
+    return m_debuggable;
 }
 
 #if !PLATFORM(COCOA) && !USE(CAIRO) && !USE(SKIA)

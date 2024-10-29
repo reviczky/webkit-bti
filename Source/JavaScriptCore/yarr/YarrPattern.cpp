@@ -404,8 +404,13 @@ public:
         if (m_compileMode != CompileMode::UnicodeSets)
             return;
 
-        asciiOpSorted(rhsMatches, rhsRanges);
-        unicodeOpSorted(rhsMatchesUnicode, rhsRangesUnicode);
+        asciiOp(rhsMatches, rhsRanges);
+        // Sort the incoming Unicode matches, since Unicode case folding canonicalization may cause
+        // characters to be added to rhsMatches out of code point order.
+        Vector<char32_t> rhsSortedMatchesUnicode(rhsMatchesUnicode);
+        std::sort(rhsSortedMatchesUnicode.begin(), rhsSortedMatchesUnicode.end());
+
+        unicodeOpSorted(rhsSortedMatchesUnicode, rhsRangesUnicode);
     }
 
     bool hasInverteStrings()
@@ -662,7 +667,7 @@ private:
         m_mayContainStrings = !m_strings.isEmpty();
     }
 
-    void asciiOpSorted(const Vector<char32_t>& rhsMatches, const Vector<CharacterRange>& rhsRanges)
+    void asciiOp(const Vector<char32_t>& rhsMatches, const Vector<CharacterRange>& rhsRanges)
     {
         Vector<char32_t> resultMatches;
         Vector<CharacterRange> resultRanges;
@@ -1940,6 +1945,62 @@ public:
         }
     }
 
+    String extractAtom()
+    {
+        if (m_pattern.m_containsBackreferences)
+            return { };
+        if (m_pattern.m_containsBOL)
+            return { };
+        if (m_pattern.m_containsLookbehinds)
+            return { };
+        if (m_pattern.m_containsUnsignedLengthPattern)
+            return { };
+        if (m_pattern.m_hasCopiedParenSubexpressions)
+            return { };
+        if (m_pattern.m_hasNamedCaptureGroups)
+            return { };
+        if (m_pattern.m_saveInitialStartValue)
+            return { };
+        if (m_pattern.m_numSubpatterns)
+            return { };
+        if (m_pattern.multiline())
+            return { };
+        if (m_pattern.sticky())
+            return { };
+        if (m_pattern.eitherUnicode())
+            return { };
+        if (m_pattern.ignoreCase())
+            return { };
+        PatternDisjunction* disjunction = m_pattern.m_body;
+        if (!disjunction->m_minimumSize)
+            return { };
+        auto& alternatives = disjunction->m_alternatives;
+        if (alternatives.size() != 1)
+            return { };
+        StringBuilder builder;
+        auto* alternative = alternatives[0].get();
+        for (unsigned index = 0; index < alternative->m_terms.size(); ++index) {
+            auto& term = alternative->m_terms[index];
+            if (term.type != PatternTerm::Type::PatternCharacter)
+                return { };
+            if (term.quantityType != QuantifierType::FixedCount)
+                return { };
+            if (term.quantityMaxCount != 1)
+                return { };
+            if (term.inputPosition != index)
+                return { };
+            if (U16_LENGTH(term.patternCharacter) != 1)
+                return { };
+            if (term.m_matchDirection != MatchDirection::Forward)
+                return { };
+            builder.append(static_cast<UChar>(term.patternCharacter));
+        }
+        String atom = builder.toString();
+        if (atom.length() > 0)
+            return atom;
+        return { };
+    }
+
     ErrorCode error() { return m_error; }
 
 private:
@@ -2096,6 +2157,8 @@ ErrorCode YarrPattern::compile(StringView patternString)
     }
 
     constructor.setupNamedCaptures();
+
+    m_atom = constructor.extractAtom();
 
     if (UNLIKELY(Options::dumpCompiledRegExpPatterns()))
         dumpPattern(patternString);

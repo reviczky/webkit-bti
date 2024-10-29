@@ -52,11 +52,16 @@ class WeakPtrImplWithEventTargetData;
 class WindowProxy;
 
 enum class AdvancedPrivacyProtections : uint16_t;
+enum class SandboxFlag : uint16_t;
+enum class ScrollbarMode : uint8_t;
+
+using SandboxFlags = OptionSet<SandboxFlag>;
 
 class Frame : public ThreadSafeRefCounted<Frame, WTF::DestructionThread::Main>, public CanMakeWeakPtr<Frame> {
 public:
     virtual ~Frame();
 
+    enum class NotifyUIProcess : bool { No, Yes };
     enum class FrameType : bool { Local, Remote };
     FrameType frameType() const { return m_frameType; }
 
@@ -73,10 +78,11 @@ public:
     Settings& settings() const { return m_settings.get(); }
     Frame& mainFrame() const { return m_mainFrame.get(); }
     bool isMainFrame() const { return this == m_mainFrame.ptr(); }
-    WEBCORE_EXPORT void setOpener(Frame*);
+    WEBCORE_EXPORT void disownOpener();
+    WEBCORE_EXPORT void updateOpener(Frame&, NotifyUIProcess = NotifyUIProcess::Yes);
+    WEBCORE_EXPORT void setOpenerForWebKitLegacy(Frame*);
     const Frame* opener() const { return m_opener.get(); }
     Frame* opener() { return m_opener.get(); }
-    WEBCORE_EXPORT Vector<Ref<Frame>> openedFrames();
     bool hasOpenedFrames() const;
     WEBCORE_EXPORT void detachFromAllOpenedFrames();
     virtual bool isRootFrame() const = 0;
@@ -93,7 +99,7 @@ public:
     WEBCORE_EXPORT void disconnectOwnerElement();
     NavigationScheduler& navigationScheduler() const { return m_navigationScheduler.get(); }
     CheckedRef<NavigationScheduler> checkedNavigationScheduler() const;
-    WEBCORE_EXPORT void takeWindowProxyFrom(Frame&);
+    WEBCORE_EXPORT void takeWindowProxyAndOpenerFrom(Frame&);
 
     HistoryController& history() const { return m_history.get(); }
     WEBCORE_EXPORT CheckedRef<HistoryController> checkedHistory() const;
@@ -114,10 +120,14 @@ public:
     virtual String customNavigatorPlatform() const = 0;
     virtual OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections() const = 0;
 
+    virtual void updateSandboxFlags(SandboxFlags, NotifyUIProcess);
+
     WEBCORE_EXPORT RenderWidget* ownerRenderer() const; // Renderer for the element that contains this frame.
 
     WEBCORE_EXPORT void setOwnerPermissionsPolicy(OwnerPermissionsPolicyData&&);
     WEBCORE_EXPORT std::optional<OwnerPermissionsPolicyData> ownerPermissionsPolicy() const;
+
+    virtual void updateScrollingMode() = 0;
 
 protected:
     Frame(Page&, FrameIdentifier, FrameType, HTMLFrameOwnerElement*, Frame* parent, Frame* opener);

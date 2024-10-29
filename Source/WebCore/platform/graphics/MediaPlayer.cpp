@@ -49,12 +49,14 @@
 #include "PlatformTimeRanges.h"
 #include "ResourceError.h"
 #include "SecurityOrigin.h"
+#include "SpatialVideoMetadata.h"
 #include "VideoFrame.h"
 #include "VideoFrameMetadata.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <wtf/Lock.h>
 #include <wtf/NativePromise.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 
@@ -103,14 +105,19 @@
 
 namespace WebCore {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaPlayer);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaPlayerFactory);
+
 // a null player to make MediaPlayer logic simpler
 
 class NullMediaPlayerPrivate final : public MediaPlayerPrivateInterface, public RefCounted<NullMediaPlayerPrivate> {
 public:
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     static Ref<NullMediaPlayerPrivate> create(MediaPlayer& player) { return adoptRef(*new NullMediaPlayerPrivate(player)); }
 
-    void ref() final { RefCounted<NullMediaPlayerPrivate>::ref(); }
-    void deref() final { RefCounted<NullMediaPlayerPrivate>::deref(); }
+    constexpr MediaPlayerType mediaPlayerType() const final { return MediaPlayerType::Null; }
 
     void load(const String&) final { }
 #if ENABLE(MEDIA_SOURCE)
@@ -227,6 +234,7 @@ private:
     const std::optional<Vector<FourCC>>& allowedMediaCaptionFormatTypes() const final { return nullOptionalFourCCVector(); }
 
     class NullMediaResourceLoader final : public PlatformMediaResourceLoader {
+        WTF_MAKE_TZONE_ALLOCATED_INLINE(NullMediaResourceLoader);
         void sendH2Ping(const URL&, CompletionHandler<void(Expected<Seconds, ResourceError>&&)>&& completionHandler) final
         {
             completionHandler(makeUnexpected(ResourceError { }));
@@ -366,6 +374,11 @@ const MediaPlayerPrivateInterface* MediaPlayer::playerPrivate() const
 }
 
 MediaPlayerPrivateInterface* MediaPlayer::playerPrivate()
+{
+    return m_private.get();
+}
+
+RefPtr<MediaPlayerPrivateInterface> MediaPlayer::protectedPlayerPrivate()
 {
     return m_private.get();
 }
@@ -1156,19 +1169,15 @@ void MediaPlayer::setPreload(MediaPlayer::Preload preload)
     m_private->setPreload(preload);
 }
 
-void MediaPlayer::paint(GraphicsContext& p, const FloatRect& r)
+void MediaPlayer::paint(GraphicsContext& context, const FloatRect& destination)
 {
-    m_private->paint(p, r);
+    m_private->paint(context, destination);
 }
 
-#if !USE(AVFOUNDATION)
-
-bool MediaPlayer::copyVideoTextureToPlatformTexture(GraphicsContextGL* context, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY)
+void MediaPlayer::paintCurrentFrameInContext(GraphicsContext& context, const FloatRect& destination)
 {
-    return m_private->copyVideoTextureToPlatformTexture(context, texture, target, level, internalFormat, format, type, premultiplyAlpha, flipY);
+    m_private->paintCurrentFrameInContext(context, destination);
 }
-
-#endif
 
 RefPtr<VideoFrame> MediaPlayer::videoFrameForCurrentTime()
 {
@@ -1342,16 +1351,6 @@ bool MediaPlayer::isCrossOrigin(const SecurityOrigin& origin) const
 MediaPlayer::MovieLoadType MediaPlayer::movieLoadType() const
 {
     return m_private->movieLoadType();
-}
-
-MediaPlayer::VideoPlaybackConfiguration MediaPlayer::videoPlaybackConfiguration() const
-{
-    return m_private->videoPlaybackConfiguration();
-}
-
-void MediaPlayer::videoPlaybackConfigurationChanged()
-{
-    return client().mediaPlayerVideoPlaybackConfigurationChanged();
 }
 
 MediaTime MediaPlayer::mediaTimeForTimeValue(const MediaTime& timeValue) const
@@ -1601,9 +1600,12 @@ CachedResourceLoader* MediaPlayer::cachedResourceLoader()
     return client().mediaPlayerCachedResourceLoader();
 }
 
-Ref<PlatformMediaResourceLoader> MediaPlayer::createResourceLoader()
+Ref<PlatformMediaResourceLoader> MediaPlayer::mediaResourceLoader()
 {
-    return client().mediaPlayerCreateResourceLoader();
+    if (!m_mediaResourceLoader)
+        m_mediaResourceLoader = client().mediaPlayerCreateResourceLoader();
+
+    return *m_mediaResourceLoader;
 }
 
 void MediaPlayer::addAudioTrack(AudioTrackPrivate& track)
@@ -1890,7 +1892,7 @@ void MediaPlayer::audioOutputDeviceChanged()
     m_private->audioOutputDeviceChanged();
 }
 
-MediaPlayerIdentifier MediaPlayer::identifier() const
+std::optional<MediaPlayerIdentifier> MediaPlayer::identifier() const
 {
     return m_private->identifier();
 }
@@ -2126,14 +2128,6 @@ String convertEnumerationToString(MediaPlayer::BufferingPolicy enumerationValue)
     return values[static_cast<size_t>(enumerationValue)];
 }
 
-String convertOptionSetToString(const MediaPlayer::VideoPlaybackConfiguration& value)
-{
-    return makeString('[', value.contains(MediaPlayer::VideoPlaybackConfigurationOption::Stereo) ? "Stereo|"_s : ""_s,
-        value.contains(MediaPlayer::VideoPlaybackConfigurationOption::StereoMultiview) ? "StereoMultiview|"_s : ""_s,
-        value.contains(MediaPlayer::VideoPlaybackConfigurationOption::Spatial) ? "Spatial|"_s : ""_s,
-        ']');
-}
-
 String MediaPlayer::lastErrorMessage() const
 {
     return m_lastErrorMessage;
@@ -2144,6 +2138,14 @@ String SeekTarget::toString() const
     return makeString('[', WTF::LogArgument<MediaTime>::toString(time),
         WTF::LogArgument<MediaTime>::toString(negativeThreshold),
         WTF::LogArgument<MediaTime>::toString(positiveThreshold), ']');
+}
+
+String convertSpatialVideoMetadataToString(const SpatialVideoMetadata& metadata)
+{
+    return makeString("SpatialMetadata {"_s, WTF::LogArgument<WebCore::IntSize>::toString(metadata.size),
+        WTF::LogArgument<float>::toString(metadata.horizontalFOVDegrees),
+        WTF::LogArgument<float>::toString(metadata.baseline),
+        WTF::LogArgument<float>::toString(metadata.disparityAdjustment), '}');
 }
 
 } // namespace WebCore

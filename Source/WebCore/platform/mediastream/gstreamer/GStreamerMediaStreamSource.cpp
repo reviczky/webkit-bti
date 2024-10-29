@@ -34,6 +34,7 @@
 #include "VideoFrameMetadataGStreamer.h"
 #include "VideoTrackPrivateMediaStream.h"
 #include <wtf/CheckedRef.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if USE(GSTREAMER_WEBRTC)
 #include "RealtimeIncomingAudioSourceGStreamer.h"
@@ -100,7 +101,7 @@ GstStream* webkitMediaStreamNew(const RefPtr<MediaStreamTrackPrivate>& track)
 static void webkitMediaStreamSrcCharacteristicsChanged(WebKitMediaStreamSrc*);
 
 class WebKitMediaStreamObserver : public MediaStreamPrivateObserver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(WebKitMediaStreamObserver);
 public:
     virtual ~WebKitMediaStreamObserver() { };
     WebKitMediaStreamObserver(GstElement* src)
@@ -135,7 +136,7 @@ class InternalSource final : public MediaStreamTrackPrivateObserver,
     public RealtimeMediaSource::AudioSampleObserver,
     public RealtimeMediaSource::VideoFrameObserver,
     public CanMakeCheckedPtr<InternalSource> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(InternalSource);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(InternalSource);
 public:
     InternalSource(GstElement* parent, MediaStreamTrackPrivate& track, const String& padName, bool consumerIsVideoPlayer)
@@ -532,12 +533,17 @@ public:
 
     GUniquePtr<GstStructure> queryAdditionalStats()
     {
+        GUniquePtr<GstStructure> stats;
         auto query = adoptGRef(gst_query_new_custom(GST_QUERY_CUSTOM, gst_structure_new_empty("webkit-video-decoder-stats")));
         auto pad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
         if (gst_pad_peer_query(pad.get(), query.get()))
-            return GUniquePtr<GstStructure>(gst_structure_copy(gst_query_get_structure(query.get())));
+            stats.reset(gst_structure_copy(gst_query_get_structure(query.get())));
 
-        return nullptr;
+        if (!stats)
+            stats.reset(gst_structure_new_empty("webkit-video-decoder-stats"));
+
+        gst_structure_set(stats.get(), "track-identifier", G_TYPE_STRING, m_track->id().utf8().data(), nullptr);
+        return stats;
     }
 
     bool isEnded() const { return m_isEnded; }

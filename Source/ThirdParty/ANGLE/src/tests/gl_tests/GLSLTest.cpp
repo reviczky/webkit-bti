@@ -1994,6 +1994,26 @@ void main(){
     glDeleteShader(shader);
 }
 
+// Verify that using maximum size as atomic counter offset results in compilation failure.
+TEST_P(GLSLTest_ES31, CompileWithMaxAtomicCounterOffsetFails)
+{
+    GLint maxSize;
+    glGetIntegerv(GL_MAX_ATOMIC_COUNTER_BUFFER_SIZE, &maxSize);
+
+    std::ostringstream srcStream;
+    srcStream << "#version 310 es\n"
+              << "layout(location = 0) out uvec4 color;\n"
+              << "layout(binding = 0, offset = " << maxSize << ") uniform atomic_uint a_counter;\n"
+              << "void main() {\n"
+              << "color = uvec4(atomicCounterIncrement(a_counter)); \n"
+              << "}";
+    std::string fsStream = srcStream.str();
+    const char *strFS    = fsStream.c_str();
+
+    GLuint shader = CompileShader(GL_FRAGMENT_SHADER, strFS);
+    EXPECT_EQ(0u, shader);
+}
+
 // Verify that functions without return statements still compile
 TEST_P(GLSLTest, MissingReturnFloat)
 {
@@ -4139,10 +4159,6 @@ TEST_P(GLSLTest, VaryingMatrixArray)
 // Test that using a centroid varying matrix array is supported.
 TEST_P(GLSLTest_ES3, CentroidVaryingMatrixArray)
 {
-    // TODO(anglebug.com/42264029): Skipping initial failures so we can set up a passing iOS test
-    // bot.
-    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
-
     constexpr char kVS[] =
         "#version 300 es\n"
         "uniform vec2 u_a1;\n"
@@ -4479,6 +4495,30 @@ TEST_P(GLSLTest_ES31, FindMSBAndFindLSBCornerCases)
     ANGLE_GL_PROGRAM(program, essl31_shaders::vs::Simple(), kFS);
     drawQuad(program, essl31_shaders::PositionAttrib(), 0.5f);
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
+}
+
+// Test that reading from a swizzled vector that is dynamically indexed succeeds.
+TEST_P(GLSLTest_ES3, ReadFromDynamicIndexingOfSwizzledVector)
+{
+    constexpr char kFS[] = R"(#version 300 es
+precision highp float;
+
+uniform int index;
+uniform vec4 data;
+
+out vec4 color;
+void main() {
+    color = vec4(vec4(data.x, data.y, data.z, data.w).zyxw[index], 0, 0, 1);
+})";
+
+    ANGLE_GL_PROGRAM(program, essl3_shaders::vs::Simple(), kFS);
+    glUseProgram(program);
+
+    GLint dataLoc = glGetUniformLocation(program, "data");
+    glUniform4f(dataLoc, 0.2, 0.4, 0.6, 0.8);
+    drawQuad(program, essl3_shaders::PositionAttrib(), 0.5f);
+
+    EXPECT_PIXEL_NEAR(0, 0, 153, 0, 0, 255, 1);
 }
 
 // Test that writing into a swizzled vector that is dynamically indexed succeeds.
@@ -6931,7 +6971,7 @@ TEST_P(GLSLTest, StructsWithSameMembersDisambiguatedByName)
 TEST_P(GLSLTest, InactiveVaryingInVertexActiveInFragment)
 {
     // http://anglebug.com/42263408
-    ANGLE_SKIP_TEST_IF((IsMac() && IsOpenGL()) || (IsIOS() && IsOpenGLES()));
+    ANGLE_SKIP_TEST_IF(IsMac() && IsOpenGL());
 
     constexpr char kVS[] =
         "attribute vec4 inputAttribute;\n"
@@ -7596,9 +7636,6 @@ TEST_P(WebGL2GLSLTest, VaryingStructNotInitializedInVertexShader)
     //
     // http://anglebug.com/42262078
     ANGLE_SKIP_TEST_IF(IsDesktopOpenGL() && (IsMac() || (IsWindows() && !IsNVIDIA())));
-    // TODO(anglebug.com/42264029): iOS thinks that the precision qualifiers don't match on the
-    // struct member. Not sure if it's being overly strict.
-    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     constexpr char kVS[] =
         "#version 300 es\n"
@@ -7630,9 +7667,6 @@ TEST_P(WebGL2GLSLTest, VaryingStructNotInitializedInVertexShader)
 // Test that a varying struct that gets used in the fragment shader works.
 TEST_P(GLSLTest_ES3, VaryingStructUsedInFragmentShader)
 {
-    // TODO(anglebug.com/42264029): iOS thinks that the precision qualifiers don't match on the
-    // struct member. Not sure if it's being overly strict.
-    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     constexpr char kVS[] =
         "#version 300 es\n"
         "in vec4 inputAttribute;\n"
@@ -7754,9 +7788,6 @@ TEST_P(GLSLTest_ES3, ComplexVaryingStructsUsedInFragmentShader)
     //
     // http://anglebug.com/42261898
     ANGLE_SKIP_TEST_IF(IsVulkan() && IsAndroid());
-    // TODO(anglebug.com/42264029): iOS thinks that the precision qualifiers don't match on the
-    // struct members. Not sure if it's being overly strict.
-    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     constexpr char kVS[] =
         "#version 300 es\n"
@@ -9289,9 +9320,6 @@ void main()
 // Test that a varying struct that's defined as a part of the declaration is handled correctly.
 TEST_P(GLSLTest_ES3, VaryingStructWithInlineDefinition)
 {
-    // TODO(anglebug.com/42264029): iOS thinks that the precision qualifiers don't match on the
-    // struct member. Not sure if it's being overly strict.
-    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     constexpr char kVS[] = R"(#version 300 es
 in vec4 inputAttribute;
 
@@ -14186,6 +14214,95 @@ void main() { v_varying = a_position.x; gl_Position = a_position; })";
     EXPECT_EQ(0u, program);
 }
 
+// Regression test for a bug with precise in combination with constructor, swizzle and dynamic
+// index.
+TEST_P(GLSLTest_ES31, PreciseVsVectorConstructorSwizzleAndIndex)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_gpu_shader5"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_gpu_shader5 : require
+
+uniform highp float u;
+
+void main()
+{
+    precise float p = vec4(u, u, u, u).xyz[int(u)];
+    gl_Position = vec4(p);
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+out vec4 oColor;
+void main()
+{
+    oColor = vec4(1.0);
+})";
+
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+}
+
+// Regression test for a bug with precise in combination with matrix constructor and column index.
+TEST_P(GLSLTest_ES31, PreciseVsMatrixConstructorAndIndex)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_gpu_shader5"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_gpu_shader5 : require
+
+uniform highp vec4 u;
+
+void main()
+{
+    precise vec4 p = mat4(u,vec4(0),vec4(0),vec4(0))[0];
+    gl_Position = p;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+out vec4 oColor;
+void main()
+{
+    oColor = vec4(1.0);
+})";
+
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+}
+
+// Regression test for a bug with precise in combination with struct constructor and field
+// selection.
+TEST_P(GLSLTest_ES31, PreciseVsStructConstructorAndFieldSelection)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_gpu_shader5"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_gpu_shader5 : require
+
+struct S
+{
+    float a;
+    float b;
+};
+
+uniform highp float u;
+
+void main()
+{
+    precise float p = S(u, u).b;
+    gl_Position = vec4(p);
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+out vec4 oColor;
+void main()
+{
+    oColor = vec4(1.0);
+})";
+
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+}
+
 // Test that reusing the same variable name for different uses across stages links fine.  The SPIR-V
 // transformation should ignore all names for non-shader-interface variables and not get confused by
 // them.
@@ -15817,93 +15934,6 @@ void main()
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::white);
 }
 
-// Test that interpolateAt* work with swizzle.  This test is disabled as swizzled interpolants are
-// only allowed in desktop GLSL.
-TEST_P(GLSLTest_ES31, InterpolateAtWithSwizzle)
-{
-    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_OES_shader_multisample_interpolation"));
-
-    constexpr char kVS[] = R"(#version 310 es
-
-out vec4 interpolant;
-
-void main()
-{
-    // The following triangle is being drawn over the framebuffer.
-    //
-    //   (-1,3) |\
-    //          |   \
-    //          |      \
-    //          |         \
-    //          |            \
-    //          +--------------+
-    //          |              | \
-    //          |              |    \
-    //          | Framebuffer  |       \
-    //          |              |          \
-    //          |              |             \
-    //  (-1,-1) +--------------+--------------- (3,-1)
-    //
-    // Interpolant is set such that interpolateAtCentroid would produce the desired value for
-    // position == (0, 0), and interpolateAtOffset(0.5, -0.5) for position == (1,-1)
-    if (gl_VertexID == 0)
-    {
-        gl_Position = vec4(-1, -1, 0, 1);
-        interpolant = vec4(1.5, 0.5, 0, 0);
-    }
-    else if (gl_VertexID == 1)
-    {
-        gl_Position = vec4(3, -1, 0, 1);
-        interpolant = vec4(0, 0, 1, 2);
-    }
-    else
-    {
-        gl_Position = vec4(-1, 3, 0, 1);
-        interpolant = vec4(0, 1, -1, 2);
-    }
-})";
-
-    constexpr char kFS[] = R"(#version 310 es
-#extension GL_OES_shader_multisample_interpolation : require
-precision highp float;
-
-in vec4 interpolant;
-out vec4 color;
-
-void main()
-{
-    // Should result in (0.75, 1.0)
-    vec2 atCentroid = interpolateAtCentroid(interpolant.xw);
-    // Selecting the bottom-right corner, this should result in (0.5, 0.25), but interpolateAtOffset
-    // doesn't make guarantees regarding the range and granularity of the offset.  The interpolant
-    // is given values such that the bottom-left/top-right diagonal is interpolated to a constant
-    // value of (0, 0.5).  The top-left corner has the value (-0.5, 0.75).  We therefore make a
-    // coarse test to make sure that atOffset.x > 0 and atOffset.y < 0.5, thus ensuring at least
-    // that the offset is in the correct half of the pixel.
-    vec2 atOffset = interpolateAtOffset(interpolant.zy, vec2(0.5, -0.5));
-
-    color = vec4(atCentroid, atOffset.x > 0.0 ? 1 : 0, atOffset.y < 0.5 ? 1 : 0);
-})";
-
-    GLRenderbuffer rbo;
-    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 1, 1);
-
-    GLFramebuffer fbo;
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo);
-    EXPECT_GL_FRAMEBUFFER_COMPLETE(GL_FRAMEBUFFER);
-
-    ANGLE_GL_PROGRAM(program, kVS, kFS);
-    glUseProgram(program);
-
-    glViewport(0, 0, 1, 1);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    EXPECT_GL_NO_ERROR();
-
-    EXPECT_PIXEL_NEAR(0, 0, 191, 255, 255, 255, 1);
-}
-
 class GLSLTestLoops : public GLSLTest
 {
   protected:
@@ -17396,6 +17426,52 @@ void main() {
 
     drawQuad(testProgram, essl3_shaders::PositionAttrib(), 0.5f, 1.0f, true);
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor(255, 0, 255, 255));
+    ASSERT_GL_NO_ERROR();
+}
+
+// Test coverage of the mix(uint, uint, bool) overload which was missing in D3D11 translation
+TEST_P(GLSLTest_ES31, MixUintUintBool)
+{
+    constexpr char kFS[] = R"(#version 310 es
+precision highp float;
+out vec4 fragColor;
+void main() {
+    uvec4 testData1 = uvec4(0, 1, 2, 3);
+    uvec4 testData2 = uvec4(4, 5, 6, 7);
+    uint scalar = mix(testData1.x, testData2.x, true);
+    uvec4 vector = mix(testData1, testData2, bvec4(false, true, true, false));
+    fragColor = vec4(scalar == 4u ? 1.0 : 0.0, vector == uvec4(0, 5, 6, 3) ? 1.0 : 0.0, 0.0, 1.0);
+}
+)";
+
+    ANGLE_GL_PROGRAM(testProgram, essl31_shaders::vs::Simple(), kFS);
+    ASSERT_GL_NO_ERROR();
+
+    drawQuad(testProgram, essl31_shaders::PositionAttrib(), 0.5f, 1.0f, true);
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor(255, 255, 0, 255));
+    ASSERT_GL_NO_ERROR();
+}
+
+// Test coverage of the mix(int, int, bool) overload which was missing in D3D11 translation
+TEST_P(GLSLTest_ES31, MixIntIntBool)
+{
+    constexpr char kFS[] = R"(#version 310 es
+precision highp float;
+out vec4 fragColor;
+void main() {
+    ivec4 testData1 = ivec4(-4, -3, -2, -1);
+    ivec4 testData2 = ivec4(4, 5, 6, 7);
+    int scalar = mix(testData1.x, testData2.x, true);
+    ivec4 vector = mix(testData1, testData2, bvec4(false, true, true, false));
+    fragColor = vec4(scalar == 4 ? 1.0 : 0.0, vector == ivec4(-4, 5, 6, -1) ? 1.0 : 0.0, 0.0, 1.0);
+}
+)";
+
+    ANGLE_GL_PROGRAM(testProgram, essl31_shaders::vs::Simple(), kFS);
+    ASSERT_GL_NO_ERROR();
+
+    drawQuad(testProgram, essl31_shaders::PositionAttrib(), 0.5f, 1.0f, true);
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor(255, 255, 0, 255));
     ASSERT_GL_NO_ERROR();
 }
 

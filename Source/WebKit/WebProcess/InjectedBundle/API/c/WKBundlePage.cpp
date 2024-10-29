@@ -342,11 +342,6 @@ WKStringRef WKBundlePageCopyRenderTreeExternalRepresentationForPrinting(WKBundle
     return WebKit::toCopiedAPI(WebKit::toImpl(pageRef)->renderTreeExternalRepresentationForPrinting());
 }
 
-void WKBundlePageClearMainFrameName(WKBundlePageRef pageRef)
-{
-    WebKit::toImpl(pageRef)->clearMainFrameName();
-}
-
 void WKBundlePageClose(WKBundlePageRef pageRef)
 {
     WebKit::toImpl(pageRef)->sendClose();
@@ -362,19 +357,9 @@ double WKBundlePageGetPageZoomFactor(WKBundlePageRef pageRef)
     return WebKit::toImpl(pageRef)->pageZoomFactor();
 }
 
-void WKBundlePageSetScaleAtOrigin(WKBundlePageRef pageRef, double scale, WKPoint origin)
-{
-    WebKit::toImpl(pageRef)->scalePage(scale, WebKit::toIntPoint(origin));
-}
-
 WKStringRef WKBundlePageDumpHistoryForTesting(WKBundlePageRef page, WKStringRef directory)
 {
     return WebKit::toCopiedAPI(WebKit::toImpl(page)->dumpHistoryForTesting(WebKit::toWTFString(directory)));
-}
-
-void WKBundleClearHistoryForTesting(WKBundlePageRef page)
-{
-    WebKit::toImpl(page)->clearHistory();
 }
 
 WKBundleBackForwardListRef WKBundlePageGetBackForwardList(WKBundlePageRef pageRef)
@@ -634,7 +619,7 @@ void WKBundlePageSetUseDarkAppearance(WKBundlePageRef pageRef, bool useDarkAppea
 {
     WebKit::WebPage* webPage = WebKit::toImpl(pageRef);
     if (WebCore::Page* page = webPage ? webPage->corePage() : nullptr)
-        page->effectiveAppearanceDidChange(useDarkAppearance, page->useElevatedUserInterfaceLevel());
+        page->setUseColorAppearance(useDarkAppearance, page->useElevatedUserInterfaceLevel());
 }
 
 bool WKBundlePageIsUsingDarkAppearance(WKBundlePageRef pageRef)
@@ -832,23 +817,6 @@ WKCaptionUserPreferencesTestingModeTokenRef WKBundlePageCreateCaptionUserPrefere
     UNUSED_PARAM(page);
     return { };
 #endif
-}
-
-void WKBundlePageSetEventThrottlingBehaviorOverride(WKBundlePageRef page, WKEventThrottlingBehavior* behavior)
-{
-    std::optional<WebCore::EventThrottlingBehavior> behaviorValue;
-    if (behavior) {
-        switch (*behavior) {
-        case kWKEventThrottlingBehaviorResponsive:
-            behaviorValue = WebCore::EventThrottlingBehavior::Responsive;
-            break;
-        case kWKEventThrottlingBehaviorUnresponsive:
-            behaviorValue = WebCore::EventThrottlingBehavior::Unresponsive;
-            break;
-        }
-    }
-
-    WebKit::toImpl(page)->corePage()->setEventThrottlingBehaviorOverride(behaviorValue);
 }
 
 void WKBundlePageLayoutIfNeeded(WKBundlePageRef page)

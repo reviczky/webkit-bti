@@ -1,85 +1,15 @@
 ================
-WebKitGTK 2.46.2
+WebKitGTK 2.47.1
 ================
 
-What's new in WebKitGTK 2.46.2?
+What's new in WebKitGTK 2.47.1?
 
-  - Own well-known bus name on a11y bus.
-  - Improve memory consumption when putImageData is used repeatedly on accelerated canvas.
-  - Disable cached web process suspension for now to prevent leaks.
-  - Improve text kerning with different combinations of antialias and hinting settings.
-  - Destroy all network sessions on process exit.
-  - Fix visible rectangle calculation when there are animations.
-  - Fix the build with ENABLE_NOTIFICATIONS=OFF.
-  - Fix the build with ENABLE_FULLSCREEN_API=OFF.
-  - Fix the build with ENABLE_WEB_AUDIO=OFF.
-  - Fix the build on ppc64le.
+  - Flatten layers to a plane when preseve-3d style is set.
+  - Build GPU process by default, but keeping WebGL in the web process by default for now.
+  - Use DMA-BUF buffers for WebGL when available.
+  - Fix DuckDuckGo links by adding a user agent quirk.
+  - Make GStreamer GL sink handle DMA-BUF memory to replace the DMA-BUF sink.
   - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.46.1
-================
-
-What's new in WebKitGTK 2.46.1?
-
-  - Fix login QR code not shown in WhatsApp web.
-  - Disable PSON by default again in GTK 3 API versions.
-  - Disable DMABuf video sink by default to prevent file descriptor leaks.
-  - Fix the build with GCC 13.
-  - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.46.0
-================
-
-What's new in WebKitGTK 2.46.0?
-
-  - Fix rendering of images in PDF documents.
-  - Make process launching fast again.
-  - Fix webkit_web_resource_get_data() regression that caused we were always retuning empty data.
-  - Fix the build with GLib < 2.68.
-  - Fix several crashes and rendering issues.
-  - Translatation updates: Polish.
-
-=================
-WebKitGTK 2.45.92
-=================
-
-What's new in WebKitGTK 2.45.92?
-
-  - Add webkit://gpu/stdout to dump the information from webkit://gpu to stdout.
-  - Undeprecate injected bundle frame access interfaces.
-  - Fix drag and drop.
-  - Fix connection to a11y bus under flatpak.
-  - Fix the build with Wayland and GBM disabled.
-  - Fix the build in non-linux systems.
-  - Fix linker relocation errors on Debug/RelWithDebInfo builds.
-  - Fix several crashes and rendering issues.
-
-=================
-WebKitGTK 2.45.91
-=================
-
-What's new in WebKitGTK 2.45.91?
-
-  - Add new API to WebKitAutomationSession to be notified when the session is about to be closed.
-  - Fix WebGL with accelerated compositing disabled.
-  - Fix image filtering not being applied in some cases.
-  - Fix the build on 32 bits systems.
-  - Fix the build with -DUSE_TEXTURE_MAPPER_DMABUF=OFF
-  - Fix several crashes and rendering issues.
-  - Translatation updates: Slovenian.
-
-=================
-WebKitGTK 2.45.90
-=================
-
-What's new in WebKitGTK 2.45.90?
-
-  - Add explicit fencing support when available.
-  - Use RGBA as the pixel format for texture backed SkSurfaces.
-  - Fix build with gstreamer versions < 1.22.
-  - Translatation updates: Slovenian.
 
 ================
 WebKitGTK 2.45.6

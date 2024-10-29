@@ -29,6 +29,7 @@
 #include "StylePropertiesInlines.h"
 #include <wtf/HashMap.h>
 #include <wtf/Hasher.h>
+#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
@@ -62,7 +63,7 @@ Ref<ImmutableStyleProperties> ImmutableStyleProperties::create(const CSSProperty
 
 static auto& deduplicationMap()
 {
-    static NeverDestroyed<HashMap<unsigned, Ref<ImmutableStyleProperties>, AlreadyHashed>> map;
+    static NeverDestroyed<UncheckedKeyHashMap<unsigned, Ref<ImmutableStyleProperties>, AlreadyHashed>> map;
     return map.get();
 }
 

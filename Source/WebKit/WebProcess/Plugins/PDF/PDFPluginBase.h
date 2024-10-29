@@ -29,7 +29,7 @@
 
 #include "FrameInfoData.h"
 #include "PDFPluginIdentifier.h"
-#include "PDFScriptEvaluator.h"
+#include "WebFoundTextRange.h"
 #include "WebMouseEvent.h"
 #include <WebCore/AffineTransform.h>
 #include <WebCore/FindOptions.h>
@@ -84,11 +84,11 @@ class WebWheelEvent;
 struct WebHitTestResultData;
 
 enum class ByteRangeRequestIdentifierType;
-using ByteRangeRequestIdentifier = LegacyNullableObjectIdentifier<ByteRangeRequestIdentifierType>;
+using ByteRangeRequestIdentifier = ObjectIdentifier<ByteRangeRequestIdentifierType>;
 
 enum class CheckValidRanges : bool { No, Yes };
 
-class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFPluginBase>, public CanMakeThreadSafeCheckedPtr<PDFPluginBase>, public WebCore::ScrollableArea, public PDFScriptEvaluatorClient, public Identified<PDFPluginIdentifier> {
+class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFPluginBase>, public CanMakeThreadSafeCheckedPtr<PDFPluginBase>, public WebCore::ScrollableArea, public Identified<PDFPluginIdentifier> {
     WTF_MAKE_NONCOPYABLE(PDFPluginBase);
     WTF_MAKE_TZONE_ALLOCATED(PDFPluginBase);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(PDFPluginBase);
@@ -105,10 +105,6 @@ public:
     uint32_t ptrCountWithoutThreadCheck() const final { return CanMakeThreadSafeCheckedPtr::ptrCountWithoutThreadCheck(); }
     void incrementPtrCount() const final { CanMakeThreadSafeCheckedPtr::incrementPtrCount(); }
     void decrementPtrCount() const final { CanMakeThreadSafeCheckedPtr::decrementPtrCount(); }
-
-    using WebKit::PDFScriptEvaluatorClient::weakPtrFactory;
-    using WebKit::PDFScriptEvaluatorClient::WeakValueType;
-    using WebKit::PDFScriptEvaluatorClient::WeakPtrImplType;
 
     void startLoading();
     void destroy();
@@ -133,8 +129,8 @@ public:
     virtual double scaleFactor() const = 0;
     virtual void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) = 0;
 
-    virtual CGFloat minScaleFactor() const { return 0.25; }
-    virtual CGFloat maxScaleFactor() const { return 5; }
+    virtual double minScaleFactor() const { return 0.25; }
+    virtual double maxScaleFactor() const { return 5; }
 
     bool isLocked() const;
 
@@ -173,6 +169,11 @@ public:
     virtual bool drawsFindOverlay() const = 0;
     virtual RefPtr<WebCore::TextIndicator> textIndicatorForCurrentSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) { return { }; }
     virtual WebCore::DictionaryPopupInfo dictionaryPopupInfoForSelection(PDFSelection *, WebCore::TextIndicatorPresentationTransition) = 0;
+
+    virtual Vector<WebFoundTextRange::PDFData> findTextMatches(const String& target, WebCore::FindOptions) = 0;
+    virtual Vector<WebCore::FloatRect> rectsForTextMatch(const WebFoundTextRange::PDFData&) = 0;
+    virtual RefPtr<WebCore::TextIndicator> textIndicatorForTextMatch(const WebFoundTextRange::PDFData&, WebCore::TextIndicatorPresentationTransition) { return { }; }
+    virtual void scrollToRevealTextMatch(const WebFoundTextRange::PDFData&) { }
 
     virtual bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) = 0;
     void performWebSearch(const String& query);
@@ -246,6 +247,7 @@ public:
     virtual void focusPreviousAnnotation() = 0;
 
     virtual Vector<WebCore::FloatRect> annotationRectsForTesting() const { return { }; }
+    virtual void setTextAnnotationValueForTesting(unsigned pageIndex, unsigned annotationIndex, const String& value) { }
     virtual void setPDFDisplayModeForTesting(const String&) { }
     void registerPDFTest(RefPtr<WebCore::VoidCallback>&&);
 
@@ -265,6 +267,8 @@ public:
 
     virtual void windowActivityDidChange() { }
 
+    virtual void didChangeIsInWindow() { }
+
     virtual void didSameDocumentNavigationForFrame(WebFrame&) { }
 
 #if PLATFORM(MAC)
@@ -272,7 +276,7 @@ public:
 #endif
 
     uint64_t streamedBytes() const;
-    WebCore::FrameIdentifier rootFrameID() const final;
+    std::optional<WebCore::FrameIdentifier> rootFrameID() const final;
 
 protected:
     virtual double contentScaleFactor() const = 0;
@@ -291,7 +295,7 @@ private:
     // FIXME: It would be nice to avoid having both the "copy into a buffer" and "return a pointer" ways of getting data.
     std::span<const uint8_t> dataSpanForRange(uint64_t sourcePosition, size_t count, CheckValidRanges) const;
     // Returns true only if we can satisfy all of the requests.
-    bool getByteRanges(CFMutableArrayRef, const CFRange*, size_t count) const;
+    bool getByteRanges(CFMutableArrayRef, std::span<const CFRange>) const;
 
 protected:
     explicit PDFPluginBase(WebCore::HTMLPlugInElement&);
@@ -315,7 +319,7 @@ protected:
 
     void invalidateRect(const WebCore::IntRect&);
 
-    void print() override;
+    void print();
 
     // ScrollableArea functions.
     WebCore::IntRect scrollCornerRect() const final;
@@ -373,6 +377,8 @@ protected:
 #if !LOG_DISABLED
     void incrementalLoaderLog(const String&);
 #endif
+
+    virtual void teardownPasswordEntryForm() = 0;
 
     SingleThreadWeakPtr<PluginView> m_view;
     WeakPtr<WebFrame> m_frame;

@@ -36,6 +36,7 @@
 #include "RotateTransformOperation.h"
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
@@ -50,6 +51,13 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AnimationValue);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FloatAnimationValue);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(TransformAnimationValue);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FilterAnimationValue);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(KeyframeValueList);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GraphicsLayer);
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 String acceleratedEffectPropertyIDAsString(AcceleratedEffectProperty property)
@@ -111,7 +119,7 @@ String animatedPropertyIDAsString(AnimatedProperty property)
     return ""_s;
 }
 
-typedef HashMap<const GraphicsLayer*, Vector<FloatRect>> RepaintMap;
+typedef UncheckedKeyHashMap<const GraphicsLayer*, Vector<FloatRect>> RepaintMap;
 static RepaintMap& repaintRectMap()
 {
     static NeverDestroyed<RepaintMap> map;
@@ -167,7 +175,7 @@ bool GraphicsLayer::supportsContentsTiling()
 
 // Singleton client used for layers on which clearClient has been called.
 class EmptyGraphicsLayerClient final : public GraphicsLayerClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(EmptyGraphicsLayerClient);
 public:
     static EmptyGraphicsLayerClient& singleton();
 };
@@ -633,7 +641,7 @@ void GraphicsLayer::setPaintingPhase(OptionSet<GraphicsLayerPaintingPhase> phase
     m_paintingPhase = phase;
 }
 
-void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const FloatRect& clip, OptionSet<GraphicsLayerPaintBehavior> layerPaintBehavior)
+void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const FloatRect& clip, OptionSet<GraphicsLayerPaintBehavior> layerPaintBehavior) const
 {
     auto offset = offsetFromRenderer() - toFloatSize(scrollOffset());
     auto clipRect = clip;
@@ -1067,6 +1075,8 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
             ts << indent << ")\n"_s;
         }
     }
+
+    client().dumpProperties(this, ts, options);
 }
 
 TextStream& operator<<(TextStream& ts, const Vector<PlatformLayerIdentifier>& layers)
@@ -1104,9 +1114,10 @@ TextStream& operator<<(TextStream& ts, const GraphicsLayer::CustomAppearance& cu
     return ts;
 }
 
-String GraphicsLayer::layerTreeAsText(OptionSet<LayerTreeAsTextOptions> options) const
+String GraphicsLayer::layerTreeAsText(OptionSet<LayerTreeAsTextOptions> options, uint32_t baseIndent) const
 {
     TextStream ts(TextStream::LineMode::MultipleLine, TextStream::Formatting::SVGStyleRect);
+    ts.setIndent(baseIndent);
 
     dumpLayer(ts, options);
     return ts.release();

@@ -37,17 +37,17 @@
 #include <skia/core/SkBitmap.h>
 #include <skia/core/SkPixmap.h>
 #include <skia/gpu/ganesh/SkSurfaceGanesh.h>
-#include <skia/gpu/gl/GrGLTypes.h>
 #include <wtf/TZoneMallocInlines.h>
 
-#if USE(NICOSIA)
+#if USE(COORDINATED_GRAPHICS)
 #include "BitmapTexture.h"
+#include "CoordinatedPlatformLayerBufferNativeImage.h"
+#include "CoordinatedPlatformLayerBufferRGB.h"
 #include "GLFence.h"
-#include "PlatformLayerDisplayDelegate.h"
+#include "GraphicsLayerContentsDisplayDelegateTextureMapper.h"
 #include "TextureMapperFlags.h"
-#include "TextureMapperPlatformLayerBuffer.h"
-#include "TextureMapperPlatformLayerProxyGL.h"
-#include <skia/gpu/GrBackendSurface.h>
+#include "TextureMapperPlatformLayerProxy.h"
+#include <skia/gpu/ganesh/GrBackendSurface.h>
 #include <skia/gpu/ganesh/gl/GrGLBackendSurface.h>
 #include <skia/gpu/ganesh/gl/GrGLDirectContext.h>
 #endif
@@ -84,53 +84,47 @@ std::unique_ptr<ImageBufferSkiaAcceleratedBackend> ImageBufferSkiaAcceleratedBac
 ImageBufferSkiaAcceleratedBackend::ImageBufferSkiaAcceleratedBackend(const Parameters& parameters, sk_sp<SkSurface>&& surface)
     : ImageBufferSkiaSurfaceBackend(parameters, WTFMove(surface), RenderingMode::Accelerated)
 {
-#if USE(NICOSIA)
+#if USE(COORDINATED_GRAPHICS)
     // Use a content layer for canvas.
     if (parameters.purpose == RenderingPurpose::Canvas) {
-        m_contentLayer = Nicosia::ContentLayer::create(*this, adoptRef(*new TextureMapperPlatformLayerProxyGL(TextureMapperPlatformLayerProxy::ContentType::Canvas)));
-        m_layerContentsDisplayDelegate = PlatformLayerDisplayDelegate::create(m_contentLayer.get());
+        auto proxy = TextureMapperPlatformLayerProxy::create(TextureMapperPlatformLayerProxy::ContentType::Canvas);
+        proxy->setSwapBuffersFunction([this](TextureMapperPlatformLayerProxy& proxy) {
+            auto image = createNativeImageReference();
+            if (!image)
+                return;
+
+            proxy.pushNextBuffer(CoordinatedPlatformLayerBufferNativeImage::create(image.releaseNonNull(), GLFence::create()));
+        });
+        m_layerContentsDisplayDelegate = GraphicsLayerContentsDisplayDelegateTextureMapper::create(WTFMove(proxy));
     }
 #endif
 }
 
 ImageBufferSkiaAcceleratedBackend::~ImageBufferSkiaAcceleratedBackend()
 {
-#if USE(NICOSIA)
-    if (m_texture.back || m_texture.front) {
-        GLContext::ScopedGLContextCurrent scopedContext(*PlatformDisplay::sharedDisplay().sharingGLContext());
-        m_texture.back = nullptr;
-        m_texture.front = nullptr;
-    }
-
-    if (m_contentLayer)
-        m_contentLayer->invalidateClient();
+#if USE(COORDINATED_GRAPHICS)
+    if (m_layerContentsDisplayDelegate)
+        static_cast<GraphicsLayerContentsDisplayDelegateTextureMapper*>(m_layerContentsDisplayDelegate.get())->proxy().setSwapBuffersFunction(nullptr);
 #endif
 }
 
-void flushSurfaceIfNeeded(SkSurface* surface)
+RefPtr<NativeImage> ImageBufferSkiaAcceleratedBackend::copyNativeImage()
+{
+    // SkSurface uses a copy-on-write mechanism for makeImageSnapshot(), so it's
+    // always safe to return the SkImage without copying.
+    return createNativeImageReference();
+}
+
+RefPtr<NativeImage> ImageBufferSkiaAcceleratedBackend::createNativeImageReference()
 {
     // If we're using MSAA, we need to flush the surface before calling makeImageSnapshot(),
     // because that call doesn't force the MSAA resolution, which can produce outdated results
     // in the resulting SkImage.
     auto& display = PlatformDisplay::sharedDisplay();
     if (display.msaaSampleCount() > 0) {
-        auto* glContext = display.skiaGLContext();
-        if (!glContext || !glContext->makeContextCurrent())
-            return;
-        display.skiaGrContext()->flush(surface);
+        if (display.skiaGLContext()->makeContextCurrent())
+            display.skiaGrContext()->flush(m_surface.get());
     }
-}
-
-RefPtr<NativeImage> ImageBufferSkiaAcceleratedBackend::copyNativeImage()
-{
-    // FIXME: do we have to do a explicit copy here?
-    flushSurfaceIfNeeded(m_surface.get());
-    return NativeImage::create(m_surface->makeImageSnapshot());
-}
-
-RefPtr<NativeImage> ImageBufferSkiaAcceleratedBackend::createNativeImageReference()
-{
-    flushSurfaceIfNeeded(m_surface.get());
     return NativeImage::create(m_surface->makeImageSnapshot());
 }
 
@@ -208,54 +202,10 @@ void ImageBufferSkiaAcceleratedBackend::putPixelBuffer(const PixelBuffer& pixelB
     m_surface->writePixels(convertedSrcPixmap, destinationRect.x(), destinationRect.y());
 }
 
-#if USE(NICOSIA)
+#if USE(COORDINATED_GRAPHICS)
 RefPtr<GraphicsLayerContentsDisplayDelegate> ImageBufferSkiaAcceleratedBackend::layerContentsDisplayDelegate() const
 {
     return m_layerContentsDisplayDelegate;
-}
-
-void ImageBufferSkiaAcceleratedBackend::swapBuffersIfNeeded()
-{
-    auto& display = PlatformDisplay::sharedDisplay();
-    if (!display.skiaGLContext()->makeContextCurrent())
-        return;
-
-    RELEASE_ASSERT(m_contentLayer);
-
-    auto* grContext = display.skiaGrContext();
-    RELEASE_ASSERT(grContext);
-    grContext->flushAndSubmit(m_surface.get(), GLFence::isSupported() ? GrSyncCpu::kNo : GrSyncCpu::kYes);
-
-    auto texture = SkSurfaces::GetBackendTexture(m_surface.get(), SkSurface::BackendHandleAccess::kFlushRead);
-    ASSERT(texture.isValid());
-    GrGLTextureInfo textureInfo;
-    bool retrievedTextureInfo = GrBackendTextures::GetGLTextureInfo(texture, &textureInfo);
-    ASSERT_UNUSED(retrievedTextureInfo, retrievedTextureInfo);
-    std::unique_ptr<GLFence> fence = GLFence::create();
-
-    // Switch to the sharing context for the texture copy.
-    if (!display.sharingGLContext()->makeContextCurrent())
-        return;
-
-    auto info = m_surface->imageInfo();
-    IntSize textureSize(info.width(), info.height());
-    if (!m_texture.back)
-        m_texture.back = BitmapTexture::create(textureSize, BitmapTexture::Flags::SupportsAlpha);
-    fence->serverWait();
-    m_texture.back->copyFromExternalTexture(textureInfo.fID);
-    fence = GLFence::create();
-    std::swap(m_texture.back, m_texture.front);
-
-    if (!display.skiaGLContext()->makeContextCurrent())
-        return;
-
-    auto& proxy = m_contentLayer->proxy();
-    Locker locker { proxy.lock() };
-    auto layerBuffer = makeUnique<TextureMapperPlatformLayerBuffer>(m_texture.front->id(), textureSize, TextureMapperFlags::ShouldBlend, GL_DONT_CARE);
-#if PLATFORM(GTK) || PLATFORM(WPE)
-    layerBuffer->setFence(WTFMove(fence));
-#endif
-    downcast<TextureMapperPlatformLayerProxyGL>(proxy).pushNextBuffer(WTFMove(layerBuffer));
 }
 #endif
 

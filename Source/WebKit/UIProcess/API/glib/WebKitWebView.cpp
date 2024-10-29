@@ -241,17 +241,25 @@ enum {
     N_PROPERTIES,
 };
 
-static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
+static std::array<GParamSpec*, N_PROPERTIES> sObjProperties;
 
-class PageLoadStateObserver final : public PageLoadState::Observer {
+class PageLoadStateObserver final : public RefCounted<PageLoadStateObserver>, public PageLoadState::Observer {
     WTF_MAKE_TZONE_ALLOCATED_INLINE(PageLoadStateObserver);
 public:
+    static Ref<PageLoadStateObserver> create(WebKitWebView* webView)
+    {
+        return adoptRef(*new PageLoadStateObserver(webView));
+    }
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
+private:
     PageLoadStateObserver(WebKitWebView* webView)
         : m_webView(webView)
     {
     }
 
-private:
     void willChangeIsLoading() override
     {
         g_object_freeze_notify(G_OBJECT(m_webView));
@@ -358,7 +366,7 @@ struct _WebKitWebViewPrivate {
     bool isControlledByAutomation;
     WebKitAutomationBrowsingContextPresentation automationPresentationType;
 
-    std::unique_ptr<PageLoadStateObserver> loadObserver;
+    RefPtr<PageLoadStateObserver> loadObserver;
 
     GRefPtr<WebKitBackForwardList> backForwardList;
     GRefPtr<WebKitSettings> settings;
@@ -412,7 +420,7 @@ struct _WebKitWebViewPrivate {
     bool isWebProcessResponsive;
 };
 
-static guint signals[LAST_SIGNAL] = { 0, };
+static std::array<unsigned, LAST_SIGNAL> signals;
 
 #if PLATFORM(GTK)
 WEBKIT_DEFINE_TYPE(WebKitWebView, webkit_web_view, WEBKIT_TYPE_WEB_VIEW_BASE)
@@ -932,7 +940,7 @@ static void webkitWebViewConstructed(GObject* object)
     webkitWebViewCreatePage(webView, WTFMove(configuration));
     webkitWebContextWebViewCreated(priv->context.get(), webView);
 
-    priv->loadObserver = makeUnique<PageLoadStateObserver>(webView);
+    priv->loadObserver = PageLoadStateObserver::create(webView);
     getPage(webView).pageLoadState().addObserver(*priv->loadObserver);
 
     priv->resourceLoadManager = makeUnique<WebKitWebResourceLoadManager>(webView);
@@ -1176,9 +1184,9 @@ static void webkitWebViewDispose(GObject* object)
 
     webkitWebViewDisconnectSettingsSignalHandlers(webView);
 
-    if (webView->priv->loadObserver) {
-        getPage(webView).pageLoadState().removeObserver(*webView->priv->loadObserver);
-        webView->priv->loadObserver.reset();
+    if (RefPtr loadObserver = webView->priv->loadObserver) {
+        getPage(webView).pageLoadState().removeObserver(*loadObserver);
+        webView->priv->loadObserver = nullptr;
 
         // We notify the context here to ensure it's called only once. Ideally we should
         // call this in finalize, not dispose, but finalize is used internally and we don't
@@ -1686,7 +1694,7 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
         nullptr,
         static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
-    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
+    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties.data());
 
     /**
      * WebKitWebView::load-changed:
@@ -2649,7 +2657,7 @@ void webkitWebViewSetIcon(WebKitWebView* webView, const LinkIcon& icon, API::Dat
 }
 #endif
 
-RefPtr<WebPageProxy> webkitWebViewCreateNewPage(WebKitWebView* webView, Ref<API::PageConfiguration>&& configuration, WindowFeatures&& windowFeatures, WebKitNavigationAction* navigationAction)
+RefPtr<WebPageProxy> webkitWebViewCreateNewPage(WebKitWebView* webView, Ref<API::PageConfiguration>&& configuration, WebKitNavigationAction* navigationAction)
 {
     auto& openerInfo = configuration->openerInfo();
 
@@ -2667,7 +2675,8 @@ RefPtr<WebPageProxy> webkitWebViewCreateNewPage(WebKitWebView* webView, Ref<API:
         return nullptr;
     }
 
-    webkitWindowPropertiesUpdateFromWebWindowFeatures(newWebView->priv->windowProperties.get(), windowFeatures);
+    ASSERT(newPage->configuration().windowFeatures());
+    webkitWindowPropertiesUpdateFromWebWindowFeatures(newWebView->priv->windowProperties.get(), *newPage->configuration().windowFeatures());
 
     return newPage;
 }
@@ -3039,6 +3048,10 @@ void webkitWebViewRequestPointerLock(WebKitWebView* webView)
 #if PLATFORM(GTK)
     webkitWebViewBaseRequestPointerLock(WEBKIT_WEB_VIEW_BASE(webView));
 #endif
+
+#if PLATFORM(WPE)
+    webView->priv->view->requestPointerLock();
+#endif
 }
 
 void webkitWebViewDenyPointerLockRequest(WebKitWebView* webView)
@@ -3051,8 +3064,12 @@ void webkitWebViewDidLosePointerLock(WebKitWebView* webView)
 #if PLATFORM(GTK)
     webkitWebViewBaseDidLosePointerLock(WEBKIT_WEB_VIEW_BASE(webView));
 #endif
-}
+
+#if PLATFORM(WPE)
+    webView->priv->view->didLosePointerLock();
 #endif
+}
+#endif // ENABLE(POINTER_LOCK)
 
 static void webkitWebViewSynthesizeCompositionKeyPress(WebKitWebView* webView, const String& text, std::optional<Vector<CompositionUnderline>>&& underlines, std::optional<EditingRange>&& selectionRange)
 {
@@ -3364,7 +3381,9 @@ void webkit_web_view_load_html(WebKitWebView* webView, const gchar* content, con
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
     g_return_if_fail(content);
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     getPage(webView).loadData(WebCore::SharedBuffer::create(std::span { reinterpret_cast<const uint8_t*>(content), content ? strlen(content) : 0 }), "text/html"_s, "UTF-8"_s, String::fromUTF8(baseURI));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 /**
@@ -3387,7 +3406,9 @@ void webkit_web_view_load_alternate_html(WebKitWebView* webView, const gchar* co
     g_return_if_fail(content);
     g_return_if_fail(contentURI);
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     getPage(webView).loadAlternateHTML(WebCore::DataSegment::create(Vector(std::span { reinterpret_cast<const uint8_t*>(content), content ? strlen(content) : 0 })), "UTF-8"_s, URL { String::fromUTF8(baseURI) }, URL { String::fromUTF8(contentURI) });
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 /**
@@ -3434,8 +3455,10 @@ void webkit_web_view_load_bytes(WebKitWebView* webView, GBytes* bytes, const cha
     gconstpointer bytesData = g_bytes_get_data(bytes, &bytesDataSize);
     g_return_if_fail(bytesDataSize);
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     getPage(webView).loadData(WebCore::SharedBuffer::create(std::span { reinterpret_cast<const uint8_t*>(bytesData), bytesDataSize }), mimeType ? String::fromUTF8(mimeType) : String::fromUTF8("text/html"),
         encoding ? String::fromUTF8(encoding) : String::fromUTF8("UTF-8"), String::fromUTF8(baseURI));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 /**
@@ -4205,7 +4228,9 @@ static void webkitWebViewEvaluateJavascriptInternal(WebKitWebView* webView, cons
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
     g_return_if_fail(script);
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     RunJavaScriptParameters params = { String::fromUTF8(std::span(script, length < 0 ? strlen(script) : length)), JSC::SourceTaintedOrigin::Untainted, URL({ }, String::fromUTF8(sourceURI)), RunAsAsyncFunction::No, std::nullopt, ForceUserGesture::Yes, RemoveTransientActivation::Yes };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     webkitWebViewRunJavaScriptWithParams(webView, WTFMove(params), worldName, returnType, adoptGRef(g_task_new(webView, cancellable, callback, userData)));
 }
 
@@ -4341,7 +4366,9 @@ static void webkitWebViewCallAsyncJavascriptFunctionInternal(WebKitWebView* webV
         return;
     }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     RunJavaScriptParameters params = { String::fromUTF8(std::span(body, length < 0 ? strlen(body) : length)), JSC::SourceTaintedOrigin::Untainted, URL({ }, String::fromUTF8(sourceURI)), RunAsAsyncFunction::Yes, WTFMove(argumentsMap), ForceUserGesture::Yes, RemoveTransientActivation::Yes };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     webkitWebViewRunJavaScriptWithParams(webView, WTFMove(params), worldName, returnType, adoptGRef(g_task_new(webView, cancellable, callback, userData)));
 }
 
@@ -5472,8 +5499,10 @@ void webkit_web_view_set_cors_allowlist(WebKitWebView* webView, const gchar* con
 
     Vector<String> allowListVector;
     if (allowList) {
+        WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
         for (auto str = allowList; *str; ++str)
             allowListVector.append(String::fromUTF8(*str));
+        WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     }
 
     getPage(webView).setCORSDisablingPatterns(WTFMove(allowListVector));

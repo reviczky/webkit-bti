@@ -339,9 +339,9 @@ DrawDisplayListItems::DrawDisplayListItems(Vector<Item>&& items, const FloatPoin
 {
 }
 
-void DrawDisplayListItems::apply(GraphicsContext& context, const ResourceHeap& resourceHeap) const
+void DrawDisplayListItems::apply(GraphicsContext& context, const ResourceHeap& resourceHeap, ControlFactory& controlFactory) const
 {
-    context.drawDisplayListItems(m_items, resourceHeap, m_destination);
+    context.drawDisplayListItems(m_items, resourceHeap, controlFactory, m_destination);
 }
 
 NO_RETURN_DUE_TO_ASSERT void DrawDisplayListItems::apply(GraphicsContext&) const
@@ -451,9 +451,8 @@ void DrawLine::dump(TextStream& ts, OptionSet<AsTextFlag>) const
     ts.dumpProperty("point-2", point2());
 }
 
-DrawLinesForText::DrawLinesForText(const FloatPoint& blockLocation, const FloatSize& localAnchor, const DashArray& widths, float thickness, bool printing, bool doubleLines, StrokeStyle style)
-    : m_blockLocation(blockLocation)
-    , m_localAnchor(localAnchor)
+DrawLinesForText::DrawLinesForText(const FloatPoint& point, const DashArray& widths, float thickness, bool printing, bool doubleLines, StrokeStyle style)
+    : m_point(point)
     , m_widths(widths)
     , m_thickness(thickness)
     , m_printing(printing)
@@ -464,13 +463,11 @@ DrawLinesForText::DrawLinesForText(const FloatPoint& blockLocation, const FloatS
 
 void DrawLinesForText::apply(GraphicsContext& context) const
 {
-    context.drawLinesForText(point(), m_thickness, m_widths, m_printing, m_doubleLines, m_style);
+    context.drawLinesForText(m_point, m_thickness, m_widths, m_printing, m_doubleLines, m_style);
 }
 
 void DrawLinesForText::dump(TextStream& ts, OptionSet<AsTextFlag>) const
 {
-    ts.dumpProperty("block-location", blockLocation());
-    ts.dumpProperty("local-anchor", localAnchor());
     ts.dumpProperty("point", point());
     ts.dumpProperty("thickness", thickness());
     ts.dumpProperty("double", doubleLines());
@@ -729,24 +726,6 @@ void FillEllipse::dump(TextStream& ts, OptionSet<AsTextFlag>) const
     ts.dumpProperty("rect", rect());
 }
 
-#if ENABLE(VIDEO)
-PaintFrameForMedia::PaintFrameForMedia(MediaPlayerIdentifier identifier, const FloatRect& destination)
-    : m_identifier(identifier)
-    , m_destination(destination)
-{
-}
-
-NO_RETURN_DUE_TO_ASSERT void PaintFrameForMedia::apply(GraphicsContext&) const
-{
-    ASSERT_NOT_REACHED();
-}
-
-void PaintFrameForMedia::dump(TextStream& ts, OptionSet<AsTextFlag>) const
-{
-    ts.dumpProperty("destination", destination());
-}
-#endif
-
 void StrokeRect::apply(GraphicsContext& context) const
 {
     context.strokeRect(m_rect, m_lineWidth);
@@ -868,9 +847,11 @@ DrawControlPart::DrawControlPart(ControlPart& part, const FloatRoundedRect& bord
 {
 }
 
-void DrawControlPart::apply(GraphicsContext& context) const
+void DrawControlPart::apply(GraphicsContext& context, ControlFactory& controlFactory) const
 {
+    m_part->setOverrideControlFactory(&controlFactory);
     context.drawControlPart(m_part, m_borderRect, m_deviceScaleFactor, m_style);
+    m_part->setOverrideControlFactory(nullptr);
 }
 
 void DrawControlPart::dump(TextStream& ts, OptionSet<AsTextFlag>) const

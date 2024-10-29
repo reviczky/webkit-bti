@@ -70,6 +70,10 @@
 #include "ImageControlsMac.h"
 #endif
 
+#if ENABLE(SPATIAL_IMAGE_CONTROLS)
+#include "SpatialImageControls.h"
+#endif
+
 namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLImageElement);
@@ -107,7 +111,7 @@ HTMLImageElement::~HTMLImageElement()
     document().removeDynamicMediaQueryDependentImage(*this);
     setForm(nullptr);
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
-    if (auto* page = document().page())
+    if (RefPtr page = document().page())
         page->removeIndividuallyPlayingAnimationElement(*this);
 #endif
 }
@@ -430,6 +434,11 @@ void HTMLImageElement::attributeChanged(const QualifiedName& name, const AtomStr
         m_hadNameBeforeAttributeChanged = willHaveName;
         break;
     }
+#if ENABLE(SPATIAL_IMAGE_CONTROLS)
+    case AttributeNames::controlsAttr:
+        SpatialImageControls::updateSpatialImageControls(*this);
+        break;
+#endif
     default:
         break;
     }
@@ -558,7 +567,7 @@ void HTMLImageElement::setPictureElement(HTMLPictureElement* pictureElement)
 unsigned HTMLImageElement::width()
 {
     if (inRenderedDocument())
-        document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+        protectedDocument()->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
 
     if (!renderer()) {
         // check the attribute first for an explicit pixel value
@@ -581,7 +590,7 @@ unsigned HTMLImageElement::width()
 unsigned HTMLImageElement::height()
 {
     if (inRenderedDocument())
-        document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+        protectedDocument()->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
 
     if (!renderer()) {
         // check the attribute first for an explicit pixel value
@@ -685,7 +694,7 @@ String HTMLImageElement::completeURLsInAttributeValue(const URL& base, const Att
     return HTMLElement::completeURLsInAttributeValue(base, attribute, resolveURLs);
 }
 
-Attribute HTMLImageElement::replaceURLsInAttributeValue(const Attribute& attribute, const HashMap<String, String>& replacementURLStrings) const
+Attribute HTMLImageElement::replaceURLsInAttributeValue(const Attribute& attribute, const UncheckedKeyHashMap<String, String>& replacementURLStrings) const
 {
     if (attribute.name() != srcsetAttr)
         return attribute;
@@ -733,7 +742,7 @@ void HTMLImageElement::setWidth(unsigned value)
 
 int HTMLImageElement::x() const
 {
-    document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+    protectedDocument()->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     auto renderer = this->renderer();
     if (!renderer)
         return 0;
@@ -744,7 +753,7 @@ int HTMLImageElement::x() const
 
 int HTMLImageElement::y() const
 {
-    document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
+    protectedDocument()->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     auto renderer = this->renderer();
     if (!renderer)
         return 0;
@@ -880,7 +889,7 @@ void HTMLImageElement::setAllowsAnimation(std::optional<bool> allowsAnimation)
         if (auto* renderer = this->renderer())
             renderer->repaint();
 
-        if (auto* page = document().page()) {
+        if (RefPtr page = document().page()) {
             if (allowsAnimation.value_or(false))
                 page->addIndividuallyPlayingAnimationElement(*this);
             else

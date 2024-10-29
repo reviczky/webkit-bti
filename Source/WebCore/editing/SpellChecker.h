@@ -31,6 +31,8 @@
 #include "TextChecking.h"
 #include "Timer.h"
 #include <wtf/Deque.h>
+#include <wtf/Markable.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -77,7 +79,7 @@ private:
 };
 
 class SpellChecker : public CanMakeSingleThreadWeakPtr<SpellChecker> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(SpellChecker);
 public:
     friend class SpellCheckRequest;
 
@@ -89,8 +91,8 @@ public:
 
     void requestCheckingFor(Ref<SpellCheckRequest>&&);
 
-    TextCheckingRequestIdentifier lastRequestIdentifier() const { return m_lastRequestIdentifier; }
-    TextCheckingRequestIdentifier lastProcessedIdentifier() const { return m_lastProcessedIdentifier; }
+    std::optional<TextCheckingRequestIdentifier> lastRequestIdentifier() const { return m_lastRequestIdentifier; }
+    std::optional<TextCheckingRequestIdentifier> lastProcessedIdentifier() const { return m_lastProcessedIdentifier; }
 
 private:
     bool canCheckAsynchronously(const SimpleRange&) const;
@@ -105,8 +107,8 @@ private:
     Ref<Document> protectedDocument() const { return m_document.get(); }
 
     WeakRef<Document, WeakPtrImplWithEventTargetData> m_document;
-    TextCheckingRequestIdentifier m_lastRequestIdentifier;
-    TextCheckingRequestIdentifier m_lastProcessedIdentifier;
+    Markable<TextCheckingRequestIdentifier> m_lastRequestIdentifier;
+    Markable<TextCheckingRequestIdentifier> m_lastProcessedIdentifier;
 
     Timer m_timerToProcessQueuedRequest;
 

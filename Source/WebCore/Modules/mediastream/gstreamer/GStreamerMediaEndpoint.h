@@ -171,7 +171,7 @@ private:
     void stopLoggingStats();
 
     const Logger& logger() const final { return m_logger.get(); }
-    const void* logIdentifier() const final { return m_logIdentifier; }
+    uint64_t logIdentifier() const final { return m_logIdentifier; }
     ASCIILiteral logClassName() const final { return "GStreamerMediaEndpoint"_s; }
     WTFLogChannel& logChannel() const final;
 
@@ -180,13 +180,13 @@ private:
 
     String trackIdFromSDPMedia(const GstSDPMedia&);
 
-    HashMap<String, RealtimeMediaSource::Type> m_mediaForMid;
+    UncheckedKeyHashMap<String, RealtimeMediaSource::Type> m_mediaForMid;
 
     GStreamerPeerConnectionBackend& m_peerConnectionBackend;
     GRefPtr<GstElement> m_webrtcBin;
     GRefPtr<GstElement> m_pipeline;
 
-    HashMap<String, RefPtr<MediaStream>> m_remoteStreamsById;
+    UncheckedKeyHashMap<String, RefPtr<MediaStream>> m_remoteStreamsById;
 
     Ref<GStreamerStatsCollector> m_statsCollector;
 
@@ -196,17 +196,17 @@ private:
     Timer m_statsLogTimer;
     Seconds m_statsFirstDeliveredTimestamp;
     Ref<const Logger> m_logger;
-    const void* m_logIdentifier;
+    const uint64_t m_logIdentifier;
 #endif
 
     UniqueRef<GStreamerDataChannelHandler> findOrCreateIncomingChannelHandler(GRefPtr<GstWebRTCDataChannel>&&);
 
-    using DataChannelHandlerIdentifier = LegacyNullableObjectIdentifier<GstWebRTCDataChannel>;
-    HashMap<DataChannelHandlerIdentifier, UniqueRef<GStreamerDataChannelHandler>> m_incomingDataChannels;
+    using DataChannelHandlerIdentifier = ObjectIdentifier<GstWebRTCDataChannel>;
+    UncheckedKeyHashMap<DataChannelHandlerIdentifier, UniqueRef<GStreamerDataChannelHandler>> m_incomingDataChannels;
 
     RefPtr<UniqueSSRCGenerator> m_ssrcGenerator;
 
-    HashMap<GRefPtr<GstWebRTCRTPTransceiver>, RefPtr<GStreamerIncomingTrackProcessor>> m_trackProcessors;
+    UncheckedKeyHashMap<GRefPtr<GstWebRTCRTPTransceiver>, RefPtr<GStreamerIncomingTrackProcessor>> m_trackProcessors;
 
     Vector<String> m_pendingIncomingMediaStreamIDs;
 

@@ -39,6 +39,7 @@
 #include <wtf/ListHashSet.h>
 #include <wtf/MainThread.h>
 #include <wtf/OptionSet.h>
+#include <wtf/RefCounted.h>
 #include <wtf/RobinHoodHashSet.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/URLHash.h>
@@ -238,6 +239,8 @@ public:
     bool isSVGUnknownElement() const { return isSVGElement() && isUnknownElement(); }
     bool isMathMLUnknownElement() const { return isMathMLElement() && isUnknownElement(); }
 
+    bool isFormControlElement() const { return hasTypeFlag(TypeFlag::IsFormControlElement); }
+
     bool isPseudoElement() const { return pseudoId() != PseudoId::None; }
     bool isBeforePseudoElement() const { return pseudoId() == PseudoId::Before; }
     bool isAfterPseudoElement() const { return pseudoId() == PseudoId::After; }
@@ -360,9 +363,9 @@ public:
     bool hasInvalidRenderer() const { return hasStateFlag(StateFlag::HasInvalidRenderer); }
     bool styleResolutionShouldRecompositeLayer() const { return hasStateFlag(StateFlag::StyleResolutionShouldRecompositeLayer); }
     bool childNeedsStyleRecalc() const { return hasStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
-    bool isEditingText() const { return isTextNode() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
+    bool isEditingText() const { return isTextNode() && hasStateFlag(StateFlag::IsSpecialInternalNode); }
 
-    bool isDocumentFragmentForInnerOuterHTML() const { return isDocumentFragment() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
+    bool isDocumentFragmentForInnerOuterHTML() const { return isDocumentFragment() && hasStateFlag(StateFlag::IsSpecialInternalNode); }
 
     bool hasHeldBackChildrenChanged() const { return hasStateFlag(StateFlag::HasHeldBackChildrenChanged); }
     void setHasHeldBackChildrenChanged() { setStateFlag(StateFlag::HasHeldBackChildrenChanged); }
@@ -413,6 +416,7 @@ public:
         ASSERT(m_treeScope);
         return *m_treeScope;
     }
+    Ref<TreeScope> protectedTreeScope() const { return treeScope(); }
     void setTreeScopeRecursively(TreeScope&);
     static constexpr ptrdiff_t treeScopeMemoryOffset() { return OBJECT_OFFSETOF(Node, m_treeScope); }
 
@@ -541,25 +545,14 @@ public:
     virtual void defaultEventHandler(Event&);
 
     void ref() const;
-    void refAllowingPartiallyDestroyed() const;
     void deref() const;
-    void derefAllowingPartiallyDestroyed() const;
     bool hasOneRef() const;
     unsigned refCount() const;
+    void applyRefDuringDestructionCheck() const;
 
 #if ASSERT_ENABLED
-    enum class IsAllocatedMemory : unsigned {
-        Scribble = 0, // Do not check for this value, it is not guaranteed to exist.
-        Yes = 0xFEEDB0BA,
-    };
-    mutable IsAllocatedMemory m_isAllocatedMemory { IsAllocatedMemory::Yes };
     mutable bool m_inRemovedLastRefFunction { false };
     bool m_adoptionIsRequired { true };
-
-    bool deletionHasEnded() const
-    {
-        return m_isAllocatedMemory != IsAllocatedMemory::Yes;
-    }
 #endif
 
     void relaxAdoptionRequirement()
@@ -571,7 +564,7 @@ public:
 #endif
     }
 
-    HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> registeredMutationObservers(MutationObserverOptionType, const QualifiedName* attributeName);
+    UncheckedKeyHashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> registeredMutationObservers(MutationObserverOptionType, const QualifiedName* attributeName);
     void registerMutationObserver(MutationObserver&, MutationObserverOptions, const MemoryCompactLookupOnlyRobinHoodHashSet<AtomString>& attributeFilter);
     void unregisterMutationObserver(MutationObserverRegistration&);
     void registerTransientMutationObserver(MutationObserverRegistration&);
@@ -618,7 +611,7 @@ protected:
         IsMathMLElement = 1 << 6,
         IsShadowRoot = 1 << 7,
         IsUnknownElement = 1 << 8,
-        IsSpecialInternalNode = 1 << 9, // DocumentFragment node for innerHTML/outerHTML or EditingText node.
+        IsFormControlElement = 1 << 9,
         HasCustomStyleResolveCallbacks = 1 << 10,
         HasDidMoveToNewDocument = 1 << 11,
     };
@@ -642,7 +635,9 @@ protected:
         HasHeldBackChildrenChanged = 1 << 9,
         HasStartedDeletion = 1 << 10,
         ContainsSelectionEndPoint = 1 << 11,
-        // 4 bits free.
+        IsSpecialInternalNode = 1 << 12, // DocumentFragment node for innerHTML/outerHTML or EditingText node.
+
+        // 3 bits free.
     };
 
     enum class ElementStateFlag : uint16_t {
@@ -833,8 +828,6 @@ inline void adopted(Node* node)
 {
     if (!node)
         return;
-    ASSERT(!node->deletionHasBegun());
-    ASSERT(!node->m_inRemovedLastRefFunction);
     node->m_adoptionIsRequired = false;
 }
 
@@ -842,32 +835,24 @@ inline void adopted(Node* node)
 
 ALWAYS_INLINE void Node::ref() const
 {
-    ASSERT(!deletionHasBegun());
-    ASSERT(!m_inRemovedLastRefFunction);
-    refAllowingPartiallyDestroyed();
+    ASSERT(isMainThread());
+    ASSERT(!m_adoptionIsRequired);
+    applyRefDuringDestructionCheck();
+    m_refCountAndParentBit += s_refCountIncrement;
 }
 
-// Doesn't check deletionHasBegun().
-ALWAYS_INLINE void Node::refAllowingPartiallyDestroyed() const
+inline void Node::applyRefDuringDestructionCheck() const
 {
-    ASSERT(isMainThread());
-    ASSERT(!deletionHasEnded());
-    ASSERT(!m_adoptionIsRequired);
-    m_refCountAndParentBit += s_refCountIncrement;
+#if CHECK_REF_COUNTED_LIFECYCLE
+    if (!deletionHasBegun())
+        return;
+    WTF::RefCountedBase::logRefDuringDestruction(this);
+#endif
 }
 
 ALWAYS_INLINE void Node::deref() const
 {
-    ASSERT(!deletionHasBegun());
-    ASSERT(!m_inRemovedLastRefFunction);
-    derefAllowingPartiallyDestroyed();
-}
-
-// Doesn't check deletionHasBegun().
-ALWAYS_INLINE void Node::derefAllowingPartiallyDestroyed() const
-{
     ASSERT(isMainThread());
-    ASSERT(!deletionHasEnded());
     ASSERT(!m_adoptionIsRequired);
 
     ASSERT(refCount());
@@ -876,7 +861,6 @@ ALWAYS_INLINE void Node::derefAllowingPartiallyDestroyed() const
         if (deletionHasBegun())
             return;
         // Don't update m_refCountAndParentBit to avoid double destruction through use of Ref<T>/RefPtr<T>.
-        // (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
 #if ASSERT_ENABLED
         m_inRemovedLastRefFunction = true;
 #endif

@@ -37,10 +37,13 @@
 #include "RenderStyleInlines.h"
 #include "StyleResolver.h"
 #include "StyleScope.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringHash.h>
 
 namespace WebCore {
 namespace Style {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MatchedDeclarationsCache);
 
 MatchedDeclarationsCache::MatchedDeclarationsCache(const Resolver& owner)
     : m_owner(owner)
@@ -76,7 +79,8 @@ bool MatchedDeclarationsCache::isCacheable(const Element& element, const RenderS
         return false;
     if (style.zoom() != RenderStyle::initialZoom())
         return false;
-    if (style.writingMode() != RenderStyle::initialWritingMode() || style.direction() != RenderStyle::initialDirection())
+    if (style.writingMode().computedWritingMode() != RenderStyle::initialWritingMode()
+        || style.writingMode().computedTextDirection() != RenderStyle::initialDirection())
         return false;
     if (style.usesContainerUnits())
         return false;

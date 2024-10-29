@@ -63,9 +63,9 @@ Ref<AccessibilityList> AccessibilityList::create(Node& node)
     return adoptRef(*new AccessibilityList(node));
 }
 
-bool AccessibilityList::computeAccessibilityIsIgnored() const
+bool AccessibilityList::computeIsIgnored() const
 {
-    return accessibilityIsIgnoredByDefault();
+    return isIgnoredByDefault();
 }
     
 bool AccessibilityList::isUnorderedList() const
@@ -108,11 +108,11 @@ bool AccessibilityList::childHasPseudoVisibleListItemMarkers(Node* node)
     if (!axBeforePseudo)
         return false;
     
-    if (!axBeforePseudo->accessibilityIsIgnored())
+    if (!axBeforePseudo->isIgnored())
         return true;
     
-    for (const auto& child : axBeforePseudo->children()) {
-        if (!child->accessibilityIsIgnored())
+    for (const auto& child : axBeforePseudo->unignoredChildren()) {
+        if (!child->isIgnored())
             return true;
     }
     
@@ -151,7 +151,7 @@ AccessibilityRole AccessibilityList::determineAccessibilityRole()
     unsigned listItemCount = 0;
     bool hasVisibleMarkers = false;
 
-    const auto& children = this->children();
+    const auto& children = this->unignoredChildren();
     // DescriptionLists are always semantically a description list, so do not apply heuristics.
     if (isDescriptionList() && children.size())
         return AccessibilityRole::DescriptionList;

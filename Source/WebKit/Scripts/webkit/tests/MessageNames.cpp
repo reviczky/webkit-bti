@@ -32,9 +32,12 @@ const MessageDescription messageDescriptions[static_cast<size_t>(MessageName::Co
     { "TestWithCVPixelBuffer_ReceiveCVPixelBuffer"_s, ReceiverName::TestWithCVPixelBuffer, false, false },
     { "TestWithCVPixelBuffer_SendCVPixelBuffer"_s, ReceiverName::TestWithCVPixelBuffer, false, false },
 #endif
+    { "TestWithEnabledByAndConjunction_AlwaysEnabled"_s, ReceiverName::TestWithEnabledByAndConjunction, false, false },
+    { "TestWithEnabledByOrConjunction_AlwaysEnabled"_s, ReceiverName::TestWithEnabledByOrConjunction, false, false },
     { "TestWithEnabledBy_AlwaysEnabled"_s, ReceiverName::TestWithEnabledBy, false, false },
     { "TestWithEnabledBy_ConditionallyEnabled"_s, ReceiverName::TestWithEnabledBy, false, false },
-    { "TestWithEnabledBy_MultiConditionallyEnabled"_s, ReceiverName::TestWithEnabledBy, false, false },
+    { "TestWithEnabledBy_ConditionallyEnabledAnd"_s, ReceiverName::TestWithEnabledBy, false, false },
+    { "TestWithEnabledBy_ConditionallyEnabledOr"_s, ReceiverName::TestWithEnabledBy, false, false },
     { "TestWithEnabledIf_AlwaysEnabled"_s, ReceiverName::TestWithEnabledIf, false, false },
     { "TestWithEnabledIf_OnlyEnabledIfFeatureEnabled"_s, ReceiverName::TestWithEnabledIf, false, false },
 #if PLATFORM(COCOA) || PLATFORM(GTK)
@@ -87,6 +90,8 @@ const MessageDescription messageDescriptions[static_cast<size_t>(MessageName::Co
 #endif
     { "TestWithStream_SendString"_s, ReceiverName::TestWithStream, true, false },
     { "TestWithStream_SendStringAsync"_s, ReceiverName::TestWithStream, true, false },
+    { "TestWithSuperclassAndWantsAsyncDispatch_LoadURL"_s, ReceiverName::TestWithSuperclassAndWantsAsyncDispatch, false, false },
+    { "TestWithSuperclassAndWantsDispatch_LoadURL"_s, ReceiverName::TestWithSuperclassAndWantsDispatch, false, false },
     { "TestWithSuperclass_LoadURL"_s, ReceiverName::TestWithSuperclass, false, false },
 #if ENABLE(TEST_FEATURE)
     { "TestWithSuperclass_TestAsyncMessage"_s, ReceiverName::TestWithSuperclass, false, false },
@@ -94,6 +99,9 @@ const MessageDescription messageDescriptions[static_cast<size_t>(MessageName::Co
     { "TestWithSuperclass_TestAsyncMessageWithMultipleArguments"_s, ReceiverName::TestWithSuperclass, false, false },
     { "TestWithSuperclass_TestAsyncMessageWithNoArguments"_s, ReceiverName::TestWithSuperclass, false, false },
 #endif
+    { "TestWithWantsAsyncDispatch_TestMessage"_s, ReceiverName::TestWithWantsAsyncDispatch, false, false },
+    { "TestWithWantsDispatchNoSyncMessages_TestMessage"_s, ReceiverName::TestWithWantsDispatchNoSyncMessages, false, false },
+    { "TestWithWantsDispatch_TestMessage"_s, ReceiverName::TestWithWantsDispatch, false, false },
 #if (ENABLE(TOUCH_EVENTS) && (NESTED_MESSAGE_CONDITION && SOME_OTHER_MESSAGE_CONDITION))
     { "TestWithoutAttributes_AddEvent"_s, ReceiverName::TestWithoutAttributes, false, false },
 #endif
@@ -134,6 +142,7 @@ const MessageDescription messageDescriptions[static_cast<size_t>(MessageName::Co
     { "TestWithoutUsingIPCConnection_MessageWithoutArgument"_s, ReceiverName::TestWithoutUsingIPCConnection, false, false },
     { "TestWithoutUsingIPCConnection_MessageWithoutArgumentAndEmptyReply"_s, ReceiverName::TestWithoutUsingIPCConnection, false, false },
     { "TestWithoutUsingIPCConnection_MessageWithoutArgumentAndReplyWithArgument"_s, ReceiverName::TestWithoutUsingIPCConnection, false, false },
+    { "CancelSyncMessageReply"_s, ReceiverName::IPC, false, false },
 #if PLATFORM(COCOA)
     { "InitializeConnection"_s, ReceiverName::IPC, false, false },
 #endif
@@ -177,8 +186,12 @@ const MessageDescription messageDescriptions[static_cast<size_t>(MessageName::Co
     { "TestWithStream_SendAndReceiveMachSendRight"_s, ReceiverName::TestWithStream, true, false },
 #endif
     { "TestWithStream_SendStringSync"_s, ReceiverName::TestWithStream, true, false },
+    { "TestWithSuperclassAndWantsAsyncDispatch_TestSyncMessage"_s, ReceiverName::TestWithSuperclassAndWantsAsyncDispatch, true, false },
+    { "TestWithSuperclassAndWantsDispatch_TestSyncMessage"_s, ReceiverName::TestWithSuperclassAndWantsDispatch, true, false },
     { "TestWithSuperclass_TestSyncMessage"_s, ReceiverName::TestWithSuperclass, true, false },
     { "TestWithSuperclass_TestSynchronousMessage"_s, ReceiverName::TestWithSuperclass, true, false },
+    { "TestWithWantsAsyncDispatch_TestSyncMessage"_s, ReceiverName::TestWithWantsAsyncDispatch, true, false },
+    { "TestWithWantsDispatch_TestSyncMessage"_s, ReceiverName::TestWithWantsDispatch, true, false },
     { "TestWithoutAttributes_GetPluginProcessConnection"_s, ReceiverName::TestWithoutAttributes, true, false },
     { "TestWithoutAttributes_TestMultipleAttributes"_s, ReceiverName::TestWithoutAttributes, true, false },
     { "WrappedAsyncMessageForTesting"_s, ReceiverName::IPC, true, false },

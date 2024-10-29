@@ -274,7 +274,7 @@ private:
     ptrdiff_t m_baseOffset;
     Page* m_currentPage;
     Vector<Page> m_pages;
-    HashMap<const void*, ptrdiff_t> m_ptrToOffsetMap;
+    UncheckedKeyHashMap<const void*, ptrdiff_t> m_ptrToOffsetMap;
     LeafExecutableMap m_leafExecutables;
 };
 
@@ -303,9 +303,9 @@ size_t Decoder::size() const
 
 ptrdiff_t Decoder::offsetOf(const void* ptr)
 {
-    const uint8_t* addr = static_cast<const uint8_t*>(ptr);
+    auto* addr = static_cast<const uint8_t*>(ptr);
     auto cachedBytecodeSpan = m_cachedBytecode->span();
-    ASSERT(addr >= cachedBytecodeSpan.data() && addr < (cachedBytecodeSpan.data() + cachedBytecodeSpan.size()));
+    ASSERT(addr >= cachedBytecodeSpan.data() && addr < cachedBytecodeSpan.data() + cachedBytecodeSpan.size());
     return addr - cachedBytecodeSpan.data();
 }
 
@@ -664,9 +664,9 @@ private:
 };
 
 template<typename Key, typename Value, typename HashArg = DefaultHash<SourceType<Key>>, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>, typename TableTraits = WTF::HashTableTraits>
-class CachedHashMap : public VariableLengthObject<HashMap<SourceType<Key>, SourceType<Value>, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>> {
+class CachedHashMap : public VariableLengthObject<UncheckedKeyHashMap<SourceType<Key>, SourceType<Value>, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>> {
     template<typename K, typename V>
-    using Map = HashMap<K, V, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>;
+    using Map = UncheckedKeyHashMap<K, V, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>;
 
 public:
     void encode(Encoder& encoder, const Map<SourceType<Key>, SourceType<Value>>& map)
@@ -881,17 +881,20 @@ public:
     void encode(Encoder& encoder, const UnlinkedSimpleJumpTable& jumpTable)
     {
         m_min = jumpTable.m_min;
+        m_defaultOffset = jumpTable.m_defaultOffset;
         m_branchOffsets.encode(encoder, jumpTable.m_branchOffsets);
     }
 
     void decode(Decoder& decoder, UnlinkedSimpleJumpTable& jumpTable) const
     {
         jumpTable.m_min = m_min;
+        jumpTable.m_defaultOffset = m_defaultOffset;
         m_branchOffsets.decode(decoder, jumpTable.m_branchOffsets);
     }
 
 private:
     int32_t m_min;
+    int32_t m_defaultOffset;
     CachedVector<int32_t> m_branchOffsets;
 };
 
@@ -900,15 +903,24 @@ public:
     void encode(Encoder& encoder, const UnlinkedStringJumpTable& jumpTable)
     {
         m_offsetTable.encode(encoder, jumpTable.m_offsetTable);
+        m_minLength = jumpTable.m_minLength;
+        m_maxLength = jumpTable.m_maxLength;
+        m_defaultOffset = jumpTable.m_defaultOffset;
     }
 
     void decode(Decoder& decoder, UnlinkedStringJumpTable& jumpTable) const
     {
         m_offsetTable.decode(decoder, jumpTable.m_offsetTable);
+        jumpTable.m_minLength = m_minLength;
+        jumpTable.m_maxLength = m_maxLength;
+        jumpTable.m_defaultOffset = m_defaultOffset;
     }
 
 private:
     CachedMemoryCompactLookupOnlyRobinHoodHashMap<CachedRefPtr<CachedStringImpl>, UnlinkedStringJumpTable::OffsetLocation> m_offsetTable;
+    unsigned m_minLength { 0 };
+    unsigned m_maxLength { 0 };
+    int32_t m_defaultOffset { 0 };
 };
 
 class CachedBitVector : public VariableLengthObject<BitVector> {
@@ -1461,13 +1473,13 @@ public:
 
     JSInstructionStream* decode(Decoder& decoder) const
     {
-        Vector<uint8_t, 0, UnsafeVectorOverflow, 16, InstructionStreamMalloc> instructionsVector;
+        Vector<uint8_t, 0, UnsafeVectorOverflow, 16, InstructionStreamBufferMalloc> instructionsVector;
         m_instructions.decode(decoder, instructionsVector);
         return new JSInstructionStream(WTFMove(instructionsVector));
     }
 
 private:
-    CachedVector<uint8_t, 0, UnsafeVectorOverflow, InstructionStreamMalloc> m_instructions;
+    CachedVector<uint8_t, 0, UnsafeVectorOverflow, InstructionStreamBufferMalloc> m_instructions;
 };
 
 class CachedMetadataTable : public CachedObject<UnlinkedMetadataTable> {
@@ -2419,7 +2431,7 @@ ALWAYS_INLINE void CachedCodeBlock<CodeBlockType>::encode(Encoder& encoder, cons
     m_rareData.encode(encoder, codeBlock.m_rareData.get());
 
     m_sourceURLDirective.encode(encoder, codeBlock.m_sourceURLDirective.get());
-    m_sourceMappingURLDirective.encode(encoder, codeBlock.m_sourceURLDirective.get());
+    m_sourceMappingURLDirective.encode(encoder, codeBlock.m_sourceMappingURLDirective.get());
 
     m_instructions.encode(encoder, codeBlock.m_instructions.get());
     m_constantRegisters.encode(encoder, codeBlock.m_constantRegisters);
@@ -2606,15 +2618,14 @@ RefPtr<CachedBytecode> encodeFunctionCodeBlock(VM& vm, const UnlinkedFunctionCod
 
 UnlinkedCodeBlock* decodeCodeBlockImpl(VM& vm, const SourceCodeKey& key, Ref<CachedBytecode> cachedBytecode)
 {
-    const auto* cachedEntry = bitwise_cast<const GenericCacheEntry*>(cachedBytecode->span().data());
-    Ref<Decoder> decoder = Decoder::create(vm, WTFMove(cachedBytecode), &key.source().provider());
+    auto* cachedEntry = bitwise_cast<const GenericCacheEntry*>(cachedBytecode->span().data());
+    Ref decoder = Decoder::create(vm, WTFMove(cachedBytecode), &key.source().provider());
     std::pair<SourceCodeKey, UnlinkedCodeBlock*> entry;
     {
         DeferGC deferGC(vm);
         if (!cachedEntry->decode(decoder.get(), entry))
             return nullptr;
     }
-
     if (entry.first != key)
         return nullptr;
     return entry.second;
@@ -2622,10 +2633,11 @@ UnlinkedCodeBlock* decodeCodeBlockImpl(VM& vm, const SourceCodeKey& key, Ref<Cac
 
 bool isCachedBytecodeStillValid(VM& vm, Ref<CachedBytecode> cachedBytecode, const SourceCodeKey& key, SourceCodeType type)
 {
-    if (!cachedBytecode->size())
+    auto span = cachedBytecode->span();
+    if (span.empty())
         return false;
-    const auto* cachedEntry = bitwise_cast<const GenericCacheEntry*>(cachedBytecode->span().data());
-    Ref<Decoder> decoder = Decoder::create(vm, WTFMove(cachedBytecode));
+    auto* cachedEntry = bitwise_cast<const GenericCacheEntry*>(span.data());
+    Ref decoder = Decoder::create(vm, WTFMove(cachedBytecode));
     return cachedEntry->isStillValid(decoder.get(), key, tagFromSourceCodeType(type));
 }
 

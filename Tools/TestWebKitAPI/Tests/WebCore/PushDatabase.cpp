@@ -105,12 +105,12 @@ static String makeTemporaryDatabasePath()
     return FileSystem::createTemporaryFile("PushDatabase"_s, ".db"_s);
 }
 
-static std::unique_ptr<PushDatabase> createDatabaseSync(const String& path)
+static RefPtr<PushDatabase> createDatabaseSync(const String& path)
 {
-    std::unique_ptr<PushDatabase> result;
+    RefPtr<PushDatabase> result;
     bool done = false;
 
-    PushDatabase::create(path, [&done, &result](std::unique_ptr<PushDatabase>&& database) {
+    PushDatabase::create(path, [&done, &result](RefPtr<PushDatabase>&& database) {
         result = WTFMove(database);
         done = true;
     });
@@ -206,8 +206,9 @@ static PushTopics getTopicsSync(PushDatabase& database)
 
 class PushDatabaseTest : public testing::Test {
 public:
-    std::unique_ptr<PushDatabase> db;
+    RefPtr<PushDatabase> db;
 
+    IGNORE_CLANG_WARNINGS_BEGIN("missing-designated-field-initializers")
     PushRecord record1 {
         .subscriptionSetIdentifier = { "com.apple.webapp"_s, emptyString(), std::nullopt },
         .securityOrigin = "https://www.apple.com"_s,
@@ -298,6 +299,7 @@ public:
         .clientPrivateKey = { 23 },
         .sharedAuthSecret = { 24 }
     };
+    IGNORE_CLANG_WARNINGS_END
 
     std::optional<PushRecord> insertResult1;
     std::optional<PushRecord> insertResult2;
@@ -358,7 +360,7 @@ public:
         bool done = false;
         bool removeResult = false;
 
-        db->removeRecordByIdentifier(LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(rowIdentifier), [&done, &removeResult](bool result) {
+        db->removeRecordByIdentifier(ObjectIdentifier<PushSubscriptionIdentifierType>(rowIdentifier), [&done, &removeResult](bool result) {
             removeResult = result;
             done = true;
         });
@@ -421,6 +423,20 @@ public:
         Vector<RemovedPushRecord> removedRecords;
 
         db->removeRecordsBySubscriptionSetAndSecurityOrigin(subscriptionSetIdentifier, securityOrigin, [&done, &removedRecords](auto&& result) {
+            removedRecords = WTFMove(result);
+            done = true;
+        });
+        Util::run(&done);
+
+        return removedRecords;
+    }
+
+    Vector<RemovedPushRecord> removeRecordsByBundleIdentifierAndDataStore(const String& bundleIdentifier, const std::optional<WTF::UUID>& dataStoreIdentifier)
+    {
+        bool done = false;
+        Vector<RemovedPushRecord> removedRecords;
+
+        db->removeRecordsByBundleIdentifierAndDataStore(bundleIdentifier, dataStoreIdentifier, [&done, &removedRecords](auto&& result) {
             removedRecords = WTFMove(result);
             done = true;
         });
@@ -520,31 +536,31 @@ TEST_F(PushDatabaseTest, UpdatePublicToken)
 TEST_F(PushDatabaseTest, InsertRecord)
 {
     auto expectedRecord1 = record1;
-    expectedRecord1.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(1);
+    expectedRecord1.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(1);
     EXPECT_TRUE(expectedRecord1 == *insertResult1);
 
     auto expectedRecord2 = record2;
-    expectedRecord2.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(2);
+    expectedRecord2.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(2);
     EXPECT_TRUE(expectedRecord2 == *insertResult2);
 
     auto expectedRecord3 = record3;
-    expectedRecord3.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(3);
+    expectedRecord3.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(3);
     EXPECT_TRUE(expectedRecord3 == *insertResult3);
 
     auto expectedRecord4 = record4;
-    expectedRecord4.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(4);
+    expectedRecord4.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(4);
     EXPECT_TRUE(expectedRecord4 == *insertResult4);
 
     auto expectedRecord5 = record5;
-    expectedRecord5.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(5);
+    expectedRecord5.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(5);
     EXPECT_TRUE(expectedRecord5 == *insertResult5);
 
     auto expectedRecord6 = record6;
-    expectedRecord6.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(6);
+    expectedRecord6.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(6);
     EXPECT_TRUE(expectedRecord6 == *insertResult6);
     
     auto expectedRecord7 = record7;
-    expectedRecord7.identifier = LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(7);
+    expectedRecord7.identifier = ObjectIdentifier<PushSubscriptionIdentifierType>(7);
     EXPECT_TRUE(expectedRecord7 == *insertResult7);
 
     EXPECT_EQ(getPushSubscriptionSets(), expectedSubscriptionSets);
@@ -611,7 +627,7 @@ TEST_F(PushDatabaseTest, RemoveRecordsBySubscriptionSet)
     PushRecord record8 = record3;
     auto insertResult = insertRecord(WTFMove(record8));
     EXPECT_TRUE(insertResult);
-    EXPECT_EQ(insertResult->identifier, LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(8));
+    EXPECT_EQ(insertResult->identifier, ObjectIdentifier<PushSubscriptionIdentifierType>(8));
     EXPECT_EQ(getRowIdentifiers(), (HashSet<uint64_t> { 1, 8 }));
 
     Vector<PushSubscriptionSetRecord> expectedSubscriptionSets {
@@ -648,7 +664,7 @@ TEST_F(PushDatabaseTest, RemoveRecordsBySubscriptionSetAndSecurityOrigin)
     PushRecord record8 = record3;
     auto insertResult = insertRecord(WTFMove(record8));
     EXPECT_TRUE(insertResult);
-    EXPECT_EQ(insertResult->identifier, LegacyNullableObjectIdentifier<PushSubscriptionIdentifierType>(8));
+    EXPECT_EQ(insertResult->identifier, ObjectIdentifier<PushSubscriptionIdentifierType>(8));
     EXPECT_EQ(getRowIdentifiers(), (HashSet<uint64_t> { 1, 2, 5, 8 }));
 
     Vector<PushSubscriptionSetRecord> expectedSubscriptionSets {
@@ -656,6 +672,31 @@ TEST_F(PushDatabaseTest, RemoveRecordsBySubscriptionSetAndSecurityOrigin)
         { record2.subscriptionSetIdentifier, record2.securityOrigin, true },
         { record5.subscriptionSetIdentifier, record5.securityOrigin, true },
         { record8.subscriptionSetIdentifier, record8.securityOrigin, true }
+    };
+    EXPECT_EQ(getPushSubscriptionSets(), expectedSubscriptionSets);
+}
+
+TEST_F(PushDatabaseTest, RemoveRecordsByBundleIdentifierAndDataStore)
+{
+    // record5, record6, and record7 have the same bundleIdentifier and dataStoreIdentifier, but different pushPartitions.
+    auto removedRecords = removeRecordsByBundleIdentifierAndDataStore(record5.subscriptionSetIdentifier.bundleIdentifier, record5.subscriptionSetIdentifier.dataStoreIdentifier);
+    auto expected = HashSet<String> { record5.topic, record6.topic, record7.topic };
+    EXPECT_EQ(getTopicsFromRecords(removedRecords), expected);
+    EXPECT_EQ(removedRecords.size(), 3u);
+    EXPECT_EQ(getRowIdentifiers(), (HashSet<uint64_t> { 1, 2, 3, 4 }));
+
+    // Inserting a new record should produce a new identifier.
+    PushRecord record8 = record5;
+    auto insertResult = insertRecord(WTFMove(record8));
+    EXPECT_TRUE(insertResult);
+    EXPECT_EQ(insertResult->identifier, ObjectIdentifier<PushSubscriptionIdentifierType>(8));
+    EXPECT_EQ(getRowIdentifiers(), (HashSet<uint64_t> { 1, 2, 3, 4, 8 }));
+
+    Vector<PushSubscriptionSetRecord> expectedSubscriptionSets {
+        { record1.subscriptionSetIdentifier, record1.securityOrigin, true },
+        { record2.subscriptionSetIdentifier, record2.securityOrigin, true },
+        { record3.subscriptionSetIdentifier, record3.securityOrigin, true },
+        { record5.subscriptionSetIdentifier, record5.securityOrigin, true },
     };
     EXPECT_EQ(getPushSubscriptionSets(), expectedSubscriptionSets);
 }
@@ -844,6 +885,7 @@ TEST(PushDatabase, ManyInFlightOps)
         ASSERT_TRUE(createResult);
 
         auto& database = *createResult;
+        IGNORE_CLANG_WARNINGS_BEGIN("missing-designated-field-initializers")
         PushRecord record {
             .subscriptionSetIdentifier = PushSubscriptionSetIdentifier { "com.apple.Safari"_s, emptyString(), std::nullopt },
             .securityOrigin = "https://www.webkit.org"_s,
@@ -854,6 +896,7 @@ TEST(PushDatabase, ManyInFlightOps)
             .sharedAuthSecret = { 4, 5 },
             .expirationTime = convertSecondsToEpochTimeStamp(1643350000),
         };
+        IGNORE_CLANG_WARNINGS_END
 
         for (unsigned i = 0; i < recordCount; i++) {
             record.scope = makeString("http://www.webkit.org/test/"_s, i);

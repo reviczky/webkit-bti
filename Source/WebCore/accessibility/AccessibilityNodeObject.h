@@ -135,7 +135,6 @@ public:
     AccessibilityObject* previousSibling() const override;
     AccessibilityObject* nextSibling() const override;
     AccessibilityObject* parentObject() const override;
-    AccessibilityObject* parentObjectIfExists() const override;
 
     bool matchesTextAreaRole() const;
 
@@ -168,7 +167,7 @@ protected:
     virtual AccessibilityRole determineAriaRoleAttribute() const;
     AccessibilityRole remapAriaRoleDueToParent(AccessibilityRole) const;
 
-    bool computeAccessibilityIsIgnored() const override;
+    bool computeIsIgnored() const override;
     void addChildren() override;
     void clearChildren() override;
     void updateChildrenIfNecessary() override;

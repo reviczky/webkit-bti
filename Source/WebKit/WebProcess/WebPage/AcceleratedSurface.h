@@ -28,6 +28,7 @@
 #include <WebCore/IntSize.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/WeakRef.h>
 
 namespace WTF {
 class RunLoop;
@@ -45,12 +46,7 @@ class AcceleratedSurface {
     WTF_MAKE_NONCOPYABLE(AcceleratedSurface);
     WTF_MAKE_TZONE_ALLOCATED(AcceleratedSurface);
 public:
-    class Client {
-    public:
-        virtual void frameComplete() = 0;
-    };
-
-    static std::unique_ptr<AcceleratedSurface> create(WebPage&, Client&);
+    static std::unique_ptr<AcceleratedSurface> create(WebPage&, Function<void()>&& frameCompleteHandler);
     virtual ~AcceleratedSurface() = default;
 
     virtual uint64_t window() const { ASSERT_NOT_REACHED(); return 0; }
@@ -59,7 +55,6 @@ public:
     virtual void clientResize(const WebCore::IntSize&) { };
     virtual bool shouldPaintMirrored() const { return false; }
 
-    virtual void initialize() { }
     virtual void didCreateGLContext() { }
     virtual void willDestroyGLContext() { }
     virtual void finalize() { }
@@ -80,10 +75,12 @@ public:
     void clearIfNeeded();
 
 protected:
-    AcceleratedSurface(WebPage&, Client&);
+    AcceleratedSurface(WebPage&, Function<void()>&& frameCompleteHandler);
 
-    WebPage& m_webPage;
-    Client& m_client;
+    void frameComplete() const;
+
+    WeakRef<WebPage> m_webPage;
+    Function<void()> m_frameCompleteHandler;
     WebCore::IntSize m_size;
     std::atomic<bool> m_isOpaque { true };
 };

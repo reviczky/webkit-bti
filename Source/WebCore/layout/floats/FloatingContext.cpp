@@ -76,6 +76,8 @@ public:
     const PlacedFloats::Item* left() const;
     const PlacedFloats::Item* right() const;
     bool intersects(const FloatAvoider&) const;
+    bool intersects(BoxGeometry::HorizontalEdges) const;
+    bool containsFloatFromFormattingContext() const;
     PositionInContextRoot verticalConstraint() const { return m_verticalPosition; }
 
     struct HorizontalConstraints {
@@ -170,18 +172,10 @@ static FloatPair::LeftRightIndex findAvailablePosition(FloatAvoider& floatAvoide
         auto leftRightEdge = leftRightFloatPair.horizontalConstraints();
 
         // Ensure that the float avoider
-        // 1. avoids floats on both sides
+        // 1. avoids floats on both sides (with the exception of non-intrusive floats from other FCs)
         // 2. does not overflow its containing block if the horizontal position is constrained by other floats
         // (i.e. a float avoider may overflow its containing block just fine unless this overflow is the result of getting it pushed by other floats on this vertical position -out of available space)
         // 3. Move to the next floating pair if this vertical position is over-constrained.
-        if ((!leftRightEdge.left || *leftRightEdge.left <= containingBlockContentBoxEdges.start)
-            && (!leftRightEdge.right || *leftRightEdge.right >= containingBlockContentBoxEdges.end)) {
-            // Surprisingly floats may overlap each other on the non-floating side (e.g. float: left may overlap a float: right)
-            // when they are not considered intrusive (i.e. they are outside of our containing block's content box).
-            // FIXME: Should we check if placed floats come from outside of this formatting context.
-            return *innerMostLeftAndRight;
-        }
-
         if (auto horizontalConstraint = floatAvoider.isLeftAligned() ? leftRightEdge.left : leftRightEdge.right)
             floatAvoider.setHorizontalPosition(*horizontalConstraint);
         else
@@ -190,6 +184,13 @@ static FloatPair::LeftRightIndex findAvailablePosition(FloatAvoider& floatAvoide
 
         if (!leftRightFloatPair.intersects(floatAvoider) && !floatAvoider.overflowsContainingBlock())
             return *innerMostLeftAndRight;
+
+        // Is this float pair is outside of our containing block's content box? In some cases we _may_ overlap them.
+        if (!leftRightFloatPair.intersects(containingBlockContentBoxEdges) && !leftRightFloatPair.containsFloatFromFormattingContext()) {
+            // Surprisingly floats do overlap each other on the non-floating side (e.g. float: left may overlap a float: right)
+            // when they are not considered intrusive (i.e. they are outside of our containing block's content box) and coming from outside of the formatting context.
+            return *innerMostLeftAndRight;
+        }
 
         bottomMost = leftRightFloatPair.bottom();
         // Move to the next floating pair.
@@ -287,7 +288,7 @@ LayoutPoint FloatingContext::positionForNonFloatingFloatAvoider(const Box& layou
 
     auto absoluteCoordinates = this->absoluteCoordinates(layoutBox, borderBoxTopLeft);
     auto margins = BoxGeometry::Edges { { boxGeometry.marginStart(), boxGeometry.marginEnd() }, { boxGeometry.marginBefore(), boxGeometry.marginAfter() } };
-    auto floatAvoider = FloatAvoider { absoluteCoordinates.topLeft, boxGeometry.borderBoxWidth(), margins, absoluteCoordinates.containingBlockContentBox, false, layoutBox.style().isLeftToRightDirection() };
+    auto floatAvoider = FloatAvoider { absoluteCoordinates.topLeft, boxGeometry.borderBoxWidth(), margins, absoluteCoordinates.containingBlockContentBox, false, layoutBox.writingMode().isBidiLTR() };
     findPositionForFormattingContextRoot(floatAvoider, absoluteCoordinates.containingBlockContentBox);
     auto containingBlockTopLeft = absoluteCoordinates.containingBlockTopLeft;
     return { floatAvoider.left() - containingBlockTopLeft.x(), floatAvoider.top() - containingBlockTopLeft.y() };
@@ -374,7 +375,7 @@ FloatingContext::Constraints FloatingContext::constraints(LayoutUnit candidateTo
         return { };
     // 1. Convert vertical position if this floating context is inherited.
     // 2. Find the inner left/right floats at candidateTop/candidateBottom. Note when MayBeAboveLastFloat is 'no', we can just stop at the inner most (last) float (block vs. inline case).
-    // 3. Convert left/right positions back to formattingContextRoot's cooridnate system.
+    // 3. Convert left/right positions back to formattingContextRoot's coordinate system.
     auto& placedFloats = this->placedFloats();
     auto coordinateMappingIsRequired = &placedFloats.formattingContextRoot() != &root();
     auto adjustedCandidateTop = candidateTop;
@@ -479,7 +480,7 @@ FloatingContext::Constraints FloatingContext::constraints(LayoutUnit candidateTo
             constraints.right->move(-adjustingDelta);
     }
 
-    if (placedFloats.isLeftToRightDirection() != root().style().isLeftToRightDirection()) {
+    if (placedFloats.writingMode().isInlineOpposing(root().writingMode())) {
         // FIXME: Move it under coordinateMappingIsRequired when the integration codepath starts initiating the floating state with the
         // correct containing block (i.e. when the float comes from the parent BFC).
 
@@ -518,7 +519,7 @@ void FloatingContext::findPositionForFormattingContextRoot(FloatAvoider& floatAv
     // Document order: 1. float: left (L1) 2. float: right (R1) 3. formatting root (F1)
     //
     // 1. Probe for available placement at initial position (note it runs a backward probing algorithm at a specific vertical position)
-    // 2. Check if there's any intersecing float below (forward seaching)
+    // 2. Check if there's any intersecting float below (forward search)
     // 3. Align the box with the intersected float and probe for placement again (#1). 
     auto& floats = m_placedFloats.list();
     while (true) {
@@ -589,7 +590,7 @@ bool FloatingContext::isLogicalLeftPositioned(const Box& floatBox) const
     ASSERT(floatBox.isFloatingPositioned());
     // Note that this returns true relative to the root of this FloatingContext and not to the PlacedFloats
     // PlacedFloats's root may be an ancestor block container with mismatching inline direction.
-    auto floatingBoxIsInLeftToRightDirection = root().style().isLeftToRightDirection();
+    auto floatingBoxIsInLeftToRightDirection = root().writingMode().isBidiLTR();
     auto floatingValue = floatBox.style().floating();
     return floatingValue == Float::InlineStart
         || (floatingBoxIsInLeftToRightDirection && floatingValue == Float::Left)
@@ -603,10 +604,10 @@ bool FloatingContext::isFloatingCandidateLeftPositionedInPlacedFloats(const Box&
     // - "float: left" in left-to-right floating state
     // - "float: inline-start" inline left-to-right floating state
     // If the floating state is right-to-left (meaning that the PlacedFloats is constructed by a BFC root with "direction: rtl")
-    // visaully left positioned floats are logically right (Note that FloatingContext's direction may not be the same as the PlacedFloats's direction
+    // visually left positioned floats are logically right (Note that FloatingContext's direction may not be the same as the PlacedFloats's direction
     // when dealing with inherited PlacedFloatss across nested IFCs).
-    auto floatingContextIsLeftToRight = root().style().isLeftToRightDirection();
-    auto placedFloatsIsLeftToRight = m_placedFloats.isLeftToRightDirection();
+    auto floatingContextIsLeftToRight = root().writingMode().isBidiLTR();
+    auto placedFloatsIsLeftToRight = m_placedFloats.writingMode().isBidiLTR();
     if (floatingContextIsLeftToRight == placedFloatsIsLeftToRight)
         return isLogicalLeftPositioned(floatBox);
 
@@ -623,7 +624,7 @@ Clear FloatingContext::clearInPlacedFloats(const Box& clearBox) const
 {
     // See isFloatingCandidateLeftPositionedInPlacedFloats for details.
     ASSERT(clearBox.hasFloatClear());
-    auto clearBoxIsInLeftToRightDirection = root().style().isLeftToRightDirection();
+    auto clearBoxIsInLeftToRightDirection = root().writingMode().isBidiLTR();
     auto clearValue = clearBox.style().clear();
     if (clearValue == Clear::Both)
         return clearValue;
@@ -633,7 +634,7 @@ Clear FloatingContext::clearInPlacedFloats(const Box& clearBox) const
     else if (clearValue == Clear::InlineEnd)
         clearValue = clearBoxIsInLeftToRightDirection ? Clear::Right : Clear::Left;
 
-    auto floatsAreInLeftToRightDirection = m_placedFloats.isLeftToRightDirection();
+    auto floatsAreInLeftToRightDirection = m_placedFloats.writingMode().isBidiLTR();
     return (floatsAreInLeftToRightDirection && clearValue == Clear::Left)
         || (!floatsAreInLeftToRightDirection && clearValue == Clear::Right) ? Clear::Left : Clear::Right;
 }
@@ -674,6 +675,32 @@ bool FloatPair::intersects(const FloatAvoider& floatAvoider) const
 
     ASSERT(!m_floatPair.isEmpty());
     return intersects(left()) || intersects(right());
+}
+
+bool FloatPair::intersects(BoxGeometry::HorizontalEdges containingBlockContentBoxEdges) const
+{
+    ASSERT(!m_floatPair.isEmpty());
+
+    auto leftRightEdge = horizontalConstraints();
+    if (leftRightEdge.left && *leftRightEdge.left > containingBlockContentBoxEdges.start)
+        return true;
+
+    if (leftRightEdge.right && *leftRightEdge.right < containingBlockContentBoxEdges.end)
+        return true;
+
+    return false;
+}
+
+bool FloatPair::containsFloatFromFormattingContext() const
+{
+    ASSERT(!m_floatPair.isEmpty());
+
+    auto isInsideCurrentFormattingContext = [&](auto* floatBox) {
+        // FIXME: This should be a tree traversal on the ancestor chain to see if this belongs to the
+        // FloatingContext's formatting context (e.g. float may come from parent and sibling formatting contexts)
+        return floatBox && floatBox->layoutBox();
+    };
+    return isInsideCurrentFormattingContext(left()) || isInsideCurrentFormattingContext(right());
 }
 
 bool FloatPair::operator ==(const FloatPair& other) const
@@ -768,7 +795,7 @@ Iterator& Iterator::operator++()
     // 1. Take the current floating from left and right and check which one's bottom edge is positioned higher (they could be on the same vertical position too).
     // The current floats from left and right are considered the inner-most pair for the current vertical position.
     // 2. Move away from inner-most pair by picking one of the previous floats in the list(#1)
-    // Ensure that the new floating's bottom edge is positioned lower than the current one -which essentially means skipping in-between floats that are positioned higher).
+    // Ensure that the new floating bottom edge is positioned lower than the current one -which essentially means skipping in-between floats that are positioned higher).
     // 3. Reset the vertical position and align it with the new left-right pair. These floats are now the inner-most boxes for the current vertical position.
     // As the result we have more horizontal space on the current vertical position.
     auto leftBottom = m_current.left() ? std::optional<PositionInContextRoot>(m_current.left()->absoluteBottom()) : std::nullopt;
@@ -796,7 +823,7 @@ void Iterator::set(PositionInContextRoot verticalPosition)
 {
     // Move the iterator to the initial vertical position by starting at the inner-most floating pair (last floats on left/right).
     // 1. Check if the inner-most pair covers the vertical position.
-    // 2. Move outwards from the inner-most pair until the vertical postion intersects.
+    // 2. Move outwards from the inner-most pair until the vertical position intersects.
     m_current.m_verticalPosition = verticalPosition;
     // No floats at all?
     if (m_floats.isEmpty()) {

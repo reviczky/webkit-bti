@@ -38,6 +38,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Scope.h>
 #include <wtf/StdMap.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/cf/TypeCastsCF.h>
 #include <wtf/spi/cocoa/IOSurfaceSPI.h>
 #include <wtf/text/StringBuilder.h>
@@ -45,6 +46,8 @@
 #include "CoreVideoSoftLink.h"
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GraphicsContextGLCVCocoa);
 
 static constexpr auto s_yuvVertexShaderTexture2D {
     "attribute vec2 a_position;"
@@ -590,7 +593,7 @@ bool GraphicsContextGLCVCocoa::copyVideoSampleToTexture(const VideoFrameCV& vide
         ) {
         convertedImage = convertPixelBuffer(image);
         if (!convertedImage) {
-            LOG(WebGL, "GraphicsContextGLCVCocoa::copyVideoTextureToPlatformTexture(%p) - failed converting an image with pixel format ('%s').", this, FourCC(pixelFormat).string().data());
+            LOG(WebGL, "GraphicsContextGLCVCocoa(%p) - failed converting an image with pixel format ('%s').", this, FourCC(pixelFormat).string().data());
             return false;
         }
         image = convertedImage.get();
@@ -682,7 +685,7 @@ bool GraphicsContextGLCVCocoa::copyVideoSampleToTexture(const VideoFrameCV& vide
     GL_FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outputTexture, level);
     GLenum status = GL_CheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        LOG(WebGL, "GraphicsContextGLCVCocoa::copyVideoTextureToPlatformTexture(%p) - Unable to create framebuffer for outputTexture.", this);
+        LOG(WebGL, "GraphicsContextGLCVCocoa(%p) - Unable to create framebuffer for outputTexture.", this);
         return false;
     }
     GL_BindTexture(GL_TEXTURE_2D, 0);

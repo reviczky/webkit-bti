@@ -72,7 +72,7 @@ using RunLoopMode = unsigned;
 #define DefaultRunLoopMode 0
 #endif
 
-class WTF_CAPABILITY("is current") RunLoop final : public RefCountedSerialFunctionDispatcher, public ThreadSafeRefCounted<RunLoop> {
+class WTF_CAPABILITY("is current") RunLoop final : public GuaranteedSerialFunctionDispatcher {
     WTF_MAKE_NONCOPYABLE(RunLoop);
 public:
     // Must be called from the main thread.
@@ -92,8 +92,6 @@ public:
     WTF_EXPORT_PRIVATE static Ref<RunLoop> create(ASCIILiteral threadName, ThreadType = ThreadType::Unknown, Thread::QOS = Thread::QOS::UserInitiated);
 
     static bool isMain() { return main().isCurrent(); }
-    void ref() const final { ThreadSafeRefCounted::ref(); }
-    void deref() const final { ThreadSafeRefCounted::deref(); }
     WTF_EXPORT_PRIVATE bool isCurrent() const final;
     WTF_EXPORT_PRIVATE ~RunLoop() final;
 
@@ -131,7 +129,7 @@ public:
     class TimerBase {
         friend class RunLoop;
     public:
-        WTF_EXPORT_PRIVATE explicit TimerBase(RunLoop&);
+        WTF_EXPORT_PRIVATE explicit TimerBase(Ref<RunLoop>&&);
         WTF_EXPORT_PRIVATE virtual ~TimerBase();
 
         void startRepeating(Seconds interval) { start(std::max(interval, 0_s), true); }
@@ -180,13 +178,13 @@ public:
         WTF_MAKE_FAST_ALLOCATED;
     public:
         template <typename TimerFiredClass>
-        Timer(RunLoop& runLoop, TimerFiredClass* o, void (TimerFiredClass::*f)())
-            : Timer(runLoop, std::bind(f, o))
+        Timer(Ref<RunLoop>&& runLoop, TimerFiredClass* o, void (TimerFiredClass::*f)())
+            : Timer(WTFMove(runLoop), std::bind(f, o))
         {
         }
 
-        Timer(RunLoop& runLoop, Function<void ()>&& function)
-            : TimerBase(runLoop)
+        Timer(Ref<RunLoop>&& runLoop, Function<void ()>&& function)
+            : TimerBase(WTFMove(runLoop))
             , m_function(WTFMove(function))
         {
         }
@@ -237,6 +235,7 @@ private:
     static LRESULT CALLBACK RunLoopWndProc(HWND, UINT, WPARAM, LPARAM);
     LRESULT wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
     HWND m_runLoopMessageWindow;
+    HashSet<UINT_PTR> m_liveTimers;
 
     Lock m_loopLock;
 #elif USE(COCOA_EVENT_LOOP)

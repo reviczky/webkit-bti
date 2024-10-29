@@ -34,6 +34,7 @@
 #include "U2fAuthenticator.h"
 #include <WebCore/AuthenticationExtensionsClientOutputs.h>
 #include <WebCore/AuthenticatorAttachment.h>
+#include <WebCore/CredentialPropertiesOutput.h>
 #include <WebCore/CryptoKeyAES.h>
 #include <WebCore/CryptoKeyHMAC.h>
 #include <WebCore/DeviceRequestConverter.h>
@@ -61,7 +62,7 @@ static Vector<Vector<PublicKeyCredentialDescriptor>> batchesForCredentials(Vecto
 {
     Vector<Vector<PublicKeyCredentialDescriptor>> batches;
     for (auto credential : credentials) {
-        if (maxCredentialIDLength && credential.id.length() > *maxCredentialIDLength)
+        if (maxCredentialIDLength && BufferSource { credential.id } .length() > *maxCredentialIDLength)
             continue;
         if (!batches.size() || batches.last().size() >= maxBatchSize)
             batches.append({ });
@@ -103,7 +104,7 @@ bool isPinError(const CtapDeviceResponseCode& error)
 
 } // namespace
 
-CtapAuthenticator::CtapAuthenticator(std::unique_ptr<CtapDriver>&& driver, AuthenticatorGetInfoResponse&& info)
+CtapAuthenticator::CtapAuthenticator(Ref<CtapDriver>&& driver, AuthenticatorGetInfoResponse&& info)
     : FidoAuthenticator(WTFMove(driver))
     , m_info(WTFMove(info))
 {
@@ -124,7 +125,7 @@ void CtapAuthenticator::makeCredential()
         if (!m_batches.size())
             return continueMakeCredentialAfterCheckExcludedCredentials();
         m_currentBatch = 0;
-        Vector<uint8_t> cborCmd = encodeSilentGetAssertion(*options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+        Vector<uint8_t> cborCmd = encodeSilentGetAssertion(options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
         driver().transact(WTFMove(cborCmd), [weakThis = WeakPtr { *this }](Vector<uint8_t>&& data) {
             ASSERT(RunLoop::isMain());
             if (!weakThis)
@@ -151,7 +152,7 @@ void CtapAuthenticator::continueSilentlyCheckCredentials(Vector<uint8_t>&& data,
     }
     Vector<uint8_t> cborCmd;
     WTF::switchOn(requestData().options, [&](const PublicKeyCredentialCreationOptions& options) {
-        cborCmd = encodeSilentGetAssertion(*options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
+        cborCmd = encodeSilentGetAssertion(options.rp.id, requestData().hash, m_batches[m_currentBatch], std::nullopt);
     }, [&](const PublicKeyCredentialRequestOptions& options) {
         cborCmd = encodeSilentGetAssertion(options.rpId, requestData().hash, m_batches[m_currentBatch], std::nullopt);
     });
@@ -245,7 +246,7 @@ void CtapAuthenticator::continueMakeCredentialAfterResponseReceived(Vector<uint8
         
         auto rkSupported = m_info.options().residentKeyAvailability() == AuthenticatorSupportedOptions::ResidentKeyAvailability::kSupported;
         auto rkRequested = options.authenticatorSelection && ((options.authenticatorSelection->residentKey && options.authenticatorSelection->residentKey != ResidentKeyRequirement::Discouraged) || options.authenticatorSelection->requireResidentKey);
-        extensionOutputs.credProps = AuthenticationExtensionsClientOutputs::CredentialPropertiesOutput { rkSupported && rkRequested && !m_isKeyStoreFull };
+        extensionOutputs.credProps = CredentialPropertiesOutput { rkSupported && rkRequested && !m_isKeyStoreFull };
         response->setExtensions(WTFMove(extensionOutputs));
     }
     receiveRespond(response.releaseNonNull());
@@ -371,7 +372,7 @@ void CtapAuthenticator::continueGetNextAssertionAfterResponseReceived(Vector<uin
     CTAP_RELEASE_LOG("continueGetNextAssertionAfterResponseReceived: Remaining responses: %lu", m_remainingAssertionResponses);
 
     if (!m_remainingAssertionResponses) {
-        if (auto* observer = this->observer()) {
+        if (RefPtr observer = this->observer()) {
             observer->selectAssertionResponse(Vector { m_assertionResponses }, WebAuthenticationSource::External, [this, weakThis = WeakPtr { *this }] (AuthenticatorAssertionResponse* response) {
                 RELEASE_ASSERT(RunLoop::isMain());
                 if (!weakThis)
@@ -441,7 +442,7 @@ void CtapAuthenticator::continueRequestPinAfterGetKeyAgreement(Vector<uint8_t>&&
         return;
     }
 
-    if (auto* observer = this->observer()) {
+    if (RefPtr observer = this->observer()) {
         CTAP_RELEASE_LOG("continueRequestPinAfterGetKeyAgreement: Requesting pin from observer.");
         observer->requestPin(retries, [weakThis = WeakPtr { *this }, this, keyAgreement = WTFMove(*keyAgreement)] (const String& pin) {
             RELEASE_ASSERT(RunLoop::isMain());
@@ -464,7 +465,7 @@ void CtapAuthenticator::continueGetPinTokenAfterRequestPin(const String& pin, co
     auto pinUTF8 = pin::validateAndConvertToUTF8(pin);
     if (!pinUTF8) {
         // Fake a pin invalid response from the authenticator such that clients could show some error to the user.
-        if (auto* observer = this->observer())
+        if (RefPtr observer = this->observer())
             observer->authenticatorStatusUpdated(WebAuthenticationStatus::PinInvalid);
         tryRestartPin(CtapDeviceResponseCode::kCtap2ErrPinInvalid);
         return;
@@ -494,7 +495,7 @@ void CtapAuthenticator::continueRequestAfterGetPinToken(Vector<uint8_t>&& data, 
         auto error = getResponseCode(data);
 
         if (isPinError(error)) {
-            if (auto* observer = this->observer())
+            if (RefPtr observer = this->observer())
                 observer->authenticatorStatusUpdated(toStatus(error));
             if (tryRestartPin(error))
                 return;

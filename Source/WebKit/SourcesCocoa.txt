@@ -31,6 +31,11 @@ NetworkProcess/cocoa/NetworkSessionCocoa.mm
 NetworkProcess/cocoa/NetworkTaskCocoa.mm
 NetworkProcess/cocoa/WKURLSessionTaskDelegate.mm
 
+NetworkProcess/webtransport/cocoa/NetworkTransportBidirectionalStreamCocoa.mm
+NetworkProcess/webtransport/cocoa/NetworkTransportReceiveStreamCocoa.mm
+NetworkProcess/webtransport/cocoa/NetworkTransportSendStreamCocoa.mm
+NetworkProcess/webtransport/cocoa/NetworkTransportSessionCocoa.mm
+
 NetworkProcess/Classifier/WebResourceLoadStatisticsStore.cpp
 
 NetworkProcess/Cookies/mac/WebCookieManagerMac.mm
@@ -65,7 +70,6 @@ GPUProcess/EntryPoint/Cocoa/XPCService/GPUServiceEntryPoint.mm
 GPUProcess/cocoa/GPUConnectionToWebProcessCocoa.mm
 GPUProcess/cocoa/GPUProcessCocoa.mm
 GPUProcess/graphics/RemoteGraphicsContextGLCocoa.cpp
-GPUProcess/graphics/ScopedRenderingResourcesRequestCocoa.mm @no-unify
 GPUProcess/ios/GPUProcessIOS.mm
 GPUProcess/mac/GPUProcessMac.mm
 GPUProcess/mac/LocalAudioSessionRoutingArbitrator.cpp
@@ -112,7 +116,6 @@ Shared/API/c/cf/WKURLCF.mm
 Shared/API/c/cg/WKImageCG.cpp
 
 Shared/API/c/mac/WKCertificateInfoMac.mm
-Shared/API/c/mac/WKMediaFormatReader.cpp
 Shared/API/c/mac/WKObjCTypeWrapperRef.mm
 Shared/API/c/mac/WKURLRequestNS.mm
 Shared/API/c/mac/WKURLResponseNS.mm
@@ -220,12 +223,6 @@ Shared/mac/WebEventFactory.mm
 Shared/mac/WebGestureEvent.cpp
 Shared/mac/WebMemorySampler.mac.mm
 
-Shared/mac/MediaFormatReader/CoreMediaWrapped.cpp
-Shared/mac/MediaFormatReader/MediaFormatReader.cpp
-Shared/mac/MediaFormatReader/MediaSampleByteRange.cpp
-Shared/mac/MediaFormatReader/MediaSampleCursor.cpp
-Shared/mac/MediaFormatReader/MediaTrackReader.cpp
-
 Shared/RemoteLayerTree/DynamicContentScalingBifurcatedImageBuffer.mm
 Shared/RemoteLayerTree/DynamicContentScalingImageBufferBackend.mm
 Shared/RemoteLayerTree/RemoteLayerBackingStore.mm
@@ -291,6 +288,7 @@ UIProcess/API/Cocoa/_WKInternalDebugFeature.mm
 UIProcess/API/Cocoa/_WKLinkIconParameters.mm
 UIProcess/API/Cocoa/_WKModalContainerInfo.mm
 UIProcess/API/Cocoa/_WKNotificationData.mm
+UIProcess/API/Cocoa/_WKPageLoadTiming.mm
 UIProcess/API/Cocoa/_WKProcessPoolConfiguration.mm
 UIProcess/API/Cocoa/_WKRemoteWebInspectorViewController.mm
 UIProcess/API/Cocoa/_WKResourceLoadInfo.mm
@@ -303,6 +301,8 @@ UIProcess/API/Cocoa/_WKTextManipulationConfiguration.mm
 UIProcess/API/Cocoa/_WKTextManipulationExclusionRule.mm
 UIProcess/API/Cocoa/_WKTextManipulationItem.mm
 UIProcess/API/Cocoa/_WKTextManipulationToken.mm
+UIProcess/API/Cocoa/_WKTextPreview.mm
+UIProcess/API/Cocoa/_WKTextRun.mm
 UIProcess/API/Cocoa/_WKThumbnailView.mm
 UIProcess/API/Cocoa/_WKUserContentExtensionStore.mm
 UIProcess/API/Cocoa/_WKUserContentFilter.mm
@@ -312,7 +312,11 @@ UIProcess/API/Cocoa/_WKUserStyleSheet.mm
 UIProcess/API/Cocoa/_WKVisitedLinkStore.mm
 UIProcess/API/Cocoa/_WKWebAuthenticationAssertionResponse.mm
 UIProcess/API/Cocoa/_WKWebAuthenticationPanel.mm
+UIProcess/API/Cocoa/_WKWebPushDaemonConnection.mm
+UIProcess/API/Cocoa/_WKWebPushMessage.mm
+UIProcess/API/Cocoa/_WKWebPushSubscriptionData.mm
 UIProcess/API/Cocoa/_WKWebExtension.mm
+UIProcess/API/Cocoa/_WKWebPushAction.mm
 UIProcess/API/Cocoa/_WKWebsiteDataSize.mm
 UIProcess/API/Cocoa/_WKWebsiteDataStoreConfiguration.mm
 UIProcess/API/Cocoa/APIAttachmentCocoa.mm
@@ -698,6 +702,7 @@ WebProcess/Model/ARKitInlinePreviewModelPlayer.mm
 WebProcess/Model/ios/ARKitInlinePreviewModelPlayerIOS.mm
 WebProcess/Model/mac/ARKitInlinePreviewModelPlayerMac.mm
 
+WebProcess/Plugins/PDF/PDFAnnotationTypeHelpers.mm
 WebProcess/Plugins/PDF/PDFIncrementalLoader.mm
 WebProcess/Plugins/PDF/PDFPlugin.mm
 WebProcess/Plugins/PDF/PDFPluginBase.mm
@@ -706,7 +711,7 @@ WebProcess/Plugins/PDF/PDFPluginChoiceAnnotation.mm
 WebProcess/Plugins/PDF/PDFPluginPasswordField.mm
 WebProcess/Plugins/PDF/PDFPluginPasswordForm.mm
 WebProcess/Plugins/PDF/PDFPluginTextAnnotation.mm
-WebProcess/Plugins/PDF/PDFScriptEvaluator.mm
+WebProcess/Plugins/PDF/PDFScriptEvaluation.mm
 WebProcess/Plugins/PDF/WKAccessibilityPDFDocumentObject.mm
 WebProcess/Plugins/PDF/UnifiedPDF/AsyncPDFRenderer.mm
 WebProcess/Plugins/PDF/UnifiedPDF/PDFDataDetectorItem.mm
@@ -775,6 +780,7 @@ GPUProcessProxyMessageReceiver.cpp
 GPUProcessMessageReceiver.cpp
 LibWebRTCCodecsProxyMessageReceiver.cpp
 LibWebRTCCodecsMessageReceiver.cpp
+LogStreamMessageReceiver.cpp
 ModelConnectionToWebProcessMessageReceiver.cpp
 ModelProcessConnectionMessageReceiver.cpp
 ModelProcessProxyMessageReceiver.cpp
@@ -787,8 +793,6 @@ RemoteAudioSessionProxyMessageReceiver.cpp
 RemoteAudioSourceProviderManagerMessageReceiver.cpp
 RemoteImageDecoderAVFProxyMessageReceiver.cpp
 RemoteImageDecoderAVFManagerMessageReceiver.cpp
-RemoteMediaRecorderMessageReceiver.cpp
-RemoteMediaRecorderManagerMessageReceiver.cpp
 RemoteMediaSessionHelperMessageReceiver.cpp
 RemoteMediaSessionHelperProxyMessageReceiver.cpp
 RemoteMediaSessionCoordinatorMessageReceiver.cpp

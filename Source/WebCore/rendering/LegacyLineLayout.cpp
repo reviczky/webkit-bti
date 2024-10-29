@@ -50,8 +50,11 @@
 #include "SVGRootInlineBox.h"
 #include "Settings.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyLineLayout);
 
 LegacyLineLayout::LegacyLineLayout(RenderBlockFlow& flow)
     : m_flow(flow)
@@ -173,9 +176,9 @@ LegacyInlineBox* LegacyLineLayout::createInlineBoxForRenderer(RenderObject* rend
 static inline void dirtyLineBoxesForRenderer(RenderObject& renderer)
 {
     if (CheckedPtr renderText = dynamicDowncast<RenderText>(renderer))
-        renderText->dirtyLineBoxes(true);
+        renderText->dirtyLegacyLineBoxes(true);
     else if (CheckedPtr renderInline = dynamicDowncast<RenderInline>(renderer))
-        renderInline->dirtyLineBoxes(true);
+        renderInline->dirtyLegacyLineBoxes(true);
 }
 
 static bool parentIsConstructedOrHaveNext(LegacyInlineFlowBox* parentBox)
@@ -379,7 +382,7 @@ static inline void constructBidiRunsForSegment(InlineBidiResolver& topResolver, 
             determineDirectionality(direction, LegacyInlineIterator(isolatedInline, &isolatedRun.object, 0));
         else {
             ASSERT(unicodeBidi == UnicodeBidi::Isolate || unicodeBidi == UnicodeBidi::IsolateOverride);
-            direction = isolatedInline->style().direction();
+            direction = isolatedInline->writingMode().bidiDirection();
         }
         isolatedResolver.setStatus(BidiStatus(direction, isOverride(unicodeBidi)));
 
@@ -463,7 +466,7 @@ void LegacyLineLayout::layoutRunsAndFloats(bool hasInlineChild)
 {
     m_lineBoxes.deleteLineBoxTree();
 
-    TextDirection direction = style().direction();
+    TextDirection direction = style().writingMode().bidiDirection();
     if (style().unicodeBidi() == UnicodeBidi::Plaintext)
         determineDirectionality(direction, LegacyInlineIterator(&m_flow, firstInlineRendererSkippingEmpty(m_flow), 0));
 
@@ -519,10 +522,10 @@ void LegacyLineLayout::layoutRunsAndFloatsInRange(InlineBidiResolver& resolver)
         ASSERT(end != resolver.position());
 
         if (!lineInfo.isEmpty()) {
-            VisualDirectionOverride override = (styleToUse.rtlOrdering() == Order::Visual ? (styleToUse.direction() == TextDirection::LTR ? VisualLeftToRightOverride : VisualRightToLeftOverride) : NoVisualOverride);
+            VisualDirectionOverride override = (styleToUse.rtlOrdering() == Order::Visual ? (styleToUse.writingMode().isBidiLTR() ? VisualLeftToRightOverride : VisualRightToLeftOverride) : NoVisualOverride);
 
             if (styleToUse.unicodeBidi() == UnicodeBidi::Plaintext && !resolver.context()->parent()) {
-                TextDirection direction = styleToUse.direction();
+                TextDirection direction = styleToUse.writingMode().bidiDirection();
                 determineDirectionality(direction, resolver.position());
                 resolver.setStatus(BidiStatus(direction, isOverride(styleToUse.unicodeBidi())));
             }

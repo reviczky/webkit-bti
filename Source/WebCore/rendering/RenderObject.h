@@ -388,7 +388,7 @@ public:
 
     WEBCORE_EXPORT RenderBox& enclosingBox() const;
     RenderBoxModelObject& enclosingBoxModelObject() const;
-    RenderBox* enclosingScrollableContainerForSnapping() const;
+    RenderBox* enclosingScrollableContainer() const;
 
     // Return our enclosing flow thread if we are contained inside one. Follows the containing block chain.
     RenderFragmentedFlow* enclosingFragmentedFlow() const;
@@ -463,6 +463,7 @@ public:
     bool isRenderReplica() const { return type() == Type::Replica; }
 
     bool isRenderSlider() const { return type() == Type::Slider; }
+    bool isRenderSliderContainer() const { return type() == Type::SliderContainer; }
     bool isRenderTable() const;
     bool isRenderTableCell() const { return type() == Type::TableCell; }
     bool isRenderTableCol() const { return type() == Type::TableCol; }
@@ -473,6 +474,7 @@ public:
     bool isRenderTextControlSingleLine() const { return isRenderTextControl() && !isRenderTextControlMultiLine(); }
     bool isRenderSearchField() const { return type() == Type::SearchField; }
     bool isRenderTextControlInnerBlock() const { return type() == Type::TextControlInnerBlock; }
+    bool isRenderTextControlInnerContainer() const { return type() == Type::TextControlInnerContainer; }
     bool isRenderVideo() const { return type() == Type::Video; }
     bool isRenderViewTransitionCapture() const { return isRenderReplaced() && m_typeSpecificFlags.replacedFlags().contains(ReplacedFlag::IsViewTransitionCapture); }
     bool isRenderWidget() const { return isRenderReplaced() && m_typeSpecificFlags.replacedFlags().contains(ReplacedFlag::IsWidget); }
@@ -600,7 +602,7 @@ public:
     bool isRenderOrLegacyRenderSVGModelObject() const { return isRenderSVGModelObject() || isLegacyRenderSVGModelObject(); }
     bool isRenderOrLegacyRenderSVGResourceFilterPrimitive() const { return isRenderSVGResourceFilterPrimitive() || isLegacyRenderSVGResourceFilterPrimitive(); }
     bool isSVGLayerAwareRenderer() const { return isRenderSVGRoot() || isRenderSVGModelObject() || isRenderSVGText() || isRenderSVGInline() || isRenderSVGForeignObject(); }
-    bool isSVGRenderer() const { return isRenderOrLegacyRenderSVGRoot() || isLegacyRenderSVGModelObject() || isRenderSVGModelObject() || isRenderSVGBlock() || isRenderSVGInline(); }
+    bool isSVGRenderer() const { return isRenderOrLegacyRenderSVGRoot() || isRenderOrLegacyRenderSVGModelObject() || isRenderSVGBlock() || isRenderSVGInline(); }
 
     // FIXME: Those belong into a SVG specific base-class for all renderers (see above)
     // Unfortunately we don't have such a class yet, because it's not possible for all renderers
@@ -886,6 +888,8 @@ public:
 
     const RenderStyle& style() const;
     const RenderStyle& firstLineStyle() const;
+    WritingMode writingMode() const { return style().writingMode(); }
+    // writingMode().isHorizontal() is cached by isHorizontalWritingMode() above.
 
     // Anonymous blocks that are part of of a continuation chain will return their inline continuation's outline style instead.
     // This is typically only relevant when repainting.
@@ -1185,7 +1189,8 @@ private:
 #if PLATFORM(IOS_FAMILY)
     struct SelectionGeometries {
         Vector<SelectionGeometry> geometries;
-        int maxLineNumber;
+        int maxLineNumber { 0 };
+        bool hasAnyRightToLeftText { false };
     };
     WEBCORE_EXPORT static SelectionGeometries collectSelectionGeometriesInternal(const SimpleRange&);
 #endif
@@ -1300,7 +1305,7 @@ private:
 
     // FIXME: This should be RenderElementRareData.
     class RenderObjectRareData {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(RenderObjectRareData);
     public:
         RenderObjectRareData();
         ~RenderObjectRareData();
@@ -1321,7 +1326,7 @@ private:
     RenderObjectRareData& ensureRareData();
     void removeRareData();
     
-    using RareDataMap = HashMap<SingleThreadWeakRef<const RenderObject>, std::unique_ptr<RenderObjectRareData>>;
+    using RareDataMap = UncheckedKeyHashMap<SingleThreadWeakRef<const RenderObject>, std::unique_ptr<RenderObjectRareData>>;
 
     static RareDataMap& rareDataMap();
 
@@ -1602,6 +1607,7 @@ inline bool RenderObject::usesBoundaryCaching() const
 }
 
 WTF::TextStream& operator<<(WTF::TextStream&, const RenderObject&);
+WTF::TextStream& operator<<(WTF::TextStream&, const RenderObject::RepaintRects&);
 
 #if ENABLE(TREE_DEBUGGING)
 void printPaintOrderTreeForLiveDocuments();

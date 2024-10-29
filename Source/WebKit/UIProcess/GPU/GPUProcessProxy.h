@@ -49,10 +49,13 @@
 
 namespace WebCore {
 class CaptureDevice;
-enum class DisplayCapturePromptType : uint8_t;
+class SecurityOriginData;
+
 struct MockMediaDevice;
 struct ScreenProperties;
-class SecurityOriginData;
+
+enum class DisplayCapturePromptType : uint8_t;
+enum class VideoFrameRotation : uint16_t;
 }
 
 namespace WebKit {
@@ -60,6 +63,7 @@ namespace WebKit {
 enum class ProcessTerminationReason : uint8_t;
 
 class SandboxExtensionHandle;
+class WebPageProxy;
 class WebProcessProxy;
 class WebsiteDataStore;
 
@@ -87,8 +91,12 @@ public:
 #if ENABLE(MEDIA_STREAM)
     void setUseMockCaptureDevices(bool);
     void setUseSCContentSharingPicker(bool);
+    void enableMicrophoneMuteStatusAPI();
     void setOrientationForMediaCapture(WebCore::IntDegrees);
-    void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, CompletionHandler<void()>&&);
+    void rotationAngleForCaptureDeviceChanged(const String&, WebCore::VideoFrameRotation);
+    void startMonitoringCaptureDeviceRotation(WebCore::PageIdentifier, const String&);
+    void stopMonitoringCaptureDeviceRotation(WebCore::PageIdentifier, const String&);
+    void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, WebPageProxyIdentifier, CompletionHandler<void()>&&);
     void updateCaptureOrigin(const WebCore::SecurityOriginData&, WebCore::ProcessIdentifier);
     void addMockMediaDevice(const WebCore::MockMediaDevice&);
     void clearMockMediaDevices();
@@ -98,6 +106,8 @@ public:
     void setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool isMicrophoneInterrupted);
     void triggerMockCaptureConfigurationChange(bool forMicrophone, bool forDisplay);
     void updateSandboxAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture);
+    void setShouldListenToVoiceActivity(const WebPageProxy&, bool);
+    void setPageUsingMicrophone(WebPageProxyIdentifier identifier) { m_lastPageUsingMicrophone = identifier; }
 #endif
 
 #if HAVE(SCREEN_CAPTURE_KIT)
@@ -182,9 +192,13 @@ private:
     void setHasAV1HardwareDecoder(bool hasAV1HardwareDecoder) { s_hasAV1HardwareDecoder = hasAV1HardwareDecoder; }
 #endif
 
-#if ENABLE(MEDIA_STREAM) && PLATFORM(IOS_FAMILY)
+#if ENABLE(MEDIA_STREAM)
+    void voiceActivityDetected();
+    void microphoneMuteStatusChanged(bool isMuting);
+#if PLATFORM(IOS_FAMILY)
     void statusBarWasTapped(CompletionHandler<void()>&&);
 #endif
+#endif // ENABLE(MEDIA_STREAM)
 
     GPUProcessCreationParameters processCreationParameters();
     void platformInitializeGPUProcessParameters(GPUProcessCreationParameters&);
@@ -193,10 +207,14 @@ private:
     void sendBookmarkDataForCacheDirectory();
 #endif
 
-    ProcessThrottler::ActivityVariant m_activityFromWebProcesses;
+    RefPtr<ProcessThrottler::Activity> m_activityFromWebProcesses;
 #if ENABLE(MEDIA_STREAM)
     bool m_useMockCaptureDevices { false };
     WebCore::IntDegrees m_orientation { 0 };
+    WeakHashSet<WebPageProxy> m_pagesListeningToVoiceActivity;
+    bool m_shouldListenToVoiceActivity { false };
+    Markable<WebPageProxyIdentifier> m_lastPageUsingMicrophone;
+    bool m_isMicrophoneMuteStatusAPIEnabled { false };
 #endif
 #if HAVE(SC_CONTENT_SHARING_PICKER)
     bool m_useSCContentSharingPicker { false };

@@ -46,7 +46,7 @@ class NavigationDestination;
 enum class FrameLoadType : uint8_t;
 
 enum class NavigationAPIMethodTrackerType { };
-using NavigationAPIMethodTrackerIdentifier = LegacyNullableObjectIdentifier<NavigationAPIMethodTrackerType>;
+using NavigationAPIMethodTrackerIdentifier = ObjectIdentifier<NavigationAPIMethodTrackerType>;
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-api-method-tracker
 struct NavigationAPIMethodTracker : public RefCounted<NavigationAPIMethodTracker> {
@@ -126,7 +126,7 @@ public:
     bool canGoBack() const;
     bool canGoForward() const;
 
-    void initializeEntries(Ref<HistoryItem>&& currentItem, Vector<Ref<HistoryItem>>& items);
+    void initializeForNewWindow(std::optional<NavigationNavigationType>, LocalDOMWindow* previousWindow);
 
     Result navigate(const String& url, NavigateOptions&&, Ref<DeferredPromise>&&, Ref<DeferredPromise>&&);
 
@@ -146,7 +146,12 @@ public:
     void updateForReactivation(Vector<Ref<HistoryItem>>& newHistoryItems, HistoryItem& reactivatedItem);
     void updateForActivation(HistoryItem* previousItem, std::optional<NavigationNavigationType>);
 
+    RefPtr<NavigationActivation> createForPageswapEvent(HistoryItem* newItem, DocumentLoader*, bool fromBackForwardCache);
+
     void abortOngoingNavigationIfNeeded();
+
+    std::optional<Ref<NavigationHistoryEntry>> findEntryByKey(const String& key);
+    bool suppressNormalScrollRestoration() const { return m_suppressNormalScrollRestorationDuringOngoingNavigation; }
 
 private:
     explicit Navigation(LocalDOMWindow&);
@@ -158,8 +163,7 @@ private:
     void derefEventTarget() final { deref(); }
 
     bool hasEntriesAndEventsDisabled() const;
-    Result performTraversal(const String& key, Navigation::Options, FrameLoadType, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished);
-    std::optional<Ref<NavigationHistoryEntry>> findEntryByKey(const String& key);
+    Result performTraversal(const String& key, Navigation::Options, Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished);
     ExceptionOr<RefPtr<SerializedScriptValue>> serializeState(JSC::JSValue state);
     bool innerDispatchNavigateEvent(NavigationNavigationType, Ref<NavigationDestination>&&, const String& downloadRequestFilename, FormState* = nullptr, SerializedScriptValue* classicHistoryAPIState = nullptr);
 
@@ -183,7 +187,7 @@ private:
     bool m_suppressNormalScrollRestorationDuringOngoingNavigation { false };
     RefPtr<NavigationAPIMethodTracker> m_ongoingAPIMethodTracker;
     RefPtr<NavigationAPIMethodTracker> m_upcomingNonTraverseMethodTracker;
-    HashMap<String, Ref<NavigationAPIMethodTracker>> m_upcomingTraverseMethodTrackers;
+    UncheckedKeyHashMap<String, Ref<NavigationAPIMethodTracker>> m_upcomingTraverseMethodTrackers;
 };
 
 } // namespace WebCore

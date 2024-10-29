@@ -35,9 +35,12 @@
 #include "LocalDOMWindow.h"
 #include "Quirks.h"
 #include "SecurityOrigin.h"
+#include <wtf/TZoneMalloc.h>
 #include <wtf/text/MakeString.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PermissionsPolicy);
 
 using namespace HTMLNames;
 
@@ -275,7 +278,7 @@ static std::pair<StringView, StringView> splitOnAsciiWhiteSpace(StringView input
 // https://w3c.github.io/webappsec-permissions-policy/#declared-origin
 static Ref<SecurityOrigin> declaredOrigin(const HTMLIFrameElement& iframe)
 {
-    if (iframe.document().isSandboxed(SandboxOrigin) || (iframe.sandboxFlags() & SandboxOrigin))
+    if (iframe.document().isSandboxed(SandboxFlag::Origin) || (iframe.sandboxFlags().contains(SandboxFlag::Origin)))
         return SecurityOrigin::createOpaque();
 
     if (iframe.hasAttributeWithoutSynchronization(srcdocAttr))

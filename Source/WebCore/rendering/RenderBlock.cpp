@@ -25,6 +25,7 @@
 #include "RenderBlock.h"
 
 #include "AXObjectCache.h"
+#include "BorderShape.h"
 #include "DocumentInlines.h"
 #include "Editor.h"
 #include "Element.h"
@@ -240,12 +241,13 @@ static PositionedDescendantsMap& positionedDescendantsMap()
     return mapForPositionedDescendants;
 }
 
-using ContinuationOutlineTableMap = HashMap<SingleThreadWeakRef<RenderBlock>, std::unique_ptr<ListHashSet<SingleThreadWeakRef<RenderInline>>>>;
+using ContinuationOutlineTableMap = UncheckedKeyHashMap<SingleThreadWeakRef<RenderBlock>, std::unique_ptr<ListHashSet<SingleThreadWeakRef<RenderInline>>>>;
 
 // Allocated only when some of these fields have non-default values
 
 struct RenderBlockRareData {
-    WTF_MAKE_NONCOPYABLE(RenderBlockRareData); WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(RenderBlockRareData);
+    WTF_MAKE_NONCOPYABLE(RenderBlockRareData);
 public:
     RenderBlockRareData()
     {
@@ -258,7 +260,7 @@ public:
     std::optional<SingleThreadWeakPtr<RenderFragmentedFlow>> m_enclosingFragmentedFlow;
 };
 
-using RenderBlockRareDataMap = HashMap<SingleThreadWeakRef<const RenderBlock>, std::unique_ptr<RenderBlockRareData>>;
+using RenderBlockRareDataMap = UncheckedKeyHashMap<SingleThreadWeakRef<const RenderBlock>, std::unique_ptr<RenderBlockRareData>>;
 static RenderBlockRareDataMap* gRareDataMap;
 
 RenderBlock::RenderBlock(Type type, Element& element, RenderStyle&& style, OptionSet<TypeFlag> baseTypeFlags, TypeSpecificFlags typeSpecificFlags)
@@ -334,7 +336,7 @@ void RenderBlock::styleWillChange(StyleDifference diff, const RenderStyle& newSt
 
 static bool borderOrPaddingLogicalWidthChanged(const RenderStyle& oldStyle, const RenderStyle& newStyle)
 {
-    if (newStyle.isHorizontalWritingMode()) {
+    if (newStyle.writingMode().isHorizontal()) {
         return oldStyle.borderLeftWidth() != newStyle.borderLeftWidth()
             || oldStyle.borderRightWidth() != newStyle.borderRightWidth()
             || oldStyle.paddingLeft() != newStyle.paddingLeft()
@@ -354,7 +356,7 @@ void RenderBlock::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
     if (oldStyle)
         adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(*oldStyle, style());
 
-    propagateStyleToAnonymousChildren(StylePropagationType::BlockChildrenOnly);
+    propagateStyleToAnonymousChildren(StylePropagationType::BlockAndRubyChildren);
 
     // It's possible for our border/padding to change, but for the overall logical width of the block to
     // end up being the same. We keep track of this change so in layoutBlock, we can know to set relayoutChildren=true.
@@ -466,7 +468,7 @@ void RenderBlock::updateScrollInfoAfterLayout()
     // Workaround for now. We cannot delay the scroll info for overflow
     // for items with opposite writing directions, as the contents needs
     // to overflow in that direction
-    if (!style().isFlippedBlocksWritingMode()) {
+    if (!writingMode().isBlockFlipped()) {
         if (auto* transaction = view().frameView().layoutContext().updateScrollInfoAfterLayoutTransactionIfExists(); transaction && transaction->nestedCount) {
             transaction->blocks.add(*this);
             return;
@@ -777,7 +779,7 @@ bool RenderBlock::simplifiedLayout()
     if (!canPerformSimplifiedLayout())
         return false;
 
-    LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || style().isFlippedBlocksWritingMode());
+    LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || writingMode().isBlockFlipped());
     if (needsPositionedMovementLayout() && !tryLayoutDoingPositionedMovementOnly())
         return false;
 
@@ -1133,6 +1135,28 @@ void RenderBlock::paintCaret(PaintInfo& paintInfo, const LayoutPoint& paintOffse
     }
 }
 
+void RenderBlock::paintDebugBoxShadowIfApplicable(GraphicsContext& context, const LayoutRect& paintRect) const
+{
+    // FIXME: Use a more generic, modern-layout wide setting instead.
+    if (!settings().legacyLineLayoutVisualCoverageEnabled())
+        return;
+
+    auto* flexBox = dynamicDowncast<RenderFlexibleBox>(this);
+    if (!flexBox)
+        return;
+
+    constexpr size_t shadowExtent = 3;
+    GraphicsContextStateSaver stateSaver(context);
+
+    auto shadowRect = paintRect;
+    shadowRect.inflate(shadowExtent);
+    context.clip(shadowRect);
+    context.setDropShadow({ { -shadowRect.width(), 0 }, 30, flexBox->hasModernLayout() ? SRGBA<uint8_t> { 0, 180, 230, 200 } : SRGBA<uint8_t> { 200, 100, 100, 200 }, ShadowRadiusMode::Default });
+    context.clipOut(paintRect);
+    shadowRect.move(shadowRect.width(), 0);
+    context.fillRect(shadowRect, Color::black);
+}
+
 void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     PaintPhase paintPhase = paintInfo.phase;
@@ -1141,6 +1165,7 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
     if ((paintPhase == PaintPhase::BlockBackground || paintPhase == PaintPhase::ChildBlockBackground) && style().usedVisibility() == Visibility::Visible) {
         if (hasVisibleBoxDecorations())
             paintBoxDecorations(paintInfo, paintOffset);
+        paintDebugBoxShadowIfApplicable(paintInfo.context(), { paintOffset, size() });
     }
     
     // Paint legends just above the border before we scroll or clip.
@@ -1168,9 +1193,10 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
         auto borderRect = LayoutRect(paintOffset, size());
 
         if (paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeBackground) && visibleToHitTesting()) {
-            auto borderRoundedRect = style().getRoundedBorderFor(borderRect);
-            LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " uniting region " << borderRoundedRect << " event listener types " << style().eventListenerRegionTypes());
-            paintInfo.eventRegionContext()->unite(FloatRoundedRect(borderRoundedRect), *this, style(), isRenderTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable());
+            auto borderShape = BorderShape::shapeForBorderRect(style(), borderRect);
+            LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " uniting region " << borderShape.deprecatedRoundedRect() << " event listener types " << style().eventListenerRegionTypes());
+            bool overrideUserModifyIsEditable = isRenderTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable();
+            paintInfo.eventRegionContext()->unite(borderShape.deprecatedPixelSnappedRoundedRect(document().deviceScaleFactor()), *this, style(), overrideUserModifyIsEditable);
         }
 
         if (!paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeForeground))
@@ -1615,7 +1641,7 @@ LayoutRect RenderBlock::logicalRightSelectionGap(RenderBlock& rootBlock, const L
 
 void RenderBlock::getSelectionGapInfo(HighlightState state, bool& leftGap, bool& rightGap)
 {
-    bool ltr = style().isLeftToRightDirection();
+    bool ltr = writingMode().isLogicalLeftInlineStart();
     leftGap = (state == RenderObject::HighlightState::Inside) || (state == RenderObject::HighlightState::End && ltr) || (state == RenderObject::HighlightState::Start && !ltr);
     rightGap = (state == RenderObject::HighlightState::Inside) || (state == RenderObject::HighlightState::Start && ltr) || (state == RenderObject::HighlightState::End && !ltr);
 }
@@ -1812,7 +1838,7 @@ LayoutUnit RenderBlock::textIndentOffset() const
 
 LayoutUnit RenderBlock::logicalLeftOffsetForContent(RenderFragmentContainer* fragment) const
 {
-    LayoutUnit logicalLeftOffset = style().isHorizontalWritingMode() ? borderLeft() + paddingLeft() : borderTop() + paddingTop();
+    LayoutUnit logicalLeftOffset = writingMode().isHorizontal() ? borderLeft() + paddingLeft() : borderTop() + paddingTop();
     if (shouldPlaceVerticalScrollbarOnLeft() && isHorizontalWritingMode())
         logicalLeftOffset += verticalScrollbarWidth();
     if (!fragment)
@@ -1823,7 +1849,7 @@ LayoutUnit RenderBlock::logicalLeftOffsetForContent(RenderFragmentContainer* fra
 
 LayoutUnit RenderBlock::logicalRightOffsetForContent(RenderFragmentContainer* fragment) const
 {
-    LayoutUnit logicalRightOffset = style().isHorizontalWritingMode() ? borderLeft() + paddingLeft() : borderTop() + paddingTop();
+    LayoutUnit logicalRightOffset = writingMode().isHorizontal() ? borderLeft() + paddingLeft() : borderTop() + paddingTop();
     if (shouldPlaceVerticalScrollbarOnLeft() && isHorizontalWritingMode())
         logicalRightOffset += verticalScrollbarWidth();
     logicalRightOffset += availableLogicalWidth();
@@ -1846,7 +1872,7 @@ LayoutUnit RenderBlock::adjustLogicalLeftOffsetForLine(LayoutUnit offsetFromFloa
         return left;
 
     RenderBlock* lineGrid = layoutState->lineGrid();
-    if (!lineGrid || lineGrid->style().writingMode() != style().writingMode())
+    if (!lineGrid || lineGrid->writingMode().computedWritingMode() != writingMode().computedWritingMode())
         return left;
 
     // FIXME: Should letter-spacing apply? This is complicated since it doesn't apply at the edge?
@@ -1883,7 +1909,7 @@ LayoutUnit RenderBlock::adjustLogicalRightOffsetForLine(LayoutUnit offsetFromFlo
         return right;
 
     RenderBlock* lineGrid = layoutState->lineGrid();
-    if (!lineGrid || lineGrid->style().writingMode() != style().writingMode())
+    if (!lineGrid || lineGrid->writingMode().computedWritingMode() != writingMode().computedWritingMode())
         return right;
 
     // FIXME: Should letter-spacing apply? This is complicated since it doesn't apply at the edge?
@@ -2135,7 +2161,7 @@ VisiblePosition RenderBlock::positionForPoint(const LayoutPoint& point, HitTestS
     while (lastCandidateBox && !isChildHitTestCandidate(*lastCandidateBox, fragment, pointInLogicalContents, source))
         lastCandidateBox = lastCandidateBox->previousSiblingBox();
 
-    bool blocksAreFlipped = style().isFlippedBlocksWritingMode();
+    bool blocksAreFlipped = writingMode().isBlockFlipped();
     if (lastCandidateBox) {
         if (pointInLogicalContents.y() > logicalTopForChild(*lastCandidateBox)
             || (!blocksAreFlipped && pointInLogicalContents.y() == logicalTopForChild(*lastCandidateBox)))
@@ -2282,7 +2308,7 @@ void RenderBlock::computeBlockPreferredLogicalWidths(LayoutUnit& minLogicalWidth
                 // Determine a left and right max value based off whether or not the floats can fit in the
                 // margins of the object.  For negative margins, we will attempt to overlap the float if the negative margin
                 // is smaller than the float width.
-                bool ltr = containingBlock ? containingBlock->style().isLeftToRightDirection() : styleToUse.isLeftToRightDirection();
+                bool ltr = containingBlock ? containingBlock->writingMode().isLogicalLeftInlineStart() : styleToUse.writingMode().isLogicalLeftInlineStart();
                 LayoutUnit marginLogicalLeft = ltr ? marginStart : marginEnd;
                 LayoutUnit marginLogicalRight = ltr ? marginEnd : marginStart;
                 LayoutUnit maxLeft = marginLogicalLeft > 0 ? std::max(floatLeftWidth, marginLogicalLeft) : floatLeftWidth + marginLogicalLeft;
@@ -3071,7 +3097,7 @@ TextRun RenderBlock::constructTextRun(StringView stringView, const RenderStyle& 
     bool directionalOverride = style.rtlOrdering() == Order::Visual;
     if (flags != DefaultTextRunFlags) {
         if (flags & RespectDirection)
-            textDirection = style.direction();
+            textDirection = style.writingMode().bidiDirection();
         if (flags & RespectDirectionOverride)
             directionalOverride |= isOverride(style.unicodeBidi());
     }
@@ -3212,22 +3238,22 @@ void RenderBlock::layoutExcludedChildren(bool relayoutChildren)
     legend.layoutIfNeeded();
     
     LayoutUnit logicalLeft;
-    if (style().isLeftToRightDirection()) {
+    if (writingMode().isBidiLTR()) {
         switch (legend.style().textAlign()) {
         case TextAlignMode::Center:
             logicalLeft = (logicalWidth() - logicalWidthForChild(legend)) / 2;
             break;
         case TextAlignMode::Right:
-            logicalLeft = logicalWidth() - borderEnd() - paddingEnd() - logicalWidthForChild(legend);
+            logicalLeft = logicalWidth() - borderAndPaddingEnd() - logicalWidthForChild(legend);
             break;
         default:
-            logicalLeft = borderStart() + paddingStart() + marginStartForChild(legend);
+            logicalLeft = borderAndPaddingStart() + marginStartForChild(legend);
             break;
         }
     } else {
         switch (legend.style().textAlign()) {
         case TextAlignMode::Left:
-            logicalLeft = borderStart() + paddingStart();
+            logicalLeft = borderAndPaddingStart();
             break;
         case TextAlignMode::Center: {
             // Make sure that the extra pixel goes to the end side in RTL (since it went to the end side
@@ -3237,7 +3263,7 @@ void RenderBlock::layoutExcludedChildren(bool relayoutChildren)
             break;
         }
         default:
-            logicalLeft = logicalWidth() - borderStart() - paddingStart() - marginStartForChild(legend) - logicalWidthForChild(legend);
+            logicalLeft = logicalWidth() - borderAndPaddingStart() - marginStartForChild(legend) - logicalWidthForChild(legend);
             break;
         }
     }
@@ -3264,7 +3290,7 @@ void RenderBlock::layoutExcludedChildren(bool relayoutChildren)
     // Now that the legend is included in the border extent, we can set our logical height
     // to the borderBefore (which includes the legend and its after margin if they were bigger
     // than the actual fieldset border) and then add in our padding before.
-    setLogicalHeight(borderBefore() + paddingBefore());
+    setLogicalHeight(borderAndPaddingBefore());
 }
 
 RenderBox* RenderBlock::findFieldsetLegend(FieldsetFindLegendOption option) const
@@ -3287,15 +3313,15 @@ void RenderBlock::adjustBorderBoxRectForPainting(LayoutRect& paintRect)
     if (!legend)
         return;
 
-    if (style().isHorizontalWritingMode()) {
+    if (writingMode().isHorizontal()) {
         LayoutUnit yOff = std::max(0_lu, (legend->height() - RenderBox::borderBefore()) / 2);
         paintRect.setHeight(paintRect.height() - yOff);
-        if (style().blockFlowDirection() == BlockFlowDirection::TopToBottom)
+        if (writingMode().isBlockTopToBottom())
             paintRect.setY(paintRect.y() + yOff);
     } else {
         LayoutUnit xOff = std::max(0_lu, (legend->width() - RenderBox::borderBefore()) / 2);
         paintRect.setWidth(paintRect.width() - xOff);
-        if (style().blockFlowDirection() == BlockFlowDirection::LeftToRight)
+        if (writingMode().isBlockLeftToRight())
             paintRect.setX(paintRect.x() + xOff);
     }
 }
@@ -3310,13 +3336,13 @@ LayoutRect RenderBlock::paintRectToClipOutFromBorder(const LayoutRect& paintRect
         return clipRect;
 
     LayoutUnit borderExtent = RenderBox::borderBefore();
-    if (style().isHorizontalWritingMode()) {
+    if (writingMode().isHorizontal()) {
         clipRect.setX(paintRect.x() + legend->x());
-        clipRect.setY(style().blockFlowDirection() == BlockFlowDirection::TopToBottom ? paintRect.y() : paintRect.y() + paintRect.height() - borderExtent);
+        clipRect.setY(writingMode().isBlockTopToBottom() ? paintRect.y() : paintRect.y() + paintRect.height() - borderExtent);
         clipRect.setWidth(legend->width());
         clipRect.setHeight(borderExtent);
     } else {
-        clipRect.setX(style().blockFlowDirection() == BlockFlowDirection::LeftToRight ? paintRect.x() : paintRect.x() + paintRect.width() - borderExtent);
+        clipRect.setX(writingMode().isBlockLeftToRight() ? paintRect.x() : paintRect.x() + paintRect.width() - borderExtent);
         clipRect.setY(paintRect.y() + legend->y());
         clipRect.setWidth(borderExtent);
         clipRect.setHeight(legend->height());
@@ -3356,28 +3382,28 @@ RectEdges<LayoutUnit> RenderBlock::borderWidths() const
 
 LayoutUnit RenderBlock::borderTop() const
 {
-    if (style().blockFlowDirection() != BlockFlowDirection::TopToBottom || !intrinsicBorderForFieldset())
+    if (!writingMode().isBlockTopToBottom() || !intrinsicBorderForFieldset())
         return RenderBox::borderTop();
     return RenderBox::borderTop() + intrinsicBorderForFieldset();
 }
 
 LayoutUnit RenderBlock::borderLeft() const
 {
-    if (style().blockFlowDirection() != BlockFlowDirection::LeftToRight || !intrinsicBorderForFieldset())
+    if (!writingMode().isBlockLeftToRight() || !intrinsicBorderForFieldset())
         return RenderBox::borderLeft();
     return RenderBox::borderLeft() + intrinsicBorderForFieldset();
 }
 
 LayoutUnit RenderBlock::borderBottom() const
 {
-    if (style().blockFlowDirection() != BlockFlowDirection::BottomToTop || !intrinsicBorderForFieldset())
+    if (writingMode().blockDirection() != FlowDirection::BottomToTop || !intrinsicBorderForFieldset())
         return RenderBox::borderBottom();
     return RenderBox::borderBottom() + intrinsicBorderForFieldset();
 }
 
 LayoutUnit RenderBlock::borderRight() const
 {
-    if (style().blockFlowDirection() != BlockFlowDirection::RightToLeft || !intrinsicBorderForFieldset())
+    if (writingMode().blockDirection() != FlowDirection::RightToLeft || !intrinsicBorderForFieldset())
         return RenderBox::borderRight();
     return RenderBox::borderRight() + intrinsicBorderForFieldset();
 }

@@ -128,6 +128,13 @@ if (angle_build_all) {
   }
 }
 
+if (build_angle_end2end_tests_aosp) {
+  group("angle_end2end_tests_aosp") {
+    testonly = true
+    deps = [ "src/tests:angle_end2end_tests" ]
+  }
+}
+
 import("src/angle_program_serialize_data_version.gni")
 import("src/compiler.gni")
 import("src/libGLESv2.gni")
@@ -296,6 +303,10 @@ config("internal_config") {
 
   if (is_win && build_with_chromium) {
     defines += [ "ANGLE_WINDOWS_NO_FUTEX=1" ]
+  }
+
+  if (angle_enable_cl) {
+    defines += [ "ANGLE_ENABLE_CL" ]
   }
 }
 
@@ -698,9 +709,7 @@ angle_static_library("angle_gpu_info_util") {
       "CoreFoundation.framework",
       "CoreGraphics.framework",
     ]
-    if (angle_enable_eagl) {
-      frameworks += [ "OpenGLES.framework" ]
-    } else if (angle_enable_cgl) {
+    if (angle_enable_cgl) {
       frameworks += [ "OpenGL.framework" ]
     }
     if (is_mac || angle_enable_cgl) {
@@ -727,13 +736,13 @@ template("translator_lib") {
     _uses_spirv = false
 
     # Frontend support:
-    if (angle_enable_desktop_glsl) {
-      sources += angle_translator_glsl_symbol_table_sources
-    } else {
-      sources += angle_translator_essl_symbol_table_sources
-    }
+    sources += angle_translator_essl_symbol_table_sources
 
     # Backend support:
+    if (angle_enable_null) {
+      defines += [ "ANGLE_ENABLE_NULL" ]
+    }
+
     if (angle_enable_essl || use_fuzzing_engine) {
       _needs_glsl_base = true
       sources += angle_translator_essl_sources
@@ -1082,10 +1091,6 @@ angle_source_set("libANGLE_no_vulkan") {
     sources += libangle_cl_sources
   }
   defines = []
-  if (angle_enable_gl_desktop_frontend) {
-    defines += [ "ANGLE_ENABLE_GL_DESKTOP_FRONTEND" ]
-    sources += libangle_gl_sources
-  }
 
   include_dirs = []
   libs = []
@@ -1151,7 +1156,7 @@ angle_source_set("libANGLE_no_vulkan") {
   }
 
   # Enable extra Chromium style warnings for libANGLE.
-  if (is_clang && angle_has_build) {
+  if (is_clang && angle_has_build && !is_nacl) {
     suppressed_configs -= [ "//build/config/clang:find_bad_constructs" ]
   }
 
@@ -1384,11 +1389,7 @@ config("shared_library_public_config") {
   }
 }
 
-if (angle_expose_wgl_entry_points) {
-  _angle_glesv2_library_name = "opengl32${angle_libs_suffix}"
-} else {
-  _angle_glesv2_library_name = "libGLESv2${angle_libs_suffix}"
-}
+_angle_glesv2_library_name = "libGLESv2${angle_libs_suffix}"
 _angle_glesv2_vulkan_secondaries_library_name =
     "libGLESv2_vulkan_secondaries${angle_libs_suffix}"
 
@@ -1439,39 +1440,12 @@ template("angle_libGLESv2") {
       ":gl_prototypes",
     ]
 
-    if (angle_enable_gl_desktop_frontend) {
-      sources += libglesv2_gl_sources
-      defines += [ "ANGLE_ENABLE_GL_DESKTOP_FRONTEND" ]
-      if (angle_expose_wgl_entry_points) {
-        sources += [
-          "src/libGLESv2/entry_points_wgl.cpp",
-          "src/libGLESv2/entry_points_wgl.h",
-          "src/libGLESv2/proc_table_wgl.h",
-          "src/libGLESv2/proc_table_wgl_autogen.cpp",
-        ]
-        defines += [ "ANGLE_EXPOSE_WGL_ENTRY_POINTS" ]
-      } else if (angle_expose_glx_entry_points) {
-        sources += [
-          "src/libGLESv2/entry_points_glx.cpp",
-          "src/libGLESv2/entry_points_glx.h",
-          "src/libGLESv2/proc_table_glx.h",
-          "src/libGLESv2/proc_table_glx_autogen.cpp",
-        ]
-      } else {
-        #TODO(http://anglebug.com/42266001): Add CGL entry points for mac support
-      }
-    }
-
     if (angle_enable_cl) {
       sources += libglesv2_cl_sources
     }
 
     if (is_win) {
-      if (angle_expose_wgl_entry_points) {
-        sources += [ "src/libGLESv2/opengl32_with_wgl_autogen.def" ]
-      } else {
-        sources += [ "src/libGLESv2/${invoker.output_name}_autogen.def" ]
-      }
+      sources += [ "src/libGLESv2/${invoker.output_name}_autogen.def" ]
       sources += [ "src/libGLESv2/libGLESv2.rc" ]
       deps += [ ":angle_version" ]
     }
@@ -1510,42 +1484,8 @@ if (angle_has_frame_capture) {
   }
 }
 
-if (angle_enable_gl_desktop_frontend) {
-  angle_libGLESv2("libGL") {
-    if (is_win) {
-      output_name = "opengl32"
-    } else {
-      output_name = "libGL"
-    }
-
-    deps = [ ":libANGLE" ]
-  }
-}
-
 angle_static_library("libGLESv2_static") {
   sources = libglesv2_sources
-  if (angle_enable_gl_desktop_frontend) {
-    sources += libglesv2_gl_sources
-    defines = [ "ANGLE_ENABLE_GL_DESKTOP_FRONTEND" ]
-    if (angle_expose_wgl_entry_points) {
-      sources += [
-        "src/libGLESv2/entry_points_wgl.cpp",
-        "src/libGLESv2/entry_points_wgl.h",
-        "src/libGLESv2/proc_table_wgl.h",
-        "src/libGLESv2/proc_table_wgl_autogen.cpp",
-      ]
-      defines += [ "ANGLE_EXPOSE_WGL_ENTRY_POINTS" ]
-    } else if (angle_expose_glx_entry_points) {
-      sources += [
-        "src/libGLESv2/entry_points_glx.cpp",
-        "src/libGLESv2/entry_points_glx.h",
-        "src/libGLESv2/proc_table_glx.h",
-        "src/libGLESv2/proc_table_glx_autogen.cpp",
-      ]
-    } else {
-      #TODO(http://anglebug.com/42266001): Add CGL entry points for mac support
-    }
-  }
   if (angle_enable_cl) {
     sources += libglesv2_cl_sources
   }
@@ -1695,7 +1635,7 @@ angle_executable("angle_shader_translator") {
   }
 }
 
-if (angle_standalone || build_with_chromium) {
+if (angle_standalone || build_with_chromium || build_angle_end2end_tests_aosp) {
   config("angle_feature_support_config") {
     include_dirs = [
       "include",
@@ -1766,7 +1706,8 @@ if (is_android && symbol_level != 0 &&
       }
     }
 
-    if (angle_enable_vulkan_api_dump_layer) {
+    if (angle_enable_vulkan_api_dump_layer &&
+        current_toolchain == default_toolchain) {
       sources += [ "$root_out_dir/libVkLayer_lunarg_api_dump$shlib_extension" ]
     }
 
@@ -1784,7 +1725,8 @@ if (is_android && symbol_level != 0 &&
       }
     }
 
-    if (angle_enable_vulkan_api_dump_layer) {
+    if (angle_enable_vulkan_api_dump_layer &&
+        current_toolchain == default_toolchain) {
       deps += [ "$angle_lunarg_vulkantools_dir:VkLayer_lunarg_api_dump" ]
     }
 

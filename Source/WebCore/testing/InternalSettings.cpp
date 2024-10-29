@@ -40,6 +40,7 @@
 #include "RenderTheme.h"
 #include "Supplementable.h"
 #include <wtf/Language.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if ENABLE(WEB_AUDIO)
 #include "AudioContext.h"
@@ -128,7 +129,7 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
 }
 
 class InternalSettingsWrapper : public Supplement<Page> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(InternalSettingsWrapper);
 public:
     explicit InternalSettingsWrapper(Page* page)
         : m_internalSettings(InternalSettings::create(page)) { }
@@ -177,7 +178,7 @@ void InternalSettings::resetToConsistentState()
     if (auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame()))
         localMainFrame->setPageAndTextZoomFactors(1, 1);
     m_page->setCanStartMedia(true);
-    m_page->effectiveAppearanceDidChange(false, false);
+    m_page->setUseColorAppearance(false, false);
 
     m_backup.restoreTo(settings());
     m_backup = Backup { settings() };
@@ -510,7 +511,7 @@ ExceptionOr<void> InternalSettings::setUseDarkAppearance(bool useDarkAppearance)
 {
     if (!m_page)
         return Exception { ExceptionCode::InvalidAccessError };
-    m_page->effectiveAppearanceDidChange(useDarkAppearance, m_page->useElevatedUserInterfaceLevel());
+    m_page->setUseColorAppearance(useDarkAppearance, m_page->useElevatedUserInterfaceLevel());
     return { };
 }
 
@@ -518,7 +519,7 @@ ExceptionOr<void> InternalSettings::setUseElevatedUserInterfaceLevel(bool useEle
 {
     if (!m_page)
         return Exception { ExceptionCode::InvalidAccessError };
-    m_page->effectiveAppearanceDidChange(m_page->useDarkAppearance(), useElevatedUserInterfaceLevel);
+    m_page->setUseColorAppearance(m_page->useDarkAppearance(), useElevatedUserInterfaceLevel);
     return { };
 }
 

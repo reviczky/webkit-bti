@@ -31,6 +31,7 @@
 #include "ReadableStreamSource.h"
 #include "RealtimeMediaSource.h"
 #include "WebCodecsVideoFrame.h"
+#include <wtf/TZoneMalloc.h>
 
 namespace JSC {
 class JSGlobaObject;
@@ -70,8 +71,8 @@ public:
         void close();
         void enqueue(WebCodecsVideoFrame&, ScriptExecutionContext&);
 
-        void ref() final { m_processor->ref(); };
-        void deref() final { m_processor->deref(); };
+        void ref() const final { m_processor->ref(); };
+        void deref() const final { m_processor->deref(); };
 
     private:
 
@@ -106,7 +107,7 @@ private:
     void tryEnqueueingVideoFrame();
 
     class VideoFrameObserver final : private RealtimeMediaSource::VideoFrameObserver {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(VideoFrameObserver);
     public:
         explicit VideoFrameObserver(ScriptExecutionContextIdentifier, WeakPtr<MediaStreamTrackProcessor>&&, Ref<RealtimeMediaSource>&&, unsigned short maxVideoFramesCount);
         ~VideoFrameObserver();

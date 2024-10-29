@@ -39,9 +39,13 @@
 #include "RenderFragmentContainer.h"
 #include "RenderImage.h"
 #include "RenderView.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ShapeOutsideDeltas);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ShapeOutsideInfo);
 
 static LayoutUnit logicalLeftOffset(const RenderBox&);
 static LayoutUnit logicalTopOffset(const RenderBox&);
@@ -49,9 +53,9 @@ static LayoutUnit logicalTopOffset(const RenderBox&);
 LayoutRect ShapeOutsideInfo::computedShapePhysicalBoundingBox() const
 {
     LayoutRect physicalBoundingBox = computedShape().shapeMarginLogicalBoundingBox();
-    if (m_renderer.style().isFlippedBlocksWritingMode())
+    if (m_renderer.writingMode().isBlockFlipped())
         physicalBoundingBox.setY(m_renderer.logicalHeight() - physicalBoundingBox.maxY());
-    if (!m_renderer.style().isHorizontalWritingMode())
+    if (!m_renderer.isHorizontalWritingMode())
         physicalBoundingBox = physicalBoundingBox.transposedRect();
     return physicalBoundingBox;
 }
@@ -59,9 +63,9 @@ LayoutRect ShapeOutsideInfo::computedShapePhysicalBoundingBox() const
 FloatPoint ShapeOutsideInfo::shapeToRendererPoint(const FloatPoint& point) const
 {
     FloatPoint result = point;
-    if (m_renderer.style().isFlippedBlocksWritingMode())
+    if (m_renderer.writingMode().isBlockFlipped())
         result.setY(m_renderer.logicalHeight() - result.y());
-    if (!m_renderer.style().isHorizontalWritingMode())
+    if (!m_renderer.isHorizontalWritingMode())
         result = result.transposedPoint();
     return result;
 }
@@ -195,12 +199,11 @@ const Shape& ShapeOutsideInfo::computedShape() const
 
 static inline LayoutUnit borderBeforeInWritingMode(const RenderBox& renderer, WritingMode writingMode)
 {
-    auto blockFlowDirection = writingModeToBlockFlowDirection(writingMode);
-    switch (blockFlowDirection) {
-    case BlockFlowDirection::TopToBottom: return renderer.borderTop();
-    case BlockFlowDirection::BottomToTop: return renderer.borderBottom();
-    case BlockFlowDirection::LeftToRight: return renderer.borderLeft();
-    case BlockFlowDirection::RightToLeft: return renderer.borderRight();
+    switch (writingMode.blockDirection()) {
+    case FlowDirection::TopToBottom: return renderer.borderTop();
+    case FlowDirection::BottomToTop: return renderer.borderBottom();
+    case FlowDirection::LeftToRight: return renderer.borderLeft();
+    case FlowDirection::RightToLeft: return renderer.borderRight();
     }
 
     ASSERT_NOT_REACHED();
@@ -209,12 +212,11 @@ static inline LayoutUnit borderBeforeInWritingMode(const RenderBox& renderer, Wr
 
 static inline LayoutUnit borderAndPaddingBeforeInWritingMode(const RenderBox& renderer, WritingMode writingMode)
 {
-    auto blockFlowDirection = writingModeToBlockFlowDirection(writingMode);
-    switch (blockFlowDirection) {
-    case BlockFlowDirection::TopToBottom: return renderer.borderTop() + renderer.paddingTop();
-    case BlockFlowDirection::BottomToTop: return renderer.borderBottom() + renderer.paddingBottom();
-    case BlockFlowDirection::LeftToRight: return renderer.borderLeft() + renderer.paddingLeft();
-    case BlockFlowDirection::RightToLeft: return renderer.borderRight() + renderer.paddingRight();
+    switch (writingMode.blockDirection()) {
+    case FlowDirection::TopToBottom: return renderer.borderTop() + renderer.paddingTop();
+    case FlowDirection::BottomToTop: return renderer.borderBottom() + renderer.paddingBottom();
+    case FlowDirection::LeftToRight: return renderer.borderLeft() + renderer.paddingLeft();
+    case FlowDirection::RightToLeft: return renderer.borderRight() + renderer.paddingRight();
     }
 
     ASSERT_NOT_REACHED();
@@ -246,29 +248,29 @@ static LayoutUnit logicalTopOffset(const RenderBox& renderer)
     return 0_lu;
 }
 
-static inline LayoutUnit borderStartWithStyleForWritingMode(const RenderBox& renderer, const RenderStyle& style)
+static inline LayoutUnit borderStartWithStyleForWritingMode(const RenderBox& renderer, const WritingMode writingMode)
 {
-    if (style.isHorizontalWritingMode()) {
-        if (style.isLeftToRightDirection())
+    if (writingMode.isHorizontal()) {
+        if (writingMode.isInlineLeftToRight())
             return renderer.borderLeft();
         
         return renderer.borderRight();
     }
-    if (style.isLeftToRightDirection())
+    if (writingMode.isInlineTopToBottom())
         return renderer.borderTop();
     
     return renderer.borderBottom();
 }
 
-static inline LayoutUnit borderAndPaddingStartWithStyleForWritingMode(const RenderBox& renderer, const RenderStyle& style)
+static inline LayoutUnit borderAndPaddingStartWithStyleForWritingMode(const RenderBox& renderer, const WritingMode writingMode)
 {
-    if (style.isHorizontalWritingMode()) {
-        if (style.isLeftToRightDirection())
+    if (writingMode.isHorizontal()) {
+        if (writingMode.isInlineLeftToRight())
             return renderer.borderLeft() + renderer.paddingLeft();
         
         return renderer.borderRight() + renderer.paddingRight();
     }
-    if (style.isLeftToRightDirection())
+    if (writingMode.isInlineTopToBottom())
         return renderer.borderTop() + renderer.paddingTop();
     
     return renderer.borderBottom() + renderer.paddingBottom();
@@ -285,9 +287,9 @@ static LayoutUnit logicalLeftOffset(const RenderBox& renderer)
     case CSSBoxType::BorderBox:
         return 0_lu;
     case CSSBoxType::PaddingBox:
-        return borderStartWithStyleForWritingMode(renderer, renderer.containingBlock()->style());
+        return borderStartWithStyleForWritingMode(renderer, renderer.containingBlock()->writingMode());
     case CSSBoxType::ContentBox:
-        return borderAndPaddingStartWithStyleForWritingMode(renderer, renderer.containingBlock()->style());
+        return borderAndPaddingStartWithStyleForWritingMode(renderer, renderer.containingBlock()->writingMode());
     case CSSBoxType::FillBox:
         break;
     case CSSBoxType::StrokeBox:
@@ -334,11 +336,11 @@ ShapeOutsideDeltas ShapeOutsideInfo::computeDeltasForContainingBlockLine(const R
         if (computedShape().lineOverlapsShapeMarginBounds(borderBoxLineTop, lineHeight)) {
             LineSegment segment = computedShape().getExcludedInterval(borderBoxLineTop, std::min(lineHeight, shapeLogicalBottom() - borderBoxLineTop));
             if (segment.isValid) {
-                LayoutUnit logicalLeftMargin = containingBlock.style().isLeftToRightDirection() ? containingBlock.marginStartForChild(m_renderer) : containingBlock.marginEndForChild(m_renderer);
+                LayoutUnit logicalLeftMargin = containingBlock.writingMode().isLogicalLeftInlineStart() ? containingBlock.marginStartForChild(m_renderer) : containingBlock.marginEndForChild(m_renderer);
                 LayoutUnit rawLeftMarginBoxDelta { segment.logicalLeft + logicalLeftMargin };
                 LayoutUnit leftMarginBoxDelta = clampTo<LayoutUnit>(rawLeftMarginBoxDelta, 0_lu, floatMarginBoxWidth);
 
-                LayoutUnit logicalRightMargin = containingBlock.style().isLeftToRightDirection() ? containingBlock.marginEndForChild(m_renderer) : containingBlock.marginStartForChild(m_renderer);
+                LayoutUnit logicalRightMargin = containingBlock.writingMode().isLogicalLeftInlineStart() ? containingBlock.marginEndForChild(m_renderer) : containingBlock.marginStartForChild(m_renderer);
                 LayoutUnit rawRightMarginBoxDelta { segment.logicalRight - containingBlock.logicalWidthForChild(m_renderer) - logicalRightMargin };
                 LayoutUnit rightMarginBoxDelta = clampTo<LayoutUnit>(rawRightMarginBoxDelta, -floatMarginBoxWidth, 0_lu);
 

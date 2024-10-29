@@ -100,7 +100,6 @@ static const MessageNameSet& messageNamesToIgnoreWhileSuspended()
         messageNames.get().add(IPC::MessageName::WebPageProxy_EditorStateChanged);
         messageNames.get().add(IPC::MessageName::WebPageProxy_PageExtendedBackgroundColorDidChange);
         messageNames.get().add(IPC::MessageName::WebPageProxy_SetRenderTreeSize);
-        messageNames.get().add(IPC::MessageName::WebPageProxy_SetStatusText);
         messageNames.get().add(IPC::MessageName::WebPageProxy_SetNetworkRequestsInProgress);
     });
 
@@ -117,7 +116,7 @@ SuspendedPageProxy::SuspendedPageProxy(WebPageProxy& page, Ref<WebProcessProxy>&
     , m_shouldDelayClosingUntilFirstLayerFlush(shouldDelayClosingUntilFirstLayerFlush)
     , m_suspensionTimeoutTimer(RunLoop::main(), this, &SuspendedPageProxy::suspensionTimedOut)
 #if USE(RUNNINGBOARD)
-    , m_suspensionActivity(m_process->throttler().backgroundActivity("Page suspension for back/forward cache"_s).moveToUniquePtr())
+    , m_suspensionActivity(m_process->throttler().backgroundActivity("Page suspension for back/forward cache"_s))
 #endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     , m_contextIDForVisibilityPropagationInWebProcess(page.contextIDForVisibilityPropagationInWebProcess())

@@ -33,6 +33,7 @@
 #include "PlatformTimeRanges.h"
 #include "ProcessIdentity.h"
 #include <optional>
+#include <wtf/AbstractRefCounted.h>
 #include <wtf/CompletionHandler.h>
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
@@ -43,16 +44,15 @@ namespace WebCore {
 
 class VideoFrame;
 
-class MediaPlayerPrivateInterface {
+// MediaPlayerPrivateInterface subclasses should be ref-counted, but each subclass may choose whether
+// to be RefCounted or ThreadSafeRefCounted. Therefore, each subclass must implement a pair of
+// virtual ref()/deref() methods. See NullMediaPlayerPrivate for an example.
+class MediaPlayerPrivateInterface : public AbstractRefCounted {
 public:
     WEBCORE_EXPORT MediaPlayerPrivateInterface();
     WEBCORE_EXPORT virtual ~MediaPlayerPrivateInterface();
 
-    // MediaPlayerPrivateInterface subclasses should be ref-counted, but each subclass may choose whether
-    // to be RefCounted or ThreadSafeRefCounted. Therefore, each subclass must implement a pair of
-    // virtual ref()/deref() methods. See NullMediaPlayerPrivate for an example.
-    virtual void ref() = 0;
-    virtual void deref() = 0;
+    virtual constexpr MediaPlayerType mediaPlayerType() const = 0;
 
     virtual void load(const String&) { }
     virtual void load(const URL& url, const ContentType&, const String&) { load(url.string()); }
@@ -190,9 +190,7 @@ public:
     virtual void paint(GraphicsContext&, const FloatRect&) = 0;
 
     virtual void paintCurrentFrameInContext(GraphicsContext& c, const FloatRect& r) { paint(c, r); }
-#if !USE(AVFOUNDATION)
-    virtual bool copyVideoTextureToPlatformTexture(GraphicsContextGL*, PlatformGLObject, GCGLenum, GCGLint, GCGLenum, GCGLenum, GCGLenum, bool, bool) { return false; }
-#endif
+
 #if PLATFORM(COCOA) && !HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)
     virtual void willBeAskedToPaintGL() { }
 #endif
@@ -234,10 +232,6 @@ public:
     virtual std::optional<bool> isCrossOrigin(const SecurityOrigin&) const { return std::nullopt; }
 
     virtual MediaPlayer::MovieLoadType movieLoadType() const { return MediaPlayer::MovieLoadType::Unknown; }
-
-    using VideoPlaybackConfiguration = MediaPlayer::VideoPlaybackConfiguration;
-    using VideoPlaybackConfigurationOption = MediaPlayer::VideoPlaybackConfigurationOption;
-    virtual VideoPlaybackConfiguration videoPlaybackConfiguration() const { return { }; }
 
     virtual void prepareForRendering() { }
 
@@ -337,7 +331,7 @@ public:
 
     virtual void audioOutputDeviceChanged() { }
 
-    virtual MediaPlayerIdentifier identifier() const { return { }; }
+    virtual std::optional<MediaPlayerIdentifier> identifier() const { return std::nullopt; }
 
     virtual bool supportsPlayAtHostTime() const { return false; }
     virtual bool supportsPauseAtHostTime() const { return false; }

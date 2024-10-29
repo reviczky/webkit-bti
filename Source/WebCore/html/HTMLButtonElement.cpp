@@ -42,6 +42,10 @@
 #include "ImageControlsMac.h"
 #endif
 
+#if ENABLE(SPATIAL_IMAGE_CONTROLS)
+#include "SpatialImageControls.h"
+#endif
+
 namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLButtonElement);
@@ -136,6 +140,10 @@ void HTMLButtonElement::defaultEventHandler(Event& event)
     if (ImageControlsMac::handleEvent(*this, event))
         return;
 #endif
+#if ENABLE(SPATIAL_IMAGE_CONTROLS)
+    if (SpatialImageControls::handleEvent(*this, event))
+        return;
+#endif
     auto& eventNames = WebCore::eventNames();
     if (event.type() == eventNames.DOMActivateEvent && !isDisabledFormControl()) {
         RefPtr<HTMLFormElement> protectedForm(form());
@@ -151,7 +159,7 @@ void HTMLButtonElement::defaultEventHandler(Event& event)
             // the Form or button relationships.
             protectedDocument()->updateLayoutIgnorePendingStylesheets();
 
-            if (auto currentForm = form()) {
+            if (RefPtr currentForm = form()) {
                 if (m_type == SUBMIT)
                     currentForm->submitIfPossible(&event, this);
 
@@ -161,8 +169,11 @@ void HTMLButtonElement::defaultEventHandler(Event& event)
 
             if (m_type == SUBMIT || m_type == RESET)
                 event.setDefaultHandled();
-        } else
+        }
+
+        if (!(protectedForm && m_type == SUBMIT))
             handlePopoverTargetAction();
+
     }
 
     if (RefPtr keyboardEvent = dynamicDowncast<KeyboardEvent>(event)) {

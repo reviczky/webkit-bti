@@ -29,7 +29,7 @@
 
 #include <windows.h>
 
-#elif OS(UNIX)
+#elif OS(UNIX) || OS(HAIKU)
 
 #include <pthread.h>
 #if HAVE(PTHREAD_NP_H)
@@ -47,6 +47,8 @@
 #endif
 
 #endif
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WTF {
 
@@ -77,7 +79,7 @@ StackBounds StackBounds::currentThreadStackBoundsInternal()
     return newThreadStackBounds(pthread_self());
 }
 
-#elif OS(UNIX)
+#elif OS(UNIX) || OS(HAIKU)
 
 #if OS(OPENBSD)
 
@@ -208,3 +210,5 @@ StackBounds StackBounds::currentThreadStackBoundsInternal()
 #endif
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

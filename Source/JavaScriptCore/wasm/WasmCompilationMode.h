@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,48 +33,23 @@ enum class CompilationMode : uint8_t {
     LLIntMode,
     IPIntMode,
     BBQMode,
-    BBQForOSREntryMode,
     OMGMode,
     OMGForOSREntryMode,
-    JSEntrypointJITMode,
-    JITLessJSEntrypointMode,
+    JSToWasmEntrypointMode,
     JSToWasmICMode,
     WasmToJSMode,
 };
-
-ASCIILiteral makeString(CompilationMode);
-
-constexpr inline bool isOSREntry(CompilationMode compilationMode)
-{
-    switch (compilationMode) {
-    case CompilationMode::LLIntMode:
-    case CompilationMode::IPIntMode:
-    case CompilationMode::BBQMode:
-    case CompilationMode::OMGMode:
-    case CompilationMode::JSEntrypointJITMode:
-    case CompilationMode::JITLessJSEntrypointMode:
-    case CompilationMode::JSToWasmICMode:
-    case CompilationMode::WasmToJSMode:
-        return false;
-    case CompilationMode::BBQForOSREntryMode:
-    case CompilationMode::OMGForOSREntryMode:
-        return true;
-    }
-    RELEASE_ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
-}
 
 constexpr inline bool isAnyBBQ(CompilationMode compilationMode)
 {
     switch (compilationMode) {
     case CompilationMode::BBQMode:
-    case CompilationMode::BBQForOSREntryMode:
         return true;
     case CompilationMode::OMGForOSREntryMode:
     case CompilationMode::LLIntMode:
     case CompilationMode::IPIntMode:
     case CompilationMode::OMGMode:
-    case CompilationMode::JSEntrypointJITMode:
-    case CompilationMode::JITLessJSEntrypointMode:
+    case CompilationMode::JSToWasmEntrypointMode:
     case CompilationMode::JSToWasmICMode:
     case CompilationMode::WasmToJSMode:
         return false;
@@ -89,11 +64,9 @@ constexpr inline bool isAnyOMG(CompilationMode compilationMode)
     case CompilationMode::OMGForOSREntryMode:
         return true;
     case CompilationMode::BBQMode:
-    case CompilationMode::BBQForOSREntryMode:
     case CompilationMode::LLIntMode:
     case CompilationMode::IPIntMode:
-    case CompilationMode::JSEntrypointJITMode:
-    case CompilationMode::JITLessJSEntrypointMode:
+    case CompilationMode::JSToWasmEntrypointMode:
     case CompilationMode::JSToWasmICMode:
     case CompilationMode::WasmToJSMode:
         return false;

@@ -52,6 +52,8 @@
 namespace WebKit {
 using namespace WebCore;
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DrawingAreaProxyCoordinatedGraphics);
+
 DrawingAreaProxyCoordinatedGraphics::DrawingAreaProxyCoordinatedGraphics(WebPageProxy& webPageProxy, WebProcessProxy& webProcessProxy)
     : DrawingAreaProxy(DrawingAreaType::CoordinatedGraphics, webPageProxy, webProcessProxy)
 #if !PLATFORM(WPE)
@@ -156,9 +158,10 @@ void DrawingAreaProxyCoordinatedGraphics::sizeDidChange()
     sendUpdateGeometry();
 }
 
-void DrawingAreaProxyCoordinatedGraphics::deviceScaleFactorDidChange()
+void DrawingAreaProxyCoordinatedGraphics::deviceScaleFactorDidChange(CompletionHandler<void()>&& completionHandler)
 {
     send(Messages::DrawingArea::SetDeviceScaleFactor(m_webPageProxy->deviceScaleFactor()));
+    completionHandler();
 }
 
 void DrawingAreaProxyCoordinatedGraphics::setBackingStoreIsDiscardable(bool isBackingStoreDiscardable)

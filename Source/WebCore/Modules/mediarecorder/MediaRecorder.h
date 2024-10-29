@@ -50,6 +50,9 @@ class MediaRecorder final
     , private MediaStreamTrackPrivateObserver {
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(MediaRecorder);
 public:
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     enum class RecordingState { Inactive, Recording, Paused };
     
     ~MediaRecorder();
@@ -66,10 +69,6 @@ public:
     RecordingState state() const { return m_state; }
     const String& mimeType() const { return m_options.mimeType; }
 
-    // ActiveDOMObject.
-    void ref() const final { RefCounted::ref(); }
-    void deref() const final { RefCounted::deref(); }
-    
     ExceptionOr<void> startRecording(std::optional<unsigned>);
     void stopRecording();
     ExceptionOr<void> requestData();
@@ -81,14 +80,12 @@ public:
 
     MediaStream& stream() { return m_stream.get(); }
 
-    using EventTarget::weakPtrFactory;
-    using EventTarget::WeakValueType;
-    using EventTarget::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(EventTarget);
 
 private:
     MediaRecorder(Document&, Ref<MediaStream>&&, Options&&);
 
-    static ExceptionOr<std::unique_ptr<MediaRecorderPrivate>> createMediaRecorderPrivate(Document&, MediaStreamPrivate&, const Options&);
+    static ExceptionOr<std::unique_ptr<MediaRecorderPrivate>> createMediaRecorderPrivate(MediaStreamPrivate&, const Options&);
     
     Document* document() const;
 

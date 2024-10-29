@@ -45,6 +45,8 @@
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/TextStream.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WTF {
 
 void URL::invalidate()
@@ -326,7 +328,7 @@ static void assertProtocolIsGood(StringView protocol)
 
 static Lock defaultPortForProtocolMapForTestingLock;
 
-using DefaultPortForProtocolMapForTesting = HashMap<String, uint16_t>;
+using DefaultPortForProtocolMapForTesting = UncheckedKeyHashMap<String, uint16_t>;
 static DefaultPortForProtocolMapForTesting*& defaultPortForProtocolMapForTesting() WTF_REQUIRES_LOCK(defaultPortForProtocolMapForTestingLock)
 {
     static DefaultPortForProtocolMapForTesting* defaultPortForProtocolMap;
@@ -1388,3 +1390,5 @@ Vector<String> removeQueryParameters(URL& url, Function<bool(const String&)>&& s
 }
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

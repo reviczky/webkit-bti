@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,21 +36,14 @@
 // While UListFormatter APIs are draft in ICU 67, they are stable in ICU 68 with the same function signatures.
 // So we can assume that these signatures of draft APIs are stable.
 // If UListFormatter is available, UNumberFormatter is also available.
-#if HAVE(ICU_U_LIST_FORMATTER)
 #ifdef U_HIDE_DRAFT_API
 #undef U_HIDE_DRAFT_API
-#endif
 #endif
 #include <unicode/ulistformatter.h>
 #include <unicode/unumberformatter.h>
 #include <unicode/ures.h>
-#if HAVE(ICU_U_LIST_FORMATTER)
 #define U_HIDE_DRAFT_API 1
-#endif
-
-#if HAVE(ICU_U_LIST_FORMATTER)
 #include <unicode/uformattedvalue.h>
-#endif
 
 namespace JSC {
 namespace IntlDurationFormatInternal {
@@ -245,7 +238,6 @@ void IntlDurationFormat::initializeDurationFormat(JSGlobalObject* globalObject, 
     m_fractionalDigits = intlNumberOption(globalObject, options, vm.propertyNames->fractionalDigits, 0, 9, fractionalDigitsUndefinedValue);
     RETURN_IF_EXCEPTION(scope, void());
 
-#if HAVE(ICU_U_LIST_FORMATTER)
     {
         auto toUListFormatterWidth = [](Style style) {
             // 6. Let listStyle be durationFormat.[[Style]].
@@ -272,14 +264,7 @@ void IntlDurationFormat::initializeDurationFormat(JSGlobalObject* globalObject, 
             return;
         }
     }
-#else
-    UNUSED_PARAM(IntlDurationFormatInternal::verbose);
-    throwTypeError(globalObject, scope, "Failed to initialize Intl.DurationFormat since this feature is not supported in the linked ICU version"_s);
-    return;
-#endif
 }
-
-#if HAVE(ICU_U_LIST_FORMATTER)
 
 static String retrieveSeparator(const CString& locale, const String& numberingSystem)
 {
@@ -341,6 +326,63 @@ static DurationSignType getDurationSign(ISO8601::Duration duration)
     return DurationSignType::Zero;
 }
 
+static String int128ToString(Int128 value)
+{
+    Vector<LChar> resultString;
+    bool isNegative = value < 0;
+    if (isNegative)
+        value = -value;
+
+    while (value) {
+        Int128 digit = value % 10;
+        resultString.append(static_cast<char>('0' + digit));
+        value /= 10;
+    }
+
+    if (isNegative)
+        resultString.append('-');
+
+    std::reverse(resultString.begin(), resultString.end());
+
+    return StringImpl::adopt(WTFMove(resultString));
+}
+
+static String buildDecimalFormat(TemporalUnit unit, Int128 ns)
+{
+    ASSERT(unit == TemporalUnit::Second || unit == TemporalUnit::Millisecond || unit == TemporalUnit::Microsecond);
+
+    int flactionalDigits = 0;
+    Int128 exponent = 0;
+    if (unit == TemporalUnit::Second) {
+        flactionalDigits = 9;
+        exponent = Int128(1000000000);
+    } else if (unit == TemporalUnit::Millisecond) {
+        flactionalDigits = 6;
+        exponent = Int128(1000000);
+    } else {
+        ASSERT(unit == TemporalUnit::Microsecond);
+        flactionalDigits = 3;
+        exponent = Int128(1000);
+    }
+
+    Int128 integerPart = ns / exponent;
+    ASSERT(ns % exponent >= std::numeric_limits<int64_t>::min() && ns % exponent <= std::numeric_limits<int64_t>::max());
+    int64_t fractionalPart = std::abs(static_cast<int64_t>(ns % exponent));
+
+    StringBuilder builder;
+
+    builder.append(int128ToString(integerPart));
+    builder.append("."_s);
+
+    String fractionalString = String::number(fractionalPart);
+    int zeroLength = flactionalDigits - fractionalString.length();
+    for (int i = 0; i < zeroLength; ++i)
+        builder.append("0"_s);
+    builder.append(fractionalString);
+
+    return builder.toString();
+}
+
 static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlDurationFormat* durationFormat, ISO8601::Duration duration)
 {
     // https://tc39.es/proposal-intl-duration-format/#sec-partitiondurationformatpattern
@@ -357,6 +399,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
         TemporalUnit unit = static_cast<TemporalUnit>(index);
         auto unitData = durationFormat->units()[index];
         double value = duration[unit];
+        std::optional<Int128> totalNanosecondsValue;
 
         StringBuilder skeletonBuilder;
 
@@ -377,13 +420,15 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
             }
             if (nextStyle == IntlDurationFormat::UnitStyle::Numeric) {
                 if (unit == TemporalUnit::Second)
-                    value = value + duration[TemporalUnit::Millisecond] / 1000.0 + duration[TemporalUnit::Microsecond] / 1000000.0 + duration[TemporalUnit::Nanosecond] / 1000000000.0;
+                    totalNanosecondsValue = duration.totalNanoseconds<TemporalUnit::Second>();
                 else if (unit == TemporalUnit::Millisecond)
-                    value = value + duration[TemporalUnit::Microsecond] / 1000.0 + duration[TemporalUnit::Nanosecond] / 1000000.0;
+                    totalNanosecondsValue = duration.totalNanoseconds<TemporalUnit::Millisecond>();
                 else {
                     ASSERT(unit == TemporalUnit::Microsecond);
-                    value = value + duration[TemporalUnit::Nanosecond] / 1000.0;
+                    totalNanosecondsValue = duration.totalNanoseconds<TemporalUnit::Microsecond>();
                 }
+                ASSERT(totalNanosecondsValue);
+
                 // https://github.com/unicode-org/icu/blob/master/docs/userguide/format_parse/numbers/skeletons.md#fraction-precision
                 skeletonBuilder.append(" ."_s);
 
@@ -408,7 +453,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
 
         // 3.k. If style is "2-digit", then
         //     i. Perform ! CreateDataPropertyOrThrow(nfOpts, "minimumIntegerDigits", 2F).
-        skeletonBuilder.append(" integer-width/"_s, WTF::ICU::majorVersion() >= 67 ? '*' : '+'); // Prior to ICU 67, use the symbol + instead of *.
+        skeletonBuilder.append(" integer-width/*"_s);
         if (style == IntlDurationFormat::UnitStyle::TwoDigit)
             skeletonBuilder.append("00"_s);
         else
@@ -471,6 +516,41 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
                 return formattedNumber;
             };
 
+            auto formatIntl128AsDecimal = [&](const String& skeleton) -> std::unique_ptr<UFormattedNumber, ICUDeleter<unumf_closeResult>> {
+                ASSERT(totalNanosecondsValue);
+                ASSERT(unit == TemporalUnit::Second || unit == TemporalUnit::Millisecond || unit == TemporalUnit::Microsecond);
+
+                auto scope = DECLARE_THROW_SCOPE(vm);
+
+                dataLogLnIf(IntlDurationFormatInternal::verbose, skeleton);
+                StringView skeletonView(skeleton);
+                auto upconverted = skeletonView.upconvertedCharacters();
+
+                UErrorCode status = U_ZERO_ERROR;
+                auto numberFormatter = std::unique_ptr<UNumberFormatter, UNumberFormatterDeleter>(unumf_openForSkeletonAndLocale(upconverted.get(), skeletonView.length(), durationFormat->dataLocaleWithExtensions().data(), &status));
+                if (U_FAILURE(status)) {
+                    throwTypeError(globalObject, scope, "Failed to initialize NumberFormat"_s);
+                    return { };
+                }
+
+                auto formattedNumber = std::unique_ptr<UFormattedNumber, ICUDeleter<unumf_closeResult>>(unumf_openResult(&status));
+                if (U_FAILURE(status)) {
+                    throwTypeError(globalObject, scope, "Failed to format a number."_s);
+                    return { };
+                }
+
+                // We need to keep string alive while strSpan is in use.
+                auto string = buildDecimalFormat(unit, totalNanosecondsValue.value());
+                auto strSpan = string.impl()->span8();
+                unumf_formatDecimal(numberFormatter.get(), reinterpret_cast<const char*>(strSpan.data()), strSpan.size(), formattedNumber.get(), &status);
+                if (U_FAILURE(status)) {
+                    throwTypeError(globalObject, scope, "Failed to format a number."_s);
+                    return { };
+                }
+
+                return formattedNumber;
+            };
+
             switch (style) {
             // 3.l.i. If style is "2-digit" or "numeric", then
             case IntlDurationFormat::UnitStyle::TwoDigit:
@@ -490,7 +570,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
                 bool needsSeparator = (unit == TemporalUnit::Hour && needsFormatMinutes) || (unit == TemporalUnit::Minute && needsFormatSeconds);
 
                 if (needsFormat) {
-                    auto formattedNumber = formatDouble(skeletonBuilder.toString());
+                    auto formattedNumber = totalNanosecondsValue ? formatIntl128AsDecimal(skeletonBuilder.toString()) : formatDouble(skeletonBuilder.toString());
                     RETURN_IF_EXCEPTION(scope, { });
 
                     auto formatted = formatToString(formattedNumber.get());
@@ -522,7 +602,7 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
                     skeletonBuilder.append(" unit-width-narrow"_s);
                 }
 
-                auto formattedNumber = formatDouble(skeletonBuilder.toString());
+                auto formattedNumber = totalNanosecondsValue ? formatIntl128AsDecimal(skeletonBuilder.toString()) : formatDouble(skeletonBuilder.toString());
                 RETURN_IF_EXCEPTION(scope, { });
 
                 auto formatted = formatToString(formattedNumber.get());
@@ -540,15 +620,12 @@ static Vector<Element> collectElements(JSGlobalObject* globalObject, const IntlD
     return elements;
 }
 
-#endif
-
 // https://tc39.es/proposal-intl-duration-format/#sec-Intl.DurationFormat.prototype.format
 JSValue IntlDurationFormat::format(JSGlobalObject* globalObject, ISO8601::Duration duration) const
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-#if HAVE(ICU_U_LIST_FORMATTER)
     auto elements = collectElements(globalObject, this, WTFMove(duration));
     RETURN_IF_EXCEPTION(scope, { });
 
@@ -584,10 +661,6 @@ JSValue IntlDurationFormat::format(JSGlobalObject* globalObject, ISO8601::Durati
         return throwTypeError(globalObject, scope, "failed to format list of strings"_s);
 
     return jsString(vm, String(WTFMove(result)));
-#else
-    UNUSED_PARAM(duration);
-    return throwTypeError(globalObject, scope, "failed to format list of strings"_s);
-#endif
 }
 
 // https://tc39.es/proposal-intl-duration-format/#sec-Intl.DurationFormat.prototype.formatToParts
@@ -596,7 +669,6 @@ JSValue IntlDurationFormat::formatToParts(JSGlobalObject* globalObject, ISO8601:
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-#if HAVE(ICU_U_LIST_FORMATTER)
     auto elements = collectElements(globalObject, this, WTFMove(duration));
     RETURN_IF_EXCEPTION(scope, { });
 
@@ -749,10 +821,6 @@ JSValue IntlDurationFormat::formatToParts(JSGlobalObject* globalObject, ISO8601:
     }
 
     return parts;
-#else
-    UNUSED_PARAM(duration);
-    return throwTypeError(globalObject, scope, "failed to format list of strings"_s);
-#endif
 }
 
 // https://tc39.es/proposal-intl-duration-format/#sec-Intl.DurationFormat.prototype.resolvedOptions
@@ -761,6 +829,7 @@ JSObject* IntlDurationFormat::resolvedOptions(JSGlobalObject* globalObject) cons
     VM& vm = globalObject->vm();
     JSObject* options = constructEmptyObject(globalObject);
     options->putDirect(vm, vm.propertyNames->locale, jsString(vm, m_locale));
+    options->putDirect(vm, vm.propertyNames->numberingSystem, jsString(vm, m_numberingSystem));
     options->putDirect(vm, vm.propertyNames->style, jsNontrivialString(vm, styleString(m_style)));
 
     for (unsigned index = 0; index < numberOfTemporalUnits; ++index) {
@@ -770,8 +839,8 @@ JSObject* IntlDurationFormat::resolvedOptions(JSGlobalObject* globalObject) cons
         options->putDirect(vm, displayName(vm, unit), jsNontrivialString(vm, displayString(unitData.display())));
     }
 
-    options->putDirect(vm, vm.propertyNames->fractionalDigits, m_fractionalDigits == fractionalDigitsUndefinedValue ? jsUndefined() : jsNumber(m_fractionalDigits));
-    options->putDirect(vm, vm.propertyNames->numberingSystem, jsString(vm, m_numberingSystem));
+    if (m_fractionalDigits != fractionalDigitsUndefinedValue)
+        options->putDirect(vm, vm.propertyNames->fractionalDigits, jsNumber(m_fractionalDigits));
     return options;
 }
 

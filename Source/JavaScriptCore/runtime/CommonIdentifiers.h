@@ -44,6 +44,7 @@
     macro(Function) \
     macro(Infinity) \
     macro(Intl) \
+    macro(Iterator) \
     macro(ListFormat) \
     macro(Loader) \
     macro(Locale) \
@@ -275,6 +276,7 @@
     macro(timeStyle) \
     macro(timeZone) \
     macro(timeZoneName) \
+    macro(toArray) \
     macro(toExponential) \
     macro(toFixed) \
     macro(toISOString) \

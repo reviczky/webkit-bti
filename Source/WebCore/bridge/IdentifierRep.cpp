@@ -30,10 +30,13 @@
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 using namespace JSC;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(IdentifierRep);
 
 typedef HashSet<IdentifierRep*> IdentifierSet;
 
@@ -43,7 +46,7 @@ static IdentifierSet& identifierSet()
     return identifierSet;
 }
     
-typedef HashMap<int, IdentifierRep*> IntIdentifierMap;
+typedef UncheckedKeyHashMap<int, IdentifierRep*> IntIdentifierMap;
 
 static IntIdentifierMap& intIdentifierMap()
 {
@@ -77,7 +80,7 @@ IdentifierRep* IdentifierRep::get(int intID)
     return result.iterator->value;
 }
 
-typedef HashMap<RefPtr<StringImpl>, IdentifierRep*> StringIdentifierMap;
+typedef UncheckedKeyHashMap<RefPtr<StringImpl>, IdentifierRep*> StringIdentifierMap;
 
 static StringIdentifierMap& stringIdentifierMap()
 {

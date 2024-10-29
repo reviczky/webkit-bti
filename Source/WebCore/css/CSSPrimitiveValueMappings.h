@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include "CSSCalcSymbolTable.h"
 #include "CSSCalcValue.h"
 #include "CSSFontFaceSrcValue.h"
 #include "CSSPrimitiveValue.h"
@@ -37,12 +38,12 @@
 #include "FontSizeAdjust.h"
 #include "GraphicsTypes.h"
 #include "Length.h"
-#include "LineClampValue.h"
 #include "ListStyleType.h"
 #include "RenderStyleConstants.h"
 #include "SVGRenderStyleDefs.h"
 #include "ScrollAxis.h"
 #include "ScrollTypes.h"
+#include "StyleBuilderState.h"
 #include "TextFlags.h"
 #include "ThemeTypes.h"
 #include "TouchAction.h"
@@ -63,9 +64,11 @@ template<typename TargetType> TargetType fromCSSValue(const CSSValue& value)
 
 class TypeDeducingCSSValueMapper {
 public:
-    TypeDeducingCSSValueMapper(const CSSValue& value)
-        : m_value(value)
-    { }
+    TypeDeducingCSSValueMapper(const Style::BuilderState& builderState, const CSSValue& value)
+        : m_builderState { builderState }
+        , m_value { value }
+    {
+    }
 
     template<typename TargetType> operator TargetType() const
     {
@@ -79,43 +82,44 @@ public:
 
     operator unsigned short() const
     {
-        return numericValue().value<unsigned short>();
+        return numericValue().resolveAsNumber<unsigned short>(m_builderState.cssToLengthConversionData());
     }
 
     operator int() const
     {
-        return numericValue().value<int>();
+        return numericValue().resolveAsNumber<int>(m_builderState.cssToLengthConversionData());
     }
 
     operator unsigned() const
     {
-        return numericValue().value<unsigned>();
+        return numericValue().resolveAsNumber<unsigned>(m_builderState.cssToLengthConversionData());
     }
 
     operator float() const
     {
-        return numericValue().value<float>();
+        return numericValue().resolveAsNumber<float>(m_builderState.cssToLengthConversionData());
     }
 
     operator double() const
     {
-        return numericValue().doubleValue();
+        return numericValue().resolveAsNumber<double>(m_builderState.cssToLengthConversionData());
     }
 
 private:
     const CSSPrimitiveValue& numericValue() const
     {
         auto& value = downcast<CSSPrimitiveValue>(m_value);
-        ASSERT(value.primitiveType() == CSSUnitType::CSS_NUMBER || value.primitiveType() == CSSUnitType::CSS_INTEGER);
+        ASSERT(value.isNumberOrInteger());
         return value;
     }
 
+    const Style::BuilderState& m_builderState;
     const CSSValue& m_value;
 };
 
-inline TypeDeducingCSSValueMapper fromCSSValueDeducingType(const CSSValue& value)
+inline TypeDeducingCSSValueMapper fromCSSValueDeducingType(const Style::BuilderState& builderState, const CSSValue& value)
 {
-    return value;
+    return { builderState, value };
 }
 
 #define EMIT_TO_CSS_SWITCH_CASE(VALUE) case TYPE::VALUE: return CSSValue##VALUE;
@@ -138,20 +142,6 @@ template<> constexpr TYPE fromCSSValueID(CSSValueID value) { \
     } \
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT(); \
     return { }; \
-}
-
-template<> inline LineClampValue fromCSSValue(const CSSValue& value)
-{
-    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-
-    if (primitiveValue.primitiveType() == CSSUnitType::CSS_INTEGER)
-        return LineClampValue(primitiveValue.value<int>(), LineClamp::LineCount);
-
-    if (primitiveValue.primitiveType() == CSSUnitType::CSS_PERCENTAGE)
-        return LineClampValue(primitiveValue.value<int>(), LineClamp::Percentage);
-
-    ASSERT(primitiveValue.valueID() == CSSValueNone);
-    return LineClampValue();
 }
 
 #define TYPE ReflectionDirection
@@ -325,6 +315,8 @@ constexpr CSSValueID toCSSValueID(StyleAppearance e)
         return CSSValueNone;
     case StyleAppearance::Auto:
         return CSSValueAuto;
+    case StyleAppearance::Base:
+        return CSSValueBase;
     case StyleAppearance::Checkbox:
         return CSSValueCheckbox;
     case StyleAppearance::Radio:
@@ -401,7 +393,7 @@ template<> constexpr StyleAppearance fromCSSValueID(CSSValueID valueID)
     if (valueID == CSSValueAuto)
         return StyleAppearance::Auto;
 
-    return StyleAppearance(valueID - CSSValueCheckbox + static_cast<unsigned>(StyleAppearance::Checkbox));
+    return StyleAppearance(valueID - CSSValueBase + static_cast<unsigned>(StyleAppearance::Base));
 }
 
 #define TYPE BackfaceVisibility
@@ -1455,27 +1447,27 @@ template<> constexpr TextDirection fromCSSValueID(CSSValueID valueID)
     return TextDirection::LTR;
 }
 
-constexpr CSSValueID toCSSValueID(WritingMode e)
+constexpr CSSValueID toCSSValueID(StyleWritingMode e)
 {
     switch (e) {
-    case WritingMode::HorizontalTb:
+    case StyleWritingMode::HorizontalTb:
         return CSSValueHorizontalTb;
-    case WritingMode::VerticalRl:
+    case StyleWritingMode::VerticalRl:
         return CSSValueVerticalRl;
-    case WritingMode::VerticalLr:
+    case StyleWritingMode::VerticalLr:
         return CSSValueVerticalLr;
-    case WritingMode::SidewaysRl:
+    case StyleWritingMode::SidewaysRl:
         return CSSValueSidewaysRl;
-    case WritingMode::SidewaysLr:
+    case StyleWritingMode::SidewaysLr:
         return CSSValueSidewaysLr;
-    case WritingMode::HorizontalBt:
+    case StyleWritingMode::HorizontalBt:
         return CSSValueHorizontalBt;
     }
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
     return CSSValueInvalid;
 }
 
-template<> constexpr WritingMode fromCSSValueID(CSSValueID valueID)
+template<> constexpr StyleWritingMode fromCSSValueID(CSSValueID valueID)
 {
     switch (valueID) {
     case CSSValueHorizontalTb:
@@ -1483,24 +1475,24 @@ template<> constexpr WritingMode fromCSSValueID(CSSValueID valueID)
     case CSSValueLrTb:
     case CSSValueRl:
     case CSSValueRlTb:
-        return WritingMode::HorizontalTb;
+        return StyleWritingMode::HorizontalTb;
     case CSSValueVerticalRl:
     case CSSValueTb:
     case CSSValueTbRl:
-        return WritingMode::VerticalRl;
+        return StyleWritingMode::VerticalRl;
     case CSSValueVerticalLr:
-        return WritingMode::VerticalLr;
+        return StyleWritingMode::VerticalLr;
     case CSSValueSidewaysLr:
-        return WritingMode::SidewaysLr;
+        return StyleWritingMode::SidewaysLr;
     case CSSValueSidewaysRl:
-        return WritingMode::SidewaysRl;
+        return StyleWritingMode::SidewaysRl;
     case CSSValueHorizontalBt:
-        return WritingMode::HorizontalBt;
+        return StyleWritingMode::HorizontalBt;
     default:
         break;
     }
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
-    return WritingMode::HorizontalTb;
+    return StyleWritingMode::HorizontalTb;
 }
 
 constexpr CSSValueID toCSSValueID(TextCombine e)
@@ -1539,6 +1531,8 @@ constexpr CSSValueID toCSSValueID(RubyPosition e)
         return CSSValueUnder;
     case RubyPosition::InterCharacter:
         return CSSValueInterCharacter;
+    case RubyPosition::LegacyInterCharacter:
+        return CSSValueLegacyInterCharacter;
     }
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
     return CSSValueInvalid;
@@ -1555,6 +1549,8 @@ template<> constexpr RubyPosition fromCSSValueID(CSSValueID valueID)
         return RubyPosition::Under;
     case CSSValueInterCharacter:
         return RubyPosition::InterCharacter;
+    case CSSValueLegacyInterCharacter:
+        return RubyPosition::LegacyInterCharacter;
     default:
         break;
     }
@@ -1564,6 +1560,12 @@ template<> constexpr RubyPosition fromCSSValueID(CSSValueID valueID)
 
 #define TYPE RubyAlign
 #define FOR_EACH(CASE) CASE(Start) CASE(Center) CASE(SpaceBetween) CASE(SpaceAround)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
+#define TYPE RubyOverhang
+#define FOR_EACH(CASE) CASE(Auto) CASE(None)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
@@ -1989,9 +1991,9 @@ constexpr CSSValueID toCSSValueID(TransformStyle3D e)
         return CSSValueFlat;
     case TransformStyle3D::Preserve3D:
         return CSSValuePreserve3d;
-#if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
-    case TransformStyle3D::Optimized3D:
-        return CSSValueOptimized3d;
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
+    case TransformStyle3D::Separated:
+        return CSSValueSeparated;
 #endif
     }
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
@@ -2005,9 +2007,9 @@ template<> constexpr TransformStyle3D fromCSSValueID(CSSValueID valueID)
         return TransformStyle3D::Flat;
     case CSSValuePreserve3d:
         return TransformStyle3D::Preserve3D;
-#if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
-    case CSSValueOptimized3d:
-        return TransformStyle3D::Optimized3D;
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
+    case CSSValueSeparated:
+        return TransformStyle3D::Separated;
 #endif
     default:
         break;
@@ -2048,15 +2050,15 @@ template<int supported> Length CSSPrimitiveValue::convertToLength(const CSSToLen
     if (!convertingToLengthHasRequiredConversionData(supported, conversionData))
         return Length(LengthType::Undefined);
     if ((supported & FixedIntegerConversion) && isLength())
-        return computeLength<Length>(conversionData);
+        return resolveAsLength<Length>(conversionData);
     if ((supported & FixedFloatConversion) && isLength())
-        return Length(computeLength<double>(conversionData), LengthType::Fixed);
+        return Length(resolveAsLength<double>(conversionData), LengthType::Fixed);
     if ((supported & PercentConversion) && isPercentage())
-        return Length(doubleValue(), LengthType::Percent);
+        return Length(resolveAsPercentage<double>(conversionData), LengthType::Percent);
     if ((supported & AutoConversion) && valueID() == CSSValueAuto)
         return Length(LengthType::Auto);
     if ((supported & CalculatedConversion) && isCalculated())
-        return Length(cssCalcValue()->createCalculationValue(conversionData));
+        return Length(cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { }));
     return Length(LengthType::Undefined);
 }
 
@@ -2191,7 +2193,7 @@ template<> constexpr CSSBoxType fromCSSValueID(CSSValueID valueID)
 #define TYPE ItemPosition
 #define FOR_EACH(CASE) CASE(Legacy) CASE(Auto) CASE(Normal) CASE(Stretch) CASE(Baseline) \
     CASE(LastBaseline) CASE(Center) CASE(Start) CASE(End) CASE(SelfStart) CASE(SelfEnd) \
-    CASE(FlexStart) CASE(FlexEnd) CASE(Left) CASE(Right)
+    CASE(FlexStart) CASE(FlexEnd) CASE(Left) CASE(Right) CASE(AnchorCenter)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
@@ -2536,6 +2538,12 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 
 #define TYPE QuoteType
 #define FOR_EACH(CASE) CASE(OpenQuote) CASE(CloseQuote) CASE(NoOpenQuote) CASE(NoCloseQuote)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
+#define TYPE OverflowContinue
+#define FOR_EACH(CASE) CASE(Auto) CASE(Discard)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH

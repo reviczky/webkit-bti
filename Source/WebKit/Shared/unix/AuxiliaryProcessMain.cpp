@@ -27,7 +27,9 @@
 #include "AuxiliaryProcessMain.h"
 
 #include "IPCUtilities.h"
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <JavaScriptCore/Options.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #include <WebCore/ProcessIdentifier.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -48,7 +50,9 @@ AuxiliaryProcessMainCommon::AuxiliaryProcessMainCommon()
 }
 
 // The command line is constructed in ProcessLauncher::launchProcess.
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 {
     int argIndex = 1; // Start from argv[1], since argv[0] is the program name.
 
@@ -56,9 +60,11 @@ bool AuxiliaryProcessMainCommon::parseCommandLine(int argc, char** argv)
     if (argc < argIndex + 2)
         return false;
 
-    if (auto processIdentifier = parseInteger<uint64_t>(span(argv[argIndex++])))
-        m_parameters.processIdentifier = LegacyNullableObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
-    else
+    if (auto processIdentifier = parseInteger<uint64_t>(span(argv[argIndex++]))) {
+        if (!ObjectIdentifier<WebCore::ProcessIdentifierType>::isValidIdentifier(*processIdentifier))
+            return false;
+        m_parameters.processIdentifier = ObjectIdentifier<WebCore::ProcessIdentifierType>(*processIdentifier);
+    } else
         return false;
 
     if (auto connectionIdentifier = parseInteger<int>(span(argv[argIndex++])))

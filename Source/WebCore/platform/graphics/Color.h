@@ -36,10 +36,13 @@
 #include <wtf/OptionSet.h>
 #include <wtf/Ref.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 #if USE(SKIA)
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <skia/core/SkColor.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
 #if USE(CG)
@@ -72,7 +75,7 @@ struct ColorDataForIPC {
 //    - 4x float color components + color space, stored in a reference counted sub-object
 
 class Color {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Color);
 public:
     enum class Flags {
         Semantic                        = 1 << 0,
@@ -94,6 +97,7 @@ public:
     explicit Color(WTF::HashTableEmptyValueType);
     explicit Color(WTF::HashTableDeletedValueType);
     bool isHashTableDeletedValue() const;
+    bool isHashTableEmptyValue() const;
 
     WEBCORE_EXPORT Color(const Color&);
     WEBCORE_EXPORT Color(Color&&);
@@ -390,6 +394,11 @@ inline Color::Color(WTF::HashTableDeletedValueType)
 inline bool Color::isHashTableDeletedValue() const
 {
     return flags().contains(FlagsIncludingPrivate::HashTableDeletedValue);
+}
+
+inline bool Color::isHashTableEmptyValue() const
+{
+    return flags().contains(FlagsIncludingPrivate::HashTableEmptyValue);
 }
 
 inline Color::~Color()

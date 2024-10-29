@@ -33,6 +33,7 @@
 #include "ScrollTypes.h"
 #include "Widget.h"
 #include <wtf/HashSet.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -70,7 +71,7 @@ enum class DelegatedScrollingMode : uint8_t {
 };
 
 class ScrollView : public Widget, public ScrollableArea, public CanMakeCheckedPtr<ScrollView> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ScrollView);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ScrollView);
 public:
     virtual ~ScrollView();
@@ -81,9 +82,7 @@ public:
     void incrementPtrCount() const final { CanMakeCheckedPtr::incrementPtrCount(); }
     void decrementPtrCount() const final { CanMakeCheckedPtr::decrementPtrCount(); }
 
-    using Widget::weakPtrFactory;
-    using Widget::WeakValueType;
-    using Widget::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(Widget);
 
     // ScrollableArea functions.
     WEBCORE_EXPORT void setScrollOffset(const ScrollOffset&) final;
@@ -161,7 +160,7 @@ public:
     bool prohibitsScrolling() const { return m_prohibitsScrolling; }
 
     class ProhibitScrollingWhenChangingContentSizeForScope {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(ProhibitScrollingWhenChangingContentSizeForScope);
     public:
         ProhibitScrollingWhenChangingContentSizeForScope(ScrollView&);
         ~ProhibitScrollingWhenChangingContentSizeForScope();

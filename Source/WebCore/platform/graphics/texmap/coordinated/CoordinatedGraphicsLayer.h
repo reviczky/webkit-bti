@@ -27,11 +27,9 @@
 #include "GraphicsLayerTransform.h"
 #include "Image.h"
 #include "IntSize.h"
-#include "NicosiaAnimatedBackingStoreClient.h"
-#include "NicosiaAnimation.h"
-#include "NicosiaBuffer.h"
 #include "NicosiaCompositionLayer.h"
 #include "NicosiaPlatformLayer.h"
+#include "TextureMapperAnimation.h"
 #include "TransformationMatrix.h"
 #include <wtf/Function.h>
 #include <wtf/RunLoop.h>
@@ -41,18 +39,23 @@
 #if USE(SKIA)
 namespace WebCore {
 class BitmapTexture;
-class SkiaAcceleratedBufferPool;
+class BitmapTexturePool;
+class SkiaThreadedPaintingPool;
 }
 #endif
 
-namespace Nicosia {
-class Animations;
-class ImageBackingStore;
+namespace WebCore {
+class CoordinatedAnimatedBackingStoreClient;
+class CoordinatedBackingStoreProxy;
+class CoordinatedGraphicsLayer;
+class CoordinatedImageBackingStore;
+class CoordinatedTileBuffer;
+class TextureMapperPlatformLayerProxy;
+#if USE(CAIRO)
+namespace Cairo {
 class PaintingEngine;
 }
-
-namespace WebCore {
-class CoordinatedGraphicsLayer;
+#endif
 
 class CoordinatedGraphicsLayerClient {
 public:
@@ -61,13 +64,13 @@ public:
     virtual void detachLayer(CoordinatedGraphicsLayer*) = 0;
     virtual void attachLayer(CoordinatedGraphicsLayer*) = 0;
 #if USE(CAIRO)
-    virtual Nicosia::PaintingEngine& paintingEngine() = 0;
+    virtual Cairo::PaintingEngine& paintingEngine() = 0;
 #elif USE(SKIA)
-    virtual SkiaAcceleratedBufferPool* skiaAcceleratedBufferPool() const = 0;
-    virtual WorkerPool* skiaUnacceleratedThreadedRenderingPool() const = 0;
+    virtual BitmapTexturePool* skiaAcceleratedBitmapTexturePool() const = 0;
+    virtual SkiaThreadedPaintingPool* skiaThreadedPaintingPool() const = 0;
 #endif
 
-    virtual RefPtr<Nicosia::ImageBackingStore> imageBackingStore(uint64_t, Function<RefPtr<Nicosia::Buffer>()>) = 0;
+    virtual Ref<CoordinatedImageBackingStore> imageBackingStore(Ref<NativeImage>&&) = 0;
 };
 
 class WEBCORE_EXPORT CoordinatedGraphicsLayer : public GraphicsLayer {
@@ -77,7 +80,7 @@ public:
 
     // FIXME: Merge these two methods.
     Nicosia::PlatformLayer::LayerID id() const;
-    PlatformLayerIdentifier primaryLayerID() const override;
+    std::optional<PlatformLayerIdentifier> primaryLayerID() const override;
 
     // Reimplementations from GraphicsLayer.h.
     bool setChildren(Vector<Ref<GraphicsLayer>>&&) override;
@@ -89,7 +92,7 @@ public:
     void willModifyChildren() override;
     void setEventRegion(EventRegion&&) override;
 #if ENABLE(SCROLLING_THREAD)
-    void setScrollingNodeID(ScrollingNodeID) override;
+    void setScrollingNodeID(std::optional<ScrollingNodeID>) override;
 #endif
     void setPosition(const FloatPoint&) override;
     void syncPosition(const FloatPoint&) override;
@@ -118,6 +121,7 @@ public:
     bool shouldDirectlyCompositeImage(Image*) const override;
     void setContentsToPlatformLayer(PlatformLayer*, ContentsLayerPurpose) override;
     void setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&&, ContentsLayerPurpose) override;
+    RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> createAsyncContentsDisplayDelegate(GraphicsLayerAsyncContentsDisplayDelegate*) override;
     void setMaskLayer(RefPtr<GraphicsLayer>&&) override;
     void setReplicatedByLayer(RefPtr<GraphicsLayer>&&) override;
     void setNeedsDisplay() override;
@@ -139,10 +143,6 @@ public:
     bool usesContentsLayer() const override;
     void dumpAdditionalProperties(WTF::TextStream&, OptionSet<LayerTreeAsTextOptions>) const override;
 
-#if USE(NICOSIA)
-    PlatformLayer* platformLayer() const override;
-#endif
-
     std::pair<bool, bool> finalizeCompositingStateFlush();
 
     FloatPoint computePositionRelativeToBase();
@@ -159,33 +159,21 @@ public:
 
     const RefPtr<Nicosia::CompositionLayer>& compositionLayer() const;
 
-    class AnimatedBackingStoreHost : public ThreadSafeRefCounted<AnimatedBackingStoreHost> {
-    public:
-        static Ref<AnimatedBackingStoreHost> create(CoordinatedGraphicsLayer& layer)
-        {
-            return adoptRef(*new AnimatedBackingStoreHost(layer));
-        }
-
-        void requestBackingStoreUpdate()
-        {
-            if (m_layer)
-                m_layer->requestBackingStoreUpdate();
-        }
-
-        void layerWillBeDestroyed() { m_layer = nullptr; }
-    private:
-        explicit AnimatedBackingStoreHost(CoordinatedGraphicsLayer& layer)
-            : m_layer(&layer)
-        { }
-
-        CoordinatedGraphicsLayer* m_layer;
-    };
-
     void requestBackingStoreUpdate();
 
     double backingStoreMemoryEstimate() const override;
 
     Vector<std::pair<String, double>> acceleratedAnimationsForTesting(const Settings&) const final;
+
+#if USE(SKIA)
+    void paintIntoGraphicsContext(GraphicsContext&, const IntRect&) const;
+#endif
+
+    float effectiveContentsScale() const;
+
+    static void clampToContentsRectIfRectIsInfinite(FloatRect&, const FloatSize&);
+
+    Ref<CoordinatedTileBuffer> paintTile(const IntRect& dirtyRect);
 
 private:
     enum class FlushNotification {
@@ -194,8 +182,6 @@ private:
     };
 
     bool isCoordinatedGraphicsLayer() const override;
-
-    void updatePlatformLayer();
 
     void setDebugBorder(const Color&, float width) override;
 
@@ -213,26 +199,18 @@ private:
     bool checkPendingStateChanges();
     bool checkContentLayerUpdated();
 
-    Ref<Nicosia::Buffer> paintTile(const IntRect&, const IntRect& mappedTileRect, float contentsScale);
-    Ref<Nicosia::Buffer> paintImage(Image&);
-
     void notifyFlushRequired();
 
     bool shouldHaveBackingStore() const;
     bool selfOrAncestorHasActiveTransformAnimation() const;
-    bool selfOrAncestorHaveNonAffineTransforms();
+    bool selfOrAncestorHaveNonAffineTransforms() const;
 
     void setShouldUpdateVisibleRect();
-    float effectiveContentsScale();
 
     void animationStartedTimerFired();
     void requestPendingTileCreationTimerFired();
 
     bool filtersCanBeComposited(const FilterOperations&) const;
-
-#if USE(SKIA)
-    RefPtr<BitmapTexture> acquireTextureForAcceleratedBuffer(const IntSize&);
-#endif
 
     Nicosia::PlatformLayer::LayerID m_id;
     GraphicsLayerTransform m_layerTransform;
@@ -254,7 +232,6 @@ private:
     bool m_movingVisibleRect : 1;
     bool m_pendingContentsScaleAdjustment : 1;
     bool m_pendingVisibleRectAdjustment : 1;
-    bool m_shouldUpdatePlatformLayer : 1;
 
     CoordinatedGraphicsLayerClient* m_coordinator;
 
@@ -264,12 +241,9 @@ private:
     } m_needsDisplay;
     bool m_damagedRectsAreUnreliable { false };
 
-    RefPtr<Image> m_compositedImage;
-    RefPtr<NativeImage> m_compositedNativeImage;
-
     Timer m_animationStartedTimer;
     RunLoop::Timer m_requestPendingTileCreationTimer;
-    Nicosia::Animations m_animations;
+    TextureMapperAnimations m_animations;
     MonotonicTime m_lastAnimationStartTime;
 
     struct {
@@ -278,15 +252,21 @@ private:
         Nicosia::CompositionLayer::LayerState::RepaintCounter repaintCounter;
         Nicosia::CompositionLayer::LayerState::DebugBorder debugBorder;
         bool performLayerSync { false };
-        bool contentLayerUpdated { false };
-
-        RefPtr<Nicosia::BackingStore> backingStore;
-        RefPtr<Nicosia::ContentLayer> contentLayer;
-        RefPtr<Nicosia::ImageBacking> imageBacking;
-        RefPtr<Nicosia::AnimatedBackingStoreClient> animatedBackingStoreClient;
     } m_nicosia;
 
-    RefPtr<AnimatedBackingStoreHost> m_animatedBackingStoreHost;
+    RefPtr<CoordinatedBackingStoreProxy> m_backingStore;
+    RefPtr<CoordinatedAnimatedBackingStoreClient> m_animatedBackingStoreClient;
+
+    RefPtr<NativeImage> m_pendingContentsImage;
+    struct {
+        RefPtr<CoordinatedImageBackingStore> store;
+        bool isVisible { false };
+    } m_imageBacking;
+
+    RefPtr<TextureMapperPlatformLayerProxy> m_contentsLayer;
+    bool m_contentsLayerNeedsUpdate { false };
+    bool m_contentsLayerUpdated { false };
+
     RefPtr<CoordinatedGraphicsLayer> m_backdropLayer;
 };
 

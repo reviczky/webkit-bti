@@ -38,24 +38,19 @@
 #include <wtf/WeakPtr.h>
 
 namespace WebKit {
-class RemoteLegacyCDMFactoryProxy;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLegacyCDMFactoryProxy> : std::true_type { };
-}
-
-namespace WebKit {
 
 class RemoteLegacyCDMSessionProxy;
 class RemoteLegacyCDMProxy;
 struct RemoteLegacyCDMConfiguration;
 
-class RemoteLegacyCDMFactoryProxy final : public IPC::MessageReceiver {
+class RemoteLegacyCDMFactoryProxy final : public RefCounted<RemoteLegacyCDMFactoryProxy>, public IPC::MessageReceiver {
     WTF_MAKE_TZONE_ALLOCATED(RemoteLegacyCDMFactoryProxy);
 public:
-    RemoteLegacyCDMFactoryProxy(GPUConnectionToWebProcess&);
+    static Ref<RemoteLegacyCDMFactoryProxy> create(GPUConnectionToWebProcess& gpuConnectionToWebProcess)
+    {
+        return adoptRef(*new RemoteLegacyCDMFactoryProxy(gpuConnectionToWebProcess));
+    }
+
     virtual ~RemoteLegacyCDMFactoryProxy();
 
     void clear();
@@ -77,19 +72,22 @@ public:
     RefPtr<GPUConnectionToWebProcess> gpuConnectionToWebProcess() { return m_gpuConnectionToWebProcess.get(); }
 
     bool allowsExitUnderMemoryPressure() const;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const;
 #endif
 
 private:
+    RemoteLegacyCDMFactoryProxy(GPUConnectionToWebProcess&);
+
     friend class GPUProcessConnection;
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
 
     // Messages
-    void createCDM(const String& keySystem, std::optional<WebCore::MediaPlayerIdentifier>&&, CompletionHandler<void(RemoteLegacyCDMIdentifier&&)>&&);
+    void createCDM(const String& keySystem, std::optional<WebCore::MediaPlayerIdentifier>&&, CompletionHandler<void(std::optional<RemoteLegacyCDMIdentifier>&&)>&&);
     void supportsKeySystem(const String& keySystem, std::optional<String> mimeType, CompletionHandler<void(bool)>&&);
 
     WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;

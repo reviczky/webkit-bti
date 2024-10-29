@@ -230,7 +230,7 @@ void BBQJIT::emitModOrDiv(Value& lhs, Location lhsLocation, Value& rhs, Location
     auto lhsArg = Value::pinned(argType, lhsLocation);
     auto rhsArg = Value::pinned(argType, rhsLocation);
     consume(result);
-    emitCCall(modOrDiv, Vector<Value> { lhsArg, rhsArg }, result);
+    emitCCall(modOrDiv, ArgumentList { lhsArg, rhsArg }, result);
 }
 
 #define PREPARE_FOR_SHIFT
@@ -353,6 +353,7 @@ void BBQJIT::emitCCall(Func function, const Vector<Value, N>& arguments, Value& 
     case TypeKind::Arrayref:
     case TypeKind::Structref:
     case TypeKind::Funcref:
+    case TypeKind::Exn:
     case TypeKind::Externref:
     case TypeKind::Eqref:
     case TypeKind::Anyref:
@@ -400,4 +401,4 @@ void BBQJIT::emitCCall(Func function, const Vector<Value, N>& arguments, Value& 
 } } } // namespace JSC::Wasm::BBQJITImpl
 
 #endif // USE(JSVALUE32_64)
-#endif // ENABLE(WEBASSEMBLY_OMGJIT)
+#endif // ENABLE(WEBASSEMBLY_BBQJIT)

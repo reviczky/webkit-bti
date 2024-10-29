@@ -102,7 +102,7 @@ struct ScrollRectToVisibleOptions;
 enum class DateComponentsType : uint8_t;
 
 enum class AXIDType { };
-using AXID = LegacyNullableObjectIdentifier<AXIDType>;
+using AXID = ObjectIdentifier<AXIDType>;
 
 enum class AXAncestorFlag : uint8_t {
     // When the flags aren't initialized, it means the object hasn't been inserted into the tree,
@@ -213,10 +213,7 @@ enum class AccessibilityRole : uint8_t {
     RowHeader,
     Row,
     RowGroup,
-    RubyBase,
-    RubyBlock,
     RubyInline,
-    RubyRun,
     RubyText,
     ScrollArea,
     ScrollBar,
@@ -454,14 +451,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "Row"_s;
     case AccessibilityRole::RowGroup:
         return "RowGroup"_s;
-    case AccessibilityRole::RubyBase:
-        return "RubyBase"_s;
-    case AccessibilityRole::RubyBlock:
-        return "RubyBlock"_s;
     case AccessibilityRole::RubyInline:
         return "RubyInline"_s;
-    case AccessibilityRole::RubyRun:
-        return "RubyRun"_s;
     case AccessibilityRole::RubyText:
         return "RubyText"_s;
     case AccessibilityRole::ScrollArea:
@@ -640,17 +631,17 @@ enum class AccessibilityTextOperationType {
     Replace,
     Capitalize,
     Lowercase,
-    Uppercase
+    Uppercase,
+    ReplacePreserveCase
 };
+
+enum class AccessibilityTextOperationSmartReplace : bool { No, Yes };
 
 struct AccessibilityTextOperation {
     Vector<SimpleRange> textRanges; // text on which perform the operation.
-    AccessibilityTextOperationType type;
-    String replacementText; // For type = replace.
-
-    AccessibilityTextOperation()
-        : type(AccessibilityTextOperationType::Select)
-    { }
+    AccessibilityTextOperationType type { AccessibilityTextOperationType::Select };
+    Vector<String> replacementStrings; // For type = Replace, ReplacePreserveCase.
+    AccessibilityTextOperationSmartReplace smartReplace { AccessibilityTextOperationSmartReplace::Yes };
 };
 
 enum class AccessibilityOrientation {
@@ -673,7 +664,7 @@ struct TextUnderElementMode {
     bool considerHiddenState { true };
     bool inHiddenSubtree { false };
     TrimWhitespace trimWhitespace { TrimWhitespace::Yes };
-    Node* ignoredChildNode { nullptr };
+    CheckedPtr<Node> ignoredChildNode { nullptr };
 
     bool isHidden() { return considerHiddenState && inHiddenSubtree; }
 };
@@ -710,7 +701,7 @@ enum class AXRelationType : uint8_t {
     OwnedBy,
     OwnerFor,
 };
-using AXRelations = HashMap<AXRelationType, ListHashSet<AXID>, DefaultHash<uint8_t>, WTF::UnsignedWithZeroKeyHashTraits<uint8_t>>;
+using AXRelations = UncheckedKeyHashMap<AXRelationType, ListHashSet<AXID>, DefaultHash<uint8_t>, WTF::UnsignedWithZeroKeyHashTraits<uint8_t>>;
 
 enum class SpinButtonType : bool {
     // The spin button is standalone. It has no separate controls, and should receive and perform actions itself.
@@ -742,8 +733,8 @@ public:
     virtual String dbg() const = 0;
 
     void setObjectID(AXID axID) { m_id = axID; }
-    AXID objectID() const { return m_id; }
-    virtual AXID treeID() const = 0;
+    std::optional<AXID> objectID() const { return m_id; }
+    virtual std::optional<AXID> treeID() const = 0;
     virtual ProcessID processID() const = 0;
 
     // When the corresponding WebCore object that this accessible object
@@ -817,7 +808,7 @@ public:
     virtual bool isRowHeader() const { return false; }
     bool isTableCellInSameRowGroup(AXCoreObject*);
     bool isTableCellInSameColGroup(AXCoreObject*);
-    virtual AXID rowGroupAncestorID() const { return { }; }
+    virtual std::optional<AXID> rowGroupAncestorID() const { return std::nullopt; }
     virtual String cellScope() const { return { }; }
     // Returns the start location and row span of the cell.
     virtual std::pair<unsigned, unsigned> rowIndexRange() const = 0;
@@ -874,7 +865,7 @@ public:
     bool isButton() const;
     virtual bool isMeter() const = 0;
 
-    virtual HashMap<String, AXEditingStyleValueVariant> resolvedEditingStyles() const = 0;
+    virtual UncheckedKeyHashMap<String, AXEditingStyleValueVariant> resolvedEditingStyles() const = 0;
 
     bool isListItem() const { return roleValue() == AccessibilityRole::ListItem; }
     bool isCheckboxOrRadio() const { return isCheckbox() || isRadioButton(); }
@@ -919,7 +910,9 @@ public:
 
     virtual bool hasBoldFont() const = 0;
     virtual bool hasItalicFont() const = 0;
-    virtual Vector<CharacterRange> spellCheckerResultRanges() const = 0;
+
+    // Returns all ranges of misspellings contained within the object.
+    virtual Vector<AXTextMarkerRange> misspellingRanges() const = 0;
     virtual std::optional<SimpleRange> misspellingRange(const SimpleRange& start, AccessibilitySearchDirection) const = 0;
     virtual std::optional<SimpleRange> visibleCharacterRange() const = 0;
     virtual bool hasPlainText() const = 0;
@@ -948,7 +941,7 @@ public:
     virtual Node* node() const = 0;
     virtual RenderObject* renderer() const = 0;
 
-    virtual bool accessibilityIsIgnored() const = 0;
+    virtual bool isIgnored() const = 0;
 
     virtual unsigned blockquoteLevel() const = 0;
     virtual unsigned headingLevel() const = 0;
@@ -1035,7 +1028,7 @@ public:
     virtual RemoteAXObjectRef remoteParentObject() const = 0;
 #endif
     virtual AXCoreObject* parentObject() const = 0;
-    virtual AXCoreObject* parentObjectUnignored() const = 0;
+    virtual AXCoreObject* parentObjectUnignored() const;
 
     virtual AccessibilityChildrenVector findMatchingObjects(AccessibilitySearchCriteria&&) = 0;
     virtual bool isDescendantOfRole(AccessibilityRole) const = 0;
@@ -1186,9 +1179,36 @@ public:
     virtual void increment() = 0;
     virtual void decrement() = 0;
 
+    // When ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE) is true, this returns ignored children.
+    // When it is not, it returns unignored children. After ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+    // is the default, we should rename this function to childrenIncludingIgnored, and all callers
+    // should be audited to either use that, or unignoredChildren.
     virtual const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) = 0;
-    Vector<AXID> childrenIDs(bool updateChildrenIfNecessary = true);
+
+    const AccessibilityChildrenVector& childrenIncludingIgnored(bool updateChildrenIfNeeded = true)
+    {
+        return children(updateChildrenIfNeeded);
+    };
+#if ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+    // FIXME: Tables returning true here is a problem for ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE), as we need ignored table rows for text marker APIs.
+    bool onlyAddsUnignoredChildren() const { return isTable() || isTableColumn() || roleValue() == AccessibilityRole::TableHeaderContainer; }
+    virtual AccessibilityChildrenVector unignoredChildren(bool updateChildrenIfNeeded = true);
+#else
+    const AccessibilityChildrenVector& unignoredChildren(bool updateChildrenIfNeeded = true) { return children(updateChildrenIfNeeded); }
+#endif // ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+
+    // When ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE) is true, this returns IDs of ignored children.
+    // When it is not, it returns IDs of unignored children. After ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+    // is the default, we should rename this function to childrenIDsIncludingIgnored, as that is what all
+    // callers will expect at the time this comment was written.
+    Vector<AXID> childrenIDs(bool updateChildrenIfNeeded = true);
     virtual void updateChildrenIfNecessary() = 0;
+    AXCoreObject* nextInPreOrder(bool updateChildrenIfNeeded, AXCoreObject& stayWithin);
+    AXCoreObject* nextSiblingIncludingIgnored(bool updateChildrenIfNeeded) const;
+    // In some contexts, we may have already computed the unignored parent for `this`, so take that as an optional
+    // parameter. If nullptr, we will compute it inside the function.
+    AXCoreObject* nextUnignoredSibling(bool updateChildrenIfNeeded, AXCoreObject* unignoredParent = nullptr) const;
+    AXCoreObject* nextUnignoredSiblingOrParent() const;
     virtual void detachFromParent() = 0;
     virtual bool isDetachedFromParent() = 0;
 
@@ -1369,7 +1389,7 @@ public:
 
 protected:
     AXCoreObject() = default;
-    explicit AXCoreObject(AXID axID)
+    explicit AXCoreObject(std::optional<AXID> axID)
         : m_id(axID)
     { }
 
@@ -1378,7 +1398,7 @@ private:
     virtual void detachRemoteParts(AccessibilityDetachmentType) = 0;
     virtual void detachPlatformWrapper(AccessibilityDetachmentType) = 0;
 
-    AXID m_id;
+    Markable<AXID> m_id;
 #if PLATFORM(COCOA)
     RetainPtr<WebAccessibilityObjectWrapper> m_wrapper;
 #elif PLATFORM(WIN)
@@ -1392,8 +1412,8 @@ private:
 
 inline Vector<AXID> axIDs(const AXCoreObject::AccessibilityChildrenVector& objects)
 {
-    return objects.map([] (const auto& object) {
-        return object ? object->objectID() : AXID();
+    return WTF::map(objects, [](auto& object) {
+        return *object->objectID();
     });
 }
 
@@ -1456,9 +1476,9 @@ inline void AXCoreObject::detachWrapper(AccessibilityDetachmentType detachmentTy
     m_wrapper = nullptr;
 }
 
-inline Vector<AXID> AXCoreObject::childrenIDs(bool updateChildrenIfNecessary)
+inline Vector<AXID> AXCoreObject::childrenIDs(bool updateChildrenIfNeeded)
 {
-    return axIDs(children(updateChildrenIfNecessary));
+    return axIDs(children(updateChildrenIfNeeded));
 }
 
 namespace Accessibility {
@@ -1550,9 +1570,9 @@ T* exposedTableAncestor(const T& object, bool includeSelf = false)
 }
 
 template<typename T, typename F>
-T* findChild(T& object, F&& matches)
+T* findUnignoredChild(T& object, F&& matches)
 {
-    for (auto child : object.children()) {
+    for (auto child : object.unignoredChildren()) {
         if (matches(child))
             return downcast<T>(child.get());
     }
@@ -1570,14 +1590,14 @@ void enumerateAncestors(const T& object, bool includeSelf, const F& lambda)
 }
 
 template<typename T, typename F>
-void enumerateDescendants(T& object, bool includeSelf, const F& lambda)
+void enumerateUnignoredDescendants(T& object, bool includeSelf, const F& lambda)
 {
     if (includeSelf)
         lambda(object);
 
-    for (const auto& child : object.children()) {
+    for (const auto& child : object.unignoredChildren()) {
         if (child)
-            enumerateDescendants(*child, true, lambda);
+            enumerateUnignoredDescendants(*child, true, lambda);
     }
 }
 
@@ -1597,11 +1617,11 @@ template<typename U> inline void performFunctionOnMainThread(U&& lambda)
 
 template<typename T, typename U> inline T retrieveValueFromMainThread(U&& lambda)
 {
-    T value;
+    std::optional<T> value;
     callOnMainThreadAndWait([&value, &lambda] {
         value = lambda();
     });
-    return value;
+    return *value;
 }
 
 #if PLATFORM(COCOA)

@@ -108,13 +108,13 @@ public:
     static bool isAccessibilityIsolatedTreeEnabled() { return shared().m_accessibilityIsolatedTree; }
 #endif
 
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    static void setAccessibilityThreadTextApisEnabled(bool isEnabled) { shared().m_accessibilityThreadTextApis = isEnabled; }
+    static bool accessibilityThreadTextApisEnabled() { return shared().m_accessibilityThreadTextApis; }
+#endif
+
     static void setArePDFImagesEnabled(bool isEnabled) { shared().m_arePDFImagesEnabled = isEnabled; }
     static bool arePDFImagesEnabled() { return shared().m_arePDFImagesEnabled; }
-
-#if ENABLE(WEBM_FORMAT_READER)
-    static void setWebMFormatReaderEnabled(bool isEnabled) { shared().m_webMFormatReaderEnabled = isEnabled; }
-    static bool webMFormatReaderEnabled() { return shared().m_webMFormatReaderEnabled; }
-#endif
 
 #if ENABLE(MEDIA_SOURCE)
     static void setWebMParserEnabled(bool isEnabled) { shared().m_webMParserEnabled = isEnabled; }
@@ -191,11 +191,11 @@ private:
     bool m_accessibilityIsolatedTree { false };
 #endif
 
-    bool m_arePDFImagesEnabled { true };
-
-#if ENABLE(WEBM_FORMAT_READER)
-    bool m_webMFormatReaderEnabled { false };
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    bool m_accessibilityThreadTextApis { false };
 #endif
+
+    bool m_arePDFImagesEnabled { true };
 
 #if ENABLE(MEDIA_SOURCE)
     bool m_webMParserEnabled { false };

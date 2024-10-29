@@ -32,6 +32,7 @@
 
 #include "AnimationMalloc.h"
 #include "AnimationUtilities.h"
+#include "BlockEllipsis.h"
 #include "CSSCustomPropertyValue.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSPropertyBlendingClient.h"
@@ -395,13 +396,6 @@ static inline DisplayType blendFunc(DisplayType from, DisplayType to, const CSSP
     if (context.progress >= 1)
         return to;
     return from == DisplayType::None ? to : from;
-}
-
-static inline TextUnderlineOffset blendFunc(const TextUnderlineOffset& from, const TextUnderlineOffset& to, const CSSPropertyBlendingContext& context)
-{
-    if (from.isLength() && to.isLength())
-        return TextUnderlineOffset::createWithLength(blendFunc(from.lengthValue(), to.lengthValue(), context));
-    return TextUnderlineOffset::createWithAuto();
 }
 
 static inline LengthBox blendFunc(const LengthBox& from, const LengthBox& to, const CSSPropertyBlendingContext& context, ValueRange valueRange = ValueRange::NonNegative)
@@ -1023,8 +1017,8 @@ private:
     {
         auto fromLengthPoint = value(from);
         auto toLengthPoint = value(to);
-        return lengthsRequireBlendingForAccumulativeIteration(fromLengthPoint.x(), toLengthPoint.x())
-            || lengthsRequireBlendingForAccumulativeIteration(fromLengthPoint.y(), toLengthPoint.y());
+        return lengthsRequireBlendingForAccumulativeIteration(fromLengthPoint.x, toLengthPoint.x)
+            || lengthsRequireBlendingForAccumulativeIteration(fromLengthPoint.y, toLengthPoint.y);
     }
 
     void blend(RenderStyle& destination, const RenderStyle& from, const RenderStyle& to, const CSSPropertyBlendingContext& context) const final
@@ -1054,7 +1048,7 @@ private:
         auto valueFrom = value(from);
         auto valueTo = value(to);
 
-        return !valueFrom.x().isAuto() && !valueTo.x().isAuto() && !valueFrom.x().isNormal() && !valueTo.x().isNormal();
+        return !valueFrom.x.isAuto() && !valueTo.x.isAuto() && !valueFrom.x.isNormal() && !valueTo.x.isNormal();
     }
 };
 
@@ -2816,6 +2810,47 @@ private:
 };
 
 
+class PropertyWrapperTextUnderlineOffset final : public PropertyWrapperGetter<TextUnderlineOffset> {
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(Animation);
+public:
+    PropertyWrapperTextUnderlineOffset()
+        : PropertyWrapperGetter(CSSPropertyTextUnderlineOffset, &RenderStyle::textUnderlineOffset)
+    {
+    }
+
+private:
+    bool canInterpolate(const RenderStyle& from, const RenderStyle& to, CompositeOperation) const final
+    {
+        auto fromTextUnderlineOffset = from.textUnderlineOffset();
+        auto toTextUnderlineOffset = to.textUnderlineOffset();
+        if (fromTextUnderlineOffset.isAuto() || toTextUnderlineOffset.isAuto())
+            return false;
+
+        auto fromValue = fromTextUnderlineOffset.resolve(from.computedFontSize());
+        auto toValue = toTextUnderlineOffset.resolve(to.computedFontSize());
+        return fromValue != toValue;
+    }
+
+    void blend(RenderStyle& destination, const RenderStyle& from, const RenderStyle& to, const CSSPropertyBlendingContext& context) const final
+    {
+        auto blendedTextUnderlineOffset = [&]() -> TextUnderlineOffset {
+            if (context.isDiscrete)
+                return (!context.progress ? from : to).textUnderlineOffset();
+
+            auto fromTextUnderlineOffset = from.textUnderlineOffset();
+            auto toTextUnderlineOffset = to.textUnderlineOffset();
+
+            auto fromValue = fromTextUnderlineOffset.resolve(from.computedFontSize());
+            auto toValue = toTextUnderlineOffset.resolve(to.computedFontSize());
+
+            auto blendedValue = blendFunc(fromValue, toValue, context);
+            return TextUnderlineOffset::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, maxValueForCssLength), LengthType::Fixed));
+        };
+
+        destination.setTextUnderlineOffset(blendedTextUnderlineOffset());
+    }
+};
+
 
 class PropertyWrapperTextDecorationThickness final : public PropertyWrapperGetter<TextDecorationThickness> {
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(Animation);
@@ -2851,7 +2886,7 @@ private:
             auto toValue = toTextDecorationThickness.resolve(to.computedFontSize(), to.metricsOfPrimaryFont());
 
             auto blendedValue = blendFunc(fromValue, toValue, context);
-            return TextDecorationThickness::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Fixed));
+            return TextDecorationThickness::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, maxValueForCssLength), LengthType::Fixed));
         };
 
         destination.setTextDecorationThickness(blendedTextDecorationThickness());
@@ -3885,7 +3920,6 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new PropertyWrapperStyleColor(CSSPropertyStrokeColor, &RenderStyle::strokeColor, &RenderStyle::setStrokeColor),
 
         new PropertyWrapperBaselineShift,
-        new PropertyWrapper<SVGLengthValue>(CSSPropertyKerning, &RenderStyle::kerning, &RenderStyle::setKerning),
 #if ENABLE(VARIATION_FONTS)
         new DiscretePropertyWrapper<FontOpticalSizing>(CSSPropertyFontOpticalSizing, &RenderStyle::fontOpticalSizing, &RenderStyle::setFontOpticalSizing),
         new PropertyWrapperFontVariationSettings,
@@ -3895,7 +3929,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new PropertyWrapper<FontSelectionValue>(CSSPropertyFontStretch, &RenderStyle::fontStretch, &RenderStyle::setFontStretch),
         new PropertyWrapperFontStyle,
         new PropertyWrapperTextDecorationThickness,
-        new PropertyWrapper<TextUnderlineOffset>(CSSPropertyTextUnderlineOffset, &RenderStyle::textUnderlineOffset, &RenderStyle::setTextUnderlineOffset),
+        new PropertyWrapperTextUnderlineOffset,
         new PropertyWrapperVisitedAffectedStyleColor(CSSPropertyTextDecorationColor, &RenderStyle::textDecorationColor, &RenderStyle::setTextDecorationColor, &RenderStyle::visitedLinkTextDecorationColor, &RenderStyle::setVisitedLinkTextDecorationColor),
 
         new LengthPropertyWrapper(CSSPropertyFlexBasis, &RenderStyle::flexBasis, &RenderStyle::setFlexBasis, { LengthPropertyWrapper::Flags::IsLengthPercentage, LengthPropertyWrapper::Flags::NegativeLengthsAreInvalid }),
@@ -3975,6 +4009,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<Resize>(CSSPropertyResize, &RenderStyle::resize, &RenderStyle::setResize),
         new DiscretePropertyWrapper<RubyPosition>(CSSPropertyRubyPosition, &RenderStyle::rubyPosition, &RenderStyle::setRubyPosition),
         new DiscretePropertyWrapper<RubyAlign>(CSSPropertyRubyAlign, &RenderStyle::rubyAlign, &RenderStyle::setRubyAlign),
+        new DiscretePropertyWrapper<RubyOverhang>(CSSPropertyRubyOverhang, &RenderStyle::rubyOverhang, &RenderStyle::setRubyOverhang),
         new DiscretePropertyWrapper<TableLayoutType>(CSSPropertyTableLayout, &RenderStyle::tableLayout, &RenderStyle::setTableLayout),
         new DiscretePropertyWrapper<TextAlignMode>(CSSPropertyTextAlign, &RenderStyle::textAlign, &RenderStyle::setTextAlign),
         new DiscretePropertyWrapper<TextAlignLast>(CSSPropertyTextAlignLast, &RenderStyle::textAlignLast, &RenderStyle::setTextAlignLast),
@@ -4060,10 +4095,13 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<ScrollSnapStop>(CSSPropertyScrollSnapStop, &RenderStyle::scrollSnapStop, &RenderStyle::setScrollSnapStop),
         new DiscretePropertyWrapper<ScrollSnapType>(CSSPropertyScrollSnapType, &RenderStyle::scrollSnapType, &RenderStyle::setScrollSnapType),
         new DiscretePropertyWrapper<const Vector<Style::ScopedName>&>(CSSPropertyViewTransitionClass, &RenderStyle::viewTransitionClasses, &RenderStyle::setViewTransitionClasses),
-        new DiscretePropertyWrapper<std::optional<Style::ScopedName>>(CSSPropertyViewTransitionName, &RenderStyle::viewTransitionName, &RenderStyle::setViewTransitionName),
+        new DiscretePropertyWrapper<Style::ViewTransitionName>(CSSPropertyViewTransitionName, &RenderStyle::viewTransitionName, &RenderStyle::setViewTransitionName),
         new DiscretePropertyWrapper<FieldSizing>(CSSPropertyFieldSizing, &RenderStyle::fieldSizing, &RenderStyle::setFieldSizing),
         new DiscretePropertyWrapper<const Vector<AtomString>&>(CSSPropertyAnchorName, &RenderStyle::anchorNames, &RenderStyle::setAnchorNames),
-        new DiscretePropertyWrapper<const AtomString&>(CSSPropertyPositionAnchor, &RenderStyle::positionAnchor, &RenderStyle::setPositionAnchor)
+        new DiscretePropertyWrapper<const AtomString&>(CSSPropertyPositionAnchor, &RenderStyle::positionAnchor, &RenderStyle::setPositionAnchor),
+        new DiscretePropertyWrapper<const BlockEllipsis&>(CSSPropertyBlockEllipsis, &RenderStyle::blockEllipsis, &RenderStyle::setBlockEllipsis),
+        new DiscretePropertyWrapper<size_t>(CSSPropertyMaxLines, &RenderStyle::maxLines, &RenderStyle::setMaxLines),
+        new DiscretePropertyWrapper<OverflowContinue>(CSSPropertyContinue, &RenderStyle::overflowContinue, &RenderStyle::setOverflowContinue)
     };
     const unsigned animatableLonghandPropertiesCount = std::size(animatableLonghandPropertyWrappers);
 
@@ -4076,6 +4114,14 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyWebkitMask, // for mask-position
         CSSPropertyMaskPosition,
         CSSPropertyWebkitMaskPosition,
+        CSSPropertyBorderBlock,
+        CSSPropertyBorderBlockColor,
+        CSSPropertyBorderBlockStyle,
+        CSSPropertyBorderBlockWidth,
+        CSSPropertyBorderInline,
+        CSSPropertyBorderInlineColor,
+        CSSPropertyBorderInlineStyle,
+        CSSPropertyBorderInlineWidth,
         CSSPropertyBorderTop, CSSPropertyBorderRight, CSSPropertyBorderBottom, CSSPropertyBorderLeft,
         CSSPropertyBorderBlockStart, CSSPropertyBorderBlockEnd, CSSPropertyBorderInlineStart, CSSPropertyBorderInlineEnd,
         CSSPropertyBorderColor,
@@ -4093,6 +4139,8 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyGridColumn,
         CSSPropertyGridRow,
         CSSPropertyGridTemplate,
+        CSSPropertyInsetBlock, // logical shorthand
+        CSSPropertyLineClamp,
         CSSPropertyListStyle, // for list-style-image
         CSSPropertyMargin,
         CSSPropertyMarginBlock, // logical shorthand
@@ -4170,19 +4218,10 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         // property should be animatable, make sure to file a bug.
 
         // To be fixed / untriaged:
-        case CSSPropertyBorderBlock: // logical shorthand
-        case CSSPropertyBorderBlockColor: // logical shorthand
-        case CSSPropertyBorderBlockStyle: // logical shorthand
-        case CSSPropertyBorderBlockWidth: // logical shorthand
-        case CSSPropertyBorderInline: // logical shorthand
-        case CSSPropertyBorderInlineColor: // logical shorthand
-        case CSSPropertyBorderInlineStyle: // logical shorthand
-        case CSSPropertyBorderInlineWidth: // logical shorthand
         case CSSPropertyBorderStyle:
         case CSSPropertyInlineSize:
         case CSSPropertyInputSecurity:
         case CSSPropertyInset:
-        case CSSPropertyInsetBlock:
         case CSSPropertyInsetBlockEnd:
         case CSSPropertyInsetBlockStart:
         case CSSPropertyInsetInline:
@@ -4234,6 +4273,9 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         case CSSPropertyAnimationIterationCount:
         case CSSPropertyAnimationName:
         case CSSPropertyAnimationPlayState:
+        case CSSPropertyAnimationRange:
+        case CSSPropertyAnimationRangeStart:
+        case CSSPropertyAnimationRangeEnd:
         case CSSPropertyAnimationTimeline:
         case CSSPropertyAnimationTimingFunction:
         case CSSPropertyContain:
@@ -4250,6 +4292,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         case CSSPropertySpeakAs:
         case CSSPropertyTextCombineUpright:
         case CSSPropertyTextOrientation:
+        case CSSPropertyTimelineScope:
         case CSSPropertyTransition:
         case CSSPropertyTransitionBehavior:
         case CSSPropertyTransitionDelay:
@@ -4341,7 +4384,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
             if (CSSProperty::isDescriptorOnly(property))
                 continue;
 
-            auto resolvedProperty = CSSProperty::resolveDirectionAwareProperty(property, RenderStyle::initialDirection(), RenderStyle::initialWritingMode());
+            auto resolvedProperty = CSSProperty::resolveDirectionAwareProperty(property, WritingMode());
             ASSERT_UNUSED(resolvedProperty, wrapperForProperty(resolvedProperty));
             break;
         }
@@ -4603,15 +4646,9 @@ bool CSSPropertyAnimation::propertiesEqual(const AnimatableCSSProperty& property
             return true;
         }, [&] (const AtomString& customProperty) {
             auto [aCustomPropertyValue, bCustomPropertyValue] = customPropertyValuesForBlending(customProperty, a, b);
-            if (!aCustomPropertyValue && !bCustomPropertyValue)
-                return true;
-            if (!aCustomPropertyValue || !bCustomPropertyValue)
-                return false;
-            if (std::holds_alternative<CSSCustomPropertyValue::SyntaxValueList>(aCustomPropertyValue->value()) && std::holds_alternative<CSSCustomPropertyValue::SyntaxValueList>(bCustomPropertyValue->value()))
+            if (aCustomPropertyValue && bCustomPropertyValue)
                 return aCustomPropertyValue->equals(*bCustomPropertyValue);
-            if (std::holds_alternative<CSSCustomPropertyValue::SyntaxValue>(aCustomPropertyValue->value()) && std::holds_alternative<CSSCustomPropertyValue::SyntaxValue>(bCustomPropertyValue->value()))
-                return aCustomPropertyValue->equals(*bCustomPropertyValue);
-            return false;
+            return !aCustomPropertyValue && !bCustomPropertyValue;
         }
     );
 }

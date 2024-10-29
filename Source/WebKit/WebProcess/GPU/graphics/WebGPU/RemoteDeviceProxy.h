@@ -32,7 +32,6 @@
 #include "WebGPUIdentifier.h"
 #include <WebCore/WebGPUCommandEncoderDescriptor.h>
 #include <WebCore/WebGPUDevice.h>
-#include <wtf/Deque.h>
 #include <wtf/TZoneMalloc.h>
 
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
@@ -56,6 +55,7 @@ public:
 
     RemoteAdapterProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent->root(); }
+    Ref<RemoteGPUProxy> protectedRoot() { return m_parent->root(); }
     WebGPUIdentifier backing() const { return m_backing; }
 
 private:
@@ -71,12 +71,12 @@ private:
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
     {
-        return root().streamClientConnection().send(WTFMove(message), backing());
+        return root().protectedStreamClientConnection()->send(WTFMove(message), backing());
     }
     template<typename T, typename C>
-    WARN_UNUSED_RETURN IPC::StreamClientConnection::AsyncReplyID sendWithAsyncReply(T&& message, C&& completionHandler)
+    WARN_UNUSED_RETURN std::optional<IPC::StreamClientConnection::AsyncReplyID> sendWithAsyncReply(T&& message, C&& completionHandler)
     {
-        return root().streamClientConnection().sendWithAsyncReply(WTFMove(message), completionHandler, backing());
+        return root().protectedStreamClientConnection()->sendWithAsyncReply(WTFMove(message), completionHandler, backing());
     }
 
     Ref<WebCore::WebGPU::Queue> queue() final;
@@ -114,12 +114,9 @@ private:
     void setLabelInternal(const String&) final;
     void resolveDeviceLostPromise(CompletionHandler<void(WebCore::WebGPU::DeviceLostReason)>&&) final;
 
-    Deque<CompletionHandler<void(Ref<WebCore::WebGPU::ComputePipeline>&&)>> m_createComputePipelineAsyncCallbacks;
-    Deque<CompletionHandler<void(Ref<WebCore::WebGPU::RenderPipeline>&&)>> m_createRenderPipelineAsyncCallbacks;
-    Deque<CompletionHandler<void(std::optional<WebCore::WebGPU::Error>&&)>> m_popErrorScopeCallbacks;
+    Ref<ConvertToBackingContext> protectedConvertToBackingContext() const;
 
     WebGPUIdentifier m_backing;
-    WebGPUIdentifier m_queueBacking;
     Ref<ConvertToBackingContext> m_convertToBackingContext;
     Ref<RemoteAdapterProxy> m_parent;
     Ref<RemoteQueueProxy> m_queue;

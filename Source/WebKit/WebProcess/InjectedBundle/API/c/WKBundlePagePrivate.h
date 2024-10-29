@@ -48,15 +48,12 @@ enum RenderTreeExternalRepresentationFlags {
 typedef uint32_t RenderTreeExternalRepresentationBehavior;
 
 WK_EXPORT void WKBundlePageSetDefersLoading(WKBundlePageRef page, bool defersLoading) WK_C_API_DEPRECATED;
-WK_EXPORT void WKBundlePageClearMainFrameName(WKBundlePageRef page);
 WK_EXPORT void WKBundlePageClose(WKBundlePageRef page);
 WK_EXPORT WKStringRef WKBundlePageCopyRenderTreeExternalRepresentation(WKBundlePageRef page, RenderTreeExternalRepresentationBehavior);
 WK_EXPORT WKStringRef WKBundlePageCopyRenderTreeExternalRepresentationForPrinting(WKBundlePageRef page);
 
 WK_EXPORT double WKBundlePageGetTextZoomFactor(WKBundlePageRef page);
 WK_EXPORT double WKBundlePageGetPageZoomFactor(WKBundlePageRef page);
-
-WK_EXPORT void WKBundlePageSetScaleAtOrigin(WKBundlePageRef page, double scale, WKPoint origin);
 
 WK_EXPORT void WKBundlePageForceRepaint(WKBundlePageRef page);
 WK_EXPORT void WKBundlePageFlushPendingEditorStateUpdate(WKBundlePageRef page);
@@ -123,9 +120,6 @@ enum {
 };
 
 typedef uint32_t WKEventThrottlingBehavior;
-
-// Passing null in the second parameter clears the override.
-WK_EXPORT void WKBundlePageSetEventThrottlingBehaviorOverride(WKBundlePageRef, WKEventThrottlingBehavior*);
 
 #if TARGET_OS_IPHONE
 WK_EXPORT void WKBundlePageSetUseTestingViewportConfiguration(WKBundlePageRef, bool);

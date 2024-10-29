@@ -28,27 +28,32 @@
 
 #include "CAAudioStreamDescription.h"
 #include "MediaRecorderPrivate.h"
-#include "MediaRecorderPrivateWriterCocoa.h"
+#include "MediaRecorderPrivateEncoder.h"
 #include <wtf/CheckedRef.h>
+#include <wtf/TZoneMalloc.h>
 
 using CVPixelBufferRef = struct __CVBuffer*;
 typedef const struct opaqueCMFormatDescription* CMFormatDescriptionRef;
 
 namespace WebCore {
 
+class ContentType;
+class Document;
 class MediaStreamPrivate;
 class WebAudioBufferList;
 
 class MediaRecorderPrivateAVFImpl final
     : public MediaRecorderPrivate {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(MediaRecorderPrivateAVFImpl);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(MediaRecorderPrivateAVFImpl);
 public:
     static std::unique_ptr<MediaRecorderPrivateAVFImpl> create(MediaStreamPrivate&, const MediaRecorderPrivateOptions&);
     ~MediaRecorderPrivateAVFImpl();
 
+    static bool isTypeSupported(Document&, ContentType&);
+
 private:
-    explicit MediaRecorderPrivateAVFImpl(Ref<MediaRecorderPrivateWriter>&&);
+    explicit MediaRecorderPrivateAVFImpl(Ref<MediaRecorderPrivateEncoder>&&);
 
     // MediaRecorderPrivate
     void videoFrameAvailable(VideoFrame&, VideoFrameTimeMetadata) final;
@@ -61,7 +66,7 @@ private:
     void pauseRecording(CompletionHandler<void()>&&) final;
     void resumeRecording(CompletionHandler<void()>&&) final;
 
-    Ref<MediaRecorderPrivateWriter> m_writer;
+    const Ref<MediaRecorderPrivateEncoder> m_encoder;
     RefPtr<VideoFrame> m_blackFrame;
     std::optional<CAAudioStreamDescription> m_description;
     std::unique_ptr<WebAudioBufferList> m_audioBuffer;

@@ -44,11 +44,6 @@ public:
 
     void init() final;
 
-    // FIXME: Override roleValue(), updateRole(), and updateRoleAfterChildrenCreation() because this class does not use m_role. We should fix this so behavior is unified with other AccessibilityObject subclasses.
-    AccessibilityRole roleValue() const final;
-    void updateRole() final { }
-    void updateRoleAfterChildrenCreation() final { }
-
     virtual bool isAriaTable() const { return false; }
     bool hasGridAriaRole() const;
 
@@ -85,7 +80,7 @@ public:
 
     // Cell indexes are assigned during child creation, so make sure children are up-to-date.
     void ensureCellIndexesUpToDate() { updateChildrenIfNecessary(); }
-    Vector<Vector<AXID>> cellSlots() final;
+    Vector<Vector<Markable<AXID>>> cellSlots() final;
     void setCellSlotsDirty();
 
 protected:
@@ -96,7 +91,7 @@ protected:
     AccessibilityChildrenVector m_columns;
     // 2D matrix of the cells assigned to each "slot" in this table.
     // ("Slot" as defined here: https://html.spec.whatwg.org/multipage/tables.html#concept-slots)
-    Vector<Vector<AXID>> m_cellSlots;
+    Vector<Vector<Markable<AXID>>> m_cellSlots;
 
     RefPtr<AccessibilityObject> m_headerContainer;
     bool m_isExposable;
@@ -104,12 +99,13 @@ protected:
     // Used in type checking function is<AccessibilityTable>.
     bool isAccessibilityTableInstance() const final { return true; }
 
-    bool computeAccessibilityIsIgnored() const final;
+    bool computeIsIgnored() const final;
 
     void addRow(AccessibilityTableRow&, unsigned, unsigned& maxColumnCount);
 
 private:
-    virtual bool computeIsTableExposableThroughAccessibility() const;
+    AccessibilityRole determineAccessibilityRole() final;
+    virtual bool computeIsTableExposableThroughAccessibility() const { return isDataTable(); }
     void labelText(Vector<AccessibilityText>&) const final;
     HTMLTableElement* tableElement() const;
 

@@ -103,26 +103,6 @@ BaselineUnlinkedCallLinkInfo* JIT::addUnlinkedCallLinkInfo()
     return &m_unlinkedCalls.alloc();
 }
 
-#if ENABLE(DFG_JIT)
-void JIT::emitEnterOptimizationCheck()
-{
-    if (!canBeOptimized())
-        return;
-
-    JumpList skipOptimize;
-    loadPtr(addressFor(CallFrameSlot::codeBlock), regT0);
-    skipOptimize.append(branchAdd32(Signed, TrustedImm32(Options::executionCounterIncrementForEntry()), Address(regT0, CodeBlock::offsetOfJITExecuteCounter())));
-    ASSERT(!m_bytecodeIndex.offset());
-
-    copyLLIntBaselineCalleeSavesFromFrameOrRegisterToEntryFrameCalleeSavesBuffer(vm().topEntryFrame);
-
-    callOperationNoExceptionCheck(operationOptimize, TrustedImmPtr(&vm()), m_bytecodeIndex.asBits());
-    skipOptimize.append(branchTestPtr(Zero, returnValueGPR));
-    farJump(returnValueGPR, GPRInfo::callFrameRegister);
-    skipOptimize.link(this);
-}
-#endif
-
 void JIT::emitNotifyWriteWatchpoint(GPRReg pointerToSet)
 {
     auto ok = branchTestPtr(Zero, pointerToSet);
@@ -267,7 +247,6 @@ void JIT::privateCompileMainPass()
         }
 
         switch (opcodeID) {
-        DEFINE_SLOW_OP(instanceof_custom)
         DEFINE_SLOW_OP(is_callable)
         DEFINE_SLOW_OP(is_constructor)
         DEFINE_SLOW_OP(typeof)
@@ -305,8 +284,10 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_tail_call_varargs)
         DEFINE_OP(op_tail_call_forward_arguments)
         DEFINE_OP(op_construct_varargs)
+        DEFINE_OP(op_super_construct_varargs)
         DEFINE_OP(op_catch)
         DEFINE_OP(op_construct)
+        DEFINE_OP(op_super_construct)
         DEFINE_OP(op_create_this)
         DEFINE_OP(op_to_this)
         DEFINE_OP(op_get_argument)
@@ -910,7 +891,7 @@ RefPtr<BaselineJITCode> JIT::link(LinkBuffer& patchBuffer)
             SimpleJumpTable& linkedTable = m_switchJumpTables[tableIndex];
             linkedTable.m_ctiDefault = patchBuffer.locationOf<JSSwitchPtrTag>(m_labels[bytecodeOffset + record.defaultOffset]);
             for (unsigned j = 0; j < unlinkedTable.m_branchOffsets.size(); ++j) {
-                unsigned offset = unlinkedTable.m_branchOffsets[j];
+                int32_t offset = unlinkedTable.m_branchOffsets[j];
                 linkedTable.m_ctiOffsets[j] = offset
                     ? patchBuffer.locationOf<JSSwitchPtrTag>(m_labels[bytecodeOffset + offset])
                     : linkedTable.m_ctiDefault;
@@ -923,7 +904,7 @@ RefPtr<BaselineJITCode> JIT::link(LinkBuffer& patchBuffer)
             StringJumpTable& linkedTable = m_stringSwitchJumpTables[tableIndex];
             auto ctiDefault = patchBuffer.locationOf<JSSwitchPtrTag>(m_labels[bytecodeOffset + record.defaultOffset]);
             for (auto& location : unlinkedTable.m_offsetTable.values()) {
-                unsigned offset = location.m_branchOffset;
+                int32_t offset = location.m_branchOffset;
                 linkedTable.m_ctiOffsets[location.m_indexInTable] = offset
                     ? patchBuffer.locationOf<JSSwitchPtrTag>(m_labels[bytecodeOffset + offset])
                     : ctiDefault;
@@ -1079,9 +1060,9 @@ int JIT::stackPointerOffsetFor(CodeBlock* codeBlock)
     return stackPointerOffsetFor(codeBlock->unlinkedCodeBlock());
 }
 
-HashMap<CString, Seconds> JIT::compileTimeStats()
+UncheckedKeyHashMap<CString, Seconds> JIT::compileTimeStats()
 {
-    HashMap<CString, Seconds> result;
+    UncheckedKeyHashMap<CString, Seconds> result;
     if (Options::reportTotalCompileTimes()) {
         result.add("Total Compile Time", totalCompileTime());
         result.add("Baseline Compile Time", totalBaselineCompileTime);

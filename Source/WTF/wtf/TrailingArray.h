@@ -30,6 +30,8 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WTF {
 
 // TrailingArray offers the feature trailing array in the derived class.
@@ -92,7 +94,7 @@ protected:
     // should be used as appropriate.
     struct Failable { };
     template<std::invocable<size_t> Generator>
-    explicit TrailingArray(Failable, unsigned size, Generator&& generator)
+    explicit TrailingArray(Failable, unsigned size, NOESCAPE Generator&& generator)
         : m_size(size)
     {
         static_assert(std::is_final_v<Derived>);
@@ -179,3 +181,5 @@ protected:
 } // namespace WTF
 
 using WTF::TrailingArray;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

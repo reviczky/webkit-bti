@@ -138,9 +138,18 @@ protected:
                     // At this point, Wasm::Callee would be dying (ref count is 0), but its fields are still live.
                     // And we can safely copy Wasm::IndexOrName even when any lock is held by suspended threads.
                     auto* wasmCallee = static_cast<Wasm::Callee*>(nativeCallee);
-                    stackTrace[m_depth].wasmIndexOrName = wasmCallee->indexOrName();
                     stackTrace[m_depth].wasmCompilationMode = wasmCallee->compilationMode();
+                    stackTrace[m_depth].wasmIndexOrName = wasmCallee->indexOrName();
+                    stackTrace[m_depth].callSiteIndex = m_callFrame->unsafeCallSiteIndex();
 #if ENABLE(JIT)
+                    // FIXME: We should be able to add all stack traces including inlined ones in SamplingProfiler.
+                    if (wasmCallee->compilationMode() == Wasm::CompilationMode::OMGMode) {
+                        auto* omgCallee = static_cast<const Wasm::OptimizingJITCallee*>(wasmCallee);
+                        bool isInlined = false;
+                        auto origin = omgCallee->getOrigin(stackTrace[m_depth].callSiteIndex.bits(), 0, isInlined);
+                        if (isInlined)
+                            stackTrace[m_depth].wasmIndexOrName = origin;
+                    }
                     stackTrace[m_depth].wasmPCMap = NativeCalleeRegistry::singleton().codeOriginMap(wasmCallee);
 #endif
 #endif
@@ -911,7 +920,7 @@ unsigned SamplingProfiler::StackFrame::functionStartColumn()
     return std::numeric_limits<unsigned>::max();
 }
 
-SourceID SamplingProfiler::StackFrame::sourceID()
+std::tuple<SourceProvider*, SourceID> SamplingProfiler::StackFrame::sourceProviderAndID()
 {
     switch (frameType) {
     case FrameType::Unknown:
@@ -919,16 +928,18 @@ SourceID SamplingProfiler::StackFrame::sourceID()
     case FrameType::RegExp:
     case FrameType::C:
     case FrameType::Wasm:
-        return internalSourceID;
+        return { nullptr, internalSourceID };
 
-    case FrameType::Executable:
+    case FrameType::Executable: {
         if (executable->isHostFunction())
-            return internalSourceID;
+            return { nullptr, internalSourceID };
 
-        return static_cast<ScriptExecutable*>(executable)->sourceID();
+        auto* provider = static_cast<ScriptExecutable*>(executable)->source().provider();
+        return { provider, provider->asID() };
+    }
     }
     RELEASE_ASSERT_NOT_REACHED();
-    return internalSourceID;
+    return { nullptr, internalSourceID };
 }
 
 String SamplingProfiler::StackFrame::url()
@@ -971,7 +982,7 @@ static String descriptionForLocation(SamplingProfiler::StackFrame::CodeLocation 
     if (wasmCompilationMode) {
         StringPrintStream description;
         description.print(":");
-        description.print(Wasm::makeString(wasmCompilationMode.value()));
+        description.print(wasmCompilationMode.value());
         description.print(":");
         if (wasmOffset) {
             uintptr_t offset = wasmOffset.offset();
@@ -1048,14 +1059,12 @@ static String tierName(SamplingProfiler::StackFrame& frame)
                 return Tiers::wasmllint;
             case Wasm::CompilationMode::IPIntMode:
                 return Tiers::ipint;
-            case Wasm::CompilationMode::JSEntrypointJITMode:
-            case Wasm::CompilationMode::JITLessJSEntrypointMode:
+            case Wasm::CompilationMode::JSToWasmEntrypointMode:
             case Wasm::CompilationMode::JSToWasmICMode:
             case Wasm::CompilationMode::WasmToJSMode:
                 // Just say "Wasm" for now.
                 break;
             case Wasm::CompilationMode::BBQMode:
-            case Wasm::CompilationMode::BBQForOSREntryMode:
                 return Tiers::bbq;
             case Wasm::CompilationMode::OMGMode:
             case Wasm::CompilationMode::OMGForOSREntryMode:
@@ -1085,11 +1094,19 @@ Ref<JSON::Value> SamplingProfiler::stackTracesAsJSON()
         processUnverifiedStackTraces();
     }
 
+    UncheckedKeyHashMap<SourceID, Ref<SourceProvider>> sources;
+
     auto stackFrameAsJSON = [&](StackFrame& stackFrame) {
+        auto [provider, sourceID] = stackFrame.sourceProviderAndID();
+        if (provider)
+            sources.add(sourceID, Ref { *provider });
+
         auto result = JSON::Object::create();
-        result->setDouble("sourceID"_s, stackFrame.sourceID());
+        result->setDouble("sourceID"_s, sourceID);
         result->setString("name"_s, stackFrame.displayName(m_vm));
         result->setString("location"_s, descriptionForLocation(stackFrame.semanticLocation, stackFrame.wasmCompilationMode, stackFrame.wasmOffset));
+        result->setDouble("line"_s, stackFrame.semanticLocation.lineColumn.line);
+        result->setDouble("column"_s, stackFrame.semanticLocation.lineColumn.column);
         result->setString("category"_s, tierName(stackFrame));
         uint32_t flags = 0;
         if (stackFrame.frameType == SamplingProfiler::FrameType::Executable && stackFrame.executable) {
@@ -1102,6 +1119,8 @@ Ref<JSON::Value> SamplingProfiler::stackTracesAsJSON()
             auto inliner = JSON::Object::create();
             inliner->setString("name"_s, String::fromUTF8(machineLocation->second->inferredName().span()));
             inliner->setString("location"_s, descriptionForLocation(machineLocation->first, std::nullopt, BytecodeIndex()));
+            inliner->setDouble("line"_s, machineLocation->first.lineColumn.line);
+            inliner->setDouble("column"_s, machineLocation->first.lineColumn.column);
             inliner->setString("category"_s, tierName(stackFrame));
             result->setValue("inliner"_s, WTFMove(inliner));
         }
@@ -1120,12 +1139,29 @@ Ref<JSON::Value> SamplingProfiler::stackTracesAsJSON()
         return result;
     };
 
+    auto sourceAsJSON = [&](SourceProvider& provider) {
+        auto result = JSON::Object::create();
+        result->setDouble("sourceID"_s, provider.asID());
+        if (!provider.sourceURL().isEmpty())
+            result->setString("url"_s, provider.sourceURL());
+        if (!provider.sourceURLDirective().isEmpty())
+            result->setString("sourceURL"_s, provider.sourceURLDirective());
+        if (!provider.sourceMappingURLDirective().isEmpty())
+            result->setString("sourceMappingURL"_s, provider.sourceMappingURLDirective());
+        return result;
+    };
+
     auto result = JSON::Object::create();
     result->setDouble("interval"_s, m_timingInterval.seconds());
     auto traces = JSON::Array::create();
     for (StackTrace& stackTrace : m_stackTraces)
         traces->pushValue(stackTraceAsJSON(stackTrace));
-    result->setValue("traces"_s, traces);
+    result->setValue("traces"_s, WTFMove(traces));
+
+    auto sourcesArray = JSON::Array::create();
+    for (auto& [ sourceID, sourceProvider ] : sources)
+        sourcesArray->pushValue(sourceAsJSON(sourceProvider.get()));
+    result->setValue("sources"_s, WTFMove(sourcesArray));
 
     clearData();
 
@@ -1182,7 +1218,7 @@ void SamplingProfiler::reportTopFunctions(PrintStream& out)
     }
 
     size_t totalSamples = 0;
-    HashMap<String, size_t> functionCounts;
+    UncheckedKeyHashMap<String, size_t> functionCounts;
     for (StackTrace& stackTrace : m_stackTraces) {
         if (!stackTrace.frames.size())
             continue;
@@ -1195,7 +1231,7 @@ void SamplingProfiler::reportTopFunctions(PrintStream& out)
             hash = stream.toString();
         } else
             hash = "<nil>"_s;
-        SourceID sourceID = frame.sourceID();
+        SourceID sourceID = std::get<1>(frame.sourceProviderAndID());
         if (Options::samplingProfilerIgnoreExternalSourceID()) {
             if (sourceID != internalSourceID)
                 sourceID = aggregatedExternalSourceID;
@@ -1248,8 +1284,8 @@ void SamplingProfiler::reportTopBytecodes(PrintStream& out)
     }
 
     size_t totalSamples = 0;
-    HashMap<String, size_t> bytecodeCounts;
-    HashMap<String, size_t> tierCounts;
+    UncheckedKeyHashMap<String, size_t> bytecodeCounts;
+    UncheckedKeyHashMap<String, size_t> tierCounts;
 
     auto forEachTier = [&] (auto func) {
         func(Tiers::llint);

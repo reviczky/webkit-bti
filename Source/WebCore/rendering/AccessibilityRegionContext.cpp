@@ -34,8 +34,11 @@
 #include "RenderStyleInlines.h"
 #include "RenderText.h"
 #include "RenderView.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AccessibilityRegionContext);
 
 AccessibilityRegionContext::~AccessibilityRegionContext()
 {
@@ -91,7 +94,7 @@ void AccessibilityRegionContext::takeBoundsInternal(const RenderBoxModelObject& 
 void AccessibilityRegionContext::takeBounds(const RenderText& renderText, FloatRect paintRect)
 {
     auto mappedPaintRect = enclosingIntRect(mapRect(WTFMove(paintRect)));
-    if (renderText.style().isVerticalWritingMode()) {
+    if (renderText.writingMode().isVertical()) {
         // This is a hack we shouldn't need to do, but have to for some reason because the paintRect isn't flipped.
         // For vertical text, swap the width and height, and move `y` by the line width.
         mappedPaintRect.setSize({ mappedPaintRect.height(), mappedPaintRect.width() });

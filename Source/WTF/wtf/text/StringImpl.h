@@ -22,6 +22,10 @@
 
 #pragma once
 
+#include <wtf/Compiler.h>
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #include <limits.h>
 #include <unicode/ustring.h>
 #include <wtf/ASCIICType.h>
@@ -263,8 +267,9 @@ public:
     static Ref<StringImpl> createWithoutCopying(std::span<const LChar> characters) { return characters.empty() ? Ref { *empty() } : createWithoutCopyingNonEmpty(characters); }
     ALWAYS_INLINE static Ref<StringImpl> createWithoutCopying(std::span<const char> characters) { return createWithoutCopying(byteCast<LChar>(characters)); }
 
-    WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(size_t length, LChar*&);
-    WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(size_t length, UChar*&);
+    WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(size_t length, std::span<LChar>&);
+    WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(size_t length, std::span<UChar>&);
+
     template<typename CharacterType> static RefPtr<StringImpl> tryCreateUninitialized(size_t length, CharacterType*&);
 
     static Ref<StringImpl> createByReplacingInCharacters(std::span<const LChar>, UChar target, UChar replacement, size_t indexOfFirstTargetCharacter);
@@ -551,8 +556,8 @@ private:
     template<typename CharacterType, typename Predicate> ALWAYS_INLINE Ref<StringImpl> removeCharactersImpl(std::span<const CharacterType> characters, const Predicate&);
     template<typename CharacterType, class CodeUnitPredicate> Ref<StringImpl> simplifyMatchedCharactersToSpace(CodeUnitPredicate);
     template<typename CharacterType> static Ref<StringImpl> constructInternal(StringImpl&, unsigned);
-    template<typename CharacterType> static Ref<StringImpl> createUninitializedInternal(size_t, CharacterType*&);
-    template<typename CharacterType> static Ref<StringImpl> createUninitializedInternalNonEmpty(size_t, CharacterType*&);
+    template<typename CharacterType> static Ref<StringImpl> createUninitializedInternal(size_t, std::span<CharacterType>&);
+    template<typename CharacterType> static Ref<StringImpl> createUninitializedInternalNonEmpty(size_t, std::span<CharacterType>&);
     template<typename CharacterType> static Expected<Ref<StringImpl>, UTF8ConversionError> reallocateInternal(Ref<StringImpl>&&, unsigned, CharacterType*&);
     template<typename CharacterType> static Ref<StringImpl> createInternal(std::span<const CharacterType>);
     WTF_EXPORT_PRIVATE NEVER_INLINE unsigned hashSlowCase() const;
@@ -1014,10 +1019,10 @@ ALWAYS_INLINE Ref<StringImpl> StringImpl::createSubstringSharingImpl(StringImpl&
     size_t substringSize = allocationSize<StringImpl*>(1);
     if (rep.is8Bit()) {
         if (substringSize >= allocationSize<LChar>(length))
-            return create(std::span { rep.m_data8 + offset, length });
+            return create(rep.span8().subspan(offset, length));
     } else {
         if (substringSize >= allocationSize<UChar>(length))
-            return create(std::span { rep.m_data16 + offset, length });
+            return create(rep.span16().subspan(offset, length));
     }
 
     auto* ownerRep = ((rep.bufferOwnership() == BufferSubstring) ? rep.substringBuffer() : &rep);
@@ -1025,8 +1030,8 @@ ALWAYS_INLINE Ref<StringImpl> StringImpl::createSubstringSharingImpl(StringImpl&
     // We allocate a buffer that contains both the StringImpl struct as well as the pointer to the owner string.
     auto* stringImpl = static_cast<StringImpl*>(StringImplMalloc::malloc(substringSize));
     if (rep.is8Bit())
-        return adoptRef(*new (NotNull, stringImpl) StringImpl({ rep.m_data8 + offset, length }, *ownerRep));
-    return adoptRef(*new (NotNull, stringImpl) StringImpl({ rep.m_data16 + offset, length }, *ownerRep));
+        return adoptRef(*new (NotNull, stringImpl) StringImpl(rep.span8().subspan(offset, length), *ownerRep));
+    return adoptRef(*new (NotNull, stringImpl) StringImpl(rep.span16().subspan(offset, length), *ownerRep));
 }
 
 template<typename CharacterType> ALWAYS_INLINE RefPtr<StringImpl> StringImpl::tryCreateUninitialized(size_t length, CharacterType*& output)
@@ -1338,11 +1343,11 @@ inline Ref<StringImpl> StringImpl::createByReplacingInCharacters(std::span<const
 {
     ASSERT(indexOfFirstTargetCharacter < characters.size());
     if (isLatin1(replacement)) {
-        LChar* data;
+        std::span<LChar> data;
         LChar oldChar = target;
         LChar newChar = replacement;
         auto newImpl = createUninitializedInternalNonEmpty(characters.size(), data);
-        memcpy(data, characters.data(), indexOfFirstTargetCharacter);
+        memcpySpan(data, characters.first(indexOfFirstTargetCharacter));
         for (size_t i = indexOfFirstTargetCharacter; i != characters.size(); ++i) {
             LChar character = characters[i];
             data[i] = character == oldChar ? newChar : character;
@@ -1350,19 +1355,20 @@ inline Ref<StringImpl> StringImpl::createByReplacingInCharacters(std::span<const
         return newImpl;
     }
 
-    UChar* data;
+    std::span<UChar> data;
     auto newImpl = createUninitializedInternalNonEmpty(characters.size(), data);
+    size_t i = 0;
     for (auto character : characters)
-        *data++ = character == target ? replacement : character;
+        data[i++] = character == target ? replacement : character;
     return newImpl;
 }
 
 inline Ref<StringImpl> StringImpl::createByReplacingInCharacters(std::span<const UChar> characters, UChar target, UChar replacement, size_t indexOfFirstTargetCharacter)
 {
     ASSERT(indexOfFirstTargetCharacter < characters.size());
-    UChar* data;
+    std::span<UChar> data;
     auto newImpl = createUninitializedInternalNonEmpty(characters.size(), data);
-    copyCharacters(data, characters.first(indexOfFirstTargetCharacter));
+    copyCharacters(data.data(), characters.first(indexOfFirstTargetCharacter));
     for (size_t i = indexOfFirstTargetCharacter; i != characters.size(); ++i) {
         UChar character = characters[i];
         data[i] = character == target ? replacement : character;
@@ -1447,3 +1453,5 @@ using WTF::equal;
 using WTF::isUnicodeWhitespace;
 using WTF::deprecatedIsSpaceOrNewline;
 using WTF::deprecatedIsNotSpaceOrNewline;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

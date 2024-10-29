@@ -379,6 +379,13 @@ constexpr ComponentType GetAttachmentComponentType(GLenum componentType)
     }
 }
 
+bool HasSupportedStencilBitCount(const Framebuffer *framebuffer)
+{
+    const FramebufferAttachment *stencilAttachment =
+        framebuffer ? framebuffer->getStencilOrDepthStencilAttachment() : nullptr;
+    return !stencilAttachment || stencilAttachment->getStencilSize() == 8;
+}
+
 }  // anonymous namespace
 
 bool FramebufferStatus::isComplete() const
@@ -801,25 +808,30 @@ bool FramebufferState::colorAttachmentsAreUniqueImages() const
 
 bool FramebufferState::hasDepth() const
 {
-    return (mDepthAttachment.isAttached() && mDepthAttachment.getDepthSize() > 0);
+    return mDepthAttachment.isAttached() && mDepthAttachment.getDepthSize() > 0;
 }
 
 bool FramebufferState::hasStencil() const
 {
-    return (mStencilAttachment.isAttached() && mStencilAttachment.getStencilSize() > 0);
+    return mStencilAttachment.isAttached() && mStencilAttachment.getStencilSize() > 0;
+}
+
+GLuint FramebufferState::getStencilBitCount() const
+{
+    return mStencilAttachment.isAttached() ? mStencilAttachment.getStencilSize() : 0;
 }
 
 bool FramebufferState::hasExternalTextureAttachment() const
 {
     // External textures can only be bound to color attachment 0
-    return (mColorAttachments[0].isAttached() && mColorAttachments[0].isExternalTexture());
+    return mColorAttachments[0].isAttached() && mColorAttachments[0].isExternalTexture();
 }
 
 bool FramebufferState::hasYUVAttachment() const
 {
     // The only attachments that can be YUV are external textures and surfaces, both are attached at
     // color attachment 0.
-    return (mColorAttachments[0].isAttached() && mColorAttachments[0].isYUV());
+    return mColorAttachments[0].isAttached() && mColorAttachments[0].isYUV();
 }
 
 bool FramebufferState::isMultiview() const
@@ -1339,44 +1351,6 @@ void Framebuffer::setReadBuffer(GLenum buffer)
     }
 }
 
-size_t Framebuffer::getNumColorAttachments() const
-{
-    return mState.mColorAttachments.size();
-}
-
-bool Framebuffer::hasDepth() const
-{
-    return mState.hasDepth();
-}
-
-bool Framebuffer::hasStencil() const
-{
-    return mState.hasStencil();
-}
-
-bool Framebuffer::hasExternalTextureAttachment() const
-{
-    return mState.hasExternalTextureAttachment();
-}
-
-bool Framebuffer::hasYUVAttachment() const
-{
-    return mState.hasYUVAttachment();
-}
-
-bool Framebuffer::usingExtendedDrawBuffers() const
-{
-    for (size_t drawbufferIdx = 1; drawbufferIdx < mState.mDrawBufferStates.size(); ++drawbufferIdx)
-    {
-        if (getDrawBuffer(drawbufferIdx) != nullptr)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void Framebuffer::invalidateCompletenessCache()
 {
     if (!isDefault())
@@ -1875,22 +1849,22 @@ bool Framebuffer::partialClearNeedsInit(const Context *context,
         return true;
     }
 
-    const Framebuffer *drawFramebuffer = glState.getDrawFramebuffer();
-    const FramebufferAttachment *stencilAttachment =
-        drawFramebuffer ? drawFramebuffer->getStencilOrDepthStencilAttachment() : nullptr;
-    const GLuint stencilBits    = stencilAttachment ? stencilAttachment->getStencilSize() : 0;
-    const GLuint maxStencilMask = (1 << stencilBits) - 1;
-
-    // The least significant |stencilBits| of stencil mask state specify a
-    // mask. Compare the masks for differences only in those bits, ignoring any
-    // difference in the high bits.
-    const auto &depthStencil       = glState.getDepthStencilState();
-    const GLuint differentFwdMasks = depthStencil.stencilMask ^ depthStencil.stencilWritemask;
-    const GLuint differentBackMasks =
-        depthStencil.stencilBackMask ^ depthStencil.stencilBackWritemask;
-    if (stencil && ((differentFwdMasks | differentBackMasks) & maxStencilMask) != 0)
+    if (stencil)
     {
-        return true;
+        ASSERT(HasSupportedStencilBitCount(glState.getDrawFramebuffer()));
+
+        // The least significant |stencilBits| of stencil mask state specify a
+        // mask. Compare the masks for differences only in those bits, ignoring any
+        // difference in the high bits.
+        const auto &depthStencil       = glState.getDepthStencilState();
+        const GLuint differentFwdMasks = depthStencil.stencilMask ^ depthStencil.stencilWritemask;
+        const GLuint differentBackMasks =
+            depthStencil.stencilBackMask ^ depthStencil.stencilBackWritemask;
+
+        if (((differentFwdMasks | differentBackMasks) & 0xFF) != 0)
+        {
+            return true;
+        }
     }
 
     return false;
@@ -2739,7 +2713,8 @@ angle::Result Framebuffer::ensureClearAttachmentsInitialized(const Context *cont
 
     bool color = (mask & GL_COLOR_BUFFER_BIT) != 0 && !glState.allActiveDrawBufferChannelsMasked();
     bool depth = (mask & GL_DEPTH_BUFFER_BIT) != 0 && !depthStencil.isDepthMaskedOut();
-    bool stencil = (mask & GL_STENCIL_BUFFER_BIT) != 0 && !depthStencil.isStencilMaskedOut();
+    bool stencil = (mask & GL_STENCIL_BUFFER_BIT) != 0 &&
+                   !depthStencil.isStencilMaskedOut(getStencilBitCount());
 
     if (!color && !depth && !stencil)
     {
@@ -2767,7 +2742,8 @@ angle::Result Framebuffer::ensureClearBufferAttachmentsInitialized(const Context
 {
     if (!context->isRobustResourceInitEnabled() ||
         context->getState().isRasterizerDiscardEnabled() ||
-        context->isClearBufferMaskedOut(buffer, drawbuffer) || mState.mResourceNeedsInit.none())
+        context->isClearBufferMaskedOut(buffer, drawbuffer, getStencilBitCount()) ||
+        mState.mResourceNeedsInit.none())
     {
         return angle::Result::Continue;
     }

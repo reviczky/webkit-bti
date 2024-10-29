@@ -29,6 +29,7 @@
 #include "BitmapImage.h"
 #include "BorderEdge.h"
 #include "BorderPainter.h"
+#include "BorderShape.h"
 #include "CachedImage.h"
 #include "ColorBlending.h"
 #include "Document.h"
@@ -73,7 +74,7 @@
 #include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(IOS_FAMILY)
-#include "RuntimeApplicationChecks.h"
+#include <wtf/RuntimeApplicationChecks.h>
 #endif
 
 namespace WebCore {
@@ -82,7 +83,7 @@ using namespace HTMLNames;
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderBoxModelObject);
 
-// The HashMap for storing continuation pointers.
+// The UncheckedKeyHashMap for storing continuation pointers.
 // An inline can be split with blocks occuring in between the inline content.
 // When this occurs we need a pointer to the next object. We can basically be
 // split into a sequence of inlines and blocks. The continuation will either be
@@ -133,6 +134,18 @@ static FirstLetterRemainingTextMap& firstLetterRemainingTextMap()
 {
     static NeverDestroyed<FirstLetterRemainingTextMap> map;
     return map;
+}
+
+void RenderBoxModelObject::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
+{
+    const RenderStyle* oldStyle = hasInitializedStyle() ? &style() : nullptr;
+
+    if (!style().anchorNames().isEmpty())
+        view().registerAnchor(*this);
+    else if (oldStyle && !oldStyle->anchorNames().isEmpty())
+        view().unregisterAnchor(*this);
+
+    RenderLayerModelObject::styleWillChange(diff, newStyle);
 }
 
 void RenderBoxModelObject::setSelectionState(HighlightState state)
@@ -208,8 +221,8 @@ void RenderBoxModelObject::updateFromStyle()
     setHasVisibleBoxDecorations(hasVisibleBoxDecorationStyle());
     setInline(styleToUse.isDisplayInlineType());
     setPositionState(styleToUse.position());
-    setHorizontalWritingMode(styleToUse.isHorizontalWritingMode());
-    if (styleToUse.isFlippedBlocksWritingMode())
+    setHorizontalWritingMode(styleToUse.writingMode().isHorizontal());
+    if (writingMode().isBlockFlipped())
         view().frameView().setHasFlippedBlockRenderers(true);
     setPaintContainmentApplies(shouldApplyPaintContainment());
 }
@@ -305,7 +318,7 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
 {
     // Some document types force synchronous decoding.
 #if PLATFORM(IOS_FAMILY)
-    if (IOSApplication::isIBooksStorytime())
+    if (WTF::IOSApplication::isIBooksStorytime())
         return DecodingMode::Synchronous;
 #endif
 
@@ -386,7 +399,7 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
     auto& bottom = style.bottom();
 
     auto offset = accumulateInFlowPositionOffsets(this);
-    if (top.isFixed() && bottom.isAuto() && left.isFixed() && right.isAuto() && containingBlock->style().isLeftToRightDirection()) {
+    if (top.isFixed() && bottom.isAuto() && left.isFixed() && right.isAuto() && containingBlock->writingMode().isAnyLeftToRight()) {
         offset.expand(left.value(), top.value());
         return offset;
     }
@@ -402,12 +415,12 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
             auto* renderBox = dynamicDowncast<RenderBox>(*this);
             if (!renderBox)
                 return containingBlock->availableWidth();
-            if (auto overridingContainingBlockContentWidth = renderBox->overridingContainingBlockContentWidth(containingBlock->style().writingMode()))
+            if (auto overridingContainingBlockContentWidth = renderBox->overridingContainingBlockContentWidth(containingBlock->writingMode()))
                 return overridingContainingBlockContentWidth->value_or(0_lu);
             return containingBlock->availableWidth();
         };
         if (!left.isAuto()) {
-            if (!right.isAuto() && !containingBlock->style().isLeftToRightDirection())
+            if (!right.isAuto() && !containingBlock->writingMode().isAnyLeftToRight())
                 offset.setWidth(-valueForLength(right, !right.isFixed() ? availableWidth() : 0_lu));
             else
                 offset.expand(valueForLength(left, !left.isFixed() ? availableWidth() : 0_lu), 0_lu);
@@ -471,7 +484,7 @@ LayoutPoint RenderBoxModelObject::adjustedPositionRelativeToOffsetParent(const L
             if (isOutOfFlowPositioned()) {
                 auto& outOfFlowStyle = style();
                 ASSERT(containingBlock());
-                auto isHorizontalWritingMode = containingBlock() ? containingBlock()->style().isHorizontalWritingMode() : true;
+                auto isHorizontalWritingMode = containingBlock() ? containingBlock()->writingMode().isHorizontal() : true;
                 if (!outOfFlowStyle.hasStaticInlinePosition(isHorizontalWritingMode))
                     topLeft.setX(LayoutUnit { });
                 if (!outOfFlowStyle.hasStaticBlockPosition(isHorizontalWritingMode))
@@ -693,14 +706,11 @@ InterpolationQuality RenderBoxModelObject::chooseInterpolationQuality(GraphicsCo
     return view().imageQualityController().chooseInterpolationQuality(context, const_cast<RenderBoxModelObject*>(this), image, layer, size);
 }
 
-void RenderBoxModelObject::paintMaskForTextFillBox(ImageBuffer* maskImage, const FloatRect& maskRect, const InlineIterator::InlineBoxIterator& inlineBox, const LayoutRect& scrolledPaintRect)
+void RenderBoxModelObject::paintMaskForTextFillBox(GraphicsContext& context, const FloatRect& paintRect, const InlineIterator::InlineBoxIterator& inlineBox, const LayoutRect& scrolledPaintRect)
 {
-    GraphicsContext& maskImageContext = maskImage->context();
-    maskImageContext.translate(-maskRect.location());
-
     // Now add the text to the clip. We do this by painting using a special paint phase that signals to
     // the painter it should just modify the clip.
-    PaintInfo maskInfo(maskImageContext, LayoutRect { maskRect }, PaintPhase::TextClip, PaintBehavior::ForceBlackText);
+    PaintInfo maskInfo(context, LayoutRect { paintRect }, PaintPhase::TextClip, PaintBehavior::ForceBlackText);
     if (inlineBox) {
         auto paintOffset = scrolledPaintRect.location() - toLayoutSize(LayoutPoint(inlineBox->visualRectIgnoringBlockDirection().location()));
 
@@ -863,14 +873,19 @@ bool RenderBoxModelObject::borderObscuresBackground() const
     return true;
 }
 
-RoundedRect RenderBoxModelObject::roundedContentBoxRect(const LayoutRect& borderBoxRect, bool includeLeftEdge, bool includeRightEdge) const
+BorderShape RenderBoxModelObject::borderShapeForContentClipping(const LayoutRect& borderBoxRect, bool includeLeftEdge, bool includeRightEdge) const
 {
     auto borderWidths = this->borderWidths();
     auto padding = this->padding();
-    return style().getRoundedInnerBorderFor(borderBoxRect,
-        borderWidths.top() + padding.top(), borderWidths.bottom() + padding.bottom(),
-        borderWidths.left() + padding.left(), borderWidths.right() + padding.right(),
-        includeLeftEdge, includeRightEdge);
+
+    auto contentBoxInsets = RectEdges<LayoutUnit> {
+        borderWidths.top() + padding.top(),
+        borderWidths.right() + padding.right(),
+        borderWidths.bottom() + padding.bottom(),
+        borderWidths.left() + padding.left(),
+    };
+
+    return BorderShape::shapeForBorderRect(style(), borderBoxRect, contentBoxInsets, includeLeftEdge, includeRightEdge);
 }
 
 LayoutUnit RenderBoxModelObject::containingBlockLogicalWidthForContent() const

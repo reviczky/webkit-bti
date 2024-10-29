@@ -936,6 +936,7 @@ public:
     static constexpr GCGLenum BGRA4_ANGLEX = 0x6ABC;
     static constexpr GCGLenum BGR5_A1_ANGLEX = 0x6ABD;
     static constexpr GCGLenum BGRA8_SRGB_ANGLEX = 0x6AC0;
+    static constexpr GCGLenum RGBX8_SRGB_ANGLEX = 0x6AFA;
 
     // GL_OES_depth32
     static constexpr GCGLenum DEPTH_COMPONENT32_OES = 0x81A7;
@@ -1658,13 +1659,8 @@ public:
     using SimulatedEventForTesting = GraphicsContextGLSimulatedEventForTesting;
     virtual void simulateEventForTesting(SimulatedEventForTesting) = 0;
 
-#if ENABLE(VIDEO) && USE(AVFOUNDATION)
-    // Returns interface for CV interaction if the functionality is present.
-    virtual GraphicsContextGLCV* asCV() = 0;
-#endif
 #if ENABLE(VIDEO)
-    virtual bool copyTextureFromMedia(MediaPlayer&, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY) = 0;
-    virtual bool copyTextureFromVideoFrame(VideoFrame&, PlatformGLObject /* texture */, GCGLenum /* target */, GCGLint /* level */, GCGLenum /* internalFormat */, GCGLenum /* format */, GCGLenum /* type */, bool /* premultiplyAlpha */, bool /* flipY */) { return false; }
+    virtual bool copyTextureFromVideoFrame(VideoFrame&, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum  format, GCGLenum type, bool premultiplyAlpha, bool flipY) = 0;
     WEBCORE_EXPORT virtual RefPtr<Image> videoFrameToImage(VideoFrame&);
 #endif
 

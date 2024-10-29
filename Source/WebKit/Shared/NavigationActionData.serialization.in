@@ -40,6 +40,8 @@ struct WebKit::NavigationActionData {
     bool hasOpenedFrames;
     bool openedByDOMWithOpener;
     bool hasOpener;
+    bool isPerformingHTTPFallback;
+    String openedMainFrameName;
     WebCore::SecurityOriginData requesterOrigin;
     WebCore::SecurityOriginData requesterTopOrigin;
     std::optional<WebCore::BackForwardItemIdentifier> targetBackForwardItemIdentifier;

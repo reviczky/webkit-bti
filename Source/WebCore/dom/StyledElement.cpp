@@ -177,7 +177,7 @@ void StyledElement::dirtyStyleAttribute()
 
 void StyledElement::invalidateStyleAttribute()
 {
-    if (auto* inlineStyle = this->inlineStyle()) {
+    if (RefPtr inlineStyle = this->inlineStyle()) {
         if (usesStyleBasedEditability(*inlineStyle))
             protectedDocument()->setHasElementUsingStyleBasedEditability();
     }
@@ -303,7 +303,7 @@ void StyledElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
     });
 }
 
-Attribute StyledElement::replaceURLsInAttributeValue(const Attribute& attribute, const HashMap<String, String>& replacementURLStrings) const
+Attribute StyledElement::replaceURLsInAttributeValue(const Attribute& attribute, const UncheckedKeyHashMap<String, String>& replacementURLStrings) const
 {
     if (replacementURLStrings.isEmpty())
         return attribute;

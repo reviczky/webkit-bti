@@ -23,9 +23,9 @@
 #pragma once
 
 #include "CSSCustomPropertySyntax.h"
+#include "CSSParserContext.h"
 #include "CSSParserTokenRange.h"
 #include "CSSPropertyParserHelpers.h"
-#include "CSSPropertyParserWorkerSafe.h"
 #include "StyleRuleType.h"
 #include <wtf/text/StringView.h>
 
@@ -118,9 +118,7 @@ private:
     bool consumeGridShorthand(bool important);
     bool consumeGridAreaShorthand(bool important);
 
-    bool consumePlaceContentShorthand(bool important);
-    bool consumePlaceItemsShorthand(bool important);
-    bool consumePlaceSelfShorthand(bool important);
+    bool consumeAlignShorthand(const StylePropertyShorthand&, bool important);
 
     bool consumeFont(bool important);
     bool consumeTextDecorationSkip(bool important);
@@ -148,8 +146,11 @@ private:
     bool consumeContainerShorthand(bool important);
     bool consumeContainIntrinsicSizeShorthand(bool important);
 
+    bool consumeAnimationRangeShorthand(bool important);
     bool consumeScrollTimelineShorthand(bool important);
     bool consumeViewTimelineShorthand(bool important);
+
+    bool consumeLineClampShorthand(bool important);
 
     bool consumeTextBoxShorthand(bool important);
 

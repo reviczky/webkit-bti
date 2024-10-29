@@ -269,13 +269,6 @@ public:
     const JITCodeMap& jitCodeMap();
 
     std::optional<CodeOrigin> findPC(void* pc);
-
-    // We call this when we want to reattempt compiling something with the baseline JIT. Ideally
-    // the baseline JIT would not add data to CodeBlock, but instead it would put its data into
-    // a newly created JITCode, which could be thrown away if we bail on JIT compilation. Then we
-    // would be able to get rid of this silly function.
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=159061
-    void resetBaselineJITData();
 #endif // ENABLE(JIT)
 
     void unlinkOrUpgradeIncomingCalls(VM&, CodeBlock*);
@@ -406,6 +399,8 @@ public:
         return m_argumentValueProfiles[argumentIndex];
     }
 
+    FixedVector<ArgumentValueProfile>& argumentValueProfiles() { return m_argumentValueProfiles; }
+
     ValueProfile& valueProfileForOffset(unsigned profileOffset) { return m_metadata->valueProfileForOffset(profileOffset); }
 
     ValueProfile* tryGetValueProfileForBytecodeIndex(BytecodeIndex);
@@ -471,6 +466,7 @@ public:
 #endif
 #if ASSERT_ENABLED
     bool hasIdentifier(UniquedStringImpl*);
+    bool wasDestructed();
 #endif
 
     Vector<WriteBarrier<Unknown>>& constants() { return m_constantRegisters; }
@@ -596,7 +592,7 @@ public:
         return m_unlinkedCode->llintExecuteCounter();
     }
 
-    typedef HashMap<std::tuple<StructureID, BytecodeIndex>, FixedVector<LLIntPrototypeLoadAdaptiveStructureWatchpoint>> StructureWatchpointMap;
+    typedef UncheckedKeyHashMap<std::tuple<StructureID, BytecodeIndex>, FixedVector<LLIntPrototypeLoadAdaptiveStructureWatchpoint>> StructureWatchpointMap;
     StructureWatchpointMap& llintGetByIdWatchpointMap() { return m_llintGetByIdWatchpointMap; }
 
     // Functions for controlling when tiered compilation kicks in. This
@@ -640,11 +636,7 @@ public:
 
     int32_t adjustedCounterValue(int32_t desiredThreshold);
 
-    static constexpr ptrdiff_t offsetOfJITExecuteCounter() { return OBJECT_OFFSETOF(CodeBlock, m_jitExecuteCounter) + OBJECT_OFFSETOF(BaselineExecutionCounter, m_counter); }
-    static constexpr ptrdiff_t offsetOfJITExecutionActiveThreshold() { return OBJECT_OFFSETOF(CodeBlock, m_jitExecuteCounter) + OBJECT_OFFSETOF(BaselineExecutionCounter, m_activeThreshold); }
-    static constexpr ptrdiff_t offsetOfJITExecutionTotalCount() { return OBJECT_OFFSETOF(CodeBlock, m_jitExecuteCounter) + OBJECT_OFFSETOF(BaselineExecutionCounter, m_totalCount); }
-
-    const BaselineExecutionCounter& jitExecuteCounter() const { return m_jitExecuteCounter; }
+    const BaselineExecutionCounter& baselineExecuteCounter();
 
     unsigned optimizationDelayCounter() const { return m_optimizationDelayCounter; }
 
@@ -954,6 +946,7 @@ private:
     SentinelLinkedList<CallLinkInfoBase, BasicRawSentinelNode<CallLinkInfoBase>> m_incomingCalls;
     uint16_t m_optimizationDelayCounter { 0 };
     uint16_t m_reoptimizationRetryCounter { 0 };
+    float m_previousCounter { 0 };
     StructureWatchpointMap m_llintGetByIdWatchpointMap;
     RefPtr<JSC::JITCode> m_jitCode;
 #if ENABLE(JIT)
@@ -979,10 +972,6 @@ private:
 
     WriteBarrier<CodeBlock> m_alternative;
 
-    BaselineExecutionCounter m_jitExecuteCounter;
-
-    float m_previousCounter { 0 };
-
     ApproximateTime m_creationTime;
 
     std::unique_ptr<RareData> m_rareData;
@@ -990,12 +979,12 @@ private:
 #if ASSERT_ENABLED
     Lock m_cachedIdentifierUidsLock;
     HashSet<UniquedStringImpl*> m_cachedIdentifierUids;
+    uint32_t m_magic;
 #endif
 };
 /* This check is for normal Release builds; ASSERT_ENABLED changes the size. */
 #if !ASSERT_ENABLED
-// TODO Figure out why this went up on my machine
-static_assert(sizeof(CodeBlock) <= 240, "Keep it small for memory saving");
+static_assert(sizeof(CodeBlock) <= 224, "Keep it small for memory saving");
 #endif
 
 template <typename ExecutableType>

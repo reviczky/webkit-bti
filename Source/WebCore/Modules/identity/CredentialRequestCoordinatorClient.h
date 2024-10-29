@@ -30,6 +30,7 @@
 #include "CredentialRequestCoordinator.h"
 #include "ExceptionData.h"
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
@@ -39,7 +40,7 @@ class LocalFrame;
 using DigitalCredentialRequestCompletionHandler = CompletionHandler<void(WebCore::ExceptionData&&)>;
 
 class CredentialRequestCoordinatorClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(CredentialRequestCoordinatorClient);
     WTF_MAKE_NONCOPYABLE(CredentialRequestCoordinatorClient);
 
 public:

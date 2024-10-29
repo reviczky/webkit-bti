@@ -874,6 +874,7 @@ public:
     void convertToNewArrayBuffer(FrozenValue* immutableButterfly);
     void convertToNewArrayWithSize();
     void convertToNewArrayWithConstantSize(Graph&, uint32_t);
+    void convertToNewArrayWithSizeAndStructure(Graph&, RegisteredStructure);
 
     void convertToNewBoundFunction(FrozenValue*);
 
@@ -2012,7 +2013,7 @@ public:
         case GetArgument:
         case ArrayPop:
         case ArrayPush:
-        case ArraySpliceExtract:
+        case ArraySplice:
         case RegExpExec:
         case RegExpExecNonGlobalOrSticky:
         case RegExpTest:
@@ -2330,6 +2331,7 @@ public:
         case NewStringObject:
         case NewMap:
         case NewSet:
+        case NewArrayWithSizeAndStructure:
             return true;
         default:
             return false;

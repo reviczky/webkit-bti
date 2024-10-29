@@ -2,7 +2,7 @@
  * Copyright (C) 2000 Lars Knoll (knoll@kde.org)
  *           (C) 2000 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Graham Dennis (graham.dennis@gmail.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -47,12 +47,16 @@
 #include "StyleSelfAlignmentData.h"
 #include "StyleTextEdge.h"
 #include "TextDecorationThickness.h"
+#include "TimelineScope.h"
 #include "TouchAction.h"
 #include "TranslateTransformOperation.h"
 #include "ViewTimeline.h"
+#include "ViewTransitionName.h"
+#include "WebAnimationTypes.h"
 #include "WillChangeData.h"
 #include <memory>
 #include <wtf/DataRef.h>
+#include <wtf/Markable.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
 
@@ -104,14 +108,18 @@ public:
 
     OptionSet<Containment> usedContain() const;
 
-    std::optional<Length> containIntrinsicWidth;
-    std::optional<Length> containIntrinsicHeight;
+    Markable<Length> containIntrinsicWidth;
+    Markable<Length> containIntrinsicHeight;
 
     Length perspectiveOriginX;
     Length perspectiveOriginY;
 
     LineClampValue lineClamp; // An Apple extension.
     
+    size_t maxLines { 0 };
+
+    OverflowContinue overflowContinue { OverflowContinue::Auto };
+
     IntSize initialLetter;
 
     DataRef<StyleMarqueeData> marquee; // Marquee properties
@@ -156,7 +164,7 @@ public:
     Vector<Style::ScopedName> containerNames;
 
     Vector<Style::ScopedName> viewTransitionClasses;
-    std::optional<Style::ScopedName> viewTransitionName;
+    Style::ViewTransitionName viewTransitionName;
 
     GapLength columnGap;
     GapLength rowGap;
@@ -185,6 +193,8 @@ public:
     Vector<ViewTimelineInsets> viewTimelineInsets;
     Vector<AtomString> viewTimelineNames;
 
+    TimelineScope timelineScope;
+
     ScrollbarGutter scrollbarGutter;
     ScrollbarWidth scrollbarWidth { ScrollbarWidth::Auto };
 
@@ -193,8 +203,6 @@ public:
 
     Vector<AtomString> anchorNames;
     AtomString positionAnchor;
-
-    TextEdge textBoxEdge;
 
     std::optional<Length> blockStepSize;
     unsigned blockStepInsert : 1; // BlockStepInsert

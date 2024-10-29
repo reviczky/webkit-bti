@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2004, 2005, 2006, 2008 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005, 2006, 2007 Rob Buis <buis@kde.org>
- * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2024 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,6 +26,7 @@
 #include "SVGNames.h"
 #include "SVGPathByteStream.h"
 #include "SVGPathSegImpl.h"
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -88,7 +89,7 @@ public:
         return SVGPathSegCurvetoQuadraticSmoothRel::create(x, y);
     }
 
-    float getTotalLength() const final;
+    ExceptionOr<float> getTotalLength() const final;
     ExceptionOr<Ref<SVGPoint>> getPointAtLength(float distance) const final;
     unsigned getPathSegAtLength(float distance) const;
 
@@ -105,10 +106,10 @@ public:
 
     static void clearCache();
 
+    using PropertyRegistry = SVGPropertyOwnerRegistry<SVGPathElement, SVGGeometryElement>;
+
 private:
     SVGPathElement(const QualifiedName&, Document&);
-
-    using PropertyRegistry = SVGPropertyOwnerRegistry<SVGPathElement, SVGGeometryElement>;
 
     void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason) final;
     void svgAttributeChanged(const QualifiedName&) final;

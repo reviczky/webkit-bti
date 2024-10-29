@@ -41,6 +41,7 @@
 
 namespace WebCore {
 class Document;
+class LocalFrame;
 }
 
 namespace WebKit {
@@ -65,7 +66,7 @@ public:
 
     void didBeginTextSearchOperation();
 
-    void addLayerForFindOverlay(CompletionHandler<void(WebCore::PlatformLayerIdentifier)>&&);
+    void addLayerForFindOverlay(CompletionHandler<void(std::optional<WebCore::PlatformLayerIdentifier>)>&&);
     void removeLayerForFindOverlay();
 
     void requestRectForFoundTextRange(const WebFoundTextRange&, CompletionHandler<void(WebCore::FloatRect)>&&);
@@ -83,8 +84,13 @@ private:
     void setTextIndicatorWithRange(const WebCore::SimpleRange&);
     void flashTextIndicatorAndUpdateSelectionWithRange(const WebCore::SimpleRange&);
 
+    RefPtr<WebCore::TextIndicator> createTextIndicatorForPDFRange(const WebFoundTextRange&, WebCore::TextIndicatorPresentationTransition);
+    void setTextIndicatorWithPDFRange(const WebFoundTextRange&);
+    void flashTextIndicatorAndUpdateSelectionWithPDFRange(const WebFoundTextRange&);
+
     Vector<WebCore::FloatRect> rectsForTextMatchesInRect(WebCore::IntRect clipRect);
 
+    WebCore::LocalFrame* frameForFoundTextRange(const WebFoundTextRange&) const;
     WebCore::Document* documentForFoundTextRange(const WebFoundTextRange&) const;
     std::optional<WebCore::SimpleRange> simpleRangeFromFoundTextRange(WebFoundTextRange);
 

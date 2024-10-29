@@ -28,10 +28,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <wtf/text/StringView.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WTF {
 
-// SortedArrayMap is a map like HashMap, but it's read-only. It uses much less memory than HashMap.
-// It uses binary search instead of hashing, so can be outperformed by HashMap for large maps.
+// SortedArrayMap is a map like UncheckedKeyHashMap, but it's read-only. It uses much less memory than UncheckedKeyHashMap.
+// It uses binary search instead of hashing, so can be outperformed by UncheckedKeyHashMap for large maps.
 // The array passed to the constructor has std::pair elements: keys first and values second.
 // The array and the SortedArrayMap should typically both be global constant expressions.
 
@@ -53,10 +55,10 @@ public:
     constexpr SortedArrayMap(const ArrayType&);
     template<typename KeyArgument> bool contains(const KeyArgument&) const;
 
-    // FIXME: To match HashMap interface better, would be nice to get the default value from traits.
+    // FIXME: To match UncheckedKeyHashMap interface better, would be nice to get the default value from traits.
     template<typename KeyArgument> ValueType get(const KeyArgument&, const ValueType& defaultValue = { }) const;
 
-    // FIXME: Should add a function like this to HashMap so the two kinds of maps are more interchangable.
+    // FIXME: Should add a function like this to UncheckedKeyHashMap so the two kinds of maps are more interchangable.
     template<typename KeyArgument> const ValueType* tryGet(const KeyArgument&) const;
 
 private:
@@ -159,7 +161,7 @@ template<ASCIISubset subset, typename CharacterType> constexpr std::make_unsigne
 template<ASCIISubset subset> template<unsigned size> constexpr ComparableASCIISubsetLiteral<subset>::ComparableASCIISubsetLiteral(const char (&characters)[size])
     : literal { ASCIILiteral::fromLiteralUnsafe(characters) }
 {
-    ASSERT_UNDER_CONSTEXPR_CONTEXT(allOfConstExpr(&characters[0], &characters[size - 1], [] (char character) {
+    ASSERT_UNDER_CONSTEXPR_CONTEXT(std::all_of(&characters[0], &characters[size - 1], [] (char character) {
         return isInSubset<subset>(character);
     }));
     ASSERT_UNDER_CONSTEXPR_CONTEXT(!characters[size - 1]);
@@ -168,7 +170,7 @@ template<ASCIISubset subset> template<unsigned size> constexpr ComparableASCIISu
 template<typename ArrayType> constexpr SortedArrayMap<ArrayType>::SortedArrayMap(const ArrayType& array)
     : m_array { array }
 {
-    ASSERT_UNDER_CONSTEXPR_CONTEXT(isSortedConstExpr(std::begin(array), std::end(array), [] (auto& a, auto b) {
+    ASSERT_UNDER_CONSTEXPR_CONTEXT(std::is_sorted(std::begin(array), std::end(array), [] (auto& a, auto b) {
         return a.first < b.first;
     }));
 }
@@ -210,7 +212,7 @@ template<typename ArrayType> template<typename KeyArgument> inline bool SortedAr
 template<typename ArrayType> constexpr SortedArraySet<ArrayType>::SortedArraySet(const ArrayType& array)
     : m_array { array }
 {
-    ASSERT_UNDER_CONSTEXPR_CONTEXT(isSortedConstExpr(std::begin(array), std::end(array)));
+    ASSERT_UNDER_CONSTEXPR_CONTEXT(std::is_sorted(std::begin(array), std::end(array)));
 }
 
 template<typename ArrayType> template<typename KeyArgument> inline bool SortedArraySet<ArrayType>::contains(const KeyArgument& key) const
@@ -424,3 +426,5 @@ using WTF::PackedLettersLiteral;
 using WTF::SortedArrayMap;
 using WTF::SortedArraySet;
 using WTF::makeOptionalFromPointer;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

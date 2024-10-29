@@ -51,20 +51,20 @@ RemoteFaceDetector::RemoteFaceDetector(Ref<WebCore::ShapeDetection::FaceDetector
 
 RemoteFaceDetector::~RemoteFaceDetector() = default;
 
-const SharedPreferencesForWebProcess& RemoteFaceDetector::sharedPreferencesForWebProcess() const
+std::optional<SharedPreferencesForWebProcess> RemoteFaceDetector::sharedPreferencesForWebProcess() const
 {
-    return m_backend->sharedPreferencesForWebProcess();
+    return protectedBackend()->sharedPreferencesForWebProcess();
 }
 
 void RemoteFaceDetector::detect(WebCore::RenderingResourceIdentifier renderingResourceIdentifier, CompletionHandler<void(Vector<WebCore::ShapeDetection::DetectedFace>&&)>&& completionHandler)
 {
-    auto sourceImage = m_backend->imageBuffer(renderingResourceIdentifier);
+    auto sourceImage = protectedBackend()->imageBuffer(renderingResourceIdentifier);
     if (!sourceImage) {
         completionHandler({ });
         return;
     }
 
-    m_backing->detect(*sourceImage, WTFMove(completionHandler));
+    Ref { m_backing }->detect(*sourceImage, WTFMove(completionHandler));
 }
 
 } // namespace WebKit

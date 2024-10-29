@@ -49,7 +49,7 @@ class UniqueIDBDatabaseConnection : public RefCounted<UniqueIDBDatabaseConnectio
 public:
     static Ref<UniqueIDBDatabaseConnection> create(UniqueIDBDatabase&, ServerOpenDBRequest&);
 
-    ~UniqueIDBDatabaseConnection();
+    WEBCORE_EXPORT ~UniqueIDBDatabaseConnection();
 
     const IDBResourceIdentifier& openRequestIdentifier() { return m_openRequestIdentifier; }
     UniqueIDBDatabase* database() { return m_database.get(); }
@@ -95,7 +95,7 @@ private:
 
     bool m_closePending { false };
 
-    HashMap<IDBResourceIdentifier, RefPtr<UniqueIDBDatabaseTransaction>> m_transactionMap;
+    UncheckedKeyHashMap<IDBResourceIdentifier, RefPtr<UniqueIDBDatabaseTransaction>> m_transactionMap;
 };
 
 } // namespace IDBServer

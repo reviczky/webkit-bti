@@ -64,8 +64,8 @@ bool RemoteConnectionToTarget::setup(bool isAutomaticInspection, bool automatica
         m_connected = true;
 
         RemoteInspector::singleton().updateTargetListing(targetIdentifier);
-    } else if (auto* automationTarget = dynamicDowncast<RemoteAutomationTarget>(*target)) {
-        automationTarget->connect(*this);
+    } else if (auto* inspectionTarget = dynamicDowncast<RemoteAutomationTarget>(*target)) {
+        inspectionTarget->connect(*this);
         m_connected = true;
 
         RemoteInspector::singleton().updateTargetListing(targetIdentifier);

@@ -77,11 +77,11 @@ public:
     void drawIndirect(Buffer& indirectBuffer, uint64_t indirectOffset);
     void endOcclusionQuery();
     void endPass();
-    void executeBundles(Vector<std::reference_wrapper<RenderBundle>>&& bundles);
+    void executeBundles(Vector<Ref<RenderBundle>>&& bundles);
     void insertDebugMarker(String&& markerLabel);
     void popDebugGroup();
     void pushDebugGroup(String&& groupLabel);
-    void setBindGroup(uint32_t groupIndex, const BindGroup&, uint32_t dynamicOffsetCount, const uint32_t* dynamicOffsets);
+    void setBindGroup(uint32_t groupIndex, const BindGroup&, std::span<const uint32_t>);
     void setBlendConstant(const WGPUColor&);
     void setIndexBuffer(Buffer&, WGPUIndexFormat, uint64_t offset, uint64_t size);
     void setPipeline(const RenderPipeline&);
@@ -97,7 +97,9 @@ public:
     bool colorDepthStencilTargetsMatch(const RenderPipeline&) const;
     id<MTLRenderCommandEncoder> renderCommandEncoder() const;
     void makeInvalid(NSString* = nil);
-    CommandEncoder& parentEncoder();
+    CommandEncoder& parentEncoder() const { return m_parentEncoder; }
+    Ref<CommandEncoder> protectedParentEncoder() const { return m_parentEncoder; }
+
     bool setCommandEncoder(const BindGroupEntryUsageData::Resource&);
     void addResourceToActiveResources(const BindGroupEntryUsageData::Resource&, id<MTLResource>, OptionSet<BindGroupEntryUsage>);
     static double quantizedDepthValue(double, WGPUTextureFormat);
@@ -114,7 +116,9 @@ private:
     RenderPassEncoder(CommandEncoder&, Device&, NSString*);
 
     bool validatePopDebugGroup() const;
+    bool executePreDrawCommands(uint32_t firstInstance, uint32_t instanceCount, bool passWasSplit = false);
     bool executePreDrawCommands(bool passWasSplit = false, const Buffer* = nullptr);
+    bool executePreDrawCommands(uint32_t firstInstance, uint32_t instanceCount, bool passWasSplit = false, const Buffer* = nullptr);
     bool runIndexBufferValidation(uint32_t firstInstance, uint32_t instanceCount);
     void runVertexBufferValidation(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
     void addResourceToActiveResources(const TextureView&, OptionSet<BindGroupEntryUsage>);
@@ -132,6 +136,7 @@ private:
     std::pair<uint32_t, uint32_t> computeMininumVertexInstanceCount() const;
     std::pair<id<MTLBuffer>, uint64_t> clampIndirectIndexBufferToValidValues(Buffer&, MTLIndexType, NSUInteger indexBufferOffsetInBytes, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount, bool& splitEncoder);
     id<MTLBuffer> clampIndirectBufferToValidValues(Buffer&, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount, bool& splitEncoder);
+    void setCachedRenderPassState(id<MTLRenderCommandEncoder>);
 
     id<MTLRenderCommandEncoder> m_renderCommandEncoder { nil };
 
@@ -170,7 +175,6 @@ private:
     uint32_t m_renderTargetHeight { 0 };
     uint32_t m_rasterSampleCount { 1 };
     NSMutableDictionary<NSNumber*, TextureAndClearColor*> *m_attachmentsToClear { nil };
-    NSMutableDictionary<NSNumber*, TextureAndClearColor*> *m_allColorAttachments { nil };
     id<MTLTexture> m_depthStencilAttachmentToClear { nil };
     WGPURenderPassDescriptor m_descriptor;
     Vector<WGPURenderPassColorAttachment> m_descriptorColorAttachments;

@@ -30,13 +30,17 @@
 #include "CSSPaintImageValue.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSValuePool.h"
+#include "ComputedStyleDependencies.h"
 #include "PaintWorkletGlobalScope.h"
 #include "PropertyAllowlist.h"
 #include "StyleBuilderGenerated.h"
 #include "StylePropertyShorthand.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 namespace Style {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PropertyCascade);
 
 PropertyCascade::PropertyCascade(const MatchResult& matchResult, CascadeLevel maximumCascadeLevel, OptionSet<PropertyType> includedProperties, const HashSet<AnimatableCSSProperty>* animatedProperties)
     : m_matchResult(matchResult)
@@ -157,14 +161,14 @@ bool PropertyCascade::hasProperty(CSSPropertyID propertyID, const CSSValue& valu
     return propertyID < firstLogicalGroupProperty ? hasNormalProperty(propertyID) : hasLogicalGroupProperty(propertyID);
 }
 
-const PropertyCascade::Property* PropertyCascade::lastPropertyResolvingLogicalPropertyPair(CSSPropertyID propertyID, TextDirection direction, WritingMode writingMode) const
+const PropertyCascade::Property* PropertyCascade::lastPropertyResolvingLogicalPropertyPair(CSSPropertyID propertyID, WritingMode writingMode) const
 {
     ASSERT(CSSProperty::isInLogicalPropertyGroup(propertyID));
 
     auto pairID = [&] {
         if (CSSProperty::isDirectionAwareProperty(propertyID))
-            return CSSProperty::resolveDirectionAwareProperty(propertyID, direction, writingMode);
-        return CSSProperty::unresolvePhysicalProperty(propertyID, direction, writingMode);
+            return CSSProperty::resolveDirectionAwareProperty(propertyID, writingMode);
+        return CSSProperty::unresolvePhysicalProperty(propertyID, writingMode);
     }();
     ASSERT(pairID != CSSPropertyInvalid);
 

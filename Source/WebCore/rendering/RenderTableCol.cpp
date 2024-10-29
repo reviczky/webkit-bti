@@ -102,8 +102,12 @@ void RenderTableCol::updateFromElement()
         m_span = tc.span();
     } else
         m_span = 1;
-    if (m_span != oldSpan && hasInitializedStyle() && parent())
-        setNeedsLayoutAndPrefWidthsRecalc();
+    if (m_span != oldSpan && parent()) {
+        if (hasInitializedStyle())
+            setNeedsLayoutAndPrefWidthsRecalc();
+        if (RenderTable* table = this->table())
+            table->invalidateColumns();
+    }
 }
 
 void RenderTableCol::insertedIntoTree()
@@ -212,24 +216,24 @@ RenderTableCol* RenderTableCol::nextColumn() const
 
 const BorderValue& RenderTableCol::borderAdjoiningCellStartBorder() const
 {
-    return style().borderStart();
+    return style().borderStart(table()->style());
 }
 
 const BorderValue& RenderTableCol::borderAdjoiningCellEndBorder() const
 {
-    return style().borderEnd();
+    return style().borderEnd(table()->style());
 }
 
 const BorderValue& RenderTableCol::borderAdjoiningCellBefore(const RenderTableCell& cell) const
 {
     ASSERT_UNUSED(cell, table()->colElement(cell.col() + cell.colSpan()) == this);
-    return style().borderStart();
+    return style().borderStart(table()->style());
 }
 
 const BorderValue& RenderTableCol::borderAdjoiningCellAfter(const RenderTableCell& cell) const
 {
     ASSERT_UNUSED(cell, table()->colElement(cell.col() - 1) == this);
-    return style().borderEnd();
+    return style().borderEnd(table()->style());
 }
 
 LayoutUnit RenderTableCol::offsetLeft() const

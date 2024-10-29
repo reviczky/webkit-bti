@@ -45,6 +45,7 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
     float secondFloat;
     TextUnderlineOffset offset;
     TextEdge lineFitEdge;
+    BlockEllipsis blockEllipsis;
     void* customPropertyDataRefs[1];
     unsigned bitfields[7];
     short pagedMediaShorts[2];
@@ -86,6 +87,7 @@ StyleRareInheritedData::StyleRareInheritedData()
     , indent(RenderStyle::initialTextIndent())
     , usedZoom(RenderStyle::initialZoom())
     , textUnderlineOffset(RenderStyle::initialTextUnderlineOffset())
+    , textBoxEdge(RenderStyle::initialTextBoxEdge())
     , lineFitEdge(RenderStyle::initialLineFitEdge())
     , miterLimit(RenderStyle::initialStrokeMiterLimit())
     , customProperties(StyleCustomPropertyData::create())
@@ -105,7 +107,6 @@ StyleRareInheritedData::StyleRareInheritedData()
     , textEmphasisFill(static_cast<unsigned>(TextEmphasisFill::Filled))
     , textEmphasisMark(static_cast<unsigned>(TextEmphasisMark::None))
     , textEmphasisPosition(static_cast<unsigned>(RenderStyle::initialTextEmphasisPosition().toRaw()))
-    , textOrientation(static_cast<unsigned>(TextOrientation::Mixed))
     , textIndentLine(static_cast<unsigned>(RenderStyle::initialTextIndentLine()))
     , textIndentType(static_cast<unsigned>(RenderStyle::initialTextIndentType()))
     , textUnderlinePosition(static_cast<unsigned>(RenderStyle::initialTextUnderlinePosition().toRaw()))
@@ -122,6 +123,7 @@ StyleRareInheritedData::StyleRareInheritedData()
     , textDecorationSkipInk(static_cast<unsigned>(RenderStyle::initialTextDecorationSkipInk()))
     , rubyPosition(static_cast<unsigned>(RenderStyle::initialRubyPosition()))
     , rubyAlign(static_cast<unsigned>(RenderStyle::initialRubyAlign()))
+    , rubyOverhang(static_cast<unsigned>(RenderStyle::initialRubyOverhang()))
     , textZoom(static_cast<unsigned>(RenderStyle::initialTextZoom()))
 #if PLATFORM(IOS_FAMILY)
     , touchCalloutEnabled(RenderStyle::initialTouchCalloutEnabled())
@@ -158,6 +160,7 @@ StyleRareInheritedData::StyleRareInheritedData()
 #endif
     , listStyleType(RenderStyle::initialListStyleType())
     , scrollbarColor(RenderStyle::initialScrollbarColor())
+    , blockEllipsis(RenderStyle::initialBlockEllipsis())
 {
 }
 
@@ -179,6 +182,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , indent(o.indent)
     , usedZoom(o.usedZoom)
     , textUnderlineOffset(o.textUnderlineOffset)
+    , textBoxEdge(o.textBoxEdge)
     , lineFitEdge(o.lineFitEdge)
     , miterLimit(o.miterLimit)
     , customProperties(o.customProperties)
@@ -199,7 +203,6 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , textEmphasisFill(o.textEmphasisFill)
     , textEmphasisMark(o.textEmphasisMark)
     , textEmphasisPosition(o.textEmphasisPosition)
-    , textOrientation(o.textOrientation)
     , textIndentLine(o.textIndentLine)
     , textIndentType(o.textIndentType)
     , textUnderlinePosition(o.textUnderlinePosition)
@@ -216,6 +219,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , textDecorationSkipInk(o.textDecorationSkipInk)
     , rubyPosition(o.rubyPosition)
     , rubyAlign(o.rubyAlign)
+    , rubyOverhang(o.rubyOverhang)
     , textZoom(o.textZoom)
 #if PLATFORM(IOS_FAMILY)
     , touchCalloutEnabled(o.touchCalloutEnabled)
@@ -259,6 +263,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
 #endif
     , listStyleType(o.listStyleType)
     , scrollbarColor(o.scrollbarColor)
+    , blockEllipsis(o.blockEllipsis)
 {
     ASSERT(o == *this, "StyleRareInheritedData should be properly copied.");
 }
@@ -290,6 +295,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && indent == o.indent
         && usedZoom == o.usedZoom
         && textUnderlineOffset == o.textUnderlineOffset
+        && textBoxEdge == o.textBoxEdge
         && lineFitEdge == o.lineFitEdge
         && wordSpacing == o.wordSpacing
         && miterLimit == o.miterLimit
@@ -322,7 +328,6 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && textEmphasisFill == o.textEmphasisFill
         && textEmphasisMark == o.textEmphasisMark
         && textEmphasisPosition == o.textEmphasisPosition
-        && textOrientation == o.textOrientation
         && textIndentLine == o.textIndentLine
         && textIndentType == o.textIndentType
         && lineBoxContain == o.lineBoxContain
@@ -343,6 +348,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && textUnderlinePosition == o.textUnderlinePosition
         && rubyPosition == o.rubyPosition
         && rubyAlign == o.rubyAlign
+        && rubyOverhang == o.rubyOverhang
         && textZoom == o.textZoom
         && lineSnap == o.lineSnap
         && lineAlign == o.lineAlign
@@ -368,7 +374,8 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && customProperties == o.customProperties
         && arePointingToEqualData(listStyleImage, o.listStyleImage)
         && listStyleType == o.listStyleType
-        && scrollbarColor == o.scrollbarColor;
+        && scrollbarColor == o.scrollbarColor
+        && blockEllipsis == o.blockEllipsis;
 }
 
 bool StyleRareInheritedData::hasColorFilters() const

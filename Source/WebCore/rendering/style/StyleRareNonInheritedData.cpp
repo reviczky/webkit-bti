@@ -42,6 +42,8 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , perspectiveOriginX(RenderStyle::initialPerspectiveOriginX())
     , perspectiveOriginY(RenderStyle::initialPerspectiveOriginY())
     , lineClamp(RenderStyle::initialLineClamp())
+    , maxLines(RenderStyle::initialMaxLines())
+    , overflowContinue(RenderStyle::initialOverflowContinue())
     , initialLetter(RenderStyle::initialInitialLetter())
     , marquee(StyleMarqueeData::create())
     , backdropFilter(StyleFilterData::create())
@@ -69,7 +71,7 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , offsetPath(RenderStyle::initialOffsetPath())
     // containerNames
     , viewTransitionClasses(RenderStyle::initialViewTransitionClasses())
-    // viewTransitionName
+    , viewTransitionName(RenderStyle::initialViewTransitionName())
     , columnGap(RenderStyle::initialColumnGap())
     , rowGap(RenderStyle::initialRowGap())
     , offsetDistance(RenderStyle::initialOffsetDistance())
@@ -90,13 +92,13 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     // viewTimelineAxes
     // viewTimelineInsets
     // viewTimelineNames
+    // timelineScope
     // scrollbarGutter
     , scrollbarWidth(RenderStyle::initialScrollbarWidth())
     , zoom(RenderStyle::initialZoom())
     , pseudoElementNameArgument(nullAtom())
     , anchorNames(RenderStyle::initialAnchorNames())
     , positionAnchor(RenderStyle::initialPositionAnchor())
-    , textBoxEdge(RenderStyle::initialTextBoxEdge())
     , blockStepSize(RenderStyle::initialBlockStepSize())
     , blockStepInsert(static_cast<unsigned>(RenderStyle::initialBlockStepInsert()))
     , overscrollBehaviorX(static_cast<unsigned>(RenderStyle::initialOverscrollBehaviorX()))
@@ -136,6 +138,8 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , perspectiveOriginX(o.perspectiveOriginX)
     , perspectiveOriginY(o.perspectiveOriginY)
     , lineClamp(o.lineClamp)
+    , maxLines(o.maxLines)
+    , overflowContinue(o.overflowContinue)
     , initialLetter(o.initialLetter)
     , marquee(o.marquee)
     , backdropFilter(o.backdropFilter)
@@ -184,13 +188,13 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , viewTimelineAxes(o.viewTimelineAxes)
     , viewTimelineInsets(o.viewTimelineInsets)
     , viewTimelineNames(o.viewTimelineNames)
+    , timelineScope(o.timelineScope)
     , scrollbarGutter(o.scrollbarGutter)
     , scrollbarWidth(o.scrollbarWidth)
     , zoom(o.zoom)
     , pseudoElementNameArgument(o.pseudoElementNameArgument)
     , anchorNames(o.anchorNames)
     , positionAnchor(o.positionAnchor)
-    , textBoxEdge(o.textBoxEdge)
     , blockStepSize(o.blockStepSize)
     , blockStepInsert(o.blockStepInsert)
     , overscrollBehaviorX(o.overscrollBehaviorX)
@@ -237,6 +241,8 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && perspectiveOriginX == o.perspectiveOriginX
         && perspectiveOriginY == o.perspectiveOriginY
         && lineClamp == o.lineClamp
+        && maxLines == o.maxLines
+        && overflowContinue == o.overflowContinue
         && initialLetter == o.initialLetter
         && marquee == o.marquee
         && backdropFilter == o.backdropFilter
@@ -283,6 +289,7 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && viewTimelineAxes == o.viewTimelineAxes
         && viewTimelineInsets == o.viewTimelineInsets
         && viewTimelineNames == o.viewTimelineNames
+        && timelineScope == o.timelineScope
         && scrollbarGutter == o.scrollbarGutter
         && scrollbarWidth == o.scrollbarWidth
         && zoom == o.zoom
@@ -315,7 +322,6 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && containIntrinsicHeightType == o.containIntrinsicHeightType
         && containerType == o.containerType
         && textBoxTrim == o.textBoxTrim
-        && textBoxEdge == o.textBoxEdge
         && overflowAnchor == o.overflowAnchor
         && viewTransitionClasses == o.viewTransitionClasses
         && viewTransitionName == o.viewTransitionName
@@ -331,10 +337,10 @@ OptionSet<Containment> StyleRareNonInheritedData::usedContain() const
     case ContainerType::Normal:
         break;
     case ContainerType::Size:
-        containment.add({ Containment::Layout, Containment::Style, Containment::Size });
+        containment.add({ Containment::Style, Containment::Size });
         break;
     case ContainerType::InlineSize:
-        containment.add({ Containment::Layout, Containment::Style, Containment::InlineSize });
+        containment.add({ Containment::Style, Containment::InlineSize });
         break;
     };
 

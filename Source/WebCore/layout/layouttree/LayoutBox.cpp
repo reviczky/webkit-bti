@@ -42,6 +42,8 @@ namespace WebCore {
 namespace Layout {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Box);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(BoxBoxRareData, Box::BoxRareData);
+
 
 Box::Box(ElementAttributes&& elementAttributes, RenderStyle&& style, std::unique_ptr<RenderStyle>&& firstLineStyle, OptionSet<BaseTypeFlag> baseTypeFlags)
     : m_nodeType(elementAttributes.nodeType)
@@ -314,7 +316,7 @@ bool Box::isRubyAnnotationBox() const
 
 bool Box::isInterlinearRubyAnnotationBox() const
 {
-    return isRubyAnnotationBox() && m_style.rubyPosition() != RubyPosition::InterCharacter;
+    return isRubyAnnotationBox() && !m_style.isInterCharacterRubyPosition();
 }
 
 bool Box::isInternalRubyBox() const
@@ -362,6 +364,14 @@ const Box* Box::nextInFlowOrFloatingSibling() const
     return nextSibling;
 }
 
+const Box* Box::nextOutOfFlowSibling() const
+{
+    auto* nextSibling = this->nextSibling();
+    while (nextSibling && !nextSibling->isOutOfFlowPositioned())
+        nextSibling = nextSibling->nextSibling();
+    return nextSibling;
+}
+
 const Box* Box::previousInFlowSibling() const
 {
     auto* previousSibling = this->previousSibling();
@@ -374,6 +384,14 @@ const Box* Box::previousInFlowOrFloatingSibling() const
 {
     auto* previousSibling = this->previousSibling();
     while (previousSibling && !(previousSibling->isInFlow() || previousSibling->isFloatingPositioned()))
+        previousSibling = previousSibling->previousSibling();
+    return previousSibling;
+}
+
+const Box* Box::previousOutOfFlowSibling() const
+{
+    auto* previousSibling = this->previousSibling();
+    while (previousSibling && !previousSibling->isOutOfFlowPositioned())
         previousSibling = previousSibling->previousSibling();
     return previousSibling;
 }

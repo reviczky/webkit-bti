@@ -52,6 +52,7 @@
 #include "XMLNames.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RobinHoodHashMap.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/unicode/CharacterNames.h>
 
@@ -60,6 +61,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLTreeBuilder);
 
 using namespace ElementNames;
 using namespace HTMLNames;

@@ -152,9 +152,15 @@ void TextBoxPainter<TextBoxPath>::paint()
 }
 
 template<typename TextBoxPath>
+std::pair<unsigned, unsigned> TextBoxPainter<TextBoxPath>::selectionStartEnd() const
+{
+    return m_renderer.view().selection().rangeForTextBox(m_renderer, m_selectableRange);
+}
+
+template<typename TextBoxPath>
 MarkedText TextBoxPainter<TextBoxPath>::createMarkedTextFromSelectionInBox()
 {
-    auto [selectionStart, selectionEnd] = m_renderer.view().selection().rangeForTextBox(m_renderer, m_selectableRange);
+    auto [selectionStart, selectionEnd] = selectionStartEnd();
     if (selectionStart < selectionEnd)
         return { selectionStart, selectionEnd, MarkedText::Type::Selection };
     return { };
@@ -262,7 +268,7 @@ void TextBoxPainter<TextBoxPath>::paintForegroundAndDecorations()
     auto shouldPaintSelectionForeground = m_haveSelection && !m_useCustomUnderlines;
     auto hasTextDecoration = !m_style.textDecorationsInEffect().isEmpty();
     auto hasHighlightDecoration = m_document.hasHighlight() && !MarkedText::collectForHighlights(m_renderer, m_selectableRange, MarkedText::PaintPhase::Decoration).isEmpty();
-    auto hasMismatchingContentDirection = m_renderer.containingBlock()->style().direction() != textBox().direction();
+    auto hasMismatchingContentDirection = m_renderer.containingBlock()->writingMode().bidiDirection() != textBox().direction();
     auto hasBackwardTrunctation = m_selectableRange.truncation && hasMismatchingContentDirection;
 
     auto hasSpellingOrGrammarDecoration = [&] {
@@ -362,7 +368,7 @@ void TextBoxPainter<TextBoxPath>::paintForegroundAndDecorations()
         unsigned selectionStart = 0;
         unsigned selectionEnd = 0;
         if (m_haveSelection)
-            std::tie(selectionStart, selectionEnd) = m_renderer.view().selection().rangeForTextBox(m_renderer, m_selectableRange);
+            std::tie(selectionStart, selectionEnd) = selectionStartEnd();
 
         FloatRect textDecorationSelectionClipOutRect;
         if ((m_paintInfo.paintBehavior.contains(PaintBehavior::ExcludeSelection)) && selectionStart < selectionEnd && selectionEnd <= length) {
@@ -469,7 +475,7 @@ void TextBoxPainter<TextBoxPath>::paintBackground(unsigned startOffset, unsigned
     auto selectionTop = LineSelection::logicalTopAdjustedForPrecedingBlock(*lineBox);
     // Use same y positioning and height as for selection, so that when the selection and this subrange are on
     // the same word there are no pieces sticking out.
-    auto deltaY = LayoutUnit { m_style.isFlippedLinesWritingMode() ? selectionBottom - m_logicalRect.maxY() : m_logicalRect.y() - selectionTop };
+    auto deltaY = LayoutUnit { m_style.writingMode().isLineInverted() ? selectionBottom - m_logicalRect.maxY() : m_logicalRect.y() - selectionTop };
     auto selectionHeight = LayoutUnit { std::max(0.f, selectionBottom - selectionTop) };
     auto selectionRect = LayoutRect { LayoutUnit(m_paintRect.x()), LayoutUnit(m_paintRect.y() - deltaY), LayoutUnit(m_logicalRect.width()), selectionHeight };
     auto adjustedSelectionRect = selectionRect;
@@ -581,6 +587,22 @@ static inline OptionSet<TextDecorationLine> computedTextDecorationType(const Ren
     return textDecorations;
 }
 
+static inline const RenderStyle& decoratingBoxStyleForInlineBox(const InlineIterator::InlineBox& inlineBox, bool isFirstLine)
+{
+    if (!inlineBox.isRootInlineBox())
+        return inlineBox.style();
+    // "When specified on or propagated to a block container that establishes an inline formatting context, the decorations are propagated to an anonymous
+    // inline box that wraps all the in-flow inline-level children of the block container"
+    // https://drafts.csswg.org/css-text-decor-4/#line-decoration
+    // Sadly we don't have the concept of anonymous inline box for all inline-level chidren when content forces us to generate anonymous block containers.
+    for (const RenderElement* ancestor = &inlineBox.renderer(); ancestor; ancestor = ancestor->parent()) {
+        if (!ancestor->isAnonymous())
+            return isFirstLine ? ancestor->firstLineStyle() : ancestor->style();
+    }
+    ASSERT_NOT_REACHED();
+    return inlineBox.style();
+}
+
 static inline bool isDecoratingBoxForBackground(const InlineIterator::InlineBox& inlineBox, const RenderStyle& styleToUse)
 {
     if (auto* element = inlineBox.renderer().element(); element && (is<HTMLAnchorElement>(*element) || element->hasTagName(HTMLNames::fontTag))) {
@@ -600,20 +622,20 @@ void TextBoxPainter<TextBoxPath>::collectDecoratingBoxesForTextBox(DecoratingBox
         return;
     }
 
-    // FIXME: Vertical writing mode needs some coordinate space transformation for parent inline boxes as we rotate the content with m_paintRect (see ::paint)
-    if (ancestorInlineBox->isRootInlineBox() || !textBox->isHorizontal()) {
-        decoratingBoxList.append({
-            ancestorInlineBox,
-            m_isFirstLine ? m_renderer.firstLineStyle() : m_renderer.style(),
-            overrideDecorationStyle,
-            textBoxLocation
-        });
+    if (ancestorInlineBox->isRootInlineBox()) {
+        decoratingBoxList.append({ ancestorInlineBox, decoratingBoxStyleForInlineBox(*ancestorInlineBox, m_isFirstLine), overrideDecorationStyle, textBoxLocation });
+        return;
+    }
+
+    if (!textBox->isHorizontal()) {
+        // FIXME: Vertical writing mode needs some coordinate space transformation for parent inline boxes as we rotate the content with m_paintRect (see ::paint)
+        decoratingBoxList.append({ ancestorInlineBox, m_isFirstLine ? m_renderer.firstLineStyle() : m_renderer.style(), overrideDecorationStyle, textBoxLocation });
         return;
     }
 
     enum UseOverriderDecorationStyle : bool { No, Yes };
     auto appendIfIsDecoratingBoxForBackground = [&] (auto& inlineBox, auto useOverriderDecorationStyle) {
-        auto& style = m_isFirstLine ? inlineBox->renderer().firstLineStyle() : inlineBox->renderer().style();
+        auto& style = decoratingBoxStyleForInlineBox(*inlineBox, m_isFirstLine);
 
         auto computedDecorationStyle = [&] {
             return TextDecorationPainter::stylesForRenderer(inlineBox->renderer(), style.textDecorationsInEffect(), m_isFirstLine);
@@ -1016,6 +1038,8 @@ template<typename TextBoxPath>
 void TextBoxPainter<TextBoxPath>::paintPlatformDocumentMarkers()
 {
     auto markedTexts = MarkedText::collectForDocumentMarkers(m_renderer, m_selectableRange, MarkedText::PaintPhase::Decoration);
+    if (markedTexts.isEmpty())
+        return;
 
     auto spellingErrorStyle = m_renderer.spellingErrorPseudoStyle();
     if (spellingErrorStyle && !spellingErrorStyle->textDecorationsInEffect().isEmpty()) {
@@ -1031,8 +1055,25 @@ void TextBoxPainter<TextBoxPath>::paintPlatformDocumentMarkers()
         });
     }
 
-    for (auto& markedText : MarkedText::subdivide(markedTexts, MarkedText::OverlapStrategy::Frontmost))
-        paintPlatformDocumentMarker(markedText);
+    auto transparentContentMarkedTexts = MarkedText::collectForDraggedAndTransparentContent(DocumentMarker::Type::TransparentContent, m_renderer, m_selectableRange);
+
+    // Ensure the transparent content marked texts go first in the vector, so that they take precedence over
+    // the other marked texts when being subdivided so that they do not get painted.
+    Vector<MarkedText> allMarkedTexts;
+    allMarkedTexts.appendVector(transparentContentMarkedTexts);
+    allMarkedTexts.appendVector(markedTexts);
+
+    for (auto& markedText : MarkedText::subdivide(allMarkedTexts, MarkedText::OverlapStrategy::Frontmost)) {
+        switch (markedText.type) {
+        case MarkedText::Type::DraggedContent:
+        case MarkedText::Type::TransparentContent:
+            continue;
+
+        default:
+            paintPlatformDocumentMarker(markedText);
+            break;
+        }
+    }
 }
 
 FloatRect LegacyTextBoxPainter::calculateUnionOfAllDocumentMarkerBounds(const LegacyInlineTextBox& textBox)
@@ -1105,7 +1146,7 @@ FloatRect TextBoxPainter<TextBoxPath>::computePaintRect(const LayoutPoint& paint
 {
     FloatPoint localPaintOffset(paintOffset);
 
-    localPaintOffset.move(0, m_style.isHorizontalWritingMode() ? 0 : -m_logicalRect.height());
+    localPaintOffset.move(0, m_style.writingMode().isHorizontal() ? 0 : -m_logicalRect.height());
     auto visualRect = textBox().visualRectIgnoringBlockDirection();
     textBox().formattingContextRoot().flipForWritingMode(visualRect);
 

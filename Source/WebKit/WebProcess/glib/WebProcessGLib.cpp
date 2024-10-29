@@ -28,13 +28,14 @@
 #include "WebProcess.h"
 
 #include "Logging.h"
+#include "SystemSettingsManager.h"
 #include "WebKitWebProcessExtensionPrivate.h"
 #include "WebPage.h"
 #include "WebProcessCreationParameters.h"
 #include "WebProcessExtensionManager.h"
 
-#include <WebCore/FontRenderOptions.h>
 #include <WebCore/PlatformScreen.h>
+#include <WebCore/RenderTheme.h>
 #include <WebCore/ScreenProperties.h>
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -86,11 +87,6 @@
 #include <WebCore/AccessibilityAtspi.h>
 #endif
 
-#if PLATFORM(GTK)
-#include "GtkSettingsManagerProxy.h"
-#include <gtk/gtk.h>
-#endif
-
 #if USE(CAIRO)
 #include <WebCore/CairoUtilities.h>
 #endif
@@ -132,6 +128,8 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
     // Disable RealTimeThreads in WebProcess initially, since it depends on having a visible web page.
     RealTimeThreads::singleton().setEnabled(false);
 #endif
+
+    addSupplement<SystemSettingsManager>();
 }
 
 void WebProcess::initializePlatformDisplayIfNeeded() const
@@ -174,16 +172,9 @@ void WebProcess::initializePlatformDisplayIfNeeded() const
 void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
 #if USE(SKIA)
-#if PLATFORM(WPE)
-    bool useAcceleratedBuffers = false;
-#else
-    bool useAcceleratedBuffers = true;
-#endif
-
-    if (const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING"))
-        useAcceleratedBuffers = (enableCPURendering == "0"_s);
-
-    ProcessCapabilities::setCanUseAcceleratedBuffers(useAcceleratedBuffers);
+    const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
+    if (enableCPURendering && strcmp(enableCPURendering, "0"))
+        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -235,10 +226,6 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 
     if (parameters.disableFontHintingForTesting)
         FontRenderOptions::singleton().disableHintingForTesting();
-
-#if PLATFORM(GTK)
-    GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
-#endif
 
 #if PLATFORM(GTK)
     WebCore::setScreenProperties(parameters.screenProperties);

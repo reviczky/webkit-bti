@@ -352,6 +352,22 @@
 #define UNUSED_FUNCTION __attribute__((unused))
 #endif
 
+/* UNUSED_MEMBER_VARIABLE */
+
+#if !defined(UNUSED_MEMBER_VARIABLE)
+#define UNUSED_MEMBER_VARIABLE __attribute__((unused))
+#endif
+
+/* TRIVIAL_ABI */
+
+#if !defined(TRIVIAL_ABI)
+#if COMPILER(CLANG)
+#define TRIVIAL_ABI __attribute__((trivial_abi))
+#else
+#define TRIVIAL_ABI
+#endif
+#endif
+
 /* UNUSED_TYPE_ALIAS */
 
 #if !defined(UNUSED_TYPE_ALIAS)
@@ -529,7 +545,7 @@
     IGNORE_CLANG_STATIC_ANALYZER_WARNINGS_ATTRIBUTE("cplusplus.Move")
 
 #define SUPPRESS_UNCOUNTED_ARG \
-    IGNORE_CLANG_STATIC_ANALYZER_WARNINGS_ATTRIBUTE("alpha.webkit.UncountedCallArgsChecker")
+    IGNORE_CLANG_STATIC_ANALYZER_WARNINGS_ATTRIBUTE_ON_MEMBER("alpha.webkit.UncountedCallArgsChecker")
 
 #define SUPPRESS_UNCOUNTED_LOCAL \
     IGNORE_CLANG_STATIC_ANALYZER_WARNINGS_ATTRIBUTE("alpha.webkit.UncountedLocalVarsChecker")
@@ -545,6 +561,18 @@
 
 #define IGNORE_NULL_CHECK_WARNINGS_BEGIN IGNORE_WARNINGS_BEGIN("nonnull")
 #define IGNORE_NULL_CHECK_WARNINGS_END IGNORE_WARNINGS_END
+
+/* NOESCAPE */
+/* This attribute promises that a function argumemnt will only be used for the duration of the function,
+   and not stored to the heap or in a global state for later use. The compiler does not verify this claim. */
+
+#if !defined(NOESCAPE) && defined(__has_cpp_attribute)
+#if __has_cpp_attribute(clang::noescape)
+#define NOESCAPE [[clang::noescape]]
+#else
+#define NOESCAPE
+#endif
+#endif
 
 /* NO_UNIQUE_ADDRESS */
 
@@ -568,4 +596,48 @@
 
 #if !defined(TLS_MODEL_INITIAL_EXEC)
 #define TLS_MODEL_INITIAL_EXEC
+#endif
+
+/* UNREACHABLE */
+
+#if COMPILER(MSVC)
+#define WTF_UNREACHABLE(...) __assume(0)
+#else
+#define WTF_UNREACHABLE(...) __builtin_unreachable();
+#endif
+
+/* WTF_ALLOW_UNSAFE_BUFFER_USAGE */
+
+#if COMPILER(CLANG)
+#define WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN \
+    _Pragma("clang diagnostic push") \
+    _Pragma("clang diagnostic ignored \"-Wunsafe-buffer-usage\"")
+
+#define WTF_ALLOW_UNSAFE_BUFFER_USAGE_END \
+    _Pragma("clang diagnostic pop")
+#else
+#define WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+#define WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+#endif
+
+/* WTF_UNSAFE_BUFFER_USAGE */
+
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+
+#ifndef __has_cpp_attribute
+#define __has_cpp_attribute(x) 0
+#endif
+
+#if COMPILER(CLANG)
+#if __has_cpp_attribute(clang::unsafe_buffer_usage)
+#define WTF_UNSAFE_BUFFER_USAGE [[clang::unsafe_buffer_usage]]
+#elif __has_attribute(unsafe_buffer_usage)
+#define WTF_UNSAFE_BUFFER_USAGE __attribute__((__unsafe_buffer_usage__))
+#else
+#define WTF_UNSAFE_BUFFER_USAGE
+#endif
+#else
+#define WTF_UNSAFE_BUFFER_USAGE
 #endif

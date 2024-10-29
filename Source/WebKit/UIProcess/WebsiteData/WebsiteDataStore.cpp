@@ -99,6 +99,10 @@
 #include "VirtualAuthenticatorManager.h"
 #endif // ENABLE(WEB_AUTHN)
 
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+#include <WebKitAdditions/DownloadProgressAdditions.h>
+#endif
+
 namespace WebKit {
 
 static bool allowsWebsiteDataRecordsForAllOrigins;
@@ -157,7 +161,10 @@ WebsiteDataStore::WebsiteDataStore(Ref<WebsiteDataStoreConfiguration>&& configur
     , m_trackingPreventionDebugMode(m_configuration->resourceLoadStatisticsDebugModeEnabled())
     , m_queue(WorkQueue::create("com.apple.WebKit.WebsiteDataStore"_s))
 #if ENABLE(WEB_AUTHN)
-    , m_authenticatorManager(makeUniqueRef<AuthenticatorManager>())
+    , m_authenticatorManager(AuthenticatorManager::create())
+#endif
+#if ENABLE(DEVICE_ORIENTATION)
+    , m_deviceOrientationAndMotionAccessController(*this)
 #endif
     , m_client(makeUniqueRef<WebsiteDataStoreClient>())
     , m_webLockRegistry(WebCore::LocalWebLockRegistry::create())
@@ -1326,11 +1333,6 @@ void WebsiteDataStore::insertExpiredStatisticForTesting(const URL& url, unsigned
     protectedNetworkProcess()->insertExpiredStatisticForTesting(m_sessionID, WebCore::RegistrableDomain { url }, numberOfOperatingDaysPassed, hadUserInteraction, isScheduledForAllButCookieDataRemoval, isPrevalent, WTFMove(completionHandler));
 }
 
-void WebsiteDataStore::setNotifyPagesWhenDataRecordsWereScanned(bool value, CompletionHandler<void()>&& completionHandler)
-{
-    protectedNetworkProcess()->setNotifyPagesWhenDataRecordsWereScanned(m_sessionID, value, WTFMove(completionHandler));
-}
-
 void WebsiteDataStore::setResourceLoadStatisticsTimeAdvanceForTesting(Seconds time, CompletionHandler<void()>&& completionHandler)
 {
     protectedNetworkProcess()->setResourceLoadStatisticsTimeAdvanceForTesting(m_sessionID, time, WTFMove(completionHandler));
@@ -1352,7 +1354,7 @@ void WebsiteDataStore::setStorageAccessPromptQuirkForTesting(String&& topFrameDo
     } };
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
-    StorageAccessPromptQuirkController::shared().setCachedQuirksForTesting(WTFMove(quirk));
+    StorageAccessPromptQuirkController::sharedSingleton().setCachedListDataForTesting(WTFMove(quirk));
 #else
     protectedNetworkProcess()->send(Messages::NetworkProcess::UpdateStorageAccessPromptQuirks(WTFMove(quirk)), 0);
 #endif
@@ -1877,7 +1879,7 @@ void WebsiteDataStore::didAllowPrivateTokenUsageByThirdPartyForTesting(bool wasA
 void WebsiteDataStore::setUserAgentStringQuirkForTesting(const String& domain, const String& userAgentString, CompletionHandler<void()>&& completionHandler)
 {
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
-    StorageAccessUserAgentStringQuirkController::shared().setCachedQuirksForTesting({ { WebCore::RegistrableDomain::uncheckedCreateFromHost(domain), userAgentString } });
+    StorageAccessUserAgentStringQuirkController::sharedSingleton().setCachedListDataForTesting({ { WebCore::RegistrableDomain::uncheckedCreateFromHost(domain), userAgentString } });
 #endif
     completionHandler();
 }
@@ -1896,14 +1898,32 @@ bool WebsiteDataStore::isBlobRegistryPartitioningEnabled() const
     });
 }
 
-void WebsiteDataStore::updateBlobRegistryPartitioningState()
+bool WebsiteDataStore::isOptInCookiePartitioningEnabled() const
 {
-    auto enabled = isBlobRegistryPartitioningEnabled();
-    if (m_isBlobRegistryPartitioningEnabled == enabled)
+    return WTF::anyOf(m_processes, [] (const WebProcessProxy& process) {
+        return WTF::anyOf(process.pages(), [](auto& page) {
+            return page->preferences().optInPartitionedCookiesEnabled();
+        });
+    });
+}
+
+void WebsiteDataStore::propagateSettingUpdatesToNetworkProcess()
+{
+    RefPtr networkProcess = networkProcessIfExists();
+    if (!networkProcess)
         return;
-    if (RefPtr networkProcess = networkProcessIfExists()) {
+
+    bool enabled = isBlobRegistryPartitioningEnabled();
+    if (m_isBlobRegistryPartitioningEnabled != enabled) {
         m_isBlobRegistryPartitioningEnabled = enabled;
+        // FIXME: Send these updates in a single message.
         networkProcess->send(Messages::NetworkProcess::SetBlobRegistryTopOriginPartitioningEnabled(sessionID(), enabled), 0);
+    }
+
+    enabled = isOptInCookiePartitioningEnabled();
+    if (m_isOptInCookiePartitioningEnabled != enabled) {
+        m_isOptInCookiePartitioningEnabled = enabled;
+        networkProcess->send(Messages::NetworkProcess::SetOptInCookiePartitioningEnabled(sessionID(), enabled), 0);
     }
 }
 
@@ -2015,6 +2035,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.webPushMachServiceName = m_configuration->webPushMachServiceName();
     networkSessionParameters.webPushPartitionString = m_configuration->webPushPartitionString();
     networkSessionParameters.isBlobRegistryTopOriginPartitioningEnabled = isBlobRegistryPartitioningEnabled();
+    networkSessionParameters.isOptInCookiePartitioningEnabled = isOptInCookiePartitioningEnabled();
     networkSessionParameters.unifiedOriginStorageLevel = m_configuration->unifiedOriginStorageLevel();
     networkSessionParameters.perOriginStorageQuota = perOriginStorageQuota();
     networkSessionParameters.originQuotaRatio = originQuotaRatio();
@@ -2082,17 +2103,28 @@ void WebsiteDataStore::addSecKeyProxyStore(Ref<SecKeyProxyStore>&& store)
 void WebsiteDataStore::setMockWebAuthenticationConfiguration(WebCore::MockWebAuthenticationConfiguration&& configuration)
 {
     if (!m_authenticatorManager->isMock()) {
-        m_authenticatorManager = makeUniqueRef<MockAuthenticatorManager>(WTFMove(configuration));
+        m_authenticatorManager = MockAuthenticatorManager::create(WTFMove(configuration));
         return;
     }
-    static_cast<MockAuthenticatorManager*>(&m_authenticatorManager)->setTestConfiguration(WTFMove(configuration));
+    Ref manager = downcast<MockAuthenticatorManager>(m_authenticatorManager);
+    manager->setTestConfiguration(WTFMove(configuration));
 }
 
 VirtualAuthenticatorManager& WebsiteDataStore::virtualAuthenticatorManager()
 {
     if (!m_authenticatorManager->isVirtual())
-        m_authenticatorManager = makeUniqueRef<VirtualAuthenticatorManager>();
-    return static_cast<VirtualAuthenticatorManager&>(m_authenticatorManager.get());
+        m_authenticatorManager = VirtualAuthenticatorManager::create();
+    return downcast<VirtualAuthenticatorManager>(m_authenticatorManager.get());
+}
+
+Ref<AuthenticatorManager> WebsiteDataStore::protectedAuthenticatorManager()
+{
+    return authenticatorManager();
+}
+
+Ref<VirtualAuthenticatorManager> WebsiteDataStore::protectedVirtualAuthenticatorManager()
+{
+    return virtualAuthenticatorManager();
 }
 #endif
 
@@ -2102,6 +2134,11 @@ API::HTTPCookieStore& WebsiteDataStore::cookieStore()
         m_cookieStore = API::HTTPCookieStore::create(*this);
 
     return *m_cookieStore;
+}
+
+Ref<API::HTTPCookieStore> WebsiteDataStore::protectedCookieStore()
+{
+    return cookieStore();
 }
 
 void WebsiteDataStore::resetQuota(CompletionHandler<void()>&& completionHandler)
@@ -2285,6 +2322,11 @@ std::optional<double> WebsiteDataStore::defaultTotalQuotaRatio()
 }
 
 #endif // !PLATFORM(COCOA)
+
+Ref<WebCore::LocalWebLockRegistry> WebsiteDataStore::protectedWebLockRegistry()
+{
+    return m_webLockRegistry;
+}
 
 void WebsiteDataStore::renameOriginInWebsiteData(WebCore::SecurityOriginData&& oldOrigin, WebCore::SecurityOriginData&& newOrigin, OptionSet<WebsiteDataType> dataTypes, CompletionHandler<void()>&& completionHandler)
 {
@@ -2513,7 +2555,12 @@ void WebsiteDataStore::resumeDownload(const DownloadProxy& downloadProxy, const 
             sandboxExtensionHandle = WTFMove(*handle);
     }
 
-    protectedNetworkProcess()->send(Messages::NetworkProcess::ResumeDownload(m_sessionID, downloadProxy.downloadID(), resumeData.span(), path, WTFMove(sandboxExtensionHandle), callDownloadDidStart), 0);
+    Vector<uint8_t> downloadProgressAccessToken;
+#if HAVE(MODERN_DOWNLOADPROGRESS)
+    downloadProgressAccessToken = activityAccessToken();
+#endif
+
+    protectedNetworkProcess()->send(Messages::NetworkProcess::ResumeDownload(m_sessionID, downloadProxy.downloadID(), resumeData.span(), path, WTFMove(sandboxExtensionHandle), callDownloadDidStart, downloadProgressAccessToken.span()), 0);
 }
 
 bool WebsiteDataStore::hasActivePages()

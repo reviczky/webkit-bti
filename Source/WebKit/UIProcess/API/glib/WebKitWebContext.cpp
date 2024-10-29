@@ -178,14 +178,14 @@ private:
             return;
 
         GRefPtr<WebKitURISchemeRequest> request = adoptGRef(webkitURISchemeRequestCreate(m_context, page, task));
-        auto addResult = m_requests.add({ task.resourceLoaderID(), task.pageProxyID() }, WTFMove(request));
+        auto addResult = m_requests.add({ task.resourceLoaderID(), *task.pageProxyID() }, WTFMove(request));
         ASSERT(addResult.isNewEntry);
         m_callback(addResult.iterator->value.get(), m_userData);
     }
 
     void platformStopTask(WebPageProxy&, WebURLSchemeTask& task) final
     {
-        auto it = m_requests.find({ task.resourceLoaderID(), task.pageProxyID() });
+        auto it = m_requests.find({ task.resourceLoaderID(), *task.pageProxyID() });
         if (it == m_requests.end())
             return;
 
@@ -195,7 +195,7 @@ private:
 
     void platformTaskCompleted(WebURLSchemeTask& task) final
     {
-        m_requests.remove({ task.resourceLoaderID(), task.pageProxyID() });
+        m_requests.remove({ task.resourceLoaderID(), *task.pageProxyID() });
     }
 
     WebKitWebContext* m_context { nullptr };
@@ -337,11 +337,9 @@ void webkitWebContextWillCloseAutomationSession(WebKitWebContext* webContext)
 
 static const char* injectedBundleDirectory()
 {
-#if ENABLE(DEVELOPER_MODE)
     const char* bundleDirectory = g_getenv("WEBKIT_INJECTED_BUNDLE_PATH");
     if (bundleDirectory && g_file_test(bundleDirectory, G_FILE_TEST_IS_DIR))
         return bundleDirectory;
-#endif
 
     static const char* injectedBundlePath = PKGLIBDIR G_DIR_SEPARATOR_S "injected-bundle" G_DIR_SEPARATOR_S;
     return injectedBundlePath;
@@ -1527,7 +1525,7 @@ gboolean webkit_web_context_get_spell_checking_enabled(WebKitWebContext* context
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
 
 #if ENABLE(SPELLCHECK)
-    return TextChecker::state().isContinuousSpellCheckingEnabled;
+    return TextChecker::state().contains(TextCheckerState::ContinuousSpellCheckingEnabled);
 #else
     return false;
 #endif

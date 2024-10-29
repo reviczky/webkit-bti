@@ -28,6 +28,7 @@
 #if ENABLE(ASSEMBLER)
 
 #include "JSCJSValue.h"
+#include <wtf/TZoneMalloc.h>
 
 #define DEFINE_SIMD_FUNC(name, func, lane) \
     template <typename ...Args> \
@@ -119,6 +120,7 @@ typedef Vector<PrintRecord> PrintRecordList;
 using MacroAssemblerBase = TARGET_MACROASSEMBLER;
 
 class MacroAssembler : public MacroAssemblerBase {
+    WTF_MAKE_TZONE_ALLOCATED(MacroAssemblerBase);
 public:
     using Base = MacroAssemblerBase;
 
@@ -158,7 +160,9 @@ public:
     using MacroAssemblerBase::branch32;
     using MacroAssemblerBase::compare32;
     using MacroAssemblerBase::move;
+    using MacroAssemblerBase::move32ToFloat;
     using MacroAssemblerBase::moveDouble;
+    using MacroAssemblerBase::move64ToDouble;
     using MacroAssemblerBase::add32;
     using MacroAssemblerBase::mul32;
     using MacroAssemblerBase::and32;
@@ -1039,6 +1043,11 @@ public:
         lshift64(src, imm, dest);
     }
 
+    void lshiftPtr(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        lshift64(imm, shiftAmount, dest);
+    }
+
     void rshiftPtr(Imm32 imm, RegisterID srcDest)
     {
         rshift64(trustedImm32ForShift(imm), srcDest);
@@ -1815,31 +1824,27 @@ public:
 
 #endif // USE(JSVALUE64)
 
-#if CPU(X86_64) || CPU(RISCV64)
-    void moveFloat(Imm32 imm, FPRegisterID dest)
+#if CPU(X86_64)
+    void move32ToFloat(Imm32 imm, FPRegisterID dest)
     {
         move(imm, scratchRegister());
         move32ToFloat(scratchRegister(), dest);
     }
 
-    void moveDouble(Imm64 imm, FPRegisterID dest)
+    void move64ToDouble(Imm64 imm, FPRegisterID dest)
     {
         move(imm, scratchRegister());
         move64ToDouble(scratchRegister(), dest);
     }
-#endif
-
-#if CPU(ARM64)
-    void moveFloat(Imm32 imm, FPRegisterID dest)
+#else
+    void move32ToFloat(Imm32 imm, FPRegisterID dest)
     {
-        move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
-        move32ToFloat(getCachedMemoryTempRegisterIDAndInvalidate(), dest);
+        MacroAssemblerBase::move32ToFloat(imm.asTrustedImm32(), dest);
     }
 
-    void moveDouble(Imm64 imm, FPRegisterID dest)
+    void move64ToDouble(Imm64 imm, FPRegisterID dest)
     {
-        move(imm, getCachedMemoryTempRegisterIDAndInvalidate());
-        move64ToDouble(getCachedMemoryTempRegisterIDAndInvalidate(), dest);
+        MacroAssemblerBase::move64ToDouble(imm.asTrustedImm64(), dest);
     }
 #endif
 
@@ -2322,6 +2327,11 @@ public:
     void lshift32(RegisterID src, Imm32 amount, RegisterID dest)
     {
         lshift32(src, trustedImm32ForShift(amount), dest);
+    }
+
+    void lshift32(Imm32 amount, RegisterID shiftAmount, RegisterID dest)
+    {
+        lshift32(trustedImm32ForShift(amount), shiftAmount, dest);
     }
     
     void rshift32(Imm32 imm, RegisterID dest)

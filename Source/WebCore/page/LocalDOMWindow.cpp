@@ -99,7 +99,6 @@
 #include "RequestAnimationFrameCallback.h"
 #include "ResourceLoadInfo.h"
 #include "ResourceLoadObserver.h"
-#include "RuntimeApplicationChecks.h"
 #include "ScheduledAction.h"
 #include "Screen.h"
 #include "ScrollAnimator.h"
@@ -136,6 +135,7 @@
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Ref.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -277,7 +277,7 @@ bool LocalDOMWindow::dispatchAllPendingBeforeUnloadEvents()
         if (!frame)
             continue;
 
-        if (!frame->checkedLoader()->shouldClose())
+        if (!frame->protectedLoader()->shouldClose())
             return false;
 
         window->enableSuddenTermination();
@@ -1141,7 +1141,7 @@ void LocalDOMWindow::stop()
     SetForScope isStopping { m_isStopping, true };
     // We must check whether the load is complete asynchronously, because we might still be parsing
     // the document until the callstack unwinds.
-    frame->checkedLoader()->stopForUserCancel(true);
+    frame->protectedLoader()->stopForUserCancel(true);
 }
 
 void LocalDOMWindow::alert(const String& message)
@@ -1151,7 +1151,7 @@ void LocalDOMWindow::alert(const String& message)
         return;
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.alert is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return;
     }
@@ -1180,7 +1180,7 @@ bool LocalDOMWindow::confirmForBindings(const String& message)
         return false;
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.confirm is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return false;
     }
@@ -1209,7 +1209,7 @@ String LocalDOMWindow::prompt(const String& message, const String& defaultValue)
         return String();
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.prompt is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return String();
     }
@@ -1269,7 +1269,7 @@ int LocalDOMWindow::outerHeight() const
     if (!page)
         return 0;
 
-    if (page->fingerprintingProtectionsEnabled())
+    if (page->shouldApplyScreenFingerprintingProtections(*protectedDocument()))
         return innerHeight();
 
 #if PLATFORM(IOS_FAMILY)
@@ -1297,7 +1297,7 @@ int LocalDOMWindow::outerWidth() const
     if (!page)
         return 0;
 
-    if (page->fingerprintingProtectionsEnabled())
+    if (page->shouldApplyScreenFingerprintingProtections(*protectedDocument()))
         return innerWidth();
 
 #if PLATFORM(IOS_FAMILY)
@@ -1362,7 +1362,7 @@ int LocalDOMWindow::screenX() const
         return 0;
 
     RefPtr page = frame->page();
-    if (!page || page->fingerprintingProtectionsEnabled())
+    if (!page || page->shouldApplyScreenFingerprintingProtections(*protectedDocument()))
         return 0;
 
     return static_cast<int>(page->chrome().windowRect().x());
@@ -1375,7 +1375,7 @@ int LocalDOMWindow::screenY() const
         return 0;
 
     RefPtr page = frame->page();
-    if (!page || page->fingerprintingProtectionsEnabled())
+    if (!page || page->shouldApplyScreenFingerprintingProtections(*protectedDocument()))
         return 0;
 
     return static_cast<int>(page->chrome().windowRect().y());
@@ -1461,7 +1461,7 @@ void LocalDOMWindow::setName(const AtomString& string)
         return;
 
     frame->tree().setSpecifiedName(string);
-    frame->checkedLoader()->client().frameNameChanged(string.string());
+    frame->protectedLoader()->client().frameNameChanged(string.string());
 }
 
 void LocalDOMWindow::setStatus(const String& string)
@@ -1472,7 +1472,7 @@ void LocalDOMWindow::setStatus(const String& string)
 void LocalDOMWindow::disownOpener()
 {
     if (RefPtr frame = this->frame())
-        frame->setOpener(nullptr);
+        frame->disownOpener();
 }
 
 String LocalDOMWindow::origin() const
@@ -1802,12 +1802,12 @@ void LocalDOMWindow::moveTo(int x, int y) const
         return;
 
     RefPtr page = frame()->page();
-    auto fr = page->chrome().windowRect();
+    auto update = page->chrome().windowRect();
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
+    if (!localMainFrame)
+        return;
 
-    auto sr = screenAvailableRect(page->mainFrame().virtualView());
-    fr.setLocation(sr.location());
-    auto update = fr;
-    update.move(x, y);
+    update.setLocation(LayoutPoint(x, y));
     page->chrome().setWindowRect(adjustWindowRect(*page, update));
 }
 
@@ -2336,7 +2336,7 @@ void LocalDOMWindow::dispatchLoadEvent()
     // Send a separate load event to the element that owns this frame.
     if (RefPtr ownerFrame = frame()) {
         if (is<RemoteFrame>(ownerFrame->tree().parent()))
-            ownerFrame->checkedLoader()->client().dispatchLoadEventToOwnerElementInAnotherProcess();
+            ownerFrame->protectedLoader()->client().dispatchLoadEventToOwnerElementInAnotherProcess();
         else if (RefPtr owner = ownerFrame->ownerElement())
             owner->dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No));
     }
@@ -2407,7 +2407,7 @@ void LocalDOMWindow::removeAllEventListeners()
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
-    if (RefPtrAllowingPartiallyDestroyed<Document> document = this->document())
+    if (RefPtr<Document> document = this->document())
         document->didRemoveEventTargetNode(*document);
 #endif
 
@@ -2504,15 +2504,15 @@ String LocalDOMWindow::crossDomainAccessErrorMessage(const LocalDOMWindow& activ
     // Sandbox errors: Use the origin of the frames' location, rather than their actual origin (since we know that at least one will be "null").
     URL activeURL = activeWindow.document()->url();
     URL targetURL = document()->url();
-    if (document()->isSandboxed(SandboxOrigin) || activeWindow.document()->isSandboxed(SandboxOrigin)) {
+    if (document()->isSandboxed(SandboxFlag::Origin) || activeWindow.document()->isSandboxed(SandboxFlag::Origin)) {
         if (includeTargetOrigin == IncludeTargetOrigin::Yes)
             message = makeString("Blocked a frame at \""_s, SecurityOrigin::create(activeURL).get().toString(), "\" from accessing a frame at \""_s, SecurityOrigin::create(targetURL).get().toString(), "\". "_s);
         else
             message = makeString("Blocked a frame at \""_s, SecurityOrigin::create(activeURL).get().toString(), "\" from accessing a cross-origin frame. "_s);
 
-        if (document()->isSandboxed(SandboxOrigin) && activeWindow.document()->isSandboxed(SandboxOrigin))
+        if (document()->isSandboxed(SandboxFlag::Origin) && activeWindow.document()->isSandboxed(SandboxFlag::Origin))
             return makeString("Sandbox access violation: "_s, message, " Both frames are sandboxed and lack the \"allow-same-origin\" flag."_s);
-        if (document()->isSandboxed(SandboxOrigin))
+        if (document()->isSandboxed(SandboxFlag::Origin))
             return makeString("Sandbox access violation: "_s, message, " The frame being accessed is sandboxed and lacks the \"allow-same-origin\" flag."_s);
         return makeString("Sandbox access violation: "_s, message, " The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."_s);
     }
@@ -2586,18 +2586,28 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     FrameLoadRequest frameLoadRequest { *activeDocument, activeDocument->protectedSecurityOrigin(), WTFMove(resourceRequest), frameName, initiatedByMainFrame };
     frameLoadRequest.setShouldOpenExternalURLsPolicy(activeDocument->shouldOpenExternalURLsPolicyToPropagate());
 
-    // We pass the opener frame for the lookupFrame in case the active frame is different from
-    // the opener frame, and the name references a frame relative to the opener frame.
-    bool created;
-    RefPtr newFrame = WebCore::createWindow(*activeFrame, openerFrame, WTFMove(frameLoadRequest), windowFeatures, created);
+    // https://html.spec.whatwg.org/#the-rules-for-choosing-a-browsing-context-given-a-browsing-context-name (Step 8.2)
+    if (openerFrame.document()->shouldForceNoOpenerBasedOnCOOP()) {
+        frameLoadRequest.setFrameName(blankTargetFrameName());
+        windowFeatures.noopener = true;
+    }
+
+    if (openerFrame.document()->settingsValues().blobRegistryTopOriginPartitioningEnabled && frameLoadRequest.resourceRequest().url().protocolIsBlob() && !openerFrame.document()->protectedSecurityOrigin()->isSameOriginAs(openerFrame.document()->protectedTopOrigin())) {
+        frameLoadRequest.setFrameName(blankTargetFrameName());
+        windowFeatures.noopener = true;
+    }
+    bool noopener = windowFeatures.wantsNoOpener();
+
+    auto [newFrame, created] = WebCore::createWindow(openerFrame, WTFMove(frameLoadRequest), WTFMove(windowFeatures));
     if (!newFrame)
         return RefPtr<Frame> { nullptr };
 
-    bool noopener = windowFeatures.wantsNoOpener();
-    if (!noopener)
-        newFrame->setOpener(&openerFrame);
+    if (!noopener) {
+        ASSERT(!newFrame->opener() || newFrame->opener() == &openerFrame);
+        newFrame->page()->setOpenedByDOMWithOpener(true);
+    }
 
-    if (created)
+    if (created == CreatedNewPage::Yes)
         newFrame->protectedPage()->setOpenedByDOM();
 
     RefPtr localNewFrame = dynamicDowncast<LocalFrame>(newFrame);
@@ -2607,7 +2617,7 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     if (prepareDialogFunction && localNewFrame)
         prepareDialogFunction(*localNewFrame->document()->protectedWindow());
 
-    if (created) {
+    if (created == CreatedNewPage::Yes) {
         ResourceRequest resourceRequest { completedURL, referrer, ResourceRequestCachePolicy::UseProtocolCachePolicy };
         FrameLoader::addSameSiteInfoToRequestIfNeeded(resourceRequest, openerFrame.protectedDocument().get());
         FrameLoadRequest frameLoadRequest { activeWindow.protectedDocument().releaseNonNull(), activeWindow.document()->protectedSecurityOrigin(), WTFMove(resourceRequest), selfTargetFrameName(), initiatedByMainFrame };
@@ -2665,7 +2675,7 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
     if (!firstWindow.allowPopUp()) {
         // Because FrameTree::findFrameForNavigation() returns true for empty strings, we must check for empty frame names.
         // Otherwise, illegitimate window.open() calls with no name will pass right through the popup blocker.
-        if (frameName.isEmpty() || !frame->checkedLoader()->findFrameForNavigation(frameName, activeDocument.get()))
+        if (frameName.isEmpty() || !frame->protectedLoader()->findFrameForNavigation(frameName, activeDocument.get()))
             return RefPtr<WindowProxy> { nullptr };
     }
 

@@ -30,8 +30,10 @@
 #include "IDBTransactionInfo.h"
 #include "IndexValueStore.h"
 #include "ThreadSafeDataBuffer.h"
+#include <wtf/CheckedRef.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 namespace IDBServer {
@@ -40,10 +42,11 @@ class MemoryIDBBackingStore;
 class MemoryIndex;
 class MemoryObjectStore;
 
-typedef HashMap<IDBKeyData, ThreadSafeDataBuffer, IDBKeyDataHash, IDBKeyDataHashTraits> KeyValueMap;
+typedef UncheckedKeyHashMap<IDBKeyData, ThreadSafeDataBuffer, IDBKeyDataHash, IDBKeyDataHashTraits> KeyValueMap;
 
-class MemoryBackingStoreTransaction {
-    WTF_MAKE_FAST_ALLOCATED;
+class MemoryBackingStoreTransaction final : public CanMakeThreadSafeCheckedPtr<MemoryBackingStoreTransaction> {
+    WTF_MAKE_TZONE_ALLOCATED(MemoryBackingStoreTransaction);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(MemoryBackingStoreTransaction);
 public:
     static std::unique_ptr<MemoryBackingStoreTransaction> create(MemoryIDBBackingStore&, const IDBTransactionInfo&);
 
@@ -76,7 +79,7 @@ public:
 private:
     void finish();
 
-    MemoryIDBBackingStore& m_backingStore;
+    CheckedRef<MemoryIDBBackingStore> m_backingStore;
     IDBTransactionInfo m_info;
 
     std::unique_ptr<IDBDatabaseInfo> m_originalDatabaseInfo;
@@ -89,15 +92,15 @@ private:
     HashSet<RefPtr<MemoryIndex>> m_indexes;
     HashSet<RefPtr<MemoryIndex>> m_versionChangeAddedIndexes;
 
-    HashMap<MemoryObjectStore*, uint64_t> m_originalKeyGenerators;
-    HashMap<String, RefPtr<MemoryObjectStore>> m_deletedObjectStores;
-    HashMap<String, RefPtr<MemoryIndex>> m_deletedIndexes;
-    HashMap<MemoryObjectStore*, std::unique_ptr<KeyValueMap>> m_originalValues;
-    HashMap<MemoryObjectStore*, std::unique_ptr<KeyValueMap>> m_clearedKeyValueMaps;
-    HashMap<MemoryObjectStore*, std::unique_ptr<IDBKeyDataSet>> m_clearedOrderedKeys;
-    HashMap<MemoryObjectStore*, String> m_originalObjectStoreNames;
-    HashMap<MemoryIndex*, String> m_originalIndexNames;
-    HashMap<MemoryIndex*, std::unique_ptr<IndexValueStore>> m_clearedIndexValueStores;
+    UncheckedKeyHashMap<MemoryObjectStore*, uint64_t> m_originalKeyGenerators;
+    UncheckedKeyHashMap<String, RefPtr<MemoryObjectStore>> m_deletedObjectStores;
+    UncheckedKeyHashMap<String, RefPtr<MemoryIndex>> m_deletedIndexes;
+    UncheckedKeyHashMap<MemoryObjectStore*, std::unique_ptr<KeyValueMap>> m_originalValues;
+    UncheckedKeyHashMap<MemoryObjectStore*, std::unique_ptr<KeyValueMap>> m_clearedKeyValueMaps;
+    UncheckedKeyHashMap<MemoryObjectStore*, std::unique_ptr<IDBKeyDataSet>> m_clearedOrderedKeys;
+    UncheckedKeyHashMap<MemoryObjectStore*, String> m_originalObjectStoreNames;
+    UncheckedKeyHashMap<MemoryIndex*, String> m_originalIndexNames;
+    UncheckedKeyHashMap<MemoryIndex*, std::unique_ptr<IndexValueStore>> m_clearedIndexValueStores;
 };
 
 } // namespace IDBServer
