@@ -34,6 +34,7 @@
 #include "WebMemoryPressureHandler.h"
 #include "WebProcessCreationParameters.h"
 #include <WebCore/PlatformDisplay.h>
+#include <WebCore/SystemSettings.h>
 #include <wtf/FileSystem.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/glib/Application.h>
@@ -62,7 +63,6 @@
 #if PLATFORM(GTK)
 #include "AcceleratedBackingStoreDMABuf.h"
 #include "Display.h"
-#include "GtkSettingsManager.h"
 #endif
 
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
@@ -70,7 +70,9 @@
 #endif
 
 #if !USE(SYSTEM_MALLOC) && OS(LINUX)
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <bmalloc/valgrind.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
 namespace WebKit {
@@ -169,8 +171,9 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
     parameters.accessibilityBusName = accessibilityBusName();
 #endif
 
+    parameters.systemSettings = WebCore::SystemSettings::singleton().settingsState();
+
 #if PLATFORM(GTK)
-    parameters.gtkSettings = GtkSettingsManager::singleton().settingsState();
     parameters.screenProperties = ScreenManager::singleton().collectScreenProperties();
 #endif
 
@@ -208,8 +211,10 @@ void WebProcessPool::setSandboxEnabled(bool enabled)
     }
 
 #if !USE(SYSTEM_MALLOC)
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     if (RUNNING_ON_VALGRIND)
         return;
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
     if (const char* disableSandbox = getenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS")) {

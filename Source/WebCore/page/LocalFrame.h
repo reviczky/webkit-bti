@@ -98,7 +98,10 @@ class SecurityOrigin;
 class VisiblePosition;
 class Widget;
 
+enum class SandboxFlag : uint16_t;
 enum class WindowProxyProperty : uint8_t;
+
+using SandboxFlags = OptionSet<SandboxFlag>;
 
 struct SimpleRange;
 
@@ -117,10 +120,10 @@ using NodeQualifier = Function<Node* (const HitTestResult&, Node* terminationNod
 
 class LocalFrame final : public Frame {
 public:
-    using ClientCreator = CompletionHandler<UniqueRef<LocalFrameLoaderClient>(LocalFrame&)>;
-    WEBCORE_EXPORT static Ref<LocalFrame> createMainFrame(Page&, ClientCreator&&, FrameIdentifier, Frame* opener);
-    WEBCORE_EXPORT static Ref<LocalFrame> createSubframe(Page&, ClientCreator&&, FrameIdentifier, HTMLFrameOwnerElement&);
-    WEBCORE_EXPORT static Ref<LocalFrame> createProvisionalSubframe(Page&, ClientCreator&&, FrameIdentifier, Frame& parent);
+    using ClientCreator = CompletionHandler<UniqueRef<LocalFrameLoaderClient>(LocalFrame&, FrameLoader&)>;
+    WEBCORE_EXPORT static Ref<LocalFrame> createMainFrame(Page&, ClientCreator&&, FrameIdentifier, SandboxFlags, Frame* opener);
+    WEBCORE_EXPORT static Ref<LocalFrame> createSubframe(Page&, ClientCreator&&, FrameIdentifier, SandboxFlags, HTMLFrameOwnerElement&);
+    WEBCORE_EXPORT static Ref<LocalFrame> createProvisionalSubframe(Page&, ClientCreator&&, FrameIdentifier, SandboxFlags, ScrollbarMode, Frame& parent);
 
     WEBCORE_EXPORT void init();
 #if PLATFORM(IOS_FAMILY)
@@ -136,6 +139,7 @@ public:
     WEBCORE_EXPORT ~LocalFrame();
 
     WEBCORE_EXPORT LocalDOMWindow* window() const;
+    WEBCORE_EXPORT RefPtr<LocalDOMWindow> protectedWindow() const;
 
     void addDestructionObserver(FrameDestructionObserver&);
     void removeDestructionObserver(FrameDestructionObserver&);
@@ -159,8 +163,8 @@ public:
 
     const FrameLoader& loader() const { return m_loader.get(); }
     FrameLoader& loader() { return m_loader.get(); }
-    CheckedRef<const FrameLoader> checkedLoader() const;
-    CheckedRef<FrameLoader> checkedLoader();
+    WEBCORE_EXPORT Ref<const FrameLoader> protectedLoader() const;
+    WEBCORE_EXPORT Ref<FrameLoader> protectedLoader();
 
     FrameSelection& selection() { return document()->selection(); }
     const FrameSelection& selection() const { return document()->selection(); }
@@ -206,11 +210,14 @@ public:
 
     void setDocument(RefPtr<Document>&&);
 
+    // These recursively set zoom on all LocalFrame descendants,
+    // use WebPageProxy instead to zoom the entire frame tree.
     WEBCORE_EXPORT void setPageZoomFactor(float);
-    float pageZoomFactor() const { return m_pageZoomFactor; }
     WEBCORE_EXPORT void setTextZoomFactor(float);
-    float textZoomFactor() const { return m_textZoomFactor; }
     WEBCORE_EXPORT void setPageAndTextZoomFactors(float pageZoomFactor, float textZoomFactor);
+
+    float pageZoomFactor() const { return m_pageZoomFactor; }
+    float textZoomFactor() const { return m_textZoomFactor; }
 
     // Scale factor of this frame with respect to the container.
     WEBCORE_EXPORT float frameScaleFactor() const;
@@ -319,13 +326,21 @@ public:
     String customNavigatorPlatform() const final;
     OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections() const final;
 
+    WEBCORE_EXPORT SandboxFlags effectiveSandboxFlags() const;
+    SandboxFlags sandboxFlagsFromSandboxAttributeNotCSP() { return m_sandboxFlags; }
+    WEBCORE_EXPORT void updateSandboxFlags(SandboxFlags, NotifyUIProcess) final;
+
+    ScrollbarMode scrollingMode() const { return m_scrollingMode; }
+    WEBCORE_EXPORT void updateScrollingMode() final;
+    WEBCORE_EXPORT void setScrollingMode(ScrollbarMode);
+
 protected:
     void frameWasDisconnectedFromOwner() const final;
 
 private:
     friend class NavigationDisabler;
 
-    LocalFrame(Page&, ClientCreator&&, FrameIdentifier, HTMLFrameOwnerElement*, Frame* parent, Frame* opener);
+    LocalFrame(Page&, ClientCreator&&, FrameIdentifier, SandboxFlags, std::optional<ScrollbarMode>, HTMLFrameOwnerElement*, Frame* parent, Frame* opener);
 
     void dropChildren();
 
@@ -373,6 +388,7 @@ private:
 
     float m_pageZoomFactor;
     float m_textZoomFactor;
+    ScrollbarMode m_scrollingMode { ScrollbarMode::Auto };
 
     int m_activeDOMObjectsAndAnimationsSuspendedCount { 0 };
     bool m_documentIsBeingReplaced { false };
@@ -387,6 +403,7 @@ private:
     FloatSize m_overrideScreenSize;
 
     const WeakRef<const LocalFrame> m_rootFrame;
+    SandboxFlags m_sandboxFlags;
     UniqueRef<EventHandler> m_eventHandler;
     HashSet<RegistrableDomain> m_storageAccessExceptionDomains;
 };

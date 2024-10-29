@@ -108,7 +108,7 @@ public:
     void reapWeakSets();
 
     template<typename Visitor>
-    Ref<SharedTask<void(Visitor&)>> forEachWeakInParallel();
+    Ref<SharedTask<void(Visitor&)>> forEachWeakInParallel(Visitor&);
 
     MarkedBlockSet& blocks() { return m_blocks; }
 
@@ -138,6 +138,8 @@ public:
     void didAddBlock(MarkedBlock::Handle*);
     void didConsumeFreeList(MarkedBlock::Handle*);
     void didAllocateInBlock(MarkedBlock::Handle*);
+
+    MarkedBlock::Handle* findMarkedBlockHandleDebug(MarkedBlock*);
 
     void beginMarking();
     void endMarking();

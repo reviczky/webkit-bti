@@ -56,6 +56,7 @@
 #include "ShadowChicken.h"
 #include "Snippet.h"
 #include "SnippetParams.h"
+#include "Strong.h"
 #include "TypeProfiler.h"
 #include "TypeProfilerLog.h"
 #include "VMEntryScopeInlines.h"
@@ -68,6 +69,7 @@
 #include <wtf/CPUTime.h>
 #include <wtf/DataLog.h>
 #include <wtf/Language.h>
+#include <wtf/MemoryPressureHandler.h>
 #include <wtf/ProcessID.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -405,6 +407,7 @@ public:
         constructData.type = CallData::Type::Native;
         constructData.native.function = callHostFunctionAsConstructor;
         constructData.native.isBoundFunction = false;
+        constructData.native.isWasm = false;
         return constructData;
     }
 
@@ -1950,7 +1953,7 @@ public:
         }
 
         bool didReceiveSectionData(Wasm::Section) final { return true; }
-        bool didReceiveFunctionData(unsigned, const Wasm::FunctionData&) final { return true; }
+        bool didReceiveFunctionData(Wasm::FunctionCodeIndex, const Wasm::FunctionData&) final { return true; }
         void didFinishParsing() final { }
 
         WasmStreamingParser* m_parser;
@@ -2142,6 +2145,7 @@ static JSC_DECLARE_HOST_FUNCTION(functionCpuClflush);
 static JSC_DECLARE_HOST_FUNCTION(functionLLintTrue);
 static JSC_DECLARE_HOST_FUNCTION(functionBaselineJITTrue);
 static JSC_DECLARE_HOST_FUNCTION(functionNoInline);
+static JSC_DECLARE_HOST_FUNCTION(functionTriggerMemoryPressure);
 static JSC_DECLARE_HOST_FUNCTION(functionGC);
 static JSC_DECLARE_HOST_FUNCTION(functionEdenGC);
 static JSC_DECLARE_HOST_FUNCTION(functionGCSweepAsynchronously);
@@ -2532,6 +2536,25 @@ JSC_DEFINE_HOST_FUNCTION(functionGC, (JSGlobalObject* globalObject, CallFrame*))
     return JSValue::encode(jsUndefined());
 }
 
+// Runs a full GC synchronously.
+// Usage: $vm.triggerMemoryPressure()
+JSC_DEFINE_HOST_FUNCTION(functionTriggerMemoryPressure, (JSGlobalObject* globalObject, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+    dataLogLn("functionTriggerMemoryPressure: ", Options::dumpHeapOnLowMemory(), " ", Options::enableStrongRefTracker());
+    globalObject->vm().drainMicrotasks();
+    WTF::MemoryPressureHandler::singleton().beginSimulatedMemoryPressure();
+    WTF::MemoryPressureHandler::singleton().beginSimulatedMemoryWarning();
+    VMInspector::gc(&globalObject->vm());
+    WTF::MemoryPressureHandler::singleton().endSimulatedMemoryPressure();
+    WTF::MemoryPressureHandler::singleton().endSimulatedMemoryWarning();
+#if ENABLE(REFTRACKER)
+    if (Options::enableStrongRefTracker())
+        StrongRefTracker::refTrackerSingleton().logAllLiveReferences();
+#endif
+    return JSValue::encode(jsUndefined());
+}
+
 // Runs the edenGC synchronously.
 // Usage: $vm.edenGC()
 JSC_DEFINE_HOST_FUNCTION(functionEdenGC, (JSGlobalObject* globalObject, CallFrame*))
@@ -2847,7 +2870,7 @@ JSC_DEFINE_HOST_FUNCTION(functionVMTaintedState, (JSGlobalObject* globalObject, 
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
 
-    SourceTaintedOrigin sourceTaintedOrigin = sourceTaintedOriginFromStack(vm, callFrame);
+    auto sourceTaintedOrigin = sourceTaintedOriginFromStack(vm, callFrame).first;
     return JSValue::encode(jsString(vm, sourceTaintedOriginToString(sourceTaintedOrigin)));
 }
 
@@ -4226,6 +4249,7 @@ void JSDollarVM::finishCreation(VM& vm)
 
     addFunction(vm, "noInline"_s, functionNoInline, 1);
 
+    addFunction(vm, "triggerMemoryPressure"_s, functionTriggerMemoryPressure, 0);
     addFunction(vm, "gc"_s, functionGC, 0);
     addFunction(vm, "gcSweepAsynchronously"_s, functionGCSweepAsynchronously, 0);
     addFunction(vm, "edenGC"_s, functionEdenGC, 0);
@@ -4416,7 +4440,9 @@ void JSDollarVM::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 }
 
 DEFINE_VISIT_CHILDREN(JSDollarVM);
+REFTRACKER_IMPL(StrongRefTracker);
 
 } // namespace JSC
 
 IGNORE_WARNINGS_END
+

@@ -343,6 +343,7 @@ public:
     typedef GPRReg RegisterType;
     static constexpr unsigned numberOfRegisters = 10;
     static constexpr unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
+    static constexpr unsigned numberOfCalleeSaveRegisters = 5;
 
     // These registers match the baseline JIT.
     static constexpr GPRReg callFrameRegister = X86Registers::ebp;
@@ -388,7 +389,7 @@ public:
     static constexpr GPRReg nonArgGPR0 = X86Registers::r10; // regT5
     static constexpr GPRReg nonArgGPR1 = X86Registers::eax; // regT0
     static constexpr GPRReg returnValueGPR = X86Registers::eax; // regT0
-    static constexpr GPRReg returnValueGPR2 = X86Registers::edx; // regT1 or regT2
+    static constexpr GPRReg returnValueGPR2 = X86Registers::edx; // regT2
     static constexpr GPRReg nonPreservedNonReturnGPR = X86Registers::r10; // regT5
     static constexpr GPRReg nonPreservedNonArgumentGPR0 = X86Registers::r10; // regT5
     static constexpr GPRReg nonPreservedNonArgumentGPR1 = X86Registers::eax;
@@ -426,6 +427,14 @@ public:
         ASSERT(reg != InvalidGPRReg);
         ASSERT(static_cast<int>(reg) < 16);
         static const unsigned indexForRegister[16] = { 0, 3, 2, 8, InvalidIndex, InvalidIndex, 1, 6, 4, 7, 5, InvalidIndex, 9, InvalidIndex, InvalidIndex, InvalidIndex };
+        return indexForRegister[reg];
+    }
+
+    static unsigned toArgumentIndex(GPRReg reg)
+    {
+        ASSERT(reg != InvalidGPRReg);
+        ASSERT(static_cast<int>(reg) < 16);
+        static const unsigned indexForRegister[16] = { InvalidIndex, 3, 2, InvalidIndex, InvalidIndex, InvalidIndex, 1, 0, 4, 5, InvalidIndex, InvalidIndex, InvalidIndex, InvalidIndex, InvalidIndex, InvalidIndex };
         return indexForRegister[reg];
     }
 
@@ -533,6 +542,15 @@ public:
         return result;
     }
 
+    static unsigned toArgumentIndex(GPRReg reg)
+    {
+        ASSERT(reg != InvalidGPRReg);
+        ASSERT(static_cast<int>(reg) < 16);
+        if (reg > argumentGPR3)
+            return InvalidIndex;
+        return static_cast<unsigned>(reg);
+    }
+
     static ASCIILiteral debugName(GPRReg reg)
     {
         ASSERT(reg != InvalidGPRReg);
@@ -554,6 +572,7 @@ public:
     typedef GPRReg RegisterType;
     static constexpr unsigned numberOfRegisters = 16;
     static constexpr unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
+    static constexpr unsigned numberOfCalleeSaveRegisters = 10;
 
     // These registers match the baseline JIT.
     static constexpr GPRReg callFrameRegister = ARM64Registers::fp;
@@ -655,13 +674,19 @@ public:
     {
         if (reg > regT15)
             return InvalidIndex;
-        return (unsigned)reg;
+        return static_cast<unsigned>(reg);
     }
 
     static constexpr GPRReg toArgumentRegister(unsigned index)
     {
         ASSERT_UNDER_CONSTEXPR_CONTEXT(index < numberOfArgumentRegisters);
         return toRegister(index);
+    }
+    static unsigned toArgumentIndex(GPRReg reg)
+    {
+        if (reg > argumentGPR7)
+            return InvalidIndex;
+        return static_cast<unsigned>(reg);
     }
 
     static ASCIILiteral debugName(GPRReg reg)
@@ -800,6 +825,15 @@ public:
             InvalidIndex, InvalidIndex, InvalidIndex, InvalidIndex, 11, 12, InvalidIndex, InvalidIndex,
         };
         return indexForRegister[reg];
+    }
+
+    static unsigned toArgumentIndex(GPRReg reg)
+    {
+        ASSERT(reg != InvalidGPRReg);
+        ASSERT(static_cast<int>(reg) < 32);
+        if (reg < argumentGPR0 || reg > argumentGPR7)
+            return InvalidIndex;
+        return static_cast<unsigned>(reg) - 10;
     }
 
     static ASCIILiteral debugName(GPRReg reg)

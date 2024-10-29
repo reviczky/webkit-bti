@@ -49,7 +49,8 @@ void WebPageProxy::platformInitialize()
 
 GtkWidget* WebPageProxy::viewWidget()
 {
-    return static_cast<PageClientImpl&>(pageClient()).viewWidget();
+    RefPtr pageClient = this->pageClient();
+    return pageClient ? static_cast<PageClientImpl&>(*pageClient).viewWidget() : nullptr;
 }
 
 void WebPageProxy::bindAccessibilityTree(const String& plugID)
@@ -70,7 +71,8 @@ void WebPageProxy::didUpdateEditorState(const EditorState&, const EditorState& n
         return;
     if (newEditorState.selectionIsRange)
         WebPasteboardProxy::singleton().setPrimarySelectionOwner(focusedFrame());
-    pageClient().selectionDidChange();
+    if (RefPtr pageClient = this->pageClient())
+        pageClient->selectionDidChange();
 }
 
 void WebPageProxy::setInputMethodState(std::optional<InputMethodState>&& state)
@@ -85,7 +87,11 @@ void WebPageProxy::showEmojiPicker(const WebCore::IntRect& caretRect, Completion
 
 void WebPageProxy::showValidationMessage(const WebCore::IntRect& anchorClientRect, const String& message)
 {
-    m_validationBubble = pageClient().createValidationBubble(message, { m_preferences->minimumFontSize() });
+    RefPtr pageClient = this->pageClient();
+    if (!pageClient)
+        return;
+
+    m_validationBubble = pageClient->createValidationBubble(message, { m_preferences->minimumFontSize() });
     m_validationBubble->showRelativeTo(anchorClientRect);
 }
 
@@ -106,11 +112,10 @@ void WebPageProxy::sendMessageToWebView(UserMessage&& message)
 
 void WebPageProxy::accentColorDidChange()
 {
-    if (!hasRunningProcess())
+    if (!hasRunningProcess() || !pageClient())
         return;
 
-    WebCore::Color accentColor = pageClient().accentColor();
-
+    auto accentColor = pageClient()->accentColor();
     legacyMainFrameProcess().send(Messages::WebPage::SetAccentColor(accentColor), webPageIDInMainFrameProcess());
 }
 

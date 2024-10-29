@@ -38,6 +38,8 @@
 #include <WebCore/PushSubscriptionData.h>
 #include <WebCore/SWServer.h>
 #include <pal/SessionID.h>
+#include <wtf/CheckedRef.h>
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
@@ -53,6 +55,7 @@ template<> struct AsyncReplyError<WebCore::ExceptionOr<bool>> {
 
 namespace WebCore {
 class ServiceWorkerRegistrationKey;
+struct CookieChangeSubscription;
 struct ClientOrigin;
 struct ExceptionData;
 struct MessageWithMessagePorts;
@@ -66,6 +69,7 @@ class NetworkProcess;
 class NetworkResourceLoadParameters;
 class NetworkResourceLoader;
 class ServiceWorkerFetchTask;
+struct SharedPreferencesForWebProcess;
 
 class WebSWServerConnection final : public WebCore::SWServer::Connection, public IPC::MessageSender, public IPC::MessageReceiver {
     WTF_MAKE_TZONE_ALLOCATED(WebSWServerConnection);
@@ -75,13 +79,13 @@ public:
     WebSWServerConnection(const WebSWServerConnection&) = delete;
     ~WebSWServerConnection() final;
 
-    using WebCore::SWServer::Connection::weakPtrFactory;
-    using WebCore::SWServer::Connection::WeakValueType;
-    using WebCore::SWServer::Connection::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(WebCore::SWServer::Connection);
 
     IPC::Connection& ipcConnection() const { return m_contentConnection.get(); }
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
+
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
     NetworkSession* session();
     PAL::SessionID sessionID() const;
@@ -151,6 +155,11 @@ private:
 
     void retrieveRecordResponseBody(WebCore::BackgroundFetchRecordIdentifier, RetrieveRecordResponseBodyCallbackIdentifier);
 
+    void addCookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier, Vector<WebCore::CookieChangeSubscription>&&, ExceptionOrVoidCallback&&);
+    void removeCookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier, Vector<WebCore::CookieChangeSubscription>&&, ExceptionOrVoidCallback&&);
+    using ExceptionOrCookieChangeSubscriptionsCallback = CompletionHandler<void(Expected<Vector<WebCore::CookieChangeSubscription>, WebCore::ExceptionData>&&)>;
+    void cookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier, ExceptionOrCookieChangeSubscriptionsCallback&&);
+
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
     void getNotifications(const URL& registrationURL, const String& tag, CompletionHandler<void(Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData>&&)>&&);
 #endif
@@ -162,6 +171,7 @@ private:
     
     template<typename U> static void sendToContextProcess(WebCore::SWServerToContextConnection&, U&& message);
     NetworkProcess& networkProcess();
+    Ref<NetworkProcess> protectedNetworkProcess();
 
     WeakPtr<NetworkConnectionToWebProcess> m_networkConnectionToWebProcess;
     Ref<IPC::Connection> m_contentConnection;

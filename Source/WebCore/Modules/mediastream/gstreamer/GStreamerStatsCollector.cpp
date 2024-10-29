@@ -31,6 +31,7 @@
 #undef GST_USE_UNSTABLE_API
 
 #include <wtf/MainThread.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/WTFGType.h>
 
 GST_DEBUG_CATEGORY_EXTERN(webkit_webrtc_endpoint_debug);
@@ -43,7 +44,7 @@ RTCStatsReport::Stats::Stats(Type type, const GstStructure* structure)
     , id(gstStructureGetString(structure, "id"_s).toString())
 {
     if (auto value = gstStructureGet<double>(structure, "timestamp"_s))
-        timestamp = *value;
+        timestamp = Seconds::fromMicroseconds(*value).milliseconds();
 }
 
 RTCStatsReport::RtpStreamStats::RtpStreamStats(Type type, const GstStructure* structure)
@@ -136,6 +137,9 @@ RTCStatsReport::InboundRtpStreamStats::InboundRtpStreamStats(const GstStructure*
     framesDropped = gstStructureGet<uint64_t>(structure, "frames-dropped"_s);
     frameWidth = gstStructureGet<unsigned>(structure, "frame-width"_s);
     frameHeight = gstStructureGet<unsigned>(structure, "frame-height"_s);
+
+    if (auto identifier = gstStructureGetString(structure, "track-identifier"_s))
+        trackIdentifier = identifier.toString();
 
     // FIXME:
     // stats.fractionLost =
@@ -246,7 +250,7 @@ RTCStatsReport::IceCandidatePairStats::IceCandidatePairStats(const GstStructure*
 }
 
 struct ReportHolder : public ThreadSafeRefCounted<ReportHolder> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ReportHolder);
     WTF_MAKE_NONCOPYABLE(ReportHolder);
 public:
     ReportHolder(DOMMapAdapter* adapter)
@@ -255,7 +259,7 @@ public:
     DOMMapAdapter* adapter;
 };
 
-static gboolean fillReportCallback(GQuark, const GValue* value, gpointer userData)
+static gboolean fillReportCallback(const GValue* value, Ref<ReportHolder>& reportHolder)
 {
     if (!GST_VALUE_HOLDS_STRUCTURE(value))
         return TRUE;
@@ -265,8 +269,10 @@ static gboolean fillReportCallback(GQuark, const GValue* value, gpointer userDat
     if (!gst_structure_get(structure, "type", GST_TYPE_WEBRTC_STATS_TYPE, &statsType, nullptr))
         return TRUE;
 
-    auto* reportHolder = reinterpret_cast<ReportHolder*>(userData);
-    DOMMapAdapter& report = *reportHolder->adapter;
+    if (UNLIKELY(!reportHolder->adapter))
+        return TRUE;
+
+    auto& report = *reportHolder->adapter;
 
     switch (statsType) {
     case GST_WEBRTC_STATS_CODEC: {
@@ -381,7 +387,9 @@ void GStreamerStatsCollector::getStats(CollectorCallback&& callback, const GRefP
                 return;
             holder->callback(RTCStatsReport::create([stats = WTFMove(preprocessedStats)](auto& mapAdapter) mutable {
                 auto holder = adoptRef(*new ReportHolder(&mapAdapter));
-                gst_structure_foreach(stats.get(), fillReportCallback, holder.ptr());
+                gstStructureForeach(stats.get(), [&](auto, const auto value) -> bool {
+                    return fillReportCallback(value, holder);
+                });
             }));
         });
     }, holder, reinterpret_cast<GDestroyNotify>(destroyCallbackHolder)));

@@ -32,6 +32,8 @@
 #include <wtf/text/AtomString.h>
 #include <wtf/text/StringView.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #if defined(NDEBUG)
 #define WTF_STRINGTYPEADAPTER_COPIED_WTF_STRING() do { } while (0)
 #else
@@ -294,7 +296,9 @@ public:
     unsigned length() const { return m_characters.lengthUTF16; }
     bool is8Bit() const { return m_characters.isAllASCII; }
     void writeTo(LChar* destination) const { memcpy(destination, m_characters.characters.data(), m_characters.lengthUTF16); }
+#ifndef __swift__ // FIXME: This fails to compile because of rdar://136156228
     void writeTo(UChar* destination) const { Unicode::convert(m_characters.characters, std::span { destination, m_characters.lengthUTF16 }); }
+#endif
 
 private:
     Unicode::CheckedUTF8 m_characters;
@@ -657,3 +661,5 @@ using WTF::asASCIILowercase;
 using WTF::asASCIIUppercase;
 using WTF::interleave;
 using WTF::pad;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

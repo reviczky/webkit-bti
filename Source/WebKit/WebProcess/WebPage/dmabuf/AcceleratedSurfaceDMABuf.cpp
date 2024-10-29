@@ -62,9 +62,9 @@ static uint64_t generateID()
     return ++identifier;
 }
 
-std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(WebPage& webPage, Client& client)
+std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(WebPage& webPage, Function<void()>&& frameCompleteHandler)
 {
-    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(webPage, client));
+    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(webPage, WTFMove(frameCompleteHandler)));
 }
 
 static bool useExplicitSync()
@@ -74,8 +74,8 @@ static bool useExplicitSync()
     return extensions.ANDROID_native_fence_sync && (display.eglCheckVersion(1, 5) || extensions.KHR_fence_sync);
 }
 
-AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Client& client)
-    : AcceleratedSurface(webPage, client)
+AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Function<void()>&& frameCompleteHandler)
+    : AcceleratedSurface(webPage, WTFMove(frameCompleteHandler))
     , m_id(generateID())
     , m_swapChain(m_id)
     , m_isVisible(webPage.activityState().contains(WebCore::ActivityState::IsVisible))
@@ -83,7 +83,7 @@ AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Client& cli
 {
 #if USE(GBM)
     if (m_swapChain.type() == SwapChain::Type::EGLImage)
-        m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+        m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 #endif
 }
 
@@ -545,7 +545,7 @@ void AcceleratedSurfaceDMABuf::preferredBufferFormatsDidChange()
     if (m_swapChain.type() != SwapChain::Type::EGLImage)
         return;
 
-    m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+    m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 }
 #endif
 
@@ -573,7 +573,7 @@ bool AcceleratedSurfaceDMABuf::backgroundColorDidChange()
 
 #if USE(GBM)
     if (m_swapChain.type() == SwapChain::Type::EGLImage)
-        m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+        m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 #endif
 
     return true;
@@ -666,7 +666,7 @@ void AcceleratedSurfaceDMABuf::releaseBuffer(uint64_t targetID, UnixFileDescript
 
 void AcceleratedSurfaceDMABuf::frameDone()
 {
-    m_client.frameComplete();
+    frameComplete();
     m_target = nullptr;
 }
 

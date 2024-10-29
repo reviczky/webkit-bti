@@ -99,7 +99,7 @@ using namespace HTMLNames;
 
 #if ENABLE(DATALIST_ELEMENT)
 class ListAttributeTargetObserver final : public IdTargetObserver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ListAttributeTargetObserver);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ListAttributeTargetObserver);
 public:
     ListAttributeTargetObserver(const AtomString& id, HTMLInputElement&);
@@ -561,8 +561,8 @@ void HTMLInputElement::updateType(const AtomString& typeAttributeValue)
     m_inputType->createShadowSubtreeIfNeeded();
 
     // https://html.spec.whatwg.org/multipage/dom.html#auto-directionality
-    if (oldType == InputType::Type::Telephone || m_inputType->type() == InputType::Type::Telephone || (hasDirectionAuto() && didDirAutoUseValue != m_inputType->dirAutoUsesValue()))
-        updateTextDirectionalityAfterInputTypeChange();
+    if (oldType == InputType::Type::Telephone || m_inputType->type() == InputType::Type::Telephone || (hasAutoTextDirectionState() && didDirAutoUseValue != m_inputType->dirAutoUsesValue()))
+        updateEffectiveTextDirection();
 
     if (UNLIKELY(didSupportReadOnly != willSupportReadOnly && hasAttributeWithoutSynchronization(readonlyAttr))) {
         emplace(readWriteInvalidation, *this, { { CSSSelector::PseudoClass::ReadWrite, !willSupportReadOnly }, { CSSSelector::PseudoClass::ReadOnly, willSupportReadOnly } });
@@ -662,7 +662,7 @@ void HTMLInputElement::subtreeHasChanged()
     m_inputType->subtreeHasChanged();
     // When typing in an input field, childrenChanged is not called, so we need to force the directionality check.
     if (selfOrPrecedingNodesAffectDirAuto())
-        updateEffectiveDirectionalityOfDirAuto();
+        updateEffectiveTextDirection();
 }
 
 const AtomString& HTMLInputElement::formControlType() const
@@ -812,7 +812,7 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
         }
         updateValidity();
         if (selfOrPrecedingNodesAffectDirAuto())
-            updateEffectiveDirectionalityOfDirAuto();
+            updateEffectiveTextDirection();
         m_valueAttributeWasUpdatedAfterParsing = !m_parsingInProgress;
         break;
     case AttributeNames::nameAttr:
@@ -866,7 +866,6 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
         m_maxResults = newValue.isNull() ? -1 : std::min(parseHTMLInteger(newValue).value_or(0), maxSavedResults);
         break;
     case AttributeNames::autosaveAttr:
-    case AttributeNames::incrementalAttr:
         invalidateStyleForSubtree();
         break;
     case AttributeNames::maxAttr:
@@ -900,6 +899,15 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
 #endif
         }
         break;
+#if ENABLE(INPUT_TYPE_COLOR)
+    case AttributeNames::alphaAttr:
+    case AttributeNames::colorspaceAttr:
+        if (isColorControl() && document().settings().inputTypeColorEnhancementsEnabled()) {
+            updateValueIfNeeded();
+            updateValidity();
+        }
+        break;
+#endif
     default:
         break;
     }
@@ -1143,6 +1151,8 @@ void HTMLInputElement::copyNonAttributePropertiesFromElement(const Element& sour
 
 String HTMLInputElement::value() const
 {
+    if (document().requiresScriptExecutionTelemetry(ScriptTelemetryCategory::FormControls))
+        return m_inputType->defaultValue();
     if (auto* fileInput = dynamicDowncast<FileInputType>(*m_inputType))
         return fileInput->firstElementPathForInputValue();
 
@@ -1179,7 +1189,7 @@ ExceptionOr<void> HTMLInputElement::setValue(const String& value, TextFieldEvent
     setFormControlValueMatchesRenderer(false);
     m_inputType->setValue(WTFMove(sanitizedValue), valueChanged, eventBehavior, selection);
     if (selfOrPrecedingNodesAffectDirAuto())
-        updateEffectiveDirectionalityOfDirAuto();
+        updateEffectiveTextDirection();
 
     if (valueChanged && eventBehavior == DispatchNoEvent)
         setTextAsOfLastFormControlChangeEvent(sanitizedValue);
@@ -1367,11 +1377,8 @@ void HTMLInputElement::defaultEventHandler(Event& event)
     }
 
     if (m_inputType->shouldSubmitImplicitly(event)) {
-        if (isSearchField()) {
+        if (isSearchField())
             addSearchResult();
-            if (document().settings().searchInputIncrementalAttributeAndSearchEventEnabled())
-                onSearch();
-        }
         // Form submission finishes editing, just as loss of focus does.
         // If there was a change, send the event now.
         if (wasChangedSinceLastFormControlChangeEvent())
@@ -1568,6 +1575,30 @@ void HTMLInputElement::setShowAutoFillButton(AutoFillButtonType autoFillButtonTy
         cache->autofillTypeChanged(*this);
 }
 
+#if ENABLE(INPUT_TYPE_COLOR)
+bool HTMLInputElement::alpha()
+{
+    return document().settings().inputTypeColorEnhancementsEnabled() && hasAttributeWithoutSynchronization(alphaAttr);
+}
+
+String HTMLInputElement::colorSpace()
+{
+    if (!document().settings().inputTypeColorEnhancementsEnabled())
+        return nullString();
+
+    if (equalLettersIgnoringASCIICase(attributeWithoutSynchronization(colorspaceAttr), "display-p3"_s))
+        return "display-p3"_s;
+
+    return "limited-srgb"_s;
+}
+
+void HTMLInputElement::setColorSpace(const AtomString& value)
+{
+    ASSERT(document().settings().inputTypeColorEnhancementsEnabled());
+    setAttributeWithoutSynchronization(colorspaceAttr, value);
+}
+#endif // ENABLE(INPUT_TYPE_COLOR)
+
 FileList* HTMLInputElement::files()
 {
     if (auto* fileInputType = dynamicDowncast<FileInputType>(*m_inputType))
@@ -1679,18 +1710,6 @@ bool HTMLInputElement::matchesReadWritePseudoClass() const
 void HTMLInputElement::addSearchResult()
 {
     m_inputType->addSearchResult();
-}
-
-void HTMLInputElement::onSearch()
-{
-    // The type of the input element could have changed during event handling. If we are no longer
-    // a search field, don't try to do search things.
-    auto* searchInputType = dynamicDowncast<SearchInputType>(*m_inputType);
-    if (!searchInputType)
-        return;
-
-    searchInputType->stopSearchEventTimer();
-    dispatchEvent(Event::create(eventNames().searchEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
 }
 
 void HTMLInputElement::resumeFromDocumentSuspension()
@@ -1832,7 +1851,7 @@ Color HTMLInputElement::valueAsColor() const
     if (auto* colorInputType = dynamicDowncast<ColorInputType>(*m_inputType))
         return colorInputType->valueAsColor();
 #endif
-    return Color::transparentBlack;
+    return Color::black;
 }
 
 void HTMLInputElement::selectColor(StringView color)
@@ -2288,17 +2307,16 @@ ExceptionOr<void> HTMLInputElement::setSelectionRangeForBindings(unsigned start,
 static Ref<StyleGradientImage> autoFillStrongPasswordMaskImage()
 {
     return StyleGradientImage::create(
-        StyleGradientImage::LinearData {
-            {
-                AngleRaw { CSSUnitType::CSS_DEG, 90 }
-            },
-            CSSGradientRepeat::NonRepeating,
-            {
-                { Color::black, Length(50, LengthType::Percent) },
-                { Color::transparentBlack, Length(100, LengthType::Percent) }
+        Style::FunctionNotation<CSSValueLinearGradient, Style::LinearGradient> {
+            .parameters = {
+                .colorInterpolationMethod = Style::GradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied),
+                .gradientLine = { Style::Angle<> { 90 } },
+                .stops = {
+                    { Color::black,            Style::LengthPercentage<> { Style::Percentage<> { 50 } } },
+                    { Color::transparentBlack, Style::LengthPercentage<> { Style::Percentage<> { 100 } } }
+                }
             }
-        },
-        CSSGradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied)
+        }
     );
 }
 

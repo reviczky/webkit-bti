@@ -129,7 +129,7 @@ LayoutUnit LegacyRootInlineBox::selectionTop() const
 {
     LayoutUnit selectionTop = m_lineTop;
 
-    if (renderer().style().isFlippedLinesWritingMode())
+    if (renderer().style().writingMode().isLineInverted())
         return selectionTop;
 
     LayoutUnit prevBottom;
@@ -150,7 +150,7 @@ LayoutUnit LegacyRootInlineBox::selectionBottom() const
 {
     LayoutUnit selectionBottom = m_lineBottom;
 
-    if (!renderer().style().isFlippedLinesWritingMode() || !nextRootBox())
+    if (!renderer().style().writingMode().isLineInverted() || !nextRootBox())
         return selectionBottom;
 
     return nextRootBox()->selectionTop();
@@ -164,18 +164,18 @@ RenderBlockFlow& LegacyRootInlineBox::blockFlow() const
 void LegacyRootInlineBox::removeLineBoxFromRenderObject()
 {
     // Null if we are destroying LegacyLineLayout.
-    if (auto* legacyLineLayout = blockFlow().legacyLineLayout())
+    if (auto* legacyLineLayout = blockFlow().svgTextLayout())
         legacyLineLayout->lineBoxes().removeLineBox(this);
 }
 
 void LegacyRootInlineBox::extractLineBoxFromRenderObject()
 {
-    blockFlow().legacyLineLayout()->lineBoxes().extractLineBox(this);
+    blockFlow().svgTextLayout()->lineBoxes().extractLineBox(this);
 }
 
 void LegacyRootInlineBox::attachLineBoxToRenderObject()
 {
-    blockFlow().legacyLineLayout()->lineBoxes().attachLineBox(this);
+    blockFlow().svgTextLayout()->lineBoxes().attachLineBox(this);
 }
 
 LayoutUnit LegacyRootInlineBox::lineBoxWidth() const

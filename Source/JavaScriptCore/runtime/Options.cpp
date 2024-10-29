@@ -71,6 +71,7 @@ extern "C" char **environ;
 namespace JSC {
 
 bool useOSLogOptionHasChanged = false;
+Options::SandboxPolicy Options::machExceptionHandlerSandboxPolicy = Options::SandboxPolicy::Unknown;
 
 namespace OptionsHelper {
 
@@ -380,6 +381,11 @@ bool Options::isAvailable(Options::ID id, Options::Availability availability)
         return !!LLINT_TRACING;
     if (id == traceLLIntSlowPathID)
         return !!LLINT_TRACING;
+    if (id == traceWasmLLIntExecutionID)
+        return !!LLINT_TRACING;
+
+    if (id == validateVMEntryCalleeSavesID)
+        return !!ASSERT_ENABLED;
     return false;
 }
 
@@ -542,8 +548,17 @@ static void scaleJITPolicy()
     scaleOption(Options::thresholdForOMGOptimizeSoon(), 1);
 }
 
+#if OS(DARWIN)
+static void disableAllSignalHandlerBasedOptions();
+#endif
+
 static void overrideDefaults()
 {
+#if OS(DARWIN)
+    if (Options::machExceptionHandlerSandboxPolicy == Options::SandboxPolicy::Block)
+        disableAllSignalHandlerBasedOptions();
+#endif
+
 #if !PLATFORM(IOS_FAMILY)
     if (WTF::numberOfProcessorCores() < 4)
 #endif
@@ -558,10 +573,10 @@ static void overrideDefaults()
             Options::gcIncrementScale() = 0;
     }
 
-#if PLATFORM(MAC) && CPU(ARM64)
-    Options::numberOfGCMarkers() = 3;
-    Options::numberOfDFGCompilerThreads() = 3;
-    Options::numberOfFTLCompilerThreads() = 3;
+#if OS(DARWIN) && CPU(ARM64)
+    Options::numberOfGCMarkers() = std::min<unsigned>(3, kernTCSMAwareNumberOfProcessorCores());
+    Options::numberOfDFGCompilerThreads() = std::min<unsigned>(3, kernTCSMAwareNumberOfProcessorCores());
+    Options::numberOfFTLCompilerThreads() = std::min<unsigned>(3, kernTCSMAwareNumberOfProcessorCores());
 #endif
 
 #if OS(LINUX) && CPU(ARM)
@@ -592,11 +607,6 @@ static void overrideDefaults()
     Options::useMachForExceptions() = false;
 #endif
 
-    if (Options::useWasmLLInt() && !Options::wasmLLIntTiersUpToBBQ()) {
-        Options::thresholdForOMGOptimizeAfterWarmUp() = 1500;
-        Options::thresholdForOMGOptimizeSoon() = 100;
-    }
-
 #if ASAN_ENABLED
     // This is a heuristic because ASAN builds are memory hogs in terms of stack frame usage.
     // So, we need a much larger ReservedZoneSize to allow stack overflow handlers to execute.
@@ -621,24 +631,35 @@ void Options::setAllJITCodeValidations(bool value)
     Options::useJITAsserts() = value;
 }
 
-static inline void disableAllWasmOptions()
+static inline void disableAllWasmJITOptions()
 {
-    Options::useWasm() = false;
-    Options::useWasmIPInt() = false;
-    Options::useWasmLLInt() = false;
+    Options::useLLInt() = true;
+    Options::useWasmJIT() = false;
     Options::useBBQJIT() = false;
     Options::useOMGJIT() = false;
+
+    Options::useWasmSIMD() = false;
+
     Options::dumpWasmDisassembly() = false;
     Options::dumpBBQDisassembly() = false;
     Options::dumpOMGDisassembly() = false;
+}
+
+static inline void disableAllWasmOptions()
+{
+    disableAllWasmJITOptions();
+
+    Options::useWasm() = false;
+    Options::useWasmIPInt() = false;
+    Options::useWasmLLInt() = false;
     Options::failToCompileWasmCode() = true;
 
     Options::useWasmFastMemory() = false;
     Options::useWasmFaultSignalHandler() = false;
     Options::numberOfWasmCompilerThreads() = 0;
 
+    // SIMD is already disabled by JITOptions
     Options::useWasmGC() = false;
-    Options::useWasmSIMD() = false;
     Options::useWasmRelaxedSIMD() = false;
     Options::useWasmTailCalls() = false;
 }
@@ -647,20 +668,16 @@ static inline void disableAllJITOptions()
 {
     Options::useLLInt() = true;
     Options::useJIT() = false;
+    Options::useWasmJIT() = false;
+    disableAllWasmJITOptions();
+
     Options::useBaselineJIT() = false;
     Options::useDFGJIT() = false;
     Options::useFTLJIT() = false;
-    Options::useBBQJIT() = false;
-    Options::useOMGJIT() = false;
     Options::useDOMJIT() = false;
     Options::useRegExpJIT() = false;
     Options::useJITCage() = false;
     Options::useConcurrentJIT() = false;
-
-    if (!Options::useWasmJITLessJSEntrypoint() && Options::useWasm())
-        disableAllWasmOptions();
-
-    Options::useWasmSIMD() = false;
 
     Options::usePollingTraps() = true;
 
@@ -670,11 +687,18 @@ static inline void disableAllJITOptions()
     Options::dumpDFGDisassembly() = false;
     Options::dumpFTLDisassembly() = false;
     Options::dumpRegExpDisassembly() = false;
-    Options::dumpWasmDisassembly() = false;
-    Options::dumpBBQDisassembly() = false;
-    Options::dumpOMGDisassembly() = false;
     Options::needDisassemblySupport() = false;
 }
+
+#if OS(DARWIN)
+static void disableAllSignalHandlerBasedOptions()
+{
+    Options::usePollingTraps() = true;
+    Options::useSharedArrayBuffer() = false;
+    Options::useWasmFastMemory() = false;
+    Options::useWasmFaultSignalHandler() = false;
+}
+#endif
 
 void Options::executeDumpOptions()
 {
@@ -715,6 +739,7 @@ void Options::notifyOptionsChanged()
 
 #if !ENABLE(JIT)
     Options::useJIT() = false;
+    Options::useWasmJIT() = false;
 #endif
 #if !ENABLE(CONCURRENT_JS)
     Options::useConcurrentJIT() = false;
@@ -745,9 +770,6 @@ void Options::notifyOptionsChanged()
 #if !CPU(ARM_THUMB2)
     Options::useBBQJIT() = false;
 #endif
-#if CPU(ARM_THUMB2)
-    Options::useBBQTierUpChecks() = false;
-#endif
 #endif
 
 #if !CPU(ARM64)
@@ -760,15 +782,31 @@ void Options::notifyOptionsChanged()
     if (!Options::allowDoubleShape())
         Options::useJIT() = false; // We don't support JIT with !allowDoubleShape. So disable it.
 
-    if (!Options::useWasm())
+    // When reenabling JITLess wasm we should unskip the tests disabled in https://bugs.webkit.org/show_bug.cgi?id=281857
+    if (!Options::useWasm() || !Options::useJIT())
         disableAllWasmOptions();
+
+    if (!Options::useJIT())
+        Options::useWasmJIT() = false;
+    if (!Options::useWasmJIT())
+        disableAllWasmJITOptions();
+
+    if (!Options::useWasmLLInt() && !Options::useWasmIPInt())
+        Options::thresholdForBBQOptimizeAfterWarmUp() = 0; // Trigger immediate BBQ tier up.
 
     // At initialization time, we may decide that useJIT should be false for any
     // number of reasons (including failing to allocate JIT memory), and therefore,
     // will / should not be able to enable any JIT related services.
-    if (!Options::useJIT())
+    if (!Options::useJIT()) {
         disableAllJITOptions();
-    else {
+#if OS(DARWIN)
+        // If we don't know what the sandbox policy is on mach exception handler use is, we'll
+        // take the default behavior of blocking its use if the JIT is disabled. JIT disablement
+        // is a good proxy indicator for when mach exception handler use would also be blocked.
+        if (machExceptionHandlerSandboxPolicy == SandboxPolicy::Unknown)
+            disableAllSignalHandlerBasedOptions();
+#endif
+    } else {
         if (WTF::isX86BinaryRunningOnARM()) {
             Options::useBaselineJIT() = false;
             Options::useDFGJIT() = false;
@@ -838,22 +876,11 @@ void Options::notifyOptionsChanged()
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) > 0);
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) <= static_cast<int64_t>(std::numeric_limits<int32_t>::max()));
 
-        if (!Options::useBBQJIT() && Options::useOMGJIT())
-            Options::wasmLLIntTiersUpToBBQ() = false;
-
         if (isX86_64() && !isX86_64_AVX())
             Options::useWasmSIMD() = false;
 
         if (Options::forceAllFunctionsToUseSIMD() && !Options::useWasmSIMD())
             Options::forceAllFunctionsToUseSIMD() = false;
-
-#if USE(JSVALUE32_64)
-        if (Options::useWasmTailCalls()) {
-            Options::useBBQJIT() = false;
-            Options::useWasmLLInt() = true;
-            Options::wasmLLIntTiersUpToBBQ() = false;
-        }
-#endif
 
         if (Options::useWasmSIMD() && !(Options::useWasmLLInt() || Options::useWasmIPInt())) {
             // The LLInt is responsible for discovering if functions use SIMD.
@@ -942,7 +969,7 @@ void Options::notifyOptionsChanged()
     if (!Options::useWasmFaultSignalHandler())
         Options::useWasmFastMemory() = false;
 
-#if CPU(ADDRESS32)
+#if CPU(ADDRESS32) || PLATFORM(PLAYSTATION)
     Options::useWasmFastMemory() = false;
 #endif
 

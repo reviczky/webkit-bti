@@ -25,8 +25,11 @@
 
 #include "config.h"
 #include "NativeImage.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NativeImage);
 
 NativeImageBackend::NativeImageBackend() = default;
 
@@ -90,6 +93,11 @@ bool NativeImage::hasAlpha() const
 DestinationColorSpace NativeImage::colorSpace() const
 {
     return m_backend->colorSpace();
+}
+
+Headroom NativeImage::headroom() const
+{
+    return m_backend->headroom();
 }
 
 void NativeImage::replaceBackend(UniqueRef<NativeImageBackend> backend)

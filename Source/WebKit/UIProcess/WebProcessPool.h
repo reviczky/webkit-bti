@@ -86,6 +86,10 @@ OBJC_CLASS WKWebInspectorPreferenceObserver;
 #include "ExtensionCapabilityGranter.h"
 #endif
 
+#if PLATFORM(IOS_FAMILY)
+#include "HardwareKeyboardState.h"
+#endif
+
 namespace API {
 class AutomationClient;
 class DownloadClient;
@@ -112,9 +116,6 @@ namespace WebKit {
 
 class LockdownModeObserver;
 class PerActivityStateCPUUsageSampler;
-#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
-class StorageAccessUserAgentStringQuirkObserver;
-#endif
 class SuspendedPageProxy;
 class UIGamepad;
 class WebAutomationSession;
@@ -128,6 +129,10 @@ struct GPUProcessCreationParameters;
 struct NetworkProcessCreationParameters;
 struct WebProcessCreationParameters;
 struct WebProcessDataStoreParameters;
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+class ListDataObserver;
+#endif
 
 #if PLATFORM(COCOA)
 int networkProcessLatencyQOS();
@@ -155,9 +160,7 @@ class WebProcessPool final
 #endif
 {
 public:
-    using IPC::MessageReceiver::weakPtrFactory;
-    using IPC::MessageReceiver::WeakValueType;
-    using IPC::MessageReceiver::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(IPC::MessageReceiver);
 
     static Ref<WebProcessPool> create(API::ProcessPoolConfiguration&);
 
@@ -173,6 +176,12 @@ public:
     T* supplement()
     {
         return static_cast<T*>(m_supplements.get(T::supplementName()));
+    }
+
+    template <typename T>
+    RefPtr<T> protectedSupplement()
+    {
+        return supplement<T>();
     }
 
     template <typename T>
@@ -347,7 +356,7 @@ public:
     bool httpPipeliningEnabled() const;
 
     WebProcessProxy* webProcessProxyFromConnection(const IPC::Connection&) const;
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess(const IPC::Connection&) const;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess(const IPC::Connection&) const;
 
     bool javaScriptConfigurationFileEnabled() { return m_javaScriptConfigurationFileEnabled; }
     void setJavaScriptConfigurationFileEnabled(bool flag);
@@ -385,6 +394,7 @@ public:
     GPUProcessProxy& ensureGPUProcess();
     Ref<GPUProcessProxy> ensureProtectedGPUProcess();
     GPUProcessProxy* gpuProcess() const { return m_gpuProcess.get(); }
+    RefPtr<GPUProcessProxy> protectedGPUProcess() const { return gpuProcess(); }
 #endif
 
 #if ENABLE(MODEL_PROCESS)
@@ -393,8 +403,7 @@ public:
 
     void createModelProcessConnection(WebProcessProxy&, IPC::Connection::Handle&&, WebKit::ModelProcessConnectionParameters&&);
 
-    ModelProcessProxy& ensureModelProcess();
-    Ref<ModelProcessProxy> ensureProtectedModelProcess();
+    Ref<ModelProcessProxy> ensureProtectedModelProcess(WebProcessProxy& requestingWebProcess);
     ModelProcessProxy* modelProcess() const { return m_modelProcess.get(); }
 #endif
 
@@ -574,11 +583,35 @@ public:
     ExtensionCapabilityGranter& extensionCapabilityGranter();
     RefPtr<GPUProcessProxy> gpuProcessForCapabilityGranter(const ExtensionCapabilityGranter&) final;
     RefPtr<WebProcessProxy> webProcessForCapabilityGranter(const ExtensionCapabilityGranter&, const String& environmentIdentifier) final;
+
+    void ref() const final { API::ObjectImpl<API::Object::Type::ProcessPool>::ref(); }
+    void deref() const final { API::ObjectImpl<API::Object::Type::ProcessPool>::deref(); }
 #endif
 
     bool usesSingleWebProcess() const { return m_configuration->usesSingleWebProcess(); }
 
     bool operator==(const WebProcessPool& other) const { return (this == &other); }
+
+#if PLATFORM(IOS_FAMILY)
+    HardwareKeyboardState cachedHardwareKeyboardState() const;
+#endif
+
+    bool webProcessStateUpdatesForPageClientEnabled() const { return m_webProcessStateUpdatesForPageClientEnabled; }
+    void setWebProcessStateUpdatesForPageClientEnabled(bool enabled) { m_webProcessStateUpdatesForPageClientEnabled = enabled; }
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    void observeScriptTelemetryUpdatesIfNeeded();
+#endif
+
+#if ENABLE(WEB_PROCESS_SUSPENSION_DELAY)
+    void memoryPressureStatusChangedForProcess(WebProcessProxy&, SystemMemoryPressureStatus);
+    void checkMemoryPressureStatus();
+
+    static Seconds defaultWebProcessSuspensionDelay();
+    Seconds webProcessSuspensionDelay() const;
+    void updateWebProcessSuspensionDelay();
+    void updateWebProcessSuspensionDelayWithPacing(WeakHashSet<WebProcessProxy>&&);
+#endif
 
 private:
     enum class NeedsGlobalStaticInitialization : bool { No, Yes };
@@ -681,6 +714,17 @@ private:
     void setMediaAccessibilityPreferences(WebProcessProxy&);
 #endif
     void clearAudibleActivity();
+
+#if PLATFORM(IOS_FAMILY)
+    static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef, void* observer, CFStringRef, const void*, CFDictionaryRef);
+    void initializeHardwareKeyboardAvailability();
+    void hardwareKeyboardAvailabilityChanged();
+    void setCachedHardwareKeyboardState(HardwareKeyboardState);
+#endif
+
+#if ENABLE(MODEL_PROCESS)
+    ModelProcessProxy& ensureModelProcess();
+#endif
 
     Ref<API::ProcessPoolConfiguration> m_configuration;
 
@@ -890,15 +934,25 @@ private:
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
-    std::unique_ptr<ExtensionCapabilityGranter> m_extensionCapabilityGranter;
+    RefPtr<ExtensionCapabilityGranter> m_extensionCapabilityGranter;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
     bool m_processesShouldSuspend { false };
+    HardwareKeyboardState m_hardwareKeyboardState;
 #endif
+
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
-    RefPtr<StorageAccessUserAgentStringQuirkObserver> m_storageAccessUserAgentStringQuirksDataUpdateObserver;
-    RefPtr<StorageAccessPromptQuirkObserver> m_storageAccessPromptQuirksDataUpdateObserver;
+    RefPtr<ListDataObserver> m_storageAccessUserAgentStringQuirksDataUpdateObserver;
+    RefPtr<ListDataObserver> m_storageAccessPromptQuirksDataUpdateObserver;
+    RefPtr<ListDataObserver> m_scriptTelemetryDataUpdateObserver;
+#endif
+
+    bool m_webProcessStateUpdatesForPageClientEnabled { false };
+
+#if PLATFORM(MAC)
+    ApproximateTime m_lastCriticalMemoryPressureStatusTime;
+    RunLoop::Timer m_checkMemoryPressureStatusTimer;
 #endif
 };
 
@@ -927,13 +981,24 @@ void WebProcessPool::sendToAllProcessesForSession(const T& message, PAL::Session
 template<typename T>
 void WebProcessPool::sendToAllRemoteWorkerProcesses(const T& message, ShouldSkipSuspendedProcesses shouldSkipSuspendedProcesses)
 {
-    for (auto& process : remoteWorkerProcesses()) {
-        if (!process.canSendMessage())
+    for (Ref process : remoteWorkerProcesses()) {
+        if (!process->canSendMessage())
             continue;
-        if (shouldSkipSuspendedProcesses == ShouldSkipSuspendedProcesses::Yes && process.throttler().isSuspended())
+        if (shouldSkipSuspendedProcesses == ShouldSkipSuspendedProcesses::Yes && process->throttler().isSuspended())
             continue;
-        process.send(T(message), 0);
+        process->send(T(message), 0);
     }
+}
+
+inline WebProcessPool& WebProcessProxy::processPool() const
+{
+    ASSERT(m_processPool);
+    return *m_processPool.get();
+}
+
+inline Ref<WebProcessPool> WebProcessProxy::protectedProcessPool() const
+{
+    return processPool();
 }
 
 } // namespace WebKit

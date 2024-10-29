@@ -33,6 +33,8 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace IPC {
 
 static uint8_t* copyBuffer(std::span<const uint8_t> buffer)
@@ -94,6 +96,12 @@ Decoder::Decoder(std::span<const uint8_t> buffer, BufferDeallocator&& bufferDeal
     if (UNLIKELY(!destinationID))
         return;
     m_destinationID = WTFMove(*destinationID);
+    if (messageIsSync(m_messageName)) {
+        auto syncRequestID = decode<SyncRequestID>();
+        if (UNLIKELY(!syncRequestID))
+            return;
+        m_syncRequestID = syncRequestID;
+    }
 }
 
 Decoder::Decoder(std::span<const uint8_t> stream, uint64_t destinationID)
@@ -106,6 +114,12 @@ Decoder::Decoder(std::span<const uint8_t> stream, uint64_t destinationID)
     if (UNLIKELY(!messageName))
         return;
     m_messageName = WTFMove(*messageName);
+    if (messageIsSync(m_messageName)) {
+        auto syncRequestID = decode<SyncRequestID>();
+        if (UNLIKELY(!syncRequestID))
+            return;
+        m_syncRequestID = syncRequestID;
+    }
 }
 
 Decoder::~Decoder()
@@ -133,13 +147,6 @@ bool Decoder::shouldMaintainOrderingWithAsyncMessages() const
 {
     return m_messageFlags.contains(MessageFlags::MaintainOrderingWithAsyncMessages);
 }
-
-#if ENABLE(IPC_TESTING_API)
-bool Decoder::hasSyncMessageDeserializationFailure() const
-{
-    return m_messageFlags.contains(MessageFlags::SyncMessageDeserializationFailure);
-}
-#endif
 
 #if PLATFORM(MAC)
 void Decoder::setImportanceAssertion(ImportanceAssertion&& assertion)
@@ -173,3 +180,5 @@ std::optional<Attachment> Decoder::takeLastAttachment()
 }
 
 } // namespace IPC
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

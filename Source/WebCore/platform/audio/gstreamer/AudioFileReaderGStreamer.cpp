@@ -33,6 +33,7 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/PrintStream.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Threading.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/MakeString.h>
@@ -52,7 +53,7 @@ GST_DEBUG_CATEGORY(webkit_audio_file_reader_debug);
 #define GST_CAT_DEFAULT webkit_audio_file_reader_debug
 
 class AudioFileReader : public CanMakeWeakPtr<AudioFileReader> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(AudioFileReader);
     WTF_MAKE_NONCOPYABLE(AudioFileReader);
 public:
     explicit AudioFileReader(std::span<const uint8_t>);
@@ -76,7 +77,7 @@ private:
     std::span<const uint8_t> m_data;
     float m_sampleRate { 0 };
     int m_channels { 0 };
-    HashMap<int, GRefPtr<GstBufferList>> m_buffers;
+    UncheckedKeyHashMap<int, GRefPtr<GstBufferList>> m_buffers;
     GRefPtr<GstElement> m_pipeline;
     std::optional<int> m_firstChannelType;
     unsigned m_channelSize { 0 };

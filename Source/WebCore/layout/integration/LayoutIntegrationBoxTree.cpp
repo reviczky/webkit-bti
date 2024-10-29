@@ -32,6 +32,7 @@
 #include "LayoutInlineTextBox.h"
 #include "RenderBlock.h"
 #include "RenderBlockFlow.h"
+#include "RenderButton.h"
 #include "RenderChildIterator.h"
 #include "RenderCombineText.h"
 #include "RenderCounter.h"
@@ -41,8 +42,11 @@
 #include "RenderLineBreak.h"
 #include "RenderListItem.h"
 #include "RenderListMarker.h"
+#include "RenderMenuList.h"
+#include "RenderSlider.h"
 #include "RenderStyleSetters.h"
 #include "RenderTable.h"
+#include "RenderTextControl.h"
 #include "RenderView.h"
 #include "TextUtil.h"
 
@@ -73,6 +77,8 @@ static Layout::Box::ElementAttributes elementAttributes(const RenderElement& ren
             return Layout::Box::NodeType::ListMarker;
         if (is<RenderReplaced>(renderer))
             return is<RenderImage>(renderer) ? Layout::Box::NodeType::Image : Layout::Box::NodeType::ReplacedElement;
+        if (is<RenderButton>(renderer) || is<RenderMenuList>(renderer) || is<RenderTextControlInnerContainer>(renderer) || is<RenderSlider>(renderer) || renderer.isRenderSliderContainer())
+            return Layout::Box::NodeType::ImplicitFlexBox;
         if (auto* renderLineBreak = dynamicDowncast<RenderLineBreak>(renderer))
             return renderLineBreak->isWBR() ? Layout::Box::NodeType::WordBreakOpportunity : Layout::Box::NodeType::LineBreak;
         if (is<RenderTable>(renderer))
@@ -94,11 +100,13 @@ BoxTree::BoxTree(RenderBlock& rootRenderer)
         initialContainingBlock().appendChild(WTFMove(newRootBox));
     }
 
-    if (is<RenderBlockFlow>(rootRenderer)) {
+    if (is<RenderBlockFlow>(rootRenderer))
         rootBox->setIsInlineIntegrationRoot();
-        rootBox->setIsFirstChildForIntegration(!rootRenderer.parent() || rootRenderer.parent()->firstChild() == &rootRenderer);
+    rootBox->setIsFirstChildForIntegration(!rootRenderer.parent() || rootRenderer.parent()->firstChild() == &rootRenderer);
+
+    if (is<RenderBlockFlow>(rootRenderer))
         buildTreeForInlineContent();
-    } else if (is<RenderFlexibleBox>(rootRenderer))
+    else if (is<RenderFlexibleBox>(rootRenderer))
         buildTreeForFlexContent();
     else
         ASSERT_NOT_IMPLEMENTED_YET();
@@ -114,7 +122,7 @@ BoxTree::~BoxTree()
             continue;
 
         auto* renderBlockFlow = dynamicDowncast<RenderBlockFlow>(*renderer);
-        auto isLFCInlineBlock = renderBlockFlow && renderBlockFlow->modernLineLayout();
+        auto isLFCInlineBlock = renderBlockFlow && renderBlockFlow->inlineLayout();
         if (isLFCInlineBlock)
             boxesToDetach.append(layoutBox);
     }
@@ -264,9 +272,13 @@ void BoxTree::buildTreeForInlineContent()
 void BoxTree::buildTreeForFlexContent()
 {
     for (auto& flexItemRenderer : childrenOfType<RenderElement>(m_rootRenderer)) {
+        if (auto existingChildBox = flexItemRenderer.layoutBox()) {
+            insertChild(existingChildBox->removeFromParent(), flexItemRenderer, flexItemRenderer.previousSibling());
+            continue;
+        }
         auto style = RenderStyle::clone(flexItemRenderer.style());
-        auto flexItem = makeUniqueRef<Layout::ElementBox>(elementAttributes(flexItemRenderer), WTFMove(style));
-        insertChild(WTFMove(flexItem), flexItemRenderer, flexItemRenderer.previousSibling());
+        auto flexItemBox = makeUniqueRef<Layout::ElementBox>(elementAttributes(flexItemRenderer), WTFMove(style));
+        insertChild(WTFMove(flexItemBox), flexItemRenderer, flexItemRenderer.previousSibling());
     }
 }
 

@@ -29,6 +29,7 @@
 #include "AudioParam.h"
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -39,8 +40,8 @@ class AudioNodeInput;
 // It may be connected to one or more AudioNodeInputs.
 
 class AudioNodeOutput {
+    WTF_MAKE_TZONE_ALLOCATED(AudioNodeOutput);
     WTF_MAKE_NONCOPYABLE(AudioNodeOutput);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
     // It's OK to pass 0 for numberOfChannels in which case setNumberOfChannels() must be called later on.
     AudioNodeOutput(AudioNode*, unsigned numberOfChannels);
@@ -141,7 +142,7 @@ private:
     // If m_isInPlace is true, use m_inPlaceBus as the valid AudioBus; If false, use the default m_internalBus.
     bool m_isInPlace { false };
 
-    using InputsMap = HashMap<AudioNodeInput*, AudioConnectionRefPtr<AudioNode>>;
+    using InputsMap = UncheckedKeyHashMap<AudioNodeInput*, AudioConnectionRefPtr<AudioNode>>;
     InputsMap m_inputs;
     typedef InputsMap::iterator InputsIterator;
     bool m_isEnabled { true };

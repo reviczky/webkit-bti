@@ -88,7 +88,7 @@ InlineLayoutUnit InlineFormattingUtils::logicalTopForNextLine(const LineLayoutRe
         ASSERT_NOT_REACHED();
         return { };
     };
-    if (auto firstAvailableVerticalPosition = intrusiveFloatBottom())
+    if (auto firstAvailableVerticalPosition = intrusiveFloatBottom(); firstAvailableVerticalPosition && *firstAvailableVerticalPosition > lineLogicalRect.top())
         return *firstAvailableVerticalPosition;
     // Do not get stuck on the same vertical position even when we find ourselves in this unexpected state.
     return ceil(nextafter(lineLogicalRect.bottom(), std::numeric_limits<float>::max()));
@@ -120,7 +120,7 @@ bool InlineFormattingUtils::inlineLevelBoxAffectsLineBox(const InlineLevelBox& i
     if (inlineLevelBox.isListMarker())
         return true;
     if (inlineLevelBox.isInlineBox())
-        return layoutState().inStandardsMode() ? true : formattingContext().quirks().inlineBoxAffectsLineBox(inlineLevelBox);
+        return formattingContext().layoutState().inStandardsMode() ? true : formattingContext().quirks().inlineBoxAffectsLineBox(inlineLevelBox);
     if (inlineLevelBox.isAtomicInlineBox())
         return !inlineLevelBox.layoutBox().isRubyAnnotationBox();
     return false;
@@ -128,21 +128,18 @@ bool InlineFormattingUtils::inlineLevelBoxAffectsLineBox(const InlineLevelBox& i
 
 InlineRect InlineFormattingUtils::flipVisualRectToLogicalForWritingMode(const InlineRect& visualRect, WritingMode writingMode)
 {
-    switch (writingModeToBlockFlowDirection(writingMode)) {
-    case BlockFlowDirection::TopToBottom:
-    case BlockFlowDirection::BottomToTop:
+    switch (writingMode.blockDirection()) {
+    case FlowDirection::TopToBottom:
+    case FlowDirection::BottomToTop:
         return visualRect;
-    case BlockFlowDirection::LeftToRight:
-    case BlockFlowDirection::RightToLeft: {
+    case FlowDirection::LeftToRight:
+    case FlowDirection::RightToLeft:
         // FIXME: While vertical-lr and vertical-rl modes do differ in the ordering direction of line boxes
         // in a block container (see: https://drafts.csswg.org/css-writing-modes/#block-flow)
         // we ignore it for now as RenderBlock takes care of it for us.
         return InlineRect { visualRect.left(), visualRect.top(), visualRect.height(), visualRect.width() };
     }
-    default:
-        ASSERT_NOT_REACHED();
-        break;
-    }
+    ASSERT_NOT_REACHED();
     return visualRect;
 }
 
@@ -188,7 +185,7 @@ InlineLayoutUnit InlineFormattingUtils::computedTextIndent(IsIntrinsicWidthMode 
 
 InlineLayoutUnit InlineFormattingUtils::initialLineHeight(bool isFirstLine) const
 {
-    if (layoutState().inStandardsMode())
+    if (formattingContext().layoutState().inStandardsMode())
         return isFirstLine ? formattingContext().root().firstLineStyle().computedLineHeight() : formattingContext().root().style().computedLineHeight();
     return formattingContext().quirks().initialLineHeight();
 }
@@ -205,7 +202,7 @@ FloatingContext::Constraints InlineFormattingUtils::floatConstraintsForLine(Inli
 
 InlineLayoutUnit InlineFormattingUtils::horizontalAlignmentOffset(const RenderStyle& rootStyle, InlineLayoutUnit contentLogicalRight, InlineLayoutUnit lineLogicalWidth, InlineLayoutUnit hangingTrailingWidth, const Line::RunList& runs, bool isLastLine, std::optional<TextDirection> inlineBaseDirectionOverride)
 {
-    // Depending on the line’s alignment/justification, the hanging glyph can be placed outside the line box.
+    // Depending on the line's alignment/justification, the hanging glyph can be placed outside the line box.
     if (hangingTrailingWidth) {
         // If white-space is set to pre-wrap, the UA must (unconditionally) hang this sequence, unless the sequence is followed
         // by a forced line break, in which case it must conditionally hang the sequence is instead.
@@ -225,7 +222,7 @@ InlineLayoutUnit InlineFormattingUtils::horizontalAlignmentOffset(const RenderSt
     if (horizontalAvailableSpace <= 0)
         return { };
 
-    auto isLeftToRightDirection = inlineBaseDirectionOverride.value_or(rootStyle.direction()) == TextDirection::LTR;
+    auto isLeftToRightDirection = inlineBaseDirectionOverride.value_or(rootStyle.writingMode().bidiDirection()) == TextDirection::LTR;
 
     auto computedHorizontalAlignment = [&] {
         auto textAlign = rootStyle.textAlign();
@@ -540,7 +537,7 @@ size_t InlineFormattingUtils::nextWrapOpportunity(size_t startIndex, const Inlin
             // Soft wrap opportunity is at the first inline box that encloses the trailing content.
             for (auto candidateIndex = start + 1; candidateIndex < end; ++candidateIndex) {
                 auto& inlineItem = inlineItemList[candidateIndex];
-                ASSERT(inlineItem.isInlineBoxStart() || inlineItem.isInlineBoxEnd() || inlineItem.isOpaque());
+                ASSERT(inlineItem.isInlineBoxStartOrEnd() || inlineItem.isOpaque());
                 if (inlineItem.isInlineBoxStart())
                     inlineBoxStack.append({ &inlineItem.layoutBox(), candidateIndex });
                 else if (inlineItem.isInlineBoxEnd() && !inlineBoxStack.isEmpty())
@@ -563,15 +560,15 @@ std::pair<InlineLayoutUnit, InlineLayoutUnit> InlineFormattingUtils::textEmphasi
     if (!hasTextEmphasis)
         return { };
     auto emphasisPosition = style.textEmphasisPosition();
-    // Normally we resolve visual -> logical values at pre-layout time, but emphaisis values are not part of the general box geometry.
+    // Normally we resolve visual -> logical values at pre-layout time, but emphasis values are not part of the general box geometry.
     auto hasAboveTextEmphasis = false;
     auto hasUnderTextEmphasis = false;
-    if (style.isHorizontalWritingMode()) {
-        hasAboveTextEmphasis = emphasisPosition.contains(TextEmphasisPosition::Over);
-        hasUnderTextEmphasis = !hasAboveTextEmphasis && emphasisPosition.contains(TextEmphasisPosition::Under);
+    if (style.writingMode().isVerticalTypographic()) {
+        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Left);
+        hasUnderTextEmphasis = !hasAboveTextEmphasis;
     } else {
-        hasAboveTextEmphasis = emphasisPosition.contains(TextEmphasisPosition::Right) || emphasisPosition == TextEmphasisPosition::Over;
-        hasUnderTextEmphasis = !hasAboveTextEmphasis && (emphasisPosition.contains(TextEmphasisPosition::Left) || emphasisPosition == TextEmphasisPosition::Under);
+        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Under);
+        hasUnderTextEmphasis = !hasAboveTextEmphasis;
     }
 
     if (!hasAboveTextEmphasis && !hasUnderTextEmphasis)
@@ -597,20 +594,30 @@ std::pair<InlineLayoutUnit, InlineLayoutUnit> InlineFormattingUtils::textEmphasi
     return { hasAboveTextEmphasis ? annotationSize : 0.f, hasAboveTextEmphasis ? 0.f : annotationSize };
 }
 
-LineEndingEllipsisPolicy InlineFormattingUtils::lineEndingEllipsisPolicy(const RenderStyle& rootStyle, size_t numberOfLinesWithInlineContent, std::optional<size_t> numberOfVisibleLinesAllowed)
+LineEndingTruncationPolicy InlineFormattingUtils::lineEndingTruncationPolicy(const RenderStyle& rootStyle, size_t numberOfLinesWithInlineContent, std::optional<size_t> numberOfVisibleLinesAllowed, bool currentLineHasInlineContent)
 {
-    if (numberOfVisibleLinesAllowed && *numberOfVisibleLinesAllowed == numberOfLinesWithInlineContent)
-        return LineEndingEllipsisPolicy::WhenContentOverflowsInBlockDirection;
+    if (numberOfVisibleLinesAllowed) {
+        // text-overflow: ellipsis should not apply inside clamping content.
+        if (!currentLineHasInlineContent) {
+            // Content with no inline should never ever receive ellipsis.
+            return LineEndingTruncationPolicy::NoTruncation;
+        }
+        return *numberOfVisibleLinesAllowed == numberOfLinesWithInlineContent ? LineEndingTruncationPolicy::WhenContentOverflowsInBlockDirection : LineEndingTruncationPolicy::NoTruncation;
+    }
 
     // Truncation is in effect when the block container has overflow other than visible.
     if (rootStyle.overflowX() != Overflow::Visible && rootStyle.textOverflow() == TextOverflow::Ellipsis)
-        return LineEndingEllipsisPolicy::WhenContentOverflowsInInlineDirection;
-    return LineEndingEllipsisPolicy::NoEllipsis;
+        return LineEndingTruncationPolicy::WhenContentOverflowsInInlineDirection;
+    return LineEndingTruncationPolicy::NoTruncation;
 }
 
-const InlineLayoutState& InlineFormattingUtils::layoutState() const
+bool InlineFormattingUtils::shouldDiscardRemainingContentInBlockDirection(size_t numberOfLinesWithInlineContent) const
 {
-    return formattingContext().layoutState();
+    auto lineClamp = formattingContext().layoutState().parentBlockLayoutState().lineClamp();
+    if (!lineClamp || !lineClamp->shouldDiscardOverflow)
+        return false;
+    ASSERT(!lineClamp->isLegacy);
+    return lineClamp->maximumLines == numberOfLinesWithInlineContent;
 }
 
 }

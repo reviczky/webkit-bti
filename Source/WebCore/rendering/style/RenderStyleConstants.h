@@ -467,7 +467,8 @@ enum class ItemPosition : uint8_t {
     FlexStart,
     FlexEnd,
     Left,
-    Right
+    Right,
+    AnchorCenter,
 };
 
 enum class OverflowAlignment : uint8_t {
@@ -889,8 +890,8 @@ enum class PointerEvents : uint8_t {
 enum class TransformStyle3D : uint8_t {
     Flat,
     Preserve3D,
-#if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
-    Optimized3D
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
+    Separated
 #endif
 };
 
@@ -910,6 +911,11 @@ enum class TransformBox : uint8_t {
 enum class LineClamp : bool {
     LineCount,
     Percentage
+};
+
+enum class OverflowContinue : bool {
+    Auto,
+    Discard
 };
 
 enum class Hyphens : uint8_t {
@@ -955,12 +961,6 @@ enum class TextUnderlinePosition : uint8_t {
     Right    = 1 << 3
 };
 
-enum class TextOrientation : uint8_t {
-    Mixed,
-    Upright,
-    Sideways
-};
-
 enum class TextOverflow : bool {
     Clip,
     Ellipsis
@@ -984,16 +984,6 @@ enum class ImageRendering : uint8_t {
     OptimizeQuality,
     CrispEdges,
     Pixelated
-};
-
-enum class ImageResolutionSource : bool {
-    Specified,
-    FromImage
-};
-
-enum class ImageResolutionSnap : bool {
-    None,
-    Pixels
 };
 
 enum class Order : bool {
@@ -1026,7 +1016,8 @@ enum class LineAlign : bool {
 enum class RubyPosition : uint8_t {
     Over,
     Under,
-    InterCharacter
+    InterCharacter,
+    LegacyInterCharacter
 };
 
 enum class RubyAlign : uint8_t {
@@ -1034,6 +1025,11 @@ enum class RubyAlign : uint8_t {
     Center,
     SpaceBetween,
     SpaceAround
+};
+
+enum class RubyOverhang : bool {
+    Auto,
+    None
 };
 
 #if ENABLE(DARK_MODE_CSS)
@@ -1294,6 +1290,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, ReflectionDirection);
 WTF::TextStream& operator<<(WTF::TextStream&, Resize);
 WTF::TextStream& operator<<(WTF::TextStream&, RubyPosition);
 WTF::TextStream& operator<<(WTF::TextStream&, RubyAlign);
+WTF::TextStream& operator<<(WTF::TextStream&, RubyOverhang);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxis);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxisAlignType);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStop);
@@ -1312,7 +1309,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisMark);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisPosition);
 WTF::TextStream& operator<<(WTF::TextStream&, TextGroupAlign);
 WTF::TextStream& operator<<(WTF::TextStream&, TextJustify);
-WTF::TextStream& operator<<(WTF::TextStream&, TextOrientation);
 WTF::TextStream& operator<<(WTF::TextStream&, TextOverflow);
 WTF::TextStream& operator<<(WTF::TextStream&, TextSecurity);
 WTF::TextStream& operator<<(WTF::TextStream&, TextTransform);
@@ -1335,5 +1331,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, WordBreak);
 WTF::TextStream& operator<<(WTF::TextStream&, MathStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, ContainIntrinsicSizeType);
 WTF::TextStream& operator<<(WTF::TextStream&, FieldSizing);
+WTF::TextStream& operator<<(WTF::TextStream&, OverflowContinue);
 
 } // namespace WebCore

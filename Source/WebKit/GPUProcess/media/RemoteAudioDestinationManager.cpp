@@ -44,7 +44,10 @@
 #include <WebCore/WebAudioBufferList.h>
 #endif
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #define MESSAGE_CHECK(assertion, message) MESSAGE_CHECK_WITH_MESSAGE_BASE(assertion, &connection->connection(), message)
+#define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, connection->connection(), completion)
 
 namespace WebKit {
 
@@ -57,8 +60,10 @@ class RemoteAudioDestination final
 public:
     RemoteAudioDestination(GPUConnectionToWebProcess& connection, const String& inputDeviceId, uint32_t numberOfInputChannels, uint32_t numberOfOutputChannels, float sampleRate, float hardwareSampleRate, IPC::Semaphore&& renderSemaphore)
         : m_renderSemaphore(WTFMove(renderSemaphore))
+#if !RELEASE_LOG_DISABLED
         , m_logger(connection.logger())
         , m_logIdentifier(LoggerHelper::uniqueLogIdentifier())
+#endif
 #if PLATFORM(COCOA)
         , m_audioOutputUnitAdaptor(*this)
         , m_numOutputChannels(numberOfOutputChannels)
@@ -161,15 +166,18 @@ private:
     }
 #endif
 
-    Logger& logger() const { return m_logger; }
-    const void* logIdentifier() const { return m_logIdentifier; }
-    ASCIILiteral logClassName() const { return "RemoteAudioDestination"_s; }
-    WTFLogChannel& logChannel() const { return WebKit2LogMedia; }
-
     IPC::Semaphore m_renderSemaphore;
     bool m_isPlaying { false };
+
+#if !RELEASE_LOG_DISABLED
+    ASCIILiteral logClassName() const { return "RemoteAudioDestination"_s; }
+    WTFLogChannel& logChannel() const { return WebKit2LogMedia; }
+    uint64_t logIdentifier() const { return m_logIdentifier; }
+    Logger& logger() const { return m_logger; }
+
     Ref<Logger> m_logger;
-    const void* m_logIdentifier;
+    const uint64_t m_logIdentifier;
+#endif
 
 #if PLATFORM(COCOA)
     WebCore::AudioOutputUnitAdaptor m_audioOutputUnitAdaptor;
@@ -223,7 +231,7 @@ void RemoteAudioDestinationManager::startAudioDestination(RemoteAudioDestination
     auto connection = m_gpuConnectionToWebProcess.get();
     if (!connection)
         return completionHandler(false);
-    MESSAGE_CHECK(!connection->isLockdownModeEnabled(), "Received a startAudioDestination() message from a webpage in Lockdown mode.");
+    MESSAGE_CHECK_COMPLETION(!connection->isLockdownModeEnabled(), completionHandler(false));
 
     bool isPlaying = false;
     if (auto* item = m_audioDestinations.get(identifier)) {
@@ -238,7 +246,7 @@ void RemoteAudioDestinationManager::stopAudioDestination(RemoteAudioDestinationI
     auto connection = m_gpuConnectionToWebProcess.get();
     if (!connection)
         return completionHandler(false);
-    MESSAGE_CHECK(!connection->isLockdownModeEnabled(), "Received a stopAudioDestination() message from a webpage in Lockdown mode.");
+    MESSAGE_CHECK_COMPLETION(!connection->isLockdownModeEnabled(), completionHandler(false));
 
     bool isPlaying = false;
     if (auto* item = m_audioDestinations.get(identifier)) {
@@ -265,8 +273,18 @@ bool RemoteAudioDestinationManager::allowsExitUnderMemoryPressure() const
     return true;
 }
 
+std::optional<SharedPreferencesForWebProcess> RemoteAudioDestinationManager::sharedPreferencesForWebProcess() const
+{
+    if (RefPtr gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get())
+        return gpuConnectionToWebProcess->sharedPreferencesForWebProcess();
+
+    return std::nullopt;
+}
+
 } // namespace WebKit
 
 #undef MESSAGE_CHECK
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // ENABLE(GPU_PROCESS) && ENABLE(WEB_AUDIO)

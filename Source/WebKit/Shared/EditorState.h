@@ -31,6 +31,7 @@
 #include <WebCore/ElementContext.h>
 #include <WebCore/FontAttributes.h>
 #include <WebCore/IntRect.h>
+#include <WebCore/PlatformLayerIdentifier.h>
 #include <WebCore/WritingDirection.h>
 #include <wtf/text/WTFString.h>
 
@@ -147,12 +148,14 @@ struct EditorState {
 #endif
 #if PLATFORM(IOS_FAMILY)
         WebCore::IntRect selectionClipRect;
+        WebCore::IntRect editableRootBounds;
         WebCore::IntRect caretRectAtEnd;
         Vector<WebCore::SelectionGeometry> selectionGeometries;
         Vector<WebCore::SelectionGeometry> markedTextRects;
         WebCore::IntRect markedTextCaretRectAtStart;
         WebCore::IntRect markedTextCaretRectAtEnd;
-#endif
+        std::optional<WebCore::PlatformLayerIdentifier> enclosingLayerID;
+#endif // PLATFORM(IOS_FAMILY)
     };
 
     bool hasVisualData() const { return !!visualData; }

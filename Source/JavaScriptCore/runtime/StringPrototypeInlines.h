@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple, Inc. All rights reserved.
+ * Copyright (C) 2019-2024 Apple, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -271,7 +271,7 @@ ALWAYS_INLINE JSString* stringReplaceAllStringString(JSGlobalObject* globalObjec
 
     auto resultLength = CheckedSize { string.length() + matchStarts.size() * (replacement.length() - searchLength) };
 
-    StringBuilder resultBuilder;
+    StringBuilder resultBuilder(StringBuilder::OverflowHandler::RecordOverflow);
     resultBuilder.reserveCapacity(resultLength);
 
     size_t lastMatchEnd = 0;
@@ -375,6 +375,32 @@ inline JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* globalObject, 
         return nullptr;
     }
     RELEASE_AND_RETURN(scope, jsSpliceSubstringsWithSeparators(globalObject, jsString, string, sourceRanges.data(), sourceRanges.size(), replacements.data(), replacements.size()));
+}
+
+enum class DollarCheck : uint8_t { Yes, No };
+template<DollarCheck check = DollarCheck::Yes>
+inline JSString* tryReplaceOneCharUsingString(JSGlobalObject* globalObject, JSString* string, JSString* search, JSString* replacement)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    // FIXME: Substring should be supported. However, substring of substring is not allowed at the moment.
+    if (!string->isNonSubstringRope() || string->length() < 0x128)
+        return nullptr;
+
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    auto searchString = search->value(globalObject);
+    if (searchString->length() != 1)
+        return nullptr;
+
+    auto replaceString = replacement->value(globalObject);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    if constexpr (check == DollarCheck::Yes) {
+        if (replaceString->find('$') != notFound)
+            return nullptr;
+    }
+
+    RELEASE_AND_RETURN(scope, string->tryReplaceOneChar(globalObject, searchString[0], replacement));
 }
 
 } // namespace JSC

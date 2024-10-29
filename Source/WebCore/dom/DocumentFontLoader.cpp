@@ -37,8 +37,11 @@
 #include "FrameDestructionObserverInlines.h"
 #include "FrameLoader.h"
 #include "LocalFrame.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DocumentFontLoader);
 
 DocumentFontLoader::DocumentFontLoader(Document& document)
     : m_document(document)
@@ -105,7 +108,7 @@ void DocumentFontLoader::fontLoadingTimerFired()
     // New font loads may be triggered by layout after the document load is complete but before we have dispatched
     // didFinishLoading for the frame. Make sure the delegate is always dispatched by checking explicitly.
     if (RefPtr frame = m_document->frame())
-        frame->checkedLoader()->checkLoadComplete();
+        frame->protectedLoader()->checkLoadComplete();
 }
 
 void DocumentFontLoader::stopLoadingAndClearFonts()

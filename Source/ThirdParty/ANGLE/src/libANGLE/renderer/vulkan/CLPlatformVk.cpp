@@ -52,9 +52,18 @@ angle::Result CLPlatformVk::initBackendRenderer()
 {
     ASSERT(mRenderer != nullptr);
 
+    angle::FeatureOverrides featureOverrides;
+
+    // In memory |SizedMRUCache| does not require dual slots, supports zero sized values, and evicts
+    // minumum number of old items when storing a new item.
+    featureOverrides.disabled.push_back("useDualPipelineBlobCacheSlots");
+    featureOverrides.enabled.push_back("useEmptyBlobsToEraseOldPipelineCacheFromBlobCache");
+    featureOverrides.enabled.push_back("hasBlobCacheThatEvictsOldItemsFirst");
+    featureOverrides.disabled.push_back("verifyPipelineCacheInBlobCache");
+
     ANGLE_TRY(mRenderer->initialize(this, this, angle::vk::ICD::Default, 0, 0, kUseDebugLayers,
                                     getWSIExtension(), getWSILayer(), getWindowSystem(),
-                                    angle::FeatureOverrides{}));
+                                    featureOverrides));
 
     return angle::Result::Continue;
 }
@@ -134,11 +143,12 @@ angle::Result CLPlatformVk::createContextFromType(cl::Context &context,
     const VkPhysicalDeviceType &vkPhysicalDeviceType =
         getRenderer()->getPhysicalDeviceProperties().deviceType;
 
-    if (deviceType.isSet(CL_DEVICE_TYPE_CPU) && vkPhysicalDeviceType != VK_PHYSICAL_DEVICE_TYPE_CPU)
+    if (deviceType.intersects(CL_DEVICE_TYPE_CPU) &&
+        vkPhysicalDeviceType != VK_PHYSICAL_DEVICE_TYPE_CPU)
     {
         ANGLE_CL_RETURN_ERROR(CL_DEVICE_NOT_FOUND);
     }
-    else if (deviceType.isSet(CL_DEVICE_TYPE_GPU))
+    else if (deviceType.intersects(CL_DEVICE_TYPE_GPU))
     {
         switch (vkPhysicalDeviceType)
         {
@@ -159,7 +169,7 @@ angle::Result CLPlatformVk::createContextFromType(cl::Context &context,
     for (const auto &platformDevice : mPlatform.getDevices())
     {
         const auto &platformDeviceInfo = platformDevice->getInfo();
-        if (platformDeviceInfo.type.isSet(deviceType))
+        if (platformDeviceInfo.type.intersects(deviceType))
         {
             devices.push_back(platformDevice);
         }

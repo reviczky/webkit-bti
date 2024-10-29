@@ -73,8 +73,9 @@
 #include "Settings.h"
 #include "StyleGridData.h"
 #include "StyleResolver.h"
-#include "TextDirection.h"
+#include "WritingMode.h"
 #include <wtf/MathExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -82,6 +83,8 @@
 namespace WebCore {
 
 using namespace Inspector;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorOverlay);
 
 static constexpr float rulerSize = 15;
 static constexpr float rulerLabelSize = 13;
@@ -1204,7 +1207,7 @@ Path InspectorOverlay::drawElementTitle(GraphicsContext& context, Node& node, co
 
     String elementRole;
     if (AXObjectCache* axObjectCache = node.document().axObjectCache()) {
-        if (auto* axObject = axObjectCache->getOrCreate(node); axObject && !axObject->accessibilityIsIgnored())
+        if (auto* axObject = axObjectCache->getOrCreate(node); axObject && !axObject->isIgnored())
             elementRole = axObject->computedRoleString();
     }
 
@@ -1437,7 +1440,7 @@ static Vector<String> authoredGridTrackSizes(Node* node, GridTrackSizingDirectio
         }
 
         if (auto* cssGridIntegerRepeatValue = dynamicDowncast<CSSGridIntegerRepeatValue>(currentValue)) {
-            size_t repetitions = cssGridIntegerRepeatValue->repetitions();
+            size_t repetitions = cssGridIntegerRepeatValue->repetitions().resolveAsIntegerDeprecated();
             for (size_t i = 0; i < repetitions; ++i) {
                 for (auto& integerRepeatValue : *cssGridIntegerRepeatValue)
                     handleValueIgnoringLineNames(integerRepeatValue);
@@ -1551,9 +1554,9 @@ std::optional<InspectorOverlay::Highlight::GridHighlightOverlay> InspectorOverla
     if (!computedStyle)
         return { };
 
-    auto isHorizontalWritingMode = computedStyle->isHorizontalWritingMode();
-    auto isDirectionFlipped = !computedStyle->isLeftToRightDirection();
-    auto isWritingModeFlipped = computedStyle->isFlippedBlocksWritingMode();
+    auto isHorizontalWritingMode = computedStyle->writingMode().isHorizontal();
+    auto isDirectionFlipped = computedStyle->writingMode().isBidiRTL();
+    auto isWritingModeFlipped = computedStyle->writingMode().isBlockFlipped();
     auto contentBox = renderGrid.absoluteBoundingBoxRectIgnoringTransforms();
 
     auto columnLineAt = [&](float x) -> FloatLine {
@@ -1911,12 +1914,12 @@ std::optional<InspectorOverlay::Highlight::FlexHighlightOverlay> InspectorOverla
         return { };
 
     auto wasRowDirection = !computedStyle->isColumnFlexDirection();
-    auto isFlippedBlocksWritingMode = computedStyle->isFlippedBlocksWritingMode();
-    auto isRightToLeftDirection = computedStyle->direction() == TextDirection::RTL;
+    auto isBlockFlipped = computedStyle->writingMode().isBlockFlipped();
+    auto isRightToLeftDirection = computedStyle->writingMode().isBidiRTL();
 
-    auto isRowDirection = wasRowDirection ^ !computedStyle->isHorizontalWritingMode();
-    auto isMainAxisDirectionReversed = computedStyle->isReverseFlexDirection() ^ (wasRowDirection ? isRightToLeftDirection : isFlippedBlocksWritingMode);
-    auto isCrossAxisDirectionReversed = (computedStyle->flexWrap() == FlexWrap::Reverse) ^ (wasRowDirection ? isFlippedBlocksWritingMode : isRightToLeftDirection);
+    auto isRowDirection = wasRowDirection ^ !computedStyle->writingMode().isHorizontal();
+    auto isMainAxisDirectionReversed = computedStyle->isReverseFlexDirection() ^ (wasRowDirection ? isRightToLeftDirection : isBlockFlipped);
+    auto isCrossAxisDirectionReversed = (computedStyle->flexWrap() == FlexWrap::Reverse) ^ (wasRowDirection ? isBlockFlipped : isBlockFlipped);
 
     auto localQuadToRootQuad = [&](const FloatQuad& quad) {
         return FloatQuad(

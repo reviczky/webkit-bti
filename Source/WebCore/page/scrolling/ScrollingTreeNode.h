@@ -32,6 +32,7 @@
 #include "ScrollingCoordinator.h"
 #include "ScrollingStateNode.h"
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/TypeCasts.h>
 
@@ -43,7 +44,7 @@ class ScrollingTreeFrameScrollingNode;
 class ScrollingTreeScrollingNode;
 
 class ScrollingTreeNode : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ScrollingTreeNode> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(ScrollingTreeNode, WEBCORE_EXPORT);
     friend class ScrollingTree;
 public:
     virtual ~ScrollingTreeNode();
@@ -96,7 +97,7 @@ public:
 
     WEBCORE_EXPORT void dump(WTF::TextStream&, OptionSet<ScrollingStateTreeAsTextBehavior>) const;
 
-    FrameIdentifier frameIdentifier() const { return m_parentFrameIdentifier; }
+    FrameIdentifier frameIdentifier() const { return *m_parentFrameIdentifier; }
     void setFrameIdentifier(FrameIdentifier frameID) { m_parentFrameIdentifier = frameID; }
 
 protected:
@@ -114,7 +115,7 @@ private:
 
     const ScrollingNodeType m_nodeType;
     const ScrollingNodeID m_nodeID;
-    FrameIdentifier m_parentFrameIdentifier;
+    Markable<FrameIdentifier> m_parentFrameIdentifier;
 
     ThreadSafeWeakPtr<ScrollingTreeNode> m_parent;
 };

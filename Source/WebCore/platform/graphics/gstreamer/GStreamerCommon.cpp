@@ -24,7 +24,6 @@
 #if USE(GSTREAMER)
 
 #include "ApplicationGLib.h"
-#include "DMABufVideoSinkGStreamer.h"
 #include "GLVideoSinkGStreamer.h"
 #include "GStreamerAudioMixer.h"
 #include "GStreamerQuirks.h"
@@ -34,7 +33,6 @@
 #include "GstAllocatorFastMalloc.h"
 #include "IntSize.h"
 #include "PlatformDisplay.h"
-#include "RuntimeApplicationChecks.h"
 #include "SharedBuffer.h"
 #include "WebKitAudioSinkGStreamer.h"
 #include <gst/audio/audio-info.h>
@@ -45,7 +43,9 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/PrintStream.h>
 #include <wtf/RecursiveLockAdapter.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GThreadSafeWeakPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
@@ -99,6 +99,9 @@ GST_DEBUG_CATEGORY(webkit_gst_common_debug);
 #define GST_CAT_DEFAULT webkit_gst_common_debug
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GstMappedFrame);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebCoreLogObserver);
 
 static GstClockTime s_webkitGstInitTime;
 
@@ -390,10 +393,7 @@ void registerWebKitGStreamerElements()
 
 #if ENABLE(VIDEO)
         gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
-        gst_element_register(0, "webkitdmabufvideosink", GST_RANK_NONE, WEBKIT_TYPE_DMABUF_VIDEO_SINK);
-#if USE(GSTREAMER_GL)
         gst_element_register(0, "webkitglvideosink", GST_RANK_NONE, WEBKIT_TYPE_GL_VIDEO_SINK);
-#endif
 #endif
         // We don't want autoaudiosink to autoplug our sink.
         gst_element_register(0, "webkitaudiosink", GST_RANK_NONE, WEBKIT_TYPE_AUDIO_SINK);
@@ -480,9 +480,9 @@ void registerWebKitGStreamerVideoEncoder()
 // We use a recursive lock because the removal of a pipeline can trigger the removal of another one,
 // from the same thread, specially when using chained element harnesses.
 static RecursiveLock s_activePipelinesMapLock;
-static HashMap<String, GRefPtr<GstElement>>& activePipelinesMap()
+static UncheckedKeyHashMap<String, GRefPtr<GstElement>>& activePipelinesMap()
 {
-    static NeverDestroyed<HashMap<String, GRefPtr<GstElement>>> activePipelines;
+    static NeverDestroyed<UncheckedKeyHashMap<String, GRefPtr<GstElement>>> activePipelines;
     return activePipelines.get();
 }
 
@@ -551,10 +551,9 @@ void WebCoreLogObserver::removeWatch(const Logger& logger)
 
 void deinitializeGStreamer()
 {
-#if USE(GSTREAMER_GL)
     if (auto* sharedDisplay = PlatformDisplay::sharedDisplayIfExists())
         sharedDisplay->clearGStreamerGLState();
-#endif
+
 #if ENABLE(MEDIA_STREAM)
     teardownGStreamerCaptureDeviceManagers();
 #endif
@@ -1211,15 +1210,6 @@ static std::optional<RefPtr<JSON::Value>> gstStructureValueToJSON(const GValue* 
     return { };
 }
 
-static gboolean parseGstStructureValue(GQuark fieldId, const GValue* value, gpointer userData)
-{
-    if (auto jsonValue = gstStructureValueToJSON(value)) {
-        auto* object = reinterpret_cast<JSON::Object*>(userData);
-        object->setValue(String::fromLatin1(g_quark_to_string(fieldId)), jsonValue->releaseNonNull());
-    }
-    return TRUE;
-}
-
 static RefPtr<JSON::Value> gstStructureToJSON(const GstStructure* structure)
 {
     auto jsonObject = JSON::Object::create();
@@ -1227,7 +1217,13 @@ static RefPtr<JSON::Value> gstStructureToJSON(const GstStructure* structure)
     if (!resultValue)
         return nullptr;
 
-    gst_structure_foreach(structure, parseGstStructureValue, resultValue.get());
+    gstStructureForeach(structure, [&](auto id, auto value) -> bool {
+        if (auto jsonValue = gstStructureValueToJSON(value)) {
+            auto fieldId = gstIdToString(id);
+            resultValue->setValue(fieldId.toString(), jsonValue->releaseNonNull());
+        }
+        return TRUE;
+    });
     return resultValue;
 }
 
@@ -1602,6 +1598,69 @@ std::optional<unsigned> gstGetAutoplugSelectResult(ASCIILiteral nick)
     if (!enumValue)
         return std::nullopt;
     return enumValue->value;
+}
+
+bool gstStructureForeach(const GstStructure* structure, Function<bool(GstId, const GValue*)>&& callback)
+{
+#if GST_CHECK_VERSION(1, 25, 0)
+    return gst_structure_foreach_id_str(structure, [](GstId id, const GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GstId, const GValue*)>*>(userData);
+        return callback(id, value);
+    }, &callback);
+#else
+    return gst_structure_foreach(structure, [](GQuark quark, const GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GQuark, const GValue*)>*>(userData);
+        return callback(quark, value);
+    }, &callback);
+#endif
+}
+
+void gstStructureIdSetValue(GstStructure* structure, GstId id, const GValue* value)
+{
+#if GST_CHECK_VERSION(1, 25, 0)
+    gst_structure_id_str_set_value(structure, id, value);
+#else
+    gst_structure_set_value(structure, g_quark_to_string(id), value);
+#endif
+}
+
+bool gstStructureMapInPlace(GstStructure* structure, Function<bool(GstId, GValue*)>&& callback)
+{
+#if GST_CHECK_VERSION(1, 25, 0)
+    return gst_structure_map_in_place_id_str(structure, [](GstId id, GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GstId, GValue*)>*>(userData);
+        return callback(id, value);
+    }, &callback);
+#else
+    return gst_structure_map_in_place(structure, [](GQuark quark, GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GQuark, GValue*)>*>(userData);
+        return callback(quark, value);
+    }, &callback);
+#endif
+}
+
+StringView gstIdToString(GstId id)
+{
+#if GST_CHECK_VERSION(1, 25, 0)
+    return StringView::fromLatin1(gst_id_str_as_str(id));
+#else
+    return StringView::fromLatin1(g_quark_to_string(id));
+#endif
+}
+
+void gstStructureFilterAndMapInPlace(GstStructure* structure, Function<bool(GstId, GValue*)>&& callback)
+{
+#if GST_CHECK_VERSION(1, 25, 0)
+    gst_structure_filter_and_map_in_place_id_str(structure, [](GstId id, GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GstId, GValue*)>*>(userData);
+        return callback(id, value);
+    }, &callback);
+#else
+    gst_structure_filter_and_map_in_place(structure, [](GQuark quark, GValue* value, gpointer userData) -> gboolean {
+        auto& callback = *reinterpret_cast<Function<bool(GQuark, GValue*)>*>(userData);
+        return callback(quark, value);
+    }, &callback);
+#endif
 }
 
 #undef GST_CAT_DEFAULT

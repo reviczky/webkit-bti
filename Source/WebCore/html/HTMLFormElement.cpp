@@ -189,7 +189,7 @@ void HTMLFormElement::submitImplicitly(Event& event, bool fromImplicitSubmission
 {
     unsigned submissionTriggerCount = 0;
     for (auto& listedElement : m_listedElements) {
-        auto* formElement = dynamicDowncast<HTMLFormControlElement>(*listedElement);
+        RefPtr formElement = dynamicDowncast<HTMLFormControlElement>(*listedElement);
         if (!formElement)
             continue;
         if (formElement->isSuccessfulSubmitButton()) {
@@ -374,7 +374,7 @@ void HTMLFormElement::submit(Event* event, bool processingUserGesture, FormSubmi
     if (!view || !frame)
         return;
 
-    if (m_isSubmittingOrPreparingForSubmission) {
+    if (trigger != SubmittedByJavaScript && m_isSubmittingOrPreparingForSubmission) {
         m_shouldSubmit = true;
         return;
     }

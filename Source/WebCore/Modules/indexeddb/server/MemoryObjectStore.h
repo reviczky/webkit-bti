@@ -53,7 +53,7 @@ namespace IDBServer {
 
 class MemoryBackingStoreTransaction;
 
-typedef HashMap<IDBKeyData, ThreadSafeDataBuffer, IDBKeyDataHash, IDBKeyDataHashTraits> KeyValueMap;
+typedef UncheckedKeyHashMap<IDBKeyData, ThreadSafeDataBuffer, IDBKeyDataHash, IDBKeyDataHashTraits> KeyValueMap;
 
 class MemoryObjectStore : public RefCounted<MemoryObjectStore>, public CanMakeWeakPtr<MemoryObjectStore> {
 public:
@@ -63,7 +63,7 @@ public:
 
     void writeTransactionStarted(MemoryBackingStoreTransaction&);
     void writeTransactionFinished(MemoryBackingStoreTransaction&);
-    MemoryBackingStoreTransaction* writeTransaction() { return m_writeTransaction; }
+    MemoryBackingStoreTransaction* writeTransaction();
 
     IDBError createIndex(MemoryBackingStoreTransaction&, const IDBIndexInfo&);
     IDBError deleteIndex(MemoryBackingStoreTransaction&, uint64_t indexIdentifier);
@@ -119,16 +119,16 @@ private:
 
     IDBObjectStoreInfo m_info;
 
-    MemoryBackingStoreTransaction* m_writeTransaction { nullptr };
+    CheckedPtr<MemoryBackingStoreTransaction> m_writeTransaction;
     uint64_t m_keyGeneratorValue { 1 };
 
     std::unique_ptr<KeyValueMap> m_keyValueStore;
     std::unique_ptr<IDBKeyDataSet> m_orderedKeys;
 
     void unregisterIndex(MemoryIndex&);
-    HashMap<uint64_t, RefPtr<MemoryIndex>> m_indexesByIdentifier;
-    HashMap<String, RefPtr<MemoryIndex>> m_indexesByName;
-    HashMap<IDBResourceIdentifier, std::unique_ptr<MemoryObjectStoreCursor>> m_cursors;
+    UncheckedKeyHashMap<uint64_t, RefPtr<MemoryIndex>> m_indexesByIdentifier;
+    UncheckedKeyHashMap<String, RefPtr<MemoryIndex>> m_indexesByName;
+    UncheckedKeyHashMap<IDBResourceIdentifier, std::unique_ptr<MemoryObjectStoreCursor>> m_cursors;
 };
 
 } // namespace IDBServer

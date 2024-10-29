@@ -36,15 +36,6 @@
 #include <objc/objc.h>
 #endif
 
-namespace WebKit {
-class DownloadProxyMap;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::DownloadProxyMap> : std::true_type { };
-}
-
 namespace API {
 class DownloadClient;
 }
@@ -62,10 +53,10 @@ class WebPageProxy;
 class WebsiteDataStore;
 struct FrameInfoData;
 
-class DownloadProxyMap : public CanMakeWeakPtr<DownloadProxyMap> {
+class DownloadProxyMap : public CanMakeWeakPtr<DownloadProxyMap>, public CanMakeCheckedPtr<DownloadProxyMap> {
     WTF_MAKE_TZONE_ALLOCATED(DownloadProxyMap);
     WTF_MAKE_NONCOPYABLE(DownloadProxyMap);
-
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(DownloadProxyMap);
 public:
     explicit DownloadProxyMap(NetworkProcessProxy&);
     ~DownloadProxyMap();
@@ -87,7 +78,6 @@ private:
 
     bool m_shouldTakeAssertion { false };
     RefPtr<ProcessAssertion> m_downloadUIAssertion;
-    RefPtr<ProcessAssertion> m_downloadNetworkingAssertion;
 };
 
 } // namespace WebKit

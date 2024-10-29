@@ -30,6 +30,12 @@
 #include "VM.h"
 #include <wtf/EnumClassOperatorOverloads.h>
 
+#if OS(WINDOWS)
+#include <intrin.h>
+#endif
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace JSC  {
 
 class JSWebAssemblyInstance;
@@ -417,3 +423,5 @@ template<> struct HashTraits<JSC::CallSiteIndex> : SimpleClassHashTraits<JSC::Ca
 };
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

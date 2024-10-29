@@ -761,6 +761,7 @@ public:
 
     void emitAllocateButterfly(GPRReg storageGPR, GPRReg sizeGPR, GPRReg scratch1, GPRReg scratch2, GPRReg scratch3, JumpList& slowCases);
     void emitInitializeButterfly(GPRReg storageGPR, GPRReg sizeGPR, JSValueRegs emptyValueRegs, GPRReg scratchGPR);
+    void compileAllocateNewArrayWithSize(Node*, GPRReg resultGPR, GPRReg sizeGPR, RegisteredStructure, bool shouldConvertLargeSizeToArrayStorage = true);
     void compileAllocateNewArrayWithSize(Node*, GPRReg resultGPR, GPRReg sizeGPR, IndexingType, bool shouldConvertLargeSizeToArrayStorage = true);
     
     // Called once a node has completed code generation but prior to setting
@@ -1670,7 +1671,7 @@ public:
     void compileNewArrayWithSpread(Node*);
     void compileGetRestLength(Node*);
     void compileArraySlice(Node*);
-    void compileArraySpliceExtract(Node*);
+    void compileArraySplice(Node*);
     void compileArrayIndexOf(Node*);
     void compileArrayPush(Node*);
     void compileNotifyWrite(Node*);
@@ -1746,6 +1747,7 @@ public:
     void compileNewArrayWithSize(Node*);
     void compileNewArrayWithConstantSize(Node*);
     void compileNewArrayWithSpecies(Node*);
+    void compileNewArrayWithSizeAndStructure(Node*);
     void compileNewTypedArray(Node*);
     void compileToThis(Node*);
     void compileOwnPropertyKeysVariant(Node*);

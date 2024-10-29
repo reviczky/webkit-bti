@@ -64,7 +64,7 @@ static void notifyNodeInsertedIntoTree(ContainerNode& parentOfInsertedTree, Node
 
     for (RefPtr currentNode = &node; currentNode; currentNode = NodeTraversal::next(*currentNode, &node)) {
         auto result = currentNode->insertedIntoAncestor(Node::InsertionType { /* connectedToDocument */ false, treeScopeChange == TreeScopeChange::Changed }, parentOfInsertedTree);
-        ASSERT_UNUSED(result, result == Node::InsertedIntoAncestorResult::Done);
+        UNUSED_PARAM(result);
         if (RefPtr root = currentNode->shadowRoot())
             notifyNodeInsertedIntoTree(parentOfInsertedTree, *root, TreeScopeChange::DidNotChange);
     }
@@ -160,7 +160,7 @@ void removeDetachedChildrenInContainer(ContainerNode& container)
         if (next)
             next->setPreviousSibling(nullptr);
 
-        node->setTreeScopeRecursively(RefAllowingPartiallyDestroyed<Document> { container.document() });
+        node->setTreeScopeRecursively(Ref<Document> { container.document() });
         if (node->isInTreeScope())
             notifyChildNodeRemoved(container, *node);
         ASSERT_WITH_SECURITY_IMPLICATION(!node->isInTreeScope());

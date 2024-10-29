@@ -75,7 +75,7 @@ void Disassembler::reportToProfiler(Profiler::Compilation* compilation, LinkBuff
 void Disassembler::dumpHeader(PrintStream& out, LinkBuffer& linkBuffer)
 {
     out.print("Generated DFG JIT code for ", CodeBlockWithJITType(m_graph.m_codeBlock, JITType::DFGJIT), ", instructions size = ", m_graph.m_codeBlock->instructionsSize(), ":\n");
-    out.print("    Optimized with execution counter = ", m_graph.m_profiledBlock->jitExecuteCounter(), "\n");
+    out.print("    Optimized with execution counter = ", m_graph.m_profiledBlock->baselineExecuteCounter(), "\n");
     out.print("    Code at [", RawPointer(linkBuffer.debugAddress()), ", ", RawPointer(static_cast<char*>(linkBuffer.debugAddress()) + linkBuffer.size()), "):\n");
 }
 
@@ -114,7 +114,7 @@ Vector<Disassembler::DumpedOp> Disassembler::createDumpList(LinkBuffer& linkBuff
         Node* lastNodeForDisassembly = block->at(0);
         for (size_t i = 0; i < block->size(); ++i) {
             MacroAssembler::Label currentLabel;
-            HashMap<Node*, MacroAssembler::Label>::iterator iter = m_labelForNode.find(block->at(i));
+            UncheckedKeyHashMap<Node*, MacroAssembler::Label>::iterator iter = m_labelForNode.find(block->at(i));
             if (iter != m_labelForNode.end())
                 currentLabel = iter->value;
             else {

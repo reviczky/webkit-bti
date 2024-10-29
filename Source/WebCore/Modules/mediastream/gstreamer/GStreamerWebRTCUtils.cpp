@@ -31,6 +31,7 @@
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
 #include <wtf/CryptographicallyRandomNumber.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/WallTime.h>
 #include <wtf/WeakRandomNumber.h>
 #include <wtf/text/Base64.h>
@@ -115,13 +116,13 @@ GUniquePtr<GstStructure> fromRTCEncodingParameters(const RTCRtpEncodingParameter
         gst_structure_set(rtcParameters.get(), "ssrc", G_TYPE_UINT, parameters.ssrc, nullptr);
 
     if (parameters.maxBitrate)
-        gst_structure_set(rtcParameters.get(), "max-bitrate", G_TYPE_ULONG, parameters.maxBitrate, nullptr);
+        gst_structure_set(rtcParameters.get(), "max-bitrate", G_TYPE_ULONG, *parameters.maxBitrate, nullptr);
 
     if (parameters.maxFramerate)
-        gst_structure_set(rtcParameters.get(), "max-framerate", G_TYPE_ULONG, parameters.maxFramerate, nullptr);
+        gst_structure_set(rtcParameters.get(), "max-framerate", G_TYPE_ULONG, *parameters.maxFramerate, nullptr);
 
     if (parameters.scaleResolutionDownBy)
-        gst_structure_set(rtcParameters.get(), "scale-resolution-down-by", G_TYPE_DOUBLE, parameters.scaleResolutionDownBy, nullptr);
+        gst_structure_set(rtcParameters.get(), "scale-resolution-down-by", G_TYPE_DOUBLE, *parameters.scaleResolutionDownBy, nullptr);
 
     if (parameters.networkPriority)
         gst_structure_set(rtcParameters.get(), "network-priority", G_TYPE_INT, *parameters.networkPriority, nullptr);
@@ -471,6 +472,8 @@ bool sdpMediaHasAttributeKey(const GstSDPMedia* media, const char* key)
     return false;
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(UniqueSSRCGenerator);
+
 uint32_t UniqueSSRCGenerator::generateSSRC()
 {
     Locker locker { m_lock };
@@ -488,7 +491,7 @@ uint32_t UniqueSSRCGenerator::generateSSRC()
 
 std::optional<int> payloadTypeForEncodingName(StringView encodingName)
 {
-    static HashMap<String, int> staticPayloadTypes = {
+    static UncheckedKeyHashMap<String, int> staticPayloadTypes = {
         { "PCMU"_s, 0 },
         { "PCMA"_s, 8 },
         { "G722"_s, 9 },
@@ -601,9 +604,10 @@ GRefPtr<GstCaps> capsFromSDPMedia(const GstSDPMedia* media)
             }
 
             // Remove ssrc- attributes that end up being accumulated in fmtp SDP media parameters.
-            gst_structure_filter_and_map_in_place(structure, reinterpret_cast<GstStructureFilterMapFunc>(+[](GQuark quark, GValue*, gpointer) -> gboolean {
-                return !g_str_has_prefix(g_quark_to_string(quark), "ssrc-");
-            }), nullptr);
+            gstStructureFilterAndMapInPlace(structure, [&](auto id, auto) -> bool {
+                auto fieldId = gstIdToString(id);
+                return !fieldId.startsWith("ssrc-"_s);
+            });
             // Align with caps from RealtimeOutgoingAudioSourceGStreamer
             setSsrcAudioLevelVadOn(structure);
         }
@@ -647,6 +651,19 @@ void setSsrcAudioLevelVadOn(GstStructure* structure)
         gst_structure_remove_field(structure, fieldName.ascii().data());
         gst_structure_take_value(structure, fieldName.ascii().data(), &arrayValue);
     }
+}
+
+StatsTimestampConverter& StatsTimestampConverter::singleton()
+{
+    static NeverDestroyed<StatsTimestampConverter> sharedInstance;
+    return sharedInstance;
+}
+
+Seconds StatsTimestampConverter::convertFromMonotonicTime(Seconds value) const
+{
+    auto monotonicOffset = value - m_initialMonotonicTime;
+    auto newTimestamp = m_epoch.secondsSinceEpoch() + monotonicOffset;
+    return Performance::reduceTimeResolution(newTimestamp.secondsSinceEpoch());
 }
 
 #undef GST_CAT_DEFAULT

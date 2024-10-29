@@ -60,6 +60,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/Seconds.h>
 #include <wtf/Stopwatch.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
@@ -68,6 +69,8 @@
 namespace WebCore {
 
 using namespace Inspector;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorAnimationAgent);
 
 static std::optional<double> protocolValueForSeconds(const Seconds& seconds)
 {
@@ -209,8 +212,11 @@ static Ref<Inspector::Protocol::Animation::Effect> buildObjectForEffect(Animatio
     effectPayload->setIterationCount(effect.iterations() == std::numeric_limits<double>::infinity() ? -1 : effect.iterations());
     effectPayload->setIterationStart(effect.iterationStart());
 
-    if (auto iterationDuration = protocolValueForSeconds(effect.iterationDuration()))
-        effectPayload->setIterationDuration(iterationDuration.value());
+    // FIXME: convert this to WebAnimationTime.
+    if (auto durationTime = effect.iterationDuration().time()) {
+        if (auto iterationDuration = protocolValueForSeconds(*durationTime))
+            effectPayload->setIterationDuration(iterationDuration.value());
+    }
 
     if (auto* timingFunction = effect.timingFunction())
         effectPayload->setTimingFunction(timingFunction->cssText());

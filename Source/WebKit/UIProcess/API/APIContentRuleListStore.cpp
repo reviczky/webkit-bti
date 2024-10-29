@@ -55,7 +55,7 @@ namespace API {
 using namespace WebKit::NetworkCache;
 using namespace FileSystem;
 
-ContentRuleListStore& ContentRuleListStore::defaultStore()
+ContentRuleListStore& ContentRuleListStore::defaultStoreSingleton()
 {
     static NeverDestroyed<Ref<ContentRuleListStore>> defaultStore = adoptRef(*new ContentRuleListStore());
     return defaultStore->get();
@@ -338,7 +338,7 @@ static Expected<MappedData, std::error_code> compiledToFile(WTF::String&& json, 
     private:
         void writeToFile(bool value)
         {
-            writeToFile(WebKit::NetworkCache::Data({ reinterpret_cast<const uint8_t*>(&value), sizeof(value) }));
+            writeToFile(WebKit::NetworkCache::Data(asByteSpan(value)));
         }
         void writeToFile(const WebKit::NetworkCache::Data& data)
         {
@@ -592,7 +592,7 @@ void ContentRuleListStore::invalidateContentRuleListVersion(const WTF::String& i
         return;
 
     ContentRuleListMetaData invalidHeader = {0, 0, 0, 0, 0, 0};
-    auto bytesWritten = writeToFile(file, { reinterpret_cast<const uint8_t*>(&invalidHeader), sizeof(invalidHeader) });
+    auto bytesWritten = writeToFile(file, asByteSpan(invalidHeader));
     ASSERT_UNUSED(bytesWritten, bytesWritten == sizeof(invalidHeader));
     closeFile(file);
 }

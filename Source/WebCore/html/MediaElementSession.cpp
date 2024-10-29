@@ -54,7 +54,6 @@
 #include "Quirks.h"
 #include "RenderMedia.h"
 #include "RenderView.h"
-#include "RuntimeApplicationChecks.h"
 #include "ScriptController.h"
 #include "Settings.h"
 #include "SourceBuffer.h"
@@ -63,6 +62,8 @@
 #include "VideoTrack.h"
 #include "VideoTrackConfiguration.h"
 #include "VideoTrackList.h"
+#include <wtf/RuntimeApplicationChecks.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
 
 #if ENABLE(MEDIA_SESSION)
@@ -75,11 +76,12 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "AudioSession.h"
-#include "RuntimeApplicationChecks.h"
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaElementSession);
 
 static const Seconds clientDataBufferingTimerThrottleDelay { 100_ms };
 static const Seconds elementMainContentCheckInterval { 250_ms };
@@ -132,7 +134,7 @@ static bool pageExplicitlyAllowsElementToAutoplayInline(const HTMLMediaElement& 
 
 #if ENABLE(MEDIA_SESSION)
 class MediaElementSessionObserver : public MediaSessionObserver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(MediaElementSessionObserver);
 
 public:
     MediaElementSessionObserver(MediaElementSession& session, const Ref<MediaSession>& mediaSession)
@@ -899,7 +901,7 @@ bool MediaElementSession::requiresFullscreenForVideoPlayback() const
         return false;
 
 #if PLATFORM(IOS_FAMILY)
-    if (CocoaApplication::isIBooks())
+    if (WTF::CocoaApplication::isIBooks())
         return !m_element.hasAttributeWithoutSynchronization(HTMLNames::webkit_playsinlineAttr) && !m_element.hasAttributeWithoutSynchronization(HTMLNames::playsinlineAttr);
     if (!linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::UnprefixedPlaysInlineAttribute))
         return !m_element.hasAttributeWithoutSynchronization(HTMLNames::webkit_playsinlineAttr);
@@ -1306,7 +1308,8 @@ std::optional<NowPlayingInfo> MediaElementSession::computeNowPlayingInfo() const
         supportsSeeking,
         m_element.mediaUniqueIdentifier(),
         isPlaying,
-        allowsNowPlayingControlsVisibility
+        allowsNowPlayingControlsVisibility,
+        m_element.isVideo()
     };
 
     if (page->usesEphemeralSession() && !m_element.document().settings().allowPrivacySensitiveOperationsInNonPersistentDataStores()) {

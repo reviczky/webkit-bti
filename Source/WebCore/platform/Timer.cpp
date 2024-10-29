@@ -27,13 +27,13 @@
 #include "config.h"
 #include "Timer.h"
 
-#include "RuntimeApplicationChecks.h"
 #include "SharedTimer.h"
 #include "ThreadGlobalData.h"
 #include "ThreadTimers.h"
 #include <limits>
 #include <math.h>
 #include <wtf/MainThread.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 
@@ -46,6 +46,10 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(TimerBase);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Timer);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DeferrableOneShotTimer);
 
 class TimerHeapReference;
 
@@ -61,7 +65,7 @@ static ThreadTimerHeap& threadGlobalTimerHeap()
 }
 #endif
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(ThreadTimerHeapItem);
+WTF_MAKE_COMPACT_TZONE_OR_ISO_ALLOCATED_IMPL(ThreadTimerHeapItem);
 
 inline ThreadTimerHeapItem::ThreadTimerHeapItem(TimerBase& timer, MonotonicTime time, unsigned insertionOrder)
     : time(time)

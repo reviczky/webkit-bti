@@ -65,8 +65,11 @@
 #include "Widget.h"
 #include <limits>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FocusController);
 
 using namespace HTMLNames;
 
@@ -466,6 +469,11 @@ void FocusController::setFocusedFrame(Frame* frame, BroadcastFocusedFrame broadc
             frame = frame->tree().parent();
         } while (frame);
     }
+
+#if PLATFORM(IOS_FAMILY)
+    if (oldFrame)
+        oldFrame->eventHandler().cancelSelectionAutoscroll();
+#endif
 
     if (newFrame && newFrame->view() && isFocused()) {
         newFrame->selection().setFocused(true);
@@ -958,8 +966,6 @@ bool FocusController::setFocusedElement(Element* element, LocalFrame& newFocused
     if (oldFocusedElement && oldFocusedElement->isRootEditableElement() && !relinquishesEditingFocus(*oldFocusedElement))
         return false;
 
-    page->editorClient().willSetInputMethodState();
-
     if (shouldClearSelectionWhenChangingFocusedElement(page, WTFMove(oldFocusedElement), element))
         clearSelectionIfNeeded(oldFocusedFrame.get(), &newFocusedFrame, element);
 
@@ -1060,7 +1066,7 @@ void FocusController::setIsVisibleAndActiveInternal(bool contentIsVisible)
 
     contentAreaDidShowOrHide(view.get(), contentIsVisible);
 
-    for (auto* frame = &page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
+    for (RefPtr frame = &page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
         RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
         if (!localFrame)
             continue;

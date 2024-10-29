@@ -16,6 +16,7 @@
 #include "libANGLE/CLBuffer.h"
 #include "libANGLE/CLContext.h"
 #include "libANGLE/CLEvent.h"
+#include "libANGLE/CLImage.h"
 #include "libANGLE/CLProgram.h"
 #include "libANGLE/cl_utils.h"
 
@@ -30,7 +31,11 @@ CLContextVk::CLContextVk(const cl::Context &context, const cl::DevicePtrs device
     mDeviceQueueIndex = mRenderer->getDefaultDeviceQueueIndex();
 }
 
-CLContextVk::~CLContextVk() = default;
+CLContextVk::~CLContextVk()
+{
+    mDescriptorSetLayoutCache.destroy(getRenderer());
+    mPipelineLayoutCache.destroy(getRenderer());
+}
 
 void CLContextVk::handleError(VkResult errorCode,
                               const char *file,
@@ -102,14 +107,18 @@ angle::Result CLContextVk::createBuffer(const cl::Buffer &buffer,
 }
 
 angle::Result CLContextVk::createImage(const cl::Image &image,
-                                       cl::MemFlags flags,
-                                       const cl_image_format &format,
-                                       const cl::ImageDescriptor &desc,
                                        void *hostPtr,
                                        CLMemoryImpl::Ptr *imageOut)
 {
-    UNIMPLEMENTED();
-    ANGLE_CL_RETURN_ERROR(CL_OUT_OF_RESOURCES);
+    CLImageVk *memory = new (std::nothrow) CLImageVk(image);
+    if (memory == nullptr)
+    {
+        ANGLE_CL_RETURN_ERROR(CL_OUT_OF_HOST_MEMORY);
+    }
+    ANGLE_TRY(memory->create(hostPtr));
+    *imageOut = CLMemoryImpl::Ptr(memory);
+    mAssociatedObjects->mMemories.emplace(image.getNative());
+    return angle::Result::Continue;
 }
 
 angle::Result CLContextVk::getSupportedImageFormats(cl::MemFlags flags,
@@ -191,6 +200,7 @@ angle::Result CLContextVk::linkProgram(const cl::Program &program,
     {
         ANGLE_CL_RETURN_ERROR(CL_OUT_OF_HOST_MEMORY);
     }
+    ANGLE_TRY(programImpl->init());
 
     cl::DevicePtrs linkDeviceList;
     CLProgramVk::LinkProgramsList linkProgramsList;
@@ -207,7 +217,7 @@ angle::Result CLContextVk::linkProgram(const cl::Program &program,
             // Should be valid at this point
             ASSERT(deviceProgramData != nullptr);
 
-            if (libraryOrObject.isSet(deviceProgramData->binaryType))
+            if (libraryOrObject.intersects(deviceProgramData->binaryType))
             {
                 linkPrograms.push_back(deviceProgramData);
             }

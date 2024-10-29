@@ -52,6 +52,7 @@
 #include "JITStubRoutineSet.h"
 #include "JITWorklistInlines.h"
 #include "JSFinalizationRegistry.h"
+#include "JSIterator.h"
 #include "JSRemoteFunction.h"
 #include "JSVirtualMachineInternal.h"
 #include "JSWeakMap.h"
@@ -80,6 +81,7 @@
 #include "TypeProfilerLog.h"
 #include "VM.h"
 #include "VerifierSlotVisitorInlines.h"
+#include "WasmCallee.h"
 #include "WeakMapImplInlines.h"
 #include "WeakSetInlines.h"
 #include <algorithm>
@@ -104,9 +106,12 @@
 
 namespace JSC {
 
-namespace {
-
+namespace HeapInternal {
+static constexpr bool verbose = false;
 static constexpr bool verboseStop = false;
+}
+
+namespace {
 
 double maxPauseMS(double thisPauseMS)
 {
@@ -160,14 +165,14 @@ constexpr bool measurePhaseTiming()
     return false;
 }
 
-HashMap<const char*, GCTypeMap<SimpleStats>>& timingStats()
+UncheckedKeyHashMap<const char*, GCTypeMap<SimpleStats>>& timingStats()
 {
-    static HashMap<const char*, GCTypeMap<SimpleStats>>* result;
+    static UncheckedKeyHashMap<const char*, GCTypeMap<SimpleStats>>* result;
     static std::once_flag once;
     std::call_once(
         once,
         [] {
-            result = new HashMap<const char*, GCTypeMap<SimpleStats>>();
+            result = new UncheckedKeyHashMap<const char*, GCTypeMap<SimpleStats>>();
         });
     return *result;
 }
@@ -443,16 +448,16 @@ bool Heap::isPagedOut()
 void Heap::dumpHeapStatisticsAtVMDestruction()
 {
     unsigned counter = 0;
+    HeapIterationScope iterationScope(*this);
     m_objectSpace.forEachBlock([&] (MarkedBlock::Handle* block) {
         unsigned live = 0;
-        block->forEachCell([&] (size_t, HeapCell* cell, HeapCell::Kind) {
-            if (cell->isLive())
-                live++;
+        block->forEachLiveCell([&] (size_t, HeapCell*, HeapCell::Kind) {
+            live++;
             return IterationStatus::Continue;
         });
         dataLogLn("[", counter++, "] ", block->cellSize(), ", ", live, " / ", block->cellsPerBlock(), " ", static_cast<double>(live) / block->cellsPerBlock() * 100, "% ", block->attributes(), " ", block->subspace()->name());
-        block->forEachCell([&] (size_t, HeapCell* heapCell, HeapCell::Kind kind) {
-            if (heapCell->isLive() && kind == HeapCell::Kind::JSCell) {
+        block->forEachLiveCell([&] (size_t, HeapCell* heapCell, HeapCell::Kind kind) {
+            if (kind == HeapCell::Kind::JSCell) {
                 auto* cell = static_cast<JSCell*>(heapCell);
                 if (cell->isObject())
                     dataLogLn("    ", JSValue((JSObject*)cell));
@@ -1284,9 +1289,7 @@ bool Heap::shouldCollectInCollectorThread(const AbstractLocker&)
 {
     RELEASE_ASSERT(m_requests.isEmpty() == (m_lastServedTicket == m_lastGrantedTicket));
     RELEASE_ASSERT(m_lastServedTicket <= m_lastGrantedTicket);
-    
-    if (false)
-        dataLog("Mutator has the conn = ", !!(m_worldState.load() & mutatorHasConnBit), "\n");
+    dataLogLnIf(HeapInternal::verbose, "Mutator has the conn = ", !!(m_worldState.load() & mutatorHasConnBit));
     
     return !m_requests.isEmpty() && !(m_worldState.load() & mutatorHasConnBit);
 }
@@ -1339,8 +1342,7 @@ auto Heap::runCurrentPhase(GCConductor conn, CurrentThreadState* currentThreadSt
     if (!finishChangingPhase(conn)) {
         // A mischevious mutator could repeatedly relinquish the conn back to us. We try to avoid doing
         // this, but it's probably not the end of the world if it did happen.
-        if (false)
-            dataLog("Conn bounce-back.\n");
+        dataLogLnIf(HeapInternal::verbose, "Conn bounce-back.");
         return RunCurrentPhaseResult::Finished;
     }
     
@@ -1498,7 +1500,7 @@ NEVER_INLINE bool Heap::runFixpointPhase(GCConductor conn)
     SlotVisitor& visitor = *m_collectorSlotVisitor;
     
     if (UNLIKELY(Options::logGC())) {
-        HashMap<const char*, size_t> visitMap;
+        UncheckedKeyHashMap<const char*, size_t> visitMap;
         forEachSlotVisitor(
             [&] (SlotVisitor& visitor) {
                 visitMap.add(visitor.codeName(), visitor.bytesVisited() / 1024);
@@ -1697,8 +1699,8 @@ NEVER_INLINE bool Heap::runEndPhase(GCConductor conn)
     if (m_currentRequest.didFinishEndPhase)
         m_currentRequest.didFinishEndPhase->run();
     
-    if (false) {
-        dataLog("Heap state after GC:\n");
+    if (HeapInternal::verbose) {
+        dataLogLn(HeapInternal::verbose, "Heap state after GC:");
         m_objectSpace.dumpBits();
     }
     
@@ -1744,9 +1746,8 @@ NEVER_INLINE bool Heap::finishChangingPhase(GCConductor conn)
     if (m_nextPhase == m_currentPhase)
         return true;
 
-    if (false)
-        dataLog(conn, ": Going to phase: ", m_nextPhase, " (from ", m_currentPhase, ")\n");
-    
+    dataLogLnIf(HeapInternal::verbose, conn, ": Going to phase: ", m_nextPhase, " (from ", m_currentPhase, ")");
+
     m_phaseVersion++;
     
     bool suspendedBefore = worldShouldBeSuspended(m_currentPhase);
@@ -1768,8 +1769,7 @@ NEVER_INLINE bool Heap::finishChangingPhase(GCConductor conn)
             if (conn == GCConductor::Collector) {
                 waitWhileNeedFinalize();
                 if (!stopTheMutator()) {
-                    if (false)
-                        dataLog("Returning false.\n");
+                    dataLogLnIf(HeapInternal::verbose, "Returning false.");
                     return false;
                 }
             } else {
@@ -1900,8 +1900,7 @@ bool Heap::stopTheMutator()
         RELEASE_ASSERT(!(oldState & stoppedBit));
         unsigned newState = (oldState | mutatorHasConnBit) & ~mutatorWaitingBit;
         if (m_worldState.compareExchangeWeak(oldState, newState)) {
-            if (false)
-                dataLog("Handed off the conn.\n");
+            dataLogLnIf(HeapInternal::verbose, "Handed off the conn.");
             m_stopIfNecessaryTimer->scheduleSoon();
             ParkingLot::unparkAll(&m_worldState);
             return false;
@@ -1911,8 +1910,7 @@ bool Heap::stopTheMutator()
 
 NEVER_INLINE void Heap::resumeTheMutator()
 {
-    if (false)
-        dataLog("Resuming the mutator.\n");
+    dataLogLnIf(HeapInternal::verbose, "Resuming the mutator.");
     for (;;) {
         unsigned oldState = m_worldState.load();
         if (!!(oldState & hasAccessBit) != !(oldState & stoppedBit)) {
@@ -1925,14 +1923,12 @@ NEVER_INLINE void Heap::resumeTheMutator()
         }
         
         if (!(oldState & stoppedBit)) {
-            if (false)
-                dataLog("Returning because not stopped.\n");
+            dataLogLnIf(HeapInternal::verbose, "Returning because not stopped.");
             return;
         }
         
         if (m_worldState.compareExchangeWeak(oldState, oldState & ~stoppedBit)) {
-            if (false)
-                dataLog("CASing and returning.\n");
+            dataLogLnIf(HeapInternal::verbose, "CASing and returning.");
             ParkingLot::unparkAll(&m_worldState);
             return;
         }
@@ -2054,8 +2050,8 @@ void Heap::acquireAccessSlow()
         RELEASE_ASSERT(!(oldState & hasAccessBit));
         
         if (oldState & stoppedBit) {
-            if (verboseStop) {
-                dataLog("Stopping in acquireAccess!\n");
+            if (HeapInternal::verboseStop) {
+                dataLogLn("Stopping in acquireAccess!");
                 WTFReportBacktrace();
             }
             // Wait until we're not stopped anymore.
@@ -2129,8 +2125,7 @@ bool Heap::relinquishConn(unsigned oldState)
 
 void Heap::finishRelinquishingConn()
 {
-    if (false)
-        dataLog("Relinquished the conn.\n");
+    dataLogLnIf(HeapInternal::verbose, "Relinquished the conn.");
     
     sanitizeStackForVM(vm());
     
@@ -2260,8 +2255,7 @@ Heap::Ticket Heap::requestCollection(GCRequest request)
     // cases.
     ASSERT(m_lastServedTicket <= m_lastGrantedTicket);
     if ((m_lastServedTicket == m_lastGrantedTicket) && !m_collectorThreadIsRunning) {
-        if (false)
-            dataLog("Taking the conn.\n");
+        dataLogLnIf(HeapInternal::verbose, "Taking the conn.");
         m_worldState.exchangeOr(mutatorHasConnBit);
     }
     
@@ -2884,6 +2878,7 @@ void Heap::addCoreConstraints()
         "Cs", "Conservative Scan",
         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([this, lastVersion = static_cast<uint64_t>(0)] (auto& visitor) mutable {
             bool shouldNotProduceWork = lastVersion == m_phaseVersion;
+            SuperSamplerScope superSamplerScope(false);
 
             // For the GC Verfier, we would like to use the identical set of conservative roots
             // as the real GC. Otherwise, the GC verifier may report false negatives due to
@@ -2897,8 +2892,14 @@ void Heap::addCoreConstraints()
             m_jitStubRoutines->prepareForConservativeScan();
 
             {
+
+                // We only want to do this when the mutator has the conn because that means we're under a safepoint.
+                // If we tried to scan while not under a safepoint we could stop a thread that's in the process of calling
+                // one of the callees we are looking for.
+                // FIXME: Should we have two constraints for this? One for concurrent and one under safepoint at the bitter end.
+                // TODO: Verify this part only runs on one thread.
+                ASSERT(worldIsStopped());
                 ConservativeRoots conservativeRoots(*this);
-                SuperSamplerScope superSamplerScope(false);
 
                 gatherStackRoots(conservativeRoots);
                 gatherJSStackRoots(conservativeRoots);
@@ -3004,7 +3005,7 @@ void Heap::addCoreConstraints()
         "Ws", "Weak Sets",
         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([this] (auto& visitor) {
             SetRootMarkReasonScope rootScope(visitor, RootMarkReason::WeakSets);
-            RefPtr<SharedTask<void(decltype(visitor)&)>> task = m_objectSpace.forEachWeakInParallel<decltype(visitor)>();
+            RefPtr<SharedTask<void(decltype(visitor)&)>> task = m_objectSpace.forEachWeakInParallel<decltype(visitor)>(visitor);
             visitor.addParallelConstraintTask(WTFMove(task));
         })),
         ConstraintVolatility::GreyedByMarking,
@@ -3308,6 +3309,25 @@ DEFINE_DYNAMIC_SPACE_AND_SET_MEMBER_SLOW(moduleProgramExecutableSpace, destructi
 
 #undef DEFINE_DYNAMIC_SPACE_AND_SET_MEMBER_SLOW
 
+#if ENABLE(WEBASSEMBLY)
+
+void Heap::reportWasmCalleePendingDestruction(Ref<Wasm::Callee>&& callee)
+{
+    void* boxedCallee = CalleeBits::boxNativeCallee(callee.ptr());
+    // This better be true or we won't find the callee in ConservativeRoots.
+    ASSERT_UNUSED(boxedCallee, boxedCallee == removeArrayPtrTag(boxedCallee));
+
+    Locker locker(m_wasmCalleesPendingDestructionLock);
+    m_wasmCalleesPendingDestruction.add(WTFMove(callee));
+}
+
+bool Heap::isWasmCalleePendingDestruction(Wasm::Callee& callee)
+{
+    Locker locker(m_wasmCalleesPendingDestructionLock);
+    return m_wasmCalleesPendingDestruction.contains(callee);
+}
+
+#endif
 
 namespace GCClient {
 

@@ -31,6 +31,9 @@
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/SIMDHelpers.h>
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WTF {
 
@@ -200,12 +203,21 @@ size_t BitVector::bitCountSlow() const
 bool BitVector::isEmptySlow() const
 {
     ASSERT(!isInline());
-    const OutOfLineBits* bits = outOfLineBits();
-    for (unsigned i = bits->numWords(); i--;) {
-        if (bits->bits()[i])
-            return false;
-    }
-    return true;
+    auto vectorMatch = [&](auto input) ALWAYS_INLINE_LAMBDA -> std::optional<uint8_t> {
+        if (SIMD::isNonZero(input))
+            return 0;
+        return std::nullopt;
+    };
+
+    auto scalarMatch = [&](auto character) ALWAYS_INLINE_LAMBDA {
+        return character;
+    };
+
+    using UnitType = std::conditional_t<sizeof(uintptr_t) == sizeof(uint32_t), uint32_t, uint64_t>;
+    const auto* bits = outOfLineBits();
+    const auto* begin = bitwise_cast<const UnitType*>(bits->bits());
+    const auto* end = begin + bits->numWords();
+    return SIMD::find(std::span { begin, end }, vectorMatch, scalarMatch) == end;
 }
 
 bool BitVector::equalsSlowCase(const BitVector& other) const
@@ -279,3 +291,5 @@ void BitVector::dump(PrintStream& out) const
 }
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

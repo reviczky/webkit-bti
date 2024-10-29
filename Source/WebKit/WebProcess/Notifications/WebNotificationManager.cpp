@@ -211,7 +211,8 @@ bool WebNotificationManager::show(NotificationData&& notification, RefPtr<Notifi
 
     if (!notification.isPersistent()) {
         ASSERT(!m_nonPersistentNotificationsContexts.contains(notificationID));
-        m_nonPersistentNotificationsContexts.add(notificationID, notification.contextIdentifier);
+        RELEASE_ASSERT(notification.contextIdentifier);
+        m_nonPersistentNotificationsContexts.add(notificationID, *notification.contextIdentifier);
     }
     return true;
 #else
@@ -230,7 +231,8 @@ void WebNotificationManager::cancel(NotificationData&& notification, WebPage* pa
     auto identifier = notification.notificationID;
     ASSERT(notification.isPersistent() || m_nonPersistentNotificationsContexts.contains(identifier));
 
-    if (!sendNotificationMessage(Messages::NotificationManagerMessageHandler::CancelNotification(identifier), page))
+    auto origin = WebCore::SecurityOriginData::fromURL(URL { notification.originString });
+    if (!sendNotificationMessage(Messages::NotificationManagerMessageHandler::CancelNotification(WTFMove(origin), identifier), page))
         return;
 #else
     UNUSED_PARAM(notification);

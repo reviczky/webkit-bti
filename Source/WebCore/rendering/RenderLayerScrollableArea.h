@@ -46,13 +46,14 @@
 
 #include "RenderLayer.h"
 #include "ScrollableArea.h"
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
 class RenderMarquee;
 
 class RenderLayerScrollableArea final : public ScrollableArea, public CanMakeCheckedPtr<RenderLayerScrollableArea> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(RenderLayerScrollableArea);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderLayerScrollableArea);
 public:
     explicit RenderLayerScrollableArea(RenderLayer&);
@@ -81,6 +82,7 @@ public:
 
     void setPostLayoutScrollPosition(std::optional<ScrollPosition>);
     void applyPostLayoutScrollPositionIfNeeded();
+    bool hasPostLayoutScrollPosition() { return !!m_postLayoutScrollPosition; }
 
     int scrollWidth() const;
     int scrollHeight() const;
@@ -197,7 +199,7 @@ public:
     IntPoint convertFromScrollbarToContainingView(const Scrollbar&, const IntPoint&) const final;
     IntPoint convertFromContainingViewToScrollbar(const Scrollbar&, const IntPoint&) const final;
     void setScrollOffset(const ScrollOffset&) final;
-    ScrollingNodeID scrollingNodeID() const final;
+    std::optional<ScrollingNodeID> scrollingNodeID() const final;
 
     IntRect visibleContentRectInternal(VisibleContentRectIncludesScrollbars, VisibleContentRectBehavior) const final;
     IntSize overhangAmount() const final;
@@ -232,7 +234,7 @@ public:
     void updateScrollbarsAfterStyleChange(const RenderStyle* oldStyle);
     void updateScrollbarsAfterLayout();
 
-    void positionOverflowControls(const IntSize&);
+    bool positionOverflowControls(const IntSize&);
 
     void updateAllScrollbarRelatedStyle();
 
@@ -267,7 +269,7 @@ public:
 
     void createScrollbarsController() final;
 
-    FrameIdentifier rootFrameID() const final;
+    std::optional<FrameIdentifier> rootFrameID() const final;
 
     void scrollbarWidthChanged(ScrollbarWidth) override;
 

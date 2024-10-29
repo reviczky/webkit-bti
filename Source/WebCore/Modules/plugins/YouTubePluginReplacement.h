@@ -50,7 +50,6 @@ private:
     static bool supportsMIMEType(const String&);
     static bool supportsFileExtension(StringView);
     static bool supportsURL(const URL&);
-    static bool isEnabledBySettings(const Settings&);
 
     void installReplacement(ShadowRoot&) final;
 
@@ -61,7 +60,7 @@ private:
 
     WeakPtr<HTMLPlugInElement, WeakPtrImplWithEventTargetData> m_parentElement;
     RefPtr<YouTubeEmbedShadowElement> m_embedShadowElement;
-    HashMap<AtomString, AtomString> m_attributes;
+    UncheckedKeyHashMap<AtomString, AtomString> m_attributes;
 };
 
 }

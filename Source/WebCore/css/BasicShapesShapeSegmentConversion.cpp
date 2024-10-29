@@ -43,8 +43,8 @@ static auto lengthToCSSValue(const Length& value, const RenderStyle& style)
 static auto lengthPointToCSSValue(const LengthPoint& value, const RenderStyle& style)
 {
     return CSSValuePair::createNoncoalescing(
-        CSSPrimitiveValue::create(value.x(), style),
-        CSSPrimitiveValue::create(value.y(), style));
+        CSSPrimitiveValue::create(value.x, style),
+        CSSPrimitiveValue::create(value.y, style));
 }
 
 static auto lengthSizeToCSSValue(const LengthSize& value, const RenderStyle& style)
@@ -52,6 +52,14 @@ static auto lengthSizeToCSSValue(const LengthSize& value, const RenderStyle& sty
     return CSSValuePair::create(
         CSSPrimitiveValue::create(value.width, style),
         CSSPrimitiveValue::create(value.height, style));
+}
+
+static ControlPointValue controlPointValue(const ControlPoint& controlPoint, const RenderStyle& style)
+{
+    return ControlPointValue {
+        lengthPointToCSSValue(controlPoint.offset, style),
+        controlPoint.anchoring
+    };
 }
 
 Ref<CSSShapeSegmentValue> toCSSShapeSegmentValue(const RenderStyle& style, const BasicShapeShape::ShapeSegment& segment)
@@ -71,13 +79,13 @@ Ref<CSSShapeSegmentValue> toCSSShapeSegmentValue(const RenderStyle& style, const
         },
         [&](const ShapeCurveSegment& segment) {
             if (segment.controlPoint2())
-                return CSSShapeSegmentValue::createCubicCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), lengthPointToCSSValue(segment.controlPoint1(), style), lengthPointToCSSValue(segment.controlPoint2().value(), style));
+                return CSSShapeSegmentValue::createCubicCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), controlPointValue(segment.controlPoint1(), style), controlPointValue(segment.controlPoint2().value(), style));
 
-            return CSSShapeSegmentValue::createQuadraticCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), lengthPointToCSSValue(segment.controlPoint1(), style));
+            return CSSShapeSegmentValue::createQuadraticCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), controlPointValue(segment.controlPoint1(), style));
         },
         [&](const ShapeSmoothSegment& segment) {
             if (segment.intermediatePoint())
-                return CSSShapeSegmentValue::createSmoothCubicCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), lengthPointToCSSValue(segment.intermediatePoint().value(), style));
+                return CSSShapeSegmentValue::createSmoothCubicCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style), controlPointValue(segment.intermediatePoint().value(), style));
 
             return CSSShapeSegmentValue::createSmoothQuadraticCurve(segment.affinity(), lengthPointToCSSValue(segment.offset(), style));
         },

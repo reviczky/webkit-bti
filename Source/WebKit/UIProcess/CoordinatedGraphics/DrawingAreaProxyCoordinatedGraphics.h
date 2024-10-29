@@ -36,15 +36,6 @@
 #include "BackingStore.h"
 #endif
 
-namespace WebKit {
-class DrawingAreaProxyCoordinatedGraphics;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::DrawingAreaProxyCoordinatedGraphics> : std::true_type { };
-}
-
 namespace WebCore {
 class Region;
 }
@@ -52,6 +43,9 @@ class Region;
 namespace WebKit {
 
 class DrawingAreaProxyCoordinatedGraphics final : public DrawingAreaProxy {
+    WTF_MAKE_TZONE_ALLOCATED(DrawingAreaProxyCoordinatedGraphics);
+    WTF_MAKE_NONCOPYABLE(DrawingAreaProxyCoordinatedGraphics);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(DrawingAreaProxyCoordinatedGraphics);
 public:
     DrawingAreaProxyCoordinatedGraphics(WebPageProxy&, WebProcessProxy&);
     virtual ~DrawingAreaProxyCoordinatedGraphics();
@@ -68,7 +62,7 @@ public:
 private:
     // DrawingAreaProxy
     void sizeDidChange() override;
-    void deviceScaleFactorDidChange() override;
+    void deviceScaleFactorDidChange(CompletionHandler<void()>&&) override;
     void setBackingStoreIsDiscardable(bool) override;
 
 #if HAVE(DISPLAY_LINK)

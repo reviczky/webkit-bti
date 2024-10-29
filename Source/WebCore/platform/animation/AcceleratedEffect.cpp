@@ -213,8 +213,8 @@ AcceleratedEffect::AcceleratedEffect(const KeyframeEffect& effect, const IntRect
         m_paused = animation->playState() == WebAnimation::PlayState::Paused;
         m_playbackRate = animation->playbackRate();
         ASSERT(animation->holdTime() || animation->startTime());
-        m_holdTime = animation->holdTime();
-        m_startTime = animation->startTime();
+        m_holdTime = animation->holdTime() ? animation->holdTime()->time() : std::nullopt;
+        m_startTime = animation->startTime() ? animation->startTime()->time() : std::nullopt;
         if (auto* styleAnimation = dynamicDowncast<StyleOriginatedAnimation>(*animation)) {
             if (auto* defaultKeyframeTimingFunction = styleAnimation->backingAnimation().timingFunction())
                 m_defaultKeyframeTimingFunction = defaultKeyframeTimingFunction;
@@ -359,7 +359,15 @@ void AcceleratedEffect::apply(Seconds currentTime, AcceleratedEffectValues& valu
         return (currentTime - *m_startTime) * m_playbackRate;
     }();
 
-    auto resolvedTiming = m_timing.resolve(localTime, m_playbackRate);
+    // FIXME: when we add threaded animaiton support support for scroll-driven animations,
+    // pass in the associated timeline's current time and duration.
+    auto resolvedTiming = m_timing.resolve({
+        std::nullopt,
+        std::nullopt,
+        { m_holdTime ? *m_holdTime : *m_startTime },
+        { localTime },
+        m_playbackRate
+    });
     if (!resolvedTiming.transformedProgress)
         return;
 
@@ -412,7 +420,7 @@ void AcceleratedEffect::apply(Seconds currentTime, AcceleratedEffectValues& valu
             return false;
         };
 
-        interpolateKeyframes(animatedProperty, interval, progress, *resolvedTiming.currentIteration, m_timing.iterationDuration, composeProperty, accumulateProperty, interpolateProperty, requiresBlendingForAccumulativeIterationCallback);
+        interpolateKeyframes(animatedProperty, interval, progress, *resolvedTiming.currentIteration, m_timing.iterationDuration, resolvedTiming.before, composeProperty, accumulateProperty, interpolateProperty, requiresBlendingForAccumulativeIterationCallback);
     }
 }
 

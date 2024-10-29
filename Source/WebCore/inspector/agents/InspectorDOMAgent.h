@@ -40,6 +40,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/JSONValues.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/text/AtomString.h>
@@ -82,7 +83,7 @@ struct Styleable;
 
 class InspectorDOMAgent final : public InspectorAgentBase, public Inspector::DOMBackendDispatcherHandler {
     WTF_MAKE_NONCOPYABLE(InspectorDOMAgent);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(InspectorDOMAgent);
 public:
     InspectorDOMAgent(PageAgentContext&, InspectorOverlay*);
     ~InspectorDOMAgent();
@@ -275,11 +276,11 @@ private:
     Page& m_inspectedPage;
     InspectorOverlay* m_overlay { nullptr };
     WeakHashMap<Node, Inspector::Protocol::DOM::NodeId, WeakPtrImplWithEventTargetData> m_nodeToId;
-    HashMap<Inspector::Protocol::DOM::NodeId, WeakPtr<Node, WeakPtrImplWithEventTargetData>> m_idToNode;
+    UncheckedKeyHashMap<Inspector::Protocol::DOM::NodeId, WeakPtr<Node, WeakPtrImplWithEventTargetData>> m_idToNode;
     HashSet<Inspector::Protocol::DOM::NodeId> m_childrenRequested;
     Inspector::Protocol::DOM::NodeId m_lastNodeId { 1 };
     RefPtr<Document> m_document;
-    typedef HashMap<String, Vector<RefPtr<Node>>> SearchResults;
+    typedef UncheckedKeyHashMap<String, Vector<RefPtr<Node>>> SearchResults;
     SearchResults m_searchResults;
     std::unique_ptr<RevalidateStyleAttributeTask> m_revalidateStyleAttrTask;
     RefPtr<Node> m_nodeToFocus;
@@ -351,7 +352,7 @@ private:
     friend class EventFiredCallback;
 
     HashSet<const Event*> m_dispatchedEvents;
-    HashMap<Inspector::Protocol::DOM::EventListenerId, InspectorEventListener> m_eventListenerEntries;
+    UncheckedKeyHashMap<Inspector::Protocol::DOM::EventListenerId, InspectorEventListener> m_eventListenerEntries;
     Inspector::Protocol::DOM::EventListenerId m_lastEventListenerId { 1 };
 
     bool m_searchingForNode { false };

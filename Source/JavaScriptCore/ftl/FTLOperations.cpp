@@ -43,6 +43,7 @@
 #include "JSGeneratorFunction.h"
 #include "JSImmutableButterfly.h"
 #include "JSInternalPromise.h"
+#include "JSIteratorHelper.h"
 #include "JSLexicalEnvironment.h"
 #include "JSMapIterator.h"
 #include "JSSetIterator.h"
@@ -146,6 +147,9 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationPopulateObjectInOSR, void, (JSGlobalO
             break;
         case JSSetIteratorType:
             materialize(jsCast<JSSetIterator*>(target));
+            break;
+        case JSIteratorHelperType:
+            materialize(jsCast<JSIteratorHelper*>(target));
             break;
         case JSPromiseType:
             if (target->classInfo() == JSInternalPromise::info())
@@ -360,6 +364,11 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationMaterializeObjectInOSR, JSCell*, (JSG
         case JSSetIteratorType: {
             JSSetIterator* result = JSSetIterator::createWithInitialValues(vm, structure);
             RELEASE_ASSERT(materialization->properties().size() - 1 == JSSetIterator::numberOfInternalFields);
+            return result;
+        }
+        case JSIteratorHelperType: {
+            JSIteratorHelper* result = JSIteratorHelper::createWithInitialValues(vm, structure);
+            RELEASE_ASSERT(materialization->properties().size() - 1 == JSIteratorHelper::numberOfInternalFields);
             return result;
         }
         case JSPromiseType: {
@@ -716,6 +725,10 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationSwitchStringAndGetIndex, unsigned, (J
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
+
+    unsigned length = string->length();
+    if (length < unlinkedTable->minLength() || length > unlinkedTable->maxLength())
+        return std::numeric_limits<unsigned>::max();
 
     auto str = string->value(globalObject);
 

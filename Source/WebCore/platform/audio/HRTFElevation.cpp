@@ -41,9 +41,12 @@
 #include <algorithm>
 #include <math.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(HRTFElevation);
 
 #if USE(CONCATENATED_IMPULSE_RESPONSES)
 // Total number of components of an HRTF database.
@@ -57,9 +60,9 @@ constexpr size_t ResponseFrameSize = 256;
 constexpr float ResponseSampleRate = 44100;
 
 static Lock audioBusMapLock;
-static HashMap<String, RefPtr<AudioBus>>& concatenatedImpulseResponsesMap() WTF_REQUIRES_LOCK(audioBusMapLock)
+static UncheckedKeyHashMap<String, RefPtr<AudioBus>>& concatenatedImpulseResponsesMap() WTF_REQUIRES_LOCK(audioBusMapLock)
 {
-    static NeverDestroyed<HashMap<String, RefPtr<AudioBus>>> audioBusMap;
+    static NeverDestroyed<UncheckedKeyHashMap<String, RefPtr<AudioBus>>> audioBusMap;
     return audioBusMap;
 }
 

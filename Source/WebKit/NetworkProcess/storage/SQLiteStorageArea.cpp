@@ -34,8 +34,11 @@
 #include <WebCore/SQLiteTransaction.h>
 #include <WebCore/StorageMap.h>
 #include <wtf/FileSystem.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(SQLiteStorageArea);
 
 constexpr Seconds transactionDuration { 500_ms };
 constexpr unsigned maximumSizeForValuesKeptInMemory { 1 * KB };
@@ -63,6 +66,11 @@ ASCIILiteral SQLiteStorageArea::statementString(StatementType type) const
 
     ASSERT_NOT_REACHED();
     return ""_s;
+}
+
+Ref<SQLiteStorageArea> SQLiteStorageArea::create(unsigned quota, const WebCore::ClientOrigin& origin, const String& path, Ref<WorkQueue>&& workQueue)
+{
+    return adoptRef(*new SQLiteStorageArea(quota, origin, path, WTFMove(workQueue)));
 }
 
 SQLiteStorageArea::SQLiteStorageArea(unsigned quota, const WebCore::ClientOrigin& origin, const String& path, Ref<WorkQueue>&& workQueue)

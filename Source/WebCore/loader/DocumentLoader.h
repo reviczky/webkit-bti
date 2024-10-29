@@ -111,7 +111,7 @@ enum class ClearSiteDataValue : uint8_t;
 enum class LoadWillContinueInAnotherProcess : bool;
 enum class ShouldContinue;
 
-using ResourceLoaderMap = HashMap<ResourceLoaderIdentifier, RefPtr<ResourceLoader>>;
+using ResourceLoaderMap = UncheckedKeyHashMap<ResourceLoaderIdentifier, RefPtr<ResourceLoader>>;
 
 enum class AutoplayPolicy : uint8_t {
     Default, // Uses policies specified in document settings.
@@ -172,6 +172,12 @@ enum class ColorSchemePreference : uint8_t {
     Dark
 };
 
+enum class PushAndNotificationsEnabledPolicy: uint8_t {
+    UseGlobalPolicy,
+    No,
+    Yes,
+};
+
 enum class ContentExtensionDefaultEnablement : bool { Disabled, Enabled };
 using ContentExtensionEnablement = std::pair<ContentExtensionDefaultEnablement, HashSet<String>>;
 
@@ -192,14 +198,17 @@ class DocumentLoader
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(DocumentLoader);
     friend class ContentFilter;
 public:
+#if ENABLE(CONTENT_FILTERING)
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+#endif
+
     static Ref<DocumentLoader> create(const ResourceRequest& request, const SubstituteData& data)
     {
         return adoptRef(*new DocumentLoader(request, data));
     }
 
-    using CachedRawResourceClient::weakPtrFactory;
-    using CachedRawResourceClient::WeakValueType;
-    using CachedRawResourceClient::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(CachedRawResourceClient);
 
     WEBCORE_EXPORT static DocumentLoader* fromScriptExecutionContextIdentifier(ScriptExecutionContextIdentifier);
 
@@ -210,7 +219,7 @@ public:
     WEBCORE_EXPORT virtual void detachFromFrame(LoadWillContinueInAnotherProcess);
 
     WEBCORE_EXPORT FrameLoader* frameLoader() const;
-    CheckedPtr<FrameLoader> checkedFrameLoader() const;
+    RefPtr<FrameLoader> protectedFrameLoader() const;
     WEBCORE_EXPORT SubresourceLoader* mainResourceLoader() const;
     WEBCORE_EXPORT RefPtr<FragmentedSharedBuffer> mainResourceData() const;
     
@@ -338,8 +347,6 @@ public:
     bool isLoadingMainResource() const { return m_loadingMainResource; }
     bool isLoadingMultipartContent() const { return m_isLoadingMultipartContent; }
 
-    bool fingerprintingProtectionsEnabled() const;
-
     void stopLoadingPlugIns();
     void stopLoadingSubresources();
     WEBCORE_EXPORT void stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(ResourceLoaderIdentifier, const ResourceResponse&);
@@ -391,7 +398,7 @@ public:
     LegacyOverflowScrollingTouchPolicy legacyOverflowScrollingTouchPolicy() const { return m_legacyOverflowScrollingTouchPolicy; }
     void setLegacyOverflowScrollingTouchPolicy(LegacyOverflowScrollingTouchPolicy policy) { m_legacyOverflowScrollingTouchPolicy = policy; }
 
-    WEBCORE_EXPORT MouseEventPolicy mouseEventPolicy() const;
+    MouseEventPolicy mouseEventPolicy() const { return m_mouseEventPolicy; }
     void setMouseEventPolicy(MouseEventPolicy policy) { m_mouseEventPolicy = policy; }
 
     ModalContainerObservationPolicy modalContainerObservationPolicy() const { return m_modalContainerObservationPolicy; }
@@ -403,6 +410,9 @@ public:
 
     HTTPSByDefaultMode httpsByDefaultMode() { return m_httpsByDefaultMode; }
     WEBCORE_EXPORT void setHTTPSByDefaultMode(HTTPSByDefaultMode);
+
+    PushAndNotificationsEnabledPolicy pushAndNotificationsEnabledPolicy() const { return m_pushAndNotificationsEnabledPolicy; }
+    void setPushAndNotificationsEnabledPolicy(PushAndNotificationsEnabledPolicy policy) { m_pushAndNotificationsEnabledPolicy = policy; }
 
     void addSubresourceLoader(SubresourceLoader&);
     void removeSubresourceLoader(LoadCompletionType, SubresourceLoader&);
@@ -452,8 +462,6 @@ public:
     void setBlockedPageURL(const URL& blockedPageURL) { m_blockedPageURL = blockedPageURL; }
     void setSubstituteDataFromContentFilter(SubstituteData&& substituteDataFromContentFilter) { m_substituteDataFromContentFilter = WTFMove(substituteDataFromContentFilter); }
     ContentFilter* contentFilter() const { return m_contentFilter.get(); }
-    void ref() const final { RefCounted<DocumentLoader>::ref(); }
-    void deref() const final { RefCounted<DocumentLoader>::deref(); }
 
     WEBCORE_EXPORT ResourceError handleContentFilterDidBlock(ContentFilterUnblockHandler, String&& unblockRequestDeniedScript);
 #endif
@@ -490,7 +498,7 @@ public:
     bool idempotentModeAutosizingOnlyHonorsPercentages() const { return m_idempotentModeAutosizingOnlyHonorsPercentages; }
 
     WEBCORE_EXPORT bool setControllingServiceWorkerRegistration(ServiceWorkerRegistrationData&&);
-    WEBCORE_EXPORT ScriptExecutionContextIdentifier resultingClientId() const;
+    std::optional<ScriptExecutionContextIdentifier> resultingClientId() const { return m_resultingClientId; }
 
     bool lastNavigationWasAppInitiated() const { return m_lastNavigationWasAppInitiated; }
     void setLastNavigationWasAppInitiated(bool lastNavigationWasAppInitiated) { m_lastNavigationWasAppInitiated = lastNavigationWasAppInitiated; }
@@ -516,7 +524,8 @@ public:
 
     bool isInitialAboutBlank() const { return m_isInitialAboutBlank; }
 
-    bool navigationCanTriggerCrossDocumentViewTransition(Document& oldDocument);
+    bool navigationCanTriggerCrossDocumentViewTransition(Document& oldDocument, bool fromBackForwardCache);
+    WEBCORE_EXPORT void whenDocumentIsCreated(Function<void(Document*)>&&);
 
 protected:
     WEBCORE_EXPORT DocumentLoader(const ResourceRequest&, const SubstituteData&);
@@ -610,8 +619,6 @@ private:
     bool disallowWebArchive() const;
     bool disallowDataRequest() const;
 
-    void updateAdditionalSettingsIfNeeded();
-
     Ref<CachedResourceLoader> m_cachedResourceLoader;
 
     CachedResourceHandle<CachedRawResource> m_mainResource;
@@ -663,7 +670,7 @@ private:
     std::optional<CrossOriginOpenerPolicy> m_responseCOOP;
     OptionSet<ClearSiteDataValue> m_responseClearSiteDataValues;
     
-    typedef HashMap<RefPtr<ResourceLoader>, RefPtr<SubstituteResource>> SubstituteResourceMap;
+    typedef UncheckedKeyHashMap<RefPtr<ResourceLoader>, RefPtr<SubstituteResource>> SubstituteResourceMap;
     SubstituteResourceMap m_pendingSubstituteResources;
     Timer m_substituteResourceDeliveryTimer;
 
@@ -679,12 +686,12 @@ private:
     String m_clientRedirectSourceForHistory;
     DocumentLoadTiming m_loadTiming;
 
-    ResourceLoaderIdentifier m_identifierForLoadWithoutResourceLoader;
+    Markable<ResourceLoaderIdentifier> m_identifierForLoadWithoutResourceLoader;
 
     DataLoadToken m_dataLoadToken;
 
-    HashMap<uint64_t, LinkIcon> m_iconsPendingLoadDecision;
-    HashMap<std::unique_ptr<IconLoader>, CompletionHandler<void(FragmentedSharedBuffer*)>> m_iconLoaders;
+    UncheckedKeyHashMap<uint64_t, LinkIcon> m_iconsPendingLoadDecision;
+    UncheckedKeyHashMap<std::unique_ptr<IconLoader>, CompletionHandler<void(FragmentedSharedBuffer*)>> m_iconLoaders;
     Vector<LinkIcon> m_linkIcons;
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -720,7 +727,7 @@ private:
 
     Vector<TargetedElementSelectors> m_visibilityAdjustmentSelectors;
 
-    ScriptExecutionContextIdentifier m_resultingClientId;
+    Markable<ScriptExecutionContextIdentifier> m_resultingClientId;
 
     std::unique_ptr<ServiceWorkerRegistrationData> m_serviceWorkerRegistrationData;
 
@@ -742,6 +749,7 @@ private:
     ColorSchemePreference m_colorSchemePreference { ColorSchemePreference::NoPreference };
     HTTPSByDefaultMode m_httpsByDefaultMode { HTTPSByDefaultMode::Disabled };
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
+    PushAndNotificationsEnabledPolicy m_pushAndNotificationsEnabledPolicy { PushAndNotificationsEnabledPolicy::UseGlobalPolicy };
 
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
 
@@ -780,6 +788,8 @@ private:
 #endif
 
     bool m_canUseServiceWorkers { true };
+
+    Function<void(Document*)> m_whenDocumentIsCreatedCallback;
 
 #if ASSERT_ENABLED
     bool m_hasEverBeenAttached { false };

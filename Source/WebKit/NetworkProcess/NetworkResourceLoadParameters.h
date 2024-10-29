@@ -51,7 +51,7 @@ public:
     NetworkResourceLoadParameters() = default;
     NetworkResourceLoadParameters(
         NetworkLoadParameters&&
-        , WebCore::ResourceLoaderIdentifier
+        , std::optional<WebCore::ResourceLoaderIdentifier>
         , RefPtr<WebCore::FormData>&& httpBody
         , std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensionIfHttpBody
         , std::optional<SandboxExtension::Handle>&& sandboxExtensionIflocalFile
@@ -73,6 +73,7 @@ public:
         , URL&& documentURL
         , bool isCrossOriginOpenerPolicyEnabled
         , bool isClearSiteDataHeaderEnabled
+        , bool isClearSiteDataExecutionContextEnabled
         , bool isDisplayingInitialEmptyDocument
         , WebCore::SandboxFlags effectiveSandboxFlags
         , URL&& openerURL
@@ -99,7 +100,7 @@ public:
 
     RefPtr<WebCore::SecurityOrigin> parentOrigin() const;
 
-    WebCore::ResourceLoaderIdentifier identifier;
+    Markable<WebCore::ResourceLoaderIdentifier> identifier;
     Vector<RefPtr<SandboxExtension>> requestBodySandboxExtensions; // Created automatically for the sender.
     RefPtr<SandboxExtension> resourceSandboxExtension; // Created automatically for the sender.
     Seconds maximumBufferingTime;
@@ -121,8 +122,9 @@ public:
 
     bool isCrossOriginOpenerPolicyEnabled { false };
     bool isClearSiteDataHeaderEnabled { false };
+    bool isClearSiteDataExecutionContextEnabled { false };
     bool isDisplayingInitialEmptyDocument { false };
-    WebCore::SandboxFlags effectiveSandboxFlags { WebCore::SandboxNone };
+    WebCore::SandboxFlags effectiveSandboxFlags;
     URL openerURL;
     WebCore::CrossOriginOpenerPolicy sourceCrossOriginOpenerPolicy;
     std::optional<WebCore::NavigationIdentifier> navigationID;

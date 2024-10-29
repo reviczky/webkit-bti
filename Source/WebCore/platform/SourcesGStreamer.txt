@@ -35,6 +35,7 @@ Modules/mediastream/gstreamer/GStreamerRtpTransformBackend.cpp
 Modules/mediastream/gstreamer/GStreamerSctpTransportBackend.cpp
 Modules/mediastream/gstreamer/GStreamerStatsCollector.cpp
 Modules/mediastream/gstreamer/GStreamerWebRTCUtils.cpp
+Modules/mediastream/RTCRtpSFrameTransformerOpenSSL.cpp
 
 Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
 
@@ -48,15 +49,12 @@ platform/audio/gstreamer/PlatformRawAudioDataGStreamer.cpp
 platform/audio/gstreamer/WebKitWebAudioSourceGStreamer.cpp @no-unify
 
 platform/graphics/gstreamer/AudioTrackPrivateGStreamer.cpp
-platform/graphics/gstreamer/DMABufUtilities.cpp
-platform/graphics/gstreamer/DMABufVideoSinkGStreamer.cpp @no-unify
 platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp @no-unify
 platform/graphics/gstreamer/GRefPtrGStreamer.cpp
 platform/graphics/gstreamer/GStreamerAudioMixer.cpp
 platform/graphics/gstreamer/GStreamerCommon.cpp
 platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
 platform/graphics/gstreamer/GStreamerSinksWorkarounds.cpp
-platform/graphics/gstreamer/GStreamerVideoFrameHolder.cpp @no-unify
 platform/graphics/gstreamer/GStreamerVideoSinkCommon.cpp
 platform/graphics/gstreamer/GstAllocatorFastMalloc.cpp
 platform/graphics/gstreamer/ImageDecoderGStreamer.cpp

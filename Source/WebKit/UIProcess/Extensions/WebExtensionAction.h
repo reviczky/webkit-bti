@@ -29,6 +29,8 @@
 
 #include "APIObject.h"
 #include "CocoaImage.h"
+#include "WebExtensionTab.h"
+#include "WebExtensionWindow.h"
 #include <wtf/Forward.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -51,8 +53,6 @@ OBJC_CLASS _WKWebExtensionActionPopover;
 
 namespace WebKit {
 
-class WebExtensionContext;
-class WebExtensionTab;
 class WebExtensionWindow;
 
 class WebExtensionAction : public API::ObjectImpl<API::Object::Type::WebExtensionAction>, public CanMakeWeakPtr<WebExtensionAction> {
@@ -78,8 +78,12 @@ public:
     bool operator==(const WebExtensionAction&) const;
 
     WebExtensionContext* extensionContext() const;
-    WebExtensionTab* tab() { return m_tab.get(); }
-    WebExtensionWindow* window() { return m_window.get(); }
+    RefPtr<WebExtensionTab> tab() const { return m_tab.value_or(nullptr).get(); }
+    RefPtr<WebExtensionWindow> window() const { return m_window.value_or(nullptr).get(); }
+
+    bool isTabAction() const { return !!m_tab; }
+    bool isWindowAction() const { return !!m_window; }
+    bool isDefaultAction() const { return !m_tab && !m_window; }
 
     void clearCustomizations();
     void clearBlockedResourceCount();
@@ -87,7 +91,10 @@ public:
     void propertiesDidChange();
 
     CocoaImage *icon(CGSize);
-    void setIconsDictionary(NSDictionary *);
+    void setIcons(NSDictionary *);
+#if ENABLE(WK_WEB_EXTENSIONS_ICON_VARIANTS)
+    void setIconVariants(NSArray *);
+#endif
 
     String label(FallbackWhenEmpty = FallbackWhenEmpty::Yes) const;
     void setLabel(String);
@@ -144,13 +151,15 @@ public:
 private:
     WebExtensionAction* fallbackAction() const;
 
+    void clearIconCache();
+
 #if PLATFORM(MAC)
     void detectPopoverColorScheme();
 #endif
 
     WeakPtr<WebExtensionContext> m_extensionContext;
-    RefPtr<WebExtensionTab> m_tab;
-    RefPtr<WebExtensionWindow> m_window;
+    std::optional<WeakPtr<WebExtensionTab>> m_tab;
+    std::optional<WeakPtr<WebExtensionWindow>> m_window;
 
 #if PLATFORM(IOS_FAMILY)
     RetainPtr<_WKWebExtensionActionViewController> m_popupViewController;
@@ -166,7 +175,14 @@ private:
     String m_customPopupPath;
     String m_popupWebViewInspectionName;
 
+    RetainPtr<CocoaImage> m_cachedIcon;
+    RetainPtr<NSSet> m_cachedIconScales;
+    CGSize m_cachedIconIdealSize { CGSizeZero };
+
     RetainPtr<NSDictionary> m_customIcons;
+#if ENABLE(WK_WEB_EXTENSIONS_ICON_VARIANTS)
+    RetainPtr<NSArray> m_customIconVariants;
+#endif
     String m_customLabel;
     String m_customBadgeText;
     ssize_t m_blockedResourceCount { 0 };
@@ -174,6 +190,7 @@ private:
     std::optional<bool> m_hasUnreadBadgeText;
     bool m_presentsPopupWhenReady : 1 { false };
     bool m_popupPresented : 1 { false };
+    bool m_updatePending : 1 { false };
 };
 
 } // namespace WebKit

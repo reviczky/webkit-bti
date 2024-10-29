@@ -29,6 +29,7 @@
 #include "Logging.h"
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/TextStream.h>
 
@@ -37,6 +38,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ViewportConfiguration);
 
 static inline bool viewportArgumentValueIsValid(float value)
 {
@@ -411,6 +414,22 @@ ViewportConfiguration::Parameters ViewportConfiguration::nativeWebpageParameters
     parameters.initialScaleIsSet = false;
     return parameters;
 }
+
+#if ENABLE(PDF_PLUGIN)
+ViewportConfiguration::Parameters ViewportConfiguration::pluginDocumentParameters()
+{
+    Parameters parameters;
+    parameters.width = ViewportArguments::ValueDeviceWidth;
+    parameters.widthIsSet = true;
+    parameters.allowsShrinkToFit = false;
+    parameters.minimumScale = 1;
+    parameters.maximumScale = 1;
+    parameters.initialScale = 1;
+    parameters.initialScaleIgnoringLayoutScaleFactor = 1;
+    parameters.initialScaleIsSet = true;
+    return parameters;
+}
+#endif
 
 ViewportConfiguration::Parameters ViewportConfiguration::webpageParameters()
 {

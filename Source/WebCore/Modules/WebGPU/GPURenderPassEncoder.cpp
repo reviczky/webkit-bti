@@ -98,7 +98,7 @@ ExceptionOr<void> GPURenderPassEncoder::setBindGroup(GPUIndex32 index, const GPU
     if (offset.hasOverflowed() || offset > dynamicOffsetsData.length())
         return Exception { ExceptionCode::RangeError, "dynamic offsets overflowed"_s };
 
-    m_backing->setBindGroup(index, bindGroup.backing(), dynamicOffsetsData.data(), dynamicOffsetsData.length(), dynamicOffsetsDataStart, dynamicOffsetsDataLength);
+    m_backing->setBindGroup(index, bindGroup.backing(), dynamicOffsetsData.span(), dynamicOffsetsDataStart, dynamicOffsetsDataLength);
     return { };
 }
 
@@ -152,7 +152,7 @@ void GPURenderPassEncoder::endOcclusionQuery()
 
 void GPURenderPassEncoder::executeBundles(Vector<Ref<GPURenderBundle>>&& bundles)
 {
-    auto result = WTF::map(bundles, [](auto& bundle) -> std::reference_wrapper<WebGPU::RenderBundle> {
+    auto result = WTF::map(bundles, [](auto& bundle) -> Ref<WebGPU::RenderBundle> {
         return bundle->backing();
     });
     m_backing->executeBundles(WTFMove(result));

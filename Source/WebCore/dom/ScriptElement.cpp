@@ -47,8 +47,8 @@
 #include "LocalFrame.h"
 #include "MIMETypeRegistry.h"
 #include "ModuleFetchParameters.h"
+#include "Page.h"
 #include "PendingScript.h"
-#include "RuntimeApplicationChecks.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGScriptElement.h"
 #include "ScriptController.h"
@@ -60,6 +60,7 @@
 #include "TextNodeTraversal.h"
 #include "TrustedType.h"
 #include <JavaScriptCore/ImportMap.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/Scope.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/text/MakeString.h>
@@ -274,6 +275,8 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition)
     }
     }
 
+    updateTaintedOriginFromSourceURL();
+
     // All the inlined module script is handled by requestModuleScript. It produces LoadableModuleScript and inlined module script
     // is handled as the same to the external module script.
 
@@ -310,6 +313,22 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition)
     return true;
 }
 
+void ScriptElement::updateTaintedOriginFromSourceURL()
+{
+    if (m_taintedOrigin == JSC::SourceTaintedOrigin::KnownTainted)
+        return;
+
+    Ref document = element().document();
+    RefPtr page = document->page();
+    if (!page)
+        return;
+
+    if (!page->requiresScriptTelemetryForURL(hasSourceAttribute() ? document->completeURL(sourceAttributeValue()) : document->url()))
+        return;
+
+    m_taintedOrigin = JSC::SourceTaintedOrigin::KnownTainted;
+}
+
 bool ScriptElement::requestClassicScript(const String& sourceURL)
 {
     auto element = protectedElement();
@@ -323,7 +342,7 @@ bool ScriptElement::requestClassicScript(const String& sourceURL)
         auto scriptURL = document->completeURL(sourceURL);
         document->willLoadScriptElement(scriptURL);
 
-        if (!document->checkedContentSecurityPolicy()->allowNonParserInsertedScripts(scriptURL, URL(), m_startLineNumber, element->nonce(), String(), m_parserInserted))
+        if (!document->checkedContentSecurityPolicy()->allowNonParserInsertedScripts(scriptURL, URL(), m_startLineNumber, element->nonce(), script->integrity(), String(), m_parserInserted))
             return false;
 
         if (script->load(document, scriptURL)) {
@@ -387,7 +406,7 @@ bool ScriptElement::requestModuleScript(const TextPosition& scriptStartPosition)
     ASSERT(document->contentSecurityPolicy());
     {
         CheckedRef contentSecurityPolicy = *document->contentSecurityPolicy();
-        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), sourceCode.source(), m_parserInserted))
+        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), script->parameters().integrity(), sourceCode.source(), m_parserInserted))
             return false;
 
         if (!contentSecurityPolicy->allowInlineScript(document->url().string(), m_startLineNumber, sourceCode.source(), element, nonce, element->isInUserAgentShadowTree()))
@@ -414,7 +433,7 @@ bool ScriptElement::requestImportMap(LocalFrame& frame, const String& sourceURL)
         auto scriptURL = document->completeURL(sourceURL);
         document->willLoadScriptElement(scriptURL);
 
-        if (!document->checkedContentSecurityPolicy()->allowNonParserInsertedScripts(scriptURL, URL(), m_startLineNumber, element->nonce(), String(), m_parserInserted))
+        if (!document->checkedContentSecurityPolicy()->allowNonParserInsertedScripts(scriptURL, URL(), m_startLineNumber, element->nonce(), script->integrity(), String(), m_parserInserted))
             return false;
 
         frame.checkedScript()->setPendingImportMaps();
@@ -446,7 +465,7 @@ void ScriptElement::executeClassicScript(const ScriptSourceCode& sourceCode)
     if (!m_isExternalScript) {
         ASSERT(document->contentSecurityPolicy());
         CheckedRef contentSecurityPolicy = *document->contentSecurityPolicy();
-        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), sourceCode.source(), m_parserInserted))
+        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), emptyString(), sourceCode.source(), m_parserInserted))
             return;
 
         if (!contentSecurityPolicy->allowInlineScript(document->url().string(), m_startLineNumber, sourceCode.source(), element, element->nonce(), element->isInUserAgentShadowTree()))
@@ -489,7 +508,7 @@ void ScriptElement::registerImportMap(const ScriptSourceCode& sourceCode)
     if (!m_isExternalScript) {
         ASSERT(document->contentSecurityPolicy());
         CheckedRef contentSecurityPolicy = *document->contentSecurityPolicy();
-        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), sourceCode.source(), m_parserInserted))
+        if (!contentSecurityPolicy->allowNonParserInsertedScripts(URL(), document->url(), m_startLineNumber, element->nonce(), emptyString(), sourceCode.source(), m_parserInserted))
             return;
 
         if (!contentSecurityPolicy->allowInlineScript(document->url().string(), m_startLineNumber, sourceCode.source(), element, element->nonce(), element->isInUserAgentShadowTree()))

@@ -64,6 +64,7 @@ namespace JSC {
     macro(ArrayBuffer) \
     macro(ShadowRealm) \
     macro(RegExp) \
+    macro(Iterator) \
     macro(min) \
     macro(create) \
     macro(defineProperty) \
@@ -114,9 +115,6 @@ namespace JSC {
     macro(generatorValue) \
     macro(generatorThis) \
     macro(generatorResumeMode) \
-    macro(syncIterator) \
-    macro(nextMethod) \
-    macro(asyncGeneratorQueueItemNext) \
     macro(this) \
     macro(toIntegerOrInfinity) \
     macro(toLength) \
@@ -137,7 +135,6 @@ namespace JSC {
     macro(instanceOf) \
     macro(isArraySlow) \
     macro(sameValue) \
-    macro(concatMemcpy) \
     macro(appendMemcpy) \
     macro(regExpCreate) \
     macro(isRegExp) \
@@ -180,11 +177,6 @@ namespace JSC {
     macro(regExpSearchFast) \
     macro(regExpSplitFast) \
     macro(regExpTestFast) \
-    macro(regExpStringIteratorRegExp) \
-    macro(regExpStringIteratorString) \
-    macro(regExpStringIteratorGlobal) \
-    macro(regExpStringIteratorUnicode) \
-    macro(regExpStringIteratorDone) \
     macro(stringIncludesInternal) \
     macro(stringIndexOfInternal) \
     macro(stringSplitFast) \
@@ -209,7 +201,8 @@ namespace JSC {
     macro(sentinelString) \
     macro(createRemoteFunction) \
     macro(isRemoteFunction) \
-    macro(arrayFromFast) \
+    macro(arrayFromFastFillWithUndefined) \
+    macro(arrayFromFastFillWithEmpty) \
     macro(arraySort) \
     macro(jsonParse) \
     macro(jsonStringify) \
@@ -222,6 +215,10 @@ namespace JSC {
     macro(hasOwn) \
     macro(indexOf) \
     macro(pop) \
+    macro(wrapForValidIteratorCreate) \
+    macro(asyncFromSyncIteratorCreate) \
+    macro(regExpStringIteratorCreate) \
+    macro(iteratorHelperCreate) \
 
 
 namespace Symbols {

@@ -35,12 +35,12 @@
 #include "FloatQuad.h"
 #include "LayoutRect.h"
 #include "Path.h"
-#include "RuntimeApplicationChecks.h"
 #include "TextIterator.h"
 #include <iterator>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
 #include <wtf/RefPtr.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/Vector.h>
 
 #if PLATFORM(COCOA)
@@ -61,13 +61,13 @@ class IntPoint;
 class IntSize;
 class ScrollableArea;
 
-bool nodeHasPresentationRole(Node*);
+bool nodeHasPresentationRole(Node&);
 
 class AccessibilityObject : public AXCoreObject, public CanMakeWeakPtr<AccessibilityObject> {
 public:
     virtual ~AccessibilityObject();
 
-    AXID treeID() const final;
+    std::optional<AXID> treeID() const final;
     String dbg() const final;
 
     // After constructing an AccessibilityObject, it must be given a
@@ -153,7 +153,7 @@ public:
     AXCoreObject* headerContainer() override { return nullptr; }
     int axColumnCount() const override { return 0; }
     int axRowCount() const override { return 0; }
-    virtual Vector<Vector<AXID>> cellSlots() { return { }; }
+    virtual Vector<Vector<Markable<AXID>>> cellSlots() { return { }; }
 
     // Table cell support.
     bool isTableCell() const override { return false; }
@@ -225,14 +225,14 @@ public:
     FloatRect primaryScreenRect() const override;
 #endif
     FloatRect convertFrameToSpace(const FloatRect&, AccessibilityConversionSpace) const override;
-    HashMap<String, AXEditingStyleValueVariant> resolvedEditingStyles() const override;
+    UncheckedKeyHashMap<String, AXEditingStyleValueVariant> resolvedEditingStyles() const override;
     
     // In a multi-select list, many items can be selected but only one is active at a time.
     bool isSelectedOptionActive() const override { return false; }
 
     bool hasBoldFont() const override { return false; }
     bool hasItalicFont() const override { return false; }
-    Vector<CharacterRange> spellCheckerResultRanges() const final;
+    Vector<AXTextMarkerRange> misspellingRanges() const final;
     std::optional<SimpleRange> misspellingRange(const SimpleRange& start, AccessibilitySearchDirection) const override;
     bool hasPlainText() const override { return false; }
     bool hasSameFont(const AXCoreObject&) const override { return false; }
@@ -257,13 +257,14 @@ public:
     RenderObject* renderer() const override { return nullptr; }
     const RenderStyle* style() const;
 
-    // Note: computeAccessibilityIsIgnored does not consider whether an object is ignored due to presence of modals.
-    // Use accessibilityIsIgnored as the word of law when determining if an object is ignored.
-    virtual bool computeAccessibilityIsIgnored() const { return true; }
-    bool accessibilityIsIgnored() const override;
+    // Note: computeIsIgnored does not consider whether an object is ignored due to presence of modals.
+    // Use isIgnored as the word of law when determining if an object is ignored.
+    virtual bool computeIsIgnored() const { return true; }
+    bool isIgnored() const override;
     void recomputeIsIgnored();
     AccessibilityObjectInclusion defaultObjectInclusion() const;
-    bool accessibilityIsIgnoredByDefault() const;
+    bool isIgnoredByDefault() const;
+    bool includeIgnoredInCoreTree() const;
     bool isARIAHidden() const;
 
     bool isShowingValidationMessage() const;
@@ -309,7 +310,7 @@ public:
 
     // This function checks if the object should be ignored when there's a modal dialog displayed.
     virtual bool ignoredFromModalPresence() const;
-    bool isModalDescendant(Node*) const;
+    bool isModalDescendant(Node&) const;
     bool isModalNode() const override;
 
     bool supportsSetSize() const override;
@@ -339,8 +340,17 @@ public:
     AccessibilityObject* previousSiblingUnignored(unsigned limit = std::numeric_limits<unsigned>::max()) const;
     AccessibilityObject* parentObject() const override { return nullptr; }
     AccessibilityObject* displayContentsParent() const;
-    AccessibilityObject* parentObjectUnignored() const override;
-    virtual AccessibilityObject* parentObjectIfExists() const { return nullptr; }
+    AccessibilityObject* parentObjectUnignored() const override { return downcast<AccessibilityObject>(AXCoreObject::parentObjectUnignored()); }
+    // Returns the parent in the "core", platform-agnostic accessibility tree, which is not necessarily
+    // the same parent that is actually exposed to assistive technologies (i.e. one that is unignored).
+    AccessibilityObject* parentInCoreTree() const
+    {
+#if ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+        return parentObject();
+#else
+        return parentObjectUnignored();
+#endif // ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
+    }
     static AccessibilityObject* firstAccessibleObjectFromNode(const Node*);
     AccessibilityChildrenVector findMatchingObjects(AccessibilitySearchCriteria&&) final;
     virtual bool isDescendantOfBarrenParent() const { return false; }
@@ -420,8 +430,7 @@ public:
     // Only if isColorWell()
     SRGBA<uint8_t> colorValue() const override;
 
-    // FIXME: This should be made final after AccessibilityTable is fixed to use m_role rather than computing its own roleValue().
-    AccessibilityRole roleValue() const override { return m_role; }
+    AccessibilityRole roleValue() const final { return m_role; }
     virtual AccessibilityRole determineAccessibilityRole() = 0;
     String rolePlatformString() const override;
     String roleDescription() const override;
@@ -513,13 +522,13 @@ public:
     void decrement() override { }
     virtual bool toggleDetailsAncestor() { return false; }
 
-    virtual void updateRole();
+    void updateRole();
     bool childrenInitialized() const { return m_childrenInitialized; }
     const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) override;
     virtual void addChildren() { }
     enum class DescendIfIgnored : bool { No, Yes };
     void addChild(AXCoreObject*, DescendIfIgnored = DescendIfIgnored::Yes);
-    virtual void insertChild(AXCoreObject*, unsigned, DescendIfIgnored = DescendIfIgnored::Yes);
+    void insertChild(AXCoreObject*, unsigned, DescendIfIgnored = DescendIfIgnored::Yes);
     virtual bool canHaveChildren() const { return true; }
     void updateChildrenIfNecessary() override;
     virtual void setNeedsToUpdateChildren() { }
@@ -557,7 +566,7 @@ public:
     std::optional<SimpleRange> visibleCharacterRange() const override;
     VisiblePositionRange visiblePositionRangeForLine(unsigned) const override { return VisiblePositionRange(); }
 
-    static bool replacedNodeNeedsCharacter(Node* replacedNode);
+    static bool replacedNodeNeedsCharacter(Node& replacedNode);
 
     VisiblePositionRange visiblePositionRangeForUnorderedPositions(const VisiblePosition&, const VisiblePosition&) const override;
     VisiblePositionRange leftLineVisiblePositionRange(const VisiblePosition&) const override;
@@ -745,6 +754,8 @@ public:
 
     const AccessibilityScrollView* ancestorAccessibilityScrollView(bool includeSelf) const;
     virtual AccessibilityObject* webAreaObject() const { return nullptr; }
+    bool isWithinHiddenWebArea() const;
+    AccessibilityObject* containingWebArea() const;
 
     void clearIsIgnoredFromParentData() { m_isIgnoredFromParentData = { }; }
     void setIsIgnoredFromParentDataForChild(AccessibilityObject*);
@@ -899,7 +910,7 @@ private:
     std::optional<BoundaryPoint> lastBoundaryPointContainedInRect(const Vector<BoundaryPoint>& boundaryPoints, const BoundaryPoint& startBoundaryPoint, const FloatRect& targetRect) const;
 
     // Note that "withoutCache" refers to the lack of referencing AXComputedObjectAttributeCache in the function, not the AXObjectCache parameter we pass in here.
-    bool accessibilityIsIgnoredWithoutCache(AXObjectCache*) const;
+    bool isIgnoredWithoutCache(AXObjectCache*) const;
     void setLastKnownIsIgnoredValue(bool);
     void ariaTreeRows(AccessibilityChildrenVector& rows, AccessibilityChildrenVector& ancestors);
     AccessibilityChildrenVector ariaListboxSelectedChildren();
@@ -939,8 +950,8 @@ inline bool AccessibilityObject::hasDisplayContents() const
 
 inline void AccessibilityObject::recomputeIsIgnored()
 {
-    // accessibilityIsIgnoredWithoutCache will update m_lastKnownIsIgnoredValue and perform any necessary actions if it has changed.
-    accessibilityIsIgnoredWithoutCache(axObjectCache());
+    // isIgnoredWithoutCache will update m_lastKnownIsIgnoredValue and perform any necessary actions if it has changed.
+    isIgnoredWithoutCache(axObjectCache());
 }
 
 inline std::optional<BoundaryPoint> AccessibilityObject::lastBoundaryPointContainedInRect(const Vector<BoundaryPoint>& boundaryPoints, const BoundaryPoint& startBoundaryPoint, const FloatRect& targetRect) const
@@ -978,7 +989,7 @@ AccessibilityObject* firstAccessibleObjectFromNode(const Node*, const Function<b
 
 namespace Accessibility {
 
-using PlatformRoleMap = HashMap<AccessibilityRole, String, DefaultHash<unsigned>, WTF::UnsignedWithZeroKeyHashTraits<unsigned>>;
+using PlatformRoleMap = UncheckedKeyHashMap<AccessibilityRole, String, DefaultHash<unsigned>, WTF::UnsignedWithZeroKeyHashTraits<unsigned>>;
 
 PlatformRoleMap createPlatformRoleMap();
 String roleToPlatformString(AccessibilityRole);

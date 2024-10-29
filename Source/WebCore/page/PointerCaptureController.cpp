@@ -34,12 +34,15 @@
 #include "Page.h"
 #include "PointerEvent.h"
 #include <wtf/CheckedArithmetic.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if ENABLE(POINTER_LOCK)
 #include "PointerLockController.h"
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PointerCaptureController);
 
 PointerCaptureController::PointerCaptureController(Page& page)
     : m_page(page)
@@ -310,6 +313,13 @@ void PointerCaptureController::dispatchEventForTouchAtIndex(EventTarget& target,
         dispatchEnterOrLeaveEvent(eventNames().pointerenterEvent, *currentTarget);
     }
 
+#if PLATFORM(IOS_FAMILY)
+    if (pointerEvent->type() == eventNames().pointercancelEvent) {
+        cancelPointer(pointerEvent->pointerId(), platformTouchEvent.touchLocationAtIndex(index), pointerEvent.ptr());
+        return;
+    }
+#endif
+
     dispatchEvent(pointerEvent, &target);
 
     if (pointerEvent->type() == eventNames().pointerupEvent) {
@@ -323,27 +333,6 @@ void PointerCaptureController::dispatchEventForTouchAtIndex(EventTarget& target,
     }
 }
 #endif
-
-static AtomString pointerEventType(const AtomString& mouseEventType)
-{
-    auto& names = eventNames();
-    if (mouseEventType == names.mousedownEvent)
-        return names.pointerdownEvent;
-    if (mouseEventType == names.mouseoverEvent)
-        return names.pointeroverEvent;
-    if (mouseEventType == names.mouseenterEvent)
-        return names.pointerenterEvent;
-    if (mouseEventType == names.mousemoveEvent)
-        return names.pointermoveEvent;
-    if (mouseEventType == names.mouseleaveEvent)
-        return names.pointerleaveEvent;
-    if (mouseEventType == names.mouseoutEvent)
-        return names.pointeroutEvent;
-    if (mouseEventType == names.mouseupEvent)
-        return names.pointerupEvent;
-
-    return nullAtom();
-}
 
 RefPtr<PointerEvent> PointerCaptureController::pointerEventForMouseEvent(const MouseEvent& mouseEvent, PointerID pointerId, const String& pointerType)
 {
@@ -363,7 +352,8 @@ RefPtr<PointerEvent> PointerCaptureController::pointerEventForMouseEvent(const M
     MouseButton newButton = mouseEvent.button();
     MouseButton previousMouseButton = capturingData ? capturingData->previousMouseButton : MouseButton::PointerHasNotChanged;
     MouseButton button = [&] {
-        if (!PointerEvent::typeIsUpOrDown(pointerEventType(type))) {
+        auto pointerEventType = PointerEvent::typeFromMouseEventType(type);
+        if (!PointerEvent::typeRequiresResolvedButton(pointerEventType)) {
             if (newButton == previousMouseButton || !pointerIsPressed)
                 return MouseButton::PointerHasNotChanged;
         }
@@ -484,7 +474,7 @@ void PointerCaptureController::pointerEventWasDispatched(const PointerEvent& eve
         capturingData->preventsCompatibilityMouseEvents = event.defaultPrevented();
 }
 
-void PointerCaptureController::cancelPointer(PointerID pointerId, const IntPoint& documentPoint)
+void PointerCaptureController::cancelPointer(PointerID pointerId, const IntPoint& documentPoint, PointerEvent* existingCancelEvent)
 {
     // https://w3c.github.io/pointerevents/#the-pointercancel-event
 
@@ -534,8 +524,14 @@ void PointerCaptureController::cancelPointer(PointerID pointerId, const IntPoint
     // followed by firing a pointer event named pointerleave.
     auto isPrimary = capturingData->isPrimary ? PointerEvent::IsPrimary::Yes : PointerEvent::IsPrimary::No;
     auto& eventNames = WebCore::eventNames();
-    auto cancelEvent = PointerEvent::create(eventNames.pointercancelEvent, pointerId, capturingData->pointerType, isPrimary);
-    target->dispatchEvent(cancelEvent);
+
+    if (existingCancelEvent)
+        target->dispatchEvent(*existingCancelEvent);
+    else {
+        auto cancelEvent = PointerEvent::create(eventNames.pointercancelEvent, pointerId, capturingData->pointerType, isPrimary);
+        target->dispatchEvent(cancelEvent);
+    }
+
     target->dispatchEvent(PointerEvent::create(eventNames.pointeroutEvent, pointerId, capturingData->pointerType, isPrimary));
     target->dispatchEvent(PointerEvent::create(eventNames.pointerleaveEvent, pointerId, capturingData->pointerType, isPrimary));
     processPendingPointerCapture(pointerId);

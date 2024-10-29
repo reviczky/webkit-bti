@@ -424,6 +424,21 @@ struct FeaturesVk : FeatureSetBase
         &members, "http://anglebug.com/42263158"
     };
 
+    FeatureInfo supportsShaderInt8 = {
+        "supportsShaderInt8",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the VK_KHR_shader_float16_int8 extension "
+        "and has the shaderInt8 feature",
+        &members,
+    };
+
+    FeatureInfo supportsShaderFloat64 = {
+        "supportsShaderFloat64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the shaderFloat64 bit of VkPhysicalDeviceFeatures",
+        &members,
+    };
+
     FeatureInfo allowGenerateMipmapWithCompute = {
         "allowGenerateMipmapWithCompute",
         FeatureCategory::VulkanFeatures,
@@ -721,6 +736,13 @@ struct FeaturesVk : FeatureSetBase
         "supportsShaderFramebufferFetchNonCoherent",
         FeatureCategory::VulkanFeatures,
         "Whether the Vulkan backend supports non-coherent framebuffer fetch",
+        &members,
+    };
+
+    FeatureInfo supportsShaderFramebufferFetchDepthStencil = {
+        "supportsShaderFramebufferFetchDepthStencil",
+        FeatureCategory::VulkanFeatures,
+        "Whether the Vulkan backend supports coherent depth/stencil framebuffer fetch",
         &members,
     };
 
@@ -1214,10 +1236,10 @@ struct FeaturesVk : FeatureSetBase
         &members, "https://issuetracker.google.com/253522366"
     };
 
-    FeatureInfo asyncCommandBufferReset = {
-        "asyncCommandBufferReset",
+    FeatureInfo asyncCommandBufferResetAndGarbageCleanup = {
+        "asyncCommandBufferResetAndGarbageCleanup",
         FeatureCategory::VulkanFeatures,
-        "Reset command buffer in async thread.",
+        "Reset command buffer and cleanup garbage in async thread.",
         &members, "https://issuetracker.google.com/255411748"
     };
 
@@ -1492,6 +1514,155 @@ struct FeaturesVk : FeatureSetBase
         FeatureCategory::VulkanFeatures,
         "Prefer host cached + non-coherent memory for buffers with dynamic/stream usage.",
         &members, "https://issuetracker.google.com/347601787"
+    };
+
+    FeatureInfo supportsRoundingModeRteFp16 = {
+        "supportsRoundingModeRteFp16",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTEFloat16 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsRoundingModeRteFp32 = {
+        "supportsRoundingModeRteFp32",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTEFloat32 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsRoundingModeRteFp64 = {
+        "supportsRoundingModeRteFp64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTEFloat64 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsRoundingModeRtzFp16 = {
+        "supportsRoundingModeRtzFp16",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTZFloat16 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsRoundingModeRtzFp32 = {
+        "supportsRoundingModeRtzFp32",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTZFloat32 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsRoundingModeRtzFp64 = {
+        "supportsRoundingModeRtzFp64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the RTZFloat64 rounding mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormPreserveFp16 = {
+        "supportsDenormPreserveFp16",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormPreserveFloat16 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormPreserveFp32 = {
+        "supportsDenormPreserveFp32",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormPreserveFloat32 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormPreserveFp64 = {
+        "supportsDenormPreserveFp64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormPreserveFloat64 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormFtzFp16 = {
+        "supportsDenormFtzFp16",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormFlushToZeroFloat16 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormFtzFp32 = {
+        "supportsDenormFtzFp32",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormFlushToZeroFloat32 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsDenormFtzFp64 = {
+        "supportsDenormFtzFp64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports the DenormFlushToZeroFloat64 mode from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsSignedZeroInfNanPreserveFp16 = {
+        "supportsSignedZeroInfNanPreserveFp16",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports SignedZeroInfNanPreserve execution mode for 16-bit floating point from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsSignedZeroInfNanPreserveFp32 = {
+        "supportsSignedZeroInfNanPreserveFp32",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports SignedZeroInfNanPreserve execution mode for 32-bit floating point from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo supportsSignedZeroInfNanPreserveFp64 = {
+        "supportsSignedZeroInfNanPreserveFp64",
+        FeatureCategory::VulkanFeatures,
+        "VkDevice supports SignedZeroInfNanPreserve execution mode for 64-bit floating point from VK_KHR_shader_float_controls extension",
+        &members, "https://anglebug.com/360031000"
+    };
+
+    FeatureInfo preferDoubleBufferSwapchainOnFifoMode = {
+        "preferDoubleBufferSwapchainOnFifoMode",
+        FeatureCategory::VulkanFeatures,
+        "allow create double buffer swapchain for fifo present mode",
+        &members, "https://issuetracker.google.com/311022968"
+    };
+
+    FeatureInfo useDualPipelineBlobCacheSlots = {
+        "useDualPipelineBlobCacheSlots",
+        FeatureCategory::VulkanFeatures,
+        "Wether to use single or dual slots to store PipelineCacheVk data into the blob cache.",
+        &members, "https://anglebug.com/42263322"
+    };
+
+    FeatureInfo useEmptyBlobsToEraseOldPipelineCacheFromBlobCache = {
+        "useEmptyBlobsToEraseOldPipelineCacheFromBlobCache",
+        FeatureCategory::VulkanFeatures,
+        "Whether to use empty blobs or 1-sized blobs to erase old PipelineCacheVk data from the blob cache.",
+        &members, "https://anglebug.com/42263322"
+    };
+
+    FeatureInfo hasBlobCacheThatEvictsOldItemsFirst = {
+        "hasBlobCacheThatEvictsOldItemsFirst",
+        FeatureCategory::VulkanFeatures,
+        "Whether platform blob cache evicts old items first (has LRU). "
+        "This is also true if cache evicts more old items than required when storing a new item.",
+        &members, "https://anglebug.com/42263322"
+    };
+
+    FeatureInfo verifyPipelineCacheInBlobCache = {
+        "verifyPipelineCacheInBlobCache",
+        FeatureCategory::VulkanFeatures,
+        "Whether need to perform verification of stored PipelineCacheVk data chunks or not. "
+        "Relevant, when blob cache does not evict old items first (no LRU) or evicts more old items than required when storing a new item.",
+        &members, "https://anglebug.com/42263322"
+    };
+
+    FeatureInfo descriptorSetCache = {
+        "descriptorSetCache",
+        FeatureCategory::VulkanFeatures,
+        "Whether cache the individual descriptorSet or not.",
+        &members, "angleproject:372268711"
     };
 
 };

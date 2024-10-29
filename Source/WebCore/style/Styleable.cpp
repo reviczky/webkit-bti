@@ -30,6 +30,7 @@
 #include "AnimationEffect.h"
 #include "AnimationList.h"
 #include "AnimationTimeline.h"
+#include "AnimationTimelinesController.h"
 #include "CSSAnimation.h"
 #include "CSSCustomPropertyValue.h"
 #include "CSSPropertyAnimation.h"
@@ -199,7 +200,7 @@ bool Styleable::computeAnimationExtent(LayoutRect& bounds) const
     KeyframeEffect* matchingEffect = nullptr;
     for (const auto& animation : *animations) {
         if (auto* keyframeEffect = dynamicDowncast<KeyframeEffect>(animation->effect())) {
-            if (keyframeEffect->animatedProperties().contains(CSSPropertyTransform))
+            if (keyframeEffect->blendingKeyframes().containsProperty(CSSPropertyTransform))
                 matchingEffect = keyframeEffect;
         }
     }
@@ -474,11 +475,11 @@ static bool transitionMatchesProperty(const Animation& transition, const Animata
                 if (!std::holds_alternative<CSSPropertyID>(property))
                     return false;
                 auto propertyIdToMatch = std::get<CSSPropertyID>(property);
-                auto resolvedPropertyId = CSSProperty::resolveDirectionAwareProperty(propertyId, style.direction(), style.writingMode());
+                auto resolvedPropertyId = CSSProperty::resolveDirectionAwareProperty(propertyId, style.writingMode());
                 if (resolvedPropertyId == propertyIdToMatch)
                     return true;
                 for (auto longhand : shorthandForProperty(resolvedPropertyId)) {
-                    auto resolvedLonghand = CSSProperty::resolveDirectionAwareProperty(longhand, style.direction(), style.writingMode());
+                    auto resolvedLonghand = CSSProperty::resolveDirectionAwareProperty(longhand, style.writingMode());
                     if (resolvedLonghand == propertyIdToMatch)
                         return true;
                 }
@@ -518,7 +519,7 @@ static void compileTransitionPropertiesInStyle(const RenderStyle& style, CSSProp
         case Animation::TransitionMode::SingleProperty: {
             WTF::switchOn(transitionProperty.animatableProperty,
                 [&] (CSSPropertyID propertyId) {
-                    auto resolvedPropertyId = CSSProperty::resolveDirectionAwareProperty(propertyId, style.direction(), style.writingMode());
+                    auto resolvedPropertyId = CSSProperty::resolveDirectionAwareProperty(propertyId, style.writingMode());
                     if (isShorthand(resolvedPropertyId)) {
                         for (auto longhand : shorthandForProperty(resolvedPropertyId))
                             transitionProperties.m_properties.set(longhand);
@@ -559,7 +560,7 @@ static void updateCSSTransitionsForStyleableAndProperty(const Styleable& styleab
             if (transitionMatchesProperty(backingAnimation.get(), property, newStyle)) {
                 hasMatchingTransitionProperty = true;
                 matchingBackingAnimation = backingAnimation.ptr();
-                matchingTransitionDuration = std::max(0.0, matchingBackingAnimation->duration()) + matchingBackingAnimation->delay();
+                matchingTransitionDuration = std::max(0.0, matchingBackingAnimation->duration().value_or(0)) + matchingBackingAnimation->delay();
             }
         }
     } else if (!document.quirks().needsResettingTransitionCancelsRunningTransitionQuirk()) {
@@ -588,7 +589,8 @@ static void updateCSSTransitionsForStyleableAndProperty(const Styleable& styleab
                         continue;
                     auto* effectAnimation = effect->animation();
                     auto* cssTransition = dynamicDowncast<CSSTransition>(effectAnimation);
-                    bool shouldUseTimelineTimeAtCreation = cssTransition && (!effectAnimation->startTime() || *effectAnimation->startTime() == document.timeline().currentTime());
+                    ASSERT(document.timeline().currentTime());
+                    bool shouldUseTimelineTimeAtCreation = cssTransition && (!effectAnimation->startTime() || effectAnimation->startTime() == document.timeline().currentTime());
                     effectAnimation->resolve(style, { nullptr }, shouldUseTimelineTimeAtCreation ? cssTransition->timelineTimeAtCreation() : std::nullopt);
                 }
             }
@@ -648,7 +650,7 @@ static void updateCSSTransitionsForStyleableAndProperty(const Styleable& styleab
         //   - reversing shortening factor is 1.
         ASSERT(matchingBackingAnimation);
         auto delay = Seconds(matchingBackingAnimation->delay());
-        auto duration = Seconds(matchingBackingAnimation->duration());
+        auto duration = Seconds(matchingBackingAnimation->duration().value_or(0));
         auto& reversingAdjustedStartStyle = beforeChangeStyle;
         auto reversingShorteningFactor = 1;
         createCSSTransition(beforeChangeStyle, delay, duration, reversingAdjustedStartStyle, reversingShorteningFactor);
@@ -707,7 +709,7 @@ static void updateCSSTransitionsForStyleableAndProperty(const Styleable& styleab
             }
             auto reversingShorteningFactor = std::max(std::min(((transformedProgress * previouslyRunningTransition->reversingShorteningFactor()) + (1 - previouslyRunningTransition->reversingShorteningFactor())), 1.0), 0.0);
             auto delay = matchingBackingAnimation->delay() < 0 ? Seconds(matchingBackingAnimation->delay()) * reversingShorteningFactor : Seconds(matchingBackingAnimation->delay());
-            auto duration = Seconds(matchingBackingAnimation->duration()) * reversingShorteningFactor;
+            auto duration = Seconds(matchingBackingAnimation->duration().value_or(0)) * reversingShorteningFactor;
 
             previouslyRunningTransition->cancelFromStyle();
             createCSSTransition(beforeChangeStyle, delay, duration, reversingAdjustedStartStyle, reversingShorteningFactor);
@@ -721,7 +723,7 @@ static void updateCSSTransitionsForStyleableAndProperty(const Styleable& styleab
             //   - reversing shortening factor is 1.
             ASSERT(matchingBackingAnimation);
             auto delay = Seconds(matchingBackingAnimation->delay());
-            auto duration = Seconds(matchingBackingAnimation->duration());
+            auto duration = Seconds(matchingBackingAnimation->duration().value_or(0));
             auto& reversingAdjustedStartStyle = currentStyle;
             auto reversingShorteningFactor = 1;
             previouslyRunningTransition->cancelFromStyle();
@@ -825,7 +827,6 @@ void Styleable::updateCSSTransitions(const RenderStyle& currentStyle, const Rend
                 addProperty(property);
         }
 
-        transitionCustomProperties.clear();
         auto gatherAnimatableCustomProperties = [&](const StyleCustomPropertyData& customPropertyData) {
             if (!customPropertyData.mayHaveAnimatableProperties())
                 return;
@@ -852,6 +853,103 @@ void Styleable::updateCSSTransitions(const RenderStyle& currentStyle, const Rend
     for (auto& customProperty : transitionCustomProperties)
         updateCSSTransitionsForStyleableAndProperty(*this, customProperty, currentStyle, newStyle, generationTime, newStyleOriginatedAnimations);
 }
+
+void Styleable::updateCSSScrollTimelines(const RenderStyle* currentStyle, const RenderStyle& afterChangeStyle) const
+{
+    auto updateAnonymousScrollTimelines = [&]() {
+        if (currentStyle && currentStyle->scrollTimelines() == afterChangeStyle.scrollTimelines())
+            return;
+
+        auto& currentTimelines = afterChangeStyle.scrollTimelines();
+        for (auto& currentTimeline : currentTimelines)
+            currentTimeline->setSource(&element);
+
+        if (!currentStyle)
+            return;
+
+        for (auto& previousTimeline : currentStyle->scrollTimelines()) {
+            if (!currentTimelines.contains(previousTimeline) && previousTimeline->source() == &element)
+                previousTimeline->setSource(nullptr);
+        }
+    };
+
+    auto updateNamedScrollTimelines = [&]() {
+        if (currentStyle && currentStyle->scrollTimelineNames() == afterChangeStyle.scrollTimelineNames())
+            return;
+
+        CheckedRef timelinesController = element.protectedDocument()->ensureTimelinesController();
+
+        auto& currentTimelineNames = afterChangeStyle.scrollTimelineNames();
+        auto& currentTimelineAxes = afterChangeStyle.scrollTimelineAxes();
+        auto numberOfAxes = currentTimelineAxes.size();
+        for (size_t i = 0; i < currentTimelineNames.size(); ++i) {
+            auto& name = currentTimelineNames[i];
+            auto axis = numberOfAxes ? currentTimelineAxes[i % numberOfAxes] : ScrollAxis::Block;
+            timelinesController->registerNamedScrollTimeline(name, element, axis);
+        }
+
+        if (!currentStyle)
+            return;
+
+        for (auto& previousTimelineName : currentStyle->scrollTimelineNames()) {
+            if (!currentTimelineNames.contains(previousTimelineName))
+                timelinesController->unregisterNamedTimeline(previousTimelineName, element);
+        }
+    };
+
+    updateAnonymousScrollTimelines();
+    updateNamedScrollTimelines();
+};
+
+void Styleable::updateCSSViewTimelines(const RenderStyle* currentStyle, const RenderStyle& afterChangeStyle) const
+{
+    auto updateAnonymousViewTimelines = [&]() {
+        if (currentStyle && currentStyle->viewTimelines() == afterChangeStyle.viewTimelines())
+            return;
+
+        auto& currentTimelines = afterChangeStyle.viewTimelines();
+        for (auto& currentTimeline : currentTimelines)
+            currentTimeline->setSubject(&element);
+
+        if (!currentStyle)
+            return;
+
+        for (auto& previousTimeline : currentStyle->viewTimelines()) {
+            if (!currentTimelines.contains(previousTimeline) && previousTimeline->subject() == &element)
+                previousTimeline->setSubject(nullptr);
+        }
+    };
+
+    auto updateNamedViewTimelines = [&]() {
+        if (currentStyle && currentStyle->viewTimelineNames() == afterChangeStyle.viewTimelineNames())
+            return;
+
+        CheckedRef timelinesController = element.protectedDocument()->ensureTimelinesController();
+
+        auto& currentTimelineNames = afterChangeStyle.viewTimelineNames();
+        auto& currentTimelineAxes = afterChangeStyle.viewTimelineAxes();
+        auto& currentTimelineInsets = afterChangeStyle.viewTimelineInsets();
+        auto numberOfAxes = currentTimelineAxes.size();
+        auto numberOfInsets = currentTimelineInsets.size();
+        for (size_t i = 0; i < currentTimelineNames.size(); ++i) {
+            auto& name = currentTimelineNames[i];
+            auto axis = numberOfAxes ? currentTimelineAxes[i % numberOfAxes] : ScrollAxis::Block;
+            auto insets = numberOfInsets ? ViewTimelineInsets(currentTimelineInsets[i % numberOfInsets]) : ViewTimelineInsets();
+            timelinesController->registerNamedViewTimeline(name, element, axis, WTFMove(insets));
+        }
+
+        if (!currentStyle)
+            return;
+
+        for (auto& previousTimelineName : currentStyle->viewTimelineNames()) {
+            if (!currentTimelineNames.contains(previousTimelineName))
+                timelinesController->unregisterNamedTimeline(previousTimelineName, element);
+        }
+    };
+
+    updateAnonymousViewTimelines();
+    updateNamedViewTimelines();
+};
 
 void Styleable::queryContainerDidChange() const
 {

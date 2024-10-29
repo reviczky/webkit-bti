@@ -66,10 +66,14 @@
 #include "TextIterator.h"
 #include "TypedElementDescendantIteratorInlines.h"
 #include "VisibilityAdjustment.h"
+#include <wtf/HashMap.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ElementTargetingController);
 
 static constexpr auto maximumNumberOfClasses = 5;
 static constexpr auto marginForTrackingAdjustmentRects = 5;
@@ -119,7 +123,7 @@ static float maximumAreaRatioForTrackingAdjustmentAreas(float viewportArea)
 
 class ClearVisibilityAdjustmentForScope {
     WTF_MAKE_NONCOPYABLE(ClearVisibilityAdjustmentForScope);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ClearVisibilityAdjustmentForScope);
 public:
     ClearVisibilityAdjustmentForScope(Element& element)
         : m_element(element)
@@ -152,7 +156,7 @@ private:
     OptionSet<VisibilityAdjustment> m_adjustmentToRestore;
 };
 
-using ElementSelectorCache = HashMap<Ref<Element>, std::optional<String>>;
+using ElementSelectorCache = UncheckedKeyHashMap<Ref<Element>, std::optional<String>>;
 
 ElementTargetingController::ElementTargetingController(Page& page)
     : m_page { page }
@@ -616,7 +620,6 @@ static String searchableTextForTarget(Element& target)
 
 static bool hasAudibleMedia(const Element& element)
 {
-#if ENABLE(VIDEO)
     if (RefPtr media = dynamicDowncast<HTMLMediaElement>(element))
         return media->isAudible();
 
@@ -629,9 +632,6 @@ static bool hasAudibleMedia(const Element& element)
         if (hasAudibleMedia(documentElement))
             return true;
     }
-#else
-    UNUSED_PARAM(element);
-#endif
 
     return false;
 }
@@ -644,10 +644,8 @@ static URL urlForElement(const Element& element)
     if (RefPtr image = dynamicDowncast<HTMLImageElement>(element))
         return image->currentURL();
 
-#if ENABLE(VIDEO)
     if (RefPtr media = dynamicDowncast<HTMLMediaElement>(element))
         return media->currentSrc();
-#endif
 
     if (CheckedPtr renderer = element.renderer()) {
         if (auto& style = renderer->style(); style.hasBackgroundImage()) {
@@ -697,7 +695,7 @@ static HashSet<URL> collectMediaAndLinkURLs(const Element& element)
 enum class IsNearbyTarget : bool { No, Yes };
 static std::optional<TargetedElementInfo> targetedElementInfo(Element& element, IsNearbyTarget isNearbyTarget, ElementSelectorCache& cache, const WeakHashSet<Element, WeakPtrImplWithEventTargetData>& adjustedElements)
 {
-    element.document().updateLayoutIgnorePendingStylesheets();
+    element.protectedDocument()->updateLayoutIgnorePendingStylesheets();
 
     FloatRect boundsInClientCoordinates;
     RectEdges<bool> offsetEdges;
@@ -863,6 +861,115 @@ Vector<TargetedElementInfo> ElementTargetingController::findTargets(TargetedElem
     return extractTargets(WTFMove(nodes), WTFMove(innerElement), request.canIncludeNearbyElements);
 }
 
+void ElementTargetingController::topologicallySortElementsHelper(ElementIdentifier currentElementID, Vector<ElementIdentifier>& depthSortedIDs, HashSet<ElementIdentifier>& processingIDs, HashSet<ElementIdentifier>& unprocessedIDs, const UncheckedKeyHashMap<ElementIdentifier, HashSet<ElementIdentifier>>& elementIDToOccludedElementIDs)
+{
+    if (processingIDs.contains(currentElementID)) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    if (!unprocessedIDs.contains(currentElementID))
+        return;
+
+    unprocessedIDs.remove(currentElementID);
+    processingIDs.add(currentElementID);
+
+    for (auto& occludedElementID : elementIDToOccludedElementIDs.get(currentElementID))
+        topologicallySortElementsHelper(occludedElementID, depthSortedIDs, processingIDs, unprocessedIDs, elementIDToOccludedElementIDs);
+
+    processingIDs.remove(currentElementID);
+    depthSortedIDs.append(currentElementID);
+}
+
+Vector<ElementIdentifier> ElementTargetingController::topologicallySortElements(const UncheckedKeyHashMap<ElementIdentifier, HashSet<ElementIdentifier>>& elementIDToOccludedElementIDs)
+{
+    Vector<ElementIdentifier> depthSortedIDs;
+    HashSet<ElementIdentifier> processingIDs;
+    HashSet<ElementIdentifier> unprocessedIDs;
+
+    const auto elementIDs = elementIDToOccludedElementIDs.keys();
+    unprocessedIDs.add(elementIDs.begin(), elementIDs.end());
+
+    while (!unprocessedIDs.isEmpty() || !processingIDs.isEmpty()) {
+        if (unprocessedIDs.isEmpty()) {
+            ASSERT_NOT_REACHED();
+            break;
+        }
+
+        topologicallySortElementsHelper(*unprocessedIDs.begin(), depthSortedIDs, processingIDs, unprocessedIDs, elementIDToOccludedElementIDs);
+    }
+
+    depthSortedIDs.reverse();
+    return depthSortedIDs;
+}
+
+Vector<Vector<TargetedElementInfo>> ElementTargetingController::findAllTargets(float hitTestInterval)
+{
+    RefPtr page = m_page.get();
+    if (!page) {
+        ASSERT_NOT_REACHED();
+        return { };
+    }
+
+    RefPtr mainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
+    if (!mainFrame) {
+        ASSERT_NOT_REACHED();
+        return { };
+    }
+
+    RefPtr view = mainFrame->view();
+    if (!view) {
+        ASSERT_NOT_REACHED();
+        return { };
+    }
+
+    const auto viewportRect = view->unobscuredContentRect();
+    const auto halfHitTestInterval = std::floor(hitTestInterval / 2);
+
+    Vector<Vector<TargetedElementInfo>> targetsList;
+    for (auto x = viewportRect.x() + halfHitTestInterval; x < viewportRect.maxX(); x += hitTestInterval) {
+        for (auto y = viewportRect.y() + halfHitTestInterval; y < viewportRect.maxY(); y += hitTestInterval) {
+            auto [nodes, innerElement] = findNodes({ x, y }, true);
+            if (nodes.isEmpty())
+                continue;
+
+            const auto targets = extractTargets(WTFMove(nodes), WTFMove(innerElement), false);
+            targetsList.append(targets);
+        }
+    }
+
+    UncheckedKeyHashMap<ElementIdentifier, HashSet<ElementIdentifier>> elementIDToOccludedElementIDs;
+    UncheckedKeyHashMap<ElementIdentifier, Vector<TargetedElementInfo>> elementIDToTargets;
+    for (auto& targets : targetsList) {
+        if (targets.isEmpty())
+            continue;
+
+        const auto topElementID = targets.first().elementIdentifier;
+        HashSet<ElementIdentifier> occludedElementIDsToInsert;
+        for (unsigned index = 1; index < targets.size(); ++index)
+            occludedElementIDsToInsert.add(targets[index].elementIdentifier);
+
+        auto storedTargets = elementIDToTargets.getOptional(topElementID);
+        auto storedIDsSet = elementIDToOccludedElementIDs.getOptional(topElementID);
+        if (storedTargets && storedIDsSet) {
+            for (auto& target : targets) {
+                if (target.elementIdentifier != topElementID && !storedIDsSet->contains(target.elementIdentifier))
+                    storedTargets->append(target);
+            }
+
+            elementIDToTargets.set(topElementID, *storedTargets);
+            elementIDToOccludedElementIDs.set(topElementID, storedIDsSet->unionWith(occludedElementIDsToInsert));
+        } else {
+            elementIDToTargets.set(topElementID, targets);
+            elementIDToOccludedElementIDs.set(topElementID, occludedElementIDsToInsert);
+        }
+    }
+
+    return topologicallySortElements(elementIDToOccludedElementIDs).map([& elementIDToTargets](const auto& elementID) {
+        return elementIDToTargets.get(elementID);
+    });
+}
+
 std::pair<Vector<Ref<Node>>, RefPtr<Element>> ElementTargetingController::findNodes(FloatPoint pointInRootView, bool shouldIgnorePointerEventsNone)
 {
     RefPtr page = m_page.get();
@@ -974,7 +1081,7 @@ std::pair<Vector<Ref<Node>>, RefPtr<Element>> ElementTargetingController::findNo
 
 static Vector<Ref<Element>> filterRedundantNearbyTargets(HashSet<Ref<Element>>&& unfilteredNearbyTargets)
 {
-    HashMap<Ref<Element>, bool> shouldKeepCache;
+    UncheckedKeyHashMap<Ref<Element>, bool> shouldKeepCache;
     Vector<Ref<Element>> filteredResults;
 
     for (auto& originalTarget : unfilteredNearbyTargets) {
@@ -1876,10 +1983,13 @@ RefPtr<Image> ElementTargetingController::snapshotIgnoringVisibilityAdjustment(E
         return { };
 
     ClearVisibilityAdjustmentForScope clearAdjustmentScope { *element };
-    element->document().updateLayoutIgnorePendingStylesheets();
+    element->protectedDocument()->updateLayoutIgnorePendingStylesheets();
 
     CheckedPtr renderer = element->renderer();
     if (!renderer)
+        return { };
+
+    if (!renderer->isRenderReplaced() && !renderer->firstChild() && !renderer->style().hasBackgroundImage())
         return { };
 
     auto backgroundColor = frameView->baseBackgroundColor();

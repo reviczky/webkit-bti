@@ -33,6 +33,8 @@
 #include <wtf/UUID.h>
 #include <wtf/text/WTFString.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WebCore {
 struct ExceptionData;
 class CertificateInfo;
@@ -61,7 +63,7 @@ template<typename T> struct Coder<T, typename std::enable_if_t<std::is_arithmeti
     }
     template<typename Decoder> static std::optional<T> decode(Decoder& decoder)
     {
-        if (T result; decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(&result), sizeof(T)))
+        if (T result; decoder.decodeFixedLengthData(asMutableByteSpan(result)))
             return result;
         return std::nullopt;
     }
@@ -157,9 +159,9 @@ template<> struct Coder<WTF::String> {
         if (!decoder.template bufferIsLargeEnoughToContain<CharacterType>(length))
             return std::nullopt;
 
-        CharacterType* buffer;
+        std::span<CharacterType> buffer;
         String string = String::createUninitialized(length, buffer);
-        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(buffer), length * sizeof(CharacterType)))
+        if (!decoder.decodeFixedLengthData(spanReinterpretCast<uint8_t>(buffer)))
             return std::nullopt;
 
         return string;
@@ -191,3 +193,5 @@ template<> struct Coder<WTF::String> {
 
 } // namespace Daemon
 } // namespace WebKit
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

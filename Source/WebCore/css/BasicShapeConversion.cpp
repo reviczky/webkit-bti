@@ -35,9 +35,6 @@
 #include "BasicShapesShape.h"
 #include "BasicShapesShapeSegmentConversion.h"
 #include "CSSBasicShapes.h"
-#include "CSSCalcNegateNode.h"
-#include "CSSCalcOperationNode.h"
-#include "CSSCalcPrimitiveValueNode.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSShapeSegmentValue.h"
 #include "CSSValuePair.h"
@@ -47,18 +44,53 @@
 #include "RenderStyle.h"
 #include "RenderStyleInlines.h"
 #include "SVGPathByteStream.h"
+#include "StyleBuilderConverter.h"
 #include "StyleBuilderState.h"
 
 namespace WebCore {
 
-static Ref<CSSValue> valueForCenterCoordinate(const RenderStyle& style, const BasicShapeCenterCoordinate& center, BoxOrient orientation)
+static Length convertToLengthOrAuto(const CSSToLengthConversionData& conversionData, const CSSValue& value)
 {
-    if (center.direction() == BasicShapeCenterCoordinate::Direction::TopLeft)
-        return CSSPrimitiveValue::create(center.length(), style);
+    return downcast<CSSPrimitiveValue>(value).convertToLength<FixedIntegerConversion | FixedFloatConversion | PercentConversion | CalculatedConversion | AutoConversion>(conversionData);
+}
 
-    CSSValueID keyword = orientation == BoxOrient::Horizontal ? CSSValueRight : CSSValueBottom;
+Length convertToLength(const CSSToLengthConversionData& conversionData, const CSSValue& value)
+{
+    return downcast<CSSPrimitiveValue>(value).convertToLength<FixedIntegerConversion | FixedFloatConversion | PercentConversion | CalculatedConversion>(conversionData);
+}
 
-    return CSSValuePair::create(CSSPrimitiveValue::create(keyword), CSSPrimitiveValue::create(center.length(), style));
+LengthSize convertToLengthSize(const CSSToLengthConversionData& conversionData, const CSSValue& value)
+{
+    return { convertToLength(conversionData, value.protectedFirst()), convertToLength(conversionData, value.protectedSecond()) };
+}
+
+LengthPoint coordinatePairToLengthPoint(const CSSToLengthConversionData& conversionData, const CSSValue& value)
+{
+    RefPtr pairValue = dynamicDowncast<CSSValuePair>(value);
+    if (!pairValue)
+        return { };
+
+    return { convertToLength(conversionData, pairValue->first()), convertToLength(conversionData, pairValue->second()) };
+}
+
+LengthPoint positionOrCoordinatePairToLengthPoint(const CSSValue& value, CoordinateAffinity affinity, const Style::BuilderState& builderState)
+{
+    if (affinity == CoordinateAffinity::Absolute)
+        return Style::BuilderConverter::convertPosition(builderState, value);
+
+    RefPtr pairValue = dynamicDowncast<CSSValuePair>(value);
+    if (!pairValue)
+        return { };
+
+    return coordinatePairToLengthPoint(builderState.cssToLengthConversionData(), value);
+}
+
+static LengthSize convertToLengthSize(const CSSToLengthConversionData& conversionData, const CSSValue* value)
+{
+    if (!value)
+        return { { 0, LengthType::Fixed }, { 0, LengthType::Fixed } };
+
+    return convertToLengthSize(conversionData, *value);
 }
 
 static Ref<CSSPrimitiveValue> basicShapeRadiusToCSSValue(const RenderStyle& style, const BasicShapeRadius& radius)
@@ -105,7 +137,7 @@ Ref<CSSValue> valueForBasicShape(const RenderStyle& style, const BasicShape& bas
         return CSSValuePair::create(createValue(size.width), createValue(size.height));
     };
     auto createCoordinatePair = [&](const LengthPoint& point) {
-        return CSSValuePair::createNoncoalescing(createValue(point.x()), createValue(point.y()));
+        return CSSValuePair::createNoncoalescing(createValue(point.x), createValue(point.y));
     };
     auto createReflectedSumValue = [&](const Length& a, const Length& b) {
         auto reflected = convertTo100PercentMinusLengthSum(a, b);
@@ -127,8 +159,9 @@ Ref<CSSValue> valueForBasicShape(const RenderStyle& style, const BasicShape& bas
             return CSSCircleValue::create(WTFMove(radius), nullptr, nullptr);
 
         return CSSCircleValue::create(WTFMove(radius),
-            valueForCenterCoordinate(style, circle.centerX(), BoxOrient::Horizontal),
-            valueForCenterCoordinate(style, circle.centerY(), BoxOrient::Vertical));
+            CSSPrimitiveValue::create(circle.centerX().length(), style),
+            CSSPrimitiveValue::create(circle.centerY().length(), style)
+        );
     }
     case BasicShape::Type::Ellipse: {
         auto& ellipse = uncheckedDowncast<BasicShapeEllipse>(basicShape);
@@ -139,9 +172,11 @@ Ref<CSSValue> valueForBasicShape(const RenderStyle& style, const BasicShape& bas
             return CSSEllipseValue::create(WTFMove(radiusX), WTFMove(radiusY), nullptr, nullptr);
 
         return CSSEllipseValue::create(
-            WTFMove(radiusX), WTFMove(radiusY),
-            valueForCenterCoordinate(style, ellipse.centerX(), BoxOrient::Horizontal),
-            valueForCenterCoordinate(style, ellipse.centerY(), BoxOrient::Vertical));
+            WTFMove(radiusX),
+            WTFMove(radiusY),
+            CSSPrimitiveValue::create(ellipse.centerX().length(), style),
+            CSSPrimitiveValue::create(ellipse.centerY().length(), style)
+        );
     }
     case BasicShape::Type::Polygon: {
         auto& polygon = uncheckedDowncast<BasicShapePolygon>(basicShape);
@@ -189,37 +224,10 @@ Ref<CSSValue> valueForBasicShape(const RenderStyle& style, const BasicShape& bas
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-static Length convertToLength(const CSSToLengthConversionData& conversionData, const CSSValue& value)
-{
-    return downcast<CSSPrimitiveValue>(value).convertToLength<FixedIntegerConversion | FixedFloatConversion | PercentConversion | CalculatedConversion>(conversionData);
-}
-
-static Length convertToLengthOrAuto(const CSSToLengthConversionData& conversionData, const CSSValue& value)
-{
-    return downcast<CSSPrimitiveValue>(value).convertToLength<FixedIntegerConversion | FixedFloatConversion | PercentConversion | CalculatedConversion | AutoConversion>(conversionData);
-}
-
-static LengthSize convertToLengthSize(const CSSToLengthConversionData& conversionData, const CSSValue* value)
-{
-    if (!value)
-        return { { 0, LengthType::Fixed }, { 0, LengthType::Fixed } };
-
-    return { convertToLength(conversionData, value->protectedFirst()), convertToLength(conversionData, value->protectedSecond()) };
-}
-
-static LengthPoint convertToLengthPoint(const CSSToLengthConversionData& conversionData, const CSSValue& value)
-{
-    RefPtr pairValue = dynamicDowncast<CSSValuePair>(value);
-    if (!pairValue)
-        return { };
-
-    return { convertToLength(conversionData, pairValue->first()), convertToLength(conversionData, pairValue->second()) };
-}
-
 static BasicShapeCenterCoordinate convertToCenterCoordinate(const CSSToLengthConversionData& conversionData, const CSSValue* value)
 {
     CSSValueID keyword = CSSValueTop;
-    Length offset { 0, LengthType::Fixed };
+    Length offset { 0, LengthType::Percent };
     if (!value)
         keyword = CSSValueCenter;
     else if (value->isValueID())
@@ -230,27 +238,23 @@ static BasicShapeCenterCoordinate convertToCenterCoordinate(const CSSToLengthCon
     } else
         offset = convertToLength(conversionData, *value);
 
-    BasicShapeCenterCoordinate::Direction direction;
     switch (keyword) {
     case CSSValueTop:
     case CSSValueLeft:
-        direction = BasicShapeCenterCoordinate::Direction::TopLeft;
         break;
     case CSSValueRight:
     case CSSValueBottom:
-        direction = BasicShapeCenterCoordinate::Direction::BottomRight;
+        offset = convertTo100PercentMinusLength(WTFMove(offset));
         break;
     case CSSValueCenter:
-        direction = BasicShapeCenterCoordinate::Direction::TopLeft;
         offset = Length(50, LengthType::Percent);
         break;
     default:
         ASSERT_NOT_REACHED();
-        direction = BasicShapeCenterCoordinate::Direction::TopLeft;
         break;
     }
 
-    return BasicShapeCenterCoordinate(direction, WTFMove(offset));
+    return BasicShapeCenterCoordinate(WTFMove(offset));
 }
 
 static BasicShapeRadius cssValueToBasicShapeRadius(const CSSToLengthConversionData& conversionData, const CSSValue* radius)
@@ -380,15 +384,13 @@ Ref<BasicShapeShape> basicShapeShapeForValue(const CSSShapeValue& shapeValue, co
         segments.append(fromCSSShapeSegmentValue(*shapeSegment, builderState));
     }
 
-    return BasicShapeShape::create(shapeValue.windRule(), convertToLengthPoint(builderState.cssToLengthConversionData(), shapeValue.protectedFromCoordinates().get()), WTFMove(segments));
+    auto fromPoint = positionOrCoordinatePairToLengthPoint(shapeValue.protectedFromCoordinates().get(), CoordinateAffinity::Absolute, builderState);
+    return BasicShapeShape::create(shapeValue.windRule(), WTFMove(fromPoint), WTFMove(segments));
 }
 
 float floatValueForCenterCoordinate(const BasicShapeCenterCoordinate& center, float boxDimension)
 {
-    float offset = floatValueForLength(center.length(), boxDimension);
-    if (center.direction() == BasicShapeCenterCoordinate::Direction::TopLeft)
-        return offset;
-    return boxDimension - offset;
+    return floatValueForLength(center.length(), boxDimension);
 }
 
 } // namespace WebCore

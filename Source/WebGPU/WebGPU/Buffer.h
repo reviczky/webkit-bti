@@ -25,6 +25,8 @@
 
 #pragma once
 
+#import "Instance.h"
+#import <Metal/Metal.h>
 #import <utility>
 #import <wtf/CompletionHandler.h>
 #import <wtf/FastMalloc.h>
@@ -32,6 +34,7 @@
 #import <wtf/RangeSet.h>
 #import <wtf/Ref.h>
 #import <wtf/RefCounted.h>
+#import <wtf/RetainReleaseSwift.h>
 #import <wtf/TZoneMalloc.h>
 #import <wtf/WeakHashSet.h>
 #import <wtf/WeakPtr.h>
@@ -66,8 +69,7 @@ public:
     ~Buffer();
 
     void destroy();
-    const void* getConstMappedRange(size_t offset, size_t);
-    void* getMappedRange(size_t offset, size_t);
+    std::span<uint8_t> getMappedRange(size_t offset, size_t);
     void mapAsync(WGPUMapModeFlags, size_t offset, size_t, CompletionHandler<void(WGPUBufferMapAsyncStatus)>&& callback);
     void unmap();
     void setLabel(String&&);
@@ -85,16 +87,19 @@ public:
 
     id<MTLBuffer> buffer() const { return m_buffer; }
     id<MTLBuffer> indirectBuffer() const;
-    id<MTLBuffer> indirectIndexedBuffer() const;
+    id<MTLBuffer> indirectIndexedBuffer() const { return m_indirectIndexedBuffer; }
+
     uint64_t initialSize() const;
     uint64_t currentSize() const;
     WGPUBufferUsageFlags usage() const { return m_usage; }
     State state() const { return m_state; }
 
     Device& device() const { return m_device; }
-    bool isDestroyed() const;
+    Ref<Device> protectedDevice() const { return m_device; }
+    bool isDestroyed() const { return state() == State::Destroyed; }
+
     void setCommandEncoder(CommandEncoder&, bool mayModifyBuffer = false) const;
-    uint8_t* getBufferContents();
+    std::span<uint8_t> getBufferContents();
     bool indirectBufferRequiresRecomputation(uint32_t baseIndex, uint32_t indexCount, uint32_t minVertexCount, uint32_t minInstanceCount, MTLIndexType, uint32_t firstInstance) const;
     bool indirectIndexedBufferRequiresRecomputation(MTLIndexType, NSUInteger indexBufferOffsetInBytes, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount) const;
     bool indirectBufferRequiresRecomputation(uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount) const;
@@ -103,6 +108,9 @@ public:
     void indirectBufferRecomputed(uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount);
     void indirectIndexedBufferRecomputed(MTLIndexType, NSUInteger indexBufferOffsetInBytes, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount);
     void indirectBufferInvalidated();
+#if ENABLE(WEBGPU_SWIFT)
+    void copy(const std::span<const uint8_t>, const size_t offset);
+#endif
 
 private:
     Buffer(id<MTLBuffer>, uint64_t initialSize, WGPUBufferUsageFlags, State initialState, MappingRange initialMappingRange, Device&);
@@ -142,6 +150,19 @@ private:
 
     const Ref<Device> m_device;
     mutable WeakHashSet<CommandEncoder> m_commandEncoders;
-};
+#if CPU(X86_64)
+    bool m_mappedAtCreation { false };
+#endif
+} SWIFT_SHARED_REFERENCE(retainBuffer, releaseBuffer);
 
 } // namespace WebGPU
+
+inline void retainBuffer(WebGPU::Buffer* obj)
+{
+    WTF::retainRefCounted(obj);
+}
+
+inline void releaseBuffer(WebGPU::Buffer* obj)
+{
+    WTF::releaseRefCounted(obj);
+}

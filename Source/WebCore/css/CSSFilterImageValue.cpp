@@ -35,7 +35,7 @@
 namespace WebCore {
 
 CSSFilterImageValue::CSSFilterImageValue(Ref<CSSValue>&& imageValueOrNone, Ref<CSSValue>&& filterValue)
-    : CSSValue { FilterImageClass }
+    : CSSValue { ClassType::FilterImage }
     , m_imageValueOrNone { WTFMove(imageValueOrNone) }
     , m_filterValue { WTFMove(filterValue) }
 {
@@ -58,9 +58,9 @@ String CSSFilterImageValue::customCSSText() const
     return makeString("filter("_s, m_imageValueOrNone->cssText(), ", "_s, m_filterValue->cssText(), ')');
 }
 
-RefPtr<StyleImage> CSSFilterImageValue::createStyleImage(Style::BuilderState& state) const
+RefPtr<StyleImage> CSSFilterImageValue::createStyleImage(const Style::BuilderState& state) const
 {
-    return StyleFilterImage::create(state.createStyleImage(m_imageValueOrNone), state.createFilterOperations(m_filterValue).value_or(FilterOperations { }));
+    return StyleFilterImage::create(state.createStyleImage(m_imageValueOrNone), state.createFilterOperations(m_filterValue));
 }
 
 } // namespace WebCore

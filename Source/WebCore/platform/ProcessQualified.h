@@ -31,6 +31,8 @@
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WebCore {
 
 template <typename T>
@@ -41,8 +43,6 @@ public:
     // Generally, objects are identified uniquely per process, but if multiple processes share them to a single
     // process, the single process should distinguish between them by augmenting the objects with the
     // ProcessIdentifier of the process which created them.
-
-    ProcessQualified() = default;
 
     ProcessQualified(T&& object, ProcessIdentifier processIdentifier)
         : m_object(WTFMove(object))
@@ -57,7 +57,8 @@ public:
     }
 
     ProcessQualified(WTF::HashTableDeletedValueType)
-        : m_processIdentifier(WTF::HashTableDeletedValue)
+        : m_object(WTF::HashTableDeletedValue)
+        , m_processIdentifier(WTF::HashTableDeletedValue)
     {
     }
 
@@ -88,14 +89,38 @@ public:
     String toString() const { return makeString(m_processIdentifier.toUInt64(), '-', m_object.toUInt64()); }
 
     struct MarkableTraits {
-        static bool isEmptyValue(const ProcessQualified& identifier) { return !identifier; }
-        static constexpr ProcessQualified emptyValue() { return { }; }
+        static bool isEmptyValue(const ProcessQualified& identifier) { return T::MarkableTraits::isEmptyValue(identifier.object()); }
+        static constexpr ProcessQualified emptyValue() { return { T::MarkableTraits::emptyValue(), ProcessIdentifier::MarkableTraits::emptyValue() }; }
     };
 
 private:
     T m_object;
     ProcessIdentifier m_processIdentifier;
 };
+
+template<typename T>
+bool operator>(const ProcessQualified<T>& a, const ProcessQualified<T>& b)
+{
+    return a.object() > b.object();
+}
+
+template<typename T>
+bool operator>=(const ProcessQualified<T>& a, const ProcessQualified<T>& b)
+{
+    return a.object() >= b.object();
+}
+
+template<typename T>
+bool operator<(const ProcessQualified<T>& a, const ProcessQualified<T>& b)
+{
+    return a.object() < b.object();
+}
+
+template<typename T>
+bool operator<=(const ProcessQualified<T>& a, const ProcessQualified<T>& b)
+{
+    return a.object() <= b.object();
+}
 
 template <typename T>
 inline TextStream& operator<<(TextStream& ts, const ProcessQualified<T>& processQualified)
@@ -132,6 +157,8 @@ template<typename T> struct DefaultHash<WebCore::ProcessQualified<T>> {
 
 template<typename T> struct HashTraits<WebCore::ProcessQualified<T>> : SimpleClassHashTraits<WebCore::ProcessQualified<T>> {
     static constexpr bool emptyValueIsZero = HashTraits<T>::emptyValueIsZero;
+    static WebCore::ProcessQualified<T> emptyValue() { return { HashTraits<T>::emptyValue(), HashTraits<WebCore::ProcessIdentifier>::emptyValue() }; }
+    static bool isEmptyValue(const WebCore::ProcessQualified<T>& value) { return value.object().isHashTableEmptyValue(); }
 };
 
 class ProcessQualifiedStringTypeAdapter {
@@ -163,3 +190,5 @@ public:
 };
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

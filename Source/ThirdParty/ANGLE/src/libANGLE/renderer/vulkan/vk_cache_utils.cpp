@@ -357,18 +357,6 @@ void DeriveRenderingInfo(Renderer *renderer,
 
         angle::FormatID attachmentFormatID = desc[colorIndexGL];
         ASSERT(attachmentFormatID != angle::FormatID::NONE);
-
-        // If this render pass uses EXT_srgb_write_control, we need to override the format to its
-        // linear counterpart. Formats that cannot be reinterpreted are exempt from this
-        // requirement.
-        angle::FormatID linearFormat = rx::ConvertToLinear(attachmentFormatID);
-        if (linearFormat != angle::FormatID::NONE)
-        {
-            if (desc.getSRGBWriteControlMode() == gl::SrgbWriteControlMode::Linear)
-            {
-                attachmentFormatID = linearFormat;
-            }
-        }
         VkFormat attachmentFormat = GetVkFormatFromFormatID(attachmentFormatID);
 
         const bool isYUVExternalFormat = vk::IsYUVExternalFormat(attachmentFormatID);
@@ -519,6 +507,7 @@ void DeriveRenderingInfo(Renderer *renderer,
             infoOut->msrtss.multisampledRenderToSingleSampledEnable = true;
             infoOut->msrtss.rasterizationSamples                    = gl_vk::GetSamples(
                 desc.samples(), renderer->getFeatures().limitSampleCountTo2.enabled);
+            AddToPNextChain(&infoOut->renderingInfo, &infoOut->msrtss);
         }
 
         // Fragment shading rate attachment, if any
@@ -571,7 +560,7 @@ void AttachPipelineRenderingInfo(Context *context,
     AddToPNextChain(createInfoOut, attachmentLocationsOut);
 
     // Note: VkRenderingInputAttachmentIndexInfoKHR only affects the fragment stage subset.
-    if (desc.hasFramebufferFetch() && GraphicsPipelineHasShaders(subset))
+    if (desc.hasColorFramebufferFetch() && GraphicsPipelineHasShaders(subset))
     {
         *inputLocationsOut       = {};
         inputLocationsOut->sType = VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO_KHR;
@@ -1689,7 +1678,7 @@ enum class PipelineState
     RenderPassColorAttachmentRange,
     RenderPassViewCount,
     RenderPassSrgbWriteControl,
-    RenderPassHasFramebufferFetch,
+    RenderPassHasColorFramebufferFetch,
     RenderPassIsRenderToTexture,
     RenderPassResolveDepth,
     RenderPassResolveStencil,
@@ -1847,8 +1836,8 @@ using PipelineStateBitSet   = angle::BitSetArray<angle::EnumSize<PipelineState>(
         (*valuesOut)[PipelineState::RenderPassViewCount] = renderPass.viewCount();
         (*valuesOut)[PipelineState::RenderPassSrgbWriteControl] =
             static_cast<uint32_t>(renderPass.getSRGBWriteControlMode());
-        (*valuesOut)[PipelineState::RenderPassHasFramebufferFetch] =
-            renderPass.hasFramebufferFetch();
+        (*valuesOut)[PipelineState::RenderPassHasColorFramebufferFetch] =
+            renderPass.hasColorFramebufferFetch();
         (*valuesOut)[PipelineState::RenderPassIsRenderToTexture] = renderPass.isRenderToTexture();
         (*valuesOut)[PipelineState::RenderPassResolveDepth] =
             renderPass.hasDepthResolveAttachment();
@@ -2002,7 +1991,7 @@ PipelineState GetPipelineState(size_t stateIndex, bool *isRangedOut, size_t *sub
         {PipelineState::RenderPassColorAttachmentRange, "rp_color_range"},
         {PipelineState::RenderPassViewCount, "rp_views"},
         {PipelineState::RenderPassSrgbWriteControl, "rp_srgb"},
-        {PipelineState::RenderPassHasFramebufferFetch, "rp_has_framebuffer_fetch"},
+        {PipelineState::RenderPassHasColorFramebufferFetch, "rp_has_color_framebuffer_fetch"},
         {PipelineState::RenderPassIsRenderToTexture, "rp_is_msrtt"},
         {PipelineState::RenderPassResolveDepth, "rp_resolve_depth"},
         {PipelineState::RenderPassResolveStencil, "rp_resolve_stencil"},
@@ -2069,7 +2058,7 @@ PipelineState GetPipelineState(size_t stateIndex, bool *isRangedOut, size_t *sub
         // its name specified, as it being enabled would be implied.
         case PipelineState::VertexAttribCompressed:
         case PipelineState::RenderPassSrgbWriteControl:
-        case PipelineState::RenderPassHasFramebufferFetch:
+        case PipelineState::RenderPassHasColorFramebufferFetch:
         case PipelineState::RenderPassIsRenderToTexture:
         case PipelineState::RenderPassResolveDepth:
         case PipelineState::RenderPassResolveStencil:
@@ -2490,7 +2479,7 @@ PipelineState GetPipelineState(size_t stateIndex, bool *isRangedOut, size_t *sub
         {PipelineState::RenderPassColorAttachmentRange, 0},
         {PipelineState::RenderPassViewCount, 0},
         {PipelineState::RenderPassSrgbWriteControl, 0},
-        {PipelineState::RenderPassHasFramebufferFetch, 0},
+        {PipelineState::RenderPassHasColorFramebufferFetch, 0},
         {PipelineState::RenderPassIsRenderToTexture, 0},
         {PipelineState::RenderPassResolveDepth, 0},
         {PipelineState::RenderPassResolveStencil, 0},
@@ -2672,6 +2661,10 @@ void DumpPipelineCacheGraph(
 }
 
 // Used by SharedCacheKeyManager
+void MakeEmptyCachedObject(SharedFramebufferCacheKey *cacheKeyOut)
+{
+    *cacheKeyOut = std::make_shared<FramebufferDescPointer>();
+}
 void ReleaseCachedObject(ContextVk *contextVk, const FramebufferDesc &desc)
 {
     contextVk->getShareGroup()->getFramebufferCache().erase(contextVk, desc);
@@ -2681,6 +2674,10 @@ void ReleaseCachedObject(Renderer *renderer, const FramebufferDesc &desc)
     UNREACHABLE();
 }
 
+void MakeEmptyCachedObject(SharedDescriptorSetCacheKey *cacheKeyOut)
+{
+    *cacheKeyOut = std::make_shared<DescriptorSetAndPoolPointer>();
+}
 void ReleaseCachedObject(ContextVk *contextVk, const DescriptorSetDescAndPool &descAndPool)
 {
     UNREACHABLE();
@@ -2770,6 +2767,13 @@ bool ShouldDumpPipelineCacheGraph(Context *context)
     return kDumpPipelineCacheGraph && context->getRenderer()->isPipelineCacheGraphDumpEnabled();
 }
 }  // anonymous namespace
+
+FramebufferFetchMode GetProgramFramebufferFetchMode(const gl::ProgramExecutable *executable)
+{
+    const bool hasFramebufferFetch =
+        executable != nullptr && executable->usesColorFramebufferFetch();
+    return hasFramebufferFetch ? vk::FramebufferFetchMode::Color : vk::FramebufferFetchMode::None;
+}
 
 GraphicsPipelineTransitionBits GetGraphicsPipelineTransitionBitsMask(GraphicsPipelineSubset subset)
 {
@@ -3035,7 +3039,7 @@ void RenderPassDesc::beginRendering(
 
     primary->setRenderingAttachmentLocations(&attachmentLocations);
 
-    if (hasFramebufferFetch())
+    if (hasColorFramebufferFetch())
     {
         VkRenderingInputAttachmentIndexInfoKHR inputLocations = {};
         inputLocations.sType = VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO_KHR;
@@ -4084,12 +4088,12 @@ void GraphicsPipelineDesc::initializePipelineFragmentOutputState(
     // fetch / advanced blend.
     //
     // We can do better by setting the bit only when there is coherent
-    // framebuffer fetch, but getRenderPassFramebufferFetchMode does not
+    // framebuffer fetch, but hasRenderPassColorFramebufferFetch does not
     // distinguish coherent / non-coherent yet.  Also, once an app uses
     // framebufer fetch, we treat all render passes as if they use framebuffer
     // fetch.  This check is not very effective.
     if (context->getFeatures().supportsRasterizationOrderAttachmentAccess.enabled &&
-        getRenderPassFramebufferFetchMode())
+        hasRenderPassColorFramebufferFetch())
     {
         stateOut->blendState.flags |=
             VK_PIPELINE_COLOR_BLEND_STATE_CREATE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_BIT_EXT;
@@ -4743,9 +4747,19 @@ void GraphicsPipelineDesc::updateNonZeroStencilWriteMaskWorkaround(
 }
 
 void GraphicsPipelineDesc::updateRenderPassDesc(GraphicsPipelineTransitionBits *transition,
-                                                const RenderPassDesc &renderPassDesc)
+                                                const angle::FeaturesVk &features,
+                                                const RenderPassDesc &renderPassDesc,
+                                                FramebufferFetchMode framebufferFetchMode)
 {
     setRenderPassDesc(renderPassDesc);
+
+    // Framebuffer fetch mode is an inherent property of the executable.  With dynamic rendering, it
+    // is not tracked in the framebuffer's render pass desc (the source of |renderPassDesc|), and is
+    // overriden at this point.
+    if (features.preferDynamicRendering.enabled)
+    {
+        setRenderPassFramebufferFetchMode(framebufferFetchMode);
+    }
 
     // The RenderPass is a special case where it spans multiple bits but has no member.
     constexpr size_t kFirstBit =
@@ -4762,9 +4776,10 @@ void GraphicsPipelineDesc::setRenderPassSampleCount(GLint samples)
     mSharedNonVertexInput.renderPass.setSamples(samples);
 }
 
-void GraphicsPipelineDesc::setRenderPassFramebufferFetchMode(bool hasFramebufferFetch)
+void GraphicsPipelineDesc::setRenderPassFramebufferFetchMode(
+    FramebufferFetchMode framebufferFetchMode)
 {
-    mSharedNonVertexInput.renderPass.setFramebufferFetchMode(hasFramebufferFetch);
+    mSharedNonVertexInput.renderPass.setFramebufferFetchMode(framebufferFetchMode);
 }
 
 void GraphicsPipelineDesc::setRenderPassColorAttachmentFormat(size_t colorIndexGL,
@@ -5312,14 +5327,14 @@ bool FramebufferDesc::hasFragmentShadingRateAttachment() const
 size_t FramebufferDesc::hash() const
 {
     return angle::ComputeGenericHash(&mSerials, sizeof(mSerials[0]) * mMaxIndex) ^
-           mHasFramebufferFetch << 26 ^ mIsRenderToTexture << 25 ^ mLayerCount << 16 ^
+           mHasColorFramebufferFetch << 26 ^ mIsRenderToTexture << 25 ^ mLayerCount << 16 ^
            mUnresolveAttachmentMask;
 }
 
 void FramebufferDesc::reset()
 {
     mMaxIndex                = 0;
-    mHasFramebufferFetch     = false;
+    mHasColorFramebufferFetch = false;
     mLayerCount              = 0;
     mSrgbWriteControlMode    = 0;
     mUnresolveAttachmentMask = 0;
@@ -5331,7 +5346,7 @@ bool FramebufferDesc::operator==(const FramebufferDesc &other) const
 {
     if (mMaxIndex != other.mMaxIndex || mLayerCount != other.mLayerCount ||
         mUnresolveAttachmentMask != other.mUnresolveAttachmentMask ||
-        mHasFramebufferFetch != other.mHasFramebufferFetch ||
+        mHasColorFramebufferFetch != other.mHasColorFramebufferFetch ||
         mSrgbWriteControlMode != other.mSrgbWriteControlMode ||
         mIsRenderToTexture != other.mIsRenderToTexture)
     {
@@ -5365,9 +5380,9 @@ void FramebufferDesc::updateLayerCount(uint32_t layerCount)
     SetBitField(mLayerCount, layerCount);
 }
 
-void FramebufferDesc::setFramebufferFetchMode(bool hasFramebufferFetch)
+void FramebufferDesc::setColorFramebufferFetchMode(bool hasColorFramebufferFetch)
 {
-    SetBitField(mHasFramebufferFetch, hasFramebufferFetch);
+    SetBitField(mHasColorFramebufferFetch, hasColorFramebufferFetch);
 }
 
 void FramebufferDesc::updateRenderToTexture(bool isRenderToTexture)
@@ -5947,7 +5962,7 @@ void WriteDescriptorDescs::updateInputAttachments(
     const ShaderInterfaceVariableInfoMap &variableInfoMap,
     FramebufferVk *framebufferVk)
 {
-    if (!executable.usesFramebufferFetch())
+    if (!executable.usesColorFramebufferFetch())
     {
         return;
     }
@@ -6033,18 +6048,18 @@ void WriteDescriptorDescs::updateDynamicDescriptorsCount()
     }
 }
 
-void WriteDescriptorDescs::streamOut(std::ostream &ostr) const
+std::ostream &operator<<(std::ostream &os, const WriteDescriptorDescs &desc)
 {
-    ostr << mDescs.size() << " write descriptor descs:\n";
-
-    for (uint32_t index = 0; index < mDescs.size(); ++index)
+    os << " WriteDescriptorDescs[" << desc.size() << "]:";
+    for (uint32_t index = 0; index < desc.size(); ++index)
     {
-        const WriteDescriptorDesc &writeDesc = mDescs[index];
-        ostr << static_cast<int>(writeDesc.binding) << ": "
-             << static_cast<int>(writeDesc.descriptorCount) << " "
-             << kDescriptorTypeNameMap[writeDesc.descriptorType] << " descriptors: ";
-        ostr << "\n";
+        const WriteDescriptorDesc &writeDesc = desc[index];
+        os << static_cast<int>(writeDesc.binding) << ": "
+           << static_cast<int>(writeDesc.descriptorCount) << ": "
+           << kDescriptorTypeNameMap[writeDesc.descriptorType] << ": "
+           << writeDesc.descriptorInfoIndex;
     }
+    return os;
 }
 
 // DescriptorSetDesc implementation.
@@ -6141,17 +6156,16 @@ void DescriptorSetDesc::updateDescriptorSet(Renderer *renderer,
     }
 }
 
-void DescriptorSetDesc::streamOut(std::ostream &ostr) const
+std::ostream &operator<<(std::ostream &os, const DescriptorSetDesc &desc)
 {
-    ostr << mDescriptorInfos.size() << " descriptor descs:\n";
-
-    for (uint32_t index = 0; index < mDescriptorInfos.size(); ++index)
+    os << " desc[" << desc.size() << "]:";
+    for (uint32_t index = 0; index < desc.size(); ++index)
     {
-        const DescriptorInfoDesc &infoDesc = mDescriptorInfos[index];
-        ostr << "{" << infoDesc.imageLayoutOrRange << ", " << infoDesc.imageSubresourceRange << ", "
-             << infoDesc.imageViewSerialOrOffset << ", " << infoDesc.samplerOrBufferSerial << "}";
-        ostr << "\n";
+        const DescriptorInfoDesc &infoDesc = desc.getInfoDesc(index);
+        os << "{" << infoDesc.samplerOrBufferSerial << ", " << infoDesc.imageViewSerialOrOffset
+           << ", " << infoDesc.imageLayoutOrRange << ", " << infoDesc.imageSubresourceRange << "}";
     }
+    return os;
 }
 
 // DescriptorSetDescBuilder implementation.
@@ -6257,16 +6271,17 @@ void DescriptorSetDescBuilder::updateUniformsAndXfb(
     }
 }
 
-void UpdatePreCacheActiveTextures(const gl::ProgramExecutable &executable,
-                                  const std::vector<gl::SamplerBinding> &samplerBindings,
-                                  const gl::ActiveTextureMask &activeTextures,
-                                  const gl::ActiveTextureArray<TextureVk *> &textures,
-                                  const gl::SamplerBindingVector &samplers,
-                                  DescriptorSetDesc *desc)
+void DescriptorSetDescBuilder::updatePreCacheActiveTextures(
+    Context *context,
+    const gl::ProgramExecutable &executable,
+    const gl::ActiveTextureArray<TextureVk *> &textures,
+    const gl::SamplerBindingVector &samplers)
 {
+    const std::vector<gl::SamplerBinding> &samplerBindings = executable.getSamplerBindings();
+    const gl::ActiveTextureMask &activeTextures            = executable.getActiveSamplersMask();
     const ProgramExecutableVk *executableVk = vk::GetImpl(&executable);
 
-    desc->resize(executableVk->getTextureWriteDescriptorDescs().getTotalDescriptorCount());
+    resize(executableVk->getTextureWriteDescriptorDescs().getTotalDescriptorCount());
     const WriteDescriptorDescs &writeDescriptorDescs =
         executableVk->getTextureWriteDescriptorDescs();
 
@@ -6301,7 +6316,7 @@ void UpdatePreCacheActiveTextures(const gl::ProgramExecutable &executable,
 
             uint32_t infoIndex = writeDescriptorDescs[info.binding].descriptorInfoIndex +
                                  arrayElement + samplerUniform.getOuterArrayOffset();
-            DescriptorInfoDesc &infoDesc = desc->getInfoDesc(infoIndex);
+            DescriptorInfoDesc &infoDesc = mDesc.getInfoDesc(infoIndex);
 
             if (textureVk->getState().getType() == gl::TextureType::Buffer)
             {
@@ -6324,7 +6339,8 @@ void UpdatePreCacheActiveTextures(const gl::ProgramExecutable &executable,
                     sampler ? sampler->getSamplerState() : textureVk->getState().getSamplerState();
 
                 ImageOrBufferViewSubresourceSerial imageViewSerial =
-                    textureVk->getImageViewSubresourceSerial(samplerState);
+                    textureVk->getImageViewSubresourceSerial(
+                        samplerState, samplerUniform.isTexelFetchStaticUse());
 
                 ImageLayout imageLayout = textureVk->getImage().getCurrentImageLayout();
                 SetBitField(infoDesc.imageLayoutOrRange, imageLayout);
@@ -6337,7 +6353,7 @@ void UpdatePreCacheActiveTextures(const gl::ProgramExecutable &executable,
     }
 }
 
-angle::Result DescriptorSetDescBuilder::updateFullActiveTextures(
+angle::Result DescriptorSetDescBuilder::updateActiveTexturesForCacheMiss(
     Context *context,
     const ShaderInterfaceVariableInfoMap &variableInfoMap,
     const WriteDescriptorDescs &writeDescriptorDescs,
@@ -6347,10 +6363,92 @@ angle::Result DescriptorSetDescBuilder::updateFullActiveTextures(
     PipelineType pipelineType,
     const SharedDescriptorSetCacheKey &sharedCacheKey)
 {
+    // This is only used when cache is enabled.
+    ASSERT(context->getFeatures().descriptorSetCache.enabled);
     const std::vector<gl::SamplerBinding> &samplerBindings = executable.getSamplerBindings();
     const std::vector<GLuint> &samplerBoundTextureUnits = executable.getSamplerBoundTextureUnits();
     const std::vector<gl::LinkedUniform> &uniforms      = executable.getUniforms();
     const gl::ActiveTextureTypeArray &textureTypes      = executable.getActiveSamplerTypes();
+
+    for (uint32_t samplerIndex = 0; samplerIndex < samplerBindings.size(); ++samplerIndex)
+    {
+        const gl::SamplerBinding &samplerBinding = samplerBindings[samplerIndex];
+        uint32_t uniformIndex = executable.getUniformIndexFromSamplerIndex(samplerIndex);
+        const gl::LinkedUniform &samplerUniform = uniforms[uniformIndex];
+
+        if (samplerUniform.activeShaders().none())
+        {
+            continue;
+        }
+
+        const gl::ShaderType firstShaderType = samplerUniform.getFirstActiveShaderType();
+        const ShaderInterfaceVariableInfo &info =
+            variableInfoMap.getVariableById(firstShaderType, samplerUniform.getId(firstShaderType));
+
+        uint32_t arraySize        = static_cast<uint32_t>(samplerBinding.textureUnitsCount);
+        bool isSamplerExternalY2Y = samplerBinding.samplerType == GL_SAMPLER_EXTERNAL_2D_Y2Y_EXT;
+
+        for (uint32_t arrayElement = 0; arrayElement < arraySize; ++arrayElement)
+        {
+            GLuint textureUnit =
+                samplerBinding.getTextureUnit(samplerBoundTextureUnits, arrayElement);
+            TextureVk *textureVk = textures[textureUnit];
+
+            uint32_t infoIndex = writeDescriptorDescs[info.binding].descriptorInfoIndex +
+                                 arrayElement + samplerUniform.getOuterArrayOffset();
+
+            if (textureTypes[textureUnit] == gl::TextureType::Buffer)
+            {
+                textureVk->onNewDescriptorSet(sharedCacheKey);
+
+                const BufferView *view = nullptr;
+                ANGLE_TRY(textureVk->getBufferViewAndRecordUse(context, nullptr, &samplerBinding,
+                                                               false, &view));
+                mHandles[infoIndex].bufferView = view->getHandle();
+            }
+            else
+            {
+                gl::Sampler *sampler       = samplers[textureUnit].get();
+                const SamplerVk *samplerVk = sampler ? vk::GetImpl(sampler) : nullptr;
+
+                const SamplerHelper &samplerHelper =
+                    samplerVk ? samplerVk->getSampler()
+                              : textureVk->getSampler(isSamplerExternalY2Y);
+                const gl::SamplerState &samplerState =
+                    sampler ? sampler->getSamplerState() : textureVk->getState().getSamplerState();
+
+                textureVk->onNewDescriptorSet(sharedCacheKey);
+
+                mHandles[infoIndex].sampler = samplerHelper.get().getHandle();
+
+                const ImageView &imageView = textureVk->getReadImageView(
+                    context, samplerState.getSRGBDecode(), samplerUniform.isTexelFetchStaticUse(),
+                    isSamplerExternalY2Y);
+                mHandles[infoIndex].imageView = imageView.getHandle();
+            }
+        }
+    }
+
+    return angle::Result::Continue;
+}
+
+angle::Result DescriptorSetDescBuilder::updateFullActiveTextures(
+    Context *context,
+    const ShaderInterfaceVariableInfoMap &variableInfoMap,
+    const WriteDescriptorDescs &writeDescriptorDescs,
+    const gl::ProgramExecutable &executable,
+    const gl::ActiveTextureArray<TextureVk *> &textures,
+    const gl::SamplerBindingVector &samplers,
+    PipelineType pipelineType)
+{
+    // This is only used when cache is disabled.
+    ASSERT(!context->getFeatures().descriptorSetCache.enabled);
+    const std::vector<gl::SamplerBinding> &samplerBindings = executable.getSamplerBindings();
+    const std::vector<GLuint> &samplerBoundTextureUnits = executable.getSamplerBoundTextureUnits();
+    const std::vector<gl::LinkedUniform> &uniforms      = executable.getUniforms();
+    const gl::ActiveTextureTypeArray &textureTypes      = executable.getActiveSamplerTypes();
+
+    resize(writeDescriptorDescs.getTotalDescriptorCount());
 
     for (uint32_t samplerIndex = 0; samplerIndex < samplerBindings.size(); ++samplerIndex)
     {
@@ -6389,8 +6487,6 @@ angle::Result DescriptorSetDescBuilder::updateFullActiveTextures(
                 infoDesc.samplerOrBufferSerial   = 0;
                 infoDesc.imageSubresourceRange   = 0;
 
-                textureVk->onNewDescriptorSet(sharedCacheKey);
-
                 const BufferView *view = nullptr;
                 ANGLE_TRY(textureVk->getBufferViewAndRecordUse(context, nullptr, &samplerBinding,
                                                                false, &view));
@@ -6408,9 +6504,8 @@ angle::Result DescriptorSetDescBuilder::updateFullActiveTextures(
                     sampler ? sampler->getSamplerState() : textureVk->getState().getSamplerState();
 
                 ImageOrBufferViewSubresourceSerial imageViewSerial =
-                    textureVk->getImageViewSubresourceSerial(samplerState);
-
-                textureVk->onNewDescriptorSet(sharedCacheKey);
+                    textureVk->getImageViewSubresourceSerial(
+                        samplerState, samplerUniform.isTexelFetchStaticUse());
 
                 ImageLayout imageLayout = textureVk->getImage().getCurrentImageLayout();
                 SetBitField(infoDesc.imageLayoutOrRange, imageLayout);
@@ -6840,7 +6935,7 @@ angle::Result DescriptorSetDescBuilder::updateInputAttachments(
     FramebufferVk *framebufferVk,
     const WriteDescriptorDescs &writeDescriptorDescs)
 {
-    if (!executable.usesFramebufferFetch())
+    if (!executable.usesColorFramebufferFetch())
     {
         return angle::Result::Continue;
     }
@@ -6896,23 +6991,78 @@ void DescriptorSetDescBuilder::updateDescriptorSet(Renderer *renderer,
 
 // SharedCacheKeyManager implementation.
 template <class SharedCacheKeyT>
-void SharedCacheKeyManager<SharedCacheKeyT>::addKey(const SharedCacheKeyT &key)
+size_t SharedCacheKeyManager<SharedCacheKeyT>::updateEmptySlotBits()
 {
-    // If there is invalid key in the array, use it instead of keep expanding the array
-    for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
+    ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
+    size_t emptySlot = kInvalidSlot;
+    for (size_t slot = 0; slot < mSharedCacheKeys.size(); ++slot)
     {
+        SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
         if (*sharedCacheKey.get() == nullptr)
         {
-            sharedCacheKey = key;
-            return;
+            mEmptySlotBits[slot / kSlotBitCount].set(slot % kSlotBitCount);
+            emptySlot = slot;
         }
     }
+    return emptySlot;
+}
+
+template <class SharedCacheKeyT>
+void SharedCacheKeyManager<SharedCacheKeyT>::addKey(const SharedCacheKeyT &key)
+{
+    // Search for available slots and use that if any
+    size_t slot = 0;
+    for (SlotBitMask &emptyBits : mEmptySlotBits)
+    {
+        if (emptyBits.any())
+        {
+            slot += emptyBits.first();
+            SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
+            ASSERT(*sharedCacheKey.get() == nullptr);
+            sharedCacheKey = key;
+            emptyBits.reset(slot % kSlotBitCount);
+            return;
+        }
+        slot += kSlotBitCount;
+    }
+
+    // Some cached entries may have been released. Try to update and use any available slot if any.
+    slot = updateEmptySlotBits();
+    if (slot != kInvalidSlot)
+    {
+        SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
+        ASSERT(*sharedCacheKey.get() == nullptr);
+        sharedCacheKey         = key;
+        SlotBitMask &emptyBits = mEmptySlotBits[slot / kSlotBitCount];
+        emptyBits.reset(slot % kSlotBitCount);
+        return;
+    }
+
+    // No slot available, expand mSharedCacheKeys
+    ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
+    if (!mEmptySlotBits.empty())
+    {
+        // On first insertion, let std::vector allocate a single entry for minimal memory overhead,
+        // since this is the most common usage case. If that exceeds, reserve a larger chunk to
+        // avoid storage reallocation for efficiency (enough storage enough for 512 cache entries).
+        mEmptySlotBits.reserve(8);
+    }
+    mEmptySlotBits.emplace_back(0xFFFFFFFE);
     mSharedCacheKeys.emplace_back(key);
+    while (mSharedCacheKeys.size() < mEmptySlotBits.size() * kSlotBitCount)
+    {
+        mSharedCacheKeys.emplace_back();
+        SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys.back();
+        // Insert an empty cache key so that sharedCacheKey will not be null.
+        MakeEmptyCachedObject(&sharedCacheKey);
+        ASSERT(*sharedCacheKey.get() == nullptr);
+    }
 }
 
 template <class SharedCacheKeyT>
 void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(ContextVk *contextVk)
 {
+    ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
         if (*sharedCacheKey.get() != nullptr)
@@ -6924,11 +7074,13 @@ void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(ContextVk *contextVk)
         }
     }
     mSharedCacheKeys.clear();
+    mEmptySlotBits.clear();
 }
 
 template <class SharedCacheKeyT>
 void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(Renderer *renderer)
 {
+    ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
         if (*sharedCacheKey.get() != nullptr)
@@ -6940,11 +7092,13 @@ void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(Renderer *renderer)
         }
     }
     mSharedCacheKeys.clear();
+    mEmptySlotBits.clear();
 }
 
 template <class SharedCacheKeyT>
 void SharedCacheKeyManager<SharedCacheKeyT>::destroyKeys(Renderer *renderer)
 {
+    ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
         // destroy the cache key
@@ -6956,6 +7110,7 @@ void SharedCacheKeyManager<SharedCacheKeyT>::destroyKeys(Renderer *renderer)
         }
     }
     mSharedCacheKeys.clear();
+    mEmptySlotBits.clear();
 }
 
 template <class SharedCacheKeyT>
@@ -6964,6 +7119,7 @@ void SharedCacheKeyManager<SharedCacheKeyT>::clear()
     // Caller must have already freed all caches
     assertAllEntriesDestroyed();
     mSharedCacheKeys.clear();
+    mEmptySlotBits.clear();
 }
 
 template <class SharedCacheKeyT>
@@ -7021,6 +7177,12 @@ VkResult PipelineCacheAccess::createComputePipeline(vk::Context *context,
     std::unique_lock<angle::SimpleMutex> lock = getLock();
 
     return pipelineOut->initCompute(context->getDevice(), createInfo, *mPipelineCache);
+}
+
+VkResult PipelineCacheAccess::getCacheData(vk::Context *context, size_t *cacheSize, void *cacheData)
+{
+    std::unique_lock<angle::SimpleMutex> lock = getLock();
+    return mPipelineCache->getCacheData(context->getDevice(), cacheSize, cacheData);
 }
 
 void PipelineCacheAccess::merge(Renderer *renderer, const vk::PipelineCache &pipelineCache)
@@ -7343,7 +7505,7 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
                                                           nullptr, VK_ATTACHMENT_UNUSED,
                                                           VK_IMAGE_LAYOUT_UNDEFINED, 0};
 
-    const bool needInputAttachments = desc.hasFramebufferFetch();
+    const bool needInputAttachments = desc.hasColorFramebufferFetch();
     const bool isRenderToTextureThroughExtension =
         desc.isRenderToTexture() &&
         renderer->getFeatures().supportsMultisampledRenderToSingleSampled.enabled;
@@ -7404,16 +7566,6 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
 
         angle::FormatID attachmentFormatID = desc[colorIndexGL];
         ASSERT(attachmentFormatID != angle::FormatID::NONE);
-
-        // If this render pass uses EXT_srgb_write_control, we need to override the format to its
-        // linear counterpart. Formats that cannot be reinterpreted are exempt from this
-        // requirement.
-        angle::FormatID linearFormat = rx::ConvertToLinear(attachmentFormatID);
-        if (linearFormat != angle::FormatID::NONE &&
-            desc.getSRGBWriteControlMode() == gl::SrgbWriteControlMode::Linear)
-        {
-            attachmentFormatID = linearFormat;
-        }
 
         bool isYUVExternalFormat = vk::IsYUVExternalFormat(attachmentFormatID);
         if (isYUVExternalFormat && renderer->nullColorAttachmentWithExternalFormatResolve())
@@ -7664,7 +7816,7 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
     // there is framebuffer fetch.  This is required when the corresponding
     // flag is set on the pipeline.
     if (renderer->getFeatures().supportsRasterizationOrderAttachmentAccess.enabled &&
-        desc.hasFramebufferFetch())
+        desc.hasColorFramebufferFetch())
     {
         for (VkSubpassDescription2 &subpass : subpassDesc)
         {

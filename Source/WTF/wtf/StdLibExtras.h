@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2022 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008-2024 Apple Inc. All Rights Reserved.
  * Copyright (C) 2013 Patrick Gansterer <paroga@paroga.com>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,6 +26,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <climits>
+#include <concepts>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -37,7 +40,12 @@
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/Compiler.h>
 #include <wtf/GetPtr.h>
+#include <wtf/IterationStatus.h>
 #include <wtf/TypeCasts.h>
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
+#define SINGLE_ARG(...) __VA_ARGS__ // useful when a macro argument includes a comma
 
 // Use this macro to declare and define a debug-only global variable that may have a
 // non-trivial constructor and destructor. When building with clang, this will suppress
@@ -392,7 +400,7 @@ bool findBitInWord(T word, size_t& startOrResultIndex, size_t endIndex, bool val
 {
     static_assert(std::is_unsigned<T>::value, "Type used in findBitInWord must be unsigned");
 
-    constexpr size_t bitsInWord = sizeof(word) * 8;
+    constexpr size_t bitsInWord = sizeof(word) * CHAR_BIT;
     ASSERT_UNUSED(bitsInWord, startOrResultIndex <= bitsInWord && endIndex <= bitsInWord);
 
     size_t index = startOrResultIndex;
@@ -424,10 +432,14 @@ bool findBitInWord(T word, size_t& startOrResultIndex, size_t endIndex, bool val
     return false;
 }
 
+// Used to check if a variadic list of compile time predicates are all true.
+template<bool... Bs> inline constexpr bool all =
+    std::is_same_v<std::integer_sequence<bool, true, Bs...>,
+                   std::integer_sequence<bool, Bs..., true>>;
+
 // Visitor adapted from http://stackoverflow.com/questions/25338795/is-there-a-name-for-this-tuple-creation-idiom
 
-template <class A, class... B>
-struct Visitor : Visitor<A>, Visitor<B...> {
+template<class A, class... B> struct Visitor : Visitor<A>, Visitor<B...> {
     Visitor(A a, B... b)
         : Visitor<A>(a)
         , Visitor<B...>(b...)
@@ -438,8 +450,7 @@ struct Visitor : Visitor<A>, Visitor<B...> {
     using Visitor<B...>::operator ();
 };
   
-template <class A>
-struct Visitor<A> : A {
+template<class A> struct Visitor<A> : A {
     Visitor(A a)
         : A(a)
     {
@@ -448,17 +459,113 @@ struct Visitor<A> : A {
     using A::operator();
 };
  
-template <class... F>
-Visitor<F...> makeVisitor(F... f)
+template<class... F> ALWAYS_INLINE Visitor<F...> makeVisitor(F... f)
 {
     return Visitor<F...>(f...);
 }
 
-template<class V, class... F>
-auto switchOn(V&& v, F&&... f) -> decltype(std::visit(makeVisitor(std::forward<F>(f)...), std::forward<V>(v)))
+// `asVariant` is used to allow subclasses of std::variant to work with `switchOn`.
+
+template<class... Ts> ALWAYS_INLINE constexpr std::variant<Ts...>& asVariant(std::variant<Ts...>& v)
 {
-    return std::visit(makeVisitor(std::forward<F>(f)...), std::forward<V>(v));
+    return v;
 }
+
+template<class... Ts> ALWAYS_INLINE constexpr const std::variant<Ts...>& asVariant(const std::variant<Ts...>& v)
+{
+    return v;
+}
+
+template<class... Ts> ALWAYS_INLINE constexpr std::variant<Ts...>&& asVariant(std::variant<Ts...>&& v)
+{
+    return std::move(v);
+}
+
+template<class... Ts> ALWAYS_INLINE constexpr const std::variant<Ts...>&& asVariant(const std::variant<Ts...>&& v)
+{
+    return std::move(v);
+}
+
+#ifdef _LIBCPP_VERSION
+
+// Single-variant switch-based visit function adapted from https://www.reddit.com/r/cpp/comments/kst2pu/comment/giilcxv/.
+// Works around bad code generation for std::visit with one std::variant by some standard library / compilers that
+// lead to excessive binary size growth. Currently only needed by libc++. See https://webkit.org/b/279498.
+
+template<size_t I = 0, class F, class V> ALWAYS_INLINE decltype(auto) visitOneVariant(F&& f, V&& v)
+{
+    constexpr auto size = std::variant_size_v<std::remove_cvref_t<V>>;
+
+#define WTF_VISIT_CASE_COUNT 32
+#define WTF_VISIT_CASE(N, D) \
+        case I + N:                                                                                 \
+        {                                                                                           \
+            if constexpr (I + N < size) {                                                           \
+                return std::invoke(std::forward<F>(f), std::get<I + N>(std::forward<V>(v)));        \
+            } else {                                                                                \
+                WTF_UNREACHABLE()                                                                   \
+            }                                                                                       \
+        }                                                                                           \
+
+    switch (v.index()) {
+        WTF_VISIT_CASE(0, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(1, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(2, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(3, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(4, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(5, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(6, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(7, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(8, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(9, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(10, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(11, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(12, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(13, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(14, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(15, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(16, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(17, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(18, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(19, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(20, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(21, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(22, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(23, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(24, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(25, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(26, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(27, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(28, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(29, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(30, WTF_VISIT_CASE_COUNT)
+        WTF_VISIT_CASE(31, WTF_VISIT_CASE_COUNT)
+    }
+
+    constexpr auto nextI = std::min(I + WTF_VISIT_CASE_COUNT, size);
+
+    if constexpr (nextI < size)
+        return visitOneVariant<nextI>(std::forward<F>(f), std::forward<V>(v));
+
+    WTF_UNREACHABLE();
+
+#undef WTF_VISIT_CASE_COUNT
+#undef WTF_VISIT_CASE
+}
+
+template<class V, class... F> ALWAYS_INLINE auto switchOn(V&& v, F&&... f) -> decltype(visitOneVariant(makeVisitor(std::forward<F>(f)...), asVariant(std::forward<V>(v))))
+{
+    return visitOneVariant(makeVisitor(std::forward<F>(f)...), asVariant(std::forward<V>(v)));
+}
+
+#else
+
+template<class V, class... F> ALWAYS_INLINE auto switchOn(V&& v, F&&... f) -> decltype(std::visit(makeVisitor(std::forward<F>(f)...), asVariant(std::forward<V>(v))))
+{
+    return std::visit(makeVisitor(std::forward<F>(f)...), asVariant(std::forward<V>(v)));
+}
+
+#endif
 
 namespace detail {
 
@@ -642,38 +749,7 @@ constexpr auto constructFixedSizeArrayWithArguments(Args&&... args) -> decltype(
     return constructFixedSizeArrayWithArgumentsImpl<ResultType>(tuple, std::forward<Args>(args)...);
 }
 
-// FIXME: Use std::is_sorted instead of this and remove it, once we require C++20.
-template<typename Iterator, typename Predicate> constexpr bool isSortedConstExpr(Iterator first, Iterator last, Predicate predicate)
-{
-    if (first == last)
-        return true;
-    auto current = first;
-    auto previous = current;
-    while (++current != last) {
-        if (!predicate(*previous, *current))
-            return false;
-        previous = current;
-    }
-    return true;
-}
-
-// FIXME: Use std::is_sorted instead of this and remove it, once we require C++20.
-template<typename Iterator> constexpr bool isSortedConstExpr(Iterator first, Iterator last)
-{
-    return isSortedConstExpr(first, last, [] (auto& a, auto& b) { return a < b; });
-}
-
-// FIXME: Use std::all_of instead of this and remove it, once we require C++20.
-template<typename Iterator, typename Predicate> constexpr bool allOfConstExpr(Iterator first, Iterator last, Predicate predicate)
-{
-    for (; first != last; ++first) {
-        if (!predicate(*first))
-            return false;
-    }
-    return true;
-}
-
-template<typename OptionalType, class Callback> typename OptionalType::value_type valueOrCompute(OptionalType optional, Callback callback) 
+template<typename OptionalType> typename OptionalType::value_type valueOrCompute(OptionalType optional, NOESCAPE const std::invocable<> auto& callback)
 {
     return optional ? *optional : callback();
 }
@@ -683,13 +759,23 @@ template<typename OptionalType> auto valueOrDefault(OptionalType&& optionalValue
     return optionalValue ? *std::forward<OptionalType>(optionalValue) : std::remove_reference_t<decltype(*optionalValue)> { };
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-align"
 template<typename T, typename U, std::size_t Extent>
-std::span<T, Extent> spanReinterpretCast(std::span<U, Extent> span)
+constexpr std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)> spanReinterpretCast(std::span<U, Extent> span)
 {
-    RELEASE_ASSERT(!(span.size_bytes() % sizeof(T)));
-    static_assert(std::is_const_v<T> || (!std::is_const_v<T> && !std::is_const_v<U>), "spanCast will not remove constness from source");
-    return std::span<T, Extent> { reinterpret_cast<T*>(const_cast<std::remove_const_t<U>*>(span.data())), span.size_bytes() / sizeof(T) };
+    static_assert(std::is_const_v<T> || (!std::is_const_v<T> && !std::is_const_v<U>), "spanReinterpretCast will not remove constness from source");
+
+    if constexpr (Extent == std::dynamic_extent) {
+        if constexpr (sizeof(U) < sizeof(T) || sizeof(U) % sizeof(T))
+            RELEASE_ASSERT_UNDER_CONSTEXPR_CONTEXT(!(span.size_bytes() % sizeof(T))); // Refuse to change size in bytes from source.
+    } else
+        static_assert(!((sizeof(U) * Extent) % sizeof(T)), "spanReinterpretCast will not change size in bytes from source");
+
+    using ReturnType = std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)>;
+    return ReturnType { reinterpret_cast<T*>(const_cast<std::remove_const_t<U>*>(span.data())), span.size_bytes() / sizeof(T) };
 }
+#pragma GCC diagnostic pop
 
 template<typename T, std::size_t Extent>
 std::span<T, Extent> spanConstCast(std::span<const T, Extent> span)
@@ -707,6 +793,18 @@ template<typename T, std::size_t Extent>
 std::span<uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> asWritableBytes(std::span<T, Extent> span)
 {
     return std::span<uint8_t, Extent == std::dynamic_extent ? std::dynamic_extent: Extent * sizeof(T)> { reinterpret_cast<uint8_t*>(span.data()), span.size_bytes() };
+}
+
+template<typename T>
+std::span<const uint8_t> asByteSpan(const T& input)
+{
+    return { reinterpret_cast<const uint8_t*>(&input), sizeof(input) };
+}
+
+template<typename T>
+std::span<uint8_t> asMutableByteSpan(T& input)
+{
+    return { reinterpret_cast<uint8_t*>(&input), sizeof(input) };
 }
 
 template<typename T, std::size_t TExtent, typename U, std::size_t UExtent>
@@ -735,6 +833,17 @@ void memsetSpan(std::span<T, Extent> destination, uint8_t byte)
 {
     static_assert(std::is_trivially_copyable_v<T>);
     memset(destination.data(), byte, destination.size_bytes());
+}
+
+// Less preferred helper function for converting an imported API into a span.
+// Use this when we can't edit the imported API and it doesn't offer
+// begin() / end() or a span accessor.
+template<typename T, std::size_t Extent = std::dynamic_extent>
+inline constexpr auto unsafeForgeSpan(T* ptr, size_t size)
+{
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    return std::span<T, Extent> { ptr, size };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 template<typename T> concept ByteType = sizeof(T) == 1 && ((std::is_integral_v<T> && !std::same_as<T, bool>) || std::same_as<T, std::byte>) && !std::is_const_v<T>;
@@ -767,11 +876,142 @@ template<ByteType T, typename U> constexpr auto byteCast(const U& value)
 }
 
 // This is like std::invocable but it takes the expected signature rather than just the arguments.
-template<typename Functor, typename Signature>
-concept Invocable = requires(std::decay_t<Functor>&& f, std::function<Signature> expected)
-{
+template<typename Functor, typename Signature> concept Invocable = requires(std::decay_t<Functor>&& f, std::function<Signature> expected) {
     { expected = std::move(f) };
 };
+
+// Concept for constraining to user-defined "Tuple-like" types.
+//
+// Based on exposition-only text in https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p2165r3.pdf
+// and https://stackoverflow.com/questions/68443804/c20-concept-to-check-tuple-like-types.
+
+template<class T, std::size_t N> concept HasTupleElement = requires(T t) {
+    typename std::tuple_element_t<N, std::remove_const_t<T>>;
+    { get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
+};
+
+template<class T> concept TupleLike = !std::is_reference_v<T>
+    && requires(T t) {
+        typename std::tuple_size<T>::type;
+        requires std::derived_from<
+          std::tuple_size<T>,
+          std::integral_constant<std::size_t, std::tuple_size_v<T>>
+        >;
+      }
+    && []<std::size_t... N>(std::index_sequence<N...>) {
+        return (HasTupleElement<T, N> && ...);
+    }(std::make_index_sequence<std::tuple_size_v<T>>());
+
+// This is like std::apply, but works with user-defined "Tuple-like" types as well as the
+// standard ones. The only real difference between its implementation and the standard one
+// is the use of un-prefixed `get`.
+//
+// This should be something we can remove if P2165 (https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/p2165r3.pdf)
+// is adopted and implemented.
+template<class F, class T, size_t ...I>
+constexpr decltype(auto) apply_impl(F&& functor, T&& tupleLike, std::index_sequence<I...>)
+{
+    using std::get;
+    return std::invoke(std::forward<F>(functor), get<I>(std::forward<T>(tupleLike))...);
+}
+
+template<class F, class T>
+constexpr decltype(auto) apply(F&& functor, T&& tupleLike)
+{
+    return apply_impl(std::forward<F>(functor), std::forward<T>(tupleLike), std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<T>>> { });
+}
+
+template<typename WordType, typename Func>
+ALWAYS_INLINE constexpr void forEachSetBit(std::span<const WordType> bits, const Func& func)
+{
+    constexpr size_t wordSize = sizeof(WordType) * CHAR_BIT;
+    for (size_t i = 0; i < bits.size(); ++i) {
+        WordType word = bits[i];
+        if (!word)
+            continue;
+        size_t base = i * wordSize;
+
+#if CPU(X86_64) || CPU(ARM64)
+        // We should only use ctz() when we know that ctz() is implementated using
+        // a fast hardware instruction. Otherwise, this will actually result in
+        // worse performance.
+        while (word) {
+            WordType temp = word & -word;
+            size_t offset = ctz(word);
+            if constexpr (std::is_same_v<IterationStatus, decltype(func(base + offset))>) {
+                if (func(base + offset) == IterationStatus::Done)
+                    return;
+            } else
+                func(base + offset);
+            word ^= temp;
+        }
+#else
+        for (size_t j = 0; j < wordSize; ++j) {
+            if (word & 1) {
+                if constexpr (std::is_same_v<IterationStatus, decltype(func(base + j))>) {
+                    if (func(base + j) == IterationStatus::Done)
+                        return;
+                } else
+                    func(base + j);
+            }
+            word >>= 1;
+        }
+#endif
+    }
+}
+
+template<typename WordType, typename Func>
+ALWAYS_INLINE constexpr void forEachSetBit(std::span<const WordType> bits, size_t startIndex, const Func& func)
+{
+    constexpr size_t wordSize = sizeof(WordType) * CHAR_BIT;
+    auto iterate = [&](WordType word, size_t i) ALWAYS_INLINE_LAMBDA {
+        size_t base = i * wordSize;
+
+#if CPU(X86_64) || CPU(ARM64)
+        // We should only use ctz() when we know that ctz() is implementated using
+        // a fast hardware instruction. Otherwise, this will actually result in
+        // worse performance.
+        while (word) {
+            WordType temp = word & -word;
+            size_t offset = ctz(word);
+            if constexpr (std::is_same_v<IterationStatus, decltype(func(base + offset))>) {
+                if (func(base + offset) == IterationStatus::Done)
+                    return;
+            } else
+                func(base + offset);
+            word ^= temp;
+        }
+#else
+        for (size_t j = 0; j < wordSize; ++j) {
+            if (word & 1) {
+                if constexpr (std::is_same_v<IterationStatus, decltype(func(base + j))>) {
+                    if (func(base + j) == IterationStatus::Done)
+                        return;
+                } else
+                    func(base + j);
+            }
+            word >>= 1;
+        }
+#endif
+    };
+
+    size_t startWord = startIndex / wordSize;
+    if (startWord >= bits.size())
+        return;
+
+    WordType word = bits[startWord];
+    size_t startIndexInWord = startIndex - startWord * wordSize;
+    WordType masked = word & (~((static_cast<WordType>(1) << startIndexInWord) - 1));
+    if (masked)
+        iterate(masked, startWord);
+
+    for (size_t i = startWord + 1; i < bits.size(); ++i) {
+        WordType word = bits[i];
+        if (!word)
+            continue;
+        iterate(word, i);
+    }
+}
 
 } // namespace WTF
 
@@ -791,6 +1031,8 @@ using WTF::KB;
 using WTF::MB;
 using WTF::approximateBinarySearch;
 using WTF::asBytes;
+using WTF::asByteSpan;
+using WTF::asMutableByteSpan;
 using WTF::asWritableBytes;
 using WTF::binarySearch;
 using WTF::bitwise_cast;
@@ -818,7 +1060,10 @@ using WTF::safeCast;
 using WTF::spanConstCast;
 using WTF::spanReinterpretCast;
 using WTF::tryBinarySearch;
+using WTF::unsafeForgeSpan;
 using WTF::valueOrCompute;
 using WTF::valueOrDefault;
 using WTF::toTwosComplement;
 using WTF::Invocable;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

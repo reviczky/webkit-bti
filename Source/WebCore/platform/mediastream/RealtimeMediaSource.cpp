@@ -102,7 +102,7 @@ RealtimeMediaSourceObserver::RealtimeMediaSourceObserver() = default;
 
 RealtimeMediaSourceObserver::~RealtimeMediaSourceObserver() = default;
 
-RealtimeMediaSource::RealtimeMediaSource(const CaptureDevice& device, MediaDeviceHashSalts&& hashSalts, PageIdentifier pageIdentifier)
+RealtimeMediaSource::RealtimeMediaSource(const CaptureDevice& device, MediaDeviceHashSalts&& hashSalts, std::optional<PageIdentifier> pageIdentifier)
     : m_pageIdentifier(pageIdentifier)
     , m_idHashSalts(WTFMove(hashSalts))
     , m_type(toSourceType(device.type()))
@@ -1485,7 +1485,7 @@ auto RealtimeMediaSource::getPhotoSettings() -> Ref<PhotoSettingsNativePromise>
 }
 
 #if !RELEASE_LOG_DISABLED
-void RealtimeMediaSource::setLogger(const Logger& newLogger, const void* newLogIdentifier)
+void RealtimeMediaSource::setLogger(const Logger& newLogger, uint64_t newLogIdentifier)
 {
     m_logger = &newLogger;
     m_logIdentifier = newLogIdentifier;

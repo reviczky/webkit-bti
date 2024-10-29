@@ -40,6 +40,7 @@
 #include "JSDOMPromiseDeferred.h"
 #include "LocalFrame.h"
 #include "Logging.h"
+#include "MediaPlayerPrivate.h"
 #include "Page.h"
 #include "Performance.h"
 #include "PictureInPictureSupport.h"
@@ -228,14 +229,14 @@ bool HTMLVideoElement::supportsFullscreen(HTMLMediaElementEnums::VideoFullscreen
     if (!player()->supportsFullscreen())
         return false;
 
+#if ENABLE(FULLSCREEN_API)
 #if PLATFORM(IOS_FAMILY)
     // Fullscreen implemented by player.
     if (!document().settings().videoFullscreenRequiresElementFullscreen())
         return true;
 #endif
 
-#if ENABLE(FULLSCREEN_API)
-    if (videoFullscreenMode == HTMLMediaElementEnums::VideoFullscreenModeStandard && !document().settings().fullScreenEnabled())
+    if (videoFullscreenMode == HTMLMediaElementEnums::VideoFullscreenModeStandard && !page->isFullscreenManagerEnabled())
         return false;
 
     // If the full screen API is enabled and is supported for the current element
@@ -345,6 +346,14 @@ RefPtr<ImageBuffer> HTMLVideoElement::createBufferForPainting(const FloatSize& s
     return ImageBuffer::create(size, RenderingPurpose::MediaPainting, 1, colorSpace, pixelFormat, bufferOptionsForRendingMode(renderingMode), hostWindow);
 }
 
+void HTMLVideoElement::paint(GraphicsContext& context, const FloatRect& destRect)
+{
+    RefPtr player = this->player();
+    if (!player)
+        return;
+    player->paint(context, destRect);
+}
+
 void HTMLVideoElement::paintCurrentFrameInContext(GraphicsContext& context, const FloatRect& destRect)
 {
     RefPtr player = this->player();
@@ -355,7 +364,7 @@ void HTMLVideoElement::paintCurrentFrameInContext(GraphicsContext& context, cons
         player->setVisibleForCanvas(true); // Make player visible or it won't draw.
         visibilityStateChanged();
     }
-    context.paintFrameForMedia(*player, destRect);
+    player->paintCurrentFrameInContext(context, destRect);
 }
 
 bool HTMLVideoElement::hasAvailableVideoFrame() const

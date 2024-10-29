@@ -25,6 +25,7 @@
 #include "GUniquePtrGStreamer.h"
 #include "MediaEndpointConfiguration.h"
 #include "PeerConnectionBackend.h"
+#include "Performance.h"
 #include "RTCBundlePolicy.h"
 #include "RTCCertificate.h"
 #include "RTCDtlsTransport.h"
@@ -43,6 +44,7 @@
 #include <gst/webrtc/webrtc.h>
 #undef GST_USE_UNSTABLE_API
 
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
@@ -270,7 +272,7 @@ std::optional<Ref<RTCCertificate>> generateCertificate(Ref<SecurityOrigin>&&, co
 bool sdpMediaHasAttributeKey(const GstSDPMedia*, const char* key);
 
 class UniqueSSRCGenerator : public ThreadSafeRefCounted<UniqueSSRCGenerator> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(UniqueSSRCGenerator);
 public:
     static Ref<UniqueSSRCGenerator> create() { return adoptRef(*new UniqueSSRCGenerator()); }
 
@@ -302,6 +304,23 @@ inline void unmapRtpBuffer(GstBuffer*, GstRTPBuffer* rtpBuffer)
 }
 
 using GstMappedRtpBuffer = GstBufferMapper<GstRTPBuffer, mapRtpBuffer, unmapRtpBuffer>;
+
+class StatsTimestampConverter {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_NONCOPYABLE(StatsTimestampConverter);
+    friend NeverDestroyed<StatsTimestampConverter>;
+
+public:
+    static StatsTimestampConverter& singleton();
+
+    Seconds convertFromMonotonicTime(Seconds value) const;
+
+private:
+    explicit StatsTimestampConverter() = default;
+
+    WallTime m_epoch { WallTime::now() };
+    MonotonicTime m_initialMonotonicTime { MonotonicTime::now() };
+};
 
 } // namespace WebCore
 

@@ -62,7 +62,7 @@ Ref<AccessibilityTableCell> AccessibilityTableCell::create(Node& node)
     return adoptRef(*new AccessibilityTableCell(node));
 }
 
-bool AccessibilityTableCell::computeAccessibilityIsIgnored() const
+bool AccessibilityTableCell::computeIsIgnored() const
 {
     auto decision = defaultObjectInclusion();
     if (decision == AccessibilityObjectInclusion::IncludeObject)
@@ -76,7 +76,7 @@ bool AccessibilityTableCell::computeAccessibilityIsIgnored() const
     if (!element() && !inTable)
         return true;
 
-    return !isExposedTableCell() && AccessibilityRenderObject::computeAccessibilityIsIgnored();
+    return !isExposedTableCell() && AccessibilityRenderObject::computeIsIgnored();
 }
 
 AccessibilityTable* AccessibilityTableCell::parentTable() const
@@ -239,13 +239,13 @@ bool AccessibilityTableCell::isRowHeader() const
     return false;
 }
     
-AXID AccessibilityTableCell::rowGroupAncestorID() const
+std::optional<AXID> AccessibilityTableCell::rowGroupAncestorID() const
 {
     auto* rowGroup = Accessibility::findAncestor<AccessibilityObject>(*this, false, [] (const auto& ancestor) {
         return ancestor.hasTagName(theadTag) || ancestor.hasTagName(tbodyTag) || ancestor.hasTagName(tfootTag);
     });
     if (!rowGroup)
-        return { };
+        return std::nullopt;
 
     return rowGroup->objectID();
 }

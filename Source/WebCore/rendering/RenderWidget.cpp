@@ -47,9 +47,9 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderWidget);
 
-static HashMap<SingleThreadWeakRef<const Widget>, SingleThreadWeakRef<RenderWidget>>& widgetRendererMap()
+static UncheckedKeyHashMap<SingleThreadWeakRef<const Widget>, SingleThreadWeakRef<RenderWidget>>& widgetRendererMap()
 {
-    static NeverDestroyed<HashMap<SingleThreadWeakRef<const Widget>, SingleThreadWeakRef<RenderWidget>>> staticWidgetRendererMap;
+    static NeverDestroyed<UncheckedKeyHashMap<SingleThreadWeakRef<const Widget>, SingleThreadWeakRef<RenderWidget>>> staticWidgetRendererMap;
     return staticWidgetRendererMap;
 }
 
@@ -175,6 +175,9 @@ void RenderWidget::setWidget(RefPtr<Widget>&& widget)
     if (widget == m_widget)
         return;
 
+    if (is<RemoteFrameView>(m_widget) != is<RemoteFrameView>(widget))
+        frameOwnerElement().scheduleInvalidateStyleAndLayerComposition();
+
     if (m_widget) {
         moveWidgetToParentSoon(*m_widget, nullptr);
         view().frameView().willRemoveWidgetFromRenderTree(*m_widget);
@@ -206,7 +209,7 @@ void RenderWidget::setWidget(RefPtr<Widget>&& widget)
         }
         moveWidgetToParentSoon(*m_widget, &view().frameView());
     }
-    
+
     if (CheckedPtr cache = document().existingAXObjectCache())
         cache->childrenChanged(this);
 }
@@ -327,8 +330,7 @@ void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
         // Push a clip if we have a border radius, since we want to round the foreground content that gets painted.
         paintInfo.context().save();
-        auto roundedInnerRect = FloatRoundedRect(roundedContentBoxRect(borderRect));
-        BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), roundedInnerRect);
+        clipToContentBoxShape(paintInfo.context(), adjustedPaintOffset, document().deviceScaleFactor());
     }
 
     if (m_widget && !isSkippedContentRoot())
@@ -384,7 +386,8 @@ RenderWidget::ChildWidgetState RenderWidget::updateWidgetPosition()
 
 IntRect RenderWidget::windowClipRect() const
 {
-    return intersection(view().frameView().contentsToWindow(m_clipRect), view().frameView().windowClipRect());
+    Ref frameView = view().frameView();
+    return intersection(frameView->contentsToWindow(m_clipRect), frameView->windowClipRect());
 }
 
 void RenderWidget::setSelectionState(HighlightState state)
@@ -470,7 +473,7 @@ RenderBox* RenderWidget::embeddedContentBox() const
 {
     if (!is<RenderEmbeddedObject>(this))
         return nullptr;
-    auto* frameView = dynamicDowncast<LocalFrameView>(widget());
+    RefPtr frameView = dynamicDowncast<LocalFrameView>(widget());
     return frameView ? frameView->embeddedContentBox() : nullptr;
 }
 

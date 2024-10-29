@@ -108,6 +108,10 @@ namespace DFG {
 class SpeculativeJIT;
 }
 
+namespace Wasm {
+class Callee;
+}
+
 namespace GCClient {
 class Heap;
 }
@@ -130,6 +134,7 @@ class Heap;
     v(numberObjectSpace, cellHeapCellType, NumberObject) \
     v(plainObjectSpace, cellHeapCellType, JSNonFinalObject) \
     v(promiseSpace, cellHeapCellType, JSPromise) \
+    v(iteratorSpace, cellHeapCellType, JSIterator) \
     v(propertyNameEnumeratorSpace, cellHeapCellType, JSPropertyNameEnumerator) \
     v(propertyTableSpace, destructibleCellHeapCellType, PropertyTable) \
     v(regExpSpace, destructibleCellHeapCellType, RegExp) \
@@ -232,6 +237,7 @@ class Heap;
     v(intlSegmentIteratorSpace, intlSegmentIteratorHeapCellType, IntlSegmentIterator) \
     v(intlSegmenterSpace, intlSegmenterHeapCellType, IntlSegmenter) \
     v(intlSegmentsSpace, intlSegmentsHeapCellType, IntlSegments) \
+    v(iteratorHelperSpace, cellHeapCellType, JSIteratorHelper) \
     v(javaScriptCallFrameSpace, javaScriptCallFrameHeapCellType, Inspector::JSJavaScriptCallFrame) \
     v(jsModuleRecordSpace, jsModuleRecordHeapCellType, JSModuleRecord) \
     v(syntheticModuleRecordSpace, syntheticModuleRecordHeapCellType, SyntheticModuleRecord) \
@@ -273,6 +279,9 @@ class Heap;
     v(weakMapSpace, weakMapHeapCellType, JSWeakMap) \
     v(weakSetSpace, weakSetHeapCellType, JSWeakSet) \
     v(withScopeSpace, cellHeapCellType, JSWithScope) \
+    v(wrapForValidIteratorSpace, cellHeapCellType, JSWrapForValidIterator) \
+    v(asyncFromSyncIteratorSpace, cellHeapCellType, JSAsyncFromSyncIterator) \
+    v(regExpStringIteratorSpace, cellHeapCellType, JSRegExpStringIterator) \
     \
     FOR_EACH_JSC_WEBASSEMBLY_DYNAMIC_ISO_SUBSPACE(v)
 
@@ -567,7 +576,7 @@ public:
     
     Seconds totalGCTime() const { return m_totalGCTime; }
 
-    HashMap<JSImmutableButterfly*, JSString*> immutableButterflyToStringCache;
+    UncheckedKeyHashMap<JSImmutableButterfly*, JSString*> immutableButterflyToStringCache;
 
     bool isMarkingForGCVerifier() const { return m_isMarkingForGCVerifier; }
 
@@ -578,10 +587,17 @@ public:
 
     bool isInPhase(CollectorPhase phase) const { return m_currentPhase == phase; }
 
+#if ENABLE(WEBASSEMBLY)
+    // FIXME: We should have a way to clear Wasm::Callees pending destruction when the Module dies.
+    void reportWasmCalleePendingDestruction(Ref<Wasm::Callee>&&);
+    bool isWasmCalleePendingDestruction(Wasm::Callee&);
+#endif
+
 private:
     friend class AllocatingScope;
     friend class CodeBlock;
     friend class CollectingScope;
+    friend class ConservativeRoots;
     friend class DeferGC;
     friend class DeferGCForAWhile;
     friend class GCAwareJITStubRoutine;
@@ -835,6 +851,7 @@ private:
     bool m_isShuttingDown { false };
     bool m_mutatorShouldBeFenced { Options::forceFencedBarrier() };
     bool m_isMarkingForGCVerifier { false };
+    Lock m_wasmCalleesPendingDestructionLock;
 
     unsigned m_barrierThreshold { Options::forceFencedBarrier() ? tautologicalThreshold : blackThreshold };
 
@@ -869,6 +886,10 @@ private:
 
     HashSet<WeakGCHashTable*> m_weakGCHashTables;
     
+#if ENABLE(WEBASSEMBLY)
+    HashSet<Ref<Wasm::Callee>> m_wasmCalleesPendingDestruction WTF_GUARDED_BY_LOCK(m_wasmCalleesPendingDestructionLock);
+#endif
+
     std::unique_ptr<MarkStackArray> m_sharedCollectorMarkStack;
     std::unique_ptr<MarkStackArray> m_sharedMutatorMarkStack;
     unsigned m_numberOfActiveParallelMarkers { 0 };

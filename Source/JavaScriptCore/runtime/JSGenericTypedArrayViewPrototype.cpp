@@ -195,7 +195,13 @@ JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToBase64, (JSGlobalObject* globalObj
 
     const uint8_t* data = uint8Array->typedVector();
     size_t length = uint8Array->length();
-    return JSValue::encode(jsString(vm, base64EncodeToString({ data, length }, options)));
+    auto result = base64EncodeToStringReturnNullIfOverflow({ data, length }, options);
+    if (UNLIKELY(result.isNull())) {
+        throwOutOfMemoryError(globalObject, scope, "generated stirng is too long"_s);
+        return { };
+    }
+
+    return JSValue::encode(jsString(vm, WTFMove(result)));
 }
 
 JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToHex, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -223,9 +229,9 @@ JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToHex, (JSGlobalObject* globalObject
         return { };
     }
 
-    LChar* buffer = nullptr;
+    std::span<LChar> buffer;
     auto result = StringImpl::createUninitialized(length * 2, buffer);
-    LChar* bufferEnd = buffer + length * 2;
+    LChar* bufferEnd = buffer.data() + length * 2;
     constexpr size_t stride = 8; // Because loading uint8x8_t.
     if (length >= stride) {
         auto encodeVector = [&](auto input) {
@@ -251,14 +257,14 @@ JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToHex, (JSGlobalObject* globalObject
         };
 
         const auto* cursor = data;
-        auto* output = buffer;
+        auto* output = buffer.data();
         for (; cursor + (stride - 1) < end; cursor += stride, output += stride * 2)
             simde_vst1q_u8(output, encodeVector(simde_vld1_u8(cursor)));
         if (cursor < end)
             simde_vst1q_u8(bufferEnd - stride * 2, encodeVector(simde_vld1_u8(end - stride)));
     } else {
         const auto* cursor = data;
-        auto* output = buffer;
+        auto* output = buffer.data();
         for (; cursor < end; cursor += 1, output += 2) {
             auto character = *cursor;
             *output = radixDigits[character / 16];

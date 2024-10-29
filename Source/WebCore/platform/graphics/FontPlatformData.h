@@ -29,6 +29,7 @@
 #include "TextFlags.h"
 #include <wtf/Forward.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 
 #if PLATFORM(WIN)
@@ -41,7 +42,9 @@
 #include "RefPtrCairo.h"
 #elif USE(SKIA)
 #include <hb.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <skia/core/SkFont.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
 #if ENABLE(MATHML) && USE(HARFBUZZ)
@@ -216,7 +219,7 @@ struct FontPlatformSerializedData {
 
 // This class is conceptually immutable. Once created, no instances should ever change (in an observable way).
 class FontPlatformData {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(FontPlatformData, WEBCORE_EXPORT);
 public:
     struct CreationData;
     struct FontVariationAxis {
@@ -384,6 +387,7 @@ public:
     {
         return m_customPlatformData.get();
     }
+    inline RefPtr<const FontCustomPlatformData> protectedCustomPlatformData() const; // Defined in FontCustomPlatformData.h
 
     WEBCORE_EXPORT Attributes attributes() const;
 
@@ -429,7 +433,7 @@ private:
     TextRenderingMode m_textRenderingMode { TextRenderingMode::AutoTextRendering };
 
     // This is conceptually const, but we can't make it actually const,
-    // because FontPlatformData is used as a key in a HashMap.
+    // because FontPlatformData is used as a key in a UncheckedKeyHashMap.
     RefPtr<const FontCustomPlatformData> m_customPlatformData;
 
     bool m_syntheticBold { false };

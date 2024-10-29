@@ -129,6 +129,7 @@ set(angle_translator_sources
     "src/compiler/translator/length_limits.h"
     "src/compiler/translator/msl/DriverUniformMetal.h"
     "src/compiler/translator/msl/TranslatorMSL.h"
+    "src/compiler/translator/null/TranslatorNULL.h"
     "src/compiler/translator/spirv/TranslatorSPIRV.h"
     "src/compiler/translator/tree_ops/ClampFragDepth.cpp"
     "src/compiler/translator/tree_ops/ClampFragDepth.h"
@@ -190,6 +191,8 @@ set(angle_translator_sources
     "src/compiler/translator/tree_ops/RewriteStructSamplers.h"
     "src/compiler/translator/tree_ops/RewriteTexelFetchOffset.cpp"
     "src/compiler/translator/tree_ops/RewriteTexelFetchOffset.h"
+    "src/compiler/translator/tree_ops/SeparateCompoundStructDeclarations.cpp"
+    "src/compiler/translator/tree_ops/SeparateCompoundStructDeclarations.h"
     "src/compiler/translator/tree_ops/SeparateDeclarations.cpp"
     "src/compiler/translator/tree_ops/SeparateDeclarations.h"
     "src/compiler/translator/tree_ops/SeparateStructFromFunctionDeclarations.cpp"
@@ -210,8 +213,7 @@ set(angle_translator_sources
     "src/compiler/translator/tree_ops/glsl/apple/RewriteUnaryMinusOperatorFloat.h"
     "src/compiler/translator/tree_ops/glsl/apple/UnfoldShortCircuitAST.h"
     "src/compiler/translator/tree_util/BuiltIn.h"
-    "src/compiler/translator/tree_util/BuiltIn_ESSL_autogen.h"
-    "src/compiler/translator/tree_util/BuiltIn_complete_autogen.h"
+    "src/compiler/translator/tree_util/BuiltIn_autogen.h"
     "src/compiler/translator/tree_util/DriverUniform.cpp"
     "src/compiler/translator/tree_util/DriverUniform.h"
     "src/compiler/translator/tree_util/FindFunction.cpp"
@@ -248,6 +250,7 @@ set(angle_translator_sources
     "src/compiler/translator/tree_util/Visit.h"
     "src/compiler/translator/util.cpp"
     "src/compiler/translator/util.h"
+    "src/compiler/translator/wgsl/TranslatorWGSL.h"
 )
 
 set(angle_translator_glsl_base_sources
@@ -357,6 +360,8 @@ set(angle_translator_lib_spirv_sources
     "src/compiler/translator/spirv/OutputSPIRV.cpp"
     "src/compiler/translator/spirv/OutputSPIRV.h"
     "src/compiler/translator/spirv/TranslatorSPIRV.cpp"
+    "src/compiler/translator/tree_ops/spirv/ClampGLLayer.cpp"
+    "src/compiler/translator/tree_ops/spirv/ClampGLLayer.h"
     "src/compiler/translator/tree_ops/spirv/EmulateAdvancedBlendEquations.cpp"
     "src/compiler/translator/tree_ops/spirv/EmulateAdvancedBlendEquations.h"
     "src/compiler/translator/tree_ops/spirv/EmulateDithering.cpp"
@@ -378,11 +383,6 @@ set(angle_translator_lib_spirv_sources
 )
 
 set(angle_translator_essl_symbol_table_sources
-    "src/compiler/translator/ImmutableString_ESSL_autogen.cpp"
-    "src/compiler/translator/SymbolTable_ESSL_autogen.cpp"
-)
-
-set(angle_translator_glsl_symbol_table_sources
     "src/compiler/translator/ImmutableString_autogen.cpp"
     "src/compiler/translator/SymbolTable_autogen.cpp"
 )
@@ -452,15 +452,21 @@ set(angle_translator_lib_msl_sources
     "src/compiler/translator/tree_ops/msl/RewriteUnaddressableReferences.h"
     "src/compiler/translator/tree_ops/msl/SeparateCompoundExpressions.cpp"
     "src/compiler/translator/tree_ops/msl/SeparateCompoundExpressions.h"
-    "src/compiler/translator/tree_ops/msl/SeparateCompoundStructDeclarations.cpp"
-    "src/compiler/translator/tree_ops/msl/SeparateCompoundStructDeclarations.h"
     "src/compiler/translator/tree_ops/msl/TransposeRowMajorMatrices.cpp"
     "src/compiler/translator/tree_ops/msl/TransposeRowMajorMatrices.h"
     "src/compiler/translator/tree_ops/msl/WrapMain.cpp"
     "src/compiler/translator/tree_ops/msl/WrapMain.h"
 )
 
-set(angle_translator_lib_wgsl_sources "src/compiler/translator/wgsl/TranslatorWGSL.cpp")
+set(angle_translator_lib_wgsl_sources
+    "src/compiler/translator/wgsl/OutputUniformBlocks.cpp"
+    "src/compiler/translator/wgsl/OutputUniformBlocks.h"
+    "src/compiler/translator/wgsl/RewritePipelineVariables.cpp"
+    "src/compiler/translator/wgsl/RewritePipelineVariables.h"
+    "src/compiler/translator/wgsl/TranslatorWGSL.cpp"
+    "src/compiler/translator/wgsl/Utils.cpp"
+    "src/compiler/translator/wgsl/Utils.h"
+)
 
 set(angle_preprocessor_sources
     "src/compiler/preprocessor/DiagnosticsBase.cpp"

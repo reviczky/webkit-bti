@@ -35,6 +35,7 @@
 #include "WindRule.h"
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/TypeCasts.h>
 #include <wtf/Vector.h>
 
@@ -54,8 +55,14 @@ enum class CoordinateAffinity : uint8_t {
     Relative, Absolute
 };
 
+enum class ControlPointAnchoring : uint8_t {
+    FromStart,
+    FromEnd,
+    FromOrigin
+};
+
 class BasicShape : public RefCounted<BasicShape> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(BasicShape);
 public:
     virtual ~BasicShape() = default;
 
@@ -87,45 +94,26 @@ public:
 
 class BasicShapeCenterCoordinate {
 public:
-    enum class Direction : bool {
-        TopLeft,
-        BottomRight
-    };
-
     BasicShapeCenterCoordinate()
     {
-        updateComputedLength();
     }
 
-    BasicShapeCenterCoordinate(Direction direction, Length&& length)
-        : m_direction(direction)
-        , m_length(WTFMove(length))
+    BasicShapeCenterCoordinate(Length&& length)
+        : m_length(WTFMove(length))
     {
-        updateComputedLength();
     }
 
-    Direction direction() const { return m_direction; }
     const Length& length() const { return m_length; }
-    const Length& computedLength() const { return m_computedLength; }
 
     BasicShapeCenterCoordinate blend(const BasicShapeCenterCoordinate& from, const BlendingContext& context) const
     {
-        return BasicShapeCenterCoordinate(Direction::TopLeft, WebCore::blend(from.m_computedLength, m_computedLength, context));
+        return BasicShapeCenterCoordinate(WebCore::blend(from.m_length, m_length, context));
     }
     
-    bool operator==(const BasicShapeCenterCoordinate& other) const
-    {
-        return m_direction == other.m_direction
-            && m_length == other.m_length
-            && m_computedLength == other.m_computedLength;
-    }
+    bool operator==(const BasicShapeCenterCoordinate&) const = default;
 
 private:
-    WEBCORE_EXPORT void updateComputedLength();
-
-    Direction m_direction { Direction::TopLeft };
-    Length m_length { LengthType::Undefined };
-    Length m_computedLength;
+    Length m_length { 100, LengthType::Percent };
 };
 
 class BasicShapeRadius {
@@ -181,6 +169,7 @@ private:
 };
 
 class BasicShapeCircleOrEllipse : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeCircleOrEllipse);
 public:
     void setPositionWasOmitted(bool flag) { m_centerWasOmitted = flag; }
     bool positionWasOmitted() const { return m_centerWasOmitted; }
@@ -191,6 +180,7 @@ private:
 };
 
 class BasicShapeCircle final : public BasicShapeCircleOrEllipse {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeCircle);
 public:
     static Ref<BasicShapeCircle> create() { return adoptRef(*new BasicShapeCircle); }
     WEBCORE_EXPORT static Ref<BasicShapeCircle> create(BasicShapeCenterCoordinate&& centerX, BasicShapeCenterCoordinate&& centerY, BasicShapeRadius&&);
@@ -231,6 +221,7 @@ private:
 };
 
 class BasicShapeEllipse final : public BasicShapeCircleOrEllipse {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeEllipse);
 public:
     static Ref<BasicShapeEllipse> create() { return adoptRef(*new BasicShapeEllipse); }
     WEBCORE_EXPORT static Ref<BasicShapeEllipse> create(BasicShapeCenterCoordinate&& centerX, BasicShapeCenterCoordinate&& centerY, BasicShapeRadius&& radiusX, BasicShapeRadius&& radiusY);
@@ -272,6 +263,7 @@ private:
 };
 
 class BasicShapePolygon final : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapePolygon);
 public:
     static Ref<BasicShapePolygon> create() { return adoptRef(*new BasicShapePolygon); }
     WEBCORE_EXPORT static Ref<BasicShapePolygon> create(WindRule, Vector<Length>&& values);
@@ -307,6 +299,7 @@ private:
 };
 
 class BasicShapePath final : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapePath);
 public:
     static Ref<BasicShapePath> create(std::unique_ptr<SVGPathByteStream>&& byteStream)
     {
@@ -349,6 +342,7 @@ private:
 };
 
 class BasicShapeInset final : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeInset);
 public:
     static Ref<BasicShapeInset> create() { return adoptRef(*new BasicShapeInset); }
     WEBCORE_EXPORT static Ref<BasicShapeInset> create(Length&& right, Length&& top, Length&& bottom, Length&& left, LengthSize&& topLeftRadius, LengthSize&& topRightRadius, LengthSize&& bottomRightRadius, LengthSize&& bottomLeftRadius);
@@ -402,6 +396,7 @@ private:
 };
 
 class BasicShapeRect final : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeRect);
 public:
     static Ref<BasicShapeRect> create() { return adoptRef(*new BasicShapeRect); }
     WEBCORE_EXPORT static Ref<BasicShapeRect> create(Length&& top, Length&& right, Length&& bottom, Length&& left, LengthSize&& topLeftRadius, LengthSize&& topRightRadius, LengthSize&& bottomRightRadius, LengthSize&& bottomLeftRadius);
@@ -453,6 +448,7 @@ private:
 };
 
 class BasicShapeXywh final : public BasicShape {
+    WTF_MAKE_TZONE_ALLOCATED(BasicShapeXywh);
 public:
     static Ref<BasicShapeXywh> create() { return adoptRef(*new BasicShapeXywh); }
     WEBCORE_EXPORT static Ref<BasicShapeXywh> create(Length&& insetX, Length&& insetY, Length&& width, Length&& height, LengthSize&& topLeftRadius, LengthSize&& topRightRadius, LengthSize&& bottomRightRadius, LengthSize&& bottomLeftRadius);
@@ -505,6 +501,7 @@ private:
     LengthSize m_bottomLeftRadius;
 };
 
+WTF::TextStream& operator<<(WTF::TextStream&, ControlPointAnchoring);
 WTF::TextStream& operator<<(WTF::TextStream&, CoordinateAffinity);
 WTF::TextStream& operator<<(WTF::TextStream&, const BasicShapeRadius&);
 WTF::TextStream& operator<<(WTF::TextStream&, const BasicShapeCenterCoordinate&);

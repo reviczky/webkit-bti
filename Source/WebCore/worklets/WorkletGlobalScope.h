@@ -49,7 +49,7 @@ class WorkerScriptLoader;
 struct WorkletParameters;
 
 enum class WorkletGlobalScopeIdentifierType { };
-using WorkletGlobalScopeIdentifier = LegacyNullableObjectIdentifier<WorkletGlobalScopeIdentifierType>;
+using WorkletGlobalScopeIdentifier = ObjectIdentifier<WorkletGlobalScopeIdentifierType>;
 
 class WorkletGlobalScope : public WorkerOrWorkletGlobalScope {
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(WorkletGlobalScope);
@@ -66,6 +66,7 @@ public:
     MessagePortChannelProvider& messagePortChannelProvider();
 
     const URL& url() const final { return m_url; }
+    const URL& cookieURL() const final { return url(); }
 
     void evaluate();
 

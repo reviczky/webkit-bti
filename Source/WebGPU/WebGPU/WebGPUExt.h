@@ -27,7 +27,10 @@
 #define WEBGPUEXT_H_
 
 #include <CoreGraphics/CGImage.h>
+#ifndef __swift__
+// Swift C++ Interop does not support extern C. This header has that.
 #include <CoreVideo/CoreVideo.h>
+#endif
 #include <IOSurface/IOSurfaceRef.h>
 
 #ifdef NDEBUG
@@ -38,9 +41,13 @@
 
 #ifdef __cplusplus
 #include <optional>
+#include <wtf/MachSendRight.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
+#endif
 
+#ifdef __swift__
+typedef struct __CVBuffer* CVPixelBufferRef;
 #endif
 
 typedef struct WGPUExternalTextureImpl* WGPUExternalTexture;
@@ -48,12 +55,6 @@ typedef struct WGPUExternalTextureImpl* WGPUExternalTexture;
 typedef void (^WGPUWorkItem)(void);
 typedef void (^WGPUScheduleWorkBlock)(WGPUWorkItem workItem);
 typedef void (^WGPUDeviceLostBlockCallback)(WGPUDeviceLostReason reason, char const * message);
-
-typedef enum WGPUXREye {
-    WGPUXREye_None,
-    WGPUXREye_Left,
-    WGPUXREye_Right
-} WGPUXREye;
 
 typedef enum WGPUBufferBindingTypeExtended {
     WGPUBufferBindingType_Float3x2 = WGPUBufferBindingType_Force32 - 1,
@@ -139,20 +140,37 @@ WGPU_EXPORT void wgpuExternalTextureDestroy(WGPUExternalTexture texture) WGPU_FU
 WGPU_EXPORT void wgpuExternalTextureUndestroy(WGPUExternalTexture texture) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT void wgpuExternalTextureUpdate(WGPUExternalTexture texture, CVPixelBufferRef) WGPU_FUNCTION_ATTRIBUTE;
 WGPU_EXPORT WGPULimits wgpuDefaultLimits() WGPU_FUNCTION_ATTRIBUTE;
-WGPU_EXPORT void wgpuBindGroupUpdateExternalTextures(WGPUBindGroup bindGroup, WGPUExternalTexture externalTexture) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT bool wgpuBindGroupUpdateExternalTextures(WGPUBindGroup bindGroup, WGPUExternalTexture externalTexture) WGPU_FUNCTION_ATTRIBUTE;
 
 WGPU_EXPORT WGPUXRBinding wgpuDeviceCreateXRBinding(WGPUDevice device) WGPU_FUNCTION_ATTRIBUTE;
 
 WGPU_EXPORT WGPUXRProjectionLayer wgpuBindingCreateXRProjectionLayer(WGPUXRBinding binding, WGPUTextureFormat colorFormat, WGPUTextureFormat* optionalDepthStencilFormat, WGPUTextureUsageFlags flags, double scale) WGPU_FUNCTION_ATTRIBUTE;
-WGPU_EXPORT WGPUXRSubImage wgpuBindingGetViewSubImage(WGPUXRBinding binding, WGPUXREye eye) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUXRSubImage wgpuBindingGetViewSubImage(WGPUXRBinding binding, WGPUXRProjectionLayer layer) WGPU_FUNCTION_ATTRIBUTE;
+
+WGPU_EXPORT WGPUTexture wgpuXRSubImageGetColorTexture(WGPUXRSubImage subImage) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT WGPUTexture wgpuXRSubImageGetDepthStencilTexture(WGPUXRSubImage subImage) WGPU_FUNCTION_ATTRIBUTE;
 
 WGPU_EXPORT WGPUBool wgpuAdapterXRCompatible(WGPUAdapter adapter) WGPU_FUNCTION_ATTRIBUTE;
 
 #ifdef __cplusplus
-WGPU_EXPORT RetainPtr<CGImageRef> wgpuSwapChainGetTextureAsNativeImage(WGPUSwapChain swapChain, uint32_t bufferIndex);
+WGPU_EXPORT void wgpuXRProjectionLayerStartFrame(WGPUXRProjectionLayer layer, size_t frameIndex, WTF::MachSendRight&& colorBuffer, WTF::MachSendRight&& depthBuffer, WTF::MachSendRight&& completionSyncEvent, size_t reusableTextureIndex) WGPU_FUNCTION_ATTRIBUTE;
+
+WGPU_EXPORT RetainPtr<CGImageRef> wgpuSwapChainGetTextureAsNativeImage(WGPUSwapChain swapChain, uint32_t bufferIndex, bool& isIOSurfaceSupportedFormat);
 #endif
 WGPU_EXPORT WGPUBool wgpuExternalTextureIsValid(WGPUExternalTexture externalTexture) WGPU_FUNCTION_ATTRIBUTE;
 
+WGPU_EXPORT void wgpuDeviceClearDeviceLostCallback(WGPUDevice device) WGPU_FUNCTION_ATTRIBUTE;
+WGPU_EXPORT void wgpuDeviceClearUncapturedErrorCallback(WGPUDevice device) WGPU_FUNCTION_ATTRIBUTE;
+
 #endif  // !defined(WGPU_SKIP_DECLARATIONS)
+
+#if defined(ENABLE_WEBGPU_SWIFT) && ENABLE_WEBGPU_SWIFT && defined(__WEBGPU__)
+#include "Buffer.h"
+#include "CommandEncoder.h"
+#include "CommandsMixin.h"
+#include "Device.h"
+#include "QuerySet.h"
+#include "Queue.h"
+#endif
 
 #endif // WEBGPUEXT_H_

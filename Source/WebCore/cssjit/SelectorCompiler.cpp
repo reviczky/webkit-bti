@@ -1008,10 +1008,10 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationMatchesHtmlDocumentPseudoClass, bool,
     return matchesHtmlDocumentPseudoClass(element);
 }
 
-JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationMatchesLangPseudoClass, bool, (const Element& element, const FixedVector<PossiblyQuotedIdentifier>& argumentList))
+JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationMatchesLangPseudoClass, bool, (const Element& element, const FixedVector<PossiblyQuotedIdentifier>& langList))
 {
     COUNT_SELECTOR_OPERATION(operationMatchesLangPseudoClass);
-    return matchesLangPseudoClass(element, argumentList);
+    return matchesLangPseudoClass(element, langList);
 }
 
 JSC_DEFINE_NOEXCEPT_JIT_OPERATION(operationMatchesPopoverOpenPseudoClass, bool, (const Element& element))
@@ -1324,8 +1324,8 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
         }
 
     case CSSSelector::PseudoClass::Lang:
-        ASSERT(selector.argumentList() && !selector.argumentList()->isEmpty());
-        fragment.languageArgumentsList.append(selector.argumentList());
+        ASSERT(selector.langList() && !selector.langList()->isEmpty());
+        fragment.languageArgumentsList.append(selector.langList());
         return FunctionType::SimpleSelectorChecker;
 
     case CSSSelector::PseudoClass::Is:
@@ -1792,7 +1792,7 @@ inline SelectorCompilationStatus SelectorCodeGenerator::compile(JSC::MacroAssemb
         linkBuffer.link(m_functionCalls[i].first, m_functionCalls[i].second);
 
 #if CSS_SELECTOR_JIT_DEBUGGING
-    codeRef = linkBuffer.finalizeCodeWithDisassembly(JSC::CSSSelectorPtrTag, "CSS Selector JIT for \"%s\"", m_originalSelector->selectorText().utf8().data());
+    codeRef = linkBuffer.finalizeCodeWithDisassembly<JSC::CSSSelectorPtrTag>(true, nullptr, "CSS Selector JIT for \"%s\"", m_originalSelector->selectorText().utf8().data());
 #else
     codeRef = FINALIZE_CODE(linkBuffer, JSC::CSSSelectorPtrTag, nullptr, "CSS Selector JIT");
 #endif

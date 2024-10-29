@@ -109,8 +109,10 @@ WTF_MAKE_COMPACT_TZONE_OR_ISO_ALLOCATED_IMPL(Node);
 using namespace HTMLNames;
 
 struct SameSizeAsNode : EventTarget, CanMakeCheckedPtr<SameSizeAsNode> {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(SameSizeAsNode);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(SameSizeAsNode);
+public:
 #if ASSERT_ENABLED
-    uint32_t m_isAllocatedMemory;
     bool inRemovedLastRefFunction;
     bool adoptionIsRequired;
 #endif
@@ -212,7 +214,7 @@ void Node::dumpStatistics()
     size_t fragmentNodes = 0;
     size_t shadowRootNodes = 0;
 
-    HashMap<String, size_t> perTagCount;
+    UncheckedKeyHashMap<String, size_t> perTagCount;
 
     size_t attributes = 0;
     size_t attributesWithAttr = 0;
@@ -220,7 +222,7 @@ void Node::dumpStatistics()
     size_t elementsWithRareData = 0;
     size_t elementsWithNamedNodeMap = 0;
 
-    HashMap<uint32_t, size_t> rareDataSingleUseTypeCounts;
+    UncheckedKeyHashMap<uint32_t, size_t> rareDataSingleUseTypeCounts;
     size_t mixedRareDataUseCount = 0;
 
     for (auto& node : liveNodeSet()) {
@@ -251,7 +253,7 @@ void Node::dumpStatistics()
 
                 // Tag stats
                 Element& element = uncheckedDowncast<Element>(node);
-                HashMap<String, size_t>::AddResult result = perTagCount.add(element.tagName(), 1);
+                UncheckedKeyHashMap<String, size_t>::AddResult result = perTagCount.add(element.tagName(), 1);
                 if (!result.isNewEntry)
                     result.iterator->value++;
 
@@ -415,7 +417,6 @@ Node::~Node()
 {
     ASSERT(isMainThread());
     ASSERT(deletionHasBegun());
-    ASSERT(!deletionHasEnded());
     ASSERT(!m_adoptionIsRequired);
 
     InspectorInstrumentation::willDestroyDOMNode(*this);
@@ -453,9 +454,9 @@ Node::~Node()
     }
 #endif
 
-#if ASSERT_ENABLED
-    m_isAllocatedMemory = IsAllocatedMemory::Scribble;
-#endif
+    // FIXME: Test performance, then add a RELEASE_ASSERT for this too.
+    if (refCount() > 1)
+        WTF::RefCountedBase::printRefDuringDestructionLogAndCrash(this);
 }
 
 void Node::willBeDeletedFrom(Document& document)
@@ -886,7 +887,7 @@ Node::Editability Node::computeEditabilityWithStyle(const RenderStyle* incomingS
             return incomingStyle;
         if (isDocumentNode())
             return renderStyle();
-        auto* element = dynamicDowncast<Element>(*this);
+        RefPtr element = dynamicDowncast<Element>(*this);
         if (!element)
             element = parentElementInComposedTree();
         return element ? const_cast<Element&>(*element).computedStyleForEditability() : nullptr;
@@ -2440,7 +2441,7 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomString& event
 
 #if PLATFORM(IOS_FAMILY)
     if (targetNode == document.ptr() && typeInfo.type() == EventType::scroll) {
-        if (auto* window = document->domWindow())
+        if (RefPtr window = document->domWindow())
             window->incrementScrollEventListenersCount();
     }
 
@@ -2482,7 +2483,7 @@ static inline bool didRemoveEventListenerOfType(Node& targetNode, const AtomStri
 
 #if PLATFORM(IOS_FAMILY)
     if (&targetNode == document.ptr() && typeInfo.type() == EventType::scroll) {
-        if (auto* window = document->domWindow())
+        if (RefPtr window = document->domWindow())
             window->decrementScrollEventListenersCount();
     }
 
@@ -2537,9 +2538,9 @@ WeakHashSet<MutationObserverRegistration>* Node::transientMutationObserverRegist
     return &data->transientRegistry;
 }
 
-HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMutationObservers(MutationObserverOptionType type, const QualifiedName* attributeName)
+UncheckedKeyHashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMutationObservers(MutationObserverOptionType type, const QualifiedName* attributeName)
 {
-    HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> observers;
+    UncheckedKeyHashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> observers;
     ASSERT((type == MutationObserverOptionType::Attributes && attributeName) || !attributeName);
 
     auto collectMatchingObserversForMutation = [&](MutationObserverRegistration& registration) {
@@ -2695,7 +2696,7 @@ void Node::defaultEventHandler(Event& event)
 #if ENABLE(CONTEXT_MENUS)
     case EventType::contextmenu:
         if (RefPtr frame = document().frame()) {
-            if (auto* page = frame->page())
+            if (RefPtr page = frame->page())
                 page->contextMenuController().handleContextMenuEvent(event);
         }
         break;

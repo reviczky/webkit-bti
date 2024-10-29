@@ -32,12 +32,12 @@ namespace Layout {
 
 class InlineItem;
 
-enum class LineEndingEllipsisPolicy : uint8_t {
-    NoEllipsis,
+using InlineBoxBoundaryTextSpacings = WTF::HashMap<size_t, float, DefaultHash<size_t>, WTF::UnsignedWithZeroKeyHashTraits<size_t>>;
+
+enum class LineEndingTruncationPolicy : uint8_t {
+    NoTruncation,
     WhenContentOverflowsInInlineDirection,
-    WhenContentOverflowsInBlockDirection,
-    // FIXME: This should be used when we realize the last line of this IFC is where the content is truncated (sibling IFC has more lines).
-    Always
+    WhenContentOverflowsInBlockDirection
 };
 
 struct ExpansionInfo {

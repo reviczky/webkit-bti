@@ -26,14 +26,19 @@
 #include "config.h"
 #include "NetworkTransportReceiveStream.h"
 
-#include "NetworkTransportSession.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkTransportReceiveStream);
 
-NetworkTransportReceiveStream::NetworkTransportReceiveStream(NetworkTransportSession& session)
-    : m_session(session) { }
+#if !PLATFORM(COCOA)
+NetworkTransportReceiveStream::NetworkTransportReceiveStream()
+    : m_identifier(WebTransportStreamIdentifier::generate())
+{
+}
+#endif
+
+NetworkTransportReceiveStream::~NetworkTransportReceiveStream() = default;
 
 }

@@ -28,6 +28,7 @@
 #include "CSSPendingSubstitutionValue.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSPropertyNames.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserHelpers.h"
 #include "CSSValueKeywords.h"
 #include "CSSValueList.h"
@@ -69,7 +70,7 @@ String serializeLonghandValue(CSSPropertyID property, const CSSValue& value)
         // FIXME: Handle this when creating the CSSValue for opacity, to be consistent with other CSS value serialization quirks.
         // Opacity percentage values serialize as a fraction in the range 0-1, not "%".
         if (auto* primitive = dynamicDowncast<CSSPrimitiveValue>(value); primitive && primitive->isPercentage())
-            return makeString(primitive->doubleValue() / 100);
+            return makeString(primitive->resolveAsPercentageDeprecated() / 100);
         break;
     default:
         break;
@@ -364,7 +365,7 @@ bool StyleProperties::mayDependOnBaseURL() const
     return false;
 }
 
-void StyleProperties::setReplacementURLForSubresources(const HashMap<String, String>& replacementURLStrings)
+void StyleProperties::setReplacementURLForSubresources(const UncheckedKeyHashMap<String, String>& replacementURLStrings)
 {
     for (auto property : *this)
         property.value()->setReplacementURLForSubresources(replacementURLStrings);
@@ -411,7 +412,7 @@ CSSStyleDeclaration& MutableStyleProperties::ensureCSSStyleDeclaration()
         ASSERT(!m_cssomWrapper->parentElement());
         return *m_cssomWrapper;
     }
-    m_cssomWrapper = makeUnique<PropertySetCSSStyleDeclaration>(*this);
+    m_cssomWrapper = makeUniqueWithoutRefCountedCheck<PropertySetCSSStyleDeclaration>(*this);
     return *m_cssomWrapper;
 }
 

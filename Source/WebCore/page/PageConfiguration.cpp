@@ -44,7 +44,6 @@
 #include "HistoryItem.h"
 #include "InspectorClient.h"
 #include "LocalFrameLoaderClient.h"
-#include "MediaRecorderProvider.h"
 #include "ModelPlayerProvider.h"
 #include "PerformanceLoggingClient.h"
 #include "PluginInfoProvider.h"
@@ -61,6 +60,7 @@
 #include "ValidationMessageClient.h"
 #include "VisitedLinkStore.h"
 #include "WebRTCProvider.h"
+#include <wtf/TZoneMallocInlines.h>
 #if ENABLE(WEB_AUTHN)
 #include "AuthenticatorCoordinatorClient.h"
 #include "CredentialRequestCoordinatorClient.h"
@@ -70,6 +70,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PageConfiguration);
 
 PageConfiguration::PageConfiguration(
     std::optional<PageIdentifier> identifier,
@@ -82,11 +84,10 @@ PageConfiguration::PageConfiguration(
     Ref<BackForwardClient>&& backForwardClient,
     Ref<CookieJar>&& cookieJar,
     UniqueRef<ProgressTrackerClient>&& progressTrackerClient,
-    ClientCreatorForMainFrame&& clientCreatorForMainFrame,
+    MainFrameCreationParameters&& mainFrameCreationParameters,
     FrameIdentifier mainFrameIdentifier,
     RefPtr<Frame>&& mainFrameOpener,
     UniqueRef<SpeechRecognitionProvider>&& speechRecognitionProvider,
-    UniqueRef<MediaRecorderProvider>&& mediaRecorderProvider,
     Ref<BroadcastChannelRegistry>&& broadcastChannelRegistry,
     UniqueRef<StorageProvider>&& storageProvider,
     UniqueRef<ModelPlayerProvider>&& modelPlayerProvider,
@@ -116,14 +117,13 @@ PageConfiguration::PageConfiguration(
     , progressTrackerClient(WTFMove(progressTrackerClient))
     , backForwardClient(WTFMove(backForwardClient))
     , cookieJar(WTFMove(cookieJar))
-    , clientCreatorForMainFrame(WTFMove(clientCreatorForMainFrame))
+    , mainFrameCreationParameters(WTFMove(mainFrameCreationParameters))
     , mainFrameIdentifier(WTFMove(mainFrameIdentifier))
     , mainFrameOpener(WTFMove(mainFrameOpener))
     , cacheStorageProvider(WTFMove(cacheStorageProvider))
     , userContentProvider(WTFMove(userContentProvider))
     , broadcastChannelRegistry(WTFMove(broadcastChannelRegistry))
     , speechRecognitionProvider(WTFMove(speechRecognitionProvider))
-    , mediaRecorderProvider(WTFMove(mediaRecorderProvider))
     , storageProvider(WTFMove(storageProvider))
     , modelPlayerProvider(WTFMove(modelPlayerProvider))
     , badgeClient(WTFMove(badgeClient))

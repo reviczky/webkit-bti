@@ -57,7 +57,7 @@ struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     void* styleSheetList;
     void* styleScope;
     void* slotAssignment;
-    std::optional<HashMap<AtomString, AtomString>> partMappings;
+    std::optional<UncheckedKeyHashMap<AtomString, AtomString>> partMappings;
 };
 
 static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
@@ -137,7 +137,7 @@ void ShadowRoot::removedFromAncestor(RemovalType removalType, ContainerNode& old
 {
     DocumentFragment::removedFromAncestor(removalType, oldParentOfRemovedTree);
     if (removalType.disconnectedFromDocument)
-        RefAllowingPartiallyDestroyed<Document> { document() }->didRemoveInDocumentShadowRoot(*this);
+        Ref<Document> { document() }->didRemoveInDocumentShadowRoot(*this);
 }
 
 void ShadowRoot::childrenChanged(const ChildChange& childChange)

@@ -164,8 +164,10 @@ void RenderMathMLMenclose::computePreferredLogicalWidths()
 
     LayoutUnit preferredWidth = preferredLogicalWidthOfRowItems();
     SpaceAroundContent space = spaceAroundContent(preferredWidth, 0);
-    preferredWidth += space.left + space.right + borderAndPaddingLogicalWidth();
+    preferredWidth += space.left + space.right;
     m_maxPreferredLogicalWidth = m_minPreferredLogicalWidth = preferredWidth;
+
+    adjustPreferredLogicalWidthsForBorderAndPadding();
 
     setPreferredLogicalWidthsDirty(false);
 }
@@ -174,8 +176,12 @@ void RenderMathMLMenclose::layoutBlock(bool relayoutChildren, LayoutUnit)
 {
     ASSERT(needsLayout());
 
+    insertPositionedChildrenIntoContainingBlock();
+
     if (!relayoutChildren && simplifiedLayout())
         return;
+
+    layoutFloatingChildren();
 
     recomputeLogicalWidth();
     computeAndSetBlockDirectionMarginsOfChildren();
@@ -186,15 +192,14 @@ void RenderMathMLMenclose::layoutBlock(bool relayoutChildren, LayoutUnit)
     layoutRowItems(contentWidth, contentAscent);
 
     SpaceAroundContent space = spaceAroundContent(contentWidth, contentAscent + contentDescent);
-    space.left += borderLeft() + paddingLeft();
-    space.right += borderRight() + paddingRight();
-    space.top += borderAndPaddingBefore();
-    space.bottom += borderAndPaddingAfter();
     setLogicalWidth(space.left + contentWidth + space.right);
     setLogicalHeight(space.top + contentAscent + contentDescent + space.bottom);
-    shiftRowItems(space.left, space.top);
+    shiftInFlowChildren(space.left, space.top);
 
     m_contentRect = LayoutRect(space.left, space.top, contentWidth, contentAscent + contentDescent);
+
+    adjustLayoutForBorderAndPadding();
+    m_contentRect.moveBy(LayoutPoint(borderLeft() + paddingLeft(), borderAndPaddingBefore()));
 
     layoutPositionedObjects(relayoutChildren);
 

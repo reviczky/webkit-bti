@@ -79,7 +79,6 @@ public:
     AccessibilityObject* previousSibling() const final;
     AccessibilityObject* nextSibling() const final;
     AccessibilityObject* parentObject() const override;
-    AccessibilityObject* parentObjectIfExists() const override;
     AccessibilityObject* observableObject() const override;
     AXCoreObject* titleUIElement() const override;
 
@@ -137,7 +136,6 @@ public:
     
     String secureFieldValue() const override;
     void labelText(Vector<AccessibilityText>&) const override;
-
 protected:
     explicit AccessibilityRenderObject(RenderObject&);
     explicit AccessibilityRenderObject(Node&);
@@ -149,7 +147,7 @@ protected:
 
     bool shouldIgnoreAttributeRole() const override;
     AccessibilityRole determineAccessibilityRole() override;
-    bool computeAccessibilityIsIgnored() const override;
+    bool computeIsIgnored() const override;
 
 #if ENABLE(MATHML)
     virtual bool isIgnoredElementWithinMathTree() const;
@@ -171,9 +169,7 @@ private:
 
     bool renderObjectIsObservable(RenderObject&) const;
     RenderObject* renderParentObject() const;
-#if USE(ATSPI)
     RenderObject* markerRenderer() const;
-#endif
 
     bool isSVGImage() const;
     void detachRemoteSVGRoot();
@@ -183,25 +179,25 @@ private:
     void offsetBoundingBoxForRemoteSVGElement(LayoutRect&) const;
     bool supportsPath() const override;
 
+#if USE(ATSPI)
     void addNodeOnlyChildren();
+    void addCanvasChildren();
+#endif // USE(ATSPI)
     void addTextFieldChildren();
     void addImageMapChildren();
-    void addCanvasChildren();
     void addAttachmentChildren();
     void addRemoteSVGChildren();
-#if USE(ATSPI)
     void addListItemMarker();
-#endif
 #if PLATFORM(COCOA)
     void updateAttachmentViewParents();
 #endif
     String expandedTextValue() const override;
     bool supportsExpandedTextValue() const override;
-    virtual void updateRoleAfterChildrenCreation();
+    void updateRoleAfterChildrenCreation();
 
     bool inheritsPresentationalRole() const override;
 
-    bool shouldGetTextFromNode(TextUnderElementMode) const;
+    bool shouldGetTextFromNode(const TextUnderElementMode&) const;
 
 #if ENABLE(APPLE_PAY)
     bool isApplePayButton() const;

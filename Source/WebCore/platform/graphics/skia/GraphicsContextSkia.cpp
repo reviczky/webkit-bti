@@ -53,7 +53,7 @@ IGNORE_CLANG_WARNINGS_END
 #include <wtf/MathExtras.h>
 
 #if USE(THEME_ADWAITA)
-#include "ThemeAdwaita.h"
+#include "Adwaita.h"
 #endif
 
 namespace WebCore {
@@ -610,7 +610,7 @@ void GraphicsContextSkia::clipToImageBuffer(ImageBuffer& buffer, const FloatRect
 void GraphicsContextSkia::drawFocusRing(const Path& path, float, const Color& color)
 {
 #if USE(THEME_ADWAITA)
-    ThemeAdwaita::paintFocus(*this, path, color);
+    Adwaita::paintFocus(*this, path, color);
 #else
     notImplemented();
     UNUSED_PARAM(path);
@@ -621,7 +621,7 @@ void GraphicsContextSkia::drawFocusRing(const Path& path, float, const Color& co
 void GraphicsContextSkia::drawFocusRing(const Vector<FloatRect>& rects, float, float, const Color& color)
 {
 #if USE(THEME_ADWAITA)
-    ThemeAdwaita::paintFocus(*this, rects, color);
+    Adwaita::paintFocus(*this, rects, color);
 #else
     notImplemented();
     UNUSED_PARAM(rects);

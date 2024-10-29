@@ -122,7 +122,7 @@ private:
     id<MTLIndirectRenderCommand> currentRenderCommand();
 
     void makeInvalid(NSString* = nil);
-    bool executePreDrawCommands(bool passWasSplit);
+    bool executePreDrawCommands(bool passWasSplit, uint32_t firstInstance = 0, uint32_t instanceCount = 0);
     void endCurrentICB();
     bool addResource(RenderBundle::ResourcesContainer*, id<MTLResource>, ResourceUsageAndRenderStage*);
     bool addResource(RenderBundle::ResourcesContainer*, id<MTLResource>, MTLRenderStages, const BindGroupEntryUsageData::Resource&);
@@ -195,7 +195,6 @@ private:
     Vector<WGPUTextureFormat> m_descriptorColorFormats;
     NSString* m_lastErrorString { nil };
     bool m_requiresCommandReplay { false };
-    bool m_requiresMetalWorkaround { true };
     bool m_finished { false };
     uint32_t m_sampleMask { defaultSampleMask };
 };

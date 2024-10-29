@@ -286,15 +286,19 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
         bool overridden = o.style().borderImage().overridesBorderWidths();
         if (box->isFieldset()) {
             const auto& block = downcast<RenderBlock>(*box);
-            if (o.style().blockFlowDirection() == BlockFlowDirection::TopToBottom)
+            switch (o.writingMode().blockDirection()) {
+            case FlowDirection::TopToBottom:
                 borderTop -= block.intrinsicBorderForFieldset();
-            else if (o.style().blockFlowDirection() == BlockFlowDirection::BottomToTop)
+                break;
+            case FlowDirection::BottomToTop:
                 borderBottom -= block.intrinsicBorderForFieldset();
-            else if (o.style().blockFlowDirection() == BlockFlowDirection::LeftToRight)
+                break;
+            case FlowDirection::LeftToRight:
                 borderLeft -= block.intrinsicBorderForFieldset();
-            else if (o.style().blockFlowDirection() == BlockFlowDirection::RightToLeft)
+                break;
+            case FlowDirection::RightToLeft:
                 borderRight -= block.intrinsicBorderForFieldset();
-            
+            }
         }
         if (borderTop || borderRight || borderBottom || borderLeft) {
             ts << " [border:";
@@ -664,6 +668,7 @@ static void writeLayers(TextStream& ts, const RenderLayer& rootLayer, RenderLaye
         paintDirtyRect.setWidth(std::max<LayoutUnit>(paintDirtyRect.width(), rootLayer.renderBox()->layoutOverflowRect().maxX()));
         paintDirtyRect.setHeight(std::max<LayoutUnit>(paintDirtyRect.height(), rootLayer.renderBox()->layoutOverflowRect().maxY()));
         layer.setSize(layer.size().expandedTo(snappedIntSize(maxLayoutOverflow(layer.renderBox()), LayoutPoint(0, 0))));
+        layer.setNeedsPositionUpdate();
     }
     
     // Calculate the clip rects we should use.

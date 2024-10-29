@@ -58,8 +58,11 @@ namespace WebCore {
 class CaptureDevice;
 class NowPlayingManager;
 class SecurityOriginData;
+
 struct MockMediaDevice;
 struct ScreenProperties;
+
+enum class VideoFrameRotation : uint16_t;
 }
 
 namespace WebKit {
@@ -71,14 +74,16 @@ struct GPUProcessCreationParameters;
 struct GPUProcessSessionParameters;
 struct SharedPreferencesForWebProcess;
 
-class GPUProcess : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess> {
+class GPUProcess final : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess> {
     WTF_MAKE_NONCOPYABLE(GPUProcess);
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(GPUProcess);
 public:
     GPUProcess();
     ~GPUProcess();
 
     static GPUProcess& singleton();
-    static constexpr WebCore::AuxiliaryProcessType processType = WebCore::AuxiliaryProcessType::GPU;
+    static constexpr WTF::AuxiliaryProcessType processType = WTF::AuxiliaryProcessType::GPU;
 
     void removeGPUConnectionToWebProcess(GPUConnectionToWebProcess&);
 
@@ -97,6 +102,7 @@ public:
 
 #if ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)
     RemoteAudioSessionProxyManager& audioSessionManager() const;
+    Ref<RemoteAudioSessionProxyManager> protectedAudioSessionManager() const;
 #endif
 
     WebCore::NowPlayingManager& nowPlayingManager();
@@ -149,7 +155,6 @@ private:
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    void didReceiveGPUProcessMessage(IPC::Connection&, IPC::Decoder&);
 
     // Message Handlers
     void initializeGPUProcess(GPUProcessCreationParameters&&, CompletionHandler<void()>&&);
@@ -167,7 +172,9 @@ private:
 #if ENABLE(MEDIA_STREAM)
     void setMockCaptureDevicesEnabled(bool);
     void setUseSCContentSharingPicker(bool);
+    void enableMicrophoneMuteStatusAPI();
     void setOrientationForMediaCapture(WebCore::IntDegrees);
+    void rotationAngleForCaptureDeviceChanged(const String&, WebCore::VideoFrameRotation);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, CompletionHandler<void()>&&);
     void updateCaptureOrigin(const WebCore::SecurityOriginData&, WebCore::ProcessIdentifier);
     void addMockMediaDevice(const WebCore::MockMediaDevice&);
@@ -177,6 +184,7 @@ private:
     void resetMockMediaDevices();
     void setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool isMicrophoneInterrupted);
     void triggerMockCaptureConfigurationChange(bool forMicrophone, bool forDisplay);
+    void setShouldListenToVoiceActivity(bool);
 #endif
 #if HAVE(SCREEN_CAPTURE_KIT)
     void promptForGetDisplayMedia(WebCore::DisplayCapturePromptType, CompletionHandler<void(std::optional<WebCore::CaptureDevice>)>&&);
@@ -246,7 +254,7 @@ private:
     String m_uiProcessName;
 #endif
 #if ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)
-    mutable std::unique_ptr<RemoteAudioSessionProxyManager> m_audioSessionManager;
+    mutable RefPtr<RemoteAudioSessionProxyManager> m_audioSessionManager;
 #endif
 #if ENABLE(WEBXR)
     std::optional<WebCore::ProcessIdentity> m_processIdentity;

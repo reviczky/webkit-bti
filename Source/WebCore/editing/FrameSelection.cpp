@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2015 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -85,6 +86,7 @@
 #include "TypingCommand.h"
 #include "VisibleUnits.h"
 #include <stdio.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/TextStream.h>
 
@@ -98,6 +100,10 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(CaretBase);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DragCaretController);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FrameSelection);
 
 using namespace HTMLNames;
 
@@ -204,14 +210,19 @@ FrameSelection::FrameSelection(Document* document)
         m_selection.setIsDirectional(true);
 
     bool activeAndFocused = isFocusedAndActive();
-    if (activeAndFocused)
-        setSelectionFromNone();
+
 #if USE(UIKIT_EDITING)
-    // Caret blinking (blinks | does not blink)
-    setCaretVisible(activeAndFocused);
+    constexpr auto shouldUpdateAppearance = ShouldUpdateAppearance::Yes;
 #else
-    setCaretVisibility(activeAndFocused ? CaretVisibility::Visible : CaretVisibility::Hidden, ShouldUpdateAppearance::No);
+    constexpr auto shouldUpdateAppearance = ShouldUpdateAppearance::No;
 #endif
+
+    // Caret blinking (blinks | does not blink)
+    if (activeAndFocused) {
+        setSelectionFromNone();
+        removeCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive, shouldUpdateAppearance);
+    } else
+        addCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive, shouldUpdateAppearance);
 }
 
 FrameSelection::~FrameSelection() = default;
@@ -2274,9 +2285,11 @@ void FrameSelection::focusedOrActiveStateChanged()
 
 #if USE(UIKIT_EDITING)
     // Caret blinking (blinks | does not blink)
-    if (activeAndFocused)
+    if (activeAndFocused) {
         setSelectionFromNone();
-    setCaretVisible(activeAndFocused);
+        removeCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive);
+    } else
+        addCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive);
 #else
     // Because RenderObject::selectionBackgroundColor() and
     // RenderObject::selectionForegroundColor() check if the frame is active,
@@ -2285,9 +2298,11 @@ void FrameSelection::focusedOrActiveStateChanged()
         view->selection().repaint();
 
     // Caret appears in the active frame.
-    if (activeAndFocused)
+    if (activeAndFocused) {
         setSelectionFromNone();
-    setCaretVisibility(activeAndFocused ? CaretVisibility::Visible : CaretVisibility::Hidden, ShouldUpdateAppearance::Yes);
+        removeCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive);
+    } else
+        addCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason::IsNotFocusedOrActive);
 #endif
 }
 
@@ -2421,8 +2436,22 @@ void FrameSelection::updateAppearance()
     }
 }
 
-void FrameSelection::setCaretVisibility(CaretVisibility visibility, ShouldUpdateAppearance doAppearanceUpdate)
+void FrameSelection::addCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason reason, ShouldUpdateAppearance doAppearanceUpdate)
 {
+    m_caretVisibilitySuppressionReasons.add(reason);
+    updateCaretVisibility(doAppearanceUpdate);
+}
+
+void FrameSelection::removeCaretVisibilitySuppressionReason(CaretVisibilitySuppressionReason reason, ShouldUpdateAppearance doAppearanceUpdate)
+{
+    m_caretVisibilitySuppressionReasons.remove(reason);
+    updateCaretVisibility(doAppearanceUpdate);
+}
+
+void FrameSelection::updateCaretVisibility(ShouldUpdateAppearance doAppearanceUpdate)
+{
+    auto visibility = m_caretVisibilitySuppressionReasons.isEmpty() ? CaretVisibility::Visible : CaretVisibility::Hidden;
+
     if (caretVisibility() == visibility)
         return;
 
@@ -2647,6 +2676,7 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
     // FIXME: This code only handles scrolling the startContainer's layer, but
     // the selection rect could intersect more than just that.
     // See <rdar://problem/4799899>.
+    m_document->frame()->view()->setWasScrolledByUser(true);
     LocalFrameView::scrollRectToVisible(rect, *start.deprecatedNode()->renderer(), insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes, scrollBehavior });
     updateAppearance();
 

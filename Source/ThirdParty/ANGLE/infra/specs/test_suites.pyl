@@ -241,6 +241,21 @@
       },
     },
 
+    'angle_deqp_gles2_webgpu_with_retry_gtests': {
+      'angle_deqp_gles2_webgpu_tests': {
+        'args': [
+          '--use-angle=webgpu',
+          # Flaky crashes. See http://anglebug.com/42265067
+          '--flaky-retries=2',
+        ],
+        'merge': {
+          'script': '//scripts/angle_deqp_test_merge.py',
+        },
+        'test': 'angle_deqp_gles2_tests',
+        'use_isolated_scripts_api': True,
+      },
+    },
+
     'angle_deqp_gles31_565_no_depth_no_stencil_vulkan_gtests': {
       'angle_deqp_gles31_565_no_depth_no_stencil_vulkan_tests':{
         'args': [
@@ -1167,15 +1182,6 @@
       },
     },
 
-    'swangle_deqp_gl46_tests': {
-      'angle_deqp_gl46_tests': {
-        'args': [
-          '--use-angle=swiftshader',
-        ],
-        'use_isolated_scripts_api': True,
-      },
-    },
-
     'swangle_deqp_gles2_slow_tests': {
       'angle_deqp_gles2_tests': {
         'args': [
@@ -1556,7 +1562,7 @@
       'angle_deqp_egl_metal_gtests',
       'angle_deqp_gles2_gl_with_retry_gtests',
       'angle_deqp_gles2_metal_gtests',
-      'angle_deqp_gles2_webgpu_gtests',
+      'angle_deqp_gles2_webgpu_with_retry_gtests',
       'angle_deqp_gles3_gl_with_retry_gtests',
       'angle_deqp_gles3_metal_gtests',
       'angle_end2end_with_retry_gtests',
@@ -1570,7 +1576,6 @@
 
     'swangle_gtests': [
       'swangle_deqp_egl_tests',
-      'swangle_deqp_gl46_tests',
       'swangle_deqp_gles2_tests',
       'swangle_deqp_gles31_multisample_tests',
       'swangle_deqp_gles31_rotate180_tests',
@@ -1613,7 +1618,6 @@
 
     'swangle_slow_gtests': [
       'swangle_deqp_egl_tests',
-      'swangle_deqp_gl46_tests',
       'swangle_deqp_gles2_slow_tests',
       'swangle_deqp_gles31_rotate180_tests',
       'swangle_deqp_gles31_rotate270_tests',

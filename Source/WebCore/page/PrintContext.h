@@ -24,6 +24,7 @@
 #include "LengthBox.h"
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -39,7 +40,7 @@ class LocalFrame;
 class Node;
 
 class PrintContext : public FrameDestructionObserver {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(PrintContext, WEBCORE_EXPORT);
 public:
     WEBCORE_EXPORT explicit PrintContext(LocalFrame*);
     WEBCORE_EXPORT ~PrintContext();
@@ -110,7 +111,7 @@ private:
     // Used to prevent misuses of begin() and end() (e.g., call end without begin).
     bool m_isPrinting { false };
 
-    std::unique_ptr<HashMap<String, Ref<Element>>> m_linkedDestinations;
+    std::unique_ptr<UncheckedKeyHashMap<String, Ref<Element>>> m_linkedDestinations;
 };
 
 } // namespace WebCore

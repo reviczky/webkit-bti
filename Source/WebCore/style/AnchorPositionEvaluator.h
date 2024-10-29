@@ -24,16 +24,20 @@
 
 #pragma once
 
-#include "CSSAnchorValue.h"
+#include "CSSCalcTree.h"
 #include "EventTarget.h"
-#include <memory>
+#include "LayoutUnit.h"
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
+#include <wtf/text/AtomStringHash.h>
 
 namespace WebCore {
 
+class Document;
 class Element;
+class RenderBoxModelObject;
 
 namespace Style {
 
@@ -41,26 +45,36 @@ class BuilderState;
 
 enum class AnchorPositionResolutionStage : uint8_t {
     Initial,
-    FinishedCollectingAnchorNames,
     FoundAnchors,
     Resolved,
+    Positioned,
 };
 
+using AnchorElements = HashMap<AtomString, WeakRef<Element, WeakPtrImplWithEventTargetData>>;
+
 struct AnchorPositionedState {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AnchorPositionedState);
 public:
-    HashMap<String, WeakRef<Element, WeakPtrImplWithEventTargetData>> anchorElements;
-    HashSet<String> anchorNames;
+    AnchorElements anchorElements;
+    HashSet<AtomString> anchorNames;
     AnchorPositionResolutionStage stage;
 };
 
-using AnchorsForAnchorName = HashMap<String, Vector<WeakRef<Element, WeakPtrImplWithEventTargetData>>>;
+using AnchorsForAnchorName = HashMap<AtomString, Vector<SingleThreadWeakRef<const RenderBoxModelObject>>>;
+
 using AnchorPositionedStates = WeakHashMap<Element, std::unique_ptr<AnchorPositionedState>, WeakPtrImplWithEventTargetData>;
 
 class AnchorPositionEvaluator {
 public:
-    static Length resolveAnchorValue(const BuilderState&, const CSSAnchorValue&);
-    static void findAnchorsForAnchorPositionedElement(Ref<const Element> anchorPositionedElement);
+    using Side = std::variant<CSSValueID, double>;
+    static std::optional<double> evaluate(const BuilderState&, AtomString elementName, Side);
+
+    static void updateAnchorPositioningStatesAfterInterleavedLayout(const Document&);
+    static void cleanupAnchorPositionedState(Element&);
+    static void updateSnapshottedScrollOffsets(Document&);
+
+private:
+    static AnchorElements findAnchorsForAnchorPositionedElement(const Element&, const HashSet<AtomString>& anchorNames, const AnchorsForAnchorName&);
 };
 
 } // namespace Style

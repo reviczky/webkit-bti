@@ -54,6 +54,7 @@ public:
 
     RemoteGPUProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent->root(); }
+    Ref<RemoteGPUProxy> protectedRoot() { return m_parent->root(); }
 
     void present(bool = false) final;
 
@@ -68,12 +69,14 @@ private:
     RemotePresentationContextProxy& operator=(RemotePresentationContextProxy&&) = delete;
 
     WebGPUIdentifier backing() const { return m_backing; }
-    RefPtr<WebCore::NativeImage> getMetalTextureAsNativeImage(uint32_t) final;
+    Ref<ConvertToBackingContext> protectedConvertToBackingContext() const;
+
+    RefPtr<WebCore::NativeImage> getMetalTextureAsNativeImage(uint32_t, bool& isIOSurfaceSupportedFormat) final;
 
     template<typename T>
     WARN_UNUSED_RETURN IPC::Error send(T&& message)
     {
-        return root().streamClientConnection().send(WTFMove(message), backing());
+        return root().protectedStreamClientConnection()->send(WTFMove(message), backing());
     }
 
     bool configure(const WebCore::WebGPU::CanvasConfiguration&) final;

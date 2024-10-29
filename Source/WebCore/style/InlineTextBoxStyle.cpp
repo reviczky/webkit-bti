@@ -118,7 +118,7 @@ static const RenderElement* enclosingRendererWithTextDecoration(const RenderText
 
 static float boxOffsetFromBottomMost(const InlineIterator::LineBoxIterator& lineBox, const RenderElement& decoratingInlineBoxRenderer, float boxLogicalTop, float boxLogicalBottom)
 {
-    if (decoratingInlineBoxRenderer.style().isFlippedLinesWritingMode())
+    if (decoratingInlineBoxRenderer.writingMode().isLineInverted())
         return boxLogicalTop - minLogicalTopForTextDecorationLineUnder(lineBox, boxLogicalTop, decoratingInlineBoxRenderer);
     return maxLogicalBottomForTextDecorationLineUnder(lineBox, boxLogicalBottom, decoratingInlineBoxRenderer) - boxLogicalBottom;
 }
@@ -160,18 +160,18 @@ static float computedUnderlineOffset(const UnderlineOffsetArguments& context)
         if (textUnderlinePosition.contains(TextUnderlinePosition::Right)) {
             ASSERT(!textUnderlinePosition.contains(TextUnderlinePosition::Left));
             // In vertical typographic modes, the underline is aligned as for under, except it is always aligned to the right edge of the text.
-            underlineOffset = 0.f - (styleToUse.textUnderlineOffset().lengthOr(0.f) + defaultGap(styleToUse));
+            underlineOffset = 0.f - (styleToUse.textUnderlineOffset().resolve(styleToUse.computedFontSize()) + defaultGap(styleToUse));
         } else {
             // Position underline relative to the bottom edge of the lowest element's content box.
             auto desiredOffset = context.textUnderlinePositionUnder->textRunLogicalHeight + std::max(context.textUnderlinePositionUnder->textRunOffsetFromBottomMost, 0.f);
-            desiredOffset += styleToUse.textUnderlineOffset().lengthOr(0.f) + defaultGap(styleToUse);
+            desiredOffset += styleToUse.textUnderlineOffset().resolve(styleToUse.computedFontSize()) + defaultGap(styleToUse);
             underlineOffset = std::max<float>(desiredOffset, fontMetrics.intAscent());
         }
     } else if (textUnderlinePosition.contains(TextUnderlinePosition::FromFont)) {
         ASSERT(!textUnderlinePosition.contains(TextUnderlinePosition::Under));
-        underlineOffset = fontMetrics.intAscent() + fontMetrics.underlinePosition().value_or(0) + styleToUse.textUnderlineOffset().lengthOr(0.f);
+        underlineOffset = fontMetrics.intAscent() + fontMetrics.underlinePosition().value_or(0) + styleToUse.textUnderlineOffset().resolve(styleToUse.computedFontSize());
     } else
-        underlineOffset = fontMetrics.intAscent() + styleToUse.textUnderlineOffset().lengthOr(defaultGap(styleToUse));
+        underlineOffset = fontMetrics.intAscent() + styleToUse.textUnderlineOffset().resolve(styleToUse.computedFontSize(), defaultGap(styleToUse));
     return underlineOffset;
 }
 
@@ -256,7 +256,8 @@ bool isAlignedForUnder(const RenderStyle& decoratingBoxStyle)
     auto underlinePosition = decoratingBoxStyle.textUnderlinePosition();
     if (underlinePosition.contains(TextUnderlinePosition::Under))
         return true;
-    if (decoratingBoxStyle.typographicMode() == TypographicMode::Horizontal || decoratingBoxStyle.textOrientation() == TextOrientation::Sideways)
+    if (!decoratingBoxStyle.writingMode().isVerticalTypographic()
+        || decoratingBoxStyle.writingMode().isSidewaysOrientation())
         return false;
     if (underlinePosition.contains(TextUnderlinePosition::Left) || underlinePosition.contains(TextUnderlinePosition::Right)) {
         // In vertical typographic modes, the underline is aligned as for under for 'left' and 'right'.
@@ -318,17 +319,14 @@ float underlineOffsetForTextBoxPainting(const InlineIterator::InlineBox& inlineB
 
 float overlineOffsetForTextBoxPainting(const InlineIterator::InlineBox& inlineBox, const RenderStyle& style)
 {
-    if (style.typographicMode() == TypographicMode::Horizontal || style.textOrientation() == TextOrientation::Sideways)
+    if (!style.writingMode().isVerticalTypographic())
         return { };
 
+    // If 'right' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
     auto underlinePosition = style.textUnderlinePosition();
-    auto overBecomesUnder = [&] {
-        // If 'right' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
-        if (underlinePosition.contains(TextUnderlinePosition::Right))
-            return style.typographicMode() == TypographicMode::Vertical || style.blockFlowDirection() == BlockFlowDirection::RightToLeft;
-        return false;
-    };
-    return overBecomesUnder() ? inlineBoxContentBoxHeight(inlineBox) + defaultGap(style) : (0.f - defaultGap(style));
+    return underlinePosition.contains(TextUnderlinePosition::Right)
+        ? inlineBoxContentBoxHeight(inlineBox) + defaultGap(style)
+        : (0.f - defaultGap(style));
 }
 
 }

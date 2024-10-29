@@ -32,6 +32,8 @@
 #include <wtf/Forward.h>
 #include <wtf/Vector.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 ALLOW_COMMA_BEGIN
 
 #include <webrtc/rtc_base/socket_address.h>
@@ -39,9 +41,19 @@ ALLOW_COMMA_BEGIN
 
 ALLOW_COMMA_END
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+
 namespace WebKit {
 
 namespace RTC::Network {
+
+// This enums corresponds to rtc::EcnMarking.
+enum class EcnMarking : int {
+    kNotEct = 0, // Not ECN-Capable Transport
+    kEct1 = 1, // ECN-Capable Transport
+    kEct0 = 2, // Not used by L4s (or webrtc.)
+    kCe = 3, // Congestion experienced
+};
 
 struct IPAddress {
     struct UnspecifiedFamily { };

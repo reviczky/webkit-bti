@@ -89,10 +89,8 @@ RenderEmbeddedObject::RenderEmbeddedObject(HTMLFrameOwnerElement& element, Rende
     ASSERT(isRenderEmbeddedObject());
 }
 
-RenderEmbeddedObject::~RenderEmbeddedObject()
-{
-    // Do not add any code here. Add it to willBeDestroyed() instead.
-}
+// Do not add any code in below destructor. Add it to willBeDestroyed() instead.
+RenderEmbeddedObject::~RenderEmbeddedObject() = default;
 
 void RenderEmbeddedObject::willBeDestroyed()
 {
@@ -128,11 +126,11 @@ bool RenderEmbeddedObject::usesAsyncScrolling() const
     return pluginViewBase->usesAsyncScrolling();
 }
 
-ScrollingNodeID RenderEmbeddedObject::scrollingNodeID() const
+std::optional<ScrollingNodeID> RenderEmbeddedObject::scrollingNodeID() const
 {
     RefPtr pluginViewBase = dynamicDowncast<PluginViewBase>(widget());
     if (!pluginViewBase)
-        return { };
+        return std::nullopt;
     return pluginViewBase->scrollingNodeID();
 }
 

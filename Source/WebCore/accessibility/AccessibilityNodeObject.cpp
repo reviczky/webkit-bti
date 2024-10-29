@@ -37,6 +37,7 @@
 #include "AccessibilityListBox.h"
 #include "AccessibilitySpinButton.h"
 #include "AccessibilityTable.h"
+#include "ComposedTreeIterator.h"
 #include "DateComponents.h"
 #include "Editing.h"
 #include "ElementAncestorIteratorInlines.h"
@@ -186,11 +187,6 @@ AccessibilityObject* AccessibilityNodeObject::nextSibling() const
     return objectCache ? objectCache->getOrCreate(*nextSibling) : nullptr;
 }
 
-AccessibilityObject* AccessibilityNodeObject::parentObjectIfExists() const
-{
-    return parentObject();
-}
-
 AccessibilityObject* AccessibilityNodeObject::ownerParentObject() const
 {
     auto owners = this->owners();
@@ -200,20 +196,20 @@ AccessibilityObject* AccessibilityNodeObject::ownerParentObject() const
 
 AccessibilityObject* AccessibilityNodeObject::parentObject() const
 {
-    if (!node())
+    RefPtr node = this->node();
+    if (!node)
         return nullptr;
 
     if (auto* ownerParent = ownerParentObject())
         return ownerParent;
 
-    Node* parentObj = node()->parentNode();
-    if (!parentObj)
-        return nullptr;
-
-    if (AXObjectCache* cache = axObjectCache())
-        return cache->getOrCreate(*parentObj);
-
-    return nullptr;
+    CheckedPtr cache = axObjectCache();
+#if !USE(ATSPI)
+    return cache ? cache->getOrCreate(composedParentIgnoringDocumentFragments(*node)) : nullptr;
+#else
+    // FIXME: Consider removing this ATSPI-only branch with https://bugs.webkit.org/show_bug.cgi?id=282117.
+    return cache ? cache->getOrCreate(node->parentNode()) : nullptr;
+#endif // !USE(ATSPI)
 }
 
 LayoutRect AccessibilityNodeObject::checkboxOrRadioRect() const
@@ -249,7 +245,7 @@ LayoutRect AccessibilityNodeObject::boundingBoxRect() const
 {
     if (hasDisplayContents()) {
         LayoutRect contentsRect;
-        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->children(false))
+        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->unignoredChildren(/* updateChildrenIfNeeded */ false))
             contentsRect.unite(child->elementRect());
 
         if (!contentsRect.isEmpty())
@@ -586,7 +582,7 @@ void AccessibilityNodeObject::addChildren()
         m_subtreeDirty = false;
     });
 
-    WeakPtr node = this->node();
+    RefPtr node = this->node();
     if (!node || !canHaveChildren())
         return;
 
@@ -594,12 +590,20 @@ void AccessibilityNodeObject::addChildren()
     if (renderer() && !node->hasTagName(canvasTag))
         return;
 
-    auto objectCache = axObjectCache();
-    if (!objectCache)
+    CheckedPtr cache = axObjectCache();
+    if (!cache)
         return;
 
+#if !USE(ATSPI)
+    if (auto* containerNode = dynamicDowncast<ContainerNode>(*node)) {
+        for (Ref child : composedTreeChildren(*containerNode))
+            addChild(cache->getOrCreate(child.get()));
+    }
+#else
+    // FIXME: Consider removing this ATSPI-only branch with https://bugs.webkit.org/show_bug.cgi?id=282117.
     for (auto* child = node->firstChild(); child; child = child->nextSibling())
-        addChild(objectCache->getOrCreate(*child));
+        addChild(cache->getOrCreate(*child));
+#endif // !USE(ATSPI)
 
     updateOwnedChildren();
 }
@@ -650,14 +654,14 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityNodeObject::visibleChildr
         addChildren();
 
     AccessibilityChildrenVector result;
-    for (const auto& child : children()) {
+    for (const auto& child : unignoredChildren()) {
         if (!child->isOffScreen())
             result.append(child);
     }
     return result;
 }
 
-bool AccessibilityNodeObject::computeAccessibilityIsIgnored() const
+bool AccessibilityNodeObject::computeIsIgnored() const
 {
 #ifndef NDEBUG
     // Double-check that an AccessibilityObject is never accessed before
@@ -1199,9 +1203,6 @@ AXCoreObject* AccessibilityNodeObject::internalLinkElement() const
         return nullptr;
 
     RefPtr linkedNode = document->findAnchor(fragmentIdentifier);
-    if (!linkedNode)
-        return nullptr;
-
     // The element we find may not be accessible, so find the first accessible object.
     return firstAccessibleObjectFromNode(linkedNode.get());
 }
@@ -1741,7 +1742,7 @@ String AccessibilityNodeObject::textAsLabelFor(const AccessibilityObject& labele
 
     if (isAccessibilityLabelInstance()) {
         StringBuilder builder;
-        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->children()) {
+        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->unignoredChildren()) {
             if (child.get() == &labeledObject)
                 continue;
 
@@ -2207,9 +2208,12 @@ void AccessibilityNodeObject::setIsExpanded(bool expand)
 // we should include the inner text of this given descendant object or skip it.
 static bool shouldUseAccessibilityObjectInnerText(AccessibilityObject& object, TextUnderElementMode mode)
 {
+#if USE(ATSPI)
+    // Only ATSPI ever sets IncludeAllChildren.
     // Do not use any heuristic if we are explicitly asking to include all the children.
     if (mode.childrenInclusion == TextUnderElementMode::Children::IncludeAllChildren)
         return true;
+#endif // USE(ATSPI)
 
     // Consider this hypothetical example:
     // <div tabindex=0>
@@ -2317,22 +2321,16 @@ static bool shouldPrependSpace(AXCoreObject& object, AXCoreObject* previousObjec
 
 String AccessibilityNodeObject::textUnderElement(TextUnderElementMode mode) const
 {
-    auto isAriaVisible = [this] () {
-        return Accessibility::findAncestor<AccessibilityObject>(*this, true, [] (const auto& object) {
-            return equalLettersIgnoringASCIICase(object.getAttribute(aria_hiddenAttr), "false"_s);
-        }) != nullptr;
-    };
-
     RefPtr node = this->node();
     if (auto* text = dynamicDowncast<Text>(node.get()))
-        return !mode.isHidden() || isAriaVisible() ? text->wholeText() : emptyString();
+        return !mode.isHidden() ? text->wholeText() : emptyString();
 
     const auto* style = this->style();
     mode.inHiddenSubtree = WebCore::isDOMHidden(style);
     // The Accname specification states that if the current node is hidden, and not directly
     // referenced by aria-labelledby or aria-describedby, and is not a host language text
     // alternative, the empty string should be returned.
-    if (mode.isHidden() && !isAriaVisible() && (node && !ancestorsOfType<HTMLCanvasElement>(*node).first())) {
+    if (mode.isHidden() && node && !ancestorsOfType<HTMLCanvasElement>(*node).first()) {
         if (!labelForObjects().isEmpty() || !descriptionForObjects().isEmpty()) {
             // This object is a hidden label or description for another object, so ignore hidden states for our
             // subtree text under element traversals too.
@@ -2527,7 +2525,7 @@ String AccessibilityNodeObject::stringValue() const
     }
 
     if (isComboBox()) {
-        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->children()) {
+        for (const auto& child : const_cast<AccessibilityNodeObject*>(this)->unignoredChildren()) {
             if (!child->isListBox())
                 continue;
 
@@ -2567,18 +2565,14 @@ DateComponentsType AccessibilityObject::dateTimeComponentsType() const
 
 SRGBA<uint8_t> AccessibilityNodeObject::colorValue() const
 {
-#if !ENABLE(INPUT_TYPE_COLOR)
-    return Color::transparentBlack;
-#else
     if (!isColorWell())
-        return Color::transparentBlack;
+        return Color::black;
 
     RefPtr input = dynamicDowncast<HTMLInputElement>(node());
     if (!input)
-        return Color::transparentBlack;
+        return Color::black;
 
     return input->valueAsColor().toColorTypeLossy<SRGBA<uint8_t>>();
-#endif
 }
 
 // This function implements the ARIA accessible name as described by the Mozilla
@@ -2610,7 +2604,7 @@ static String accessibleNameForNode(Node& node, Node* labelledbyNode)
         if (axObject->isListBox())
             selectedChildren = axObject->selectedChildren();
         else if (axObject->isComboBox()) {
-            for (const auto& child : axObject->children()) {
+            for (const auto& child : axObject->unignoredChildren()) {
                 if (child->isListBox()) {
                     selectedChildren = child->selectedChildren();
                     break;
@@ -2927,14 +2921,14 @@ AccessibilityRole AccessibilityNodeObject::determineAriaRoleAttribute() const
 AccessibilityRole AccessibilityNodeObject::remapAriaRoleDueToParent(AccessibilityRole role) const
 {
     // Some objects change their role based on their parent.
-    // However, asking for the unignoredParent calls accessibilityIsIgnored(), which can trigger a loop.
-    // While inside the call stack of creating an element, we need to avoid accessibilityIsIgnored().
+    // However, asking for the unignoredParent calls isIgnored(), which can trigger a loop.
+    // While inside the call stack of creating an element, we need to avoid isIgnored().
     // https://bugs.webkit.org/show_bug.cgi?id=65174
 
     if (role != AccessibilityRole::ListBoxOption && role != AccessibilityRole::MenuItem)
         return role;
 
-    for (AccessibilityObject* parent = parentObject(); parent && !parent->accessibilityIsIgnored(); parent = parent->parentObject()) {
+    for (AccessibilityObject* parent = parentObject(); parent && !parent->isIgnored(); parent = parent->parentObject()) {
         AccessibilityRole parentAriaRole = parent->ariaRoleAttribute();
 
         // Selects and listboxes both have options as child roles, but they map to different roles within WebCore.

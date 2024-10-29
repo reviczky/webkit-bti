@@ -646,6 +646,7 @@ TextStream& operator<<(TextStream& ts, ItemPosition position)
     case ItemPosition::FlexEnd: ts << "flex-end"; break;
     case ItemPosition::Left: ts << "left"; break;
     case ItemPosition::Right: ts << "right"; break;
+    case ItemPosition::AnchorCenter: ts << "anchor-center"; break;
     }
     return ts;
 }
@@ -940,6 +941,7 @@ TextStream& operator<<(TextStream& ts, RubyPosition position)
     case RubyPosition::Over: ts << "over"; break;
     case RubyPosition::Under: ts << "under"; break;
     case RubyPosition::InterCharacter: ts << "inter-character"; break;
+    case RubyPosition::LegacyInterCharacter: ts << "legacy inter-character"; break;
     }
     return ts;
 }
@@ -951,6 +953,15 @@ TextStream& operator<<(TextStream& ts, RubyAlign alignment)
     case RubyAlign::Center: ts << "center"; break;
     case RubyAlign::SpaceBetween: ts << "space-between"; break;
     case RubyAlign::SpaceAround: ts << "space-around"; break;
+    }
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, RubyOverhang overhang)
+{
+    switch (overhang) {
+    case RubyOverhang::Auto: ts << "auto"; break;
+    case RubyOverhang::None: ts << "none"; break;
     }
     return ts;
 }
@@ -1167,15 +1178,6 @@ TextStream& operator<<(TextStream& ts, TextJustify justify)
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, TextOrientation orientation)
-{
-    switch (orientation) {
-    case TextOrientation::Mixed: ts << "mixed"; break;
-    case TextOrientation::Upright: ts << "upright"; break;
-    case TextOrientation::Sideways: ts << "sideways"; break;
-    }
-    return ts;
-}
 TextStream& operator<<(TextStream& ts, TextOverflow overflow)
 {
     switch (overflow) {
@@ -1291,8 +1293,8 @@ TextStream& operator<<(TextStream& ts, TransformStyle3D transformStyle)
     switch (transformStyle) {
     case TransformStyle3D::Flat: ts << "flat"; break;
     case TransformStyle3D::Preserve3D: ts << "preserve-3d"; break;
-#if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
-    case TransformStyle3D::Optimized3D: ts << "optimized-3d"; break;
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
+    case TransformStyle3D::Separated: ts << "separated"; break;
 #endif
     }
     return ts;
@@ -1415,6 +1417,19 @@ TextStream& operator<<(TextStream& ts, ContainIntrinsicSizeType containIntrinsic
         break;
     case ContainIntrinsicSizeType::AutoAndNone:
         ts << "autoandnone";
+        break;
+    }
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, OverflowContinue overflowContinue)
+{
+    switch (overflowContinue) {
+    case OverflowContinue::Auto:
+        ts << "auto";
+        break;
+    case OverflowContinue::Discard:
+        ts << "discard";
         break;
     }
     return ts;

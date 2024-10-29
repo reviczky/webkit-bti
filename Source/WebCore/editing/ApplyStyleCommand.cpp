@@ -368,7 +368,7 @@ void ApplyStyleCommand::applyRelativeFontStyleChange(EditingStyle* style)
 
     // Store away font size before making any changes to the document.
     // This ensures that changes to one node won't effect another.
-    HashMap<Ref<Node>, float> startingFontSizes;
+    UncheckedKeyHashMap<Ref<Node>, float> startingFontSizes;
     for (auto node = startNode; node != beyondEnd; node = NodeTraversal::next(*node)) {
         RELEASE_ASSERT(node);
         startingFontSizes.set(*node, computedFontSize(node.get()));
@@ -1517,7 +1517,7 @@ float ApplyStyleCommand::computedFontSize(Node* node)
     auto value = ComputedStyleExtractor(node).propertyValue(CSSPropertyFontSize);
     if (!value)
         return 0;
-    return downcast<CSSPrimitiveValue>(*value).floatValue(CSSUnitType::CSS_PX);
+    return downcast<CSSPrimitiveValue>(*value).resolveAsLengthDeprecated();
 }
 
 void ApplyStyleCommand::joinChildTextNodes(Node* node, const Position& start, const Position& end)
