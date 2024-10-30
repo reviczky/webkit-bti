@@ -18,6 +18,8 @@ webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
     - Stop overriding dh_builddeb, running it in parallel used to be a
       problem when we were building without -g1 and had very large debug
       packages.
+  * debian/patches/calctree-static-assert.patch:
+    - Fix static assertion in i386.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 29 Oct 2024 10:38:41 +0100
 
