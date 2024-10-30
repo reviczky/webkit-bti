@@ -361,10 +361,6 @@ override_dh_makeshlibs:
 	$(GTK4_BUILD)  dh_makeshlibs -plibwebkitgtk-6.0-4 -Xinjected-bundle
 	$(GTK4_BUILD)  dh_makeshlibs -plibjavascriptcoregtk-6.0-1 -VNone
 
-override_dh_builddeb:
-	DEB_BUILD_OPTIONS="$(filter-out parallel=%,$(DEB_BUILD_OPTIONS))" \
-		dh_builddeb
-
 override_dh_auto_test:
 
 override_dh_dwz:
