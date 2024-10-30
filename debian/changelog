@@ -1,10 +1,10 @@
-wpewebkit (2.46.3-1) UNRELEASED; urgency=medium
+wpewebkit (2.46.3-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/rules:
     - Disable Skia on loong64 (Closes: #1085312).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 23 Oct 2024 12:47:46 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 30 Oct 2024 22:57:37 +0100
 
 wpewebkit (2.46.2-1) unstable; urgency=medium
 
