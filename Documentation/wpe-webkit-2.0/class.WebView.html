@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.46.2</p>
+        <p>Library Version: 2.46.3</p>
         
       </div>
       
@@ -133,6 +133,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
   
     <a class="method" href="method.WebView.get_default_content_security_policy.html">get_default_content_security_policy</a>
   
+    <a class="method" href="method.WebView.get_display.html">get_display</a>
+  
     <a class="method" href="method.WebView.get_display_capture_state.html">get_display_capture_state</a>
   
     <a class="method" href="method.WebView.get_editor_state.html">get_editor_state</a>
@@ -172,6 +174,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.WebView.get_website_policies.html">get_website_policies</a>
   
     <a class="method" href="method.WebView.get_window_properties.html">get_window_properties</a>
+  
+    <a class="method" href="method.WebView.get_wpe_view.html">get_wpe_view</a>
   
     <a class="method" href="method.WebView.get_zoom_level.html">get_zoom_level</a>
   
@@ -246,6 +250,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="method" href="method.WebView.stop_loading.html">stop_loading</a>
   
     <a class="method" href="method.WebView.terminate_web_process.html">terminate_web_process</a>
+  
+    <a class="method" href="method.WebView.toggle_inspector.html">toggle_inspector</a>
   
     <a class="method" href="method.WebView.try_close.html">try_close</a>
   
@@ -813,6 +819,16 @@ When not provided, the document <span class="caps">URL</span> is&nbsp;used.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.WebView.get_display.html">webkit_web_view_get_display</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WPEDisplay</code> of <code>web_view</code>.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.44</span></p>
+          </div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.WebView.get_display_capture_state.html">webkit_web_view_get_display_capture_state</a></h6>
           <div class="docblock">
             <p>Get the display capture state of a <code>WebKitWebView</code>.</p>
@@ -1010,6 +1026,16 @@ the <code>WebKitWebView</code>.</p>
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.get_wpe_view.html">webkit_web_view_get_wpe_view</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WPEView</code> of <code>web_view</code>.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.44</span></p>
           </div>
         </div>
       
@@ -1382,6 +1408,16 @@ using any cached&nbsp;data.</p>
           </div>
           <div class="docblock">
             <p><span class="emblem available">since: 2.34</span></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.toggle_inspector.html">webkit_web_view_toggle_inspector</a></h6>
+          <div class="docblock">
+            No description available.
+          </div>
+          <div class="docblock">
+            <p></p>
           </div>
         </div>
       
