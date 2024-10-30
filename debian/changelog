@@ -1,4 +1,4 @@
-webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.47.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/watch, debian/gbp.conf:
@@ -21,7 +21,7 @@ webkit2gtk (2.47.1-1) UNRELEASED; urgency=medium
   * debian/patches/calctree-static-assert.patch:
     - Fix static assertion in i386.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 29 Oct 2024 10:38:41 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 30 Oct 2024 18:47:05 +0100
 
 webkit2gtk (2.46.2-1) unstable; urgency=medium
 
