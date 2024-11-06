@@ -28,6 +28,7 @@ webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
   * Revert cmake bump.
   * Use clang 16 for C++23 support, and use it on every architecture.
     The GCC version in bullseye doesn't support c++2b.
+  * Use and link against libc++-16.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Oct 2024 10:36:45 +0200
 

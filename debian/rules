@@ -48,6 +48,8 @@ DH_GENCONTROL_ARGS =
 EXTRA_CMAKE_ARGUMENTS += \
    -DCMAKE_C_COMPILER=clang-16 \
    -DCMAKE_CXX_COMPILER=clang++-16
+CXXFLAGS += -stdlib=libc++ -I/usr/lib/llvm-16/include/c++/v1
+LDFLAGS += -stdlib=libc++ -Wl,-rpath,/usr/lib/llvm-16/lib
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
