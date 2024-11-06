@@ -1,5 +1,6 @@
 webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
 
+  [ Alberto Garcia ]
   * Rebuild for bullseye-security.
   * gcc 10 segfaults when building webkit in amd64 (see #1008098) so use
     clang instead. Keep using gcc in other architectures because clang has
@@ -22,6 +23,9 @@ webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
   * debian/patches/disable-dmabuf.patch:
     - Disable the DMABuf renderer in all cases in bullseye
       (see #1054101).
+
+  [ Emilio Pozuelo Monfort ]
+  * Revert cmake bump.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Oct 2024 10:36:45 +0200
 

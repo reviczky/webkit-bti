@@ -1,0 +1,28 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5d275a5be9..3c448a7f9b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -6,7 +6,7 @@
+ # latter in particular handles loading a bunch of shared CMake definitions
+ # and loading the cross-compilation settings from CMAKE_TOOLCHAIN_FILE.
+ 
+-cmake_minimum_required(VERSION 3.20)
++cmake_minimum_required(VERSION 3.18)
+ project(WebKit)
+ 
+ # -----------------------------------------------------------------------------
+diff --git a/Source/cmake/OptionsCommon.cmake b/Source/cmake/OptionsCommon.cmake
+index 15256505d7..54c6cd9267 100644
+--- a/Source/cmake/OptionsCommon.cmake
++++ b/Source/cmake/OptionsCommon.cmake
+@@ -1,6 +1,7 @@
+-set(CMAKE_CXX_STANDARD 23)
+-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+-set(CMAKE_CXX_EXTENSIONS OFF)
++#set(CMAKE_CXX_STANDARD 23)
++#set(CMAKE_CXX_STANDARD_REQUIRED ON)
++#set(CMAKE_CXX_EXTENSIONS OFF)
++string(APPEND CMAKE_CXX_FLAGS " -std=c++2b")
+ set(CMAKE_EXPERIMENTAL_CXX_MODULE_DYNDEP OFF)
+ 
+ add_definitions(-DBUILDING_WITH_CMAKE=1)
