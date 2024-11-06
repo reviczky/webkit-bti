@@ -44,13 +44,10 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
-# gcc 10 segfaults when building webkit in amd64 (#1008098) so use clang
-# However in i386, mipsel and arm64 clang is the buggy one (#1010329, #1016811)
-ifneq (,$(filter $(DEB_HOST_ARCH),amd64))
-	EXTRA_CMAKE_ARGUMENTS += \
-	   -DCMAKE_C_COMPILER=clang \
-	   -DCMAKE_CXX_COMPILER=clang++
-endif
+# We need clang-16 and libc++-16 for c++2b support
+EXTRA_CMAKE_ARGUMENTS += \
+   -DCMAKE_C_COMPILER=clang-16 \
+   -DCMAKE_CXX_COMPILER=clang++-16
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
