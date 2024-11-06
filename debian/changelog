@@ -29,6 +29,13 @@ webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
   * Use clang 16 for C++23 support, and use it on every architecture.
     The GCC version in bullseye doesn't support c++2b.
   * Use and link against libc++-16.
+  * Add libgstreamer-plugins-bad1.0-dev build-dependency, as required
+    by the new WebKit version. This GStreamer library depends on
+    libunwind-dev and looks for libunwind.pc, but libc++-16-dev depends
+    on libunwind-16-dev, which conflicts/provides libunwind-dev, so we
+    have to use the LLVM library. However, libunwind-16-dev ships no
+    pkg-config file, so we ship our own so that CMake can find it and
+    use the appropriate flags.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Oct 2024 10:36:45 +0200
 

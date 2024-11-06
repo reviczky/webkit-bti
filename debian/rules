@@ -26,6 +26,10 @@ USE_OLD_JSCBIN_PKG=YES
 # Set to YES to build webkit2gtk-driver instead of webkitgtk-webdriver
 USE_OLD_WEBDRIVER_PKG=YES
 
+# GStreamer needs libunwind.pc, but we need to use libunwind-16-dev from LLVM,
+# which doesn't ship a .pc file. So we add our own to workaround it.
+export PKG_CONFIG_PATH = $(CURDIR)/debian/pkgconfig
+
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
