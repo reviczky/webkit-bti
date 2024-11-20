@@ -1,4 +1,4 @@
-webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
+webkit2gtk (2.46.3-1~deb11u1) bullseye-security; urgency=medium
 
   [ Alberto Garcia ]
   * Rebuild for bullseye-security.
@@ -37,7 +37,7 @@ webkit2gtk (2.46.3-1~deb11u0) bullseye-security-UNRELEASED; urgency=medium
     pkg-config file, so we ship our own so that CMake can find it and
     use the appropriate flags.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 14 Oct 2024 10:36:45 +0200
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Wed, 20 Nov 2024 12:53:02 +0100
 
 webkit2gtk (2.46.3-1) unstable; urgency=medium
 
