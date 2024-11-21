@@ -190,7 +190,6 @@ else
 endif
 ifneq ($(ENABLE_GTK4),YES)
 	GTK4_BUILD = @:
-	EXTRA_DH_ARGUMENTS += -N$(LIBWEBKITGTKDOC_PKG)
 else
 	SOUP3_BUILD_DEP=libsoup-3.0-dev,
 	GTK4_BUILD_DEP=libgtk-4-dev,
