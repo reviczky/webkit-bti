@@ -1,8 +1,8 @@
-webkit2gtk (2.46.3-1~deb11u2) UNRELEASED; urgency=medium
+webkit2gtk (2.46.3-1~deb11u2) bullseye-security; urgency=medium
 
   * Enable -doc package.
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 21 Nov 2024 16:45:44 +0100
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 21 Nov 2024 21:45:36 +0100
 
 webkit2gtk (2.46.3-1~deb11u1) bullseye-security; urgency=medium
 
