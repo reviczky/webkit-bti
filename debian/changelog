@@ -7,6 +7,8 @@ webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
   * Remove libwebkit2gtk-4.0-37.lintian-overrides.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 11:19:22 +0100
 
