@@ -2,6 +2,8 @@ webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Drop calctree-static-assert.patch.
+  * debian/control.in:
+    - Add build dependency on flite1-dev (for speech synthesis).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 11:19:22 +0100
 
