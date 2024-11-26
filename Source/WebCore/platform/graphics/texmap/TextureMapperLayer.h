@@ -43,16 +43,22 @@ class TextureMapperFlattenedLayer;
 class TextureMapperPaintOptions;
 class TextureMapperPlatformLayer;
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
 class TextureMapperLayerDamageVisitor {
 public:
     virtual void recordDamage(const FloatRect&) = 0;
 };
+#endif
 
 class TextureMapperLayer : public CanMakeWeakPtr<TextureMapperLayer> {
     WTF_MAKE_TZONE_ALLOCATED(TextureMapperLayer);
     WTF_MAKE_NONCOPYABLE(TextureMapperLayer);
 public:
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     WEBCORE_EXPORT TextureMapperLayer(Damage::ShouldPropagate = Damage::ShouldPropagate::No);
+#else
+    WEBCORE_EXPORT TextureMapperLayer();
+#endif
     WEBCORE_EXPORT virtual ~TextureMapperLayer();
 
 #if USE(COORDINATED_GRAPHICS)
@@ -82,6 +88,7 @@ public:
     FloatSize size() const { return m_state.size; }
     float opacity() const { return m_state.opacity; }
     TransformationMatrix transform() const { return m_state.transform; }
+    const TransformationMatrix& toSurfaceTransform() const { return m_layerTransforms.combined; }
     WEBCORE_EXPORT void setContentsVisible(bool);
     WEBCORE_EXPORT void setContentsOpaque(bool);
     WEBCORE_EXPORT void setBackfaceVisibility(bool);
@@ -121,6 +128,9 @@ public:
 
     void addChild(TextureMapperLayer*);
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    void collectDamage(TextureMapper&);
+
     void acceptDamageVisitor(TextureMapperLayerDamageVisitor&);
     void dismissDamageVisitor();
 
@@ -128,6 +138,9 @@ public:
     ALWAYS_INLINE void invalidateDamage();
     ALWAYS_INLINE void addDamage(const Damage&);
     ALWAYS_INLINE void addDamage(const FloatRect&);
+#endif
+
+    FloatRect effectiveLayerRect() const;
 
 private:
     TextureMapperLayer& rootLayer() const
@@ -149,8 +162,6 @@ private:
 
     struct ComputeTransformData;
     void computeTransformsRecursive(ComputeTransformData&);
-
-    static void sortByZOrder(Vector<TextureMapperLayer* >& array);
 
     TransformationMatrix replicaTransform();
     void removeFromParent();
@@ -183,7 +194,13 @@ private:
     void paintSelfAndChildrenWithReplica(TextureMapperPaintOptions&);
     void paintBackdrop(TextureMapperPaintOptions&);
     void applyMask(TextureMapperPaintOptions&);
+    void collect3DSceneLayers(Vector<TextureMapperLayer*>&);
+
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    void collectDamageRecursive(TextureMapperPaintOptions&);
+    void collectDamageSelf(TextureMapperPaintOptions&);
     void recordDamage(const FloatRect&, const TransformationMatrix&, const TextureMapperPaintOptions&);
+#endif
 
     bool isVisible() const;
 
@@ -207,7 +224,6 @@ private:
     std::unique_ptr<TextureMapperFlattenedLayer> m_flattenedLayer;
     float m_currentOpacity { 1.0 };
     FilterOperations m_currentFilters;
-    float m_centerZ { 0 };
 
     struct State {
         FloatPoint pos;
@@ -271,10 +287,12 @@ private:
     bool m_isBackdrop { false };
     bool m_isReplica { false };
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     Damage::ShouldPropagate m_propagateDamage;
     Damage m_damage;
 
     TextureMapperLayerDamageVisitor* m_visitor { nullptr };
+#endif
 
     struct {
         TransformationMatrix localTransform;
@@ -287,6 +305,8 @@ private:
 #endif
     } m_layerTransforms;
 };
+
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
 
 ALWAYS_INLINE void TextureMapperLayer::clearDamage()
 {
@@ -313,5 +333,7 @@ ALWAYS_INLINE void TextureMapperLayer::addDamage(const FloatRect& rect)
 
     m_damage.add(rect);
 }
+
+#endif
 
 } // namespace WebCore

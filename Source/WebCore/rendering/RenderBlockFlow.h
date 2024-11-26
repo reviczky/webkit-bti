@@ -238,6 +238,7 @@ public:
     };
 
     bool shouldTrimChildMargin(MarginTrimType, const RenderBox&) const;
+    void distributeExtraBlockStepSizingSpaceToChild(RenderBox& child, LayoutUnit extraSpace) const;
 
     void layoutBlockChild(RenderBox& child, MarginInfo&, LayoutUnit& previousFloatLogicalBottom, LayoutUnit& maxFloatLogicalBottom);
     void adjustPositionedBlock(RenderBox& child, const MarginInfo&);
@@ -534,13 +535,14 @@ private:
 
     void setTextBoxTrimForSubtree(const RenderBlockFlow* inlineFormattingContextRootForTextBoxTrimEnd = nullptr);
     void adjustTextBoxTrimAfterLayout();
+    std::pair<float, float> inlineContentTopAndBottomIncludingInkOverflow() const;
 
 #if ENABLE(TEXT_AUTOSIZING)
     int m_widthForTextAutosizing;
     unsigned m_lineCountForTextAutosizing : 2;
 #endif
     // FIXME: This is temporary until after we remove the forced "line layout codepath" invalidation.
-    std::optional<LayoutUnit> m_previousInlineLayoutContentBoxLogicalHeight;
+    std::optional<std::pair<LayoutUnit, LayoutUnit>> m_previousInlineLayoutContentTopAndBottomIncludingInkOverflow;
 
     std::optional<LayoutUnit> selfCollapsingMarginBeforeWithClear(RenderObject* candidate);
 

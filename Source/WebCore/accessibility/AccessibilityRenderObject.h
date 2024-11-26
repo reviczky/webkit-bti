@@ -54,13 +54,14 @@ class VisibleSelection;
 
 class AccessibilityRenderObject : public AccessibilityNodeObject {
 public:
-    static Ref<AccessibilityRenderObject> create(RenderObject&);
+    static Ref<AccessibilityRenderObject> create(AXID, RenderObject&);
     virtual ~AccessibilityRenderObject();
     
     FloatRect frameRect() const final;
     bool isNonLayerSVGObject() const override;
 
     bool isAttachment() const override;
+    bool isDetached() const final { return !m_renderer && AccessibilityNodeObject::isDetached(); }
     bool isOffScreen() const override;
     bool hasBoldFont() const override;
     bool hasItalicFont() const override;
@@ -137,14 +138,12 @@ public:
     String secureFieldValue() const override;
     void labelText(Vector<AccessibilityText>&) const override;
 protected:
-    explicit AccessibilityRenderObject(RenderObject&);
-    explicit AccessibilityRenderObject(Node&);
+    explicit AccessibilityRenderObject(AXID, RenderObject&);
+    explicit AccessibilityRenderObject(AXID, Node&);
     void detachRemoteParts(AccessibilityDetachmentType) override;
     ScrollableArea* getScrollableAreaIfScrollable() const override;
     void scrollTo(const IntPoint&) const override;
     
-    bool isDetached() const final { return !m_renderer && AccessibilityNodeObject::isDetached(); }
-
     bool shouldIgnoreAttributeRole() const override;
     AccessibilityRole determineAccessibilityRole() override;
     bool computeIsIgnored() const override;
@@ -160,7 +159,7 @@ private:
     bool isAllowedChildOfTree() const;
     CharacterRange documentBasedSelectedTextRange() const;
     RefPtr<Element> rootEditableElementForPosition(const Position&) const;
-    bool nodeIsTextControl(const Node&) const;
+    bool elementIsTextControl(const Element&) const;
     Path elementPath() const override;
     
     AccessibilityObject* accessibilityImageMapHitTest(HTMLAreaElement&, const IntPoint&) const;
@@ -193,7 +192,7 @@ private:
 #endif
     String expandedTextValue() const override;
     bool supportsExpandedTextValue() const override;
-    void updateRoleAfterChildrenCreation();
+    virtual void updateRoleAfterChildrenCreation();
 
     bool inheritsPresentationalRole() const override;
 

@@ -39,6 +39,7 @@
 #include "InternalObserverFromScript.h"
 #include "InternalObserverLast.h"
 #include "InternalObserverMap.h"
+#include "InternalObserverSome.h"
 #include "InternalObserverTake.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSSubscriptionObserverCallback.h"
@@ -88,13 +89,13 @@ void Observable::subscribeInternal(ScriptExecutionContext& context, Ref<Internal
     JSC::JSLockHolder lock(vm);
 
     // The exception is not reported, instead it is forwarded to the
-    // error handler. As such, SusbcribeCallback `[RethrowsException]` and
+    // error handler. As such, SusbcribeCallback has `[RethrowException]` and
     // here a catch scope is declared so the error can be passed to the
     // subscription error handler.
     JSC::Exception* previousException = nullptr;
     {
         auto catchScope = DECLARE_CATCH_SCOPE(vm);
-        m_subscriberCallback->handleEvent(subscriber);
+        m_subscriberCallback->handleEventRethrowingException(subscriber);
         previousException = catchScope.exception();
         if (previousException) {
             catchScope.clearException();
@@ -146,6 +147,11 @@ void Observable::find(ScriptExecutionContext& context, Ref<PredicateCallback>&& 
 void Observable::every(ScriptExecutionContext& context, Ref<PredicateCallback>&& callback, const SubscribeOptions& options, Ref<DeferredPromise>&& promise)
 {
     return createInternalObserverOperatorEvery(context, *this, WTFMove(callback), options, WTFMove(promise));
+}
+
+void Observable::some(ScriptExecutionContext& context, Ref<PredicateCallback>&& callback, const SubscribeOptions& options, Ref<DeferredPromise>&& promise)
+{
+    return createInternalObserverOperatorSome(context, *this, WTFMove(callback), options, WTFMove(promise));
 }
 
 Observable::Observable(Ref<SubscriberCallback> callback)

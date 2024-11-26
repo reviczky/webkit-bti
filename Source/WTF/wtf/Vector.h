@@ -31,7 +31,7 @@
 #include <wtf/FailureAction.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
-#include <wtf/MallocPtr.h>
+#include <wtf/MallocSpan.h>
 #include <wtf/MathExtras.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/NotFound.h>
@@ -60,7 +60,7 @@ struct VectorDestructor;
 template<typename T>
 struct VectorDestructor<false, T>
 {
-    static void destruct(T*, T*) {}
+    static void destruct(T*, T*) { }
 };
 
 template<typename T>
@@ -255,6 +255,11 @@ struct VectorTypeOperations
         VectorDestructor<!std::is_trivially_destructible<T>::value, T>::destruct(begin, end);
     }
 
+    static void destruct(std::span<T> span)
+    {
+        VectorDestructor<!std::is_trivially_destructible<T>::value, T>::destruct(std::to_address(span.begin()), std::to_address(span.end()));
+    }
+
     static void initializeIfNonPOD(T* begin, T* end)
     {
         VectorInitializer<VectorTraits<T>::needsInitialization, VectorTraits<T>::canInitializeWithMemset, T>::initializeIfNonPOD(begin, end);
@@ -276,14 +281,29 @@ struct VectorTypeOperations
         VectorMover<VectorTraits<T>::canMoveWithMemcpy, T>::move(src, srcEnd, dst);
     }
 
+    static void move(std::span<T> src, std::span<T> dst)
+    {
+        VectorMover<VectorTraits<T>::canMoveWithMemcpy, T>::move(std::to_address(src.begin()), std::to_address(src.end()), std::to_address(dst.begin()));
+    }
+
     static void moveOverlapping(T* src, T* srcEnd, T* dst)
     {
         VectorMover<VectorTraits<T>::canMoveWithMemcpy, T>::moveOverlapping(src, srcEnd, dst);
     }
 
+    static void moveOverlapping(std::span<T> src, std::span<T> dst)
+    {
+        VectorMover<VectorTraits<T>::canMoveWithMemcpy, T>::moveOverlapping(std::to_address(src.begin()), std::to_address(src.end()), std::to_address(dst.begin()));
+    }
+
     static void uninitializedCopy(const T* src, const T* srcEnd, T* dst)
     {
         VectorCopier<VectorTraits<T>::canCopyWithMemcpy, T>::uninitializedCopy(src, srcEnd, dst);
+    }
+
+    static void uninitializedCopy(std::span<const T> src, std::span<T> dst)
+    {
+        VectorCopier<VectorTraits<T>::canCopyWithMemcpy, T>::uninitializedCopy(std::to_address(src.begin()), std::to_address(src.end()), std::to_address(dst.begin()));
     }
 
     static void uninitializedFill(T* dst, T* dstEnd, const T& val)
@@ -368,12 +388,13 @@ public:
     static constexpr ptrdiff_t bufferMemoryOffset() { return OBJECT_OFFSETOF(VectorBufferBase, m_buffer); }
     size_t capacity() const { return m_capacity; }
 
-    MallocPtr<T, Malloc> releaseBuffer()
+    std::span<T> capacitySpan() { return unsafeMakeSpan(m_buffer, m_capacity); }
+    std::span<const T> capacitySpan() const { return unsafeMakeSpan(m_buffer, m_capacity); }
+
+    MallocSpan<T, Malloc> releaseBuffer()
     {
-        T* buffer = m_buffer;
-        m_buffer = nullptr;
         m_capacity = 0;
-        return adoptMallocPtr<T, Malloc>(buffer);
+        return adoptMallocSpan<T, Malloc>(unsafeMakeSpan(std::exchange(m_buffer, nullptr), std::exchange(m_size, 0)));
     }
 
 protected:
@@ -452,6 +473,7 @@ public:
     using Base::bufferMemoryOffset;
 
     using Base::releaseBuffer;
+    using Base::capacitySpan;
 
 protected:
     using Base::m_size;
@@ -579,10 +601,11 @@ public:
 #endif
 
     using Base::buffer;
+    using Base::capacitySpan;
     using Base::capacity;
     using Base::bufferMemoryOffset;
 
-    MallocPtr<T, Malloc> releaseBuffer()
+    MallocSpan<T, Malloc> releaseBuffer()
     {
         if (buffer() == inlineBuffer())
             return { };
@@ -926,7 +949,7 @@ public:
     template<typename Iterator> void appendRange(Iterator start, Iterator end);
     template<typename ContainerType, typename MapFunction> void appendContainerWithMapping(ContainerType&&, NOESCAPE const MapFunction&);
 
-    MallocPtr<T, Malloc> releaseBuffer();
+    MallocSpan<T, Malloc> releaseBuffer();
 
     void swap(Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>& other)
     {
@@ -1805,21 +1828,20 @@ void Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::appendCont
 }
 
 template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t minCapacity, typename Malloc>
-inline MallocPtr<T, Malloc> Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::releaseBuffer()
+inline MallocSpan<T, Malloc> Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::releaseBuffer()
 {
     // FIXME: Find a way to preserve annotations on the returned buffer.
     // ASan requires that all annotations are removed before deallocation,
-    // and MallocPtr doesn't implement that.
+    // and MallocSpan doesn't implement that.
     asanSetBufferSizeToFullCapacity();
 
     auto buffer = Base::releaseBuffer();
-    if (inlineCapacity && !buffer && m_size) {
+    if (inlineCapacity && buffer.span().empty() && m_size) {
         // If the vector had some data, but no buffer to release,
         // that means it was using the inline buffer. In that case,
         // we create a brand new buffer so the caller always gets one.
-        size_t bytes = m_size * sizeof(T);
-        buffer = adoptMallocPtr<T, Malloc>(static_cast<T*>(Malloc::malloc(bytes)));
-        memcpy(buffer.get(), data(), bytes);
+        buffer = MallocSpan<T, Malloc>::malloc(m_size * sizeof(T));
+        memcpySpan(buffer.mutableSpan(), span());
     }
     m_size = 0;
     // FIXME: Should we call Base::restoreInlineBufferIfNeeded() here?

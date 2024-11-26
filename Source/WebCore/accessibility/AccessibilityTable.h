@@ -38,21 +38,20 @@ class HTMLTableElement;
 
 class AccessibilityTable : public AccessibilityRenderObject {
 public:
-    static Ref<AccessibilityTable> create(RenderObject&);
-    static Ref<AccessibilityTable> create(Node&);
+    static Ref<AccessibilityTable> create(AXID, RenderObject&);
+    static Ref<AccessibilityTable> create(AXID, Node&);
     virtual ~AccessibilityTable();
 
     void init() final;
 
     virtual bool isAriaTable() const { return false; }
-    bool hasGridAriaRole() const;
 
     void addChildren() final;
     void clearChildren() final;
     void updateChildrenRoles();
 
-    AccessibilityChildrenVector columns() override;
-    AccessibilityChildrenVector rows() override;
+    AccessibilityChildrenVector columns() final;
+    AccessibilityChildrenVector rows() final;
 
     unsigned columnCount() final;
     unsigned rowCount() final;
@@ -60,15 +59,14 @@ public:
     String title() const final;
 
     // all the cells in the table
-    AccessibilityChildrenVector cells() override;
-    AccessibilityObject* cellForColumnAndRow(unsigned column, unsigned row) override;
+    AccessibilityChildrenVector cells() final;
+    AccessibilityObject* cellForColumnAndRow(unsigned column, unsigned row) final;
 
-    AccessibilityChildrenVector columnHeaders() override;
-    AccessibilityChildrenVector rowHeaders() override;
-    AccessibilityChildrenVector visibleRows() override;
+    AccessibilityChildrenVector rowHeaders() final;
+    AccessibilityChildrenVector visibleRows() final;
 
     // Returns an object that contains, as children, all the objects that act as headers.
-    AXCoreObject* headerContainer() override;
+    AXCoreObject* headerContainer() final;
 
     bool isTable() const final { return true; }
     // Returns whether it is exposed as an AccessibilityTable to the platform.
@@ -84,8 +82,8 @@ public:
     void setCellSlotsDirty();
 
 protected:
-    explicit AccessibilityTable(RenderObject&);
-    explicit AccessibilityTable(Node&);
+    explicit AccessibilityTable(AXID, RenderObject&);
+    explicit AccessibilityTable(AXID, Node&);
 
     AccessibilityChildrenVector m_rows;
     AccessibilityChildrenVector m_columns;
@@ -108,6 +106,9 @@ private:
     virtual bool computeIsTableExposableThroughAccessibility() const { return isDataTable(); }
     void labelText(Vector<AccessibilityText>&) const final;
     HTMLTableElement* tableElement() const;
+
+    // Returns the number of columns the table should have.
+    unsigned computeCellSlots();
 
     void ensureRow(unsigned);
     void ensureRowAndColumn(unsigned /* rowIndex */, unsigned /* columnIndex */);

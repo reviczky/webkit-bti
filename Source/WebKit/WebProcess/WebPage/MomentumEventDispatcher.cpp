@@ -467,7 +467,7 @@ void MomentumEventDispatcher::equalizeTailGaps()
 
     enum Axis { Horizontal, Vertical };
     std::array<Vector<float>, 2> deltas;
-    std::array<unsigned, 2> firstZeroIndex = { 0, 0 };
+    std::array<unsigned, 2> firstZeroIndex { 0, 0 };
     deltas[Horizontal].reserveInitialCapacity(initialTableSize);
     deltas[Vertical].reserveInitialCapacity(initialTableSize);
     for (unsigned i = 0; i < initialTableSize; i++) {
@@ -494,11 +494,11 @@ void MomentumEventDispatcher::equalizeTailGaps()
     sortDeltas(Vertical);
 
     // GapSize is a count of contiguous frames with zero deltas.
-    using GapSize = std::array<unsigned, 2>;
-    GapSize minimumGap = { 0, 0 };
-    GapSize currentGap = { 0, 0 };
-    GapSize remainingGapToGenerate = { 0, 0 };
-    std::array<unsigned, 2> originalTableIndex = { 0, 0 };
+    typedef std::array<unsigned, 2> GapSize;
+    GapSize minimumGap { 0, 0 };
+    GapSize currentGap { 0, 0 };
+    GapSize remainingGapToGenerate { 0, 0 };
+    std::array<unsigned, 2> originalTableIndex { 0, 0 };
 
     auto takeNextDelta = [&] (uint8_t axis) -> float {
         if (originalTableIndex[axis] >= initialTableSize)

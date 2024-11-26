@@ -42,6 +42,7 @@
 #include "DataListSuggestionPicker.h"
 #include "DatabaseProvider.h"
 #include "DiagnosticLoggingClient.h"
+#include "DisplayRefreshMonitor.h"
 #include "DisplayRefreshMonitorFactory.h"
 #include "DocumentFragment.h"
 #include "DocumentLoader.h"
@@ -58,7 +59,9 @@
 #include "HTMLFormElement.h"
 #include "HistoryItem.h"
 #include "IDBConnectionToServer.h"
+#include "IDBIndexIdentifier.h"
 #include "IDBObjectStoreIdentifier.h"
+#include "Icon.h"
 #include "InspectorClient.h"
 #include "LocalFrame.h"
 #include "LocalFrameLoaderClient.h"
@@ -68,8 +71,11 @@
 #include "PageConfiguration.h"
 #include "PaymentCoordinatorClient.h"
 #include "PluginInfoProvider.h"
+#include "PopupMenu.h"
+#include "ProcessSyncClient.h"
 #include "ProgressTrackerClient.h"
 #include "RemoteFrameClient.h"
+#include "SearchPopupMenu.h"
 #include "SecurityOriginData.h"
 #include "SocketProvider.h"
 #include "StorageArea.h"
@@ -204,7 +210,7 @@ class EmptyDatabaseProvider final : public DatabaseProvider {
         void clearObjectStore(const IDBRequestData&, IDBObjectStoreIdentifier) final { }
         void createIndex(const IDBRequestData&, const IDBIndexInfo&) final { }
         void deleteIndex(const IDBRequestData&, IDBObjectStoreIdentifier, const String&) final { }
-        void renameIndex(const IDBRequestData&, IDBObjectStoreIdentifier, uint64_t, const String&) final { }
+        void renameIndex(const IDBRequestData&, IDBObjectStoreIdentifier, IDBIndexIdentifier, const String&) final { }
         void putOrAdd(const IDBRequestData&, const IDBKeyData&, const IDBValue&, const IndexedDB::ObjectStoreOverwriteMode) final { }
         void getRecord(const IDBRequestData&, const IDBGetRecordData&) final { }
         void getAllRecords(const IDBRequestData&, const IDBGetAllRecordsData&) final { }
@@ -592,6 +598,13 @@ void EmptyChromeClient::requestCookieConsent(CompletionHandler<void(CookieConsen
     completion(CookieConsentDecisionResult::NotSupported);
 }
 
+RefPtr<Icon> EmptyChromeClient::createIconForFiles(const Vector<String>& /* filenames */)
+{
+    return nullptr;
+}
+
+// MARK: -
+
 void EmptyFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const NavigationAction&, const ResourceRequest&, FormState*, const String&, std::optional<HitTestResult>&&, FramePolicyFunction&&)
 {
 }
@@ -605,10 +618,6 @@ void EmptyFrameLoaderClient::updateSandboxFlags(SandboxFlags)
 }
 
 void EmptyFrameLoaderClient::updateOpener(const Frame&)
-{
-}
-
-void EmptyFrameLoaderClient::broadcastMainFrameURLChangeToOtherProcesses(const URL&)
 {
 }
 
@@ -1232,7 +1241,8 @@ PageConfiguration pageConfigurationWithEmptyClients(std::optional<PageIdentifier
         makeUniqueRef<EmptyPaymentCoordinatorClient>(),
 #endif
         makeUniqueRef<EmptyChromeClient>(),
-        makeUniqueRef<EmptyCryptoClient>()
+        makeUniqueRef<EmptyCryptoClient>(),
+        makeUniqueRef<ProcessSyncClient>()
     };
 
 #if ENABLE(DRAG_SUPPORT)

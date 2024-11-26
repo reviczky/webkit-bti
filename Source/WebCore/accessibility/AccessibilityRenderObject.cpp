@@ -127,8 +127,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-AccessibilityRenderObject::AccessibilityRenderObject(RenderObject& renderer)
-    : AccessibilityNodeObject(renderer.node())
+AccessibilityRenderObject::AccessibilityRenderObject(AXID axID, RenderObject& renderer)
+    : AccessibilityNodeObject(axID, renderer.node())
     , m_renderer(renderer)
 {
 #if ASSERT_ENABLED
@@ -136,8 +136,8 @@ AccessibilityRenderObject::AccessibilityRenderObject(RenderObject& renderer)
 #endif
 }
 
-AccessibilityRenderObject::AccessibilityRenderObject(Node& node)
-    : AccessibilityNodeObject(&node)
+AccessibilityRenderObject::AccessibilityRenderObject(AXID axID, Node& node)
+    : AccessibilityNodeObject(axID, &node)
 {
     // We should only ever create an instance of this class with a node if that node has no renderer (i.e. because of display:contents).
     ASSERT(!node.renderer());
@@ -148,9 +148,9 @@ AccessibilityRenderObject::~AccessibilityRenderObject()
     ASSERT(isDetached());
 }
 
-Ref<AccessibilityRenderObject> AccessibilityRenderObject::create(RenderObject& renderer)
+Ref<AccessibilityRenderObject> AccessibilityRenderObject::create(AXID axID, RenderObject& renderer)
 {
-    return adoptRef(*new AccessibilityRenderObject(renderer));
+    return adoptRef(*new AccessibilityRenderObject(axID, renderer));
 }
 
 void AccessibilityRenderObject::detachRemoteParts(AccessibilityDetachmentType detachmentType)
@@ -512,13 +512,6 @@ AccessibilityObject* AccessibilityRenderObject::parentObject() const
     WeakPtr cache = axObjectCache();
     if (!cache)
         return nullptr;
-
-    if (ariaRoleAttribute() == AccessibilityRole::Menu) {
-        // menuButton and its corresponding menu are DOM siblings, but accessibility expects them to be parent/child.
-        if (auto* parent = menuButtonForMenu())
-            return parent;
-    }
-
 
 #if !USE(ATSPI)
     // FIXME: This compiler directive can be removed after https://bugs.webkit.org/show_bug.cgi?id=282117 is fixed.
@@ -1076,7 +1069,7 @@ static bool webAreaIsPresentational(RenderObject* renderer)
         return false;
     
     RefPtr ownerElement = renderer->document().ownerElement();
-    return ownerElement && nodeHasPresentationRole(*ownerElement);
+    return ownerElement && hasPresentationRole(*ownerElement);
 }
 
 bool AccessibilityRenderObject::computeIsIgnored() const
@@ -1183,8 +1176,8 @@ bool AccessibilityRenderObject::computeIsIgnored() const
 
             if (checkForIgnored && !ancestor->isIgnored()) {
                 checkForIgnored = false;
-                // Static text beneath MenuItems and MenuButtons are just reported along with the menu item, so it's ignored on an individual level.
-                if (ancestor->isMenuItem() || ancestor->isMenuButton())
+                // Static text beneath MenuItems are just reported along with the menu item, so it's ignored on an individual level.
+                if (ancestor->isMenuItem())
                     return true;
             }
         }
@@ -1302,9 +1295,12 @@ bool AccessibilityRenderObject::computeIsIgnored() const
         return false;
 #endif
 
+    // This logic, originally added in:
+    // https://github.com/WebKit/WebKit/commit/ddeb923489b58fd890527bf0e432ebe6a477d2ef
+    // Results in a lot of useless generics being exposed, which is wasteful. We should remove this.
     WeakPtr blockFlow = dynamicDowncast<RenderBlockFlow>(*m_renderer);
     if (blockFlow && m_renderer->childrenInline() && !canSetFocusAttribute())
-        return !blockFlow->hasLines() && !mouseButtonListener();
+        return !blockFlow->hasLines() && !clickableSelfOrAncestor();
 
     if (isCanvas()) {
         if (canvasHasFallbackContent())
@@ -1661,18 +1657,22 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLin
     AccessibilityChildrenVector result;
     Document& document = m_renderer->document();
     Ref<HTMLCollection> links = document.links();
+    CheckedPtr cache = document.existingAXObjectCache();
+    if (!cache)
+        return { };
+
     for (unsigned i = 0; auto* current = links->item(i); ++i) {
         if (auto* renderer = current->renderer()) {
-            RefPtr<AccessibilityObject> axObject = document.axObjectCache()->getOrCreate(*renderer);
+            RefPtr axObject = cache->getOrCreate(*renderer);
             ASSERT(axObject);
             if (!axObject->isIgnored() && axObject->isLink())
-                result.append(axObject);
+                result.append(axObject.releaseNonNull());
         } else {
             auto* parent = current->parentNode();
             if (auto* parentMap = dynamicDowncast<HTMLMapElement>(parent); parentMap && is<HTMLAreaElement>(*current)) {
                 RefPtr parentImage = parentMap->imageElement();
                 auto* parentImageRenderer = parentImage ? parentImage->renderer() : nullptr;
-                if (auto* parentImageAxObject = document.axObjectCache()->getOrCreate(parentImageRenderer)) {
+                if (auto* parentImageAxObject = cache->getOrCreate(parentImageRenderer)) {
                     for (const auto& child : parentImageAxObject->unignoredChildren()) {
                         if (is<AccessibilityImageMapLink>(child) && !result.contains(child))
                             result.append(child);
@@ -1680,11 +1680,11 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLin
                 } else {
                     // We couldn't retrieve the already existing image-map links from the parent image, so create a new one.
                     ASSERT_NOT_REACHED("Unexpectedly missing image-map link parent AX object.");
-                    auto& areaObject = uncheckedDowncast<AccessibilityImageMapLink>(*axObjectCache()->create(AccessibilityRole::ImageMapLink));
+                    auto& areaObject = downcast<AccessibilityImageMapLink>(*cache->create(AccessibilityRole::ImageMapLink));
                     areaObject.setHTMLAreaElement(uncheckedDowncast<HTMLAreaElement>(current));
                     areaObject.setHTMLMapElement(parentMap);
                     areaObject.setParent(associatedAXImage(*parentMap));
-                    result.append(&areaObject);
+                    result.append(areaObject);
                 }
             }
         }
@@ -1742,7 +1742,7 @@ RefPtr<Element> AccessibilityRenderObject::rootEditableElementForPosition(const 
     RefPtr rootEditableElement = position.rootEditableElement();
 
     for (RefPtr ancestor = position.anchorElementAncestor(); ancestor && ancestor != rootEditableElement; ancestor = ancestor->parentElement()) {
-        if (nodeIsTextControl(*ancestor))
+        if (elementIsTextControl(*ancestor))
             result = ancestor;
         if (ancestor->hasTagName(bodyTag))
             break;
@@ -1750,10 +1750,10 @@ RefPtr<Element> AccessibilityRenderObject::rootEditableElementForPosition(const 
     return result ? result : rootEditableElement;
 }
 
-bool AccessibilityRenderObject::nodeIsTextControl(const Node& node) const
+bool AccessibilityRenderObject::elementIsTextControl(const Element& element) const
 {
     auto* cache = axObjectCache();
-    auto* axObject = cache ? cache->getOrCreate(const_cast<Node&>(node)) : nullptr;
+    auto* axObject = cache ? cache->getOrCreate(const_cast<Element&>(element)) : nullptr;
     return axObject && axObject->isTextControl();
 }
 
@@ -2061,15 +2061,14 @@ bool AccessibilityRenderObject::renderObjectIsObservable(RenderObject& renderer)
     auto* node = renderer.node();
     if (!node)
         return false;
-    
-    if (auto* renderBox = dynamicDowncast<RenderBoxModelObject>(renderer); (renderBox && renderBox->isRenderListBox()) || nodeHasRole(node, "listbox"_s))
+
+    auto* element = dynamicDowncast<Element>(*node);
+    auto* renderBox = dynamicDowncast<RenderBoxModelObject>(renderer);
+    if ((renderBox && renderBox->isRenderListBox()) || (element && hasRole(*element, "listbox"_s)))
         return true;
 
     // Textboxes should send out notifications.
-    if (auto* element = dynamicDowncast<Element>(*node); (element && contentEditableAttributeIsEnabled(element)) || nodeHasRole(node, "textbox"_s))
-        return true;
-    
-    return false;
+    return element && (contentEditableAttributeIsEnabled(*element) || hasRole(*element, "textbox"_s));
 }
     
 AccessibilityObject* AccessibilityRenderObject::observableObject() const
@@ -2115,6 +2114,9 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
     if (!m_renderer)
         return AccessibilityNodeObject::determineAccessibilityRole();
 
+    if (m_renderer->isRenderText())
+        return AccessibilityRole::StaticText;
+
 #if ENABLE(APPLE_PAY)
     if (isApplePayButton())
         return AccessibilityRole::Button;
@@ -2125,14 +2127,17 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
     if ((m_ariaRole = determineAriaRoleAttribute()) != AccessibilityRole::Unknown && !shouldIgnoreAttributeRole())
         return m_ariaRole;
 
-    Node* node = m_renderer->node();
+    RefPtr node = m_renderer->node();
+    if (m_renderer->isRenderListItem()) {
+        // The details / summary disclosure triangle is implemented using RenderListItem
+        // but we want to return `AccessibilityRole::Summary` there, so skip them here.
+        RefPtr summary = dynamicDowncast<HTMLSummaryElement>(node);
+        if (!summary || !summary->isActiveSummary())
+            return AccessibilityRole::ListItem;
+    }
 
-    if (m_renderer->isRenderListItem())
-        return AccessibilityRole::ListItem;
     if (m_renderer->isRenderListMarker())
         return AccessibilityRole::ListMarker;
-    if (m_renderer->isRenderText())
-        return AccessibilityRole::StaticText;
 #if ENABLE(AX_THREAD_TEXT_APIS)
     if (m_renderer->isBR())
         return AccessibilityRole::LineBreak;
@@ -2188,7 +2193,6 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
     // the cell should not be treated as a cell (e.g. because it is a layout table.
     if (is<RenderTableCell>(m_renderer.get()))
         return AccessibilityRole::TextGroup;
-    // Table sections should be ignored.
     if (m_renderer->isRenderTableSection())
         return AccessibilityRole::Ignored;
 
@@ -2441,13 +2445,13 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
             if (childObject && childObject->isIgnored()) {
                 const auto& children = childObject->unignoredChildren();
                 if (children.size())
-                    childObject = children.last().get();
+                    childObject = children.last().ptr();
                 else
                     childObject = nullptr;
             }
 
             if (childObject)
-                insertionIndex = m_children.find(childObject) + 1;
+                insertionIndex = m_children.find(Ref { *childObject }) + 1;
             continue;
         }
 
@@ -2558,7 +2562,7 @@ void AccessibilityRenderObject::addChildren()
             return;
 #endif
         auto owners = object.owners();
-        if (owners.size() && !owners.contains(this))
+        if (owners.size() && !owners.contains(Ref { *this }))
             return;
 
         addChild(&object);

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WebPageTesting.h"
 
+#include "DrawingArea.h"
 #include "NotificationPermissionRequestManager.h"
 #include "PluginView.h"
 #include "WebNotificationClient.h"
@@ -90,7 +91,7 @@ void WebPageTesting::isEditingCommandEnabled(const String& commandName, Completi
         return completionHandler(pluginView->isEditingCommandEnabled(commandName));
 #endif
 
-    auto command = frame->checkedEditor()->command(commandName);
+    auto command = frame->protectedEditor()->command(commandName);
     completionHandler(command.isSupported() && command.isEnabled());
 }
 
@@ -143,6 +144,35 @@ void WebPageTesting::clearCachedBackForwardListCounts(CompletionHandler<void()>&
 
     Ref backForwardListProxy = static_cast<WebBackForwardListProxy&>(page->backForward().client());
     backForwardListProxy->clearCachedListCounts();
+    completionHandler();
+}
+
+void WebPageTesting::setTracksRepaints(bool trackRepaints, CompletionHandler<void()>&& completionHandler)
+{
+    RefPtr page = m_page->corePage();
+    if (!page)
+        return completionHandler();
+
+    for (auto& rootFrame : page->rootFrames()) {
+        if (RefPtr view = rootFrame->view())
+            view->setTracksRepaints(trackRepaints);
+    }
+    completionHandler();
+}
+
+void WebPageTesting::displayAndTrackRepaints(CompletionHandler<void()>&& completionHandler)
+{
+    RefPtr page = m_page->corePage();
+    if (!page)
+        return completionHandler();
+
+    protectedPage()->protectedDrawingArea()->updateRenderingWithForcedRepaint();
+    for (auto& rootFrame : page->rootFrames()) {
+        if (RefPtr view = rootFrame->view()) {
+            view->setTracksRepaints(true);
+            view->resetTrackedRepaints();
+        }
+    }
     completionHandler();
 }
 

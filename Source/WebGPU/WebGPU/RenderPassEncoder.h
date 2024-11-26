@@ -108,8 +108,9 @@ public:
     static std::pair<id<MTLBuffer>, uint64_t> clampIndirectIndexBufferToValidValues(Buffer*, Buffer&, MTLIndexType, NSUInteger indexBufferOffsetInBytes, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount, MTLPrimitiveType, Device&, uint32_t rasterSampleCount, id<MTLRenderCommandEncoder>, bool& splitEncoder);
     static id<MTLBuffer> clampIndirectBufferToValidValues(Buffer&, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount, Device&, uint32_t rasterSampleCount, id<MTLRenderCommandEncoder>, bool& splitEncoder);
     enum class IndexCall { Draw, IndirectDraw, Skip, CachedIndirectDraw };
-    static IndexCall clampIndexBufferToValidValues(uint32_t indexCount, uint32_t instanceCount, int32_t baseVertex, uint32_t firstInstance, MTLIndexType, NSUInteger indexBufferOffsetInBytes, Buffer*, uint32_t minVertexCount, uint32_t minInstanceCount, id<MTLRenderCommandEncoder>, Device&, uint32_t rasterSampleCount, MTLPrimitiveType);
+    static IndexCall clampIndexBufferToValidValues(uint32_t indexCount, uint32_t instanceCount, int32_t baseVertex, uint32_t firstInstance, MTLIndexType, NSUInteger indexBufferOffsetInBytes, Buffer*, uint32_t minVertexCount, uint32_t minInstanceCount, RenderPassEncoder&, Device&, uint32_t rasterSampleCount, MTLPrimitiveType);
     void splitRenderPass();
+    static std::pair<uint32_t, uint32_t> computeMininumVertexInstanceCount(const RenderPipeline*, uint64_t (^)(uint32_t));
 
 private:
     RenderPassEncoder(id<MTLRenderCommandEncoder>, const WGPURenderPassDescriptor&, NSUInteger, bool depthReadOnly, bool stencilReadOnly, CommandEncoder&, id<MTLBuffer>, uint64_t maxDrawCount, Device&, MTLRenderPassDescriptor*);
@@ -141,10 +142,6 @@ private:
     id<MTLRenderCommandEncoder> m_renderCommandEncoder { nil };
 
     uint64_t m_debugGroupStackSize { 0 };
-    struct PendingTimestampWrites {
-        Ref<QuerySet> querySet;
-        uint32_t queryIndex;
-    };
 
     const Ref<Device> m_device;
     RefPtr<Buffer> m_indexBuffer;
@@ -179,7 +176,6 @@ private:
     WGPURenderPassDescriptor m_descriptor;
     Vector<WGPURenderPassColorAttachment> m_descriptorColorAttachments;
     WGPURenderPassDepthStencilAttachment m_descriptorDepthStencilAttachment;
-    WGPURenderPassTimestampWrites m_descriptorTimestampWrites;
     Vector<RefPtr<TextureView>> m_colorAttachmentViews;
     RefPtr<TextureView> m_depthStencilView;
     struct BufferAndOffset {

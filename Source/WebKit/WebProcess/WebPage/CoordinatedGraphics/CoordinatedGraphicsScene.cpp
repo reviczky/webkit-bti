@@ -30,13 +30,20 @@
 #include <WebCore/NicosiaScene.h>
 #include <WebCore/TextureMapperLayer.h>
 #include <wtf/Atomics.h>
+#include <wtf/SystemTracing.h>
 
 namespace WebKit {
 using namespace WebCore;
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
 CoordinatedGraphicsScene::CoordinatedGraphicsScene(CoordinatedGraphicsSceneClient* client, Damage::ShouldPropagate propagateDamage)
+#else
+CoordinatedGraphicsScene::CoordinatedGraphicsScene(CoordinatedGraphicsSceneClient* client)
+#endif
     : m_client(client)
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     , m_propagateDamage(propagateDamage)
+#endif
 {
 }
 
@@ -53,11 +60,17 @@ void CoordinatedGraphicsScene::applyStateChanges(const Vector<RefPtr<Nicosia::Sc
         commitSceneState(scene);
 }
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+void CoordinatedGraphicsScene::paintToCurrentGLContext(const TransformationMatrix& matrix, const FloatRect& clipRect, bool unifyDamagedRegions, bool flipY)
+#else
 void CoordinatedGraphicsScene::paintToCurrentGLContext(const TransformationMatrix& matrix, const FloatRect& clipRect, bool flipY)
+#endif
 {
     updateSceneState();
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     m_damage = WebCore::Damage();
+#endif
 
     TextureMapperLayer* currentRootLayer = rootLayer();
     if (!currentRootLayer)
@@ -67,13 +80,55 @@ void CoordinatedGraphicsScene::paintToCurrentGLContext(const TransformationMatri
         currentRootLayer->setTransform(matrix);
 
     bool sceneHasRunningAnimations = currentRootLayer->applyAnimationsRecursively(MonotonicTime::now());
-    m_textureMapper->beginPainting(flipY ? TextureMapper::FlipY::Yes : TextureMapper::FlipY::No);
-    m_textureMapper->beginClip(TransformationMatrix(), FloatRoundedRect(clipRect));
 
+    FloatRoundedRect actualClipRect(clipRect);
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    if (m_propagateDamage != Damage::ShouldPropagate::No) {
+        WTFBeginSignpost(this, CollectDamage);
+        currentRootLayer->collectDamage(*m_textureMapper);
+        WTFEndSignpost(this, CollectDamage);
+
+        WebCore::Damage boundsDamage;
+        const auto& frameDamage = ([this, &boundsDamage, &unifyDamagedRegions]() -> const WebCore::Damage& {
+            const auto& damage = lastDamage();
+            if (m_propagateDamage != Damage::ShouldPropagate::No && !damage.isInvalid()) {
+                if (unifyDamagedRegions) {
+                    boundsDamage.add(damage.bounds());
+                    return boundsDamage;
+                }
+                return damage;
+            }
+            return WebCore::Damage::invalid();
+        })();
+        if (m_client) {
+            const Damage& damageSinceLastSurfaceUse = m_client->addSurfaceDamage(frameDamage);
+            if (!damageSinceLastSurfaceUse.isInvalid())
+                actualClipRect = static_cast<FloatRoundedRect>(damageSinceLastSurfaceUse.bounds());
+        }
+    }
+#endif
+
+    WTFBeginSignpost(this, PaintTextureMapperLayerTree);
+    m_textureMapper->beginPainting(flipY ? TextureMapper::FlipY::Yes : TextureMapper::FlipY::No);
+    m_textureMapper->beginClip(TransformationMatrix(), actualClipRect);
     currentRootLayer->paint(*m_textureMapper);
-    m_fpsCounter.updateFPSAndDisplay(*m_textureMapper, clipRect.location(), matrix);
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    if (m_propagateDamage == Damage::ShouldPropagate::No)
+#endif
+        m_fpsCounter.updateFPSAndDisplay(*m_textureMapper, clipRect.location(), matrix);
     m_textureMapper->endClip();
     m_textureMapper->endPainting();
+    WTFEndSignpost(this, PaintTextureMapperLayerTree);
+
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    if (m_propagateDamage != Damage::ShouldPropagate::No && m_fpsCounter.isActive()) {
+        m_textureMapper->beginPainting(flipY ? TextureMapper::FlipY::Yes : TextureMapper::FlipY::No);
+        m_textureMapper->beginClip(TransformationMatrix(), FloatRoundedRect(clipRect));
+        m_fpsCounter.updateFPSAndDisplay(*m_textureMapper, clipRect.location(), matrix);
+        m_textureMapper->endClip();
+        m_textureMapper->endPainting();
+    }
+#endif
 
     if (sceneHasRunningAnimations)
         updateViewport();
@@ -90,11 +145,19 @@ void CoordinatedGraphicsScene::onNewBufferAvailable()
     updateViewport();
 }
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
 static TextureMapperLayer& texmapLayer(Nicosia::CompositionLayer& compositionLayer, Damage::ShouldPropagate propagateDamage)
+#else
+static TextureMapperLayer& texmapLayer(Nicosia::CompositionLayer& compositionLayer)
+#endif
 {
     auto& compositionState = compositionLayer.compositionState();
     if (!compositionState.layer) {
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
         compositionState.layer = makeUnique<TextureMapperLayer>(propagateDamage);
+#else
+        compositionState.layer = makeUnique<TextureMapperLayer>();
+#endif
         compositionState.layer->setID(compositionLayer.id());
     }
     return *compositionState.layer;
@@ -174,7 +237,11 @@ void CoordinatedGraphicsScene::updateSceneState()
             // Handle the root layer, adding it to the TextureMapperLayer tree
             // on the first update. No such change is expected later.
             {
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                 auto& rootLayer = texmapLayer(*state.rootLayer, m_propagateDamage);
+#else
+                auto& rootLayer = texmapLayer(*state.rootLayer);
+#endif
                 if (rootLayer.id() != m_rootLayerID) {
                     m_rootLayerID = rootLayer.id();
                     RELEASE_ASSERT(m_rootLayer->children().isEmpty());
@@ -212,7 +279,11 @@ void CoordinatedGraphicsScene::updateSceneState()
             // the incoming state changes. Layer backings are stored so that the updates
             // (possibly time-consuming) can be done outside of this scene update.
             for (auto& compositionLayer : m_nicosia.state.layers) {
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                 auto& layer = texmapLayer(*compositionLayer, m_propagateDamage);
+#else
+                auto& layer = texmapLayer(*compositionLayer);
+#endif
                 compositionLayer->commitState(
                     [this, &layer, &layersByBacking, &replacedProxiesToInvalidate]
                     (const Nicosia::CompositionLayer::LayerState& layerState)
@@ -248,7 +319,11 @@ void CoordinatedGraphicsScene::updateSceneState()
                         if (layerState.delta.filtersChanged)
                             layer.setFilters(layerState.filters);
                         if (layerState.delta.backdropFiltersChanged)
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                             layer.setBackdropLayer(layerState.backdropLayer ? &texmapLayer(*layerState.backdropLayer, m_propagateDamage) : nullptr);
+#else
+                            layer.setBackdropLayer(layerState.backdropLayer ? &texmapLayer(*layerState.backdropLayer) : nullptr);
+#endif
                         if (layerState.delta.backdropFiltersRectChanged)
                             layer.setBackdropFiltersRect(layerState.backdropFiltersRect);
                         if (layerState.delta.animationsChanged)
@@ -257,14 +332,26 @@ void CoordinatedGraphicsScene::updateSceneState()
                         if (layerState.delta.childrenChanged) {
                             layer.setChildren(WTF::map(layerState.children,
                                 [this](auto& child) {
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                                     return &texmapLayer(*child, m_propagateDamage);
+#else
+                                    return &texmapLayer(*child);
+#endif
                                 }));
                         }
 
                         if (layerState.delta.maskChanged)
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                             layer.setMaskLayer(layerState.mask ? &texmapLayer(*layerState.mask, m_propagateDamage) : nullptr);
+#else
+                            layer.setMaskLayer(layerState.mask ? &texmapLayer(*layerState.mask) : nullptr);
+#endif
                         if (layerState.delta.replicaChanged)
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                             layer.setReplicaLayer(layerState.replica ? &texmapLayer(*layerState.replica, m_propagateDamage) : nullptr);
+#else
+                            layer.setReplicaLayer(layerState.replica ? &texmapLayer(*layerState.replica) : nullptr);
+#endif
 
                         if (layerState.delta.flagsChanged) {
                             layer.setContentsOpaque(layerState.flags.contentsOpaque);
@@ -288,10 +375,14 @@ void CoordinatedGraphicsScene::updateSceneState()
                         }
 
                         if (layerState.backingStore) {
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                             layer.acceptDamageVisitor(*this);
+#endif
                             layersByBacking.backingStore.append({ std::ref(layer), layerState.backingStore->takePendingUpdate() });
-                        } else
+                        } else {
                             layer.setBackingStore(nullptr);
+                            m_backingStores.remove(&layer);
+                        }
 
                         if (layerState.contentLayer) {
                             layersByBacking.contentLayer.append(
@@ -308,11 +399,13 @@ void CoordinatedGraphicsScene::updateSceneState()
                         else
                             layer.setAnimatedBackingStoreClient(nullptr);
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
                         if (layerState.delta.damageChanged) {
                             layer.addDamage(layerState.damage);
                             if (layerState.damage.isInvalid())
                                 layer.invalidateDamage();
                         }
+#endif
                     });
             }
         });
@@ -380,8 +473,12 @@ void CoordinatedGraphicsScene::ensureRootLayer()
     if (m_rootLayer)
         return;
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     m_rootLayer = makeUnique<TextureMapperLayer>(m_propagateDamage);
     m_rootLayer->acceptDamageVisitor(*this);
+#else
+    m_rootLayer = makeUnique<TextureMapperLayer>();
+#endif
     m_rootLayer->setMasksToBounds(false);
     m_rootLayer->setDrawsContent(false);
     m_rootLayer->setAnchorPoint(FloatPoint3D(0, 0, 0));
@@ -404,7 +501,9 @@ void CoordinatedGraphicsScene::purgeGLResources()
         m_nicosia.scene = nullptr;
     }
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     m_rootLayer->dismissDamageVisitor();
+#endif
     m_rootLayer = nullptr;
     m_rootLayerID = 0;
     m_textureMapper = nullptr;
@@ -417,10 +516,12 @@ void CoordinatedGraphicsScene::detach()
     m_client = nullptr;
 }
 
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
 void CoordinatedGraphicsScene::recordDamage(const FloatRect& damagedRect)
 {
     m_damage.add(damagedRect);
 }
+#endif
 
 } // namespace WebKit
 

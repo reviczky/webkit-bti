@@ -33,7 +33,7 @@
 
 namespace PAL {
 
-static const UChar latin1ConversionTable[256] = {
+static constexpr std::array<UChar, 256> latin1ConversionTable = {
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, // 00-07
     0x0008, 0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x000E, 0x000F, // 08-0F
     0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017, // 10-17
@@ -96,6 +96,8 @@ void TextCodecLatin1::registerCodecs(TextCodecRegistrar registrar)
         return makeUnique<TextCodecLatin1>();
     });
 }
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 String TextCodecLatin1::decode(std::span<const uint8_t> bytes, bool, bool, bool& sawException)
 {
@@ -206,6 +208,8 @@ useLookupTable16:
     return result16;
 }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+
 static Vector<uint8_t> encodeComplexWindowsLatin1(StringView string, UnencodableHandling handling)
 {
     Vector<uint8_t> result;
@@ -231,6 +235,8 @@ static Vector<uint8_t> encodeComplexWindowsLatin1(StringView string, Unencodable
     return result;
 }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 Vector<uint8_t> TextCodecLatin1::encode(StringView string, UnencodableHandling handling) const
 {
     {
@@ -251,5 +257,7 @@ Vector<uint8_t> TextCodecLatin1::encode(StringView string, UnencodableHandling h
     // If it wasn't all ASCII, call the function that handles more-complex cases.
     return encodeComplexWindowsLatin1(string, handling);
 }
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 } // namespace PAL

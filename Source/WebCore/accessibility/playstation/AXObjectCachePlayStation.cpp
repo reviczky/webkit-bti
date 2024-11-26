@@ -63,7 +63,7 @@ static AXCoreObject* notifyChildrenSelectionChange(AXCoreObject* object)
     const AccessibilityObject::AccessibilityChildrenVector& items = object->children();
     if (changedItemIndex < 0 || changedItemIndex >= static_cast<int>(items.size()))
         return object;
-    return items.at(changedItemIndex).get();
+    return items.at(changedItemIndex).ptr();
 }
 
 static AXObjectCache::AXNotification checkInteractableObjects(AXCoreObject* object)
@@ -131,12 +131,12 @@ void AXObjectCache::handleScrolledToAnchor(const Node& scrolledToNode)
         postPlatformNotification(*object, AXScrolledToAnchor);
 }
 
-void AXObjectCache::platformHandleFocusedUIElementChanged(Node*, Node* newFocusedNode)
+void AXObjectCache::platformHandleFocusedUIElementChanged(Element*, Element* newFocus)
 {
-    if (!newFocusedNode)
+    if (!newFocus)
         return;
 
-    Page* page = newFocusedNode->document().page();
+    Page* page = newFocus->document().page();
     if (!page || !page->chrome().platformPageClient())
         return;
 

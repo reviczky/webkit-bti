@@ -716,6 +716,7 @@ protected:
     bool isMediaElement() const final { return true; }
 
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) override;
+    bool isReplaced(const RenderStyle&) const override { return true; }
 
     SecurityOriginData documentSecurityOrigin() const final;
 
@@ -758,6 +759,8 @@ protected:
 
     bool videoFullscreenStandby() const { return m_videoFullscreenStandby; }
     void setVideoFullscreenStandbyInternal(bool videoFullscreenStandby) { m_videoFullscreenStandby = videoFullscreenStandby; }
+
+    void ignoreFullscreenPermissionPolicyOnNextCallToEnterFullscreen() { m_ignoreFullscreenPermissionsPolicy = true; }
 
 protected:
     // ActiveDOMObject
@@ -1116,6 +1119,8 @@ private:
     void watchtimeTimerFired();
     void startBufferingStopwatch();
     void invalidateBufferingStopwatch();
+    void logTextTrackDiagnostics(Ref<TextTrack>, double);
+
 
     enum ForceMuteChange { False, True };
     void setMutedInternal(bool muted, ForceMuteChange);
@@ -1428,6 +1433,8 @@ private:
 
     std::unique_ptr<PausableIntervalTimer> m_watchtimeTimer;
     RefPtr<WTF::Stopwatch> m_bufferingStopwatch;
+
+    bool m_ignoreFullscreenPermissionsPolicy { false };
 };
 
 String convertEnumerationToString(HTMLMediaElement::AutoplayEventPlaybackState);

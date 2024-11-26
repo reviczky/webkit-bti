@@ -42,6 +42,7 @@ namespace WebCore {
 class TextureMapperGLData;
 class TextureMapperShaderProgram;
 class FilterOperations;
+class FloatPolygon;
 class FloatRoundedRect;
 enum class TextureMapperFlags : uint16_t;
 
@@ -77,6 +78,7 @@ public:
     void bindSurface(BitmapTexture* surface);
     BitmapTexture* currentSurface();
     void beginClip(const TransformationMatrix&, const FloatRoundedRect&);
+    void beginClip(const TransformationMatrix&, const FloatPolygon&);
     WEBCORE_EXPORT void beginPainting(FlipY = FlipY::No, BitmapTexture* = nullptr);
     WEBCORE_EXPORT void endPainting();
     void endClip();
@@ -109,7 +111,6 @@ private:
 
     void drawTextureCopy(const BitmapTexture& sourceTexture, const FloatRect& sourceRect, const FloatRect& targetRect);
     void drawBlurred(const BitmapTexture& sourceTexture, const FloatRect&, float radius, Direction, bool alphaBlur = false);
-    void drawFilterPass(const BitmapTexture& sourceTexture, const BitmapTexture* contentTexture, const FilterOperation&, int pass);
     void drawTexturedQuadWithProgram(TextureMapperShaderProgram&, uint32_t texture, OptionSet<TextureMapperFlags>, const FloatRect&, const TransformationMatrix& modelViewMatrix, float opacity);
     void drawTexturedQuadWithProgram(TextureMapperShaderProgram&, const Vector<std::pair<GLuint, GLuint> >& texturesAndSamplers, OptionSet<TextureMapperFlags>, const FloatRect&, const TransformationMatrix& modelViewMatrix, float opacity);
     void draw(const FloatRect&, const TransformationMatrix& modelViewMatrix, TextureMapperShaderProgram&, GLenum drawingMode, OptionSet<TextureMapperFlags>);

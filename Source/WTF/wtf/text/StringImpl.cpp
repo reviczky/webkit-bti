@@ -191,7 +191,7 @@ template<typename CharacterType> inline Ref<StringImpl> StringImpl::createUninit
     if (length > maxInternalLength<CharacterType>())
         CRASH();
     StringImpl* string = static_cast<StringImpl*>(StringImplMalloc::malloc(allocationSize<CharacterType>(length)));
-    data = unsafeForgeSpan(string->tailPointer<CharacterType>(), length);
+    data = unsafeMakeSpan(string->tailPointer<CharacterType>(), length);
     return constructInternal<CharacterType>(*string, length);
 }
 
@@ -1543,18 +1543,16 @@ std::optional<UCharDirection> StringImpl::defaultWritingDirection()
 
 Ref<StringImpl> StringImpl::adopt(StringBuffer<LChar>&& buffer)
 {
-    unsigned length = buffer.length();
-    if (!length)
+    if (!buffer.length())
         return *empty();
-    return adoptRef(*new StringImpl(buffer.release(), length));
+    return adoptRef(*new StringImpl(buffer.release()));
 }
 
 Ref<StringImpl> StringImpl::adopt(StringBuffer<UChar>&& buffer)
 {
-    unsigned length = buffer.length();
-    if (!length)
+    if (!buffer.length())
         return *empty();
-    return adoptRef(*new StringImpl(buffer.release(), length));
+    return adoptRef(*new StringImpl(buffer.release()));
 }
 
 size_t StringImpl::sizeInBytes() const

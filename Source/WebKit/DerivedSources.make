@@ -126,6 +126,8 @@ else
     DELETE = rm -f
 endif
 
+to-pattern = $(join $(basename $1), $(subst .,%,$(suffix $1)))
+
 MESSAGE_RECEIVERS = \
 	NetworkProcess/NetworkBroadcastChannelRegistry \
 	NetworkProcess/NetworkConnectionToWebProcess \
@@ -184,7 +186,6 @@ MESSAGE_RECEIVERS = \
 	UIProcess/Cocoa/VideoPresentationManagerProxy \
 	UIProcess/ViewGestureController \
 	UIProcess/WebProcessProxy \
-	UIProcess/Automation/WebAutomationSession \
 	UIProcess/WebProcessPool \
 	UIProcess/WebScreenOrientationManagerProxy \
 	UIProcess/Downloads/DownloadProxy \
@@ -378,7 +379,7 @@ MESSAGE_RECEIVER_FILES := $(addsuffix MessageReceiver.cpp,$(notdir $(MESSAGE_REC
 MESSAGES_FILES := $(addsuffix Messages.h,$(notdir $(MESSAGE_RECEIVERS)))
 
 GENERATED_MESSAGES_FILES := $(MESSAGE_RECEIVER_FILES) $(MESSAGES_FILES) MessageNames.h MessageNames.cpp MessageArgumentDescriptions.cpp
-GENERATED_MESSAGES_FILES_AS_PATTERNS := $(subst .,%,$(GENERATED_MESSAGES_FILES))
+GENERATED_MESSAGES_FILES_AS_PATTERNS := $(call to-pattern, $(GENERATED_MESSAGES_FILES))
 
 MESSAGES_IN_FILES := $(addsuffix .messages.in,$(MESSAGE_RECEIVERS))
 
@@ -461,7 +462,7 @@ AUTOMATION_PROTOCOL_OUTPUT_FILES = \
     AutomationProtocolObjects.h \
     AutomationProtocolObjects.cpp \
 #
-AUTOMATION_PROTOCOL_OUTPUT_PATTERNS = $(subst .,%,$(AUTOMATION_PROTOCOL_OUTPUT_FILES))
+AUTOMATION_PROTOCOL_OUTPUT_PATTERNS = $(call to-pattern, $(AUTOMATION_PROTOCOL_OUTPUT_FILES))
 
 # JSON-RPC Frontend Dispatchers, Backend Dispatchers, Type Builders
 $(AUTOMATION_PROTOCOL_OUTPUT_PATTERNS) : $(AUTOMATION_PROTOCOL_INPUT_FILES) $(AUTOMATION_PROTOCOL_GENERATOR_SCRIPTS)
@@ -497,7 +498,7 @@ WEB_PREFERENCES_TEMPLATES = \
     $(WebKit2)/Scripts/PreferencesTemplates/WebPreferencesStoreDefaultsMap.cpp.erb \
 #
 WEB_PREFERENCES_FILES = $(basename $(notdir $(WEB_PREFERENCES_TEMPLATES)))
-WEB_PREFERENCES_PATTERNS = $(subst .cpp,%cpp, $(subst .h,%h, $(subst .in,%in, $(WEB_PREFERENCES_FILES))))
+WEB_PREFERENCES_PATTERNS = $(call to-pattern, $(WEB_PREFERENCES_FILES))
 
 all : $(WEB_PREFERENCES_FILES)
 
@@ -600,6 +601,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/SharedCARingBuffer.serialization.in \
 	Shared/Cocoa/WebCoreArgumentCodersCocoa.serialization.in \
 	Shared/CallbackID.serialization.in \
+	Shared/ContentWorldData.serialization.in \
 	Shared/ContextMenuContextData.serialization.in \
 	Shared/CoordinateSystem.serialization.in \
 	Shared/DebuggableInfoData.serialization.in \
@@ -695,6 +697,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebEvent.serialization.in \
 	Shared/WebFindOptions.serialization.in \
 	Shared/WebFoundTextRange.serialization.in \
+	Shared/WebFrameMetrics.serialization.in \
 	Shared/WebHitTestResultData.serialization.in \
 	Shared/WebImage.serialization.in \
 	Shared/WebNavigationDataStore.serialization.in \
@@ -843,6 +846,7 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	PlatformScreen.serialization.in \
 	PlatformWheelEvent.serialization.in \
 	PlaybackSessionModel.serialization.in \
+	ProcessSyncData.serialization.in \
 	ProtectionSpaceBase.serialization.in \
 	ScrollTypes.serialization.in \
 	WebGPU.serialization.in \
@@ -861,7 +865,7 @@ GENERATED_SERIALIZERS_OUTPUT_FILES = \
     WebKitPlatformGeneratedSerializers.mm \
 #
 
-GENERATED_SERIALIZERS_OUTPUT_PATTERNS = $(subst .,%,$(GENERATED_SERIALIZERS_OUTPUT_FILES))
+GENERATED_SERIALIZERS_OUTPUT_PATTERNS = $(call to-pattern, $(GENERATED_SERIALIZERS_OUTPUT_FILES))
 
 $(GENERATED_SERIALIZERS_OUTPUT_PATTERNS) : $(WebKit2)/Scripts/generate-serializers.py $(SERIALIZATION_DESCRIPTION_FILES) $(WebKit2)/DerivedSources.make $(WEBCORE_SERIALIZATION_DESCRIPTION_FILES_FULLPATH)
 	$(PYTHON) $(WebKit2)/Scripts/generate-serializers.py mm $(filter %.in,$^)

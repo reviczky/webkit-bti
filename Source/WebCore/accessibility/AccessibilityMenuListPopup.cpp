@@ -38,7 +38,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-AccessibilityMenuListPopup::AccessibilityMenuListPopup()
+AccessibilityMenuListPopup::AccessibilityMenuListPopup(AXID axID)
+    : AccessibilityMockObject(axID)
 {
 }
 
@@ -77,7 +78,7 @@ std::optional<AXCoreObject::AccessibilityChildrenVector> AccessibilityMenuListPo
         addChildren();
 
     AccessibilityChildrenVector result;
-    for (const auto& child : unignoredChildren(/* updateChildrenIfNeeded */ false)) {
+    for (const auto& child : unignoredChildren()) {
         auto* liveChild = dynamicDowncast<AccessibilityObject>(child.get());
         if (liveChild && liveChild->isMenuListOption() && liveChild->isSelected())
             result.append(child.get());
@@ -123,16 +124,16 @@ void AccessibilityMenuListPopup::addChildren()
 
 void AccessibilityMenuListPopup::handleChildrenChanged()
 {
-    auto* cache = axObjectCache();
+    CheckedPtr cache = axObjectCache();
     if (!cache)
         return;
 
     const auto& children = unignoredChildren(/* updateChildrenIfNeeded */ false);
     for (size_t i = children.size(); i > 0; --i) {
-        auto* child = children[i - 1].get();
-        if (child->actionElement() && !child->actionElement()->inRenderedDocument()) {
-            child->detachFromParent();
-            cache->remove(child->objectID());
+        auto& child = children[i - 1].get();
+        if (RefPtr actionElement = child.actionElement(); actionElement && !actionElement->inRenderedDocument()) {
+            child.detachFromParent();
+            cache->remove(child.objectID());
         }
     }
 
@@ -144,16 +145,16 @@ void AccessibilityMenuListPopup::handleChildrenChanged()
 void AccessibilityMenuListPopup::didUpdateActiveOption(int optionIndex)
 {
     ASSERT_ARG(optionIndex, optionIndex >= 0);
-    const auto& children = unignoredChildren(/* updateChildrenIfNeeded */ false);
+    const auto& children = unignoredChildren();
     ASSERT_ARG(optionIndex, optionIndex < static_cast<int>(children.size()));
 
-    auto* cache = axObjectCache();
+    CheckedPtr cache = axObjectCache();
     if (!cache)
         return;
 
-    RefPtr child = downcast<AccessibilityObject>(children[optionIndex].get());
-    cache->postNotification(child.get(), document(), AXObjectCache::AXFocusedUIElementChanged);
-    cache->postNotification(child.get(), document(), AXObjectCache::AXMenuListItemSelected);
+    auto& child = downcast<AccessibilityObject>(children[optionIndex].get());
+    cache->postNotification(&child, document(), AXObjectCache::AXFocusedUIElementChanged);
+    cache->postNotification(&child, document(), AXObjectCache::AXMenuListItemSelected);
 }
 
 } // namespace WebCore

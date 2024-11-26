@@ -31,8 +31,15 @@
 #include "GPUQuerySet.h"
 #include "GPURenderBundle.h"
 #include "GPURenderPipeline.h"
+#include "WebGPUDevice.h"
 
 namespace WebCore {
+
+GPURenderPassEncoder::GPURenderPassEncoder(Ref<WebGPU::RenderPassEncoder>&& backing, WebGPU::Device& device)
+    : m_backing(WTFMove(backing))
+    , m_device(&device)
+{
+}
 
 String GPURenderPassEncoder::label() const
 {
@@ -98,7 +105,7 @@ ExceptionOr<void> GPURenderPassEncoder::setBindGroup(GPUIndex32 index, const GPU
     if (offset.hasOverflowed() || offset > dynamicOffsetsData.length())
         return Exception { ExceptionCode::RangeError, "dynamic offsets overflowed"_s };
 
-    m_backing->setBindGroup(index, bindGroup.backing(), dynamicOffsetsData.span(), dynamicOffsetsDataStart, dynamicOffsetsDataLength);
+    m_backing->setBindGroup(index, bindGroup.backing(), dynamicOffsetsData.typedSpan(), dynamicOffsetsDataStart, dynamicOffsetsDataLength);
     return { };
 }
 
@@ -161,6 +168,8 @@ void GPURenderPassEncoder::executeBundles(Vector<Ref<GPURenderBundle>>&& bundles
 void GPURenderPassEncoder::end()
 {
     m_backing->end();
+    if (m_device)
+        m_backing = m_device->invalidRenderPassEncoder();
 }
 
 }
