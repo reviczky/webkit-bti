@@ -1,4 +1,4 @@
-webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.47.2-1) experimental; urgency=medium
 
   * New upstream development release.
   * Drop calctree-static-assert.patch.
@@ -13,7 +13,7 @@ webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
     ("failed to perform tail call elimination on a call site marked
     musttail").
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 11:19:22 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 16:50:51 +0100
 
 webkit2gtk (2.47.1-1) experimental; urgency=medium
 
