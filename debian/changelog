@@ -9,6 +9,9 @@ webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
   * Remove libwebkit2gtk-4.0-37.lintian-overrides.
   * debian/copyright:
     - Update copyright information of all files.
+  * Disable clang in i386 ("unknown type name __m128i") and mips64el
+    ("failed to perform tail call elimination on a call site marked
+    musttail").
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 11:19:22 +0100
 
