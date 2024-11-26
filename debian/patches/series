@@ -4,4 +4,3 @@ fix-ftbfs-x32.patch
 dont-detect-sse2.patch
 disable-nvidia-dmabuf.patch
 fix-bmalloc-armhf.patch
-calctree-static-assert.patch
