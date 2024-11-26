@@ -29,6 +29,7 @@
 #if ENABLE(MEDIA_RECORDER)
 
 #include "AudioSampleBufferCompressor.h"
+#include "CARingBuffer.h"
 #include "CMUtilities.h"
 #include "ContentType.h"
 #include "MediaRecorderPrivateOptions.h"
@@ -183,14 +184,6 @@ bool MediaRecorderPrivateEncoder::initialize(const MediaRecorderPrivateOptions& 
     m_audioBitsPerSecond = options.audioBitsPerSecond.value_or(0);
     m_videoBitsPerSecond = options.videoBitsPerSecond.value_or(0);
 
-    if (hasAudio()) {
-        m_audioCompressor = AudioSampleBufferCompressor::create(compressedAudioOutputBufferCallback, this, m_audioCodec);
-        if (!m_audioCompressor)
-            return false;
-        if (options.audioBitsPerSecond)
-            audioCompressor()->setBitsPerSecond(*options.audioBitsPerSecond);
-    }
-
     if (hasAudio())
         m_audioCodecMimeType = codecStringForMediaVideoCodecId(m_audioCodec);
     if (hasVideo())
@@ -250,7 +243,7 @@ void MediaRecorderPrivateEncoder::close()
     stopRecording();
 }
 
-const String& MediaRecorderPrivateEncoder::mimeType() const
+String MediaRecorderPrivateEncoder::mimeType() const
 {
     assertIsMainThread();
     return m_mimeType;
@@ -276,24 +269,152 @@ void MediaRecorderPrivateEncoder::appendAudioSampleBuffer(const PlatformAudioDat
     // explicitly allow the following allocation(s).
     DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
 
-    ASSERT(!m_currentAudioSamplingRate || m_currentAudioSamplingRate == description.sampleRate(), "sampling rate should never change over a session");
-    m_currentAudioSamplingRate = description.sampleRate();
-    m_lastEnqueuedAudioSampleCount = m_currentAudioSampleCount.load();
+    if (m_currentStreamDescription != description) {
+        LOG(MediaStream, "description changed");
+        m_currentStreamDescription = toCAAudioStreamDescription(description);
+        addRingBuffer(description);
+        m_currentAudioSampleCount = 0;
+    }
+
+    auto currentAudioTime = m_currentAudioTime;
+    m_lastEnqueuedAudioTimeUs = m_currentAudioTime.toMicroseconds();
+
+    m_currentAudioTime += MediaTime(sampleCount, description.sampleRate());
+    m_currentAudioTimeUs = m_currentAudioTime.toMicroseconds();
+
+    writeDataToRingBuffer(downcast<WebAudioBufferList>(data).list(), sampleCount, m_currentAudioSampleCount);
+
+    queueSingleton().dispatch([weakThis = ThreadSafeWeakPtr { *this }, currentAudioTime, sampleCount, currentAudioSampleCount = m_currentAudioSampleCount] {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->audioSamplesAvailable(currentAudioTime, sampleCount, currentAudioSampleCount);
+    });
+
     m_currentAudioSampleCount += sampleCount;
-    if (RetainPtr sampleBuffer = createAudioSampleBuffer(data, description, PAL::CMTimeMake(m_lastEnqueuedAudioSampleCount, description.sampleRate()), sampleCount))
-        audioCompressor()->addSampleBuffer(sampleBuffer.get());
+}
+
+void MediaRecorderPrivateEncoder::audioSamplesDescriptionChanged(const AudioStreamBasicDescription& description)
+{
+    assertIsCurrent(queueSingleton());
+
+    if (!m_originalOutputDescription) {
+        AudioStreamBasicDescription outputDescription = { };
+        outputDescription.mFormatID = m_audioCodec;
+        outputDescription.mChannelsPerFrame = description.mChannelsPerFrame;
+        outputDescription.mSampleRate = description.mSampleRate;
+        m_originalOutputDescription = outputDescription;
+    }
+
+    CMFormatDescriptionRef newFormat = nullptr;
+    if (auto error = PAL::CMAudioFormatDescriptionCreate(kCFAllocatorDefault, &description, 0, nullptr, 0, nullptr, nullptr, &newFormat)) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesAvailable: CMAudioFormatDescriptionCreate failed with %u", error);
+        m_hadError = true;
+        return;
+    }
+    m_audioFormatDescription = adoptCF(newFormat);
+
+    if (m_audioCompressor) {
+        audioCompressor()->finish();
+        m_formatChangedOccurred = true;
+    }
+
+    m_audioCompressor = AudioSampleBufferCompressor::create(compressedAudioOutputBufferCallback, this, m_audioCodec, *m_originalOutputDescription);
+    if (!m_audioCompressor) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesDescriptionChanged: creation of compressor failed");
+        m_hadError = true;
+        return;
+    }
+
+    if (m_audioBitsPerSecond)
+        audioCompressor()->setBitsPerSecond(m_audioBitsPerSecond);
+
+    updateCurrentRingBufferIfNeeded();
+}
+
+void MediaRecorderPrivateEncoder::addRingBuffer(const AudioStreamDescription& description)
+{
+    auto asbd = *std::get<const AudioStreamBasicDescription*>(description.platformDescription().description);
+    Locker locker { m_ringBuffersLock };
+    m_ringBuffers.append(InProcessCARingBuffer::allocate(asbd, description.sampleRate() * 2)); // allocate 2s of buffer.
+    queueSingleton().dispatch([weakThis = ThreadSafeWeakPtr { *this }, description = asbd] {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->audioSamplesDescriptionChanged(description);
+    });
+}
+
+void MediaRecorderPrivateEncoder::writeDataToRingBuffer(AudioBufferList* list, size_t sampleCount, size_t totalSampleCount)
+{
+    Locker locker { m_ringBuffersLock };
+    if (m_ringBuffers.isEmpty() || !m_ringBuffers.last())
+        return;
+    m_ringBuffers.last()->store(list, sampleCount, totalSampleCount);
+}
+
+void MediaRecorderPrivateEncoder::updateCurrentRingBufferIfNeeded()
+{
+    assertIsCurrent(queueSingleton());
+
+    Locker locker { m_ringBuffersLock };
+    if (m_currentRingBuffer) {
+        ASSERT(m_ringBuffers.size() > 1);
+        m_ringBuffers.removeFirst();
+    }
+    m_currentRingBuffer = m_ringBuffers.first().get();
+    if (!m_currentRingBuffer) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesDescriptionChanged: out of memory error occurred");
+        m_hadError = true;
+    }
+}
+
+void MediaRecorderPrivateEncoder::audioSamplesAvailable(const MediaTime& time, size_t sampleCount, size_t totalSampleCount)
+{
+    assertIsCurrent(queueSingleton());
+
+    ASSERT(m_audioFormatDescription);
+
+    if (m_hadError)
+        return;
+
+    auto* absd = PAL::CMAudioFormatDescriptionGetStreamBasicDescription(m_audioFormatDescription.get());
+    ASSERT(absd);
+    if (!absd) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesAvailable: inconsistent running state");
+        m_hadError = true;
+        return;
+    }
+
+    auto result = WebAudioBufferList::createWebAudioBufferListWithBlockBuffer(*absd, sampleCount);
+    if (!result) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesAvailable: failed to create block buffer");
+        m_hadError = true;
+        return;
+    }
+    auto [list, block] = WTFMove(*result);
+
+    ASSERT(m_currentRingBuffer);
+    m_currentRingBuffer->fetch(list->list(), sampleCount, totalSampleCount);
+
+    CMSampleBufferRef sampleBuffer = nullptr;
+    if (auto error = PAL::CMAudioSampleBufferCreateWithPacketDescriptions(kCFAllocatorDefault, block.get(), true, nullptr, nullptr, m_audioFormatDescription.get(), sampleCount, PAL::toCMTime(time), nullptr, &sampleBuffer)) {
+        RELEASE_LOG_ERROR(MediaStream, "MediaRecorderPrivateEncoder::audioSamplesAvailable: CMAudioSampleBufferCreateWithPacketDescriptions failed with error %d", error);
+        m_hadError = true;
+        return;
+    }
+    RetainPtr sample = adoptCF(sampleBuffer);
+
+    audioCompressor()->addSampleBuffer(sampleBuffer);
 }
 
 void MediaRecorderPrivateEncoder::appendVideoFrame(VideoFrame& frame)
 {
-    queueSingleton().dispatch([weakThis = ThreadSafeWeakPtr { *this }, this, frame = Ref { frame }, sampleCount = static_cast<size_t>(m_lastEnqueuedAudioSampleCount), samplingRate = static_cast<uint32_t>(m_currentAudioSamplingRate)]() mutable {
+    if (m_isStopped)
+        return;
+
+    queueSingleton().dispatch([weakThis = ThreadSafeWeakPtr { *this }, this, frame = Ref { frame }, time = MediaTime(m_lastEnqueuedAudioTimeUs.load(), 1000000)]() mutable {
         assertIsCurrent(queueSingleton());
         if (RefPtr protectedThis = weakThis.get()) {
-            if (m_isStopped)
-                return;
             if (!hasAudio() && !m_resumeWallTime)
                 m_resumeWallTime = MonotonicTime::now();
-            appendVideoFrame(samplingRate ? MediaTime(sampleCount, samplingRate) : MediaTime::zeroTime(), WTFMove(frame));
+            appendVideoFrame(time, WTFMove(frame));
         }
     });
 }
@@ -338,16 +459,16 @@ void MediaRecorderPrivateEncoder::appendVideoFrame(const MediaTime& audioTime, R
     }
 
     auto sampleTime = nextVideoFrameTime(audioTime);
-    // FIXME: AVAssetWriter errors we we attempt to add a sample with the same time.
+    // FIXME: AVAssetWriter errors when we attempt to add a sample with the same time.
     // When we start and audio isn't ready, we may output multiple frame that has a timestamp of 0.
     if (sampleTime <= m_lastEnqueuedRawVideoFrame)
-        sampleTime = m_lastEnqueuedRawVideoFrame + MediaTime(1, m_currentAudioSamplingRate ? static_cast<uint32_t>(m_currentAudioSamplingRate) : 1000000u);
+        sampleTime = m_lastEnqueuedRawVideoFrame + MediaTime(1, 1000000);
 
     ASSERT(m_lastEnqueuedRawVideoFrame <= sampleTime);
     ASSERT(m_lastEnqueuedRawVideoFrame >= m_lastReceivedCompressedVideoFrame);
     m_lastEnqueuedRawVideoFrame = sampleTime;
     m_pendingVideoFrames.append({ WTFMove(frame), sampleTime });
-    LOG(MediaStream, "appendVideoFrame:enqueuing raw video frame:%f queue:%zu first:%f last:%f (received audio:%d)", sampleTime.toDouble(), m_pendingVideoFrames.size(), m_pendingVideoFrames.first().second.toDouble(), m_pendingVideoFrames.last().second.toDouble(), uint32_t(m_currentAudioSamplingRate));
+    LOG(MediaStream, "appendVideoFrame:enqueuing raw video frame:%f queue:%zu first:%f last:%f (received audio:%d)", sampleTime.toDouble(), m_pendingVideoFrames.size(), m_pendingVideoFrames.first().second.toDouble(), m_pendingVideoFrames.last().second.toDouble(), !!m_lastEnqueuedAudioTimeUs.load());
 
     encodePendingVideoFrames();
 }
@@ -392,18 +513,12 @@ bool MediaRecorderPrivateEncoder::hasMuxedDataSinceEndSegment() const
 {
     assertIsCurrent(queueSingleton());
 
-    return (!hasAudio() || m_hasMuxedAudioFrameSinceTakeData) && (!hasVideo() || m_hasMuxedVideoFrameSinceTakeData);
+    return (!hasAudio() || m_hasMuxedAudioFrameSinceEndSegment) && (!hasVideo() || m_hasMuxedVideoFrameSinceEndSegment);
 }
 
-RefPtr<FragmentedSharedBuffer> MediaRecorderPrivateEncoder::takeData()
+Ref<FragmentedSharedBuffer> MediaRecorderPrivateEncoder::takeData()
 {
     assertIsCurrent(queueSingleton());
-
-    if (!hasMuxedDataSinceEndSegment())
-        return FragmentedSharedBuffer::create();
-
-    m_hasMuxedAudioFrameSinceTakeData = false;
-    m_hasMuxedVideoFrameSinceTakeData = false;
 
     {
         Locker locker { m_lock };
@@ -421,9 +536,9 @@ void MediaRecorderPrivateEncoder::enqueueCompressedAudioSampleBuffers()
     if (!audioCompressor() || audioCompressor()->isEmpty())
         return;
 
-    if (!m_audioFormatDescription) {
-        m_audioFormatDescription = PAL::CMSampleBufferGetFormatDescription(audioCompressor()->getOutputSampleBuffer());
-        if (auto result = m_writer->addAudioTrack(m_audioFormatDescription.get()))
+    if (!m_audioCompressedFormatDescription) {
+        m_audioCompressedFormatDescription = PAL::CMSampleBufferGetFormatDescription(audioCompressor()->getOutputSampleBuffer());
+        if (auto result = m_writer->addAudioTrack(m_audioCompressedFormatDescription.get()))
             m_audioTrackIndex = result;
         else {
             RELEASE_LOG_ERROR(MediaStream, "appendAudioFrame: Failed to create audio track");
@@ -443,6 +558,8 @@ void MediaRecorderPrivateEncoder::enqueueCompressedAudioSampleBuffers()
                 m_pendingAudioFramePromise->second.resolve();
                 m_pendingAudioFramePromise.reset();
             }
+            if (!m_hasStartedAudibleAudioFrame && sample->duration())
+                m_hasStartedAudibleAudioFrame = true;
             m_encodedAudioFrames.append(WTFMove(sample));
         }
     }
@@ -455,7 +572,7 @@ void MediaRecorderPrivateEncoder::maybeStartWriter()
     if (m_writerIsStarted)
         return;
 
-    if ((hasAudio() && !m_audioFormatDescription && !m_audioTrackIndex) || (hasVideo() && !m_videoFormatDescription && !m_videoTrackIndex))
+    if ((hasAudio() && !m_audioCompressedFormatDescription && !m_audioTrackIndex) || (hasVideo() && !m_videoFormatDescription && !m_videoTrackIndex))
         return;
 
     m_writer->allTracksAdded();
@@ -570,7 +687,7 @@ void MediaRecorderPrivateEncoder::partiallyFlushEncodedQueues()
     if (m_pendingFlush)
         return;
 
-    LOG(MediaStream, "partiallyFlushEncodedQueues: lastAudioReceived:%f audioqueue:%zu first:%f last:%f videoQueue:%zu first:%f (kf:%d) last:%f", (static_cast<uint32_t>(m_lastEnqueuedAudioSampleCount) ? MediaTime(m_currentAudioSampleCount, m_currentAudioSamplingRate) : MediaTime::zeroTime()).toDouble(), m_encodedAudioFrames.size(), m_encodedAudioFrames.size() ? m_encodedAudioFrames.first()->presentationTime().toDouble() : 0, m_encodedAudioFrames.size() ? m_encodedAudioFrames.last()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size(), m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->isSync() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.last()->presentationTime().toDouble() : 0);
+    LOG(MediaStream, "partiallyFlushEncodedQueues: lastAudioReceived:%f audioqueue:%zu first:%f last:%f videoQueue:%zu first:%f (kf:%d) last:%f", lastEnqueuedAudioTime().toDouble(), m_encodedAudioFrames.size(), m_encodedAudioFrames.size() ? m_encodedAudioFrames.first()->presentationTime().toDouble() : 0, m_encodedAudioFrames.size() ? m_encodedAudioFrames.last()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size(), m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->isSync() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.last()->presentationTime().toDouble() : 0);
 
     if (hasAudio())
         enqueueCompressedAudioSampleBuffers(); // compressedAudioOutputBufferCallback isn't always called when new frames are available. Force refresh
@@ -614,19 +731,28 @@ Ref<GenericPromise> MediaRecorderPrivateEncoder::waitForMatchingAudio(const Medi
     return m_pendingAudioFramePromise->second.promise();
 }
 
-void MediaRecorderPrivateEncoder::flushToEndSegment(const MediaTime& flushTime)
+std::pair<MediaRecorderPrivateEncoder::Result, MediaTime> MediaRecorderPrivateEncoder::flushToEndSegment(const MediaTime& flushTime)
 {
     assertIsCurrent(queueSingleton());
 
-    LOG(MediaStream, "MediaRecorderPrivateEncoder::flushToEndSegment(%f): lastAudioReceived:%f audioqueue:%zu first:%f last:%f videoQueue:%zu first:%f (kf:%d) last:%f", flushTime.toDouble(), (static_cast<uint32_t>(m_lastEnqueuedAudioSampleCount) ? MediaTime(m_currentAudioSampleCount, m_currentAudioSamplingRate) : MediaTime::zeroTime()).toDouble(), m_encodedAudioFrames.size(), m_encodedAudioFrames.size() ? m_encodedAudioFrames.first()->presentationTime().toDouble() : 0, m_encodedAudioFrames.size() ? m_encodedAudioFrames.last()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size(), m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->isSync() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.last()->presentationTime().toDouble() : 0);
+    LOG(MediaStream, "MediaRecorderPrivateEncoder::flushToEndSegment(%f): lastAudioReceived:%f audioqueue:%zu first:%f last:%f videoQueue:%zu first:%f (kf:%d) last:%f", flushTime.toDouble(), lastEnqueuedAudioTime().toDouble(), m_encodedAudioFrames.size(), m_encodedAudioFrames.size() ? m_encodedAudioFrames.first()->presentationTime().toDouble() : 0, m_encodedAudioFrames.size() ? m_encodedAudioFrames.last()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size(), m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->presentationTime().toDouble() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.first()->isSync() : 0, m_encodedVideoFrames.size() ? m_encodedVideoFrames.last()->presentationTime().toDouble() : 0);
 
     if (hasAudio())
         enqueueCompressedAudioSampleBuffers(); // compressedAudioOutputBufferCallback isn't always called when new frames are available. Force refresh
 
-    if (!m_writerIsStarted)
-        return;
+    if (!m_writerIsStarted || (hasAudio() && !m_hasStartedAudibleAudioFrame))
+        return { Result::NotReady, MediaTime::invalidTime() };
 
     ASSERT(!m_videoEncoderCreationPromise);
+
+    // Find last video keyframe in the queue.
+    RefPtr<MediaSample> lastVideoKeyFrame;
+    for (auto it = m_encodedVideoFrames.rbegin(); it != m_encodedVideoFrames.rend(); ++it) {
+        if ((*it)->isSync()) {
+            lastVideoKeyFrame = (*it).copyRef();
+            break;
+        }
+    }
 
     // Mux all video frames until we reached the end of the queue or we found a keyframe.
     Result success = Result::Success;
@@ -636,31 +762,29 @@ void MediaRecorderPrivateEncoder::flushToEndSegment(const MediaTime& flushTime)
         ASSERT(audioFrame || videoFrame);
         bool takeVideo = videoFrame && (!audioFrame || videoFrame->presentationTime() < audioFrame->presentationTime());
         Ref frame = takeVideo ? videoFrame.releaseNonNull() : audioFrame.releaseNonNull();
-        if (takeVideo && frame->isSync()) {
+        if (takeVideo && frame.ptr() == lastVideoKeyFrame) {
             LOG(MediaStream, "flushToEndSegment: stopping prior video keyframe time:%f", frame->presentationTime().toDouble());
-            m_endMuxedTime = frame->presentationTime();
-            break;
+            return { success, frame->presentationTime() };
         }
         // We are about to end the current segment and the next segment needs to start with a keyframe.
         // Don't mux the current audio frame (if any) if the next video frame is a keyframe and is to be displayed
         // while the current audio frame is playing.
         if (!takeVideo && videoFrame) {
-            if ((videoFrame->presentationTime() <= frame->presentationEndTime()) && videoFrame->isSync()) {
+            if ((videoFrame->presentationTime() <= frame->presentationEndTime()) && videoFrame == lastVideoKeyFrame) {
                 LOG(MediaStream, "flushToEndSegment: stopping prior audio containing video keyframe time:%f", frame->presentationTime().toDouble());
-                m_endMuxedTime = frame->presentationTime();
-                break;
+                return { success, frame->presentationTime() };
             }
         }
 
         // If we don't have any more video frames pending (the next incoming frame will be a keyframe),
         // we write all the audio frames received with a date prior flushTime.
-        if (!takeVideo && !videoFrame && frame->presentationTime() > flushTime) {
-            m_endMuxedTime = frame->presentationTime();
-            break;
-        }
+        if (!takeVideo && !videoFrame && frame->presentationTime() > flushTime)
+            return { success, frame->presentationTime() };
 
         success = muxNextFrame();
     };
+
+    return { success, flushTime };
 }
 
 void MediaRecorderPrivateEncoder::flushAllEncodedQueues()
@@ -696,23 +820,30 @@ MediaRecorderPrivateEncoder::Result MediaRecorderPrivateEncoder::muxNextFrame()
 
     ASSERT(!takeVideo || !m_nextVideoFrameMuxedShouldBeKeyframe || frame->isSync());
 
+    if (m_formatChangedOccurred && !takeVideo) {
+        RetainPtr sample = downcast<MediaSampleAVFObjC>(frame)->sampleBuffer();
+        // Writing audio samples requiring an edit list is forbidden by the AVAssetWriterInput when used with fMP4, remove the keys.
+        PAL::CMRemoveAttachment(sample.get(), PAL::kCMSampleBufferAttachmentKey_TrimDurationAtStart);
+        PAL::CMRemoveAttachment(sample.get(), PAL::kCMSampleBufferAttachmentKey_TrimDurationAtEnd);
+    }
+
     auto result = m_writer->muxFrame(frame, takeVideo ? *m_videoTrackIndex : *m_audioTrackIndex);
     if (result != Result::NotReady) {
         (takeVideo ? m_encodedVideoFrames : m_encodedAudioFrames).removeFirst();
-        LOG(MediaStream, "muxNextFrame: writing %s (kf:%d) frame time:%f-%f (previous:%f) success:%d", takeVideo ? "video" : "audio", frame->isSync(), frame->presentationTime().toDouble(), frame->presentationEndTime().toDouble(), m_lastMuxedSampleStartTime.toDouble(), result == Result::Success);
+        LOG(MediaStream, "muxNextFrame: wrote %s (kf:%d) frame time:%f-%f (previous:%f) success:%d", takeVideo ? "video" : "audio", frame->isSync(), frame->presentationTime().toDouble(), frame->presentationEndTime().toDouble(), m_lastMuxedSampleStartTime.toDouble(), result == Result::Success);
         ASSERT(frame->presentationTime() >= m_lastMuxedSampleStartTime);
         m_lastMuxedSampleStartTime = frame->presentationTime();
+        ASSERT(result == Result::Success);
         if (takeVideo) {
-            m_hasMuxedVideoFrameSinceTakeData = true;
+            m_hasMuxedVideoFrameSinceEndSegment = true;
             m_nextVideoFrameMuxedShouldBeKeyframe = false;
         } else {
-            m_hasMuxedAudioFrameSinceTakeData = true;
+            m_hasMuxedAudioFrameSinceEndSegment = true;
             m_lastMuxedAudioSampleEndTime = frame->presentationEndTime();
         }
     } else {
         // The MediaRecorderPrivateEncoder performs the correct interleaving of samples and doesn't rely on the writer to do so.
-        LOG(MediaStream, "muxNextFrame: writing %s frame time:%f not ready", takeVideo ? "video" : "audio", frame->presentationTime().toDouble());
-        ASSERT_NOT_REACHED();
+        RELEASE_LOG_ERROR(MediaStream, "muxNextFrame: writing %s frame time:%f not ready", takeVideo ? "video" : "audio", frame->presentationTime().toDouble());
     }
 
     return result;
@@ -743,6 +874,11 @@ void MediaRecorderPrivateEncoder::stopRecording()
         if (RefPtr compressor = audioCompressor())
             compressor->finish();
 
+        {
+            Locker locker { m_ringBuffersLock };
+            m_ringBuffers.clear();
+        }
+
         return flushPendingData(MediaTime::positiveInfiniteTime())->whenSettled(queueSingleton(), [protectedThis, this] {
             assertIsCurrent(queueSingleton());
             if (m_videoEncoder)
@@ -756,6 +892,7 @@ void MediaRecorderPrivateEncoder::stopRecording()
             m_writerIsClosed = true;
 
             LOG(MediaStream, "FlushPendingData::close writer time:%f", currentEndTime().toDouble());
+
             return m_writer->close(currentEndTime());
         });
     });
@@ -769,12 +906,13 @@ void MediaRecorderPrivateEncoder::fetchData(CompletionHandler<void(RefPtr<Fragme
         auto currentTime = this->currentTime();
         return flushPendingData(currentTime)->whenSettled(queueSingleton(), [protectedThis, this, completionHandler = WTFMove(completionHandler), currentTime]() mutable {
             assertIsCurrent(queueSingleton());
-            RefPtr data = takeData();
-            auto timeCode = data->size() ? currentTime.toDouble() : m_timeCode;
-            callOnMainThread([completionHandler = WTFMove(completionHandler), data, timeCode]() mutable {
-                LOG(MediaStream, "fetchData::returning data:%zu time:%f", data->size(), timeCode);
+            Ref data = takeData();
+            LOG(MediaStream, "fetchData::returning data:%zu timeCode:%f time:%f", data->size(), m_timeCode, currentTime.toDouble());
+            callOnMainThread([completionHandler = WTFMove(completionHandler), data, timeCode = m_timeCode]() mutable {
                 completionHandler(WTFMove(data), timeCode);
             });
+            if (data->size())
+                m_timeCode = currentTime.toDouble();
             return GenericPromise::createAndResolve();
         });
     });
@@ -809,13 +947,20 @@ Ref<GenericPromise> MediaRecorderPrivateEncoder::flushPendingData(const MediaTim
         assertIsCurrent(queueSingleton());
         if (RefPtr protectedThis = weakThis.get()) {
             if (result) {
-                flushToEndSegment(currentTime);
-                // Ending the current segment before frames of all kind have been amended results in a broken file.
-                if (!m_isStopped && hasMuxedDataSinceEndSegment()) {
-                    LOG(MediaStream, "FlushPendingData::forceNewSegment at time:%f", m_endMuxedTime.value_or(currentTime).toDouble());
-                    m_writer->forceNewSegment(m_endMuxedTime.value_or(currentTime));
-                    m_endMuxedTime.reset();
+                auto [result, endMuxedTime] = flushToEndSegment(currentTime);
+                // Start a new segment if:
+                // 1: We aren't stopped (all frames will be flushed and written upon the promise being resolved) and
+                // 2: We have muxed data for all tracks (Ending the current segment before frames of all kind have been amended results in a broken file) and
+                // 3: We have accumulated more than m_minimumSegmentDuration of content or
+                // 4: We are paused.
+                if (!m_isStopped && hasMuxedDataSinceEndSegment() && result == Result::Success
+                    && ((endMuxedTime - m_startSegmentTime >= m_minimumSegmentDuration) || m_isPaused)) {
+                    LOG(MediaStream, "FlushPendingData::forceNewSegment at time:%f", endMuxedTime.toDouble());
+                    m_writer->forceNewSegment(endMuxedTime);
                     m_nextVideoFrameMuxedShouldBeKeyframe = true;
+                    m_startSegmentTime = endMuxedTime;
+                    m_hasMuxedAudioFrameSinceEndSegment = false;
+                    m_hasMuxedVideoFrameSinceEndSegment = false;
                 }
             }
             m_pendingFlush--;
@@ -829,7 +974,7 @@ MediaTime MediaRecorderPrivateEncoder::currentTime() const
     assertIsCurrent(queueSingleton());
 
     if (hasAudio())
-        return m_currentAudioSamplingRate ? MediaTime(static_cast<int64_t>(m_lastEnqueuedAudioSampleCount), m_currentAudioSamplingRate) : MediaTime::zeroTime();
+        return lastEnqueuedAudioTime();
 
     return MediaTime::createWithSeconds(MonotonicTime::now() - m_resumeWallTime.value_or(MonotonicTime::now())) + m_currentVideoDuration;
 }
@@ -839,13 +984,15 @@ MediaTime MediaRecorderPrivateEncoder::currentEndTime() const
     assertIsCurrent(queueSingleton());
 
     if (hasAudio())
-        return m_currentAudioSamplingRate ? MediaTime(static_cast<int64_t>(m_currentAudioSampleCount), m_currentAudioSamplingRate) : MediaTime::zeroTime();
+        return MediaTime(m_currentAudioTimeUs.load(), 1000000);
 
     return MediaTime::createWithSeconds(MonotonicTime::now() - m_resumeWallTime.value_or(MonotonicTime::now())) + m_currentVideoDuration;
 }
 
 RefPtr<AudioSampleBufferCompressor> MediaRecorderPrivateEncoder::audioCompressor() const
 {
+    assertIsCurrent(queueSingleton());
+
     return m_audioCompressor;
 }
 

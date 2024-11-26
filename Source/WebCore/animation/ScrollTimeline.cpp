@@ -30,10 +30,11 @@
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSScrollValue.h"
 #include "CSSValuePool.h"
-#include "Document.h"
+#include "DocumentInlines.h"
 #include "Element.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderView.h"
+#include "WebAnimation.h"
 
 namespace WebCore {
 
@@ -99,6 +100,40 @@ ScrollTimeline::ScrollTimeline(Scroller scroller, ScrollAxis axis)
 {
     m_axis = axis;
     m_scroller = scroller;
+}
+
+Element* ScrollTimeline::source() const
+{
+    if (!m_source)
+        return nullptr;
+
+    switch (m_scroller) {
+    case Scroller::Nearest: {
+        if (CheckedPtr subjectRenderer = m_source->renderer()) {
+            if (CheckedPtr nearestScrollableContainer = subjectRenderer->enclosingScrollableContainer()) {
+                if (RefPtr nearestSource = nearestScrollableContainer->element()) {
+                    auto document = nearestSource->protectedDocument();
+                    RefPtr documentElement = document->documentElement();
+                    if (nearestSource != documentElement)
+                        return nearestSource.get();
+                    // RenderObject::enclosingScrollableContainer() will return the document element even in
+                    // quirks mode, but the scrolling element in that case is the <body> element, so we must
+                    // make sure to return Document::scrollingElement() in case the document element is
+                    // returned by enclosingScrollableContainer() but it was not explicitly set as the source.
+                    return m_source.get() == documentElement ? nearestSource.get() : document->scrollingElement();
+                }
+            }
+        }
+        return nullptr;
+    }
+    case Scroller::Root:
+        return m_source->protectedDocument()->scrollingElement();
+    case Scroller::Self:
+        return m_source.get();
+    }
+
+    ASSERT_NOT_REACHED();
+    return nullptr;
 }
 
 void ScrollTimeline::setSource(const Element* source)
@@ -170,13 +205,18 @@ AnimationTimeline::ShouldUpdateAnimationsAndSendEvents ScrollTimeline::documentW
     return AnimationTimeline::ShouldUpdateAnimationsAndSendEvents::No;
 }
 
-ScrollableArea* ScrollTimeline::scrollableAreaForSourceRenderer(RenderElement* renderer, Ref<Document> document)
+void ScrollTimeline::setTimelineScopeElement(const Element& element)
+{
+    m_timelineScopeElement = WeakPtr { &element };
+}
+
+ScrollableArea* ScrollTimeline::scrollableAreaForSourceRenderer(const RenderElement* renderer, Document& document)
 {
     CheckedPtr renderBox = dynamicDowncast<RenderBox>(renderer);
     if (!renderBox)
         return nullptr;
 
-    if (renderer->element() == document->documentElement())
+    if (renderer->element() == Ref { document }->scrollingElement())
         return &renderer->view().frameView();
 
     return renderBox->hasLayer() ? renderBox->layer()->scrollableArea() : nullptr;
@@ -199,10 +239,11 @@ ScrollTimeline::Data ScrollTimeline::computeTimelineData(const TimelineRange& ra
     if ((range.start.name != SingleTimelineRange::Name::Normal && range.start.name != SingleTimelineRange::Name::Omitted) || (range.end.name != SingleTimelineRange::Name::Normal && range.end.name != SingleTimelineRange::Name::Omitted))
         return { };
 
-    if (!m_source)
+    RefPtr source = this->source();
+    if (!source)
         return { };
 
-    auto* sourceScrollableArea = scrollableAreaForSourceRenderer(m_source->renderer(), m_source->document());
+    auto* sourceScrollableArea = scrollableAreaForSourceRenderer(source->renderer(), source->document());
     if (!sourceScrollableArea)
         return { };
 
@@ -230,6 +271,17 @@ std::optional<WebAnimationTime> ScrollTimeline::currentTime(const TimelineRange&
     auto distance = data.scrollOffset - data.rangeStart;
     auto progress = distance / range;
     return WebAnimationTime::fromPercentage(progress * 100);
+}
+
+void ScrollTimeline::animationTimingDidChange(WebAnimation& animation)
+{
+    AnimationTimeline::animationTimingDidChange(animation);
+
+    if (!m_source || !animation.pending() || animation.isEffectInvalidationSuspended())
+        return;
+
+    if (RefPtr page = m_source->protectedDocument()->page())
+        page->scheduleRenderingUpdate(RenderingUpdateStep::Animations);
 }
 
 } // namespace WebCore

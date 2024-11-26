@@ -33,6 +33,8 @@
 #include "ParseInt.h"
 #include <wtf/text/Base64.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace JSC {
 
 JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeSetFromBase64, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -231,7 +233,7 @@ JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToHex, (JSGlobalObject* globalObject
 
     std::span<LChar> buffer;
     auto result = StringImpl::createUninitialized(length * 2, buffer);
-    LChar* bufferEnd = buffer.data() + length * 2;
+    LChar* bufferEnd = std::to_address(buffer.end());
     constexpr size_t stride = 8; // Because loading uint8x8_t.
     if (length >= stride) {
         auto encodeVector = [&](auto input) {
@@ -276,3 +278,5 @@ JSC_DEFINE_HOST_FUNCTION(uint8ArrayPrototypeToHex, (JSGlobalObject* globalObject
 }
 
 } // namespace JSC
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

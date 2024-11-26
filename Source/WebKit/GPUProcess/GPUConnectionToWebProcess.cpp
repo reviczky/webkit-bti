@@ -404,7 +404,7 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
     }
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
-    if (auto userMediaCaptureManagerProxy = std::exchange(m_userMediaCaptureManagerProxy, { }))
+    if (RefPtr userMediaCaptureManagerProxy = std::exchange(m_userMediaCaptureManagerProxy, nullptr))
         userMediaCaptureManagerProxy->close();
 #endif
 #if ENABLE(VIDEO)
@@ -438,8 +438,10 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
     RemoteLegacyCDMFactoryProxy& legacyCdmFactoryProxy();
 #endif
 
+#if ENABLE(VIDEO)
     if (RefPtr remoteMediaResourceManager = m_remoteMediaResourceManager)
         remoteMediaResourceManager->stopListeningForIPC();
+#endif
 
     Ref gpuProcess = this->gpuProcess();
     gpuProcess->connectionToWebProcessClosed(connection);
@@ -508,11 +510,12 @@ bool GPUConnectionToWebProcess::allowsExitUnderMemoryPressure() const
         return false;
 
 #if ENABLE(WEB_AUDIO)
-    if (m_remoteAudioDestinationManager && !m_remoteAudioDestinationManager->allowsExitUnderMemoryPressure())
+    RefPtr remoteAudioDestinationManager = m_remoteAudioDestinationManager.get();
+    if (remoteAudioDestinationManager && !remoteAudioDestinationManager->allowsExitUnderMemoryPressure())
         return false;
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
-    if (m_userMediaCaptureManagerProxy && m_userMediaCaptureManagerProxy->hasSourceProxies())
+    if (m_userMediaCaptureManagerProxy && Ref { *m_userMediaCaptureManagerProxy }->hasSourceProxies())
         return false;
     if (m_audioMediaStreamTrackRendererInternalUnitManager && m_audioMediaStreamTrackRendererInternalUnitManager->hasUnits())
         return false;
@@ -542,7 +545,7 @@ Logger& GPUConnectionToWebProcess::logger()
 {
     if (!m_logger) {
         m_logger = Logger::create(this);
-        m_logger->setEnabled(this, m_sessionID.isAlwaysOnLoggingAllowed());
+        m_logger->setEnabled(this, isAlwaysOnLoggingAllowed());
     }
 
     return *m_logger;
@@ -576,9 +579,14 @@ void GPUConnectionToWebProcess::lowMemoryHandler(Critical critical, Synchronous 
 RemoteAudioDestinationManager& GPUConnectionToWebProcess::remoteAudioDestinationManager()
 {
     if (!m_remoteAudioDestinationManager)
-        m_remoteAudioDestinationManager = makeUnique<RemoteAudioDestinationManager>(*this);
+        m_remoteAudioDestinationManager = makeUniqueWithoutRefCountedCheck<RemoteAudioDestinationManager>(*this);
 
     return *m_remoteAudioDestinationManager;
+}
+
+Ref<RemoteAudioDestinationManager> GPUConnectionToWebProcess::protectedRemoteAudioDestinationManager()
+{
+    return remoteAudioDestinationManager();
 }
 #endif
 
@@ -611,9 +619,13 @@ Ref<RemoteSampleBufferDisplayLayerManager> GPUConnectionToWebProcess::protectedS
 UserMediaCaptureManagerProxy& GPUConnectionToWebProcess::userMediaCaptureManagerProxy()
 {
     if (!m_userMediaCaptureManagerProxy)
-        m_userMediaCaptureManagerProxy = makeUnique<UserMediaCaptureManagerProxy>(makeUniqueRef<GPUProxyForCapture>(*this));
-
+        lazyInitialize(m_userMediaCaptureManagerProxy, UserMediaCaptureManagerProxy::create(makeUniqueRef<GPUProxyForCapture>(*this)));
     return *m_userMediaCaptureManagerProxy;
+}
+
+Ref<UserMediaCaptureManagerProxy> GPUConnectionToWebProcess::protectedUserMediaCaptureManagerProxy()
+{
+    return userMediaCaptureManagerProxy();
 }
 
 RemoteAudioMediaStreamTrackRendererInternalUnitManager& GPUConnectionToWebProcess::audioMediaStreamTrackRendererInternalUnitManager()
@@ -899,7 +911,7 @@ void GPUConnectionToWebProcess::releaseRemoteCommandListener(RemoteRemoteCommand
 
 void GPUConnectionToWebProcess::setMediaOverridesForTesting(MediaOverridesForTesting overrides)
 {
-    if (!allowTestOnlyIPC()) {
+    if (!m_sharedPreferencesForWebProcess.allowTestOnlyIPC) {
         MESSAGE_CHECK(!overrides.systemHasAC && !overrides.systemHasBattery && !overrides.vp9HardwareDecoderDisabled && !overrides.vp9DecoderDisabled && !overrides.vp9ScreenSizeAndScale);
 #if PLATFORM(COCOA)
 #if ENABLE(VP9)
@@ -925,7 +937,7 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
 {
 #if ENABLE(WEB_AUDIO)
     if (decoder.messageReceiverName() == Messages::RemoteAudioDestinationManager::messageReceiverName()) {
-        remoteAudioDestinationManager().didReceiveMessageFromWebProcess(connection, decoder);
+        protectedRemoteAudioDestinationManager()->didReceiveMessageFromWebProcess(connection, decoder);
         return true;
     }
 #endif
@@ -945,7 +957,7 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     if (decoder.messageReceiverName() == Messages::UserMediaCaptureManagerProxy::messageReceiverName()) {
-        userMediaCaptureManagerProxy().didReceiveMessageFromGPUProcess(connection, decoder);
+        protectedUserMediaCaptureManagerProxy()->didReceiveMessageFromGPUProcess(connection, decoder);
         return true;
     }
     if (decoder.messageReceiverName() == Messages::RemoteAudioMediaStreamTrackRendererInternalUnitManager::messageReceiverName()) {
@@ -1049,7 +1061,7 @@ bool GPUConnectionToWebProcess::dispatchSyncMessage(IPC::Connection& connection,
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     if (decoder.messageReceiverName() == Messages::UserMediaCaptureManagerProxy::messageReceiverName()) {
-        userMediaCaptureManagerProxy().didReceiveSyncMessage(connection, decoder, replyEncoder);
+        protectedUserMediaCaptureManagerProxy()->didReceiveSyncMessage(connection, decoder, replyEncoder);
         return true;
     }
 #endif
@@ -1123,7 +1135,7 @@ void GPUConnectionToWebProcess::setOrientationForMediaCapture(IntDegrees orienta
 {
 // FIXME: <https://bugs.webkit.org/show_bug.cgi?id=211085>
 #if PLATFORM(COCOA)
-    userMediaCaptureManagerProxy().setOrientation(orientation);
+    protectedUserMediaCaptureManagerProxy()->setOrientation(orientation);
 #endif
 }
 
@@ -1150,7 +1162,7 @@ void GPUConnectionToWebProcess::stopMonitoringCaptureDeviceRotation(WebCore::Pag
 void GPUConnectionToWebProcess::rotationAngleForCaptureDeviceChanged(const String& persistentId, WebCore::VideoFrameRotation rotation)
 {
 #if PLATFORM(COCOA)
-    userMediaCaptureManagerProxy().rotationAngleForCaptureDeviceChanged(persistentId, rotation);
+    protectedUserMediaCaptureManagerProxy()->rotationAngleForCaptureDeviceChanged(persistentId, rotation);
 #else
     UNUSED_PARAM(persistentId);
     UNUSED_PARAM(rotation);
@@ -1242,6 +1254,11 @@ void GPUConnectionToWebProcess::enableMediaPlaybackIfNecessary()
     m_routingArbitrator = LocalAudioSessionRoutingArbitrator::create(*this);
     protectedGPUProcess()->protectedAudioSessionManager()->session().setRoutingArbitrationClient(m_routingArbitrator.get());
 #endif
+}
+
+bool GPUConnectionToWebProcess::isAlwaysOnLoggingAllowed() const
+{
+    return m_sessionID.isAlwaysOnLoggingAllowed() || m_sharedPreferencesForWebProcess.allowPrivacySensitiveOperationsInNonPersistentDataStores;
 }
 
 } // namespace WebKit

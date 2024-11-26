@@ -26,7 +26,7 @@
 
 #if ENABLE(MEDIA_RECORDER)
 
-#include "AudioStreamDescription.h"
+#include "CAAudioStreamDescription.h"
 #include "MediaRecorderPrivateWriter.h"
 #include "SharedBuffer.h"
 #include "VideoEncoder.h"
@@ -46,6 +46,7 @@ typedef struct opaqueCMBufferQueueTriggerToken *CMBufferQueueTriggerToken;
 namespace WebCore {
 
 class AudioSampleBufferCompressor;
+class InProcessCARingBuffer;
 class FragmentedSharedBuffer;
 struct MediaRecorderPrivateOptions;
 class MediaSample;
@@ -53,10 +54,10 @@ class PlatformAudioData;
 class VideoFrame;
 struct VideoInfo;
 
-class MediaRecorderPrivateEncoder : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<MediaRecorderPrivateEncoder, WTF::DestructionThread::Main> {
+class MediaRecorderPrivateEncoder final : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<MediaRecorderPrivateEncoder, WTF::DestructionThread::Main> {
 public:
     static RefPtr<MediaRecorderPrivateEncoder> create(bool hasAudio, bool hasVideo, const MediaRecorderPrivateOptions&);
-    virtual ~MediaRecorderPrivateEncoder();
+    ~MediaRecorderPrivateEncoder();
 
     void appendVideoFrame(VideoFrame&);
     void appendAudioSampleBuffer(const PlatformAudioData&, const AudioStreamDescription&, const WTF::MediaTime&, size_t);
@@ -67,7 +68,7 @@ public:
     void stopRecording();
     void close();
 
-    const String& mimeType() const;
+    String mimeType() const;
     unsigned audioBitRate() const;
     unsigned videoBitRate() const;
 
@@ -86,6 +87,7 @@ private:
     friend class Listener;
     void appendData(std::span<const uint8_t>);
 
+    MediaTime lastEnqueuedAudioTime() const { return MediaTime(m_lastEnqueuedAudioTimeUs.load(), 1000000); }
     MediaTime currentTime() const;
     MediaTime currentEndTime() const;
 
@@ -93,13 +95,15 @@ private:
 
     static void compressedAudioOutputBufferCallback(void*, CMBufferQueueTriggerToken);
 
-    RefPtr<FragmentedSharedBuffer> takeData();
+    Ref<FragmentedSharedBuffer> takeData();
 
     MediaTime nextVideoFrameTime(const MediaTime&);
     MediaTime lastMuxedSampleTime() const;
 
     void generateMIMEType();
 
+    void audioSamplesDescriptionChanged(const AudioStreamBasicDescription&);
+    void audioSamplesAvailable(const MediaTime&, size_t, size_t);
     RefPtr<AudioSampleBufferCompressor> audioCompressor() const;
     void enqueueCompressedAudioSampleBuffers();
 
@@ -111,21 +115,25 @@ private:
     Ref<GenericPromise> flushPendingData(const MediaTime&);
     void partiallyFlushEncodedQueues();
     Ref<GenericPromise> waitForMatchingAudio(const MediaTime&);
-    void flushToEndSegment(const MediaTime&);
-    void flushAllEncodedQueues();
     using Result = MediaRecorderPrivateWriter::Result;
+    std::pair<Result, MediaTime> flushToEndSegment(const MediaTime&);
+    void flushAllEncodedQueues();
     Result muxNextFrame();
 
     void maybeStartWriter();
     bool hasMuxedDataSinceEndSegment() const;
+
+    void addRingBuffer(const AudioStreamDescription&);
+    void writeDataToRingBuffer(AudioBufferList*, size_t, size_t);
+    void updateCurrentRingBufferIfNeeded();
 
     std::atomic<bool> m_isStopped { false };
     bool m_writerIsStarted WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
     bool m_writerIsClosed WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
     MediaTime m_lastMuxedSampleStartTime WTF_GUARDED_BY_CAPABILITY(queueSingleton());
     MediaTime m_lastMuxedAudioSampleEndTime WTF_GUARDED_BY_CAPABILITY(queueSingleton());
-    bool m_hasMuxedAudioFrameSinceTakeData WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
-    bool m_hasMuxedVideoFrameSinceTakeData WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
+    bool m_hasMuxedAudioFrameSinceEndSegment WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
+    bool m_hasMuxedVideoFrameSinceEndSegment WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
     bool m_nextVideoFrameMuxedShouldBeKeyframe WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { true };
     size_t m_pendingFlush WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { 0 };
     Ref<GenericPromise> m_currentFlushOperations WTF_GUARDED_BY_CAPABILITY(mainThread) { GenericPromise::createAndResolve() };
@@ -136,12 +144,22 @@ private:
     String m_audioCodecMimeType WTF_GUARDED_BY_CAPABILITY(mainThread);
     std::optional<uint8_t> m_audioTrackIndex WTF_GUARDED_BY_CAPABILITY(queueSingleton());
     RetainPtr<CMFormatDescriptionRef> m_audioFormatDescription WTF_GUARDED_BY_CAPABILITY(queueSingleton());
-    RefPtr<AudioSampleBufferCompressor> m_audioCompressor; // set on creation. const after
+    RetainPtr<CMFormatDescriptionRef> m_audioCompressedFormatDescription WTF_GUARDED_BY_CAPABILITY(queueSingleton());
+    RefPtr<AudioSampleBufferCompressor> m_audioCompressor WTF_GUARDED_BY_CAPABILITY(queueSingleton());
+    bool m_formatChangedOccurred WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
+    std::optional<AudioStreamBasicDescription> m_originalOutputDescription WTF_GUARDED_BY_CAPABILITY(queueSingleton());
     Deque<Ref<MediaSample>> m_encodedAudioFrames WTF_GUARDED_BY_CAPABILITY(queueSingleton());
-    std::atomic<size_t> m_lastEnqueuedAudioSampleCount { 0 };
-    std::atomic<size_t> m_currentAudioSampleCount { 0 };
-    std::atomic<uint32_t> m_currentAudioSamplingRate { 0 };
     std::optional<std::pair<const MediaTime, GenericPromise::Producer>> m_pendingAudioFramePromise WTF_GUARDED_BY_CAPABILITY(queueSingleton());
+    Lock m_ringBuffersLock;
+    Deque<std::unique_ptr<InProcessCARingBuffer>> m_ringBuffers WTF_GUARDED_BY_LOCK(m_ringBuffersLock);
+    InProcessCARingBuffer* m_currentRingBuffer WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { nullptr };
+    std::atomic<int64_t> m_lastEnqueuedAudioTimeUs { 0 };
+    std::atomic<int64_t> m_currentAudioTimeUs { 0 };
+
+    // Audio thread variables.
+    std::optional<CAAudioStreamDescription> m_currentStreamDescription;
+    MediaTime m_currentAudioTime { MediaTime::zeroTime() };
+    uint64_t m_currentAudioSampleCount { 0 };
 
     FourCharCode m_videoCodec { 0 }; // set on creation. const after
     String m_videoCodecMimeType WTF_GUARDED_BY_CAPABILITY(mainThread);
@@ -170,10 +188,13 @@ private:
     uint64_t m_audioBitsPerSecond { 0 }; // set on creation. const after
     uint64_t m_videoBitsPerSecond { 0 }; // set on creation. const after
 
+    bool m_hadError WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
     bool m_isPaused WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
+    bool m_hasStartedAudibleAudioFrame WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { false };
     bool m_needKeyFrame WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { true };
-    std::optional<MediaTime> m_endMuxedTime WTF_GUARDED_BY_CAPABILITY(queueSingleton());
+    MediaTime m_startSegmentTime WTF_GUARDED_BY_CAPABILITY(queueSingleton()) { MediaTime::zeroTime() };
 
+    const MediaTime m_minimumSegmentDuration { MediaTime::createWithDouble(1) };
     const MediaTime m_maxGOPDuration { MediaTime::createWithDouble(2) };
     const bool m_hasAudio { false };
     const bool m_hasVideo { false };

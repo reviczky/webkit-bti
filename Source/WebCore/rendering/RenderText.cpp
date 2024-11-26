@@ -382,8 +382,8 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     if (needsResetText || oldTransform != newStyle.textTransform() || oldSecurity != newStyle.textSecurity())
         RenderText::setText(originalText(), true);
 
-    // FIXME: First line change on the block comes in as equal on text with inline box parent.
-    auto needsLayoutBoxStyleUpdate = (diff >= StyleDifference::Repaint || (is<RenderInline>(parent()) && &style() != &firstLineStyle())) && layoutBox();
+    // FIXME: First line change on the block comes in as equal on text.
+    auto needsLayoutBoxStyleUpdate = layoutBox() && (diff >= StyleDifference::Repaint || (&style() != &firstLineStyle()));
     if (needsLayoutBoxStyleUpdate)
         LayoutIntegration::LineLayout::updateStyle(*this);
 }
@@ -1418,7 +1418,7 @@ bool RenderText::containsOnlyCSSWhitespace(unsigned from, unsigned length) const
     return containsOnlyPossiblyCollapsibleWhitespace(text().span16().subspan(from, length));
 }
 
-Vector<std::pair<unsigned, unsigned>> RenderText::contentRangesBetweenOffsetsForType(DocumentMarker::Type type, unsigned startOffset, unsigned endOffset) const
+Vector<std::pair<unsigned, unsigned>> RenderText::contentRangesBetweenOffsetsForType(DocumentMarkerType type, unsigned startOffset, unsigned endOffset) const
 {
     if (!textNode())
         return { };

@@ -33,13 +33,16 @@
 
 namespace WebCore {
 
-AccessibilityTableColumn::AccessibilityTableColumn() = default;
+AccessibilityTableColumn::AccessibilityTableColumn(AXID axID)
+    : AccessibilityMockObject(axID)
+{
+}
 
 AccessibilityTableColumn::~AccessibilityTableColumn() = default;
 
-Ref<AccessibilityTableColumn> AccessibilityTableColumn::create()
+Ref<AccessibilityTableColumn> AccessibilityTableColumn::create(AXID axID)
 {
-    return adoptRef(*new AccessibilityTableColumn());
+    return adoptRef(*new AccessibilityTableColumn(axID));
 }
 
 void AccessibilityTableColumn::setParent(AccessibilityObject* parent)
@@ -69,7 +72,7 @@ AXCoreObject* AccessibilityTableColumn::columnHeader()
 
     for (const auto& cell : unignoredChildren()) {
         if (cell->roleValue() == AccessibilityRole::ColumnHeader)
-            return cell.get();
+            return cell.ptr();
     }
     return nullptr;
 }
@@ -88,14 +91,11 @@ void AccessibilityTableColumn::setColumnIndex(unsigned columnIndex)
 
 bool AccessibilityTableColumn::computeIsIgnored() const
 {
-    if (!m_parent)
-        return true;
-    
 #if PLATFORM(IOS_FAMILY) || USE(ATSPI)
     return true;
 #endif
     
-    return m_parent->isIgnored();
+    return !m_parent || m_parent->isIgnored();
 }
     
 void AccessibilityTableColumn::addChildren()
@@ -114,7 +114,7 @@ void AccessibilityTableColumn::addChildren()
             continue;
 
         // make sure the last one isn't the same as this one (rowspan cells)
-        if (m_children.size() > 0 && m_children.last() == cell.get())
+        if (m_children.size() > 0 && m_children.last().ptr() == cell.get())
             continue;
 
         addChild(cell.get());

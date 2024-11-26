@@ -55,7 +55,7 @@
 #include "WebFrame.h"
 #include "WebFullScreenManager.h"
 #include "WebImage.h"
-#include "WebInspector.h"
+#include "WebInspectorInternal.h"
 #include "WebPage.h"
 #include "WebPageGroupProxy.h"
 #include "WebPageOverlay.h"
@@ -533,19 +533,9 @@ void WKBundlePageSetPaintedObjectsCounterThreshold(WKBundlePageRef, uint64_t)
     // We should remove it as soon as we can.
 }
 
-void WKBundlePageSetTracksRepaints(WKBundlePageRef pageRef, bool trackRepaints)
-{
-    WebKit::toImpl(pageRef)->setTracksRepaints(trackRepaints);
-}
-
 bool WKBundlePageIsTrackingRepaints(WKBundlePageRef pageRef)
 {
     return WebKit::toImpl(pageRef)->isTrackingRepaints();
-}
-
-void WKBundlePageResetTrackedRepaints(WKBundlePageRef pageRef)
-{
-    WebKit::toImpl(pageRef)->resetTrackedRepaints();
 }
 
 WKArrayRef WKBundlePageCopyTrackedRepaintRects(WKBundlePageRef pageRef)
@@ -708,30 +698,11 @@ void WKBundlePageCallAfterTasksAndTimers(WKBundlePageRef pageRef, WKBundlePageTe
     WebCore::Document* document = localMainFrame->document();
     if (!document)
         return;
-
-    class TimerOwner {
-    public:
-        TimerOwner(WTF::Function<void (void*)>&& callback, void* context)
-            : m_timer(*this, &TimerOwner::timerFired)
-            , m_callback(WTFMove(callback))
-            , m_context(context)
-        {
-            m_timer.startOneShot(0_s);
-        }
-        
-        void timerFired()
-        {
-            m_callback(m_context);
-            delete this;
-        }
-        
-        WebCore::Timer m_timer;
-        WTF::Function<void (void*)> m_callback;
-        void* m_context;
-    };
     
     document->postTask([=] (WebCore::ScriptExecutionContext&) {
-        new TimerOwner(callback, context); // deletes itself when done.
+        WebCore::Timer::schedule(0_s, [=] {
+            callback(context);
+        });
     });
 }
 

@@ -65,6 +65,9 @@ bool MediaRecorderPrivateAVFImpl::isTypeSupported(Document& document, ContentTyp
 #if ENABLE(WEB_RTC)
                 && !((codec.startsWith("hev1."_s) || codec.startsWith("hvc1."_s)) && document.settings().webRTCH265CodecEnabled())
 #endif
+#if HAVE(AVASSETWRITER_WITH_OPUS_SUPPORTED)
+                && !codec.startsWith("opus"_s)
+#endif
                 && !startsWithLettersIgnoringASCIICase(codec, "mp4a"_s))
                 return false;
         }
@@ -194,7 +197,7 @@ void MediaRecorderPrivateAVFImpl::fetchData(FetchDataCallback&& completionHandle
     });
 }
 
-const String& MediaRecorderPrivateAVFImpl::mimeType() const
+String MediaRecorderPrivateAVFImpl::mimeType() const
 {
     return m_encoder->mimeType();
 }

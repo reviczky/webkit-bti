@@ -25,6 +25,9 @@
 
 #pragma once
 
+#include "ExceptionOr.h"
+#include <wtf/text/StringView.h>
+
 namespace WebCore {
 namespace URLPatternUtilities {
 
@@ -33,7 +36,7 @@ enum class TokenizePolicy : bool { Strict, Lenient };
 
 struct Token {
     TokenType type;
-    size_t index;
+    std::optional<size_t> index;
     StringView value;
 
     bool isNull() const;
@@ -60,7 +63,7 @@ private:
     void addToken(TokenType currentType, size_t nextPosition, size_t valuePosition);
     void addToken(TokenType currentType);
 
-    ExceptionOr<void> processTokenizingError(size_t nextPosition, size_t valuePosition);
+    ExceptionOr<void> processTokenizingError(size_t nextPosition, size_t valuePosition, const String&);
 };
 
 } // namespace URLPatternUtilities

@@ -986,6 +986,7 @@ void WKPageSetPageContextMenuClient(WKPageRef pageRef, const WKPageContextMenuCl
     CRASH_IF_SUSPENDED;
 #if ENABLE(CONTEXT_MENUS)
     class ContextMenuClient final : public API::Client<WKPageContextMenuClientBase>, public API::ContextMenuClient {
+        WTF_MAKE_TZONE_ALLOCATED_INLINE(ContextMenuClient);
     public:
         explicit ContextMenuClient(const WKPageContextMenuClientBase* client)
         {
@@ -3354,6 +3355,28 @@ void WKPageClearBackForwardListForTesting(WKPageRef pageRef, void* context, WKPa
         return completionHandler(context);
 
     pageForTesting->clearBackForwardList([context, completionHandler] {
+        completionHandler(context);
+    });
+}
+
+void WKPageSetTracksRepaintsForTesting(WKPageRef pageRef, void* context, bool trackRepaints, WKPageSetTracksRepaintsForTestingFunction completionHandler)
+{
+    RefPtr pageForTesting = toImpl(pageRef)->pageForTesting();
+    if (!pageForTesting)
+        return completionHandler(context);
+
+    pageForTesting->setTracksRepaints(trackRepaints, [context, completionHandler] {
+        completionHandler(context);
+    });
+}
+
+void WKPageDisplayAndTrackRepaintsForTesting(WKPageRef pageRef, void* context, WKPageDisplayAndTrackRepaintsForTestingFunction completionHandler)
+{
+    RefPtr pageForTesting = toImpl(pageRef)->pageForTesting();
+    if (!pageForTesting)
+        return completionHandler(context);
+
+    pageForTesting->displayAndTrackRepaints([context, completionHandler] {
         completionHandler(context);
     });
 }

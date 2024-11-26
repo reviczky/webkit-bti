@@ -70,7 +70,6 @@ public:
 
     uint64_t surfaceID() const;
 
-    void setScrollPosition(const WebCore::IntPoint&, float scale);
     void setViewportSize(const WebCore::IntSize&, float scale);
     void backgroundColorDidChange();
 #if PLATFORM(WPE) && USE(GBM) && ENABLE(WPE_PLATFORM)
@@ -102,6 +101,9 @@ private:
 
     // CoordinatedGraphicsSceneClient
     void updateViewport() override;
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
+    const WebCore::Damage& addSurfaceDamage(const WebCore::Damage&) override;
+#endif
 
     void renderLayerTree();
     void frameComplete();
@@ -119,8 +121,9 @@ private:
     std::unique_ptr<WebCore::GLContext> m_context;
 
     bool m_flipY { false };
-    bool m_scrolledSinceLastFrame { false };
+#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
     DamagePropagation m_damagePropagation { DamagePropagation::None };
+#endif
     unsigned m_suspendedCount { 0 };
 
     std::unique_ptr<CompositingRunLoop> m_compositingRunLoop;
@@ -128,10 +131,8 @@ private:
     struct {
         Lock lock;
         WebCore::IntSize viewportSize;
-        WebCore::IntPoint scrollPosition;
         float scaleFactor { 1 };
         bool needsResize { false };
-        bool scrolledSinceLastFrame { false };
         Vector<RefPtr<Nicosia::Scene>> states;
 
         bool clientRendersNextFrame { false };

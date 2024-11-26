@@ -287,10 +287,11 @@
 // 32-bit platforms use different calling conventions, so a MUST_TAIL_CALL function
 // written for 64-bit may fail to tail call on 32-bit.
 // It also doesn't work on ppc64le: https://github.com/llvm/llvm-project/issues/98859
+// and on Windows: https://github.com/llvm/llvm-project/issues/116568
 #if COMPILER(CLANG)
 #if __SIZEOF_POINTER__ == 8
 #if !defined(MUST_TAIL_CALL) && defined(__cplusplus) && defined(__has_cpp_attribute)
-#if __has_cpp_attribute(clang::musttail) && !defined(__powerpc__)
+#if __has_cpp_attribute(clang::musttail) && !defined(__powerpc__) && !defined(_WIN32)
 #define MUST_TAIL_CALL [[clang::musttail]]
 #endif
 #endif
@@ -641,3 +642,19 @@
 #else
 #define WTF_UNSAFE_BUFFER_USAGE
 #endif
+
+/* WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE */
+
+#define WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN \
+    ALLOW_COMMA_BEGIN \
+    ALLOW_DEPRECATED_DECLARATIONS_BEGIN \
+    IGNORE_WARNINGS_BEGIN("cast-align") \
+    IGNORE_CLANG_WARNINGS_BEGIN("thread-safety-reference-return")
+
+#define WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END \
+    IGNORE_CLANG_WARNINGS_END \
+    IGNORE_WARNINGS_END \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END \
+    ALLOW_COMMA_END \
+    ALLOW_DEPRECATED_DECLARATIONS_END

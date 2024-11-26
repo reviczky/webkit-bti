@@ -51,6 +51,8 @@
 #include <wtf/ASCIICType.h>
 #include <wtf/TZoneMallocInlines.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(WebCodecsVideoDecoder);
@@ -122,10 +124,11 @@ static VideoDecoder::Config createVideoDecoderConfig(const WebCodecsVideoDecoder
     }
 
     return {
-        description,
-        config.codedWidth.value_or(0),
-        config.codedHeight.value_or(0),
-        config.hardwareAcceleration == HardwareAcceleration::PreferSoftware ? VideoDecoder::HardwareAcceleration::No : VideoDecoder::HardwareAcceleration::Yes
+        .description = description,
+        .width = config.codedWidth.value_or(0),
+        .height = config.codedHeight.value_or(0),
+        .colorSpace = config.colorSpace,
+        .decoding = config.hardwareAcceleration == HardwareAcceleration::PreferSoftware ? VideoDecoder::HardwareAcceleration::No : VideoDecoder::HardwareAcceleration::Yes
     };
 }
 
@@ -360,5 +363,7 @@ bool WebCodecsVideoDecoder::virtualHasPendingActivity() const
 }
 
 } // namespace WebCore
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // ENABLE(WEB_CODECS)

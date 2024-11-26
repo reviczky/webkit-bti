@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
  *           (C) 2004 Allan Sandfeld Jensen (kde@carewolf.com)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Google Inc. All rights reserved.
  * Copyright (C) 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
@@ -30,6 +30,7 @@
 #include "AXObjectCache.h"
 #include "DocumentInlines.h"
 #include "Editing.h"
+#include "Editor.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "FloatQuad.h"
 #include "FrameSelection.h"
@@ -93,8 +94,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_COMPACT_TZONE_OR_ISO_ALLOCATED_IMPL(RenderObject);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(RenderObjectRenderObjectRareData, RenderObject::RenderObjectRareData);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderObject);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(RenderObject, RenderObjectRareData);
 
 #if ASSERT_ENABLED
 
@@ -112,7 +113,7 @@ RenderObject::SetLayoutNeededForbiddenScope::~SetLayoutNeededForbiddenScope()
 
 #endif
 
-struct SameSizeAsRenderObject final : public CachedImageClient, public CanMakeCheckedPtr<SameSizeAsRenderObject> {
+struct SameSizeAsRenderObject final : public CachedImageClient {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
     WTF_STRUCT_OVERRIDE_DELETE_FOR_CHECKED_PTR(SameSizeAsRenderObject);
 
@@ -1826,25 +1827,31 @@ bool RenderObject::isSelectionBorder() const
         || view().selection().end() == this;
 }
 
-void RenderObject::setCapturedInViewTransition(bool captured)
+bool RenderObject::setCapturedInViewTransition(bool captured)
 {
-    if (capturedInViewTransition() != captured) {
-        m_stateBitfields.setFlag(StateFlag::CapturedInViewTransition, captured);
+    if (capturedInViewTransition() == captured)
+        return false;
 
-        CheckedPtr<RenderLayer> layerToInvalidate;
-        if (isDocumentElementRenderer()) {
-            layerToInvalidate = view().layer();
-            view().compositor().setRootElementCapturedInViewTransition(captured);
-        } else if (hasLayer())
-            layerToInvalidate = downcast<RenderLayerModelObject>(*this).layer();
+    m_stateBitfields.setFlag(StateFlag::CapturedInViewTransition, captured);
 
-        if (layerToInvalidate) {
-            layerToInvalidate->setNeedsPostLayoutCompositingUpdate();
+    CheckedPtr<RenderLayer> layerToInvalidate;
+    if (isDocumentElementRenderer()) {
+        layerToInvalidate = view().layer();
+        view().compositor().setRootElementCapturedInViewTransition(captured);
+    } else if (hasLayer())
+        layerToInvalidate = downcast<RenderLayerModelObject>(*this).layer();
 
-            // Invalidate transform applied by `RenderLayerBacking::updateTransform`.
-            layerToInvalidate->setNeedsCompositingGeometryUpdate();
-        }
+    if (layerToInvalidate) {
+        layerToInvalidate->setNeedsPostLayoutCompositingUpdate();
+
+        // Invalidate transform applied by `RenderLayerBacking::updateTransform`.
+        layerToInvalidate->setNeedsCompositingGeometryUpdate();
     }
+
+    if (CheckedPtr renderBox = dynamicDowncast<RenderBox>(*this))
+        renderBox->invalidateAncestorBackgroundObscurationStatus();
+
+    return true;
 }
 
 void RenderObject::willBeDestroyed()
@@ -2540,7 +2547,7 @@ static bool areOnSameLine(const SelectionGeometry& a, const SelectionGeometry& b
 
 static void makeBidiSelectionVisuallyContiguousIfNeeded(const SimpleRange& range, Vector<SelectionGeometry>& geometries)
 {
-    if (!range.startContainer().document().settings().visuallyContiguousBidiTextSelectionEnabled())
+    if (!range.startContainer().document().editor().shouldDrawVisuallyContiguousBidiSelection())
         return;
 
     FloatPoint selectionStartTop;
@@ -2591,7 +2598,6 @@ static void makeBidiSelectionVisuallyContiguousIfNeeded(const SimpleRange& range
         // For a single line selection, simply merge the end into the start and remove other selection geometries on the same line.
         startGeometry->setQuad({ selectionStartTop, selectionEndTop, selectionEndBottom, selectionStartBottom });
         startGeometry->setContainsEnd(true);
-        startGeometry->setMayAppearLogicallyDiscontiguous(true);
         geometries.append(WTFMove(*startGeometry));
         return;
     }
@@ -2631,7 +2637,6 @@ static void makeBidiSelectionVisuallyContiguousIfNeeded(const SimpleRange& range
         selectionEndBottom = endRect.maxXMaxYCorner();
     }
 
-    startGeometry->setMayAppearLogicallyDiscontiguous(true);
     startGeometry->setQuad({
         selectionStartTop,
         selectionExtents.p2(),
@@ -2639,7 +2644,6 @@ static void makeBidiSelectionVisuallyContiguousIfNeeded(const SimpleRange& range
         selectionStartBottom,
     });
 
-    endGeometry->setMayAppearLogicallyDiscontiguous(true);
     endGeometry->setQuad({
         selectionExtents.p1(),
         selectionEndTop,
@@ -2943,11 +2947,6 @@ String RenderObject::debugDescription() const
 bool RenderObject::isSkippedContent() const
 {
     return parent() && parent()->style().hasSkippedContent();
-}
-
-bool RenderObject::isSkippedContentForLayout() const
-{
-    return isSkippedContent() && !view().frameView().layoutContext().needsSkippedContentLayout();
 }
 
 TextStream& operator<<(TextStream& ts, const RenderObject& renderer)

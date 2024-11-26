@@ -34,11 +34,9 @@
 #include <wtf/Identified.h>
 #include <wtf/TZoneMalloc.h>
 
-ALLOW_COMMA_BEGIN
-
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <webrtc/rtc_base/async_packet_socket.h>
-
-ALLOW_COMMA_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 namespace IPC {
 class Connection;
