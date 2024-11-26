@@ -6,6 +6,7 @@ webkit2gtk (2.47.2-1) UNRELEASED; urgency=medium
     - Add build dependency on flite1-dev (for speech synthesis).
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * Remove libwebkit2gtk-4.0-37.lintian-overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2024 11:19:22 +0100
 

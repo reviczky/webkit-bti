@@ -202,7 +202,6 @@ WEBKIT_DH_FILES = \
 	libjavascriptcoregtk-4.0-dev.install \
 	libwebkit2gtk-4.0-37.docs \
 	libwebkit2gtk-4.0-37.install \
-	libwebkit2gtk-4.0-37.lintian-overrides \
 	libwebkit2gtk-4.0-37.symbols \
 	libwebkit2gtk-4.0-dev.install
 
