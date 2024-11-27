@@ -152,7 +152,7 @@ public:
     ExceptionOr<void> removeTrack(RTCRtpSender&);
 
     using AddTransceiverTrackOrKind = std::variant<RefPtr<MediaStreamTrack>, String>;
-    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiver(AddTransceiverTrackOrKind&&, const RTCRtpTransceiverInit&);
+    ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiver(AddTransceiverTrackOrKind&&, RTCRtpTransceiverInit&&);
 
     // 6.1 Peer-to-peer data API
     ExceptionOr<Ref<RTCDataChannel>> createDataChannel(String&&, RTCDataChannelInit&&);
@@ -201,6 +201,8 @@ public:
 
     // EventTarget implementation.
     void dispatchEvent(Event&) final;
+
+    void dispatchDataChannelEvent(UniqueRef<RTCDataChannelHandler>&&, String&& label, RTCDataChannelInit&&);
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
