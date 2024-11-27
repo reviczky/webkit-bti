@@ -82,7 +82,11 @@ LibWebRTCMediaEndpoint::LibWebRTCMediaEndpoint(LibWebRTCPeerConnectionBackend& p
     ASSERT(isMainThread());
     ASSERT(client.factory());
 
-    webrtc::field_trial::InitFieldTrialsFromString("WebRTC-Video-H26xPacketBuffer/Enabled/");
+    String fieldTrials = "WebRTC-Video-H26xPacketBuffer/Enabled/"_s;
+    if (peerConnection.shouldEnableWebRTCL4S())
+        fieldTrials = makeString(fieldTrials, "WebRTC-RFC8888CongestionControlFeedback/Enabled,force_send:true/"_s);
+
+    webrtc::field_trial::InitFieldTrialsFromString(fieldTrials.utf8().data());
 }
 
 void LibWebRTCMediaEndpoint::restartIce()
@@ -825,8 +829,17 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
 
         for (auto iterator = report->begin(); iterator != report->end(); ++iterator) {
             RTCStatsLogger statsLogger { *iterator };
-            if (m_isGatheringRTCLogs)
-                m_peerConnectionBackend.provideStatLogs(statsLogger.toJSONString());
+            if (m_isGatheringRTCLogs) {
+                auto event = m_peerConnectionBackend.generateJSONLogEvent(String::fromLatin1(iterator->ToJson().c_str()), true);
+                m_peerConnectionBackend.provideStatLogs(WTFMove(event));
+            }
+
+#if PLATFORM(WPE) || PLATFORM(GTK)
+            if (m_peerConnectionBackend.isJSONLogStreamingEnabled()) {
+                auto event = m_peerConnectionBackend.generateJSONLogEvent(String::fromLatin1(iterator->ToJson().c_str()), false);
+                m_peerConnectionBackend.emitJSONLogEvent(WTFMove(event));
+            }
+#endif
 
             if (logger().willLog(logChannel(), WTFLogLevel::Debug)) {
                 // Stats are very verbose, let's only display them in inspector console in verbose mode.
@@ -835,8 +848,6 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
                 logger().logAlways(LogWebRTCStats, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint"_s, "OnStatsDelivered"_s, logIdentifier()), statsLogger);
         }
     });
-#else
-    UNUSED_PARAM(report);
 #endif
 }
 

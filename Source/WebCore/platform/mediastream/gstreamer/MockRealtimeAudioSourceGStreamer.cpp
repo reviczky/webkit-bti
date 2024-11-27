@@ -131,9 +131,17 @@ void MockRealtimeAudioSourceGStreamer::captureEnded()
     captureFailed();
 }
 
+std::pair<GstClockTime, GstClockTime> MockRealtimeAudioSourceGStreamer::queryCaptureLatency() const
+{
+    if (!m_capturer)
+        return { GST_CLOCK_TIME_NONE, GST_CLOCK_TIME_NONE };
+
+    return m_capturer->queryLatency();
+}
+
 void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
 {
-    if (!m_bipBopBuffer.size())
+    if (!m_bipBopBuffer.size() || !m_streamFormat)
         reconfigure();
 
     uint32_t totalFrameCount = GST_ROUND_UP_16(static_cast<size_t>(delta.seconds() * sampleRate()));
@@ -145,7 +153,7 @@ void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
         uint32_t bipBopCount = std::min(frameCount, bipBopRemain);
 
         // We might have stopped producing data. Break out of the loop earlier if that happens.
-        if (!m_caps)
+        if (!isProducingData())
             break;
 
         ASSERT(m_streamFormat);
@@ -175,6 +183,12 @@ void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
         ASSERT(GST_IS_APP_SRC(m_capturer->source()));
         gst_app_src_push_sample(GST_APP_SRC_CAST(m_capturer->source()), sample.get());
     }
+}
+
+void MockRealtimeAudioSourceGStreamer::settingsDidChange(OptionSet<RealtimeMediaSourceSettings::Flag> flags)
+{
+    MockRealtimeAudioSource::settingsDidChange(flags);
+    reconfigure();
 }
 
 void MockRealtimeAudioSourceGStreamer::addHum(float amplitude, float frequency, float sampleRate, uint64_t start, float *p, uint64_t count)
