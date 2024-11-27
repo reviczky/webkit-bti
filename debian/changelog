@@ -1,8 +1,11 @@
-wpewebkit (2.46.4-1) UNRELEASED; urgency=medium
+wpewebkit (2.46.4-1) unstable; urgency=high
 
   * New upstream release.
+  * The WPE WebKit security advisory WSA-2024-0007 lists the following
+    security fixes in the latest versions of WPE WebKit:
+    - CVE-2024-44308, CVE-2024-44309 (fixed in 2.46.4).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 27 Nov 2024 10:32:51 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 27 Nov 2024 14:43:44 +0100
 
 wpewebkit (2.46.3-1) unstable; urgency=medium
 
