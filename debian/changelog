@@ -1,10 +1,10 @@
-webkit2gtk (2.46.4-1~deb11u1) UNRELEASED; urgency=medium
+webkit2gtk (2.46.4-1~deb11u1) bullseye-security; urgency=medium
 
   * Backport to bullseye.
   * debian/patches/build-fixes-for-gbm-disabled-and-release-logs.patch:
     - Backport patch from upstream to fix build with -DUSE_GBM=OFF.
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 28 Nov 2024 12:38:42 +0100
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 28 Nov 2024 17:15:27 +0100
 
 webkit2gtk (2.46.4-1) unstable; urgency=high
 
