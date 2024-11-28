@@ -1,3 +1,12 @@
+webkit2gtk (2.46.4-1) unstable; urgency=high
+
+  * New upstream release.
+  * The WebKitGTK security advisory WSA-2024-0007 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2024-44308, CVE-2024-44309 (fixed in 2.46.4).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 27 Nov 2024 16:00:26 +0100
+
 webkit2gtk (2.46.3-1~deb11u2) bullseye-security; urgency=medium
 
   * Enable -doc package.
