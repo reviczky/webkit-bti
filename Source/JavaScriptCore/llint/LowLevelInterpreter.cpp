@@ -565,6 +565,15 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
     ".thumb\n"                                   \
     ".thumb_func " THUMB_FUNC_PARAM(label) "\n"  \
     SYMBOL_STRING(label) ":\n"
+#elif CPU(RISCV64)
+#define OFFLINE_ASM_GLOBAL_LABEL_IMPL(label, ALT_ENTRY, ALIGNMENT, VISIBILITY) \
+    OFFLINE_ASM_TEXT_SECTION                    \
+    ALIGNMENT                                   \
+    ALT_ENTRY(label)                            \
+    ".globl " SYMBOL_STRING(label) "\n"         \
+    ".attribute arch, \"rv64gc\"" "\n"          \
+    VISIBILITY(label) "\n"                      \
+    SYMBOL_STRING(label) ":\n"
 #else
 #define OFFLINE_ASM_GLOBAL_LABEL_IMPL(label, ALT_ENTRY, ALIGNMENT, VISIBILITY) \
     OFFLINE_ASM_TEXT_SECTION                    \
@@ -584,6 +593,8 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
 #define OFFLINE_ASM_ALIGN_TRAP(align) OFFLINE_ASM_BEGIN_SPACER "\n .balign " #align ", 0xcc\n" // pad with int 3 instructions
 #elif CPU(ARM)
 #define OFFLINE_ASM_ALIGN_TRAP(align) OFFLINE_ASM_BEGIN_SPACER "\n .balignw " #align ", 0xde00\n" // pad with udf instructions
+#elif CPU(RISCV64)
+#define OFFLINE_ASM_ALIGN_TRAP(align) OFFLINE_ASM_BEGIN_SPACER "\n .balign " #align ", 0x73\n" // pad with ebreak instructions
 #endif
 
 #define OFFLINE_ASM_EXPORT_SYMBOL(symbol)
