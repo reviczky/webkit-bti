@@ -60,14 +60,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     //   easiest way of indicating that something cannot be hoisted is to claim
     //   that it side-effects some miscellaneous thing.
     //
-    // - We cannot hoist forward-exiting nodes without some additional effort. I
-    //   believe that what it comes down to is that forward-exiting generally have
-    //   their NodeExitsForward cleared upon hoist, except for forward-exiting
-    //   nodes that take bogus state as their input. Those are substantially
-    //   harder. We disable it for now. In the future we could enable it by having
-    //   versions of those nodes that backward-exit instead, but I'm not convinced
-    //   of the soundness.
-    //
     // - Some nodes lie, and claim that they do not read the JSCell_structureID,
     //   JSCell_typeInfoFlags, etc. These are nodes that use the structure in a way
     //   that does not depend on things that change under structure transitions.
@@ -1116,8 +1108,11 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             if (mode.mayBeResizableOrGrowableSharedTypedArray()) {
                 write(MiscFields);
                 write(TypedArrayProperties);
-            } else
+            } else {
+                if (mode.isOutOfBounds())
+                    indexedPropertyLoc = indexedPropertyLocToOutOfBoundsSaneChain(indexedPropertyLoc);
                 def(HeapLocation(indexedPropertyLoc, TypedArrayProperties, graph.varArgChild(node, 0), graph.varArgChild(node, 1)), LazyNode(node));
+            }
             return;
         // We should not get an AnyTypedArray in a GetByVal as AnyTypedArray is only created from intrinsics, which
         // are only added from Inline Caching a GetById.
@@ -1167,7 +1162,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             return;
             
         case Array::Int32:
-            if (node->arrayMode().isOutOfBounds()) {
+            if (mode.isOutOfBounds()) {
                 clobberTop();
                 return;
             }
@@ -1175,14 +1170,14 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             read(Butterfly_vectorLength);
             read(IndexedInt32Properties);
             write(IndexedInt32Properties);
-            if (node->arrayMode().mayStoreToHole())
+            if (mode.mayStoreToHole())
                 write(Butterfly_publicLength);
             def(HeapLocation(indexedPropertyLoc, IndexedInt32Properties, base, index), LazyNode(value));
             def(HeapLocation(IndexedPropertyInt32OutOfBoundsSaneChainLoc, IndexedInt32Properties, base, index), LazyNode(value));
             return;
             
         case Array::Double:
-            if (node->arrayMode().isOutOfBounds()) {
+            if (mode.isOutOfBounds()) {
                 clobberTop();
                 return;
             }
@@ -1190,7 +1185,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             read(Butterfly_vectorLength);
             read(IndexedDoubleProperties);
             write(IndexedDoubleProperties);
-            if (node->arrayMode().mayStoreToHole())
+            if (mode.mayStoreToHole())
                 write(Butterfly_publicLength);
             def(HeapLocation(IndexedPropertyDoubleLoc, IndexedDoubleProperties, base, index), LazyNode(value));
             def(HeapLocation(IndexedPropertyDoubleSaneChainLoc, IndexedDoubleProperties, base, index), LazyNode(value));
@@ -1198,7 +1193,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             return;
             
         case Array::Contiguous:
-            if (node->arrayMode().isOutOfBounds()) {
+            if (mode.isOutOfBounds()) {
                 clobberTop();
                 return;
             }
@@ -1206,7 +1201,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             read(Butterfly_vectorLength);
             read(IndexedContiguousProperties);
             write(IndexedContiguousProperties);
-            if (node->arrayMode().mayStoreToHole())
+            if (mode.mayStoreToHole())
                 write(Butterfly_publicLength);
             def(HeapLocation(indexedPropertyLoc, IndexedContiguousProperties, base, index), LazyNode(value));
             def(HeapLocation(IndexedPropertyJSOutOfBoundsSaneChainLoc, IndexedContiguousProperties, base, index), LazyNode(value));
@@ -1221,12 +1216,12 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             read(Butterfly_vectorLength);
             read(IndexedArrayStorageProperties);
             write(IndexedArrayStorageProperties);
-            if (node->arrayMode().mayStoreToHole())
+            if (mode.mayStoreToHole())
                 write(Butterfly_publicLength);
             return;
 
         case Array::SlowPutArrayStorage:
-            if (node->arrayMode().mayStoreToHole()) {
+            if (mode.mayStoreToHole()) {
                 clobberTop();
                 return;
             }
@@ -1246,7 +1241,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         case Array::Float16Array:
         case Array::Float32Array:
         case Array::Float64Array:
-            if (node->arrayMode().mayBeResizableOrGrowableSharedTypedArray()) {
+            if (mode.mayBeResizableOrGrowableSharedTypedArray()) {
                 read(TypedArrayProperties);
                 read(MiscFields);
                 write(TypedArrayProperties);
@@ -2266,7 +2261,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             write(MiscFields);
             write(TypedArrayProperties);
         } else {
-            LocationKind indexedPropertyLoc = indexedPropertyLocForResultType(node->result());
+            LocationKind indexedPropertyLoc = indexedPropertyLocToOutOfBoundsSaneChain(indexedPropertyLocForResultType(node->result()));
             def(HeapLocation(indexedPropertyLoc, AbstractHeap(TypedArrayProperties, node->dataViewData().asQuadWord), node->child1(), node->child2(), node->child3()), LazyNode(node));
         }
         return;

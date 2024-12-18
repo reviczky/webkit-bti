@@ -1935,6 +1935,8 @@ private:
 
     void unbind(Value value, Location loc);
 
+    void unbindAllRegisters();
+
     template<typename Register>
     static Register fromJSCReg(Reg reg)
     {

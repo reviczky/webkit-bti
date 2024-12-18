@@ -33,6 +33,7 @@
 #include "GStreamerWebRTCUtils.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSRTCStatsReport.h"
+#include "LogInitialization.h"
 #include "Logging.h"
 #include "MediaEndpointConfiguration.h"
 #include "NotImplemented.h"
@@ -2167,6 +2168,9 @@ void GStreamerMediaEndpoint::onStatsDelivered(const GstStructure* stats)
 
 void GStreamerMediaEndpoint::startLoggingStats()
 {
+    if (!WebCore::logChannels().isLogChannelEnabled("WebRTC"_s) && !m_peerConnectionBackend.isJSONLogStreamingEnabled() && !m_isGatheringRTCLogs)
+        return;
+
     if (m_statsLogTimer.isActive())
         m_statsLogTimer.stop();
     m_statsLogTimer.startRepeating(statsLogInterval(Seconds::nan()));
@@ -2228,7 +2232,9 @@ std::optional<bool> GStreamerMediaEndpoint::canTrickleIceCandidates() const
 void GStreamerMediaEndpoint::startRTCLogs()
 {
     m_isGatheringRTCLogs = true;
+#if !RELEASE_LOG_DISABLED
     startLoggingStats();
+#endif
 }
 
 void GStreamerMediaEndpoint::stopRTCLogs()

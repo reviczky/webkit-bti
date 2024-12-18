@@ -3444,6 +3444,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addCatch(unsigned exceptionIndex, const
 {
     m_usesExceptions = true;
     data.flushAndSingleExit(*this, data, expressionStack, false, true);
+    unbindAllRegisters();
     ControlData dataCatch(*this, BlockType::Catch, data.signature(), data.enclosedHeight());
     dataCatch.setCatchKind(CatchKind::Catch);
     if (ControlData::isTry(data)) {
@@ -3466,6 +3467,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addCatch(unsigned exceptionIndex, const
 PartialResult WARN_UNUSED_RETURN BBQJIT::addCatchToUnreachable(unsigned exceptionIndex, const TypeDefinition& exceptionSignature, ControlType& data, ResultList& results)
 {
     m_usesExceptions = true;
+    unbindAllRegisters();
     ControlData dataCatch(*this, BlockType::Catch, data.signature(), data.enclosedHeight());
     dataCatch.setCatchKind(CatchKind::Catch);
     if (ControlData::isTry(data)) {
@@ -3488,6 +3490,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addCatchAll(Stack& expressionStack, Con
 {
     m_usesExceptions = true;
     data.flushAndSingleExit(*this, data, expressionStack, false, true);
+    unbindAllRegisters();
     ControlData dataCatch(*this, BlockType::Catch, data.signature(), data.enclosedHeight());
     dataCatch.setCatchKind(CatchKind::CatchAll);
     if (ControlData::isTry(data)) {
@@ -3510,6 +3513,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addCatchAll(Stack& expressionStack, Con
 PartialResult WARN_UNUSED_RETURN BBQJIT::addCatchAllToUnreachable(ControlType& data)
 {
     m_usesExceptions = true;
+    unbindAllRegisters();
     ControlData dataCatch(*this, BlockType::Catch, data.signature(), data.enclosedHeight());
     dataCatch.setCatchKind(CatchKind::CatchAll);
     if (ControlData::isTry(data)) {
@@ -3745,14 +3749,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::addEndToUnreachable(ControlEntry& entry
             Type type = entryData.signature()->returnType(i);
             entry.enclosedExpressionStack.constructAndAppend(type, Value::fromTemp(type.kind, entryData.enclosedHeight() + entryData.implicitSlots() + i));
         }
-        for (const auto& binding : m_gprBindings) {
-            if (!binding.isNone())
-                consume(binding.toValue());
-        }
-        for (const auto& binding : m_fprBindings) {
-            if (!binding.isNone())
-                consume(binding.toValue());
-        }
+        unbindAllRegisters();
     } else {
         unsigned offset = stack.size() - returnCount;
         for (unsigned i = 0; i < returnCount; ++i)
@@ -4865,6 +4862,18 @@ void BBQJIT::unbind(Value value, Location loc)
 
     if (UNLIKELY(Options::verboseBBQJITAllocation()))
         dataLogLn("BBQ\tUnbound value ", value, " from ", loc);
+}
+
+void BBQJIT::unbindAllRegisters()
+{
+    for (const auto& binding : m_gprBindings) {
+        if (!binding.isNone())
+            consume(binding.toValue());
+    }
+    for (const auto& binding : m_fprBindings) {
+        if (!binding.isNone())
+            consume(binding.toValue());
+    }
 }
 
 GPRReg BBQJIT::nextGPR()
