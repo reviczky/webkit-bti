@@ -49,6 +49,16 @@ public:
 
 enum class GridAxisPosition : uint8_t { GridAxisStart, GridAxisEnd, GridAxisCenter };
 
+class GridItemSizeCache {
+public:
+    void setSizeForGridItem(const RenderBox& gridItem, LayoutUnit size);
+    std::optional<LayoutUnit> sizeForItem(const RenderBox& gridItem) const;
+    void invalidateSizeForItem(const RenderBox& gridItem);
+
+private:
+    SingleThreadWeakHashMap<const RenderBox, std::optional<LayoutUnit>> m_sizes;
+};
+
 class RenderGrid final : public RenderBlock {
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(RenderGrid);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderGrid);
@@ -97,6 +107,7 @@ public:
     // of a descendant subgrid.
     GridSpan gridSpanForGridItem(const RenderBox&, GridTrackSizingDirection) const;
 
+    bool isSubgrid() const;
     bool isSubgrid(GridTrackSizingDirection) const;
     bool isSubgridRows() const
     {
@@ -131,6 +142,9 @@ public:
 
     LayoutUnit masonryContentSize() const;
     Vector<LayoutRect> gridItemsLayoutRects();
+
+    void updateIntrinsicLogicalHeightsForRowSizingFirstPassCacheAvailability();
+    std::optional<GridItemSizeCache>& intrinsicLogicalHeightsForRowSizingFirstPass() const;
 
     bool shouldCheckExplicitIntrinsicInnerLogicalSize(GridTrackSizingDirection) const;
 
@@ -268,6 +282,8 @@ private:
     AutoRepeatType autoRepeatColumnsType() const;
     AutoRepeatType autoRepeatRowsType() const;
 
+    bool canCreateIntrinsicLogicalHeightsForRowSizingFirstPassCache() const;
+
     class GridWrapper {
         Grid m_layoutGrid;
     public:
@@ -294,6 +310,8 @@ private:
     bool m_hasAspectRatioBlockSizeDependentItem { false };
     bool m_baselineItemsCached {false};
     bool m_hasAnyBaselineAlignmentItem { false };
+
+    mutable std::optional<GridItemSizeCache> m_intrinsicLogicalHeightsForRowSizingFirstPass;
 };
 
 } // namespace WebCore

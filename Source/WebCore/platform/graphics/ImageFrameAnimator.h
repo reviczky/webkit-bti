@@ -66,7 +66,7 @@ private:
 
     unsigned nextFrameIndex() const { return (m_currentFrameIndex + 1) % m_frameCount; }
 
-    const char* sourceUTF8() const;
+    CString sourceUTF8() const;
 
     BitmapImageSource& m_source;
     unsigned m_frameCount { 0 };
