@@ -20,6 +20,7 @@ Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
 Depends: @LIBJSC_PKG@ (= ${binary:Version}),
+         gir1.2-javascriptcoregtk-@WK_API_VERSION@ (= ${binary:Version}),
          libglib2.0-dev,
          ${gir:Depends},
          ${misc:Depends}
@@ -90,6 +91,7 @@ Package: lib@WEBKIT@gtk-@WK_API_VERSION@-dev
 Section: libdevel
 Architecture: linux-any
 Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
+         gir1.2-@WEBKIT@-@WK_API_VERSION@ (= ${binary:Version}),
          libgtk-@GTK_VERSION@-dev,
          @SOUPDEV_PKG@,
          libjavascriptcoregtk-@WK_API_VERSION@-dev (= ${binary:Version}),
