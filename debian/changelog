@@ -1,6 +1,8 @@
 webkit2gtk (2.46.5-1~deb11u1) UNRELEASED; urgency=medium
 
   * Backport to bullseye.
+  * debian/patches/build-fixes-for-gbm-disabled-and-release-logs.patch:
+    - Drop, included upstream.
 
  -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 02 Jan 2025 17:19:29 +0100
 

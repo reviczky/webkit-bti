@@ -7,4 +7,3 @@ disable-dmabuf.patch
 fix-bmalloc-armhf.patch
 revert-cmake-bump.patch
 revert-cmake_path-usage.patch
-build-fixes-for-gbm-disabled-and-release-logs.patch
