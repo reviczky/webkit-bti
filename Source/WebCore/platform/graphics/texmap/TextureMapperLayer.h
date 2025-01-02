@@ -84,7 +84,6 @@ public:
     FloatSize size() const { return m_state.size; }
     float opacity() const { return m_state.opacity; }
     TransformationMatrix transform() const { return m_state.transform; }
-    const TransformationMatrix& toSurfaceTransform() const { return m_layerTransforms.combined; }
     void setContentsVisible(bool);
     void setContentsOpaque(bool);
     void setBackfaceVisibility(bool);
@@ -132,8 +131,6 @@ public:
     ALWAYS_INLINE void addDamage(const Damage&);
     ALWAYS_INLINE void addDamage(const FloatRect&);
 
-    FloatRect effectiveLayerRect() const;
-
 private:
     TextureMapperLayer& rootLayer() const
     {
@@ -155,9 +152,13 @@ private:
     struct ComputeTransformData;
     void computeTransformsRecursive(ComputeTransformData&);
 
+    static void sortByZOrder(Vector<TextureMapperLayer* >& array);
+
     TransformationMatrix replicaTransform();
     void removeFromParent();
     void removeAllChildren();
+
+    void paintPreserves3DHolePunch(TextureMapperPlatformLayer*, const TransformationMatrix&, TextureMapperPaintOptions&);
 
     enum class ComputeOverlapRegionMode : uint8_t {
         Intersection,
@@ -187,7 +188,6 @@ private:
     void paintBackdrop(TextureMapperPaintOptions&);
     void applyMask(TextureMapperPaintOptions&);
     void recordDamage(const FloatRect&, const TransformationMatrix&, const TextureMapperPaintOptions&);
-    void collect3DSceneLayers(Vector<TextureMapperLayer*>&);
 
     bool isVisible() const;
 
@@ -211,6 +211,7 @@ private:
     std::unique_ptr<TextureMapperFlattenedLayer> m_flattenedLayer;
     float m_currentOpacity { 1.0 };
     FilterOperations m_currentFilters;
+    float m_centerZ { 0 };
 
     struct State {
         FloatPoint pos;
