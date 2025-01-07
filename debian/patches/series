@@ -5,3 +5,4 @@ dont-detect-sse2.patch
 fix-ftbfs-hurd.patch
 disable-nvidia-dmabuf.patch
 fix-bmalloc-armhf.patch
+support-icu-76.1.patch
