@@ -1,4 +1,4 @@
-webkit2gtk (2.47.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.47.3-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh disable-nvidia-dmabuf.patch.
@@ -7,7 +7,7 @@ webkit2gtk (2.47.3-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2025 10:44:44 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2025 17:27:50 +0100
 
 webkit2gtk (2.47.2-1) experimental; urgency=medium
 
