@@ -563,8 +563,15 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, exposeCustomSettersOnGlobalObjectForTesting, false, Normal, nullptr) \
     v(Bool, useJITCage, canUseJITCage(), Normal, nullptr) \
     v(Bool, useAllocationProfiling, false, Normal, "Allows toggling of bmalloc/libPAS allocation profiling features at JSC launch."_s) \
+    v(Unsigned, allocationProfilingMode, 0, Normal, "Allows custom arguments to be passed to bmalloc/libPAS allocation profiling features at JSC launch."_s) \
     v(Bool, dumpBaselineJITSizeStatistics, false, Normal, nullptr) \
     v(Bool, dumpDFGJITSizeStatistics, false, Normal, nullptr) \
+    v(Bool, useLoopUnrolling, true, Normal, nullptr) \
+    v(Bool, verboseLoopUnrolling, false, Normal, nullptr) \
+    v(Unsigned, maxLoopUnrollingCount, 2, Normal, nullptr) \
+    v(Unsigned, maxLoopUnrollingBodyNodeSize, 200, Normal, nullptr) \
+    v(Unsigned, maxLoopUnrollingIterationCount, 4, Normal, nullptr) \
+    v(Bool, printEachUnrolledLoop, false, Normal, nullptr) \
     v(Bool, verboseExecutablePoolAllocation, false, Normal, nullptr) \
     v(Bool, useHandlerIC, canUseHandlerIC(), Normal, nullptr) \
     v(Bool, useDataICInFTL, false, Normal, nullptr) \
@@ -578,7 +585,7 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, dumpWasmWarnings, false, Normal, nullptr) \
     v(Bool, useRecursiveJSONParse, true, Normal, nullptr) \
     v(Unsigned, thresholdForStringReplaceCache, 0x1000, Normal, nullptr) \
-    v(Bool, useWasmIPInt, false, Normal, "Use the in-place interpereter for WASM instead of LLInt."_s) \
+    v(Bool, useWasmIPInt, ipintEnabledByDefault(), Normal, "Use the in-place interpereter for WASM instead of LLInt."_s) \
     v(Bool, useWasmIPIntPrologueOSR, true, Normal, "Allow IPInt to tier up during function prologues"_s) \
     v(Bool, useWasmIPIntLoopOSR, true, Normal, "Allow IPInt to tier up during loop iterations"_s) \
     v(Bool, useWasmIPIntEpilogueOSR, true, Normal, "Allow IPInt to tier up during function epilogues"_s) \
@@ -589,13 +596,16 @@ bool hasCapacityToUseLargeGigacage();
     /* Feature Flags */\
     \
     v(Bool, useAtomicsPause, true, Normal, "Expose Atomics.pause."_s) \
-    v(Bool, useErrorIsError, false, Normal, "Expose Error.isError feature."_s) \
+    v(Bool, useErrorIsError, true, Normal, "Expose Error.isError feature."_s) \
     v(Bool, useFloat16Array, true, Normal, "Expose Float16Array."_s) \
+    v(Bool, useImportDefer, false, Normal, "Enable deferred module import."_s) \
     v(Bool, useIteratorChunking, false, Normal, "Expose the Iterator.prototype.chunks and Iterator.prototype.windows methods."_s) \
     v(Bool, useIteratorHelpers, true, Normal, "Expose the Iterator Helpers."_s) \
     v(Bool, useIteratorSequencing, false, Normal, "Expose the Iterator.concat method."_s) \
+    v(Bool, useJSONSourceTextAccess, true, Normal, "Expose JSON source text access feature."_s) \
     v(Bool, useMapGetOrInsert, false, Normal, "Expose the Map.prototype.getOrInsert family of methods."_s) \
     v(Bool, useMathSumPreciseMethod, false, Normal, "Expose the Math.sumPrecise() method."_s) \
+    v(Bool, useMoreCurrencyDisplayChoices, false, Normal, "Enable more currencyDisplay choices for Intl.NumberFormat"_s) \
     v(Bool, usePromiseTryMethod, true, Normal, "Expose the Promise.try() method."_s) \
     v(Bool, useRegExpEscape, true, Normal, "Expose RegExp.escape feature."_s) \
     v(Bool, useSharedArrayBuffer, false, Normal, nullptr) \
@@ -603,7 +613,6 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, useTemporal, false, Normal, "Expose the Temporal object."_s) \
     v(Bool, useTrustedTypes, false, Normal, "Enable trusted types eval protection feature."_s) \
     v(Bool, useUint8ArrayBase64Methods, true, Normal, "Expose methods for converting Uint8Array to/from base64 and hex."_s) \
-    v(Bool, useWasmGC, true, Normal, "Allow gc types from the wasm gc proposal."_s) \
     v(Bool, useWasmSIMD, true, Normal, "Allow the new simd instructions and types from the wasm simd spec."_s) \
     v(Bool, useWasmRelaxedSIMD, false, Normal, "Allow the relaxed simd instructions and types from the wasm relaxed simd spec."_s) \
     v(Bool, useWasmTailCalls, true, Normal, "Allow the new instructions from the wasm tail calls spec."_s) \

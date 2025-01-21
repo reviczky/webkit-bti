@@ -116,7 +116,7 @@ public:
     Ref<GenericPromise> flushDecoder(Decoder&);
     void setDecoderFormatDescription(Decoder&, std::span<const uint8_t>, uint16_t width, uint16_t height);
     int32_t decodeWebRTCFrame(Decoder&, int64_t timeStamp, std::span<const uint8_t>, uint16_t width, uint16_t height);
-    Ref<FramePromise> decodeFrame(Decoder&, int64_t timeStamp, std::span<const uint8_t>, uint16_t width, uint16_t height);
+    Ref<FramePromise> decodeFrame(Decoder&, int64_t timeStamp, std::span<const uint8_t>);
     void registerDecodeFrameCallback(Decoder&, void* decodedImageCallback);
     void registerDecodedVideoFrameCallback(Decoder&, DecoderCallback&&);
 
@@ -191,6 +191,7 @@ public:
     void ref() const final { return IPC::WorkQueueMessageReceiver::ref(); }
     void deref() const final { return IPC::WorkQueueMessageReceiver::deref(); }
     ThreadSafeWeakPtrControlBlock& controlBlock() const final { return IPC::WorkQueueMessageReceiver::controlBlock(); }
+    size_t weakRefCount() const final { return IPC::WorkQueueMessageReceiver::weakRefCount(); }
 
     WorkQueue& workQueue() const { return m_queue; }
 

@@ -91,7 +91,7 @@ public:
     void setRangeDeletedByUnapply(const VisiblePositionIndexRange&);
 
 #ifndef NDEBUG
-    virtual void getNodesInCommand(HashSet<Ref<Node>>&);
+    virtual void getNodesInCommand(NodeSet&);
 #endif
 
 private:
@@ -233,3 +233,7 @@ private:
 };
 
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::CompositeEditCommand)
+    static bool isType(const WebCore::EditCommand& command) { return command.isCompositeEditCommand(); }
+SPECIALIZE_TYPE_TRAITS_END()

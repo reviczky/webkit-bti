@@ -52,6 +52,7 @@
 #include "NetworkProcessProxyMessages.h"
 #include "PageClient.h"
 #include "PageLoadState.h"
+#include "ProcessTerminationReason.h"
 #include "RemoteWorkerType.h"
 #include "SandboxExtension.h"
 #include "ShouldGrandfatherStatistics.h"
@@ -206,9 +207,6 @@ void NetworkProcessProxy::sendCreationParametersToNewProcess()
     parameters.enablePrivateClickMeasurement = false;
 #endif
 
-#if ENABLE(WEB_PUSH_NOTIFICATIONS)
-    parameters.builtInNotificationsEnabled = DeprecatedGlobalSettings::builtInNotificationsEnabled();
-#endif
 #if PLATFORM(COCOA)
     parameters.enableModernDownloadProgress = CFPreferencesGetAppBooleanValue(CFSTR("EnableModernDownloadProgress"), CFSTR("com.apple.WebKit"), nullptr);
 #endif
@@ -563,16 +561,16 @@ void NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation(WebPage
         completionHandler(false);
 }
 
-void NetworkProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
+void NetworkProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier&& connectionIdentifier)
 {
     RELEASE_LOG(Process, "%p - NetworkProcessProxy::didFinishLaunching", this);
 
-    AuxiliaryProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
+    bool didTerminate = !connectionIdentifier;
 
-    if (!connectionIdentifier) {
+    AuxiliaryProcessProxy::didFinishLaunching(launcher, WTFMove(connectionIdentifier));
+
+    if (didTerminate)
         networkProcessDidTerminate(ProcessTerminationReason::Crash);
-        return;
-    }
 }
 
 void NetworkProcessProxy::logDiagnosticMessage(WebPageProxyIdentifier pageID, const String& message, const String& description, WebCore::ShouldSample shouldSample)
@@ -594,8 +592,10 @@ void NetworkProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProc
 
 void NetworkProcessProxy::processHasUnresponseServiceWorker(WebCore::ProcessIdentifier processIdentifier)
 {
-    if (auto process = WebProcessProxy::processForIdentifier(processIdentifier))
+    if (auto process = WebProcessProxy::processForIdentifier(processIdentifier)) {
+        process->endServiceWorkerBackgroundProcessing();
         process->disableRemoteWorkers(RemoteWorkerType::ServiceWorker);
+    }
 }
 
 void NetworkProcessProxy::terminateIdleServiceWorkers(WebCore::ProcessIdentifier processIdentifier, CompletionHandler<void()>&& callback)
@@ -1415,7 +1415,7 @@ WebsiteDataStore* NetworkProcessProxy::websiteDataStoreFromSessionID(PAL::Sessio
 #if ENABLE(CONTENT_EXTENSIONS)
 void NetworkProcessProxy::contentExtensionRules(UserContentControllerIdentifier identifier)
 {
-    if (auto* webUserContentControllerProxy = WebUserContentControllerProxy::get(identifier)) {
+    if (RefPtr webUserContentControllerProxy = WebUserContentControllerProxy::get(identifier)) {
         m_webUserContentControllerProxies.add(*webUserContentControllerProxy);
         webUserContentControllerProxy->addNetworkProcess(*this);
 
@@ -1778,18 +1778,19 @@ void NetworkProcessProxy::getPendingPushMessages(PAL::SessionID sessionID, Compl
 
 void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, const WebPushMessage& pushMessage, CompletionHandler<void(bool wasProcessed, std::optional<WebCore::NotificationPayload>&&)>&& callback)
 {
+    bool builtInNotificationsEnabled = false;
     auto permission = PushPermissionState::Granted;
 
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    RefPtr dataStore = websiteDataStoreFromSessionID(sessionID);
+    if (!dataStore)
+        return callback(false, std::nullopt);
+    builtInNotificationsEnabled = dataStore->builtInNotificationsEnabled();
     // When built-in notifications are disabled, the source of permissions is the UIProcess.
     // Since we're already in UIProcess, we look up the permissions here to remove a round trip.
-    if (!DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
+    if (!builtInNotificationsEnabled) {
         permission = PushPermissionState::Prompt;
-        HashMap<String, bool> permissions;
-
-        if (RefPtr dataStore = websiteDataStoreFromSessionID(sessionID))
-            permissions = dataStore->client().notificationPermissions();
-
+        auto permissions = dataStore->client().notificationPermissions();
         if (permissions.isEmpty())
             permissions = WebNotificationManagerProxy::protectedSharedServiceWorkerManager()->notificationPermissions();
 
@@ -1812,7 +1813,7 @@ void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, const Web
     auto innerCallback = [callback = WTFMove(callback), assertionTimer = WTFMove(assertionTimer)] (bool wasProcessed, std::optional<WebCore::NotificationPayload>&& resultPayload) mutable {
         callback(wasProcessed, WTFMove(resultPayload));
     };
-    sendWithAsyncReply(Messages::NetworkProcess::ProcessPushMessage { sessionID, pushMessage, permission }, WTFMove(innerCallback));
+    sendWithAsyncReply(Messages::NetworkProcess::ProcessPushMessage { sessionID, pushMessage, permission, builtInNotificationsEnabled }, WTFMove(innerCallback));
 }
 
 void NetworkProcessProxy::processNotificationEvent(const NotificationData& data, NotificationEventType eventType, CompletionHandler<void(bool wasProcessed)>&& callback)
@@ -2000,6 +2001,16 @@ void NetworkProcessProxy::setEmulatedConditions(PAL::SessionID sessionID, std::o
 }
 
 #endif // ENABLE(INSPECTOR_NETWORK_THROTTLING)
+
+void NetworkProcessProxy::fetchLocalStorage(PAL::SessionID sessionID, CompletionHandler<void(HashMap<WebCore::ClientOrigin, HashMap<String, String>>&&)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::FetchLocalStorage(sessionID), WTFMove(completionHandler));
+}
+
+void NetworkProcessProxy::restoreLocalStorage(PAL::SessionID sessionID, HashMap<WebCore::ClientOrigin, HashMap<String, String>>&& localStorage, CompletionHandler<void(bool)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::RestoreLocalStorage(sessionID, WTFMove(localStorage)), WTFMove(completionHandler));
+}
 
 } // namespace WebKit
 

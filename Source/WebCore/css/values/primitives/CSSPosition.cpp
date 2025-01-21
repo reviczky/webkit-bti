@@ -32,12 +32,12 @@ bool isCenterPosition(const Position& position)
 {
     auto isCenter = [](const auto& component) {
         return WTF::switchOn(component.offset,
-            [](auto)   { return false; },
-            [](Center) { return true;  },
+            [](auto)            { return false; },
+            [](Keyword::Center) { return true;  },
             [](const LengthPercentage<>& value) {
                 return WTF::switchOn(value,
-                    [](const LengthPercentageRaw<>& raw) { return raw.type == CSSUnitType::CSS_PERCENTAGE && raw.value == 50.0; },
-                    [](const UnevaluatedCalc<LengthPercentageRaw<>>&) { return false; }
+                    [](const LengthPercentage<>::Raw& raw) { return raw == 50_css_percentage; },
+                    [](const LengthPercentage<>::Calc&) { return false; }
                 );
             }
         );

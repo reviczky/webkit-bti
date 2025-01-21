@@ -1495,11 +1495,8 @@ WebCore::ThirdPartyCookieBlockingMode WebsiteDataStore::thirdPartyCookieBlocking
 }
 #endif
 
-void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForTesting(bool enabled, bool onlyOnSitesWithoutUserInteraction, CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForTesting(bool enabled, WebCore::ThirdPartyCookieBlockingMode blockingMode, CompletionHandler<void()>&& completionHandler)
 {
-    WebCore::ThirdPartyCookieBlockingMode blockingMode = WebCore::ThirdPartyCookieBlockingMode::OnlyAccordingToPerDomainPolicy;
-    if (enabled)
-        blockingMode = onlyOnSitesWithoutUserInteraction ? WebCore::ThirdPartyCookieBlockingMode::AllOnSitesWithoutUserInteraction : WebCore::ThirdPartyCookieBlockingMode::All;
     setThirdPartyCookieBlockingMode(blockingMode, WTFMove(completionHandler));
 }
 
@@ -1903,6 +1900,7 @@ bool WebsiteDataStore::isBlobRegistryPartitioningEnabled() const
     });
 }
 
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
 bool WebsiteDataStore::isOptInCookiePartitioningEnabled() const
 {
     return WTF::anyOf(m_processes, [] (const WebProcessProxy& process) {
@@ -1911,8 +1909,9 @@ bool WebsiteDataStore::isOptInCookiePartitioningEnabled() const
         });
     });
 }
+#endif
 
-void WebsiteDataStore::propagateSettingUpdatesToNetworkProcess()
+void WebsiteDataStore::propagateSettingUpdates()
 {
     RefPtr networkProcess = networkProcessIfExists();
     if (!networkProcess)
@@ -1925,11 +1924,24 @@ void WebsiteDataStore::propagateSettingUpdatesToNetworkProcess()
         networkProcess->send(Messages::NetworkProcess::SetBlobRegistryTopOriginPartitioningEnabled(sessionID(), enabled), 0);
     }
 
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
     enabled = isOptInCookiePartitioningEnabled();
-    if (m_isOptInCookiePartitioningEnabled != enabled) {
+    if (m_isOptInCookiePartitioningEnabled != enabled && trackingPreventionEnabled()) {
         m_isOptInCookiePartitioningEnabled = enabled;
         networkProcess->send(Messages::NetworkProcess::SetOptInCookiePartitioningEnabled(sessionID(), enabled), 0);
+
+        for (Ref webProcess : processes())
+            webProcess->setOptInCookiePartitioningEnabled(enabled);
+
+        if (m_isOptInCookiePartitioningEnabled && m_thirdPartyCookieBlockingMode == WebCore::ThirdPartyCookieBlockingMode::All) {
+            RELEASE_LOG(Storage, "WebsiteDataStore::propagateSettingUpdates (%p) sessionID=%" PRIu64 ", OptInCookiePartitioning enabled, setting ThirdPartyCookieBlockingMode::AllExceptPartitioned" PRIu64, this, m_sessionID.toUInt64());
+            setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode::AllExceptPartitioned, []() { });
+        } else if (!m_isOptInCookiePartitioningEnabled && m_thirdPartyCookieBlockingMode == WebCore::ThirdPartyCookieBlockingMode::AllExceptPartitioned) {
+            RELEASE_LOG(Storage, "WebsiteDataStore::propagateSettingUpdates (%p) sessionID=%" PRIu64 ", OptInCookiePartitioning disabled, setting ThirdPartyCookieBlockingMode::All", this, m_sessionID.toUInt64());
+            setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode::All, []() { });
+        }
     }
+#endif
 }
 
 void WebsiteDataStore::dispatchOnQueue(Function<void()>&& function)
@@ -2040,7 +2052,9 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.webPushMachServiceName = m_configuration->webPushMachServiceName();
     networkSessionParameters.webPushPartitionString = m_configuration->webPushPartitionString();
     networkSessionParameters.isBlobRegistryTopOriginPartitioningEnabled = isBlobRegistryPartitioningEnabled();
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
     networkSessionParameters.isOptInCookiePartitioningEnabled = isOptInCookiePartitioningEnabled();
+#endif
     networkSessionParameters.unifiedOriginStorageLevel = m_configuration->unifiedOriginStorageLevel();
     networkSessionParameters.perOriginStorageQuota = perOriginStorageQuota();
     networkSessionParameters.originQuotaRatio = originQuotaRatio();
@@ -2709,5 +2723,32 @@ void WebsiteDataStore::setRestrictedOpenerTypeForDomainForTesting(const WebCore:
 
     m_restrictedOpenerTypesForTesting.set(domain, type);
 }
+
+void WebsiteDataStore::fetchLocalStorage(CompletionHandler<void(HashMap<WebCore::ClientOrigin, HashMap<String, String>>&&)>&& completionHandler)
+{
+    if (RefPtr networkProcess = networkProcessIfExists())
+        networkProcess->fetchLocalStorage(m_sessionID, WTFMove(completionHandler));
+    else
+        completionHandler({ });
+}
+
+void WebsiteDataStore::restoreLocalStorage(HashMap<WebCore::ClientOrigin, HashMap<String, String>>&& localStorage, CompletionHandler<void(bool)>&& completionHandler)
+{
+    protectedNetworkProcess()->restoreLocalStorage(m_sessionID, WTFMove(localStorage), WTFMove(completionHandler));
+}
+
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+bool WebsiteDataStore::builtInNotificationsEnabled() const
+{
+    if (!m_pages.computeSize())
+        return defaultBuiltInNotificationsEnabled();
+
+    for (Ref page : m_pages) {
+        if (page->preferences().builtInNotificationsEnabled())
+            return true;
+    }
+    return false;
+}
+#endif
 
 } // namespace WebKit

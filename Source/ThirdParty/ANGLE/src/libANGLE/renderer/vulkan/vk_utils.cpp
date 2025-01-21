@@ -616,17 +616,22 @@ VkResult AllocateBufferMemoryWithRequirements(Context *context,
 }
 
 angle::Result InitShaderModule(Context *context,
-                               ShaderModule *shaderModule,
+                               ShaderModulePtr *shaderModulePtr,
                                const uint32_t *shaderCode,
                                size_t shaderCodeSize)
 {
+    ASSERT(!(*shaderModulePtr));
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.flags                    = 0;
     createInfo.codeSize                 = shaderCodeSize;
     createInfo.pCode                    = shaderCode;
 
-    ANGLE_VK_TRY(context, shaderModule->init(context->getDevice(), createInfo));
+    ShaderModulePtr newShaderModule = ShaderModulePtr::MakeShared(context->getDevice());
+    ANGLE_VK_TRY(context, newShaderModule->init(context->getDevice(), createInfo));
+
+    *shaderModulePtr = std::move(newShaderModule);
+
     return angle::Result::Continue;
 }
 
@@ -749,7 +754,7 @@ void GarbageObject::destroy(Renderer *renderer)
             break;
     }
 
-    renderer->onDeallocateHandle(mHandleType);
+    renderer->onDeallocateHandle(mHandleType, 1);
 }
 
 void MakeDebugUtilsLabel(GLenum source, const char *marker, VkDebugUtilsLabelEXT *label)
@@ -1301,12 +1306,6 @@ VkSamplerAddressMode GetSamplerAddressMode(const GLenum wrap)
     }
 }
 
-VkRect2D GetRect(const gl::Rectangle &source)
-{
-    return {{source.x, source.y},
-            {static_cast<uint32_t>(source.width), static_cast<uint32_t>(source.height)}};
-}
-
 VkPrimitiveTopology GetPrimitiveTopology(gl::PrimitiveMode mode)
 {
     switch (mode)
@@ -1703,6 +1702,46 @@ VkImageTiling GetTilingMode(gl::TilingMode tilingMode)
     }
 }
 
+VkImageCompressionFixedRateFlagsEXT ConvertEGLFixedRateToVkFixedRate(
+    const EGLenum eglCompressionRate,
+    const angle::FormatID actualFormatID)
+{
+    switch (eglCompressionRate)
+    {
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_DEFAULT_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_1BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_1BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_2BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_2BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_3BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_3BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_4BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_4BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_5BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_5BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_6BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_6BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_7BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_7BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_8BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_8BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_9BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_9BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_10BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_10BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_11BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_11BPC_BIT_EXT;
+        case EGL_SURFACE_COMPRESSION_FIXED_RATE_12BPC_EXT:
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_12BPC_BIT_EXT;
+        default:
+            UNREACHABLE();
+            return VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT;
+    }
+}
+
 }  // namespace gl_vk
 
 namespace vk_gl
@@ -1745,6 +1784,134 @@ GLuint GetSampleCount(VkSampleCountFlags supportedCounts, GLuint requestedCount)
 gl::LevelIndex GetLevelIndex(vk::LevelIndex levelVk, gl::LevelIndex baseLevel)
 {
     return gl::LevelIndex(levelVk.get() + baseLevel.get());
+}
+
+GLenum ConvertVkFixedRateToGLFixedRate(const VkImageCompressionFixedRateFlagsEXT vkCompressionRate)
+{
+    switch (vkCompressionRate)
+    {
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_1BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_1BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_2BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_2BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_3BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_3BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_4BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_4BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_5BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_5BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_6BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_6BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_7BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_7BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_8BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_8BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_9BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_9BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_10BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_10BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_11BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_11BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_12BPC_BIT_EXT:
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_12BPC_EXT;
+        default:
+            UNREACHABLE();
+            return GL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
+    }
+}
+
+GLint ConvertCompressionFlagsToGLFixedRates(
+    VkImageCompressionFixedRateFlagsEXT imageCompressionFixedRateFlags,
+    GLint bufSize,
+    GLint *rates)
+{
+    if (imageCompressionFixedRateFlags == VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT)
+    {
+        if (nullptr != rates)
+        {
+            rates[0] = GL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
+        }
+        return 0;
+    }
+    VkImageCompressionFixedRateFlagsEXT tmpFlags = imageCompressionFixedRateFlags;
+    uint8_t bitCount                             = 0;
+    std::vector<GLint> GLRates;
+
+    while (tmpFlags > 0)
+    {
+        if ((tmpFlags & 1) == true)
+        {
+            GLRates.push_back(ConvertVkFixedRateToGLFixedRate(1 << bitCount));
+        }
+        bitCount += 1;
+        tmpFlags >>= 1;
+    }
+
+    GLint size = static_cast<GLint>(GLRates.size());
+    // rates could be nullprt, as user only want get the size(count) of rates
+    if (nullptr != rates && size <= bufSize)
+    {
+        std::copy(GLRates.begin(), GLRates.end(), rates);
+    }
+    return size;
+}
+
+EGLenum ConvertVkFixedRateToEGLFixedRate(
+    const VkImageCompressionFixedRateFlagsEXT vkCompressionRate)
+{
+    switch (vkCompressionRate)
+    {
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_NONE_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_1BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_1BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_2BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_2BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_3BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_3BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_4BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_4BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_5BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_5BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_6BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_6BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_7BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_7BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_8BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_8BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_9BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_9BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_10BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_10BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_11BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_11BPC_EXT;
+        case VK_IMAGE_COMPRESSION_FIXED_RATE_12BPC_BIT_EXT:
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_12BPC_EXT;
+        default:
+            UNREACHABLE();
+            return EGL_SURFACE_COMPRESSION_FIXED_RATE_NONE_EXT;
+    }
+}
+
+std::vector<EGLint> ConvertCompressionFlagsToEGLFixedRate(
+    VkImageCompressionFixedRateFlagsEXT imageCompressionFixedRateFlags,
+    size_t rateSize)
+{
+    std::vector<EGLint> EGLRates;
+
+    for (size_t bit : angle::BitSet<32>(imageCompressionFixedRateFlags))
+    {
+        if (EGLRates.size() >= rateSize)
+        {
+            break;
+        }
+
+        EGLRates.push_back(ConvertVkFixedRateToEGLFixedRate(angle::Bit<uint32_t>(bit)));
+    }
+
+    return EGLRates;
 }
 }  // namespace vk_gl
 }  // namespace rx

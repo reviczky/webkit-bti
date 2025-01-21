@@ -61,6 +61,7 @@
 #include "DocumentInlines.h"
 #include "DocumentLoader.h"
 #include "DocumentMarkerController.h"
+#include "DocumentSyncData.h"
 #include "DragController.h"
 #include "Editing.h"
 #include "Editor.h"
@@ -241,9 +242,9 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Page);
 
-static HashSet<WeakRef<Page>>& allPages()
+static UncheckedKeyHashSet<WeakRef<Page>>& allPages()
 {
-    static NeverDestroyed<HashSet<WeakRef<Page>>> set;
+    static NeverDestroyed<UncheckedKeyHashSet<WeakRef<Page>>> set;
     return set;
 }
 
@@ -438,6 +439,10 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_writingToolsController(makeUniqueRef<WritingToolsController>(*this))
 #endif
     , m_activeNowPlayingSessionUpdateTimer(*this, &Page::activeNowPlayingSessionUpdateTimerFired)
+    , m_topDocumentSyncData(DocumentSyncData::create())
+#if HAVE(AUDIT_TOKEN)
+    , m_presentingApplicationAuditToken(WTFMove(pageConfiguration.presentingApplicationAuditToken))
+#endif
 {
     updateTimerThrottlingState();
 
@@ -486,8 +491,10 @@ Page::Page(PageConfiguration&& pageConfiguration)
     if (m_lowPowerModeNotifier->isLowPowerModeEnabled())
         m_throttlingReasons.add(ThrottlingReason::LowPowerMode);
 
-    if (m_thermalMitigationNotifier->thermalMitigationEnabled())
+    if (m_thermalMitigationNotifier->thermalMitigationEnabled()) {
         m_throttlingReasons.add(ThrottlingReason::ThermalMitigation);
+        m_throttlingReasons.set(ThrottlingReason::AggressiveThermalMitigation, settings().respondToThermalPressureAggressively());
+    }
 }
 
 Page::~Page()
@@ -495,8 +502,7 @@ Page::~Page()
     m_validationMessageClient = nullptr;
     m_diagnosticLoggingClient = nullptr;
     m_performanceLoggingClient = nullptr;
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame))
-        localMainFrame->setView(nullptr);
+    m_mainFrame->disconnectView();
     setGroupName(String());
     allPages().remove(*this);
     if (!isUtilityPage()) {
@@ -548,12 +554,12 @@ void Page::firstTimeInitialization()
 void Page::clearPreviousItemFromAllPages(BackForwardItemIdentifier itemID)
 {
     for (auto& page : allPages()) {
-        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
+        RefPtr localMainFrame = page->localMainFrame();
         if (!localMainFrame)
             return;
 
-        CheckedRef controller = localMainFrame->history();
-        if (controller->previousItem() && controller->previousItem()->identifier() == itemID) {
+        CheckedRef controller = localMainFrame->loader().history();
+        if (controller->previousItem() && controller->previousItem()->itemID() == itemID) {
             controller->clearPreviousItem();
             return;
         }
@@ -570,11 +576,27 @@ uint64_t Page::renderTreeSize() const
     return total;
 }
 
+void Page::destroyRenderTrees()
+{
+    // When closing or entering back/forward cache, tear down the render tree before setting the in-cache flag.
+    // This maintains the invariant that render trees are never present in the back/forward cache or outliving the page.
+    // Note that destruction happens bottom-up so that the main frame's tree dies last.
+    for (RefPtr frame = m_mainFrame->tree().traversePrevious(CanWrap::Yes); frame; frame = frame->tree().traversePrevious(CanWrap::No)) {
+        RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
+        if (!localFrame)
+            continue;
+        if (!localFrame->document())
+            continue;
+        Ref document = *localFrame->document();
+        if (document->hasLivingRenderTree())
+            document->destroyRenderTree();
+    }
+}
+
 OptionSet<DisabledAdaptations> Page::disabledAdaptations() const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
-        return document->disabledAdaptations();
+    if (RefPtr localTopDocument = this->localTopDocument())
+        return localTopDocument->disabledAdaptations();
     return { };
 }
 
@@ -611,9 +633,8 @@ void Page::setOverrideViewportArguments(const std::optional<ViewportArguments>& 
         return;
 
     m_overrideViewportArguments = viewportArguments;
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
-        document->updateViewportArguments();
+    if (RefPtr localTopDocument = this->localTopDocument())
+        localTopDocument->updateViewportArguments();
 }
 
 ScrollingCoordinator* Page::scrollingCoordinator()
@@ -744,12 +765,11 @@ void Page::settingsDidChange()
 
 std::optional<AXTreeData> Page::accessibilityTreeData() const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document)
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument)
         return std::nullopt;
 
-    if (CheckedPtr cache = document->existingAXObjectCache())
+    if (CheckedPtr cache = localTopDocument->existingAXObjectCache())
         return { cache->treeData() };
     return std::nullopt;
 }
@@ -773,21 +793,142 @@ void Page::progressFinished(LocalFrame& frameWithCompletedProgress) const
 void Page::setMainFrame(Ref<Frame>&& frame)
 {
     m_mainFrame = WTFMove(frame);
+
+    RefPtr<Document> document;
+    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get()))
+        document = localFrame->document();
+
+    m_topDocumentSyncData = document ? document->syncData() : DocumentSyncData::create();
 }
 
-void Page::setMainFrameURL(const URL& url)
+void Page::setMainFrameURLAndOrigin(const URL& url, RefPtr<SecurityOrigin>&& origin)
 {
-    m_mainFrameURL = url;
-    m_mainFrameOrigin = SecurityOrigin::create(url);
+    // This URL and SecurityOrigin is relevant to this Page only if it is not
+    // directly hosting the local main frame.
+    RefPtr localFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+    if (!localFrame) {
+        m_topDocumentSyncData->documentURL = url;
+
+        if (!origin)
+            origin = SecurityOrigin::create(url);
+        m_topDocumentSyncData->documentSecurityOrigin = WTFMove(origin);
+
+        return;
+    }
+
+    // If this page is hosting the local main frame, make sure the url and origin
+    // match what we expect, then broadcast them out to other processes.
+    RELEASE_ASSERT(url == m_topDocumentSyncData->documentURL);
+    if (!origin)
+        RELEASE_ASSERT(!m_topDocumentSyncData->documentSecurityOrigin);
+    else
+        RELEASE_ASSERT(origin->equal(*m_topDocumentSyncData->documentSecurityOrigin));
+
+    processSyncClient().broadcastTopDocumentSyncDataToOtherProcesses(m_topDocumentSyncData.get());
+}
+
+#if ENABLE(DOM_AUDIO_SESSION)
+void Page::setAudioSessionType(DOMAudioSessionType audioSessionType)
+{
+    m_topDocumentSyncData->audioSessionType = audioSessionType;
+    processSyncClient().broadcastAudioSessionTypeToOtherProcesses(audioSessionType);
+}
+
+DOMAudioSessionType Page::audioSessionType() const
+{
+    return m_topDocumentSyncData->audioSessionType;
+}
+#endif
+
+void Page::setUserDidInteractWithPage(bool didInteract)
+{
+    if (m_topDocumentSyncData->userDidInteractWithPage == didInteract)
+        return;
+
+    m_topDocumentSyncData->userDidInteractWithPage = didInteract;
+    processSyncClient().broadcastUserDidInteractWithPageToOtherProcesses(didInteract);
+}
+
+bool Page::userDidInteractWithPage() const
+{
+    return m_topDocumentSyncData->userDidInteractWithPage;
+}
+
+void Page::setAutofocusProcessed()
+{
+    if (m_topDocumentSyncData->isAutofocusProcessed)
+        return;
+
+    m_topDocumentSyncData->isAutofocusProcessed = true;
+    processSyncClient().broadcastIsAutofocusProcessedToOtherProcesses(true);
+}
+
+bool Page::autofocusProcessed() const
+{
+    return m_topDocumentSyncData->isAutofocusProcessed;
+}
+
+bool Page::topDocumentHasDocumentClass(DocumentClass documentClass) const
+{
+    return m_topDocumentSyncData->documentClasses.contains(documentClass);
+}
+
+void Page::setTopDocumentHasFullscreenElement(bool hasFullscreenElement)
+{
+    if (hasFullscreenElement == m_topDocumentSyncData->hasFullscreenElement)
+        return;
+
+    m_topDocumentSyncData->hasFullscreenElement = hasFullscreenElement;
+    processSyncClient().broadcastHasFullscreenElementToOtherProcesses(hasFullscreenElement);
+}
+
+bool Page::topDocumentHasFullscreenElement()
+{
+    return m_topDocumentSyncData->hasFullscreenElement;
+}
+
+bool Page::hasInjectedUserScript()
+{
+    return m_topDocumentSyncData->hasInjectedUserScript;
+}
+
+void Page::setHasInjectedUserScript()
+{
+    if (m_topDocumentSyncData->hasInjectedUserScript)
+        return;
+
+    m_topDocumentSyncData->hasInjectedUserScript = true;
+    processSyncClient().broadcastHasInjectedUserScriptToOtherProcesses(true);
 }
 
 void Page::updateProcessSyncData(const ProcessSyncData& data)
 {
     switch (data.type) {
-    case ProcessSyncDataType::MainFrameURLChange:
-        setMainFrameURL(std::get<URL>(data.value));
+    case ProcessSyncDataType::DocumentClasses:
+    case ProcessSyncDataType::DocumentSecurityOrigin:
+    case ProcessSyncDataType::DocumentURL:
+    case ProcessSyncDataType::HasFullscreenElement:
+    case ProcessSyncDataType::HasInjectedUserScript:
+    case ProcessSyncDataType::IsAutofocusProcessed:
+    case ProcessSyncDataType::UserDidInteractWithPage:
+#if ENABLE(DOM_AUDIO_SESSION)
+    case ProcessSyncDataType::AudioSessionType:
+#endif
+        m_topDocumentSyncData->update(data);
         break;
     }
+}
+
+void Page::updateTopDocumentSyncData(Ref<DocumentSyncData>&& data)
+{
+    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get())) {
+        // Prefer the main LocalFrame document's data, but if the main LocalFrame
+        // has no document, accept the remote pushed data.
+        if (localFrame->document())
+            return;
+    }
+
+    m_topDocumentSyncData = WTFMove(data);
 }
 
 void Page::setMainFrameURLFragment(String&& fragment)
@@ -796,11 +937,16 @@ void Page::setMainFrameURLFragment(String&& fragment)
         m_mainFrameURLFragment = WTFMove(fragment);
 }
 
+const URL& Page::mainFrameURL() const
+{
+    return m_topDocumentSyncData->documentURL;
+}
+
 SecurityOrigin& Page::mainFrameOrigin() const
 {
-    if (!m_mainFrameOrigin)
+    if (!m_topDocumentSyncData->documentSecurityOrigin)
         return SecurityOrigin::opaqueOrigin();
-    return *m_mainFrameOrigin;
+    return *m_topDocumentSyncData->documentSecurityOrigin;
 }
 
 bool Page::openedByDOM() const
@@ -819,10 +965,16 @@ void Page::goToItem(LocalFrame& frame, HistoryItem& item, FrameLoadType type, Sh
     // being deref()-ed. Make sure we can still use it with HistoryController::goToItem later.
     Ref protectedItem { item };
 
-    ASSERT(frame.isRootFrame());
-    if (frame.checkedHistory()->shouldStopLoadingForHistoryItem(item))
+    if (frame.loader().checkedHistory()->shouldStopLoadingForHistoryItem(item))
         frame.protectedLoader()->stopAllLoadersAndCheckCompleteness();
-    frame.checkedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
+    frame.loader().checkedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
+}
+
+void Page::goToItemForNavigationAPI(LocalFrame& frame, HistoryItem& item, FrameLoadType type, LocalFrame& triggeringFrame, NavigationAPIMethodTracker* tracker)
+{
+    if (frame.loader().checkedHistory()->shouldStopLoadingForHistoryItem(item))
+        frame.protectedLoader()->stopAllLoadersAndCheckCompleteness();
+    frame.loader().checkedHistory()->goToItemForNavigationAPI(item, type, triggeringFrame, tracker);
 }
 
 void Page::setGroupName(const String& name)
@@ -924,11 +1076,7 @@ bool Page::showAllPlugins() const
     if (m_showAllPlugins)
         return true;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    if (Document* document = localMainFrame ? localMainFrame->document() : nullptr)
-        return document->securityOrigin().isLocal();
-
-    return false;
+    return mainFrameOrigin().isLocal();
 }
 
 inline std::optional<std::pair<WeakRef<MediaCanStartListener>, WeakRef<Document, WeakPtrImplWithEventTargetData>>>  Page::takeAnyMediaCanStartListener()
@@ -1262,7 +1410,7 @@ void Page::setEditableRegionEnabled(bool enabled)
     if (m_isEditableRegionEnabled == enabled)
         return;
     m_isEditableRegionEnabled = enabled;
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr;
     if (!frameView)
         return;
@@ -1283,7 +1431,7 @@ bool Page::shouldBuildEditableRegion() const
 
 Vector<Ref<Element>> Page::editableElementsInRect(const FloatRect& searchRectInRootViewCoordinates) const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr;
     if (!frameView)
         return { };
@@ -1347,7 +1495,7 @@ void Page::setInteractionRegionsEnabled(bool enable)
     bool needsUpdate = enable && !shouldBuildInteractionRegions();
     m_settings->setInteractionRegionsEnabled(enable);
     if (needsUpdate) {
-        if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+        if (RefPtr localMainFrame = this->localMainFrame())
             localMainFrame->invalidateContentEventRegionsIfNeeded(LocalFrame::InvalidateContentEventRegionsReason::Layout);
     }
 }
@@ -1438,15 +1586,14 @@ void Page::setZoomedOutPageScaleFactor(float scale)
     if (m_zoomedOutPageScaleFactor == scale)
         return;
     m_zoomedOutPageScaleFactor = scale;
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+    if (RefPtr localMainFrame = this->localMainFrame())
         localMainFrame->deviceOrPageScaleFactorChanged();
 }
 
 void Page::setPageScaleFactor(float scale, const IntPoint& origin, bool inStableState)
 {
     LOG_WITH_STREAM(Viewports, stream << "Page " << this << " setPageScaleFactor " << scale << " at " << origin << " - stable " << inStableState);
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr mainDocument = localMainFrame ? localMainFrame->document() : nullptr;
+    RefPtr mainDocument = localTopDocument();
     RefPtr mainFrameView = mainDocument ? mainDocument->view() : nullptr;
 
     if (scale == m_pageScaleFactor) {
@@ -1481,7 +1628,7 @@ void Page::setPageScaleFactor(float scale, const IntPoint& origin, bool inStable
 
         if (mainFrameView && mainFrameView->scrollPosition() != origin && !delegatesScaling() && mainDocument->renderView() && mainDocument->renderView()->needsLayout() && mainFrameView->didFirstLayout()) {
             mainFrameView->layoutContext().layout();
-            mainFrameView->updateCompositingLayersAfterLayoutIfNeeded();
+            mainFrameView->layoutContext().updateCompositingLayersAfterLayoutIfNeeded();
         }
     }
 
@@ -1526,7 +1673,7 @@ void Page::setDeviceScaleFactor(float scaleFactor)
 
     m_deviceScaleFactor = scaleFactor;
     setNeedsRecalcStyleInAllFrames();
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+    if (RefPtr localMainFrame = this->localMainFrame())
         localMainFrame->deviceOrPageScaleFactorChanged();
     BackForwardCache::singleton().markPagesForDeviceOrPageScaleChanged(*this);
 
@@ -1680,6 +1827,19 @@ void Page::setLowPowerModeEnabledOverrideForTesting(std::optional<bool> isEnable
     m_throttlingReasonsOverridenForTesting.add(ThrottlingReason::LowPowerMode);
 }
 
+void Page::setAggressiveThermalMitigationEnabledForTesting(std::optional<bool> isEnabled)
+{
+    m_throttlingReasonsOverridenForTesting.remove(ThrottlingReason::AggressiveThermalMitigation);
+
+    if (!isEnabled.has_value()) {
+        handleThermalMitigationChange(m_thermalMitigationNotifier->thermalMitigationEnabled());
+        return;
+    }
+
+    handleThermalMitigationChange(isEnabled.value());
+    m_throttlingReasonsOverridenForTesting.add(ThrottlingReason::AggressiveThermalMitigation);
+}
+
 void Page::setOutsideViewportThrottlingEnabledForTesting(bool isEnabled)
 {
     if (!isEnabled)
@@ -1696,7 +1856,7 @@ void Page::setTopContentInset(float contentInset)
         return;
     
     m_topContentInset = contentInset;
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
         view->topContentInsetDidChange(m_topContentInset);
 }
@@ -1760,7 +1920,7 @@ void Page::setHorizontalScrollElasticity(ScrollElasticity elasticity)
     
     m_horizontalScrollElasticity = elasticity;
     
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
         view->setHorizontalScrollElasticity(elasticity);
 }
@@ -1780,9 +1940,8 @@ unsigned Page::pageCount() const
     if (m_pagination.mode == Pagination::Mode::Unpaginated)
         return 0;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
-        document->updateLayoutIgnorePendingStylesheets();
+    if (RefPtr localTopDocument = this->localTopDocument())
+        localTopDocument->updateLayoutIgnorePendingStylesheets();
 
     return pageCountAssumingLayoutIsUpToDate();
 }
@@ -1792,7 +1951,7 @@ unsigned Page::pageCountAssumingLayoutIsUpToDate() const
     if (m_pagination.mode == Pagination::Mode::Unpaginated)
         return 0;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     ASSERT(!localMainFrame || !localMainFrame->view() || !localMainFrame->view()->needsLayout());
     CheckedPtr contentRenderer = localMainFrame ? localMainFrame->contentRenderer() : nullptr;
     return contentRenderer ? contentRenderer->pageCount() : 0;
@@ -2113,7 +2272,7 @@ void Page::doAfterUpdateRendering()
 
     m_renderingUpdateRemainingSteps.last().remove(RenderingUpdateStep::EventRegionUpdate);
 
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
 #if ENABLE(IOS_TOUCH_EVENTS)
     // updateTouchEventRegions() needs to be called only on the top document.
     if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
@@ -2224,7 +2383,7 @@ void Page::willStartRenderingUpdateDisplay()
 
     // Inspector's use of "composite" is rather innacurate. On Apple platforms, the "composite" step happens
     // in another process; these hooks wrap the non-WebKit CA commit time which is mostly painting-related.
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+    if (RefPtr localMainFrame = this->localMainFrame())
         m_inspectorController->willComposite(*localMainFrame);
 
     if (RefPtr scrollingCoordinator = m_scrollingCoordinator)
@@ -2238,7 +2397,7 @@ void Page::didCompleteRenderingUpdateDisplay()
     if (RefPtr scrollingCoordinator = m_scrollingCoordinator)
         scrollingCoordinator->didCompletePlatformRenderingUpdate();
 
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+    if (RefPtr localMainFrame = this->localMainFrame())
         m_inspectorController->didComposite(*localMainFrame);
 }
 
@@ -2259,10 +2418,8 @@ void Page::prioritizeVisibleResources()
 {
     if (loadSchedulingMode() == LoadSchedulingMode::Direct)
         return;
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    if (!localMainFrame)
-        return;
-    if (!localMainFrame->document())
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument)
         return;
 
     Vector<CachedResourceHandle<CachedResource>> toPrioritize;
@@ -2272,13 +2429,12 @@ void Page::prioritizeVisibleResources()
     });
     
     auto computeSchedulingMode = [&] {
-        Ref document = *localMainFrame->document();
         // Parsing generates resource loads.
-        if (document->parsing())
+        if (localTopDocument->parsing())
             return LoadSchedulingMode::Prioritized;
         
         // Async script execution may generate more resource loads that benefit from prioritization.
-        if (CheckedPtr scriptRunner = document->scriptRunnerIfExists(); scriptRunner && scriptRunner->hasPendingScripts())
+        if (CheckedPtr scriptRunner = localTopDocument->scriptRunnerIfExists(); scriptRunner && scriptRunner->hasPendingScripts())
             return LoadSchedulingMode::Prioritized;
         
         // We still haven't finished loading the visible resources.
@@ -2322,7 +2478,7 @@ bool Page::shouldUpdateAccessibilityRegions() const
         // We've already updated accessibility object rects recently, so skip this update and schedule another for later.
 
         RefPtr<Document> protectedMainDocument;
-        if (auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+        if (RefPtr localMainFrame = this->localMainFrame())
             protectedMainDocument = localMainFrame ? localMainFrame->document() : nullptr;
         else if (auto* remoteFrame = dynamicDowncast<RemoteFrame>(mainFrame())) {
             if (auto* owner = remoteFrame->ownerElement())
@@ -2459,6 +2615,15 @@ void Page::handleThermalMitigationChange(bool thermalMitigationEnabled)
         return;
 
     m_throttlingReasons.set(ThrottlingReason::ThermalMitigation, thermalMitigationEnabled);
+
+    if (settings().respondToThermalPressureAggressively()) {
+        m_throttlingReasons.set(ThrottlingReason::AggressiveThermalMitigation, thermalMitigationEnabled);
+        if (CheckedPtr scheduler = existingRenderingUpdateScheduler())
+            scheduler->adjustRenderingUpdateFrequency();
+        chrome().client().renderingUpdateFramesPerSecondChanged();
+    }
+
+    RELEASE_LOG(PerformanceLogging, "%p - Page::handleThermalMitigationChange: thermal mitigation %d, aggressive thermal mitigation %d", this, isThermalMitigationEnabled(), isAggressiveThermalMitigationEnabled());
 
     updateDOMTimerAlignmentInterval();
 }
@@ -2943,7 +3108,7 @@ void Page::resumeAnimatingImages()
 {
     // Drawing models which cache painted content while out-of-window (WebKit2's composited drawing areas, etc.)
     // require that we repaint animated images to kickstart the animation loop.
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
         view->resumeVisibleImageAnimationsIncludingSubframes();
 }
@@ -3058,7 +3223,7 @@ void Page::setIsVisibleInternal(bool isVisible)
         });
 #endif
 
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+        RefPtr localMainFrame = this->localMainFrame();
         if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
             view->show();
 
@@ -3102,7 +3267,7 @@ void Page::setIsVisibleInternal(bool isVisible)
 #endif
 
         suspendScriptedAnimations();
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+        RefPtr localMainFrame = this->localMainFrame();
         if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
             view->hide();
     }
@@ -3132,7 +3297,7 @@ void Page::setHeaderHeight(int headerHeight)
 
     m_headerHeight = headerHeight;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr;
     if (!frameView)
         return;
@@ -3152,7 +3317,7 @@ void Page::setFooterHeight(int footerHeight)
 
     m_footerHeight = footerHeight;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr;
     if (!frameView)
         return;
@@ -3228,17 +3393,15 @@ void Page::removeLayoutMilestones(OptionSet<LayoutMilestone> milestones)
 
 Color Page::themeColor() const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    auto* document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document)
-        return { };
+    if (RefPtr localTopDocument = this->localTopDocument())
+        return localTopDocument->themeColor();
 
-    return document->themeColor();
+    return { };
 }
 
 Color Page::pageExtendedBackgroundColor() const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr;
     if (!frameView)
         return Color();
@@ -3293,7 +3456,7 @@ void Page::setUnderPageBackgroundColorOverride(Color&& underPageBackgroundColorO
     scheduleRenderingUpdate({ });
 
 #if HAVE(RUBBER_BANDING)
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr) {
         if (CheckedPtr renderView = frameView->renderView()) {
             if (renderView->usesCompositing())
@@ -3688,8 +3851,7 @@ void Page::setSessionID(PAL::SessionID sessionID)
 
     if (sessionID != m_sessionID) {
         constexpr auto doNotCreate = StorageNamespaceProvider::ShouldCreateNamespace::No;
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
-        RefPtr topOrigin = localMainFrame ? &localMainFrame->document()->topOrigin() : m_mainFrameOrigin;
+        RefPtr topOrigin = &mainFrameOrigin();
         if (RefPtr sessionStorage = topOrigin ? m_storageNamespaceProvider->sessionStorageNamespace(*topOrigin, *this, doNotCreate) : nullptr)
             sessionStorage->setSessionIDForTesting(sessionID);
     }
@@ -3808,7 +3970,7 @@ void Page::startMonitoringWheelEvents(bool clearLatchingState)
         scrollLatchingController().clear();
 #endif
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr frameView = localMainFrame ? localMainFrame->view() : nullptr) {
         if (RefPtr scrollingCoordinator = m_scrollingCoordinator) {
             scrollingCoordinator->startMonitoringWheelEvents(clearLatchingState);
@@ -3867,7 +4029,7 @@ void Page::setResourceUsageOverlayVisible(bool visible)
     }
 
     if (!m_resourceUsageOverlay && m_settings->acceleratedCompositingEnabled())
-        m_resourceUsageOverlay = makeUnique<ResourceUsageOverlay>(*this);
+        m_resourceUsageOverlay = ResourceUsageOverlay::create(*this);
 }
 #endif
 
@@ -3918,13 +4080,8 @@ void Page::setUnobscuredSafeAreaInsets(const FloatBoxExtent& insets)
     });
 }
 
-void Page::setUseSystemAppearance(bool value)
+void Page::useSystemAppearanceChanged()
 {
-    if (m_useSystemAppearance == value)
-        return;
-
-    m_useSystemAppearance = value;
-
     appearanceDidChange();
 
     forEachDocument([&](Document& document) {
@@ -3963,7 +4120,7 @@ void Page::setUseColorAppearance(bool useDarkAppearance, bool useElevatedUserInt
 bool Page::useDarkAppearance() const
 {
 #if ENABLE(DARK_MODE_CSS)
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
 
     // FIXME: If this page is being printed, this function should return false.
     // Currently remote mainFrame() does not have this information.
@@ -3978,8 +4135,9 @@ bool Page::useDarkAppearance() const
         return m_useDarkAppearanceOverride.value();
 
     if (RefPtr documentLoader = localMainFrame->loader().documentLoader()) {
-        if (documentLoader->colorSchemePreference() == ColorSchemePreference::Dark)
-            return true;
+        auto colorSchemePreference = documentLoader->colorSchemePreference();
+        if (colorSchemePreference != ColorSchemePreference::NoPreference)
+            return colorSchemePreference == ColorSchemePreference::Dark;
     }
 
     return m_useDarkAppearance;
@@ -3990,16 +4148,12 @@ bool Page::useDarkAppearance() const
 
 void Page::setUseDarkAppearanceOverride(std::optional<bool> valueOverride)
 {
-#if HAVE(OS_DARK_MODE_SUPPORT)
     if (valueOverride == m_useDarkAppearanceOverride)
         return;
 
     m_useDarkAppearanceOverride = valueOverride;
 
     appearanceDidChange();
-#else
-    UNUSED_PARAM(valueOverride);
-#endif
 }
 
 void Page::setFullscreenInsets(const FloatBoxExtent& insets)
@@ -4069,8 +4223,41 @@ void Page::enableICECandidateFiltering()
 #endif
 }
 
+RefPtr<LocalFrame> Page::localMainFrame()
+{
+    return dynamicDowncast<LocalFrame>(mainFrame());
+}
+
+RefPtr<const LocalFrame> Page::localMainFrame() const
+{
+    return dynamicDowncast<LocalFrame>(mainFrame());
+}
+
+RefPtr<Document> Page::localTopDocument()
+{
+    if (RefPtr localMainFrame = this->localMainFrame())
+        return localMainFrame->document();
+    return nullptr;
+}
+
+RefPtr<Document> Page::localTopDocument() const
+{
+    if (RefPtr localMainFrame = this->localMainFrame())
+        return localMainFrame->document();
+    return nullptr;
+}
+
+bool Page::hasLocalMainFrame()
+{
+    return dynamicDowncast<LocalFrame>(mainFrame());
+}
+
 void Page::didChangeMainDocument(Document* newDocument)
 {
+    m_topDocumentSyncData = newDocument ? newDocument->syncData() : DocumentSyncData::create();
+
+    processSyncClient().broadcastTopDocumentSyncDataToOtherProcesses(m_topDocumentSyncData.get());
+
 #if ENABLE(WEB_RTC)
     m_rtcController->reset(m_shouldEnableICECandidateFilteringByDefault);
 #endif
@@ -4176,7 +4363,7 @@ void Page::forEachLocalFrame(const Function<void(LocalFrame&)>& functor)
 
 void Page::forEachWindowEventLoop(const Function<void(WindowEventLoop&)>& functor)
 {
-    HashSet<Ref<WindowEventLoop>> windowEventLoops;
+    UncheckedKeyHashSet<Ref<WindowEventLoop>> windowEventLoops;
     WindowEventLoop* lastEventLoop = nullptr;
     for (RefPtr frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
@@ -4211,7 +4398,7 @@ bool Page::hasLocalDataForURL(const URL& url)
     if (url.protocolIsFile())
         return true;
 
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     RefPtr documentLoader = localMainFrame ? localMainFrame->loader().documentLoader() : nullptr;
     if (documentLoader && documentLoader->subresource(MemoryCache::removeFragmentIdentifierIfNeeded(url)))
         return true;
@@ -4352,7 +4539,7 @@ void Page::setMediaSessionCoordinator(Ref<MediaSessionCoordinatorPrivate>&& medi
 {
     m_mediaSessionCoordinator = WTFMove(mediaSessionCoordinator);
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     auto* window = localMainFrame ? localMainFrame->window() : nullptr;
     if (RefPtr navigator = window ? window->optionalNavigator() : nullptr)
         NavigatorMediaSession::mediaSession(*navigator).coordinator().setMediaSessionCoordinatorPrivate(*m_mediaSessionCoordinator);
@@ -4361,7 +4548,7 @@ void Page::setMediaSessionCoordinator(Ref<MediaSessionCoordinatorPrivate>&& medi
 void Page::invalidateMediaSessionCoordinator()
 {
     m_mediaSessionCoordinator = nullptr;
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     auto* window = localMainFrame ? localMainFrame->window() : nullptr;
     if (!window)
         return;
@@ -4431,7 +4618,7 @@ void Page::recomputeTextAutoSizingInAllFrames()
                 if (RefPtr element = renderer.element()) {
                     if (auto adjustment = Style::Adjuster::adjustmentForTextAutosizing(renderer.style(), *element)) {
                         auto newStyle = RenderStyle::clone(renderer.style());
-                        Style::Adjuster::adjustForTextAutosizing(newStyle, *element, adjustment);
+                        Style::Adjuster::adjustForTextAutosizing(newStyle, adjustment);
                         renderer.setStyle(WTFMove(newStyle));
                     }
                 }
@@ -4722,7 +4909,7 @@ ModelPlayerProvider& Page::modelPlayerProvider()
 
 void Page::setupForRemoteWorker(const URL& scriptURL, const SecurityOriginData& topOrigin, const String& referrerPolicy, OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (!localMainFrame)
         return;
     // FIXME: <rdar://117922051> Investigate if the correct origins are set here with site isolation enabled.
@@ -4767,7 +4954,7 @@ void Page::forceRepaintAllFrames()
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 void Page::updatePlayStateForAllAnimations()
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
         view->updatePlayStateForAllAnimationsIncludingSubframes();
 }
@@ -4895,6 +5082,24 @@ void Page::performOpportunisticallyScheduledTasks(MonotonicTime deadline)
     if (m_opportunisticTaskScheduler->hasImminentlyScheduledWork())
         options.add(JSC::VM::SchedulerOptions::HasImminentlyScheduledWork);
     commonVM().performOpportunisticallyScheduledTasks(deadline, options);
+
+    deleteRemovedNodes();
+}
+
+void Page::deleteRemovedNodes()
+{
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    if (!localMainFrame)
+        return;
+    RefPtr document = localMainFrame->document();
+    if (!document)
+        return;
+    forEachLocalFrame([] (LocalFrame& frame) {
+        RefPtr document = frame.document();
+        if (!document)
+            return;
+        document->asyncNodeDeletionQueue().deleteNodesNow();
+    });
 }
 
 CheckedRef<ProgressTracker> Page::checkedProgress()
@@ -5077,9 +5282,8 @@ void Page::respondToReappliedWritingToolsEditing(EditCommandComposition* command
 
 Vector<FloatRect> Page::proofreadingSessionSuggestionTextRectsInRootViewCoordinates(const CharacterRange& enclosingRangeRelativeToSessionRange) const
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document) {
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument) {
         ASSERT_NOT_REACHED();
         return { };
     }
@@ -5090,14 +5294,13 @@ Vector<FloatRect> Page::proofreadingSessionSuggestionTextRectsInRootViewCoordina
         return { };
     }
 
-    return IntelligenceTextEffectsSupport::writingToolsTextSuggestionRectsInRootViewCoordinates(*document, *scope, enclosingRangeRelativeToSessionRange);
+    return IntelligenceTextEffectsSupport::writingToolsTextSuggestionRectsInRootViewCoordinates(*localTopDocument, *scope, enclosingRangeRelativeToSessionRange);
 }
 
 void Page::updateTextVisibilityForActiveWritingToolsSession(const CharacterRange& rangeRelativeToSessionRange, bool visible, const WTF::UUID& identifier)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document) {
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument) {
         ASSERT_NOT_REACHED();
         return;
     }
@@ -5108,14 +5311,13 @@ void Page::updateTextVisibilityForActiveWritingToolsSession(const CharacterRange
         return;
     }
 
-    IntelligenceTextEffectsSupport::updateTextVisibility(*document, *scope, rangeRelativeToSessionRange, visible, identifier);
+    IntelligenceTextEffectsSupport::updateTextVisibility(*localTopDocument, *scope, rangeRelativeToSessionRange, visible, identifier);
 }
 
 std::optional<TextIndicatorData> Page::textPreviewDataForActiveWritingToolsSession(const CharacterRange& rangeRelativeToSessionRange)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document) {
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument) {
         ASSERT_NOT_REACHED();
         return std::nullopt;
     }
@@ -5126,14 +5328,13 @@ std::optional<TextIndicatorData> Page::textPreviewDataForActiveWritingToolsSessi
         return std::nullopt;
     }
 
-    return IntelligenceTextEffectsSupport::textPreviewDataForRange(*document, *scope, rangeRelativeToSessionRange);
+    return IntelligenceTextEffectsSupport::textPreviewDataForRange(*localTopDocument, *scope, rangeRelativeToSessionRange);
 }
 
 void Page::decorateTextReplacementsForActiveWritingToolsSession(const CharacterRange& rangeRelativeToSessionRange)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document) {
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument) {
         ASSERT_NOT_REACHED();
         return;
     }
@@ -5144,14 +5345,13 @@ void Page::decorateTextReplacementsForActiveWritingToolsSession(const CharacterR
         return;
     }
 
-    IntelligenceTextEffectsSupport::decorateWritingToolsTextReplacements(*document, *scope, rangeRelativeToSessionRange);
+    IntelligenceTextEffectsSupport::decorateWritingToolsTextReplacements(*localTopDocument, *scope, rangeRelativeToSessionRange);
 }
 
 void Page::setSelectionForActiveWritingToolsSession(const CharacterRange& rangeRelativeToSessionRange)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (!document) {
+    RefPtr localTopDocument = this->localTopDocument();
+    if (!localTopDocument) {
         ASSERT_NOT_REACHED();
         return;
     }
@@ -5167,7 +5367,7 @@ void Page::setSelectionForActiveWritingToolsSession(const CharacterRange& rangeR
     if (visibleSelection.isNoneOrOrphaned())
         return;
 
-    document->selection().setSelection(visibleSelection);
+    localTopDocument->selection().setSelection(visibleSelection);
 }
 
 std::optional<SimpleRange> Page::contextRangeForActiveWritingToolsSession() const
@@ -5336,6 +5536,31 @@ Ref<InspectorController> Page::protectedInspectorController()
 Ref<ServicesOverlayController> Page::protectedServicesOverlayController()
 {
     return m_servicesOverlayController.get();
+}
+#endif
+
+ProcessID Page::presentingApplicationPID() const
+{
+#if HAVE(AUDIT_TOKEN)
+    if (m_presentingApplicationAuditToken)
+        return pidFromAuditToken(*m_presentingApplicationAuditToken);
+#endif
+
+    return WTF::legacyPresentingApplicationPID();
+}
+
+#if HAVE(AUDIT_TOKEN)
+const std::optional<audit_token_t>& Page::presentingApplicationAuditToken() const
+{
+    return m_presentingApplicationAuditToken;
+}
+
+void Page::setPresentingApplicationAuditToken(std::optional<audit_token_t> presentingApplicationAuditToken)
+{
+    m_presentingApplicationAuditToken = WTFMove(presentingApplicationAuditToken);
+
+    if (auto mediaSessionManager = PlatformMediaSessionManager::singletonIfExists())
+        mediaSessionManager->updatePresentingApplicationPIDIfNecessary(presentingApplicationPID());
 }
 #endif
 

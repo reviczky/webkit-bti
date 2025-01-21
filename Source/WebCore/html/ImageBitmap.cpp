@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -136,8 +136,7 @@ RefPtr<ImageBuffer> ImageBitmap::createImageBuffer(ScriptExecutionContext& scrip
         imageBufferColorSpace = DestinationColorSpace::SRGB();
 #endif
     }
-    auto bufferOptions = bufferOptionsForRendingMode(renderingMode);
-    return ImageBuffer::create(size, RenderingPurpose::Canvas, resolutionScale, *imageBufferColorSpace, ImageBufferPixelFormat::BGRA8, bufferOptions, scriptExecutionContext.graphicsClient());
+    return ImageBuffer::create(size, renderingMode, RenderingPurpose::Canvas, resolutionScale, *imageBufferColorSpace, ImageBufferPixelFormat::BGRA8, scriptExecutionContext.graphicsClient());
 }
 
 void ImageBitmap::createCompletionHandler(ScriptExecutionContext& scriptExecutionContext, ImageBitmap::Source&& source, ImageBitmapOptions&& options, ImageBitmapCompletionHandler&& completionHandler)
@@ -193,6 +192,11 @@ void ImageBitmap::close()
 void ImageBitmap::prepareForCrossThreadTransfer()
 {
     m_bitmap = ImageBuffer::sinkIntoImageBufferForCrossThreadTransfer(WTFMove(m_bitmap));
+}
+
+void ImageBitmap::finalizeCrossThreadTransfer()
+{
+    m_bitmap = ImageBuffer::sinkIntoImageBufferAfterCrossThreadTransfer(WTFMove(m_bitmap));
 }
 #endif
 
@@ -757,7 +761,7 @@ private:
 };
 
 class PendingImageBitmap final : public RefCounted<PendingImageBitmap>, public ActiveDOMObject, public FileReaderLoaderClient {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(PendingImageBitmap);
+    WTF_MAKE_TZONE_ALLOCATED(PendingImageBitmap);
 public:
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
@@ -840,6 +844,8 @@ private:
     RefPtr<ArrayBuffer> m_arrayBufferToProcess;
     RefPtr<PendingActivity<PendingImageBitmap>> m_pendingActivity;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PendingImageBitmap);
 
 void ImageBitmap::createFromBuffer(ScriptExecutionContext& scriptExecutionContext, Ref<ArrayBuffer>&& arrayBuffer, String mimeType, long long expectedContentLength, const URL& sourceURL, ImageBitmapOptions&& options, std::optional<IntRect> rect, ImageBitmapCompletionHandler&& completionHandler)
 {

@@ -253,7 +253,7 @@ void HTMLSelectElement::remove(int optionIndex)
 
 String HTMLSelectElement::value() const
 {
-    if (document().requiresScriptExecutionTelemetry(ScriptTelemetryCategory::FormControls))
+    if (protectedDocument()->requiresScriptExecutionTelemetry(ScriptTelemetryCategory::FormControls))
         return emptyString();
     for (auto& item : listItems()) {
         if (RefPtr option = dynamicDowncast<HTMLOptionElement>(item.get())) {
@@ -1695,7 +1695,7 @@ ExceptionOr<void> HTMLSelectElement::showPicker()
         return Exception { ExceptionCode::SecurityError, "Select showPicker() called from cross-origin iframe."_s };
 
     RefPtr window = frame->window();
-    if (!window || !window->hasTransientActivation())
+    if (!window || !window->consumeTransientActivation())
         return Exception { ExceptionCode::NotAllowedError, "Select showPicker() requires a user gesture."_s };
 
 #if !PLATFORM(IOS_FAMILY)

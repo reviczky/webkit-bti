@@ -50,7 +50,6 @@
 #include "RenderListMarker.h"
 #include "RenderStyleInlines.h"
 #include "RenderView.h"
-#include "RenderViewTransitionRoot.h"
 #include "StyleCustomPropertyData.h"
 #include "StyleOriginatedAnimation.h"
 #include "StylePropertyShorthand.h"
@@ -133,22 +132,18 @@ RenderElement* Styleable::renderer() const
         }
         break;
     case PseudoId::ViewTransition:
-        if (element.renderer())
+        if (element.renderer() && element.renderer()->isDocumentElementRenderer())
             return element.renderer()->view().viewTransitionRoot().get();
         break;
     case PseudoId::ViewTransitionGroup:
     case PseudoId::ViewTransitionImagePair:
     case PseudoId::ViewTransitionNew:
     case PseudoId::ViewTransitionOld: {
-        if (!element.renderer())
-            return nullptr;
-
-        WeakPtr viewTransitionRoot = element.renderer()->view().viewTransitionRoot();
-        if (!viewTransitionRoot)
+        if (!element.renderer() || !element.renderer()->isDocumentElementRenderer())
             return nullptr;
 
         // Find the right ::view-transition-group().
-        CheckedPtr correctGroup = viewTransitionRoot->childGroupForName(pseudoElementIdentifier->nameArgument);
+        CheckedPtr correctGroup = element.renderer()->view().viewTransitionGroupForName(pseudoElementIdentifier->nameArgument);
         if (!correctGroup)
             return nullptr;
 
@@ -493,7 +488,7 @@ static bool transitionMatchesProperty(const Animation& transition, const Animata
     return false;
 }
 
-static void compileTransitionPropertiesInStyle(const RenderStyle& style, CSSPropertiesBitSet& transitionProperties, HashSet<AtomString>& transitionCustomProperties, bool& transitionPropertiesContainAll)
+static void compileTransitionPropertiesInStyle(const RenderStyle& style, CSSPropertiesBitSet& transitionProperties, UncheckedKeyHashSet<AtomString>& transitionCustomProperties, bool& transitionPropertiesContainAll)
 {
     auto* transitions = style.transitions();
     if (!transitions) {
@@ -779,7 +774,7 @@ void Styleable::updateCSSTransitions(const RenderStyle& currentStyle, const Rend
     // First, let's compile the list of all CSS properties found in the current style and the after-change style.
     bool transitionPropertiesContainAll = false;
     CSSPropertiesBitSet transitionProperties;
-    HashSet<AtomString> transitionCustomProperties;
+    UncheckedKeyHashSet<AtomString> transitionCustomProperties;
     compileTransitionPropertiesInStyle(currentStyle, transitionProperties, transitionCustomProperties, transitionPropertiesContainAll);
     compileTransitionPropertiesInStyle(newStyle, transitionProperties, transitionCustomProperties, transitionPropertiesContainAll);
 

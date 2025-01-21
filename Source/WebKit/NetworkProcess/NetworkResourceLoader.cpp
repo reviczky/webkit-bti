@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,7 +48,6 @@
 #include "PrivateRelayed.h"
 #include "ResourceLoadInfo.h"
 #include "ServiceWorkerFetchTask.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebLoaderStrategy.h"
 #include "WebPageMessages.h"
@@ -93,6 +92,7 @@
 #include <WebCore/ContentFilterUnblockHandler.h>
 #endif
 
+#define LOADER_RELEASE_LOG_WITH_THIS(thisPtr, fmt, ...) RELEASE_LOG(Network, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", isMainResource=%d, destination=%u, isSynchronous=%d] NetworkResourceLoader::" fmt, WTF::getPtr(thisPtr), thisPtr->webPageProxyID().toUInt64(), thisPtr->pageID().toUInt64(), thisPtr->frameID().object().toUInt64(), thisPtr->coreIdentifier().toUInt64(), thisPtr->isMainResource(), static_cast<unsigned>(thisPtr->m_parameters.options.destination), thisPtr->isSynchronous(), ##__VA_ARGS__)
 #define LOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", isMainResource=%d, destination=%u, isSynchronous=%d] NetworkResourceLoader::" fmt, this, webPageProxyID().toUInt64(), pageID().toUInt64(), frameID().object().toUInt64(), coreIdentifier().toUInt64(), isMainResource(), static_cast<unsigned>(m_parameters.options.destination), isSynchronous(), ##__VA_ARGS__)
 #define LOADER_RELEASE_LOG_ERROR(fmt, ...) RELEASE_LOG_ERROR(Network, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", isMainResource=%d, destination=%u, isSynchronous=%d] NetworkResourceLoader::" fmt, this, webPageProxyID().toUInt64(), pageID().toUInt64(), frameID().object().toUInt64(), coreIdentifier().toUInt64(), isMainResource(), static_cast<unsigned>(m_parameters.options.destination), isSynchronous(), ##__VA_ARGS__)
 #define LOADER_RELEASE_LOG_FAULT(fmt, ...) RELEASE_LOG_FAULT(Network, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", isMainResource=%d, destination=%u, isSynchronous=%d] NetworkResourceLoader::" fmt, this, webPageProxyID().toUInt64(), pageID().toUInt64(), frameID().object().toUInt64(), coreIdentifier().toUInt64(), isMainResource(), static_cast<unsigned>(m_parameters.options.destination), isSynchronous(), ##__VA_ARGS__)
@@ -157,12 +157,14 @@ NetworkResourceLoader::NetworkResourceLoader(NetworkResourceLoadParameters&& par
             URL { m_parameters.documentURL }, m_parameters.sourceOrigin.copyRef(), m_parameters.topOrigin.copyRef(), m_parameters.parentOrigin(),
             m_parameters.preflightPolicy, originalRequest().httpReferrer(), m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections,
             shouldCaptureExtraNetworkLoadMetrics(), requestLoadType);
+
+        RefPtr networkLoadChecker = m_networkLoadChecker;
         if (m_parameters.cspResponseHeaders)
-            m_networkLoadChecker->setCSPResponseHeaders(ContentSecurityPolicyResponseHeaders { m_parameters.cspResponseHeaders.value() });
-        m_networkLoadChecker->setParentCrossOriginEmbedderPolicy(m_parameters.parentCrossOriginEmbedderPolicy);
-        m_networkLoadChecker->setCrossOriginEmbedderPolicy(m_parameters.crossOriginEmbedderPolicy);
+            networkLoadChecker->setCSPResponseHeaders(ContentSecurityPolicyResponseHeaders { m_parameters.cspResponseHeaders.value() });
+        networkLoadChecker->setParentCrossOriginEmbedderPolicy(m_parameters.parentCrossOriginEmbedderPolicy);
+        networkLoadChecker->setCrossOriginEmbedderPolicy(m_parameters.crossOriginEmbedderPolicy);
 #if ENABLE(CONTENT_EXTENSIONS)
-        m_networkLoadChecker->setContentExtensionController(URL { m_parameters.mainDocumentURL }, URL { m_parameters.frameURL }, m_parameters.userContentControllerIdentifier);
+        networkLoadChecker->setContentExtensionController(URL { m_parameters.mainDocumentURL }, URL { m_parameters.frameURL }, m_parameters.userContentControllerIdentifier);
 #endif
     }
     if (synchronousReply)
@@ -234,37 +236,39 @@ void NetworkResourceLoader::start()
 void NetworkResourceLoader::startRequest(const ResourceRequest& newRequest)
 {
     ASSERT(RunLoop::isMain());
-    LOADER_RELEASE_LOG("startRequest: hasNetworkLoadChecker=%d", !!m_networkLoadChecker);
+    RefPtr networkLoadChecker = m_networkLoadChecker;
+    LOADER_RELEASE_LOG("startRequest: hasNetworkLoadChecker=%d", !!networkLoadChecker);
 
-    m_networkActivityTracker = m_connection->startTrackingResourceLoad(pageID(), coreIdentifier(), isMainFrameLoad());
+    m_networkActivityTracker = protectedConnectionToWebProcess()->startTrackingResourceLoad(pageID(), coreIdentifier(), isMainFrameLoad());
 
     ASSERT(!m_wasStarted);
     m_wasStarted = true;
 
-    if (m_networkLoadChecker) {
-        m_networkLoadChecker->check(ResourceRequest { newRequest }, this, [this, weakThis = WeakPtr { *this }] (auto&& result) {
-            if (!weakThis)
+    if (networkLoadChecker) {
+        networkLoadChecker->check(ResourceRequest { newRequest }, this, [weakThis = WeakPtr { *this }] (auto&& result) {
+            RefPtr protectedThis = weakThis.get();
+            if (!protectedThis)
                 return;
 
             WTF::switchOn(result,
-                [this] (ResourceError& error) {
-                    LOADER_RELEASE_LOG("start: NetworkLoadChecker::check returned an error (error.domain=%" PUBLIC_LOG_STRING ", error.code=%d, isCancellation=%d)", error.domain().utf8().data(), error.errorCode(), error.isCancellation());
+                [protectedThis] (ResourceError& error) {
+                    LOADER_RELEASE_LOG_WITH_THIS(protectedThis, "start: NetworkLoadChecker::check returned an error (error.domain=%" PUBLIC_LOG_STRING ", error.code=%d, isCancellation=%d)", error.domain().utf8().data(), error.errorCode(), error.isCancellation());
                     if (!error.isCancellation())
-                        this->didFailLoading(error);
+                        protectedThis->didFailLoading(error);
                 },
-                [this] (NetworkLoadChecker::RedirectionTriplet& triplet) {
-                    LOADER_RELEASE_LOG("start: NetworkLoadChecker::check returned a synthetic redirect");
-                    this->m_isWaitingContinueWillSendRequestForCachedRedirect = true;
-                    this->willSendRedirectedRequest(WTFMove(triplet.request), WTFMove(triplet.redirectRequest), WTFMove(triplet.redirectResponse), [](auto) { });
+                [protectedThis] (NetworkLoadChecker::RedirectionTriplet& triplet) {
+                    LOADER_RELEASE_LOG_WITH_THIS(protectedThis, "start: NetworkLoadChecker::check returned a synthetic redirect");
+                    protectedThis->m_isWaitingContinueWillSendRequestForCachedRedirect = true;
+                    protectedThis->willSendRedirectedRequest(WTFMove(triplet.request), WTFMove(triplet.redirectRequest), WTFMove(triplet.redirectResponse), [](auto) { });
                 },
-                [this] (ResourceRequest& request) {
-                    LOADER_RELEASE_LOG("start: NetworkLoadChecker::check is done");
-                    if (this->canUseCache(request)) {
-                        this->retrieveCacheEntry(request);
+                [protectedThis] (ResourceRequest& request) {
+                    LOADER_RELEASE_LOG_WITH_THIS(protectedThis, "start: NetworkLoadChecker::check is done");
+                    if (protectedThis->canUseCache(request)) {
+                        protectedThis->retrieveCacheEntry(request);
                         return;
                     }
 
-                    this->startNetworkLoad(WTFMove(request), FirstLoad::Yes);
+                    protectedThis->startNetworkLoad(WTFMove(request), FirstLoad::Yes);
                 }
             );
         });
@@ -326,18 +330,19 @@ void NetworkResourceLoader::retrieveCacheEntry(const ResourceRequest& request)
     }
 
     LOADER_RELEASE_LOG("retrieveCacheEntry: Checking the HTTP disk cache");
-    cache->retrieve(request, globalFrameID(), m_parameters.isNavigatingToAppBoundDomain, m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections, [this, weakThis = WeakPtr { *this }, request = ResourceRequest { request }](auto entry, auto info) mutable {
-        if (!weakThis)
+    cache->retrieve(request, globalFrameID(), m_parameters.isNavigatingToAppBoundDomain, m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections, [weakThis = WeakPtr { *this }, request = ResourceRequest { request }](auto entry, auto info) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return;
 
-        LOADER_RELEASE_LOG("retrieveCacheEntry: Done checking the HTTP disk cache (foundCachedEntry=%d)", !!entry);
-        logSlowCacheRetrieveIfNeeded(info);
+        LOADER_RELEASE_LOG_WITH_THIS(protectedThis, "retrieveCacheEntry: Done checking the HTTP disk cache (foundCachedEntry=%d)", !!entry);
+        protectedThis->logSlowCacheRetrieveIfNeeded(info);
 
         if (!entry) {
-            startNetworkLoad(WTFMove(request), FirstLoad::Yes);
+            protectedThis->startNetworkLoad(WTFMove(request), FirstLoad::Yes);
             return;
         }
-        retrieveCacheEntryInternal(WTFMove(entry), WTFMove(request));
+        protectedThis->retrieveCacheEntryInternal(WTFMove(entry), WTFMove(request));
     });
 }
 
@@ -400,7 +405,7 @@ void NetworkResourceLoader::startNetworkLoad(ResourceRequest&& request, FirstLoa
     if (parameters.storedCredentialsPolicy == WebCore::StoredCredentialsPolicy::Use && m_networkLoadChecker)
         parameters.storedCredentialsPolicy = m_networkLoadChecker->storedCredentialsPolicy();
 
-    auto* networkSession = m_connection->networkSession();
+    auto* networkSession = protectedConnectionToWebProcess()->networkSession();
     if (!networkSession) {
         WTFLogAlways("Attempted to create a NetworkLoad with a session (id=%" PRIu64 ") that does not exist.", sessionID().toUInt64());
         LOADER_RELEASE_LOG_ERROR("startNetworkLoad: Attempted to create a NetworkLoad for a session that does not exist (sessionID=%" PRIu64 ")", sessionID().toUInt64());
@@ -535,10 +540,11 @@ ResourceLoadInfo NetworkResourceLoader::resourceLoadInfo()
         return ResourceLoadInfo::Type::Other;
     };
 
-    return ResourceLoadInfo {
+    return {
         m_resourceLoadID,
         m_parameters.webFrameID,
         m_parameters.parentFrameID,
+        m_parameters.options.resultingClientIdentifier ?: m_parameters.options.clientIdentifier,
         originalRequest().url(),
         originalRequest().httpMethod(),
         WallTime::now(),
@@ -568,7 +574,8 @@ void NetworkResourceLoader::cleanup(LoadResult result)
         break;
     }
 
-    m_connection->stopTrackingResourceLoad(coreIdentifier(), code);
+    Ref connection = m_connection;
+    connection->stopTrackingResourceLoad(coreIdentifier(), code);
 
     m_bufferingTimer.stop();
 
@@ -577,7 +584,7 @@ void NetworkResourceLoader::cleanup(LoadResult result)
     m_networkLoad = nullptr;
 
     // This will cause NetworkResourceLoader to be destroyed and therefore we do it last.
-    m_connection->didCleanupResourceLoader(*this);
+    connection->didCleanupResourceLoader(*this);
 }
 
 void NetworkResourceLoader::convertToDownload(DownloadID downloadID, const ResourceRequest& request, const ResourceResponse& response)
@@ -609,7 +616,7 @@ void NetworkResourceLoader::abort()
     if (m_parameters.options.keepAlive && m_response.isNull() && !m_isKeptAlive) {
         m_isKeptAlive = true;
         LOADER_RELEASE_LOG("abort: Keeping network load alive due to keepalive option");
-        m_connection->transferKeptAliveLoad(*this);
+        protectedConnectionToWebProcess()->transferKeptAliveLoad(*this);
         return;
     }
 
@@ -839,14 +846,12 @@ void NetworkResourceLoader::processClearSiteDataHeader(const WebCore::ResourceRe
         origin
     };
 
-    auto callbackAggregator = CallbackAggregator::create([this, weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
-#if RELEASE_LOG_DISABLED
-        UNUSED_PARAM(this);
-#endif
-        if (!weakThis)
+    auto callbackAggregator = CallbackAggregator::create([weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return completionHandler();
 
-        LOADER_RELEASE_LOG("processClearSiteDataHeader: END");
+        LOADER_RELEASE_LOG_WITH_THIS(protectedThis, "processClearSiteDataHeader: END");
         completionHandler();
     });
     if (typesToRemove)
@@ -899,13 +904,16 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
     if (!m_firstResponseURL.isValid())
         m_firstResponseURL = m_response.url();
 
-    if (shouldCaptureExtraNetworkLoadMetrics() && m_networkLoadChecker) {
-        auto information = m_networkLoadChecker->takeNetworkLoadInformation();
+    Ref connection = m_connection;
+    RefPtr networkLoadChecker = m_networkLoadChecker;
+
+    if (shouldCaptureExtraNetworkLoadMetrics() && networkLoadChecker) {
+        auto information = networkLoadChecker->takeNetworkLoadInformation();
         information.response = m_response;
-        m_connection->addNetworkLoadInformation(coreIdentifier(), WTFMove(information));
+        connection->addNetworkLoadInformation(coreIdentifier(), WTFMove(information));
     }
 
-    if (CheckedPtr networkSession = m_response.url().protocolIs("https"_s) ? m_connection->networkSession() : nullptr) {
+    if (CheckedPtr networkSession = m_response.url().protocolIs("https"_s) ? connection->networkSession() : nullptr) {
         if (auto metrics = computeResponseMetrics(m_response))
             networkSession->recordHTTPSConnectionTiming(*metrics);
     }
@@ -960,8 +968,8 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
     if (m_cacheEntryForValidation)
         return completionHandler(PolicyAction::Use);
 
-    if (m_networkLoadChecker) {
-        auto error = m_networkLoadChecker->validateResponse(m_networkLoad ? m_networkLoad->currentRequest() : originalRequest(), m_response);
+    if (networkLoadChecker) {
+        auto error = networkLoadChecker->validateResponse(m_networkLoad ? m_networkLoad->currentRequest() : originalRequest(), m_response);
         if (!error.isNull()) {
             LOADER_RELEASE_LOG_ERROR("didReceiveResponse: NetworkLoadChecker::validateResponse returned an error (error.domain=%" PUBLIC_LOG_STRING ", error.code=%d)", error.domain().utf8().data(), error.errorCode());
             RunLoop::protectedMain()->dispatch([protectedThis = Ref { *this }, error = WTFMove(error)] {
@@ -970,7 +978,7 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
             });
             return completionHandler(PolicyAction::Ignore);
         }
-        if (RefPtr networkLoad = m_networkLoad; networkLoad && m_networkLoadChecker->timingAllowFailedFlag())
+        if (RefPtr networkLoad = m_networkLoad; networkLoad && networkLoadChecker->timingAllowFailedFlag())
             networkLoad->setTimingAllowFailedFlag();
     }
 
@@ -1046,13 +1054,14 @@ void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
 void NetworkResourceLoader::sendDidReceiveResponsePotentiallyInNewBrowsingContextGroup(const WebCore::ResourceResponse& response, PrivateRelayed privateRelayed, bool needsContinueDidReceiveResponseMessage)
 {
-    auto browsingContextGroupSwitchDecision = m_connection->usesSingleWebProcess()? BrowsingContextGroupSwitchDecision::StayInGroup: toBrowsingContextGroupSwitchDecision(m_currentCoopEnforcementResult);
+    Ref connection = m_connection;
+    auto browsingContextGroupSwitchDecision = connection->usesSingleWebProcess()? BrowsingContextGroupSwitchDecision::StayInGroup: toBrowsingContextGroupSwitchDecision(m_currentCoopEnforcementResult);
     if (browsingContextGroupSwitchDecision == BrowsingContextGroupSwitchDecision::StayInGroup) {
         send(Messages::WebResourceLoader::DidReceiveResponse { response, privateRelayed, needsContinueDidReceiveResponseMessage, computeResponseMetrics(response) });
         return;
     }
 
-    auto loader = m_connection->takeNetworkResourceLoader(coreIdentifier());
+    auto loader = connection->takeNetworkResourceLoader(coreIdentifier());
     if (!loader) {
         LOADER_RELEASE_LOG_FAULT("sendDidReceiveResponsePotentiallyInNewBrowsingContextGroup: Failed to find loader with identifier %" PRIu64 ", m_isKeptAlive=%d, needsContinueDidReceiveResponseMessage=%d", coreIdentifier().toUInt64(), m_isKeptAlive, needsContinueDidReceiveResponseMessage);
         send(Messages::WebResourceLoader::DidReceiveResponse { response, privateRelayed, needsContinueDidReceiveResponseMessage, computeResponseMetrics(response) });
@@ -1066,10 +1075,10 @@ void NetworkResourceLoader::sendDidReceiveResponsePotentiallyInNewBrowsingContex
 
     ASSERT(loader == this);
     auto existingNetworkResourceLoadIdentifierToResume = loader->identifier();
-    if (auto* session = m_connection->networkSession())
+    if (auto* session = connection->networkSession())
         session->addLoaderAwaitingWebProcessTransfer(loader.releaseNonNull());
     Site responseSite { response.url() };
-    protectedConnectionToWebProcess()->protectedNetworkProcess()->protectedParentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::TriggerBrowsingContextGroupSwitchForNavigation(webPageProxyID(), *m_parameters.navigationID, browsingContextGroupSwitchDecision, responseSite, existingNetworkResourceLoadIdentifierToResume), [existingNetworkResourceLoadIdentifierToResume, session = WeakPtr { connectionToWebProcess().networkSession() }](bool success) {
+    connection->protectedNetworkProcess()->protectedParentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::TriggerBrowsingContextGroupSwitchForNavigation(webPageProxyID(), *m_parameters.navigationID, browsingContextGroupSwitchDecision, responseSite, existingNetworkResourceLoadIdentifierToResume), [existingNetworkResourceLoadIdentifierToResume, session = WeakPtr { connection->networkSession() }](bool success) {
         if (success)
             return;
         if (session)
@@ -1111,8 +1120,9 @@ void NetworkResourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLo
 
     LOADER_RELEASE_LOG("didFinishLoading: (numBytesReceived=%zd, hasCacheEntryForValidation=%d)", m_numBytesReceived, !!m_cacheEntryForValidation);
 
+    Ref connection = m_connection;
     if (shouldCaptureExtraNetworkLoadMetrics())
-        m_connection->addNetworkLoadInformationMetrics(coreIdentifier(), networkLoadMetrics);
+        connection->addNetworkLoadInformationMetrics(coreIdentifier(), networkLoadMetrics);
 
     if (m_cacheEntryForValidation) {
         ASSERT(m_response.httpStatusCode() == httpStatus304NotModified);
@@ -1122,7 +1132,7 @@ void NetworkResourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLo
     }
 
 #if !RELEASE_LOG_DISABLED
-    if (shouldLogCookieInformation(m_connection, sessionID()))
+    if (shouldLogCookieInformation(connection, sessionID()))
         logCookieInformation();
 #endif
 
@@ -1158,8 +1168,9 @@ void NetworkResourceLoader::didFailLoading(const ResourceError& error)
     LOADER_RELEASE_LOG_ERROR("didFailLoading: (wasServiceWorkerLoad=%d, isTimeout=%d, isCancellation=%d, isAccessControl=%d, errorCode=%d)", wasServiceWorkerLoad, error.isTimeout(), error.isCancellation(), error.isAccessControl(), error.errorCode());
     UNUSED_VARIABLE(wasServiceWorkerLoad);
 
+    Ref connection = m_connection;
     if (shouldCaptureExtraNetworkLoadMetrics())
-        m_connection->removeNetworkLoadInformation(coreIdentifier());
+        connection->removeNetworkLoadInformation(coreIdentifier());
 
     ASSERT(!error.isNull());
 
@@ -1176,13 +1187,13 @@ void NetworkResourceLoader::didFailLoading(const ResourceError& error)
     }
 
     if (shouldSendResourceLoadMessages())
-        protectedConnectionToWebProcess()->protectedNetworkProcess()->protectedParentProcessConnection()->send(Messages::NetworkProcessProxy::ResourceLoadDidCompleteWithError(webPageProxyID(), resourceLoadInfo(), { }, error), 0);
+        connection->protectedNetworkProcess()->protectedParentProcessConnection()->send(Messages::NetworkProcessProxy::ResourceLoadDidCompleteWithError(webPageProxyID(), resourceLoadInfo(), { }, error), 0);
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     if (error.blockedKnownTracker()) {
         auto effectiveBlockedURL = error.failingURL();
         if (auto hostName = error.blockedTrackerHostName(); !hostName.isEmpty())
             effectiveBlockedURL.setHost(hostName);
-        protectedConnectionToWebProcess()->protectedNetworkProcess()->protectedParentProcessConnection()->send(Messages::NetworkProcessProxy::DidBlockLoadToKnownTracker(webPageProxyID(), WTFMove(effectiveBlockedURL)), 0);
+        connection->protectedNetworkProcess()->protectedParentProcessConnection()->send(Messages::NetworkProcessProxy::DidBlockLoadToKnownTracker(webPageProxyID(), WTFMove(effectiveBlockedURL)), 0);
     }
 #endif
     cleanup(LoadResult::Failure);
@@ -1277,16 +1288,16 @@ void NetworkResourceLoader::willSendRedirectedRequestInternal(ResourceRequest&& 
         redirectRequest.setHTTPHeaderField(WebCore::HTTPHeaderName::Authorization, authorization);
     }
 
-    if (m_networkLoadChecker) {
+    if (RefPtr networkLoadChecker = m_networkLoadChecker) {
         if (privateClickMeasurementAttributionTriggerData)
-            m_networkLoadChecker->enableContentExtensionsCheck();
-        m_networkLoadChecker->storeRedirectionIfNeeded(request, redirectResponse);
+            networkLoadChecker->enableContentExtensionsCheck();
+        networkLoadChecker->storeRedirectionIfNeeded(request, redirectResponse);
 
         LOADER_RELEASE_LOG("willSendRedirectedRequest: Checking redirect using NetworkLoadChecker");
         auto continueAfterRedirectionCheck = [
             this,
             protectedThis = Ref { *this },
-            storedCredentialsPolicy = m_networkLoadChecker->storedCredentialsPolicy(),
+            storedCredentialsPolicy = networkLoadChecker->storedCredentialsPolicy(),
             privateClickMeasurementAttributionTriggerData = WTFMove(privateClickMeasurementAttributionTriggerData),
             completionHandler = WTFMove(completionHandler)
         ] (auto&& result) mutable {
@@ -1327,7 +1338,7 @@ void NetworkResourceLoader::willSendRedirectedRequestInternal(ResourceRequest&& 
             m_shouldRestartLoad = storedCredentialsPolicy != m_networkLoadChecker->storedCredentialsPolicy();
             this->continueWillSendRedirectedRequest(WTFMove(result->request), WTFMove(result->redirectRequest), WTFMove(result->redirectResponse), WTFMove(privateClickMeasurementAttributionTriggerData), WTFMove(completionHandler));
         };
-        m_networkLoadChecker->checkRedirection(WTFMove(request), WTFMove(redirectRequest), WTFMove(redirectResponse), this, WTFMove(continueAfterRedirectionCheck));
+        networkLoadChecker->checkRedirection(WTFMove(request), WTFMove(redirectRequest), WTFMove(redirectResponse), this, WTFMove(continueAfterRedirectionCheck));
         return;
     }
     continueWillSendRedirectedRequest(WTFMove(request), WTFMove(redirectRequest), WTFMove(redirectResponse), WTFMove(privateClickMeasurementAttributionTriggerData), WTFMove(completionHandler));
@@ -1355,10 +1366,11 @@ void NetworkResourceLoader::continueWillSendRedirectedRequest(ResourceRequest&& 
 
     // We send the request body separately because the ResourceRequest body normally does not get encoded when sent over IPC, as an optimization.
     // However, we really need the body here because a redirect cross-site may cause a process-swap and the request to start again in a new WebContent process.
-    sendWithAsyncReply(Messages::WebResourceLoader::WillSendRequest(redirectRequest, IPC::FormDataReference { redirectRequest.httpBody() }, sanitizeResponseIfPossible(WTFMove(redirectResponse), ResourceResponse::SanitizationType::Redirection)), [this, weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)] (ResourceRequest&& newRequest, bool isAllowedToAskUserForCredentials) mutable {
-        if (!weakThis)
+    sendWithAsyncReply(Messages::WebResourceLoader::WillSendRequest(redirectRequest, IPC::FormDataReference { redirectRequest.httpBody() }, sanitizeResponseIfPossible(WTFMove(redirectResponse), ResourceResponse::SanitizationType::Redirection)), [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)] (ResourceRequest&& newRequest, bool isAllowedToAskUserForCredentials) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return completionHandler({ });
-        continueWillSendRequest(WTFMove(newRequest), isAllowedToAskUserForCredentials, WTFMove(completionHandler));
+        protectedThis->continueWillSendRequest(WTFMove(newRequest), isAllowedToAskUserForCredentials, WTFMove(completionHandler));
     });
 }
 
@@ -1440,7 +1452,7 @@ void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest
     if (shouldTryToMatchRegistrationOnRedirection(parameters().options, !!m_serviceWorkerFetchTask)) {
         m_serviceWorkerRegistration = { };
         setWorkerStart({ });
-        if (auto serviceWorkerFetchTask = m_connection->createFetchTask(*this, newRequest)) {
+        if (auto serviceWorkerFetchTask = protectedConnectionToWebProcess()->createFetchTask(*this, newRequest)) {
             LOADER_RELEASE_LOG("continueWillSendRequest: Created a ServiceWorkerFetchTask to handle the redirect (fetchIdentifier=%" PRIu64 ")", serviceWorkerFetchTask->fetchIdentifier().toUInt64());
             m_networkLoad = nullptr;
             m_serviceWorkerFetchTask = WTFMove(serviceWorkerFetchTask);
@@ -1645,8 +1657,8 @@ void NetworkResourceLoader::didRetrieveCacheEntry(std::unique_ptr<NetworkCache::
         send(Messages::WebResourceLoader::StopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied { response });
         return;
     }
-    if (m_networkLoadChecker) {
-        auto error = m_networkLoadChecker->validateResponse(originalRequest(), response);
+    if (RefPtr networkLoadChecker = m_networkLoadChecker) {
+        auto error = networkLoadChecker->validateResponse(originalRequest(), response);
         if (!error.isNull()) {
             LOADER_RELEASE_LOG_ERROR("didRetrieveCacheEntry: Failing load due to NetworkLoadChecker::validateResponse");
             didFailLoading(error);
@@ -2017,7 +2029,7 @@ void NetworkResourceLoader::startWithServiceWorker()
 #endif
 
     ASSERT(!m_serviceWorkerFetchTask);
-    m_serviceWorkerFetchTask = m_connection->createFetchTask(*this, newRequest);
+    m_serviceWorkerFetchTask = protectedConnectionToWebProcess()->createFetchTask(*this, newRequest);
     if (m_serviceWorkerFetchTask) {
         LOADER_RELEASE_LOG("startWithServiceWorker: Created a ServiceWorkerFetchTask (fetchIdentifier=%" PRIu64 ")", m_serviceWorkerFetchTask->fetchIdentifier().toUInt64());
         return;

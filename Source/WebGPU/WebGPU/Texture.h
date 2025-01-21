@@ -25,11 +25,13 @@
 
 #pragma once
 
+#import <Metal/Metal.h>
 #import <wtf/FastMalloc.h>
 #import <wtf/HashMap.h>
 #import <wtf/HashSet.h>
 #import <wtf/Ref.h>
-#import <wtf/RefCounted.h>
+#import <wtf/RefCountedAndCanMakeWeakPtr.h>
+#import <wtf/RetainReleaseSwift.h>
 #import <wtf/TZoneMalloc.h>
 #import <wtf/Vector.h>
 #import <wtf/WeakHashSet.h>
@@ -45,7 +47,7 @@ class Device;
 class TextureView;
 
 // https://gpuweb.github.io/gpuweb/#gputexture
-class Texture : public WGPUTextureImpl, public RefCounted<Texture>, public CanMakeWeakPtr<Texture> {
+class Texture : public RefCountedAndCanMakeWeakPtr<Texture>, public WGPUTextureImpl {
     WTF_MAKE_TZONE_ALLOCATED(Texture);
 public:
     static Ref<Texture> create(id<MTLTexture> texture, const WGPUTextureDescriptor& descriptor, Vector<WGPUTextureFormat>&& viewFormats, Device& device)
@@ -82,7 +84,7 @@ public:
     static bool refersToSingleAspect(WGPUTextureFormat, WGPUTextureAspect);
     static bool isValidDepthStencilCopySource(WGPUTextureFormat, WGPUTextureAspect);
     static bool isValidDepthStencilCopyDestination(WGPUTextureFormat, WGPUTextureAspect);
-    static bool validateLinearTextureData(const WGPUTextureDataLayout&, uint64_t, WGPUTextureFormat, WGPUExtent3D);
+    static NSString* errorValidatingLinearTextureData(const WGPUTextureDataLayout&, uint64_t, WGPUTextureFormat, WGPUExtent3D);
     static MTLTextureUsage usage(WGPUTextureUsageFlags, WGPUTextureFormat);
     static MTLPixelFormat pixelFormat(WGPUTextureFormat);
     static std::optional<MTLPixelFormat> depthOnlyAspectMetalFormat(WGPUTextureFormat);
@@ -162,6 +164,16 @@ private:
     mutable WeakHashSet<CommandEncoder> m_commandEncoders;
     id<MTLSharedEvent> m_sharedEvent { nil };
     uint64_t m_sharedEventSignalValue { 0 };
-};
+} SWIFT_SHARED_REFERENCE(refTexture, derefTexture);
 
 } // namespace WebGPU
+
+inline void refTexture(WebGPU::Texture* obj)
+{
+    WTF::ref(obj);
+}
+
+inline void derefTexture(WebGPU::Texture* obj)
+{
+    WTF::deref(obj);
+}

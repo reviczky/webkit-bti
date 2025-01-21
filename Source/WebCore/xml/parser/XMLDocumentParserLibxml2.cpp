@@ -67,8 +67,14 @@
 #include "TransformSource.h"
 #include "XMLNSNames.h"
 #include "XMLDocumentParserScope.h"
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
+IGNORE_WARNINGS_BEGIN("undef")
 #include <libxml/parser.h>
 #include <libxml/parserInternals.h>
+IGNORE_WARNINGS_END
+IGNORE_WARNINGS_END
+#include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -196,7 +202,7 @@ public:
         m_callbacks.append(WTFMove(callback));
     }
 
-    void appendErrorCallback(XMLErrors::ErrorType type, const xmlChar* message, OrdinalNumber lineNumber, OrdinalNumber columnNumber)
+    void appendErrorCallback(XMLErrors::Type type, const xmlChar* message, OrdinalNumber lineNumber, OrdinalNumber columnNumber)
     {
         auto callback = makeUnique<PendingErrorCallback>();
 
@@ -226,6 +232,8 @@ private:
     struct PendingStartElementNSCallback : public PendingCallback {
         virtual ~PendingStartElementNSCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(xmlLocalName);
             xmlFree(xmlPrefix);
             xmlFree(xmlURI);
@@ -237,6 +245,7 @@ private:
                     xmlFree(attributes[i * 5 + j]);
             }
             xmlFree(attributes);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -264,7 +273,10 @@ private:
     struct PendingCharactersCallback : public PendingCallback {
         virtual ~PendingCharactersCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(s);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -279,8 +291,11 @@ private:
     struct PendingProcessingInstructionCallback : public PendingCallback {
         virtual ~PendingProcessingInstructionCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(target);
             xmlFree(data);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -295,7 +310,10 @@ private:
     struct PendingCDATABlockCallback : public PendingCallback {
         virtual ~PendingCDATABlockCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(s);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -310,7 +328,10 @@ private:
     struct PendingCommentCallback : public PendingCallback {
         virtual ~PendingCommentCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(s);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -324,9 +345,12 @@ private:
     struct PendingInternalSubsetCallback : public PendingCallback {
         virtual ~PendingInternalSubsetCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(name);
             xmlFree(externalID);
             xmlFree(systemID);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -342,7 +366,10 @@ private:
     struct PendingErrorCallback: public PendingCallback {
         virtual ~PendingErrorCallback()
         {
+// FIXME (286277): Stop ignoring -Wundef and -Wdeprecated-declarations in code that imports libxml and libxslt headers
+IGNORE_WARNINGS_BEGIN("deprecated-declarations")
             xmlFree(message);
+IGNORE_WARNINGS_END
         }
 
         void call(XMLDocumentParser* parser) override
@@ -350,7 +377,7 @@ private:
             parser->handleError(type, reinterpret_cast<char*>(message), TextPosition(lineNumber, columnNumber));
         }
 
-        XMLErrors::ErrorType type;
+        XMLErrors::Type type;
         xmlChar* message;
         OrdinalNumber lineNumber;
         OrdinalNumber columnNumber;
@@ -378,15 +405,15 @@ public:
     {
     }
 
-    int readOutBytes(char* outputBuffer, unsigned askedToRead)
+    int readOutBytes(std::span<char> outputBuffer)
     {
-        unsigned bytesLeft = m_buffer.size() - m_currentOffset;
-        unsigned lenToCopy = std::min(askedToRead, bytesLeft);
-        if (lenToCopy) {
-            memcpy(outputBuffer, m_buffer.data() + m_currentOffset, lenToCopy);
-            m_currentOffset += lenToCopy;
+        size_t bytesLeft = m_buffer.size() - m_currentOffset;
+        size_t lengthToCopy = std::min(outputBuffer.size(), bytesLeft);
+        if (lengthToCopy) {
+            memcpySpan(outputBuffer, m_buffer.subspan(m_currentOffset, lengthToCopy));
+            m_currentOffset += lengthToCopy;
         }
-        return lenToCopy;
+        return lengthToCopy;
     }
 
 private:
@@ -526,7 +553,7 @@ static int readFunc(void* context, char* buffer, int len)
         return 0;
 
     OffsetBuffer* data = static_cast<OffsetBuffer*>(context);
-    return data->readOutBytes(buffer, len);
+    return data->readOutBytes(unsafeMakeSpan(buffer, len));
 }
 
 static int writeFunc(void*, const char*, int)
@@ -601,7 +628,7 @@ RefPtr<XMLParserContext> XMLParserContext::createMemoryParser(xmlSAXHandlerPtr h
     if (!parser)
         return nullptr;
 
-    memcpy(parser->sax, handlers, sizeof(xmlSAXHandler));
+    memcpySpan(asMutableByteSpan(*parser->sax), asByteSpan(*handlers));
 
     // Substitute entities.
     // FIXME: Why is XML_PARSE_NODICT needed? This is different from what createStringParser does.
@@ -696,7 +723,7 @@ void XMLDocumentParser::doWrite(const String& parseString)
     if (document()->decoder() && document()->decoder()->sawError()) {
         // If the decoder saw an error, report it as fatal (stops parsing)
         TextPosition position(OrdinalNumber::fromOneBasedInt(context->context()->input->line), OrdinalNumber::fromOneBasedInt(context->context()->input->col));
-        handleError(XMLErrors::fatal, "Encoding error", position);
+        handleError(XMLErrors::Type::Fatal, "Encoding error", position);
     }
 }
 
@@ -948,7 +975,7 @@ void XMLDocumentParser::characters(std::span<const xmlChar> characters)
     m_bufferedText.append(characters);
 }
 
-void XMLDocumentParser::error(XMLErrors::ErrorType type, const char* message, va_list args)
+void XMLDocumentParser::error(XMLErrors::Type type, const char* message, va_list args)
 {
     if (isStopped())
         return;
@@ -1118,7 +1145,7 @@ static void warningHandler(void* closure, const char* message, ...)
 {
     va_list args;
     va_start(args, message);
-    getParser(closure)->error(XMLErrors::warning, message, args);
+    getParser(closure)->error(XMLErrors::Type::Warning, message, args);
     va_end(args);
 }
 
@@ -1127,7 +1154,7 @@ static void fatalErrorHandler(void* closure, const char* message, ...)
 {
     va_list args;
     va_start(args, message);
-    getParser(closure)->error(XMLErrors::fatal, message, args);
+    getParser(closure)->error(XMLErrors::Type::Fatal, message, args);
     va_end(args);
 }
 
@@ -1136,7 +1163,7 @@ static void normalErrorHandler(void* closure, const char* message, ...)
 {
     va_list args;
     va_start(args, message);
-    getParser(closure)->error(XMLErrors::nonFatal, message, args);
+    getParser(closure)->error(XMLErrors::Type::NonFatal, message, args);
     va_end(args);
 }
 
@@ -1286,7 +1313,7 @@ static void ignorableWhitespaceHandler(void*, const xmlChar*, int)
 void XMLDocumentParser::initializeParserContext(const CString& chunk)
 {
     xmlSAXHandler sax;
-    memset(&sax, 0, sizeof(sax));
+    zeroBytes(sax);
 
     sax.error = normalErrorHandler;
     sax.fatalError = fatalErrorHandler;
@@ -1501,7 +1528,7 @@ std::optional<HashMap<String, String>> parseAttributes(CachedResourceLoader& cac
     AttributeParseState attributes;
 
     xmlSAXHandler sax;
-    memset(&sax, 0, sizeof(sax));
+    zeroBytes(sax);
     sax.startElementNs = attributesStartElementNsHandler;
     sax.initialized = XML_SAX2_MAGIC;
 

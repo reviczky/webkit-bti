@@ -2567,8 +2567,9 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case StringAt:
     case StringCharAt: {
-        // Relies on StringCharAt node having same basic layout as GetByVal
+        // Relies on StringCharAt and StringAt node having same basic layout as GetByVal
         JSValueRegsTemporary result;
         compileGetByValOnString(node, scopedLambda<std::tuple<JSValueRegs, DataFormat>(DataFormat preferredFormat, bool needsFlush)>([&](DataFormat preferredFormat, bool needsFlush) {
             result = JSValueRegsTemporary(this);
@@ -3867,6 +3868,10 @@ void SpeculativeJIT::compile(Node* node)
 
     case MapStorage:
         compileMapStorage(node);
+        break;
+
+    case MapStorageOrSentinel:
+        compileMapStorageOrSentinel(node);
         break;
 
     case MapIteratorNext:

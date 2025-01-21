@@ -30,6 +30,7 @@
 #include "GStreamerRtpTransceiverBackend.h"
 #include "IceCandidate.h"
 #include "JSRTCStatsReport.h"
+#include "Logging.h"
 #include "MediaEndpointConfiguration.h"
 #include "NotImplemented.h"
 #include "RTCIceCandidate.h"
@@ -60,9 +61,7 @@ public:
     }
     bool shouldEmitLogMessage(const WTFLogChannel& channel) const final
     {
-        WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GLib
-        return g_str_has_prefix(channel.name, "WebRTC");
-        WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+        return StringView::fromLatin1(channel.name).startsWith("WebRTC"_s);
     }
 };
 
@@ -101,7 +100,7 @@ GStreamerPeerConnectionBackend::GStreamerPeerConnectionBackend(RTCPeerConnection
     auto& logObserver = webrtcLogObserverSingleton();
     logObserver.addWatch(logger());
 
-    auto identifier = makeString(logIdentifier());
+    auto identifier = makeString(hex(LOGIDENTIFIER.objectIdentifier));
     GST_INFO_OBJECT(m_endpoint->pipeline(), "WebCore logs identifier for this pipeline is: %s", identifier.convertToASCIIUppercase().ascii().data());
 #endif
 }
@@ -138,6 +137,22 @@ GStreamerRtpSenderBackend& GStreamerPeerConnectionBackend::backendFromRTPSender(
 {
     ASSERT(!sender.isStopped());
     return static_cast<GStreamerRtpSenderBackend&>(*sender.backend());
+}
+
+void GStreamerPeerConnectionBackend::dispatchSenderBitrateRequest(const GRefPtr<GstWebRTCDTLSTransport>& transport, uint32_t bitrate)
+{
+    for (auto& transceiver : protectedPeerConnection()->currentTransceivers()) {
+        auto& senderBackend = backendFromRTPSender(transceiver->sender());
+        GRefPtr<GstWebRTCDTLSTransport> candidate;
+        g_object_get(senderBackend.rtcSender(), "transport", &candidate.outPtr(), nullptr);
+        if (!candidate)
+            continue;
+
+        if (candidate == transport) {
+            senderBackend.dispatchBitrateRequest(bitrate);
+            return;
+        }
+    }
 }
 
 void GStreamerPeerConnectionBackend::getStats(Ref<DeferredPromise>&& promise)
@@ -336,6 +351,7 @@ void GStreamerPeerConnectionBackend::collectTransceivers()
 
 void GStreamerPeerConnectionBackend::removeTrack(RTCRtpSender& sender)
 {
+    ALWAYS_LOG(LOGIDENTIFIER, "Removing "_s, sender.trackKind(), " track with ID "_s, sender.trackId());
     m_endpoint->removeTrack(backendFromRTPSender(sender));
 }
 
@@ -388,6 +404,27 @@ void GStreamerPeerConnectionBackend::tearDown()
         auto& backend = backendFromRTPTransceiver(*transceiver);
         backend.tearDown();
     }
+}
+
+void GStreamerPeerConnectionBackend::startGatheringStatLogs(Function<void(String&&)>&& callback)
+{
+    if (!m_rtcStatsLogCallback)
+        m_endpoint->startRTCLogs();
+    m_rtcStatsLogCallback = WTFMove(callback);
+}
+
+void GStreamerPeerConnectionBackend::stopGatheringStatLogs()
+{
+    if (m_rtcStatsLogCallback) {
+        m_endpoint->stopRTCLogs();
+        m_rtcStatsLogCallback = { };
+    }
+}
+
+void GStreamerPeerConnectionBackend::provideStatLogs(String&& stats)
+{
+    if (m_rtcStatsLogCallback)
+        m_rtcStatsLogCallback(WTFMove(stats));
 }
 
 #undef GST_CAT_DEFAULT

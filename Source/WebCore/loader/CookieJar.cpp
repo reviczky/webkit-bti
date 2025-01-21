@@ -193,7 +193,7 @@ bool CookieJar::getRawCookies(Document& document, const URL& url, Vector<Cookie>
     return false;
 }
 
-void CookieJar::setRawCookie(const Document&, const Cookie& cookie)
+void CookieJar::setRawCookie(const Document&, const Cookie& cookie, ShouldPartitionCookie)
 {
     if (CheckedPtr session = protectedStorageSessionProvider()->storageSession())
         session->setCookie(cookie);
@@ -227,7 +227,7 @@ Ref<StorageSessionProvider> CookieJar::protectedStorageSessionProvider() const
 }
 
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
-void CookieJar::addChangeListener(const String&, const CookieChangeListener&)
+void CookieJar::addChangeListener(const WebCore::Document&, const CookieChangeListener&)
 {
 }
 

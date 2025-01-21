@@ -159,6 +159,7 @@ public:
 
     void storePrivateClickMeasurement(WebCore::PrivateClickMeasurement&&);
     virtual void donateToSKAdNetwork(WebCore::PrivateClickMeasurement&&) { }
+    virtual void notifyAdAttributionKitOfSessionTermination() { }
     void handlePrivateClickMeasurementConversion(WebCore::PCM::AttributionTriggerData&&, const URL& requestURL, const WebCore::ResourceRequest& redirectRequest, String&& attributedBundleIdentifier);
     void dumpPrivateClickMeasurement(CompletionHandler<void(String)>&&);
     void clearPrivateClickMeasurement(CompletionHandler<void()>&&);
@@ -194,6 +195,7 @@ public:
 
     WebCore::BlobRegistryImpl& blobRegistry() { return m_blobRegistry; }
     NetworkBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry; }
+    Ref<NetworkBroadcastChannelRegistry> protectedBroadcastChannelRegistry();
 
     unsigned testSpeedMultiplier() const { return m_testSpeedMultiplier; }
     bool allowsServerPreconnect() const { return m_allowsServerPreconnect; }
@@ -232,6 +234,8 @@ public:
     void clearCacheEngine();
 
     NetworkLoadScheduler& networkLoadScheduler();
+    Ref<NetworkLoadScheduler> protectedNetworkLoadScheduler();
+
     PCM::ManagerInterface& privateClickMeasurement() { return m_privateClickMeasurement.get(); }
     void setPrivateClickMeasurementDebugMode(bool);
     bool privateClickMeasurementDebugModeEnabled() const { return m_privateClickMeasurementDebugModeEnabled; }
@@ -239,7 +243,9 @@ public:
     void setBlobRegistryTopOriginPartitioningEnabled(bool);
     void setShouldSendPrivateTokenIPCForTesting(bool);
     bool shouldSendPrivateTokenIPCForTesting() const { return m_shouldSendPrivateTokenIPCForTesting; }
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
     void setOptInCookiePartitioningEnabled(bool);
+#endif
 
 #if PLATFORM(COCOA)
     AppPrivacyReportTestingData& appPrivacyReportTestingData() { return m_appPrivacyReportTestingData; }
@@ -260,7 +266,8 @@ public:
 #endif
 
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
-    NetworkNotificationManager& notificationManager() { return m_notificationManager; }
+    NetworkNotificationManager& notificationManager() { return m_notificationManager.get(); }
+    Ref<NetworkNotificationManager> protectedNotificationManager();
 #endif
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
@@ -278,6 +285,8 @@ public:
 
     void recordHTTPSConnectionTiming(const WebCore::NetworkLoadMetrics&);
     double currentHTTPSConnectionAverageTiming() const { return m_recentHTTPSConnectionTiming.currentMovingAverage; }
+
+    virtual bool isNetworkSessionCocoa() const { return false; }
                                     
 protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
@@ -345,7 +354,7 @@ protected:
     RefPtr<NetworkCache::Cache> m_cache;
     RefPtr<NetworkLoadScheduler> m_networkLoadScheduler;
     WebCore::BlobRegistryImpl m_blobRegistry;
-    UniqueRef<NetworkBroadcastChannelRegistry> m_broadcastChannelRegistry;
+    Ref<NetworkBroadcastChannelRegistry> m_broadcastChannelRegistry;
     unsigned m_testSpeedMultiplier { 1 };
     bool m_allowsServerPreconnect { true };
     bool m_shouldRunServiceWorkersOnMainThreadForTesting { false };
@@ -380,7 +389,7 @@ protected:
     HashMap<WebPageProxyIdentifier, String> m_attributedBundleIdentifierFromPageIdentifiers;
 
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
-    NetworkNotificationManager m_notificationManager;
+    Ref<NetworkNotificationManager> m_notificationManager;
 #endif
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)
     std::optional<int64_t> m_bytesPerSecondLimit;

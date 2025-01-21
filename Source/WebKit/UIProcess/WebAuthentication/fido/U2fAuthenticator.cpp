@@ -142,9 +142,9 @@ void U2fAuthenticator::issueCommand(const Vector<uint8_t>& command, CommandType 
 
 void U2fAuthenticator::responseReceived(Vector<uint8_t>&& response, CommandType type)
 {
-    auto apduResponse = ApduResponse::createFromMessage(response);
+    auto apduResponse = ApduResponse::createFromMessage(WTFMove(response));
     if (!apduResponse) {
-        U2F_RELEASE_LOG("responseReceived: Failed to parse response: %s", base64EncodeToString(response).utf8().data());
+        U2F_RELEASE_LOG("responseReceived: Failed to parse response.");
         receiveRespond(ExceptionData { ExceptionCode::UnknownError, "Couldn't parse the APDU response."_s });
         return;
     }
@@ -253,7 +253,7 @@ void U2fAuthenticator::continueSignCommandAfterResponseReceived(ApduResponse&& a
         U2F_RELEASE_LOG("continueSignCommandAfterResponseReceived: m_isAppId=%d", m_isAppId);
         RefPtr<AuthenticatorAssertionResponse> response;
         if (m_isAppId) {
-            if (requestOptions.extensions && !requestOptions.extensions->appid.isNull()) {
+            if (!(requestOptions.extensions && !requestOptions.extensions->appid.isNull())) {
                 U2F_RELEASE_LOG("continueSignCommandAfterResponseReceived: appid and m_isAppId mismatch");
                 ASSERT(false);
             }

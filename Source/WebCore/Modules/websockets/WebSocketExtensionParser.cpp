@@ -34,6 +34,7 @@
 
 #include <wtf/ASCIICType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/ParsingUtilities.h>
 
 namespace WebCore {
 
@@ -50,14 +51,20 @@ bool WebSocketExtensionParser::parsedSuccessfully()
 static bool isSeparator(char character)
 {
     static constexpr auto separatorCharacters = "()<>@,;:\\\"/[]?={} \t"_s;
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     const char* p = strchr(separatorCharacters.characters(), character);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     return p && *p;
+}
+
+static bool isSpaceOrTab(LChar character)
+{
+    return character == ' ' || character == '\t';
 }
 
 void WebSocketExtensionParser::skipSpaces()
 {
-    while (!m_data.empty() && (m_data[0] == ' ' || m_data[0] == '\t'))
-        m_data = m_data.subspan(1);
+    skipWhile<isSpaceOrTab>(m_data);
 }
 
 bool WebSocketExtensionParser::consumeToken()
@@ -68,8 +75,7 @@ bool WebSocketExtensionParser::consumeToken()
     while (tokenLength < m_data.size() && isASCIIPrintable(m_data[tokenLength]) && !isSeparator(m_data[tokenLength]))
         ++tokenLength;
     if (tokenLength) {
-        m_currentToken = String(start.first(tokenLength));
-        m_data = m_data.subspan(tokenLength);
+        m_currentToken = String(consumeSpan(start, tokenLength));
         return true;
     }
     return false;
@@ -78,26 +84,23 @@ bool WebSocketExtensionParser::consumeToken()
 bool WebSocketExtensionParser::consumeQuotedString()
 {
     skipSpaces();
-    if (m_data.empty() || m_data[0] != '"')
+    if (!skipExactly(m_data, '"'))
         return false;
 
     Vector<char> buffer;
-    m_data = m_data.subspan(1);
     while (!m_data.empty() && m_data[0] != '"') {
-        if (m_data[0] == '\\') {
-            m_data = m_data.subspan(1);
+        if (skipExactly(m_data, '\\')) {
             if (m_data.empty())
                 return false;
         }
-        buffer.append(m_data[0]);
-        m_data = m_data.subspan(1);
+        buffer.append(consume(m_data));
     }
     if (m_data.empty() || m_data[0] != '"')
         return false;
     m_currentToken = String::fromUTF8(buffer.span());
     if (m_currentToken.isNull())
         return false;
-    m_data = m_data.subspan(1);
+    skip(m_data, 1);
     return true;
 }
 
@@ -111,11 +114,7 @@ bool WebSocketExtensionParser::consumeQuotedStringOrToken()
 bool WebSocketExtensionParser::consumeCharacter(char character)
 {
     skipSpaces();
-    if (!m_data.empty() && m_data[0] == character) {
-        m_data = m_data.subspan(1);
-        return true;
-    }
-    return false;
+    return skipExactly(m_data, character);
 }
 
 bool WebSocketExtensionParser::parseExtension(String& extensionToken, HashMap<String, String>& extensionParameters)

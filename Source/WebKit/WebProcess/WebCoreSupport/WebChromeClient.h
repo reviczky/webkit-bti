@@ -42,6 +42,10 @@ enum class StorageAccessWasGranted : uint8_t;
 struct TextRecognitionOptions;
 }
 
+namespace API {
+class Object;
+};
+
 namespace WebKit {
 
 class WebFrame;
@@ -132,6 +136,7 @@ private:
     void scroll(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& scrollRect, const WebCore::IntRect& clipRect) final;
 
     WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const final;
+    WebCore::IntPoint rootViewToScreen(const WebCore::IntPoint&) const final;
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const final;
 
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) const final;
@@ -154,10 +159,8 @@ private:
     void print(WebCore::LocalFrame&, const WebCore::StringWithDirection&) final;
 
     void exceededDatabaseQuota(WebCore::LocalFrame&, const String& databaseName, WebCore::DatabaseDetails) final { }
-    
-#if ENABLE(INPUT_TYPE_COLOR)
+
     RefPtr<WebCore::ColorChooser> createColorChooser(WebCore::ColorChooserClient&, const WebCore::Color&) final;
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
     RefPtr<WebCore::DataListSuggestionPicker> createDataListSuggestionPicker(WebCore::DataListSuggestionsClient&) final;
@@ -250,9 +253,9 @@ private:
 #endif
 
 #if PLATFORM(PLAYSTATION)
-    void postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXObjectCache::AXNotification) final;
+    void postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXNotification) final;
     void postAccessibilityNodeTextChangeNotification(WebCore::AccessibilityObject*, WebCore::AXTextChange, unsigned, const String&) final;
-    void postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXObjectCache::AXLoadingEvent) final;
+    void postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXLoadingEvent) final;
 #endif
 
     void animationDidFinishForElement(const WebCore::Element&) final;
@@ -260,7 +263,7 @@ private:
     WebCore::DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const final;
 
 #if ENABLE(GPU_PROCESS)
-    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::ImageBufferPixelFormat, OptionSet<WebCore::ImageBufferOptions>) const final;
+    RefPtr<WebCore::ImageBuffer> createImageBuffer(const WebCore::FloatSize&, WebCore::RenderingMode, WebCore::RenderingPurpose, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::ImageBufferPixelFormat) const final;
     RefPtr<WebCore::ImageBuffer> sinkIntoImageBuffer(std::unique_ptr<WebCore::SerializedImageBuffer>) final;
 #endif
     std::unique_ptr<WebCore::WorkerClient> createWorkerClient(SerialFunctionDispatcher&) final;
@@ -283,7 +286,7 @@ private:
             VideoTrigger |
             PluginTrigger|
             CanvasTrigger |
-#if PLATFORM(COCOA) || USE(NICOSIA)
+#if PLATFORM(COCOA) || USE(COORDINATED_GRAPHICS)
             ScrollableNonMainFrameTrigger |
 #endif
 #if PLATFORM(IOS_FAMILY)
@@ -377,11 +380,6 @@ private:
     
     void wheelEventHandlersChanged(bool) final;
 
-    String plugInStartLabelTitle(const String& mimeType) const final;
-    String plugInStartLabelSubtitle(const String& mimeType) const final;
-    String plugInExtraStyleSheet() const final;
-    String plugInExtraScript() const final;
-
     void didAddHeaderLayer(WebCore::GraphicsLayer&) final;
     void didAddFooterLayer(WebCore::GraphicsLayer&) final;
 
@@ -390,6 +388,7 @@ private:
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     void isAnyAnimationAllowedToPlayDidChange(bool /* anyAnimationCanPlay */) final;
 #endif
+    void resolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier, const WebCore::IntPoint&, CompletionHandler<void(String)>&&) final;
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags) final;
     void handleAutoplayEvent(WebCore::AutoplayEvent, OptionSet<WebCore::AutoplayEventFlags>) final;
 
@@ -548,7 +547,9 @@ private:
 
     void callAfterPendingSyntheticClick(CompletionHandler<void(WebCore::SyntheticClickResult)>&&) final;
 
-    void didSwallowClickEvent(const WebCore::PlatformMouseEvent&, WebCore::Node&) final;
+    void didDispatchClickEvent(const WebCore::PlatformMouseEvent&, WebCore::Node&) final;
+
+    void didProgrammaticallyClearTextFormControl(const WebCore::HTMLTextFormControlElement&) final;
 
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };
     mutable bool m_cachedMainFrameHasVerticalScrollbar { false };
@@ -568,5 +569,7 @@ private:
     WeakRef<WebPage> m_page;
     AutomaticallySend m_automaticallySend;
 };
+
+RefPtr<API::Object> userDataFromJSONData(JSON::Value&);
 
 } // namespace WebKit

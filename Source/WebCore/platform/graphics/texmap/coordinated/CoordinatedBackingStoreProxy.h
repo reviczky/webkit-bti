@@ -31,8 +31,9 @@
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
-class CoordinatedGraphicsLayer;
+class CoordinatedPlatformLayer;
 class CoordinatedTileBuffer;
+class GraphicsLayer;
 
 class CoordinatedBackingStoreProxy final : public ThreadSafeRefCounted<CoordinatedBackingStoreProxy> {
     WTF_MAKE_TZONE_ALLOCATED(CoordinatedBackingStoreProxy);
@@ -64,6 +65,7 @@ public:
         const Vector<uint32_t>& tilesToRemove() const { return m_tilesToRemove; }
 
         void appendUpdate(float, Vector<uint32_t>&&, Vector<TileUpdate>&&, Vector<uint32_t>&&);
+        void waitUntilPaintingComplete();
 
     private:
         float m_scale { 1 };
@@ -77,8 +79,10 @@ public:
         TilesPending = 1 << 1,
         TilesChanged = 1 << 2
     };
-    OptionSet<UpdateResult> updateIfNeeded(const IntRect& unscaledVisibleRect, const IntRect& unscaledContentsRect, bool shouldCreateAndDestroyTiles, const Vector<IntRect, 1>&, CoordinatedGraphicsLayer&);
+    OptionSet<UpdateResult> updateIfNeeded(const IntRect& unscaledVisibleRect, const IntRect& unscaledContentsRect, bool shouldCreateAndDestroyTiles, const Vector<IntRect, 1>&, CoordinatedPlatformLayer&);
     Update takePendingUpdate();
+
+    void waitUntilPaintingComplete();
 
 private:
     struct Tile {

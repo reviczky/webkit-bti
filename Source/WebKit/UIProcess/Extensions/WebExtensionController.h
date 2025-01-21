@@ -73,6 +73,7 @@ class WebPageProxy;
 class WebProcessPool;
 class WebsiteDataStore;
 struct WebExtensionControllerParameters;
+struct WebExtensionFrameParameters;
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
 class WebInspectorUIProxy;
@@ -83,7 +84,10 @@ class WebExtensionController : public API::ObjectImpl<API::Object::Type::WebExte
 
 public:
     static Ref<WebExtensionController> create(Ref<WebExtensionControllerConfiguration> configuration) { return adoptRef(*new WebExtensionController(configuration)); }
-    static WebExtensionController* get(WebExtensionControllerIdentifier);
+    static RefPtr<WebExtensionController> get(WebExtensionControllerIdentifier);
+
+    void ref() const final { API::ObjectImpl<API::Object::Type::WebExtensionController>::ref(); }
+    void deref() const final { API::ObjectImpl<API::Object::Type::WebExtensionController>::deref(); }
 
     explicit WebExtensionController(Ref<WebExtensionControllerConfiguration>);
     ~WebExtensionController();
@@ -207,18 +211,18 @@ private:
     String stateFilePath(const String& uniqueIdentifier) const;
     _WKWebExtensionStorageSQLiteStore* sqliteStore(const String& storageDirectory, WebExtensionDataType, RefPtr<WebExtensionContext>);
 
-    void didStartProvisionalLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
-    void didCommitLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
-    void didFinishLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
-    void didFailLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
+    void didStartProvisionalLoadForFrame(WebPageProxyIdentifier, const WebExtensionFrameParameters&, WallTime);
+    void didCommitLoadForFrame(WebPageProxyIdentifier, const WebExtensionFrameParameters&, WallTime);
+    void didFinishLoadForFrame(WebPageProxyIdentifier, const WebExtensionFrameParameters&, WallTime);
+    void didFailLoadForFrame(WebPageProxyIdentifier, const WebExtensionFrameParameters&, WallTime);
 
     void purgeOldMatchedRules();
 
     // Test APIs
     void testResult(bool result, String message, String sourceURL, unsigned lineNumber);
     void testEqual(bool result, String expected, String actual, String message, String sourceURL, unsigned lineNumber);
-    void testMessage(String message, String sourceURL, unsigned lineNumber);
-    void testYielded(String message, String sourceURL, unsigned lineNumber);
+    void testLogMessage(String message, String sourceURL, unsigned lineNumber);
+    void testSentMessage(String message, String argument, String sourceURL, unsigned lineNumber);
     void testFinished(bool result, String message, String sourceURL, unsigned lineNumber);
 
     class HTTPCookieStoreObserver : public API::HTTPCookieStoreObserver {
@@ -240,16 +244,22 @@ private:
         {
             // FIXME: <https://webkit.org/b/267514> Add support for changeInfo.
 
+#if PLATFORM(COCOA)
             if (RefPtr extensionController = m_extensionController.get())
                 extensionController->cookiesDidChange(cookieStore);
+#endif
         }
 
         WeakPtr<WebExtensionController> m_extensionController;
     };
 
+    RefPtr<HTTPCookieStoreObserver> protectedCookieStoreObserver() { return m_cookieStoreObserver; }
+
     Ref<WebExtensionControllerConfiguration> m_configuration;
 
+#if PLATFORM(COCOA)
     RetainPtr<_WKWebExtensionControllerHelper> m_webExtensionControllerHelper;
+#endif
     WebExtensionContextSet m_extensionContexts;
     WebExtensionContextBaseURLMap m_extensionContextBaseURLMap;
     WebPageProxySet m_pages;

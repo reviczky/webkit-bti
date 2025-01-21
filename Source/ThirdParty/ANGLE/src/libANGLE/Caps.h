@@ -582,6 +582,9 @@ struct DisplayExtensions
     // EGL_ANDROID_get_frame_timestamps
     bool getFrameTimestamps = false;
 
+    // EGL_ANDROID_front_buffer_auto_refresh
+    bool frontBufferAutoRefreshANDROID = false;
+
     // EGL_ANGLE_timestamp_surface_attribute
     bool timestampSurfaceAttributeANGLE = false;
 
@@ -707,6 +710,12 @@ struct DisplayExtensions
 
     // EGL_ANGLE_global_fence_sync
     bool globalFenceSyncANGLE = false;
+
+    // EGL_ANGLE_memory_usage_report
+    bool memoryUsageReportANGLE = false;
+
+    // EGL_EXT_surface_compression
+    bool surfaceCompressionEXT = false;
 };
 
 struct DeviceExtensions

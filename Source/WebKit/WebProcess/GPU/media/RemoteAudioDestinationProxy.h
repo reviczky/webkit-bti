@@ -59,13 +59,12 @@ public:
     RemoteAudioDestinationProxy(AudioIOCallback&, const String& inputDeviceId, unsigned numberOfInputChannels, unsigned numberOfOutputChannels, float sampleRate);
     ~RemoteAudioDestinationProxy();
 
-    void ref() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioDestinationProxy>::ref(); }
-    void deref() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioDestinationProxy>::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioDestinationProxy>::controlBlock(); }
+    WTF_ABSTRACT_THREAD_SAFE_REF_COUNTED_AND_CAN_MAKE_WEAK_PTR_IMPL;
 
 private:
     void startRendering(CompletionHandler<void(bool)>&&) override;
     void stopRendering(CompletionHandler<void(bool)>&&) override;
+    MediaTime outputLatency() const final;
 
     void startRenderingThread();
     void stopRenderingThread();
@@ -95,6 +94,7 @@ private:
     String m_inputDeviceId;
     unsigned m_numberOfInputChannels;
     float m_remoteSampleRate;
+    size_t m_audioUnitLatency;
 
     RefPtr<Thread> m_renderThread;
     RefPtr<WebCore::SharedMemory> m_frameCount;

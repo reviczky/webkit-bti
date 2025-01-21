@@ -166,10 +166,10 @@ private:
 
     void append32BitCode(ASCIILiteral code)
     {
-        m_result.append(code[0]);
-        m_result.append(code[1]);
-        m_result.append(code[2]);
-        m_result.append(code[3]);
+        m_result.append(code[0uz]);
+        m_result.append(code[1uz]);
+        m_result.append(code[2uz]);
+        m_result.append(code[3uz]);
     }
 
     void append16(uint16_t value)
@@ -232,9 +232,9 @@ private:
 
     Vector<char> transcodeGlyphPaths(float width, const SVGElement& glyphOrMissingGlyphElement, std::optional<FloatRect>& boundingBox) const;
 
-    void addCodepointRanges(const UnicodeRanges&, HashSet<Glyph>& glyphSet) const;
-    void addCodepoints(const HashSet<String>& codepoints, HashSet<Glyph>& glyphSet) const;
-    void addGlyphNames(const HashSet<String>& glyphNames, HashSet<Glyph>& glyphSet) const;
+    void addCodepointRanges(const UnicodeRanges&, UncheckedKeyHashSet<Glyph>& glyphSet) const;
+    void addCodepoints(const UncheckedKeyHashSet<String>& codepoints, UncheckedKeyHashSet<Glyph>& glyphSet) const;
+    void addGlyphNames(const UncheckedKeyHashSet<String>& glyphNames, UncheckedKeyHashSet<Glyph>& glyphSet) const;
     void addKerningPair(Vector<KerningData>&, SVGKerningPair&&) const;
     template<typename T> size_t appendKERNSubtable(std::optional<SVGKerningPair> (T::*buildKerningPair)() const, uint16_t coverage);
     size_t finishAppendingKERNSubtable(Vector<KerningData>, uint16_t coverage);
@@ -538,7 +538,7 @@ void SVGToOTFFontConverter::appendOS2Table()
         }
     }
     if (numPanoseBytes != panoseSize)
-        memset(panoseBytes.data(), 0, panoseSize);
+        panoseBytes.fill(0);
     m_result.append(std::span<char> { panoseBytes });
 
     for (int i = 0; i < 4; ++i)
@@ -1018,7 +1018,7 @@ Vector<Glyph, 1> SVGToOTFFontConverter::glyphsForCodepoint(char32_t codepoint) c
     return m_codepointsToIndicesMap.get(codepointToString(codepoint));
 }
 
-void SVGToOTFFontConverter::addCodepointRanges(const UnicodeRanges& unicodeRanges, HashSet<Glyph>& glyphSet) const
+void SVGToOTFFontConverter::addCodepointRanges(const UnicodeRanges& unicodeRanges, UncheckedKeyHashSet<Glyph>& glyphSet) const
 {
     for (auto& unicodeRange : unicodeRanges) {
         for (auto codepoint = unicodeRange.first; codepoint <= unicodeRange.second; ++codepoint) {
@@ -1028,7 +1028,7 @@ void SVGToOTFFontConverter::addCodepointRanges(const UnicodeRanges& unicodeRange
     }
 }
 
-void SVGToOTFFontConverter::addCodepoints(const HashSet<String>& codepoints, HashSet<Glyph>& glyphSet) const
+void SVGToOTFFontConverter::addCodepoints(const UncheckedKeyHashSet<String>& codepoints, UncheckedKeyHashSet<Glyph>& glyphSet) const
 {
     for (auto& codepointString : codepoints) {
         for (auto index : m_codepointsToIndicesMap.get(codepointString))
@@ -1036,7 +1036,7 @@ void SVGToOTFFontConverter::addCodepoints(const HashSet<String>& codepoints, Has
     }
 }
 
-void SVGToOTFFontConverter::addGlyphNames(const HashSet<String>& glyphNames, HashSet<Glyph>& glyphSet) const
+void SVGToOTFFontConverter::addGlyphNames(const UncheckedKeyHashSet<String>& glyphNames, UncheckedKeyHashSet<Glyph>& glyphSet) const
 {
     for (auto& glyphName : glyphNames) {
         if (Glyph glyph = m_glyphNameToIndexMap.get(glyphName))
@@ -1046,8 +1046,8 @@ void SVGToOTFFontConverter::addGlyphNames(const HashSet<String>& glyphNames, Has
 
 void SVGToOTFFontConverter::addKerningPair(Vector<KerningData>& data, SVGKerningPair&& kerningPair) const
 {
-    HashSet<Glyph> glyphSet1;
-    HashSet<Glyph> glyphSet2;
+    UncheckedKeyHashSet<Glyph> glyphSet1;
+    UncheckedKeyHashSet<Glyph> glyphSet2;
 
     addCodepointRanges(kerningPair.unicodeRange1, glyphSet1);
     addCodepointRanges(kerningPair.unicodeRange2, glyphSet2);
@@ -1307,8 +1307,8 @@ void SVGToOTFFontConverter::processGlyphElement(const SVGElement& glyphOrMissing
 
 void SVGToOTFFontConverter::appendLigatureGlyphs()
 {
-    HashSet<uint32_t> ligatureCodepoints;
-    HashSet<uint32_t> nonLigatureCodepoints;
+    UncheckedKeyHashSet<uint32_t> ligatureCodepoints;
+    UncheckedKeyHashSet<uint32_t> nonLigatureCodepoints;
     for (auto& glyph : m_glyphs) {
         auto codePoints = StringView(glyph.codepoints).codePoints();
         auto codePointsIterator = codePoints.begin();
@@ -1505,10 +1505,10 @@ void SVGToOTFFontConverter::appendTable(ASCIILiteral identifier, FontAppendingFu
         m_result.append(0);
     ASSERT(isFourByteAligned(m_result.size()));
     size_t directoryEntryOffset = headerSize + m_tablesAppendedCount * directoryEntrySize;
-    m_result[directoryEntryOffset] = identifier[0];
-    m_result[directoryEntryOffset + 1] = identifier[1];
-    m_result[directoryEntryOffset + 2] = identifier[2];
-    m_result[directoryEntryOffset + 3] = identifier[3];
+    m_result[directoryEntryOffset] = identifier[0uz];
+    m_result[directoryEntryOffset + 1] = identifier[1uz];
+    m_result[directoryEntryOffset + 2] = identifier[2uz];
+    m_result[directoryEntryOffset + 3] = identifier[3uz];
     overwrite32(directoryEntryOffset + 4, calculateChecksum(offset, m_result.size()));
     overwrite32(directoryEntryOffset + 8, offset);
     overwrite32(directoryEntryOffset + 12, unpaddedSize);

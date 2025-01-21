@@ -58,8 +58,6 @@
 #include "VideoFrameGStreamer.h"
 #endif
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 struct VideoFrameAdaptor {
@@ -111,26 +109,26 @@ RealtimeMediaSource::RealtimeMediaSource(const CaptureDevice& device, MediaDevic
     , m_name({ device.label() })
     , m_device(device)
 {
-    initializePersistentId();
+    initializeIds();
 }
 
-RealtimeMediaSource::~RealtimeMediaSource()
-{
-}
+RealtimeMediaSource::~RealtimeMediaSource() = default;
 
 void RealtimeMediaSource::setPersistentId(const String& persistentID)
 {
     m_device.setPersistentId(persistentID);
-    initializePersistentId();
+    initializeIds();
 }
 
-void RealtimeMediaSource::initializePersistentId()
+void RealtimeMediaSource::initializeIds()
 {
     if (m_device.persistentId().isEmpty())
         m_device.setPersistentId(createVersion4UUIDString());
 
     m_hashedID = RealtimeMediaSourceCenter::hashStringWithSalt(m_device.persistentId(), m_idHashSalts.persistentDeviceSalt);
     m_ephemeralHashedID = RealtimeMediaSourceCenter::hashStringWithSalt(m_device.persistentId(), m_idHashSalts.ephemeralDeviceSalt);
+
+    m_hashedGroupId = RealtimeMediaSourceCenter::hashStringWithSalt(m_device.groupId(), m_idHashSalts.ephemeralDeviceSalt);
 }
 
 void RealtimeMediaSource::addAudioSampleObserver(AudioSampleObserver& observer)
@@ -397,7 +395,7 @@ void RealtimeMediaSource::start()
 
 void RealtimeMediaSource::stop()
 {
-    if (!m_isProducingData)
+    if (!m_isProducingData || m_isEnded)
         return;
 
     ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
@@ -1509,7 +1507,7 @@ WTFLogChannel& RealtimeMediaSource::logChannel() const
 
 String convertEnumerationToString(RealtimeMediaSource::Type enumerationValue)
 {
-    static const NeverDestroyed<String> values[] = {
+    static const std::array<NeverDestroyed<String>, 2> values {
         MAKE_STATIC_STRING_IMPL("Audio"),
         MAKE_STATIC_STRING_IMPL("Video")
     };
@@ -1520,7 +1518,5 @@ String convertEnumerationToString(RealtimeMediaSource::Type enumerationValue)
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // ENABLE(MEDIA_STREAM)

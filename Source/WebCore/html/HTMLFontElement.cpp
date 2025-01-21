@@ -33,10 +33,9 @@
 #include "NodeName.h"
 #include "StyleProperties.h"
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/ParsingUtilities.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringToIntegerConversion.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 
@@ -62,20 +61,15 @@ static bool parseFontSize(std::span<const CharacterType> characters, int& size)
 
     // Step 1
     // Step 2
-    const CharacterType* position = characters.data();
-    const CharacterType* end = characters.data() + characters.size();
-
     // Step 3
-    while (position < end) {
-        if (!isASCIIWhitespace(*position))
+    while (!characters.empty()) {
+        if (!skipExactly<isASCIIWhitespace>(characters))
             break;
-        ++position;
     }
 
     // Step 4
-    if (position == end)
+    if (characters.empty())
         return false;
-    ASSERT_WITH_SECURITY_IMPLICATION(position < end);
 
     // Step 5
     enum {
@@ -84,14 +78,14 @@ static bool parseFontSize(std::span<const CharacterType> characters, int& size)
         Absolute
     } mode;
 
-    switch (*position) {
+    switch (characters.front()) {
     case '+':
         mode = RelativePlus;
-        ++position;
+        skip(characters, 1);
         break;
     case '-':
         mode = RelativeMinus;
-        ++position;
+        skip(characters, 1);
         break;
     default:
         mode = Absolute;
@@ -101,10 +95,10 @@ static bool parseFontSize(std::span<const CharacterType> characters, int& size)
     // Step 6
     StringBuilder digits;
     digits.reserveCapacity(16);
-    while (position < end) {
-        if (!isASCIIDigit(*position))
+    while (!characters.empty()) {
+        if (!isASCIIDigit(characters.front()))
             break;
-        digits.append(*position++);
+        digits.append(consume(characters));
     }
 
     // Step 7
@@ -216,5 +210,3 @@ void HTMLFontElement::collectPresentationalHintsForAttribute(const QualifiedName
 }
 
 }
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

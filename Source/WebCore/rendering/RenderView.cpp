@@ -40,6 +40,7 @@
 #include "LegacyRenderSVGRoot.h"
 #include "LocalFrame.h"
 #include "LocalFrameView.h"
+#include "Logging.h"
 #include "NodeTraversal.h"
 #include "Page.h"
 #include "RenderBoxInlines.h"
@@ -61,7 +62,6 @@
 #include "RenderSVGRoot.h"
 #include "RenderStyleInlines.h"
 #include "RenderTreeBuilder.h"
-#include "RenderViewTransitionRoot.h"
 #include "RenderWidget.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGImage.h"
@@ -321,7 +321,7 @@ bool RenderView::requiresColumns(int) const
 
 void RenderView::computeColumnCountAndWidth()
 {
-    int columnWidth = contentLogicalWidth();
+    int columnWidth = contentBoxLogicalWidth();
     if (style().hasInlineColumnAxis()) {
         if (int pageLength = protectedFrameView()->pagination().pageLength)
             columnWidth = pageLength;
@@ -782,7 +782,7 @@ Node* RenderView::nodeForHitTest() const
     return document().documentElement();
 }
 
-void RenderView::updateHitTestResult(HitTestResult& result, const LayoutPoint& point)
+void RenderView::updateHitTestResult(HitTestResult& result, const LayoutPoint& point) const
 {
     if (result.innerNode())
         return;
@@ -1014,14 +1014,13 @@ RenderView::RepaintRegionAccumulator::RepaintRegionAccumulator(RenderView* view)
     if (!view)
         return;
 
-    auto* rootRenderView = view->document().topDocument().renderView();
-    if (!rootRenderView)
+    if (!view->document().isTopDocument())
         return;
 
-    m_wasAccumulatingRepaintRegion = !!rootRenderView->m_accumulatedRepaintRegion;
+    m_wasAccumulatingRepaintRegion = !!view->m_accumulatedRepaintRegion;
     if (!m_wasAccumulatingRepaintRegion)
-        rootRenderView->m_accumulatedRepaintRegion = makeUnique<Region>();
-    m_rootView = *rootRenderView;
+        view->m_accumulatedRepaintRegion = makeUnique<Region>();
+    m_rootView = *view;
 }
 
 RenderView::RepaintRegionAccumulator::~RepaintRegionAccumulator()
@@ -1111,14 +1110,29 @@ SingleThreadWeakHashSet<RenderCounter> RenderView::takeCountersNeedingUpdate()
     return std::exchange(m_countersNeedingUpdate, { });
 }
 
-SingleThreadWeakPtr<RenderViewTransitionRoot> RenderView::viewTransitionRoot() const
+SingleThreadWeakPtr<RenderElement> RenderView::viewTransitionRoot() const
 {
     return m_viewTransitionRoot;
 }
 
-void RenderView::setViewTransitionRoot(RenderViewTransitionRoot& renderer)
+void RenderView::setViewTransitionRoot(RenderElement& renderer)
 {
     m_viewTransitionRoot = renderer;
+}
+
+void RenderView::addViewTransitionGroup(const AtomString& name, RenderElement& group)
+{
+    m_viewTransitionGroups.set(name, &group);
+}
+
+void RenderView::removeViewTransitionGroup(const AtomString& name)
+{
+    m_viewTransitionGroups.remove(name);
+}
+
+RenderElement* RenderView::viewTransitionGroupForName(const AtomString& name)
+{
+    return m_viewTransitionGroups.get(name).get();
 }
 
 } // namespace WebCore

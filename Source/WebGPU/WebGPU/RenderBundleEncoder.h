@@ -45,9 +45,10 @@ struct WGPURenderBundleEncoderImpl {
 
 @interface RenderBundleICBWithResources : NSObject
 
-- (instancetype)initWithICB:(id<MTLIndirectCommandBuffer>)icb containerBuffer:(id<MTLBuffer>)containerBuffer pipelineState:(id<MTLRenderPipelineState>)pipelineState depthStencilState:(id<MTLDepthStencilState>)depthStencilState cullMode:(MTLCullMode)cullMode frontFace:(MTLWinding)frontFace depthClipMode:(MTLDepthClipMode)depthClipMode depthBias:(float)depthBias depthBiasSlopeScale:(float)depthBiasSlopeScale depthBiasClamp:(float)depthBiasClamp fragmentDynamicOffsetsBuffer:(id<MTLBuffer>)fragmentDynamicOffsetsBuffer pipeline:(const WebGPU::RenderPipeline*)pipeline minVertexCounts:(WebGPU::RenderBundle::MinVertexCountsContainer*)minVertexCounts NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithICB:(id<MTLIndirectCommandBuffer>)icb containerBuffer:(id<MTLBuffer>)containerBuffer pipelineState:(id<MTLRenderPipelineState>)pipelineState depthStencilState:(id<MTLDepthStencilState>)depthStencilState cullMode:(MTLCullMode)cullMode frontFace:(MTLWinding)frontFace depthClipMode:(MTLDepthClipMode)depthClipMode depthBias:(float)depthBias depthBiasSlopeScale:(float)depthBiasSlopeScale depthBiasClamp:(float)depthBiasClamp fragmentDynamicOffsetsBuffer:(id<MTLBuffer>)fragmentDynamicOffsetsBuffer pipeline:(const WebGPU::RenderPipeline*)pipeline minVertexCounts:(WebGPU::RenderBundle::MinVertexCountsContainer*)minVertexCounts outOfBoundsReadFlag:(id<MTLBuffer>)outOfBoundsReadFlag NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
+@property (readonly, nonatomic) id<MTLBuffer> outOfBoundsReadFlag;
 @property (readonly, nonatomic) id<MTLIndirectCommandBuffer> indirectCommandBuffer;
 @property (readonly, nonatomic) id<MTLBuffer> indirectCommandBufferContainer;
 @property (readonly, nonatomic) id<MTLRenderPipelineState> currentPipelineState;
@@ -122,7 +123,7 @@ private:
     id<MTLIndirectRenderCommand> currentRenderCommand();
 
     void makeInvalid(NSString* = nil);
-    bool executePreDrawCommands(bool passWasSplit, uint32_t firstInstance = 0, uint32_t instanceCount = 0);
+    bool executePreDrawCommands(bool needsValidationLayerWorkaround, bool passWasSplit, uint32_t firstInstance = 0, uint32_t instanceCount = 0);
     void endCurrentICB();
     bool addResource(RenderBundle::ResourcesContainer*, id<MTLResource>, ResourceUsageAndRenderStage*);
     bool addResource(RenderBundle::ResourcesContainer*, id<MTLResource>, MTLRenderStages, const BindGroupEntryUsageData::Resource&);
@@ -140,7 +141,8 @@ private:
     uint32_t maxBindGroupIndex() const;
     void recordCommand(WTF::Function<bool(void)>&&);
     void storeVertexBufferCountsForValidation(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance, MTLIndexType, NSUInteger indexBufferOffsetInBytes);
-    std::pair<uint32_t, uint32_t> computeMininumVertexInstanceCount() const;
+    std::pair<uint32_t, uint32_t> computeMininumVertexInstanceCount(bool& needsValidationLayerWorkaround) const;
+    void resetIndexBuffer();
 
     const Ref<Device> m_device;
     RefPtr<Buffer> m_indexBuffer;
@@ -197,6 +199,7 @@ private:
     bool m_requiresCommandReplay { false };
     bool m_finished { false };
     uint32_t m_sampleMask { defaultSampleMask };
+    bool m_makeSubmitInvalid { false };
 };
 
 } // namespace WebGPU

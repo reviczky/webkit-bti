@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2025 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -42,8 +42,7 @@
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/AtomStringHash.h>
 #include <wtf/text/StringBuilder.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
@@ -146,6 +145,7 @@ bool FontCascade::isCurrent(const FontSelector& fontSelector) const
 
 void FontCascade::updateFonts(Ref<FontCascadeFonts>&& fonts) const
 {
+    // FIXME: Ideally we'd only update m_generation if the fonts changed.
     m_fonts = WTFMove(fonts);
     m_generation = ++lastFontCascadeGeneration;
 }
@@ -670,9 +670,8 @@ FontCascade::CodePath FontCascade::characterRangeCodePath(std::span<const UChar>
     CodePath result = CodePath::Simple;
     bool previousCharacterIsEmojiGroupCandidate = false;
     size_t size = span.size();
-    auto* characters = span.data();
     for (size_t i = 0; i < size; ++i) {
-        auto c = characters[i];
+        auto c = span[i];
         if (c == zeroWidthJoiner && previousCharacterIsEmojiGroupCandidate)
             return CodePath::Complex;
         
@@ -796,7 +795,7 @@ FontCascade::CodePath FontCascade::characterRangeCodePath(std::span<const UChar>
             if (i + 1 == size)
                 continue;
 
-            UChar next = characters[++i];
+            UChar next = span[++i];
             if (!U16_IS_TRAIL(next))
                 continue;
 
@@ -1249,15 +1248,41 @@ bool FontCascade::rightExpansionOpportunity(StringView stringView, TextDirection
     return treatAsSpace(finalCharacter) || (canExpandAroundIdeographsInComplexText() && isCJKIdeographOrSymbol(finalCharacter));
 }
 
+// https://www.w3.org/TR/css-text-decor-3/#text-emphasis-style-property
 bool FontCascade::canReceiveTextEmphasis(char32_t c)
 {
-    if (U_GET_GC_MASK(c) & (U_GC_Z_MASK | U_GC_CN_MASK | U_GC_CC_MASK | U_GC_CF_MASK))
+    auto mask = U_GET_GC_MASK(c);
+    if (mask & (U_GC_Z_MASK | U_GC_CN_MASK | U_GC_CC_MASK | U_GC_CF_MASK))
         return false;
 
     // Additional word-separator characters listed in CSS Text Level 3 Editor's Draft 3 November 2010.
+    // https://www.w3.org/TR/css-text-3/#word-separator
     if (c == ethiopicWordspace || c == aegeanWordSeparatorLine || c == aegeanWordSeparatorDot
         || c == ugariticWordDivider || c == tibetanMarkIntersyllabicTsheg || c == tibetanMarkDelimiterTshegBstar)
         return false;
+
+    if (mask & U_GC_P_MASK) {
+        return c == '#' || c == '%' || c == '&' || c == '@'
+            || c == arabicIndicPerMilleSign
+            || c == arabicIndicPerTenThousandSign
+            || c == arabicPercentSign
+            || c == fullwidthAmpersand
+            || c == fullwidthCommercialAt
+            || c == fullwidthNumberSign
+            || c == fullwidthPercentSign
+            || c == partAlternationMark
+            || c == perMilleSign
+            || c == perTenThousandSign
+            || c == pilcrowSign
+            || c == reversedPilcrowSign
+            || c == sectionSign
+            || c == smallAmpersand
+            || c == smallCommercialAt
+            || c == smallNumberSign
+            || c == smallPercentSign
+            || c == swungDash
+            || c == tironianSignEt;
+    }
 
     return true;
 }
@@ -1489,9 +1514,10 @@ void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& g
         RefPtr nextFontData = &glyphBuffer.fontAt(nextGlyph);
 
         if (nextFontData != fontData) {
-            if (shouldDrawIfLoading(*fontData, customFontNotReadyAction))
-                context.drawGlyphs(*fontData, glyphBuffer.glyphs(lastFrom), glyphBuffer.advances(lastFrom), nextGlyph - lastFrom, startPoint, m_fontDescription.usedFontSmoothing());
-
+            if (shouldDrawIfLoading(*fontData, customFontNotReadyAction)) {
+                size_t glyphCount = nextGlyph - lastFrom;
+                context.drawGlyphs(*fontData, glyphBuffer.glyphs(lastFrom, glyphCount), glyphBuffer.advances(lastFrom, glyphCount), startPoint, m_fontDescription.usedFontSmoothing());
+            }
             lastFrom = nextGlyph;
             fontData = WTFMove(nextFontData);
             startPoint.setX(nextX);
@@ -1502,8 +1528,10 @@ void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& g
         nextGlyph++;
     }
 
-    if (shouldDrawIfLoading(*fontData, customFontNotReadyAction))
-        context.drawGlyphs(*fontData, glyphBuffer.glyphs(lastFrom), glyphBuffer.advances(lastFrom), nextGlyph - lastFrom, startPoint, m_fontDescription.usedFontSmoothing());
+    if (shouldDrawIfLoading(*fontData, customFontNotReadyAction)) {
+        size_t glyphCount = nextGlyph - lastFrom;
+        context.drawGlyphs(*fontData, glyphBuffer.glyphs(lastFrom, glyphCount), glyphBuffer.advances(lastFrom, glyphCount), startPoint, m_fontDescription.usedFontSmoothing());
+    }
     point.setX(nextX);
 }
 
@@ -1568,10 +1596,10 @@ float FontCascade::widthForSimpleText(const TextRun& run, SingleThreadWeakHashSe
     it.finalize(glyphBuffer);
 
     if (glyphOverflow) {
-        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-it.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().intAscent()));
-        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(it.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().intDescent()));
-        glyphOverflow->left = ceilf(it.firstGlyphOverflow());
-        glyphOverflow->right = ceilf(it.lastGlyphOverflow());
+        glyphOverflow->top = std::max<double>(glyphOverflow->top, -it.minGlyphBoundingBoxY() - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().ascent()));
+        glyphOverflow->bottom = std::max<double>(glyphOverflow->bottom, it.maxGlyphBoundingBoxY() - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().descent()));
+        glyphOverflow->left = it.firstGlyphOverflow();
+        glyphOverflow->right = it.lastGlyphOverflow();
     }
 
     return it.runWidthSoFar();
@@ -1581,10 +1609,10 @@ float FontCascade::widthForComplexText(const TextRun& run, SingleThreadWeakHashS
 {
     ComplexTextController controller(*this, run, true, fallbackFonts);
     if (glyphOverflow) {
-        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-controller.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().intAscent()));
-        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(controller.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().intDescent()));
-        glyphOverflow->left = std::max<int>(0, ceilf(-controller.minGlyphBoundingBoxX()));
-        glyphOverflow->right = std::max<int>(0, ceilf(controller.maxGlyphBoundingBoxX() - controller.totalAdvance().width()));
+        glyphOverflow->top = std::max<double>(glyphOverflow->top, -controller.minGlyphBoundingBoxY() - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().ascent()));
+        glyphOverflow->bottom = std::max<double>(glyphOverflow->bottom, controller.maxGlyphBoundingBoxY() - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().descent()));
+        glyphOverflow->left = std::max<double>(0, -controller.minGlyphBoundingBoxX());
+        glyphOverflow->right = std::max<double>(0, controller.maxGlyphBoundingBoxX() - controller.totalAdvance().width());
     }
     return controller.totalAdvance().width();
 }
@@ -1900,6 +1928,17 @@ std::optional<char32_t> capitalized(char32_t baseCharacter)
     return std::nullopt;
 }
 
+TextStream& operator<<(TextStream& ts, const FontCascade& fontCascade)
+{
+    ts << fontCascade.fontDescription();
+
+    if (fontCascade.fonts()) {
+        ts << ", font selector " << fontCascade.fonts()->fontSelector();
+        ts << ", font selector version " << fontCascade.fonts()->fontSelectorVersion();
+        ts << ", generation " << fontCascade.fonts()->generation();
+    }
+
+    return ts;
 }
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+} // namespace WebCore

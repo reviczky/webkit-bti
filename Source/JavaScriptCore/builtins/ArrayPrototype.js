@@ -199,43 +199,6 @@ function some(callback /*, thisArg */)
     return false;
 }
 
-function fill(value /* [, start [, end]] */)
-{
-    "use strict";
-
-    var array = @toObject(this, "Array.prototype.fill requires that |this| not be null or undefined");
-    var length = @toLength(array.length);
-
-    var relativeStart = @toIntegerOrInfinity(@argument(1));
-    var k = 0;
-    if (relativeStart < 0) {
-        k = length + relativeStart;
-        if (k < 0)
-            k = 0;
-    } else {
-        k = relativeStart;
-        if (k > length)
-            k = length;
-    }
-    var relativeEnd = length;
-    var end = @argument(2);
-    if (end !== @undefined)
-        relativeEnd = @toIntegerOrInfinity(end);
-    var final = 0;
-    if (relativeEnd < 0) {
-        final = length + relativeEnd;
-        if (final < 0)
-            final = 0;
-    } else {
-        final = relativeEnd;
-        if (final > length)
-            final = length;
-    }
-    for (; k < final; k++)
-        array[k] = value;
-    return array;
-}
-
 function find(callback /*, thisArg */)
 {
     "use strict";
@@ -492,55 +455,6 @@ function at(index)
     return (k >= 0 && k < length) ? array[k] : @undefined;
 }
 
-function toReversed()
-{
-    "use strict";
-
-    // Step 1.
-    var array = @toObject(this, "Array.prototype.toReversed requires that |this| not be null or undefined");
-
-    // Step 2.
-    var length = @toLength(array.length);
-
-    // Step 3.
-    var result = @newArrayWithSize(length);
-
-    // Step 4-5.
-    for (var k = 0; k < length; k++) {
-        var fromValue = array[length - k - 1];
-        @putByValDirect(result, k, fromValue);
-    }
-
-    return result;
-}
-
-function toSorted(comparator)
-{
-    "use strict";
-
-    // Step 1.
-    if (comparator !== @undefined && !@isCallable(comparator))
-        @throwTypeError("Array.prototype.toSorted requires the comparator argument to be a function or undefined");
-
-    // Step 2.
-    var array = @toObject(this, "Array.prototype.toSorted requires that |this| not be null or undefined");
-
-    // Step 3.
-    var length = @toLength(array.length);
-
-    // Step 4.
-    var result = @newArrayWithSize(length);
-
-    // Step 8.
-    for (var k = 0; k < length; k++)
-        @putByValDirect(result, k, array[k]);
-
-    // Step 6.
-    @arraySort.@call(result, comparator);
-
-    return result;
-}
-
 function toSpliced(start, deleteCount /*, ...items */)
 {
     "use strict"
@@ -609,47 +523,4 @@ function toSpliced(start, deleteCount /*, ...items */)
 
     return result;
 
-}
-
-function with(index, value)
-{
-    "use strict";
-
-    // Step 1.
-    var array = @toObject(this, "Array.prototype.with requires that |this| not be null or undefined");
-
-    // Step 2.
-    var length = @toLength(array.length);
-
-    // Step 3.
-    var relativeIndex = @toIntegerOrInfinity(index);
-
-    // Step 4-5.
-    var actualIndex;
-    if (relativeIndex >= 0)
-        actualIndex = relativeIndex;
-    else
-        actualIndex = length + relativeIndex;
-
-    // Step 6.
-    if (actualIndex >= length || actualIndex < 0)
-        @throwRangeError("Array index out of Range");
-
-    // Step 7.
-    var fastResult = @arrayFromFastFillWithUndefined(@Array, array);
-    if (fastResult) {
-        @putByValDirect(fastResult, actualIndex, value);
-        return fastResult;
-    }
-    var result = @newArrayWithSize(length);
-
-    // Step 8-9
-    for (var k = 0; k < length; k++) {
-        if (k === actualIndex)
-            @putByValDirect(result, k, value);
-        else
-            @putByValDirect(result, k, array[k]);
-    }
-
-    return result;
 }

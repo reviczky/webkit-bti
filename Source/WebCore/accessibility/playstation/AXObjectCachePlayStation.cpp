@@ -66,20 +66,21 @@ static AXCoreObject* notifyChildrenSelectionChange(AXCoreObject* object)
     return items.at(changedItemIndex).ptr();
 }
 
-static AXObjectCache::AXNotification checkInteractableObjects(AXCoreObject* object)
+static AXNotification checkInteractableObjects(AXCoreObject* object)
 {
     if (!object->isEnabled())
-        return AXObjectCache::AXNotification::AXPressDidFail;
+        return AXNotification::PressDidFail;
 
     if (object->isTextControl() && !object->canSetValueAttribute()) // Also determine whether it is readonly
-        return AXObjectCache::AXNotification::AXPressDidFail;
+        return AXNotification::PressDidFail;
 
-    return AXObjectCache::AXNotification::AXPressDidSucceed;
+    return AXNotification::PressDidSucceed;
 }
 
 void AXObjectCache::postPlatformNotification(AccessibilityObject& object, AXNotification notification)
 {
-    if (!!object.document()
+    if (!document()
+        || !!object.document()
         || !object.document()->view()
         || object.document()->view()->layoutContext().layoutState()
         || object.document()->childNeedsStyleRecalc())
@@ -87,48 +88,50 @@ void AXObjectCache::postPlatformNotification(AccessibilityObject& object, AXNoti
 
     RefPtr protectedObject = &object;
     switch (notification) {
-    case AXNotification::AXSelectedChildrenChanged:
+    case AXNotification::SelectedChildrenChanged:
         protectedObject = downcast<AccessibilityObject>(notifyChildrenSelectionChange(protectedObject.get()));
         break;
-    case AXNotification::AXPressDidSucceed:
+    case AXNotification::PressDidSucceed:
         notification = checkInteractableObjects(protectedObject.get());
         break;
     default:
         break;
     }
 
-    ChromeClient& client = document().frame()->page()->chrome().client();
+    ChromeClient& client = document()->frame()->page()->chrome().client();
     client.postAccessibilityNotification(*protectedObject, notification);
 }
 
 void AXObjectCache::nodeTextChangePlatformNotification(AccessibilityObject* object, AXTextChange textChange, unsigned offset, const String& text)
 {
-    if (!object
+    if (!document()
+        || !object
         || !object->document()
         || !object->document()->view()
         || object->document()->view()->layoutContext().layoutState()
         || object->document()->childNeedsStyleRecalc())
         return;
-    ChromeClient& client = document().frame()->page()->chrome().client();
+    ChromeClient& client = document()->frame()->page()->chrome().client();
     client.postAccessibilityNodeTextChangeNotification(object, textChange, offset, text);
 }
 
 void AXObjectCache::frameLoadingEventPlatformNotification(AccessibilityObject* object, AXLoadingEvent loadingEvent)
 {
-    if (!object
+    if (!document()
+        || !object
         || !object->document()
         || !object->document()->view()
         || object->document()->view()->layoutContext().layoutState()
         || object->document()->childNeedsStyleRecalc())
         return;
-    ChromeClient& client = document().frame()->page()->chrome().client();
+    ChromeClient& client = document()->frame()->page()->chrome().client();
     client.postAccessibilityFrameLoadingEventNotification(object, loadingEvent);
 }
 
 void AXObjectCache::handleScrolledToAnchor(const Node& scrolledToNode)
 {
     if (RefPtr object = AccessibilityObject::firstAccessibleObjectFromNode(&scrolledToNode))
-        postPlatformNotification(*object, AXScrolledToAnchor);
+        postPlatformNotification(*object, AXNotification::ScrolledToAnchor);
 }
 
 void AXObjectCache::platformHandleFocusedUIElementChanged(Element*, Element* newFocus)
@@ -141,7 +144,7 @@ void AXObjectCache::platformHandleFocusedUIElementChanged(Element*, Element* new
         return;
 
     if (RefPtr focusedObject = focusedObjectForPage(page))
-        postPlatformNotification(*focusedObject, AXFocusedUIElementChanged);
+        postPlatformNotification(*focusedObject, AXNotification::FocusedUIElementChanged);
 }
 
 void AXObjectCache::platformPerformDeferredCacheUpdate()

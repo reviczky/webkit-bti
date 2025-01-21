@@ -46,8 +46,6 @@
 #include <wtf/text/StringView.h>
 #include <wtf/unicode/CharacterNames.h>
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 // We don't let our line box tree for a single line get any deeper than this.
@@ -191,11 +189,11 @@ inline void BreakingContext::initializeForCurrentObject()
     if (m_nextObject && m_nextObject->parent() && !m_nextObject->parent()->isDescendantOf(renderer.parent()))
         m_includeEndWidth = true;
 
-    m_currentTextWrap = renderer.isReplacedOrInlineBlock() ? renderer.parent()->style().textWrapMode() : renderer.style().textWrapMode();
-    m_currentWhitespaceCollapse = renderer.isReplacedOrInlineBlock() ? renderer.parent()->style().whiteSpaceCollapse() : renderer.style().whiteSpaceCollapse();
+    m_currentTextWrap = renderer.isReplacedOrAtomicInline() ? renderer.parent()->style().textWrapMode() : renderer.style().textWrapMode();
+    m_currentWhitespaceCollapse = renderer.isReplacedOrAtomicInline() ? renderer.parent()->style().whiteSpaceCollapse() : renderer.style().whiteSpaceCollapse();
 
-    m_lastObjectTextWrap = m_lastObject->isReplacedOrInlineBlock() ? m_lastObject->parent()->style().textWrapMode() : m_lastObject->style().textWrapMode();
-    m_lastObjectWhitespaceCollapse = m_lastObject->isReplacedOrInlineBlock() ? m_lastObject->parent()->style().whiteSpaceCollapse() : m_lastObject->style().whiteSpaceCollapse();
+    m_lastObjectTextWrap = m_lastObject->isReplacedOrAtomicInline() ? m_lastObject->parent()->style().textWrapMode() : m_lastObject->style().textWrapMode();
+    m_lastObjectWhitespaceCollapse = m_lastObject->isReplacedOrAtomicInline() ? m_lastObject->parent()->style().whiteSpaceCollapse() : m_lastObject->style().whiteSpaceCollapse();
 
     bool isSVGText = renderer.isRenderSVGInlineText();
     m_autoWrap = !isSVGText && m_currentTextWrap != TextWrapMode::NoWrap;
@@ -668,7 +666,7 @@ inline bool BreakingContext::canBreakAtThisPosition()
         return false;
 
     // Avoid breaking before empty inlines (as long as the current object isn't replaced).
-    if (!m_current.renderer()->isReplacedOrInlineBlock()) {
+    if (!m_current.renderer()->isReplacedOrAtomicInline()) {
         auto* renderInline = dynamicDowncast<RenderInline>(m_nextObject);
         if (renderInline && isEmptyInline(*renderInline))
             return false;
@@ -741,7 +739,7 @@ inline void BreakingContext::commitAndUpdateLineBreakIfNeeded()
 
     if (!m_current.renderer()->isFloatingOrOutOfFlowPositioned()) {
         m_lastObject = m_current.renderer();
-        if (m_lastObject->isReplacedOrInlineBlock() && m_autoWrap && (!m_lastObject->isImage() || m_allowImagesToBreak)) {
+        if (m_lastObject->isReplacedOrAtomicInline() && m_autoWrap && (!m_lastObject->isImage() || m_allowImagesToBreak)) {
             auto* renderListMarker = dynamicDowncast<RenderListMarker>(*m_lastObject);
             if (!renderListMarker || renderListMarker->isInside()) {
                 if (m_nextObject)
@@ -759,9 +757,9 @@ inline TrailingObjects::CollapseFirstSpace checkWhitespaceCollapsingTransitions(
     // shave it off the list, and shave off a trailing space if the previous end point doesn't
     // preserve whitespace.
     if (lBreak.renderer() && lineWhitespaceCollapsingState.numTransitions() && !(lineWhitespaceCollapsingState.numTransitions() % 2)) {
-        const LegacyInlineIterator* transitions = lineWhitespaceCollapsingState.transitions().data();
-        const LegacyInlineIterator& endpoint = transitions[lineWhitespaceCollapsingState.numTransitions() - 2];
-        const LegacyInlineIterator& startpoint = transitions[lineWhitespaceCollapsingState.numTransitions() - 1];
+        auto transitions = lineWhitespaceCollapsingState.transitions().span();
+        auto& endpoint = transitions[lineWhitespaceCollapsingState.numTransitions() - 2];
+        auto& startpoint = transitions[lineWhitespaceCollapsingState.numTransitions() - 1];
         LegacyInlineIterator currpoint = endpoint;
         while (!currpoint.atEnd() && currpoint != startpoint && currpoint != lBreak)
             currpoint.increment();
@@ -827,5 +825,3 @@ inline LegacyInlineIterator BreakingContext::handleEndOfLine()
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

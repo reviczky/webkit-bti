@@ -36,7 +36,7 @@
 namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(SharedWorkerContextManager);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(SharedWorkerContextManager, Connection);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(SharedWorkerContextManager::Connection);
 
 SharedWorkerContextManager& SharedWorkerContextManager::singleton()
 {
@@ -93,7 +93,7 @@ void SharedWorkerContextManager::stopAllSharedWorkers()
         stopSharedWorker(m_workerMap.begin()->key);
 }
 
-void SharedWorkerContextManager::setConnection(std::unique_ptr<Connection>&& connection)
+void SharedWorkerContextManager::setConnection(RefPtr<Connection>&& connection)
 {
     ASSERT(!m_connection || m_connection->isClosed());
     m_connection = WTFMove(connection);

@@ -65,7 +65,7 @@ public:
 
 private:
     // PageClient
-    std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) override;
+    Ref<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) override;
     void setViewNeedsDisplay(const WebCore::Region&) override;
     void requestScroll(const WebCore::FloatPoint& scrollPosition, const WebCore::IntPoint& scrollOrigin, WebCore::ScrollIsAnimated) override;
     void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin) override;
@@ -91,6 +91,7 @@ private:
     WebCore::FloatRect convertToUserSpace(const WebCore::FloatRect&) override;
     WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) override;
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) override;
+    WebCore::IntPoint rootViewToScreen(const WebCore::IntPoint&) override;
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) override;
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) override;
     void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled) override;
@@ -98,9 +99,7 @@ private:
 #if ENABLE(CONTEXT_MENUS)
     Ref<WebContextMenuProxy> createContextMenuProxy(WebPageProxy&, ContextMenuContextData&&, const UserData&) override;
 #endif // ENABLE(CONTEXT_MENUS)
-#if ENABLE(INPUT_TYPE_COLOR)
-    RefPtr<WebColorPicker> createColorPicker(WebPageProxy*, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) override;
-#endif
+    RefPtr<WebColorPicker> createColorPicker(WebPageProxy&, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) override;
 #if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     RefPtr<WebDateTimePicker> createDateTimePicker(WebPageProxy&) override;
 #endif
@@ -136,7 +135,7 @@ private:
     // WebFullScreenManagerProxyClient
     void closeFullScreenManager() override;
     bool isFullScreen() override;
-    void enterFullScreen() override;
+    void enterFullScreen(CompletionHandler<void(bool)>&&) override;
     void exitFullScreen() override;
     void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;

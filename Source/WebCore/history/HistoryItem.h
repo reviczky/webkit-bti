@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "BackForwardFrameItemIdentifier.h"
 #include "BackForwardItemIdentifier.h"
 #include "FloatRect.h"
 #include "FrameIdentifier.h"
@@ -36,7 +37,7 @@
 #include "PolicyContainer.h"
 #include "SerializedScriptValue.h"
 #include <memory>
-#include <wtf/RefCounted.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakPtr.h>
@@ -69,26 +70,27 @@ protected:
     HistoryItemClient() = default;
 };
 
-class HistoryItem : public RefCounted<HistoryItem>, public CanMakeWeakPtr<HistoryItem> {
+class HistoryItem : public RefCountedAndCanMakeWeakPtr<HistoryItem> {
 public:
     using Client = HistoryItemClient;
-    static Ref<HistoryItem> create(Client& client, const String& urlString = { }, const String& title = { }, const String& alternateTitle = { }, std::optional<BackForwardItemIdentifier> identifier = { })
+    static Ref<HistoryItem> create(Client& client, const String& urlString = { }, const String& title = { }, const String& alternateTitle = { }, std::optional<BackForwardItemIdentifier> itemID = { }, std::optional<BackForwardFrameItemIdentifier> frameItemID = { })
     {
-        return adoptRef(*new HistoryItem(client, urlString, title, alternateTitle, identifier));
+        return adoptRef(*new HistoryItem(client, urlString, title, alternateTitle, itemID, frameItemID));
     }
     
     WEBCORE_EXPORT ~HistoryItem();
 
     WEBCORE_EXPORT Ref<HistoryItem> copy() const;
 
-    const BackForwardItemIdentifier& identifier() const { return m_identifier; }
+    BackForwardItemIdentifier itemID() const { return m_itemID; }
+    BackForwardFrameItemIdentifier frameItemID() const { return m_frameItemID; }
     const WTF::UUID& uuidIdentifier() const { return m_uuidIdentifier; }
     void setUUIDIdentifier(const WTF::UUID& uuidIdentifier) { m_uuidIdentifier = uuidIdentifier; }
 
     // Resets the HistoryItem to its initial state, as returned by create().
     void reset();
 
-    bool operator==(const HistoryItem& other) const { return identifier() == other.identifier(); }
+    bool operator==(const HistoryItem& other) const { return itemID() == other.itemID(); }
 
     WEBCORE_EXPORT const String& originalURLString() const;
     WEBCORE_EXPORT const String& urlString() const;
@@ -105,6 +107,7 @@ public:
     WEBCORE_EXPORT const String& referrer() const;
     WEBCORE_EXPORT const AtomString& target() const;
     std::optional<FrameIdentifier> frameID() const { return m_frameID; }
+    bool isTargetItem() const { return m_isTargetItem; }
     
     WEBCORE_EXPORT FormData* formData();
     WEBCORE_EXPORT String formContentType() const;
@@ -135,6 +138,7 @@ public:
     WEBCORE_EXPORT void setTarget(const AtomString&);
     void setFrameID(std::optional<FrameIdentifier> frameID) { m_frameID = frameID; }
     WEBCORE_EXPORT void setTitle(const String&);
+    void setIsTargetItem(bool isTargetItem) { m_isTargetItem = isTargetItem; }
     
     WEBCORE_EXPORT void setStateObject(RefPtr<SerializedScriptValue>&&);
     SerializedScriptValue* stateObject() const { return m_stateObject.get(); }
@@ -221,7 +225,7 @@ public:
     void setPolicyContainer(const PolicyContainer& policyContainer) { m_policyContainer = policyContainer; }
 
 private:
-    WEBCORE_EXPORT HistoryItem(Client&, const String& urlString, const String& title, const String& alternateTitle, std::optional<BackForwardItemIdentifier>);
+    WEBCORE_EXPORT HistoryItem(Client&, const String& urlString, const String& title, const String& alternateTitle, std::optional<BackForwardItemIdentifier>, std::optional<BackForwardFrameItemIdentifier>);
 
     HistoryItem(const HistoryItem&);
 
@@ -249,6 +253,7 @@ private:
     bool m_wasRestoredFromSession { false };
     bool m_wasCreatedByJSWithoutUserInteraction { false };
     bool m_shouldRestoreScrollPosition { true };
+    bool m_isTargetItem { false };
 
     // If two HistoryItems have the same item sequence number, then they are
     // clones of one another.  Traversing history from one such HistoryItem to
@@ -286,7 +291,8 @@ private:
     RetainPtr<id> m_viewState;
 #endif
 
-    BackForwardItemIdentifier m_identifier;
+    BackForwardItemIdentifier m_itemID;
+    BackForwardFrameItemIdentifier m_frameItemID;
     WTF::UUID m_uuidIdentifier;
     std::optional<PolicyContainer> m_policyContainer;
     Ref<Client> m_client;

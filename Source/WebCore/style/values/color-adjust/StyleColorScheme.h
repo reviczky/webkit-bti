@@ -37,11 +37,9 @@
 namespace WebCore {
 namespace Style {
 
-using Only = CSS::Only;
-
 struct ColorScheme {
     SpaceSeparatedVector<CustomIdentifier> schemes;
-    std::optional<Only> only;
+    std::optional<CSS::Keyword::Only> only;
 
     // As an optimization, if `schemes` is empty, that indicates the
     // entire value should be considered `normal`.
@@ -60,13 +58,13 @@ template<size_t I> const auto& get(const ColorScheme& colorScheme)
         return colorScheme.only;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::ColorScheme, ColorScheme)
+DEFINE_TYPE_MAPPING(CSS::ColorScheme, ColorScheme)
 
 TextStream& operator<<(TextStream&, const ColorScheme&);
 
 } // namespace Style
 } // namespace WebCore
 
-STYLE_TUPLE_LIKE_CONFORMANCE(ColorScheme, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::ColorScheme, 2)
 
 #endif

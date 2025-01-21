@@ -42,7 +42,7 @@ namespace Style {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(PropertyCascade);
 
-PropertyCascade::PropertyCascade(const MatchResult& matchResult, CascadeLevel maximumCascadeLevel, OptionSet<PropertyType> includedProperties, const HashSet<AnimatableCSSProperty>* animatedProperties)
+PropertyCascade::PropertyCascade(const MatchResult& matchResult, CascadeLevel maximumCascadeLevel, OptionSet<PropertyType> includedProperties, const UncheckedKeyHashSet<AnimatableCSSProperty>* animatedProperties)
     : m_matchResult(matchResult)
     , m_includedProperties(includedProperties)
     , m_maximumCascadeLevel(maximumCascadeLevel)
@@ -64,7 +64,7 @@ PropertyCascade::PropertyCascade(const PropertyCascade& parent, CascadeLevel max
 
 PropertyCascade::~PropertyCascade() = default;
 
-PropertyCascade::AnimationLayer::AnimationLayer(const HashSet<AnimatableCSSProperty>& properties)
+PropertyCascade::AnimationLayer::AnimationLayer(const UncheckedKeyHashSet<AnimatableCSSProperty>& properties)
     : properties(properties)
 {
     hasCustomProperties = std::find_if(properties.begin(), properties.end(), [](auto& property) {
@@ -106,11 +106,18 @@ void PropertyCascade::setPropertyInternal(Property& property, CSSPropertyID id, 
     property.fromStyleAttribute = matchedProperties.fromStyleAttribute;
 
     if (matchedProperties.linkMatchType == SelectorChecker::MatchAll) {
-        property.cssValue[0] = &cssValue;
+        property.cascadeLevels[SelectorChecker::MatchDefault] = cascadeLevel;
+        property.cssValue[SelectorChecker::MatchDefault] = &cssValue;
+
+        property.cascadeLevels[SelectorChecker::MatchLink] = cascadeLevel;
         property.cssValue[SelectorChecker::MatchLink] = &cssValue;
+
+        property.cascadeLevels[SelectorChecker::MatchVisited] = cascadeLevel;
         property.cssValue[SelectorChecker::MatchVisited] = &cssValue;
-    } else
+    } else {
+        property.cascadeLevels[matchedProperties.linkMatchType] = cascadeLevel;
         property.cssValue[matchedProperties.linkMatchType] = &cssValue;
+    }
 }
 
 void PropertyCascade::set(CSSPropertyID id, CSSValue& cssValue, const MatchedProperties& matchedProperties, CascadeLevel cascadeLevel)
@@ -396,7 +403,7 @@ void PropertyCascade::sortLogicalGroupPropertyIDs()
     });
 }
 
-const HashSet<AnimatableCSSProperty> PropertyCascade::overriddenAnimatedProperties() const
+const UncheckedKeyHashSet<AnimatableCSSProperty> PropertyCascade::overriddenAnimatedProperties() const
 {
     if (m_animationLayer)
         return m_animationLayer->overriddenProperties;

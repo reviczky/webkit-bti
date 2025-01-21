@@ -31,7 +31,9 @@
 #include "WebExtensionControllerParameters.h"
 #include "WebExtensionControllerProxyMessages.h"
 #include "WebPageProxy.h"
+#if PLATFORM(COCOA)
 #include <wtf/BlockPtr.h>
+#endif
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 
@@ -39,15 +41,15 @@ namespace WebKit {
 
 constexpr auto freshlyCreatedTimeout = 5_s;
 
-static HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionController>>& webExtensionControllers()
+static HashMap<WebExtensionControllerIdentifier, WeakPtr<WebExtensionController>>& webExtensionControllers()
 {
-    static MainThreadNeverDestroyed<HashMap<WebExtensionControllerIdentifier, WeakRef<WebExtensionController>>> controllers;
+    static MainThreadNeverDestroyed<HashMap<WebExtensionControllerIdentifier, WeakPtr<WebExtensionController>>> controllers;
     return controllers;
 }
 
-WebExtensionController* WebExtensionController::get(WebExtensionControllerIdentifier identifier)
+RefPtr<WebExtensionController> WebExtensionController::get(WebExtensionControllerIdentifier identifier)
 {
-    return webExtensionControllers().get(identifier);
+    return webExtensionControllers().get(identifier).get();
 }
 
 WebExtensionController::WebExtensionController(Ref<WebExtensionControllerConfiguration> configuration)
@@ -62,16 +64,19 @@ WebExtensionController::WebExtensionController(Ref<WebExtensionControllerConfigu
     // should be fired for any loaded extensions during a brief time window. Start a timer
     // when the first extension is about to be loaded.
 
+#if PLATFORM(COCOA)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(freshlyCreatedTimeout.seconds() * NSEC_PER_SEC)), dispatch_get_main_queue(), makeBlockPtr([this, weakThis = WeakPtr { *this }] {
         if (!weakThis)
             return;
 
         m_freshlyCreated = false;
     }).get());
+#endif
 }
 
 WebExtensionController::~WebExtensionController()
 {
+    webExtensionControllers().remove(identifier());
     unloadAll();
 }
 

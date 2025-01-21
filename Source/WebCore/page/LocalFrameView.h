@@ -129,9 +129,6 @@ public:
     CheckedRef<const LocalFrameViewLayoutContext> checkedLayoutContext() const;
     CheckedRef<LocalFrameViewLayoutContext> checkedLayoutContext();
 
-    bool hasPendingUpdateLayerPositions() const;
-    void flushUpdateLayerPositions();
-
     WEBCORE_EXPORT bool didFirstLayout() const;
 
     WEBCORE_EXPORT bool needsLayout() const;
@@ -162,11 +159,6 @@ public:
 
     void willRecalcStyle();
     void styleAndRenderTreeDidChange() override;
-    bool updateCompositingLayersAfterStyleChange();
-    void updateCompositingLayersAfterLayout();
-
-    // Returns true if a pending compositing layer update was done.
-    bool updateCompositingLayersAfterLayoutIfNeeded();
 
     // Called when changes to the GraphicsLayer hierarchy have to be synchronized with
     // content rendered via the normal painting path.
@@ -400,7 +392,9 @@ public:
     WEBCORE_EXPORT void updateControlTints();
 
     WEBCORE_EXPORT bool wasScrolledByUser() const;
-    WEBCORE_EXPORT void setWasScrolledByUser(bool);
+
+    enum class UserScrollType : uint8_t { Explicit, Implicit };
+    WEBCORE_EXPORT void setLastUserScrollType(std::optional<UserScrollType>);
 
     bool safeToPropagateScrollToParent() const;
 
@@ -460,6 +454,7 @@ public:
     WEBCORE_EXPORT void enableFixedWidthAutoSizeMode(bool enable, const IntSize& minSize);
     WEBCORE_EXPORT void enableSizeToContentAutoSizeMode(bool enable, const IntSize& maxSize);
     WEBCORE_EXPORT void setAutoSizeFixedMinimumHeight(int);
+    bool isAutoSizeEnabled() const { return m_shouldAutoSize; }
     bool isFixedWidthAutoSizeEnabled() const { return m_shouldAutoSize && m_autoSizeMode == AutoSizeMode::FixedWidth; }
     bool isSizeToContentAutoSizeEnabled() const { return m_shouldAutoSize && m_autoSizeMode == AutoSizeMode::SizeToContent; }
     IntSize autoSizingIntrinsicContentSize() const { return m_autoSizeContentSize; }
@@ -659,7 +654,7 @@ public:
     void didAddWidgetToRenderTree(Widget&);
     void willRemoveWidgetFromRenderTree(Widget&);
 
-    const HashSet<SingleThreadWeakRef<Widget>>& widgetsInRenderTree() const { return m_widgetsInRenderTree; }
+    const UncheckedKeyHashSet<SingleThreadWeakRef<Widget>>& widgetsInRenderTree() const { return m_widgetsInRenderTree; }
 
     void notifyAllFramesThatContentAreaWillPaint() const;
 
@@ -932,7 +927,7 @@ private:
     RenderElement* viewportRenderer() const;
     
     void willDoLayout(SingleThreadWeakPtr<RenderElement> layoutRoot);
-    void didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bool didRunSimplifiedLayout, bool canDeferUpdateLayerPositions);
+    void didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bool canDeferUpdateLayerPositions);
 
     FloatSize calculateSizeForCSSViewportUnitsOverride(std::optional<OverrideViewportSize>) const;
 
@@ -962,7 +957,7 @@ private:
     const Ref<LocalFrame> m_frame;
     LocalFrameViewLayoutContext m_layoutContext;
 
-    HashSet<SingleThreadWeakRef<Widget>> m_widgetsInRenderTree;
+    UncheckedKeyHashSet<SingleThreadWeakRef<Widget>> m_widgetsInRenderTree;
     std::unique_ptr<ListHashSet<SingleThreadWeakRef<RenderEmbeddedObject>>> m_embeddedObjectsToUpdate;
     std::unique_ptr<SingleThreadWeakHashSet<RenderElement>> m_slowRepaintObjects;
 
@@ -1011,8 +1006,6 @@ private:
     unsigned m_visuallyNonEmptyCharacterCount { 0 };
     unsigned m_visuallyNonEmptyPixelCount { 0 };
     unsigned m_textRendererCountForVisuallyNonEmptyCharacters { 0 };
-    unsigned m_layoutUpdateCount { 0 };
-    unsigned m_renderLayerPositionUpdateCount { 0 };
     int m_headerHeight { 0 };
     int m_footerHeight { 0 };
 
@@ -1038,20 +1031,6 @@ private:
     std::unique_ptr<ScrollableAreaSet> m_scrollableAreasForAnimatedScroll;
     std::unique_ptr<SingleThreadWeakHashSet<RenderLayerModelObject>> m_viewportConstrainedObjects;
 
-    struct UpdateLayerPositions {
-        void merge(const UpdateLayerPositions& other)
-        {
-            needsFullRepaint |= other.needsFullRepaint;
-            if (!other.didRunSimplifiedLayout)
-                didRunSimplifiedLayout = false;
-        }
-
-        RenderElement::LayoutIdentifier layoutIdentifier : 12 { 0 };
-        bool needsFullRepaint { false };
-        bool didRunSimplifiedLayout { true };
-    };
-    std::optional<UpdateLayerPositions> m_pendingUpdateLayerPositions;
-
     OptionSet<LayoutMilestone> m_milestonesPendingPaint;
 
     static const unsigned visualCharacterThreshold = 200;
@@ -1067,6 +1046,8 @@ private:
 
     std::unique_ptr<ScrollAnchoringController> m_scrollAnchoringController;
 
+    std::optional<UserScrollType> m_lastUserScrollType;
+
     bool m_shouldUpdateWhileOffscreen { true };
     bool m_canHaveScrollbars { true };
     bool m_cannotBlitToWindow { false };
@@ -1080,7 +1061,6 @@ private:
 #endif
 
     bool m_isTrackingRepaints { false }; // Used for testing.
-    bool m_wasScrolledByUser { false };
     bool m_shouldScrollToFocusedElement { false };
 
     bool m_isPainting { false };
@@ -1106,7 +1086,6 @@ private:
     bool m_didRunAutosize { false };
     bool m_inUpdateEmbeddedObjects { false };
     bool m_scheduledToScrollToAnchor { false };
-    bool m_updateCompositingLayersIsPending { false };
 #if ASSERT_ENABLED
     bool m_layerAccessPrevented { false };
 #endif

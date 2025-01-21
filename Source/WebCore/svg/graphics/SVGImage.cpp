@@ -89,7 +89,7 @@ RefPtr<SVGSVGElement> SVGImage::rootElement() const
     if (!m_page)
         return nullptr;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return nullptr;
 
@@ -124,9 +124,6 @@ bool SVGImage::renderingTaintsOrigin() const
 
 void SVGImage::setContainerSize(const FloatSize& size)
 {
-    if (!usesContainerSize())
-        return;
-
     RefPtr rootElement = this->rootElement();
     if (!rootElement || !rootElement->renderer() || !rootElement->renderer()->isRenderOrLegacyRenderSVGRoot())
         return;
@@ -217,15 +214,13 @@ RefPtr<NativeImage> SVGImage::nativeImage(const DestinationColorSpace& colorSpac
     if (!m_page)
         return nullptr;
 
-    OptionSet<ImageBufferOptions> bufferOptions;
-    if (m_page->settings().acceleratedDrawingEnabled())
-        bufferOptions.add(ImageBufferOptions::Accelerated);
+    auto renderingMode = m_page->settings().acceleratedDrawingEnabled() ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
 
     HostWindow* hostWindow = nullptr;
     if (CheckedPtr contentRenderer = embeddedContentBox())
         hostWindow = contentRenderer->hostWindow();
 
-    RefPtr imageBuffer = ImageBuffer::create(size(), RenderingPurpose::DOM, 1, colorSpace, ImageBufferPixelFormat::BGRA8, bufferOptions, hostWindow);
+    RefPtr imageBuffer = ImageBuffer::create(size(), renderingMode, RenderingPurpose::DOM, 1, colorSpace, ImageBufferPixelFormat::BGRA8, hostWindow);
     if (!imageBuffer)
         return nullptr;
 
@@ -340,7 +335,7 @@ LocalFrameView* SVGImage::frameView() const
     if (!m_page)
         return nullptr;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return nullptr;
 
@@ -438,13 +433,13 @@ bool SVGImage::isAnimating() const
 
 void SVGImage::reportApproximateMemoryCost() const
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
-    if (!localMainFrame)
+    RefPtr localTopDocument = m_page->localTopDocument();
+    if (!localTopDocument)
         return;
-    RefPtr document = localMainFrame->document();
+
     size_t decodedImageMemoryCost = 0;
 
-    for (RefPtr<Node> node = document; node; node = NodeTraversal::next(*node))
+    for (RefPtr<Node> node = localTopDocument; node; node = NodeTraversal::next(*node))
         decodedImageMemoryCost += node->approximateMemoryCost();
 
     JSC::VM& vm = commonVM();
@@ -478,10 +473,14 @@ EncodedDataStatus SVGImage::dataChanged(bool allDataReceived)
         m_page->settings().setAcceleratedCompositingEnabled(false);
         m_page->settings().setShouldAllowUserInstalledFonts(false);
 
-        if (RefPtr observer = imageObserver())
-            m_page->settings().setLayerBasedSVGEngineEnabled(observer->layerBasedSVGEngineEnabled());
+        if (RefPtr observer = imageObserver()) {
+            if (RefPtr parentSettings = observer->settings()) {
+                m_page->settings().setLayerBasedSVGEngineEnabled(parentSettings->layerBasedSVGEngineEnabled());
+                m_page->settings().fontGenericFamilies() = parentSettings->fontGenericFamilies();
+            }
+        }
 
-        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+        RefPtr localMainFrame = m_page->localMainFrame();
         if (!localMainFrame)
             return EncodedDataStatus::Unknown;
 

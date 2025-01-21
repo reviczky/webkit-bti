@@ -53,6 +53,7 @@
 #include "JITWorklistInlines.h"
 #include "JSFinalizationRegistry.h"
 #include "JSIterator.h"
+#include "JSRawJSONObject.h"
 #include "JSRemoteFunction.h"
 #include "JSVirtualMachineInternal.h"
 #include "JSWeakMap.h"
@@ -136,14 +137,25 @@ size_t proportionalHeapSize(size_t heapSize, size_t ramSize)
     if (VM::isInMiniMode())
         return Options::miniVMHeapGrowthFactor() * heapSize;
 
+    bool useNewHeapGrowthFactor = true;
+
     // Use new heuristic function for machines >= 16GB RAM.
     // https://www.mathway.com/en/Algebra?asciimath=2%20*%20e%5E(-1%20*%20x)%20%2B%201%20%3Dy
     size_t heapGrowthFunctionThresholdInBytes = static_cast<size_t>(Options::heapGrowthFunctionThresholdInMB()) * MB;
-    if (ramSize >= heapGrowthFunctionThresholdInBytes) {
+    if (ramSize < heapGrowthFunctionThresholdInBytes)
+        useNewHeapGrowthFactor = false;
+
+    // Disable it for Darwin Intel machine.
+#if OS(DARWIN) && CPU(X86_64)
+    useNewHeapGrowthFactor = false;
+#endif
+
+    if (useNewHeapGrowthFactor) {
         double x = static_cast<double>(std::min(heapSize, ramSize)) / ramSize;
         double ratio = Options::heapGrowthMaxIncrease() * std::exp(-(Options::heapGrowthSteepnessFactor() * x)) + 1;
         return ratio * heapSize;
     }
+
 #if USE(BMALLOC_MEMORY_FOOTPRINT_API)
     size_t memoryFootprint = bmalloc::api::memoryFootprint();
     if (memoryFootprint < ramSize * Options::smallHeapRAMFraction())
@@ -379,17 +391,17 @@ Heap::Heap(VM& vm, HeapType heapType)
 
     // Subspaces
     , primitiveGigacageAuxiliarySpace("Primitive Gigacage Auxiliary", *this, auxiliaryHeapCellType, primitiveGigacageAllocator.get()) // Hash:0x3e7cd762
-    , auxiliarySpace("Auxiliary", *this, auxiliaryHeapCellType, fastMallocAllocator.get()) // Hash:0x241e946
-    , immutableButterflyAuxiliarySpace("ImmutableButterfly JSCellWithIndexingHeader", *this, immutableButterflyHeapCellType, fastMallocAllocator.get()) // Hash:0x7a945300
+    , auxiliarySpace("Auxiliary", *this, auxiliaryHeapCellType, fastMallocAllocator.get()) // Hash:0x96255ba1
+    , immutableButterflyAuxiliarySpace("ImmutableButterfly JSCellWithIndexingHeader", *this, immutableButterflyHeapCellType, fastMallocAllocator.get()) // Hash:0xaadcb3c1
     , cellSpace("JSCell", *this, cellHeapCellType, fastMallocAllocator.get()) // Hash:0xadfb5a79
     , variableSizedCellSpace("Variable Sized JSCell", *this, cellHeapCellType, fastMallocAllocator.get()) // Hash:0xbcd769cc
     , destructibleObjectSpace("JSDestructibleObject", *this, destructibleObjectHeapCellType, fastMallocAllocator.get()) // Hash:0x4f5ed7a9
     FOR_EACH_JSC_COMMON_ISO_SUBSPACE(INIT_SERVER_ISO_SUBSPACE)
     FOR_EACH_JSC_STRUCTURE_ISO_SUBSPACE(INIT_SERVER_STRUCTURE_ISO_SUBSPACE)
-    , codeBlockSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, CodeBlock) // Hash:0x77e66ec9
-    , functionExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, FunctionExecutable) // Hash:0x5d158f3
-    , programExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, ProgramExecutable) // Hash:0x527c77e7
-    , unlinkedFunctionExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, UnlinkedFunctionExecutable) // Hash:0xf6b828d9
+    , codeBlockSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, CodeBlock) // Hash:0x2b743c6a
+    , functionExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, FunctionExecutable) // Hash:0xbcb36268
+    , programExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, ProgramExecutable) // Hash:0x4c9208f7
+    , unlinkedFunctionExecutableSpaceAndSet ISO_SUBSPACE_INIT(*this, destructibleCellHeapCellType, UnlinkedFunctionExecutable) // Hash:0x3ba0f4e1
 
 {
     m_worldState.store(0);
@@ -1514,12 +1526,14 @@ NEVER_INLINE bool Heap::runFixpointPhase(GCConductor conn)
                 visitMap.add(visitor.codeName(), visitor.bytesVisited() / 1024);
             });
         
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
         auto perVisitorDump = sortedMapDump(
             visitMap,
             [] (const char* a, const char* b) -> bool {
                 return strcmp(a, b) < 0;
             },
             ":"_s, " "_s);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
         
         dataLog("v=", bytesVisited() / 1024, "kb (", perVisitorDump, ") o=", m_opaqueRoots.size(), " b=", m_barriersExecuted, " ");
     }
@@ -1805,7 +1819,7 @@ void Heap::stopThePeriphery(GCConductor conn)
     
     m_mutatorDidRun = false;
 
-    suspendCompilerThreads();
+    m_isCompilerThreadsSuspended = suspendCompilerThreads();
     m_worldIsStopped = true;
 
     forEachSlotVisitor(
@@ -1874,8 +1888,9 @@ NEVER_INLINE void Heap::resumeThePeriphery()
     
     for (SlotVisitor* visitor : visitorsToUpdate)
         visitor->updateMutatorIsStopped();
-    
-    resumeCompilerThreads();
+
+    if (std::exchange(m_isCompilerThreadsSuspended, false))
+        resumeCompilerThreads();
 }
 
 bool Heap::stopTheMutator()
@@ -2293,15 +2308,20 @@ void Heap::sweepInFinalize()
 #endif
 }
 
-void Heap::suspendCompilerThreads()
+bool Heap::suspendCompilerThreads()
 {
 #if ENABLE(JIT)
     // We ensure the worklists so that it's not possible for the mutator to start a new worklist
     // after we have suspended the ones that he had started before. That's not very expensive since
     // the worklists use AutomaticThreads anyway.
     if (!Options::useJIT())
-        return;
+        return false;
+    if (!vm().numberOfActiveJITPlans())
+        return false;
     JITWorklist::ensureGlobalWorklist().suspendAllThreads();
+    return true;
+#else
+    return false;
 #endif
 }
 
@@ -2508,8 +2528,6 @@ void Heap::didFinishCollection()
 void Heap::resumeCompilerThreads()
 {
 #if ENABLE(JIT)
-    if (!Options::useJIT())
-        return;
     JITWorklist::ensureGlobalWorklist().resumeAllThreads();
 #endif
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,7 +29,6 @@
 #include "HTMLElement.h"
 #include "HTMLFormControlElement.h"
 #include "ToggleEventTask.h"
-#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
@@ -39,7 +38,7 @@ enum class PopoverVisibilityState : bool {
 };
 
 class PopoverData {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(PopoverData);
+    WTF_MAKE_TZONE_ALLOCATED(PopoverData);
 public:
     PopoverData() = default;
 
@@ -54,8 +53,8 @@ public:
 
     Ref<ToggleEventTask> ensureToggleEventTask(Element&);
 
-    HTMLFormControlElement* invoker() const { return m_invoker.get(); }
-    void setInvoker(const HTMLFormControlElement* element) { m_invoker = element; }
+    HTMLElement* invoker() const { return m_invoker.get(); }
+    void setInvoker(const HTMLElement* element) { m_invoker = element; }
 
     class ScopedStartShowingOrHiding {
     public:
@@ -82,7 +81,7 @@ private:
     PopoverVisibilityState m_visibilityState;
     WeakPtr<Element, WeakPtrImplWithEventTargetData> m_previouslyFocusedElement;
     RefPtr<ToggleEventTask> m_toggleEventTask;
-    WeakPtr<HTMLFormControlElement, WeakPtrImplWithEventTargetData> m_invoker;
+    WeakPtr<HTMLElement, WeakPtrImplWithEventTargetData> m_invoker;
     bool m_isHidingOrShowingPopover = false;
 };
 

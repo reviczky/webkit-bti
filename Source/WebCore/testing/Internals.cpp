@@ -55,8 +55,10 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ClientOrigin.h"
+#include "ColorChooser.h"
 #include "ColorSerialization.h"
 #include "ComposedTreeIterator.h"
+#include "ContextMenuController.h"
 #include "CookieJar.h"
 #include "CrossOriginPreflightResultCache.h"
 #include "Cursor.h"
@@ -216,6 +218,7 @@
 #include "ServiceWorkerRegistrationData.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
+#include "ShouldPartitionCookie.h"
 #include "SourceBuffer.h"
 #include "SpeechSynthesisUtterance.h"
 #include "SpellChecker.h"
@@ -272,10 +275,6 @@
 
 #if USE(CG)
 #include "PDFDocumentImage.h"
-#endif
-
-#if ENABLE(INPUT_TYPE_COLOR)
-#include "ColorChooser.h"
 #endif
 
 #if ENABLE(MOUSE_CURSOR_SCALE)
@@ -568,7 +567,7 @@ void Internals::resetToConsistentState(Page& page)
     page.setDefersLoading(false);
     page.setResourceCachingDisabledByWebInspector(false);
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(page.mainFrame());
+    RefPtr localMainFrame = page.localMainFrame();
     if (!localMainFrame)
         return;
 
@@ -602,6 +601,9 @@ void Internals::resetToConsistentState(Page& page)
     localMainFrame->loader().clearTestingOverrides();
     if (auto* applicationCacheStorage = page.applicationCacheStorage())
         applicationCacheStorage->setDefaultOriginQuota(ApplicationCacheStorage::noQuota());
+#if ENABLE(CONTEXT_MENUS)
+    page.contextMenuController().didDismissContextMenu();
+#endif
 #if ENABLE(VIDEO)
     page.group().ensureCaptionPreferences().setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode::ForcedOnly);
     page.group().ensureCaptionPreferences().setCaptionsStyleSheetOverride(emptyString());
@@ -636,6 +638,7 @@ void Internals::resetToConsistentState(Page& page)
 
     page.setShowAllPlugins(false);
     page.setLowPowerModeEnabledOverrideForTesting(std::nullopt);
+    page.setAggressiveThermalMitigationEnabledForTesting(std::nullopt);
     page.setOutsideViewportThrottlingEnabledForTesting(false);
 
 #if USE(QUICK_LOOK)
@@ -730,7 +733,7 @@ Internals::Internals(Document& document)
 #if ENABLE(APPLE_PAY)
     auto* frame = document.frame();
     if (frame && frame->page() && frame->isMainFrame()) {
-        auto mockPaymentCoordinator = makeUniqueRefWithoutRefCountedCheck<MockPaymentCoordinator>(*frame->page());
+        auto mockPaymentCoordinator = MockPaymentCoordinator::create(*frame->page());
         frame->page()->setPaymentCoordinator(PaymentCoordinator::create(WTFMove(mockPaymentCoordinator)));
     }
 #endif
@@ -1656,7 +1659,7 @@ void Internals::selectColorInColorChooser(HTMLInputElement& element, const Strin
 
 ExceptionOr<Vector<AtomString>> Internals::formControlStateOfPreviousHistoryItem()
 {
-    HistoryItem* mainItem = frame()->history().previousItem();
+    HistoryItem* mainItem = frame()->loader().history().previousItem();
     if (!mainItem)
         return Exception { ExceptionCode::InvalidAccessError };
     auto frameID = frame()->frameID();
@@ -1667,7 +1670,7 @@ ExceptionOr<Vector<AtomString>> Internals::formControlStateOfPreviousHistoryItem
 
 ExceptionOr<void> Internals::setFormControlStateOfPreviousHistoryItem(const Vector<AtomString>& state)
 {
-    HistoryItem* mainItem = frame()->history().previousItem();
+    HistoryItem* mainItem = frame()->loader().history().previousItem();
     if (!mainItem)
         return Exception { ExceptionCode::InvalidAccessError };
     auto frameID = frame()->frameID();
@@ -2098,6 +2101,19 @@ ExceptionOr<void> Internals::setLowPowerModeEnabled(bool isEnabled)
     return { };
 }
 
+ExceptionOr<void> Internals::setAggressiveThermalMitigationEnabled(bool isEnabled)
+{
+    auto* document = contextDocument();
+    if (!document)
+        return Exception { ExceptionCode::InvalidAccessError };
+    auto* page = document->page();
+    if (!page)
+        return Exception { ExceptionCode::InvalidAccessError };
+
+    page->setAggressiveThermalMitigationEnabledForTesting(isEnabled);
+    return { };
+}
+
 ExceptionOr<void> Internals::setOutsideViewportThrottlingEnabled(bool isEnabled)
 {
     auto* document = contextDocument();
@@ -2259,8 +2275,8 @@ ExceptionOr<void> Internals::setViewBaseBackgroundColor(const String& colorValue
 
 using LazySlowPathColorParsingParameters = std::tuple<
     CSSPropertyParserHelpers::CSSColorParsingOptions,
-    CSSUnresolvedColorResolutionState,
-    std::optional<CSSUnresolvedColorResolutionDelegate>
+    CSS::PlatformColorResolutionState,
+    std::optional<CSS::PlatformColorResolutionDelegate>
 >;
 
 ExceptionOr<void> Internals::setUnderPageBackgroundColorOverride(const String& colorValue)
@@ -3094,6 +3110,15 @@ unsigned Internals::numberOfLiveDocuments() const
 unsigned Internals::referencingNodeCount(const Document& document) const
 {
     return document.referencingNodeCount();
+}
+
+ExceptionOr<void> Internals::executeOpportunisticallyScheduledTasks() const
+{
+    Document* document = contextDocument();
+    if (!document || !document->page())
+        return Exception { ExceptionCode::InvalidAccessError };
+    document->page()->performOpportunisticallyScheduledTasks(MonotonicTime::now());
+    return { };
 }
 
 #if ENABLE(WEB_AUDIO)
@@ -4008,8 +4033,8 @@ Ref<MemoryInfo> Internals::memoryInfo() const
 
 Vector<String> Internals::getReferencedFilePaths() const
 {
-    frame()->history().saveDocumentAndScrollState();
-    return FormController::referencedFilePaths(frame()->history().currentItem()->documentState());
+    frame()->loader().history().saveDocumentAndScrollState();
+    return FormController::referencedFilePaths(frame()->loader().history().currentItem()->documentState());
 }
 
 ExceptionOr<void> Internals::startTrackingRepaints()
@@ -4964,8 +4989,12 @@ void Internals::setMediaElementRestrictions(HTMLMediaElement& element, StringVie
             restrictions |= MediaElementSession::RequirePlaybackToControlControlsManager;
         if (equalLettersIgnoringASCIICase(restrictionString, "requireusergestureforvideoduetolowpowermode"_s))
             restrictions |= MediaElementSession::RequireUserGestureForVideoDueToLowPowerMode;
+        if (equalLettersIgnoringASCIICase(restrictionString, "requireusergestureforvideoduetoaggressivethermalmitigation"_s))
+            restrictions |= MediaElementSession::RequireUserGestureForVideoDueToAggressiveThermalMitigation;
         if (equalLettersIgnoringASCIICase(restrictionString, "requirepagevisibilitytoplayaudio"_s))
             restrictions |= MediaElementSession::RequirePageVisibilityToPlayAudio;
+        if (equalLettersIgnoringASCIICase(restrictionString, "requirepagevisibilityforvideotobenowplaying"_s))
+            restrictions |= MediaElementSession::RequirePageVisibilityForVideoToBeNowPlaying;
     }
     element.mediaSession().addBehaviorRestriction(restrictions);
 }
@@ -5209,6 +5238,7 @@ ExceptionOr<Internals::MediaUsageState> Internals::mediaUsageState(HTMLMediaElem
         info.value().isVideoAndRequiresUserGestureForVideoRateChange,
         info.value().isAudioAndRequiresUserGestureForAudioRateChange,
         info.value().isVideoAndRequiresUserGestureForVideoDueToLowPowerMode,
+        info.value().isVideoAndRequiresUserGestureForVideoDueToAggressiveThermalMitigation,
         info.value().noUserGestureRequired,
         info.value().requiresPlaybackAndIsNotPlaying,
         info.value().hasEverNotifiedAboutPlaying,
@@ -6059,7 +6089,8 @@ void Internals::setQuickLookPassword(const String& password)
 
 void Internals::setAsRunningUserScripts(Document& document)
 {
-    document.setAsRunningUserScripts();
+    if (RefPtr page = document.protectedPage())
+        page->setHasInjectedUserScript();
 }
 
 #if ENABLE(WEBGL)
@@ -6245,6 +6276,11 @@ void Internals::setMediaStreamTrackIdentifier(MediaStreamTrack& track, String&& 
 void Internals::setMediaStreamSourceInterrupted(MediaStreamTrack& track, bool interrupted)
 {
     track.source().setInterruptedForTesting(interrupted);
+}
+
+const String& Internals::mediaStreamTrackPersistentId(const MediaStreamTrack& track)
+{
+    return track.source().persistentID();
 }
 
 bool Internals::isMediaStreamSourceInterrupted(MediaStreamTrack& track) const
@@ -6700,13 +6736,6 @@ void Internals::disableContentExtensionsChecks()
         loader->setContentExtensionEnablement({ ContentExtensionDefaultEnablement::Disabled, { } });
 }
 
-void Internals::setUseSystemAppearance(bool value)
-{
-    if (!contextDocument() || !contextDocument()->page())
-        return;
-    contextDocument()->page()->setUseSystemAppearance(value);
-}
-
 size_t Internals::pluginCount()
 {
     if (!contextDocument() || !contextDocument()->page())
@@ -6835,6 +6864,19 @@ bool Internals::validateAV1ConfigurationRecord(const String& parameters)
     if (auto record = WebCore::parseAV1CodecParameters(parameters))
         return WebCore::validateAV1ConfigurationRecord(*record);
     return false;
+}
+
+void Internals::setCookie(CookieData&& cookieData)
+{
+    auto* document = contextDocument();
+    if (!document)
+        return;
+
+    auto* page = document->page();
+    if (!page)
+        return;
+
+    page->cookieJar().setRawCookie(*document, CookieData::toCookie(WTFMove(cookieData)), ShouldPartitionCookie::No);
 }
 
 auto Internals::getCookies() const -> Vector<CookieData>
@@ -7045,7 +7087,7 @@ String Internals::windowLocationHost(DOMWindow& window)
 String Internals::systemColorForCSSValue(const String& cssValue, bool useDarkModeAppearance, bool useElevatedUserInterfaceLevel)
 {
     CSSValueID id = cssValueKeywordID(cssValue);
-    RELEASE_ASSERT(StyleColor::isSystemColorKeyword(id));
+    RELEASE_ASSERT(CSS::isSystemColorKeyword(id));
 
     OptionSet<StyleColorOptions> options;
     if (useDarkModeAppearance)
@@ -7697,7 +7739,7 @@ std::optional<RenderingMode> Internals::getEffectiveRenderingModeOfNewlyCreatedA
     if (!document || !document->page())
         return std::nullopt;
 
-    if (RefPtr imageBuffer = ImageBuffer::create({ 100, 100 }, RenderingPurpose::DOM, 1, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8, ImageBufferOptions::Accelerated, &document->page()->chrome())) {
+    if (RefPtr imageBuffer = ImageBuffer::create({ 100, 100 }, RenderingMode::Accelerated, RenderingPurpose::DOM, 1, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8,  &document->page()->chrome())) {
         imageBuffer->ensureBackendCreated();
         if (imageBuffer->hasBackend())
             return imageBuffer->renderingMode();

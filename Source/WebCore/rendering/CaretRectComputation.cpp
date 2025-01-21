@@ -31,6 +31,7 @@
 #include "InlineIteratorLineBox.h"
 #include "InlineIteratorTextBox.h"
 #include "InlineIteratorTextBoxInlines.h"
+#include "InlineIteratorSVGTextBox.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "LineSelection.h"
 #include "RenderBlockFlow.h"
@@ -225,18 +226,20 @@ static LayoutRect computeCaretRectForLineBreak(const InlineBoxAndOffset& boxAndO
 
 static LayoutRect computeCaretRectForSVGInlineText(const InlineBoxAndOffset& boxAndOffset, CaretRectMode)
 {
-    auto* box = boxAndOffset.box ? boxAndOffset.box->legacyInlineBox() : nullptr;
+    auto box = boxAndOffset.box;
     auto caretOffset = boxAndOffset.offset;
+    if (!is<InlineIterator::SVGTextBoxIterator>(box))
+        return { };
 
-    auto* textBox = dynamicDowncast<LegacyInlineTextBox>(*box);
+    auto textBox = downcast<InlineIterator::SVGTextBoxIterator>(box);
     if (!textBox)
         return { };
 
-    if (caretOffset < textBox->start() || caretOffset > textBox->start() + textBox->len())
+    if (caretOffset < textBox->start() || caretOffset > textBox->start() + textBox->length())
         return { };
 
     // Use the edge of the selection rect to determine the caret rect.
-    if (caretOffset < textBox->start() + textBox->len()) {
+    if (caretOffset < textBox->start() + textBox->length()) {
         LayoutRect rect = textBox->localSelectionRect(caretOffset, caretOffset + 1);
         LayoutUnit x = textBox->isLeftToRightDirection() ? rect.x() : rect.maxX();
         return LayoutRect(x, rect.y(), caretWidth(), rect.height());
@@ -276,7 +279,7 @@ static LayoutRect computeCaretRectForBox(const RenderBox& renderer, const Inline
     //
     // FIXME: ignoring :first-line, missing good reason to take care of
     auto fontHeight = renderer.style().metricsOfPrimaryFont().height();
-    if (fontHeight > rect.height() || (!renderer.isReplacedOrInlineBlock() && !renderer.isRenderTable()))
+    if (fontHeight > rect.height() || (!renderer.isReplacedOrAtomicInline() && !renderer.isRenderTable()))
         rect.setHeight(fontHeight);
 
     // Move to local coords
@@ -318,7 +321,7 @@ static LayoutRect computeCaretRectForInline(const RenderInline& renderer)
 
     LayoutRect caretRect = computeCaretRectForEmptyElement(renderer, renderer.borderAndPaddingLogicalWidth(), 0, CaretRectMode::Normal);
 
-    if (auto firstInlineBox = InlineIterator::firstInlineBoxFor(renderer))
+    if (auto firstInlineBox = InlineIterator::lineLeftmostInlineBoxFor(renderer))
         caretRect.moveBy(LayoutPoint { firstInlineBox->visualRectIgnoringBlockDirection().location() });
 
     return caretRect;

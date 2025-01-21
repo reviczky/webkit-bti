@@ -44,15 +44,23 @@ class WebExtensionAPIWebRequestEvent : public WebExtensionAPIObject, public JSWe
     WEB_EXTENSION_DECLARE_JS_WRAPPER_CLASS(WebExtensionAPIWebRequestEvent, webRequestEvent, event);
 
 public:
-    using FilterAndCallbackPair = std::pair<RefPtr<WebExtensionCallbackHandler>, RetainPtr<_WKWebExtensionWebRequestFilter>>;
-    using ListenerVector = Vector<FilterAndCallbackPair>;
+#if PLATFORM(COCOA)
+    struct Listener {
+        RefPtr<WebExtensionCallbackHandler> callback;
+        RetainPtr<_WKWebExtensionWebRequestFilter> filter;
+        Vector<String> extraInfo;
+    };
+
+    using ListenerVector = Vector<Listener>;
 
     const ListenerVector& listeners() const { return m_listeners; }
 
-    void addListener(WebFrame&, RefPtr<WebExtensionCallbackHandler>, NSDictionary *filter, id extraInfoSpec, NSString **outExceptionString);
-    void removeListener(WebFrame&, RefPtr<WebExtensionCallbackHandler>);
+    void addListener(WebCore::FrameIdentifier, RefPtr<WebExtensionCallbackHandler>, NSDictionary *filter, NSArray *extraInfo, NSString **outExceptionString);
+    void removeListener(WebCore::FrameIdentifier, RefPtr<WebExtensionCallbackHandler>);
     bool hasListener(RefPtr<WebExtensionCallbackHandler>);
+#endif
 
+    void enumerateListeners(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const ResourceLoadInfo&, const Function<void(WebExtensionCallbackHandler&, const Vector<String>&)>&);
     void invokeListenersWithArgument(NSDictionary *argument, WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const ResourceLoadInfo&);
 
     void removeAllListeners();
@@ -72,7 +80,9 @@ private:
 
     Markable<WebCore::FrameIdentifier> m_frameIdentifier;
     WebExtensionEventListenerType m_type;
+#if PLATFORM(COCOA)
     ListenerVector m_listeners;
+#endif
 };
 
 } // namespace WebKit

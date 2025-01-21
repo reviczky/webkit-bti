@@ -337,7 +337,7 @@ void EditCommandComposition::setRangeDeletedByUnapply(const VisiblePositionIndex
 }
 
 #ifndef NDEBUG
-void EditCommandComposition::getNodesInCommand(HashSet<Ref<Node>>& nodes)
+void EditCommandComposition::getNodesInCommand(NodeSet& nodes)
 {
     for (size_t i = 0; i < m_commands.size(); ++i) {
         RefPtr command = m_commands[i].get();
@@ -507,9 +507,9 @@ void CompositeEditCommand::applyCommandToComposite(Ref<EditCommand>&& command)
 {
     command->setParent(this);
     command->doApply();
-    if (command->isSimpleEditCommand()) {
+    if (auto* simpleCommand = dynamicDowncast<SimpleEditCommand>(command.get())) {
         command->setParent(nullptr);
-        ensureComposition().append(toSimpleEditCommand(command.ptr()));
+        ensureComposition().append(simpleCommand);
     }
     m_commands.append(WTFMove(command));
 }

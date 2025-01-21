@@ -36,7 +36,6 @@
 #include "WebBroadcastChannelRegistryMessages.h"
 #include "WebCacheStorageProvider.h"
 #include "WebCookieJar.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebFileSystemStorageConnection.h"
 #include "WebFileSystemStorageConnectionMessages.h"
 #include "WebFrame.h"
@@ -80,8 +79,8 @@
 namespace WebKit {
 using namespace WebCore;
 
-NetworkProcessConnection::NetworkProcessConnection(IPC::Connection::Identifier connectionIdentifier, HTTPCookieAcceptPolicy cookieAcceptPolicy)
-    : m_connection(IPC::Connection::createClientConnection(connectionIdentifier))
+NetworkProcessConnection::NetworkProcessConnection(IPC::Connection::Identifier&& connectionIdentifier, HTTPCookieAcceptPolicy cookieAcceptPolicy)
+    : m_connection(IPC::Connection::createClientConnection(WTFMove(connectionIdentifier)))
     , m_cookieAcceptPolicy(cookieAcceptPolicy)
 {
     m_connection->open(*this);
@@ -125,7 +124,7 @@ bool NetworkProcessConnection::dispatchMessage(IPC::Connection& connection, IPC:
         return true;
     }
     if (decoder.messageReceiverName() == Messages::WebTransportSession::messageReceiverName() && WebProcess::singleton().isWebTransportEnabled()) {
-        if (auto* webTransportSession = WebProcess::singleton().webTransportSession(WebTransportSessionIdentifier(decoder.destinationID())))
+        if (RefPtr webTransportSession = WebProcess::singleton().webTransportSession(WebTransportSessionIdentifier(decoder.destinationID())))
             webTransportSession->didReceiveMessage(connection, decoder);
         return true;
     }
@@ -142,7 +141,7 @@ bool NetworkProcessConnection::dispatchMessage(IPC::Connection& connection, IPC:
     if (decoder.messageReceiverName() == Messages::WebRTCResolver::messageReceiverName()) {
         auto& network = WebProcess::singleton().libWebRTCNetwork();
         if (network.isActive())
-            network.resolver(AtomicObjectIdentifier<LibWebRTCResolverIdentifierType>(decoder.destinationID())).didReceiveMessage(connection, decoder);
+            network.resolver(AtomicObjectIdentifier<LibWebRTCResolverIdentifierType>(decoder.destinationID()))->didReceiveMessage(connection, decoder);
         else
             RELEASE_LOG_ERROR(WebRTC, "Received WebRTCResolver message while libWebRTCNetwork is not active");
         return true;
@@ -326,9 +325,8 @@ void NetworkProcessConnection::broadcastConsoleMessage(MessageSource source, Mes
     FAST_RETURN_IF_NO_FRONTENDS(void());
 
     Page::forEachPage([&] (auto& page) {
-        if (auto* localMainFrame = dynamicDowncast<LocalFrame>(page.mainFrame()))
-            if (RefPtr document = localMainFrame->document())
-                document->addConsoleMessage(source, level, message);
+        if (RefPtr localTopDocument = page.localTopDocument())
+            localTopDocument->addConsoleMessage(source, level, message);
     });
 }
 
@@ -346,7 +344,7 @@ void NetworkProcessConnection::loadCancelledDownloadRedirectRequestInFrame(WebCo
 #if ENABLE(WEB_RTC)
 void NetworkProcessConnection::connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier localIdentifier, WebCore::RTCDataChannelIdentifier remoteIdentifier, CompletionHandler<void(std::optional<bool>)>&& callback)
 {
-    callback(RTCDataChannelRemoteManager::sharedManager().connectToRemoteSource(localIdentifier, remoteIdentifier));
+    callback(RTCDataChannelRemoteManager::singleton().connectToRemoteSource(localIdentifier, remoteIdentifier));
 }
 #endif
 

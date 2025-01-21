@@ -25,11 +25,15 @@
 #include "config.h"
 #include "ComputedStyleExtractor.h"
 
+#include "CSSAppleColorFilterPropertyValue.h"
 #include "CSSBasicShapeValue.h"
 #include "CSSBorderImage.h"
 #include "CSSBorderImageSliceValue.h"
+#include "CSSBoxShadowPropertyValue.h"
 #include "CSSColorSchemeValue.h"
 #include "CSSCounterValue.h"
+#include "CSSEasingFunctionValue.h"
+#include "CSSFilterPropertyValue.h"
 #include "CSSFontFeatureValue.h"
 #include "CSSFontStyleWithAngleValue.h"
 #include "CSSFontValue.h"
@@ -41,6 +45,7 @@
 #include "CSSGridLineNamesValue.h"
 #include "CSSGridTemplateAreasValue.h"
 #include "CSSPathValue.h"
+#include "CSSPrimitiveNumericTypes+CSSValueCreation.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSProperty.h"
 #include "CSSPropertyAnimation.h"
@@ -49,9 +54,10 @@
 #include "CSSRectValue.h"
 #include "CSSReflectValue.h"
 #include "CSSRegisteredCustomProperty.h"
+#include "CSSScrollMarginEdgeValue.h"
+#include "CSSScrollPaddingEdgeValue.h"
 #include "CSSScrollValue.h"
-#include "CSSShadowValue.h"
-#include "CSSTimingFunctionValue.h"
+#include "CSSTextShadowPropertyValue.h"
 #include "CSSTransformListValue.h"
 #include "CSSValueList.h"
 #include "CSSValuePair.h"
@@ -82,14 +88,22 @@
 #include "ScaleTransformOperation.h"
 #include "ScrollTimeline.h"
 #include "SkewTransformOperation.h"
+#include "StyleAppleColorFilterProperty.h"
+#include "StyleBoxShadow.h"
 #include "StyleColorScheme.h"
+#include "StyleEasingFunction.h"
+#include "StyleFilterProperty.h"
 #include "StylePathData.h"
+#include "StylePrimitiveNumericOrKeyword+Conversions.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StylePropertyShorthand.h"
 #include "StylePropertyShorthandFunctions.h"
 #include "StyleReflection.h"
 #include "StyleResolver.h"
 #include "StyleScope.h"
+#include "StyleScrollMargin.h"
+#include "StyleScrollPadding.h"
+#include "StyleTextShadow.h"
 #include "Styleable.h"
 #include "TimelineRange.h"
 #include "TransformOperationData.h"
@@ -97,10 +111,10 @@
 #include "ViewTimeline.h"
 #include "WebAnimationUtilities.h"
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(ComputedStyleExtractor);
+
+enum class AdjustPixelValuesForComputedStyle : bool { No, Yes };
 
 template<typename ConvertibleType> Ref<CSSPrimitiveValue> createConvertingToCSSValueID(const ConvertibleType& value)
 {
@@ -584,9 +598,9 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
         if (box->isStickilyPositioned()) {
             auto& enclosingClippingBox = box->enclosingClippingBoxForStickyPosition().first;
             if (isVerticalProperty == enclosingClippingBox.isHorizontalWritingMode())
-                containingBlockSize = enclosingClippingBox.contentLogicalHeight();
+                containingBlockSize = enclosingClippingBox.contentBoxLogicalHeight();
             else
-                containingBlockSize = enclosingClippingBox.contentLogicalWidth();
+                containingBlockSize = enclosingClippingBox.contentBoxLogicalWidth();
         } else {
             if (isVerticalProperty == containingBlock->isHorizontalWritingMode()) {
                 containingBlockSize = box->isOutOfFlowPositioned()
@@ -594,7 +608,7 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
                     : box->containingBlockLogicalHeightForContent(AvailableLogicalHeightType::ExcludeMarginBorderPadding);
             } else {
                 containingBlockSize = box->isOutOfFlowPositioned()
-                    ? box->containingBlockLogicalWidthForPositioned(*containingBlock, nullptr, false)
+                    ? box->containingBlockLogicalWidthForPositioned(*containingBlock, false)
                     : box->containingBlockLogicalWidthForContent();
             }
         }
@@ -675,6 +689,27 @@ static Ref<CSSValue> valueForTextEdge(CSSPropertyID property, const TextEdge& te
         createConvertingToCSSValueID(textEdge.under));
 }
 
+static RefPtr<CSSValue> blockStepShorthandValue(const RenderStyle& style)
+{
+    CSSValueListBuilder list;
+    if (style.blockStepSize())
+        list.append(ComputedStyleExtractor::zoomAdjustedPixelValueForLength(*style.blockStepSize(), style));
+
+    if (style.blockStepInsert() != RenderStyle::initialBlockStepInsert())
+        list.append(createConvertingToCSSValueID(style.blockStepInsert()));
+
+    if (style.blockStepAlign() != RenderStyle::initialBlockStepAlign())
+        list.append(createConvertingToCSSValueID(style.blockStepAlign()));
+
+    if (style.blockStepRound() != RenderStyle::initialBlockStepRound())
+        list.append(createConvertingToCSSValueID(style.blockStepRound()));
+
+    if (!list.isEmpty())
+        return CSSValueList::createSpaceSeparated(list);
+
+    return CSSPrimitiveValue::create(CSSValueNone);
+}
+
 RefPtr<CSSValue> ComputedStyleExtractor::textBoxShorthandValue(const RenderStyle& style) const
 {
     auto textBoxTrim = style.textBoxTrim();
@@ -713,7 +748,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::lineClampShorthandValue(const RenderSty
     return { };
 }
 
-Ref<CSSPrimitiveValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle& style, const StyleColor& color)
+Ref<CSSColorValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle& style, const Style::Color& color)
 {
     // This function does NOT look at visited information, so that computed style doesn't expose that.
     return CSSValuePool::singleton().createColorValue(style.colorResolvingCurrentColor(color));
@@ -1041,101 +1076,60 @@ static Ref<CSSValue> computedRotate(RenderObject* renderer, const RenderStyle& s
         CSSPrimitiveValue::create(rotate->y()), CSSPrimitiveValue::create(rotate->z()), WTFMove(angle));
 }
 
-static inline Ref<CSSPrimitiveValue> adjustLengthForZoom(const Length& length, const RenderStyle& style, ComputedStyleExtractor::AdjustPixelValuesForComputedStyle adjust)
-{
-    return adjust == ComputedStyleExtractor::AdjustPixelValuesForComputedStyle::Yes ? zoomAdjustedPixelValue(length.value(), style) : CSSPrimitiveValue::create(length);
-}
-
-Ref<CSSValue> ComputedStyleExtractor::valueForShadow(const ShadowData* shadow, CSSPropertyID propertyID, const RenderStyle& style, AdjustPixelValuesForComputedStyle adjust)
+static Ref<CSSValue> valueForBoxShadow(const ShadowData* shadow, const RenderStyle& style)
 {
     if (!shadow)
         return CSSPrimitiveValue::create(CSSValueNone);
-    auto& cssValuePool = CSSValuePool::singleton();
-    CSSValueListBuilder list;
-    for (const ShadowData* currShadowData = shadow; currShadowData; currShadowData = currShadowData->next()) {
-        auto x = adjustLengthForZoom(currShadowData->x(), style, adjust);
-        auto y = adjustLengthForZoom(currShadowData->y(), style, adjust);
-        auto blur = adjustLengthForZoom(currShadowData->radius(), style, adjust);
-        auto spread = propertyID == CSSPropertyTextShadow ? RefPtr<CSSPrimitiveValue>() : adjustLengthForZoom(currShadowData->spread(), style, adjust);
-        auto shadowStyle = propertyID == CSSPropertyTextShadow || currShadowData->style() == ShadowStyle::Normal ? RefPtr<CSSPrimitiveValue>() : CSSPrimitiveValue::create(CSSValueInset);
-        auto color = cssValuePool.createColorValue(style.colorResolvingCurrentColor(currShadowData->color()));
-        list.append(CSSShadowValue::create(WTFMove(x), WTFMove(y), WTFMove(blur), WTFMove(spread), WTFMove(shadowStyle), WTFMove(color), currShadowData->isWebkitBoxShadow()));
-    }
-    list.reverse();
-    return CSSValueList::createCommaSeparated(WTFMove(list));
+
+    CSS::BoxShadowProperty::List list;
+
+    for (const auto* currentShadowData = shadow; currentShadowData; currentShadowData = currentShadowData->next())
+        list.value.append(Style::toCSS(currentShadowData->asBoxShadow(), style));
+
+    list.value.reverse();
+
+    return CSSBoxShadowPropertyValue::create(CSS::BoxShadowProperty { WTFMove(list) });
 }
 
-Ref<CSSValue> ComputedStyleExtractor::valueForFilter(const RenderStyle& style, const FilterOperations& filterOperations, AdjustPixelValuesForComputedStyle adjust)
+static Ref<CSSValue> valueForTextShadow(const ShadowData* shadow, const RenderStyle& style)
 {
-    if (filterOperations.isEmpty())
+    if (!shadow)
+        return CSSPrimitiveValue::create(CSSValueNone);
+
+    CSS::TextShadowProperty::List list;
+
+    for (const auto* currentShadowData = shadow; currentShadowData; currentShadowData = currentShadowData->next())
+        list.value.append(Style::toCSS(currentShadowData->asTextShadow(), style));
+
+    list.value.reverse();
+
+    return CSSTextShadowPropertyValue::create(CSS::TextShadowProperty { WTFMove(list) });
+}
+
+static Ref<CSSValue> valueForPositionTryFallbacks(const Vector<PositionTryFallback>& fallbacks)
+{
+    if (fallbacks.isEmpty())
         return CSSPrimitiveValue::create(CSSValueNone);
 
     CSSValueListBuilder list;
-
-    for (auto& filterOperationRef : filterOperations) {
-        auto& filterOperation = filterOperationRef.get();
-
-        if (auto* referenceOperation = dynamicDowncast<ReferenceFilterOperation>(filterOperation))
-            list.append(CSSPrimitiveValue::createURI(referenceOperation->url()));
-        else {
-            RefPtr<CSSFunctionValue> filterValue;
-            switch (filterOperation.type()) {
-            case FilterOperation::Type::Grayscale:
-                filterValue = CSSFunctionValue::create(CSSValueGrayscale,
-                    CSSPrimitiveValue::create(downcast<BasicColorMatrixFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::Sepia:
-                filterValue = CSSFunctionValue::create(CSSValueSepia,
-                    CSSPrimitiveValue::create(downcast<BasicColorMatrixFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::Saturate:
-                filterValue = CSSFunctionValue::create(CSSValueSaturate,
-                    CSSPrimitiveValue::create(downcast<BasicColorMatrixFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::HueRotate:
-                filterValue = CSSFunctionValue::create(CSSValueHueRotate,
-                    CSSPrimitiveValue::create(downcast<BasicColorMatrixFilterOperation>(filterOperation).amount(), CSSUnitType::CSS_DEG));
-                break;
-            case FilterOperation::Type::Invert:
-                filterValue = CSSFunctionValue::create(CSSValueInvert,
-                    CSSPrimitiveValue::create(downcast<BasicComponentTransferFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::AppleInvertLightness:
-                filterValue = CSSFunctionValue::create(CSSValueAppleInvertLightness);
-                break;
-            case FilterOperation::Type::Opacity:
-                filterValue = CSSFunctionValue::create(CSSValueOpacity,
-                    CSSPrimitiveValue::create(downcast<BasicComponentTransferFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::Brightness:
-                filterValue = CSSFunctionValue::create(CSSValueBrightness,
-                    CSSPrimitiveValue::create(downcast<BasicComponentTransferFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::Contrast:
-                filterValue = CSSFunctionValue::create(CSSValueContrast,
-                    CSSPrimitiveValue::create(downcast<BasicComponentTransferFilterOperation>(filterOperation).amount()));
-                break;
-            case FilterOperation::Type::Blur:
-                filterValue = CSSFunctionValue::create(CSSValueBlur,
-                    adjustLengthForZoom(uncheckedDowncast<BlurFilterOperation>(filterOperation).stdDeviation(), style, adjust));
-                break;
-            case FilterOperation::Type::DropShadow: {
-                // We want our computed style to look like that of a text shadow (has neither spread nor inset style).
-                auto& dropShadowOperation = uncheckedDowncast<DropShadowFilterOperation>(filterOperation);
-                ShadowData shadowData({ Length(dropShadowOperation.location().x(), LengthType::Fixed), Length(dropShadowOperation.location().y(), LengthType::Fixed) }, Length(dropShadowOperation.stdDeviation(), LengthType::Fixed), Length(0, LengthType::Fixed), ShadowStyle::Normal, false, dropShadowOperation.color());
-                filterValue = CSSFunctionValue::create(CSSValueDropShadow,
-                    valueForShadow(&shadowData, CSSPropertyTextShadow, style, adjust));
-                break;
-            }
-            default:
-                ASSERT_NOT_REACHED();
-                filterValue = CSSFunctionValue::create(CSSValueInvalid);
-                break;
-            }
-            list.append(filterValue.releaseNonNull());
-        }
+    for (auto& fallback : fallbacks) {
+        CSSValueListBuilder tacticsList;
+        for (auto& tactic : fallback.tactics)
+            tacticsList.append(createConvertingToCSSValueID(tactic));
+        list.append(CSSValueList::createSpaceSeparated(tacticsList));
     }
-    return CSSValueList::createSpaceSeparated(WTFMove(list));
+
+    return CSSValueList::createCommaSeparated(WTFMove(list));
+}
+
+Ref<CSSValue> ComputedStyleExtractor::cssValueForFilter(const RenderStyle& style, const FilterOperations& filterOperations)
+{
+    return CSSFilterPropertyValue::create(Style::toCSSFilterProperty(filterOperations, style));
+}
+
+Ref<CSSValue> ComputedStyleExtractor::cssValueForAppleColorFilter(const RenderStyle& style, const FilterOperations& filterOperations)
+{
+    return CSSAppleColorFilterPropertyValue::create(Style::toCSSAppleColorFilterProperty(filterOperations, style));
 }
 
 static Ref<CSSValue> specifiedValueForGridTrackBreadth(const GridLength& trackBreadth, const RenderStyle& style)
@@ -1640,82 +1634,52 @@ static Ref<CSSPrimitiveValue> valueForScopedName(const Style::ScopedName& scoped
 
 static Ref<CSSValue> valueForAnimationTimeline(const RenderStyle& style, const Animation::Timeline& timeline)
 {
+    auto valueForAnonymousScrollTimeline = [](const Animation::AnonymousScrollTimeline& anonymousScrollTimeline) {
+        auto scroller = [&]() {
+            switch (anonymousScrollTimeline.scroller) {
+            case Scroller::Nearest:
+                return CSSValueNearest;
+            case Scroller::Root:
+                return CSSValueRoot;
+            case Scroller::Self:
+                return CSSValueSelf;
+            default:
+                ASSERT_NOT_REACHED();
+                return CSSValueNearest;
+            }
+        }();
+        return CSSScrollValue::create(CSSPrimitiveValue::create(scroller), createConvertingToCSSValueID(anonymousScrollTimeline.axis));
+    };
+
+    auto valueForAnonymousViewTimeline = [&](const Animation::AnonymousViewTimeline& anonymousViewTimeline) {
+        auto insetCSSValue = [&](const std::optional<Length>& inset) -> RefPtr<CSSValue> {
+            if (!inset)
+                return nullptr;
+            return CSSPrimitiveValue::create(*inset, style);
+        };
+        return CSSViewValue::create(
+            createConvertingToCSSValueID(anonymousViewTimeline.axis),
+            insetCSSValue(anonymousViewTimeline.insets.start),
+            insetCSSValue(anonymousViewTimeline.insets.end)
+        );
+    };
+
     return WTF::switchOn(timeline,
         [&] (Animation::TimelineKeyword keyword) -> Ref<CSSValue> {
             return CSSPrimitiveValue::create(keyword == Animation::TimelineKeyword::None ? CSSValueNone : CSSValueAuto);
         }, [&] (const AtomString& customIdent) -> Ref<CSSValue> {
             return CSSPrimitiveValue::createCustomIdent(customIdent);
-        }, [&] (const Ref<ScrollTimeline>& scrollTimeline) -> Ref<CSSValue> {
-            return scrollTimeline->toCSSValue(style);
+        }, [&] (const Animation::AnonymousScrollTimeline& anonymousScrollTimeline) -> Ref<CSSValue> {
+            return valueForAnonymousScrollTimeline(anonymousScrollTimeline);
+        }, [&] (const Animation::AnonymousViewTimeline& anonymousViewTimeline) -> Ref<CSSValue> {
+            return valueForAnonymousViewTimeline(anonymousViewTimeline);
         }
     );
 }
 
-static Ref<CSSValue> valueForAnimationTimingFunction(const TimingFunction& timingFunction)
+static Ref<CSSValue> valueForAnimationTimingFunction(const RenderStyle& style, const TimingFunction& timingFunction)
 {
-    switch (timingFunction.type()) {
-    case TimingFunction::Type::CubicBezierFunction: {
-        auto& function = uncheckedDowncast<CubicBezierTimingFunction>(timingFunction);
-        if (function.timingFunctionPreset() != CubicBezierTimingFunction::TimingFunctionPreset::Custom) {
-            CSSValueID valueId = CSSValueInvalid;
-            switch (function.timingFunctionPreset()) {
-            case CubicBezierTimingFunction::TimingFunctionPreset::Ease:
-                valueId = CSSValueEase;
-                break;
-            case CubicBezierTimingFunction::TimingFunctionPreset::EaseIn:
-                valueId = CSSValueEaseIn;
-                break;
-            case CubicBezierTimingFunction::TimingFunctionPreset::EaseOut:
-                valueId = CSSValueEaseOut;
-                break;
-            case CubicBezierTimingFunction::TimingFunctionPreset::Custom:
-            case CubicBezierTimingFunction::TimingFunctionPreset::EaseInOut:
-                ASSERT(function.timingFunctionPreset() == CubicBezierTimingFunction::TimingFunctionPreset::EaseInOut);
-                valueId = CSSValueEaseInOut;
-                break;
-            }
-            return CSSPrimitiveValue::create(valueId);
-        }
-        return CSSCubicBezierTimingFunctionValue::create(
-            CSSPrimitiveValue::create(function.x1()),
-            CSSPrimitiveValue::create(function.y1()),
-            CSSPrimitiveValue::create(function.x2()),
-            CSSPrimitiveValue::create(function.y2())
-        );
-    }
-    case TimingFunction::Type::StepsFunction: {
-        auto& function = uncheckedDowncast<StepsTimingFunction>(timingFunction);
-        return CSSStepsTimingFunctionValue::create(
-            CSSPrimitiveValue::createInteger(function.numberOfSteps()),
-            function.stepPosition()
-        );
-    }
-    case TimingFunction::Type::SpringFunction: {
-        auto& function = uncheckedDowncast<SpringTimingFunction>(timingFunction);
-        return CSSSpringTimingFunctionValue::create(
-            CSSPrimitiveValue::create(function.mass()),
-            CSSPrimitiveValue::create(function.stiffness()),
-            CSSPrimitiveValue::create(function.damping()),
-            CSSPrimitiveValue::create(function.initialVelocity())
-        );
-    }
-    case TimingFunction::Type::LinearFunction: {
-        auto& function = uncheckedDowncast<LinearTimingFunction>(timingFunction);
-        if (function.points().isEmpty())
-            return CSSPrimitiveValue::create(CSSValueLinear);
-
-        return CSSLinearTimingFunctionValue::create(function.points().map([](const auto& point) {
-            return CSSLinearTimingFunctionValue::LinearStop {
-                .output = CSSPrimitiveValue::create(point.value),
-                .input = CSSLinearTimingFunctionValue::LinearStop::Length {
-                    .input = CSSPrimitiveValue::create(point.progress * 100, CSSUnitType::CSS_PERCENTAGE),
-                    .extra = nullptr
-                }
-            };
-        }));
-    }
-    }
-    RELEASE_ASSERT_NOT_REACHED();
+    return CSSEasingFunctionValue::create(Style::toCSSEasingFunction(timingFunction, style));
 }
 
 static Ref<CSSValue> valueForSingleAnimationRange(const RenderStyle& style, const SingleTimelineRange& range, SingleTimelineRange::Type type)
@@ -1803,9 +1767,9 @@ static void addValueForAnimationPropertyToList(const RenderStyle& style, CSSValu
     case CSSPropertyTransitionTimingFunction:
         if (animation) {
             if (!animation->isTimingFunctionFilled())
-                list.append(valueForAnimationTimingFunction(*animation->timingFunction()));
+                list.append(valueForAnimationTimingFunction(style, *animation->timingFunction()));
         } else
-            list.append(valueForAnimationTimingFunction(CubicBezierTimingFunction::defaultTimingFunction()));
+            list.append(valueForAnimationTimingFunction(style, CubicBezierTimingFunction::defaultTimingFunction()));
         break;
     case CSSPropertyAnimationRangeStart:
         if (!animation || !animation->isRangeStartFilled())
@@ -1902,7 +1866,7 @@ static Ref<CSSValue> singleAnimationValue(const RenderStyle& style, const Animat
     if (showsDuration)
         list.append(valueForAnimationDuration(animation.duration()));
     if (showsTimingFunction())
-        list.append(valueForAnimationTimingFunction(*animation.timingFunction()));
+        list.append(valueForAnimationTimingFunction(style, *animation.timingFunction()));
     if (showsDelay)
         list.append(valueForAnimationDelay(animation.delay()));
     if (showsIterationCount())
@@ -1936,7 +1900,7 @@ static Ref<CSSValue> animationShorthandValue(const RenderStyle& style, const Ani
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
 
-static Ref<CSSValue> singleTransitionValue(const Animation& transition)
+static Ref<CSSValue> singleTransitionValue(const RenderStyle& style, const Animation& transition)
 {
     static NeverDestroyed<Ref<TimingFunction>> initialTimingFunction(Animation::initialTimingFunction());
 
@@ -1952,7 +1916,7 @@ static Ref<CSSValue> singleTransitionValue(const Animation& transition)
     if (showsDuration)
         list.append(valueForAnimationDuration(transition.duration()));
     if (auto* timingFunction = transition.timingFunction(); *timingFunction != initialTimingFunction.get())
-        list.append(valueForAnimationTimingFunction(*timingFunction));
+        list.append(valueForAnimationTimingFunction(style, *timingFunction));
     if (showsDelay)
         list.append(valueForAnimationDelay(transition.delay()));
     if (transition.allowsDiscreteTransitions() != Animation::initialAllowsDiscreteTransitions())
@@ -1962,14 +1926,14 @@ static Ref<CSSValue> singleTransitionValue(const Animation& transition)
     return CSSValueList::createSpaceSeparated(WTFMove(list));
 }
 
-static Ref<CSSValue> transitionShorthandValue(const AnimationList* transitions)
+static Ref<CSSValue> transitionShorthandValue(const RenderStyle& style, const AnimationList* transitions)
 {
     if (!transitions || transitions->isEmpty())
         return CSSPrimitiveValue::create(CSSValueAll);
 
     CSSValueListBuilder list;
     for (auto& transition : *transitions)
-        list.append(singleTransitionValue(transition));
+        list.append(singleTransitionValue(style, transition));
     ASSERT(!list.isEmpty());
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
@@ -2586,14 +2550,14 @@ static Ref<CSSPrimitiveValue> fontWeight(const RenderStyle& style)
     return fontWeight(style.fontDescription().weight());
 }
 
-static Ref<CSSPrimitiveValue> fontStretch(FontSelectionValue stretch)
+static Ref<CSSPrimitiveValue> fontWidth(FontSelectionValue width)
 {
-    return CSSPrimitiveValue::create(static_cast<float>(stretch), CSSUnitType::CSS_PERCENTAGE);
+    return CSSPrimitiveValue::create(static_cast<float>(width), CSSUnitType::CSS_PERCENTAGE);
 }
 
-static Ref<CSSPrimitiveValue> fontStretch(const RenderStyle& style)
+static Ref<CSSPrimitiveValue> fontWidth(const RenderStyle& style)
 {
-    return fontStretch(style.fontDescription().stretch());
+    return fontWidth(style.fontDescription().width());
 }
 
 static Ref<CSSValue> fontStyle(std::optional<FontSelectionValue> italic, FontStyleAxis axis)
@@ -2662,7 +2626,7 @@ typedef const Length& (RenderStyle::*RenderStyleLengthGetter)() const;
 typedef LayoutUnit (RenderBoxModelObject::*RenderBoxComputedCSSValueGetter)() const;
 
 template<RenderStyleLengthGetter lengthGetter, RenderBoxComputedCSSValueGetter computedCSSValueGetter>
-static RefPtr<CSSValue> zoomAdjustedPaddingOrMarginPixelValue(const RenderStyle& style, RenderObject* renderer)
+static RefPtr<CSSValue> zoomAdjustedPaddingPixelValue(const RenderStyle& style, RenderObject* renderer)
 {
     Length unzoomedLength = (style.*lengthGetter)();
     auto* renderBox = dynamicDowncast<RenderBox>(renderer);
@@ -2671,8 +2635,19 @@ static RefPtr<CSSValue> zoomAdjustedPaddingOrMarginPixelValue(const RenderStyle&
     return zoomAdjustedPixelValue((renderBox->*computedCSSValueGetter)(), style);
 }
 
+template<RenderStyleLengthGetter lengthGetter, RenderBoxComputedCSSValueGetter computedCSSValueGetter>
+static RefPtr<CSSValue> zoomAdjustedMarginPixelValue(const RenderStyle& style, RenderObject* renderer)
+{
+    auto* renderBox = dynamicDowncast<RenderBox>(renderer);
+    if (!renderBox) {
+        Length unzoomedLength = (style.*lengthGetter)();
+        return ComputedStyleExtractor::zoomAdjustedPixelValueForLength(unzoomedLength, style);
+    }
+    return zoomAdjustedPixelValue((renderBox->*computedCSSValueGetter)(), style);
+}
+
 template<RenderStyleLengthGetter lengthGetter>
-static bool paddingOrMarginIsRendererDependent(const RenderStyle* style, RenderObject* renderer)
+static bool paddingIsRendererDependent(const RenderStyle* style, RenderObject* renderer)
 {
     return renderer && style && renderer->isRenderBox() && !(style->*lengthGetter)().isFixed();
 }
@@ -2717,7 +2692,7 @@ static CSSValueID convertToColumnBreak(BreakInside value)
 
 static inline bool isNonReplacedInline(RenderObject& renderer)
 {
-    return renderer.isInline() && !renderer.isReplacedOrInlineBlock();
+    return renderer.isInline() && !renderer.isReplacedOrAtomicInline();
 }
 
 static bool rendererCanHaveTrimmedMargin(const RenderBox& renderer, MarginTrimType marginTrimType)
@@ -2834,6 +2809,18 @@ static bool isLayoutDependent(CSSPropertyID propertyID, const RenderStyle* style
     case CSSPropertyInlineSize:
     case CSSPropertyBlockSize:
         return renderer && !renderer->isRenderOrLegacyRenderSVGModelObject() && !isNonReplacedInline(*renderer);
+    case CSSPropertyMargin:
+    case CSSPropertyMarginBlock:
+    case CSSPropertyMarginBlockStart:
+    case CSSPropertyMarginBlockEnd:
+    case CSSPropertyMarginInline:
+    case CSSPropertyMarginInlineStart:
+    case CSSPropertyMarginInlineEnd:
+    case CSSPropertyMarginTop:
+    case CSSPropertyMarginRight:
+    case CSSPropertyMarginBottom:
+    case CSSPropertyMarginLeft:
+        return renderer && renderer->isRenderBox();
     case CSSPropertyPerspectiveOrigin:
     case CSSPropertyTransformOrigin:
     case CSSPropertyTransform:
@@ -2841,52 +2828,6 @@ static bool isLayoutDependent(CSSPropertyID propertyID, const RenderStyle* style
     case CSSPropertyBackdropFilter:
     case CSSPropertyWebkitBackdropFilter: // Ditto for backdrop-filter.
         return true;
-    case CSSPropertyMargin:
-        return isLayoutDependent(CSSPropertyMarginBlock, style, renderer) || isLayoutDependent(CSSPropertyMarginInline, style, renderer);
-    case CSSPropertyMarginBlock:
-        return isLayoutDependent(CSSPropertyMarginBlockStart, style, renderer) || isLayoutDependent(CSSPropertyMarginBlockEnd, style, renderer);
-    case CSSPropertyMarginInline:
-        return isLayoutDependent(CSSPropertyMarginInlineStart, style, renderer) || isLayoutDependent(CSSPropertyMarginInlineEnd, style, renderer);
-    case CSSPropertyMarginBlockStart:
-        if (auto* renderBox = dynamicDowncast<RenderBox>(renderer))
-            return isLayoutDependent(toPaddingOrMarginPropertyID(FlowRelativeDirection::BlockStart, *renderBox, PropertyType::Margin), style, renderBox);
-        return false;
-    case CSSPropertyMarginBlockEnd:
-        if (auto* renderBox = dynamicDowncast<RenderBox>(renderer))
-            return isLayoutDependent(toPaddingOrMarginPropertyID(FlowRelativeDirection::BlockEnd, *renderBox, PropertyType::Margin), style, renderBox);
-        return false;
-    case CSSPropertyMarginInlineStart:
-        if (auto* renderBox = dynamicDowncast<RenderBox>(renderer))
-            return isLayoutDependent(toPaddingOrMarginPropertyID(FlowRelativeDirection::InlineStart, *renderBox, PropertyType::Margin), style, renderBox);
-        return false;
-    case CSSPropertyMarginInlineEnd:
-        if (auto* renderBox = dynamicDowncast<RenderBox>(renderer))
-            return isLayoutDependent(toPaddingOrMarginPropertyID(FlowRelativeDirection::InlineEnd, *renderBox, PropertyType::Margin), style, renderBox);
-        return false;
-    case CSSPropertyMarginTop: {
-        if (paddingOrMarginIsRendererDependent<&RenderStyle::marginTop>(style, renderer))
-            return true;
-        auto* renderBox = dynamicDowncast<RenderBox>(renderer);
-        return renderBox && rendererCanHaveTrimmedMargin(*renderBox, MarginTrimType::BlockStart);
-    }
-    case CSSPropertyMarginRight: {
-        if (paddingOrMarginIsRendererDependent<&RenderStyle::marginRight>(style, renderer))
-            return true;
-        auto* renderBox = dynamicDowncast<RenderBox>(renderer);
-        return renderBox && rendererCanHaveTrimmedMargin(*renderBox, MarginTrimType::InlineEnd);
-    }
-    case CSSPropertyMarginBottom: {
-        if (paddingOrMarginIsRendererDependent<&RenderStyle::marginBottom>(style, renderer))
-            return true;
-        auto* renderBox = dynamicDowncast<RenderBox>(renderer);
-        return renderBox && rendererCanHaveTrimmedMargin(*renderBox, MarginTrimType::BlockEnd);
-    }
-    case CSSPropertyMarginLeft: {
-        if (paddingOrMarginIsRendererDependent<&RenderStyle::marginLeft>(style, renderer))
-            return true;
-        auto* renderBox = dynamicDowncast<RenderBox>(renderer);
-        return renderBox && rendererCanHaveTrimmedMargin(*renderBox, MarginTrimType::InlineStart);
-    }
     case CSSPropertyPadding:
         return isLayoutDependent(CSSPropertyPaddingBlock, style, renderer) || isLayoutDependent(CSSPropertyPaddingInline, style, renderer);
     case CSSPropertyPaddingBlock:
@@ -2910,13 +2851,13 @@ static bool isLayoutDependent(CSSPropertyID propertyID, const RenderStyle* style
             return isLayoutDependent(toPaddingOrMarginPropertyID(FlowRelativeDirection::InlineEnd, *renderBox, PropertyType::Padding), style, renderBox);
         return false;
     case CSSPropertyPaddingTop:
-        return paddingOrMarginIsRendererDependent<&RenderStyle::paddingTop>(style, renderer);
+        return paddingIsRendererDependent<&RenderStyle::paddingTop>(style, renderer);
     case CSSPropertyPaddingRight:
-        return paddingOrMarginIsRendererDependent<&RenderStyle::paddingRight>(style, renderer);
+        return paddingIsRendererDependent<&RenderStyle::paddingRight>(style, renderer);
     case CSSPropertyPaddingBottom:
-        return paddingOrMarginIsRendererDependent<&RenderStyle::paddingBottom>(style, renderer);
+        return paddingIsRendererDependent<&RenderStyle::paddingBottom>(style, renderer);
     case CSSPropertyPaddingLeft:
-        return paddingOrMarginIsRendererDependent<&RenderStyle::paddingLeft>(style, renderer);
+        return paddingIsRendererDependent<&RenderStyle::paddingLeft>(style, renderer);
     case CSSPropertyGridTemplateColumns:
     case CSSPropertyGridTemplateRows:
     case CSSPropertyGridTemplate:
@@ -3342,7 +3283,7 @@ String ComputedStyleExtractor::customPropertyText(const AtomString& propertyName
 static Ref<CSSFontValue> fontShorthandValue(const RenderStyle& style, ComputedStyleExtractor::PropertyValueType valueType)
 {
     auto& description = style.fontDescription();
-    auto fontStretch = fontStretchKeyword(description.stretch());
+    auto fontWidth = fontWidthKeyword(description.width());
     auto fontStyle = fontStyleKeyword(description.italic(), description.fontStyleAxis());
 
     auto propertiesResetByShorthandAreExpressible = [&] {
@@ -3353,7 +3294,7 @@ static Ref<CSSFontValue> fontShorthandValue(const RenderStyle& style, ComputedSt
 
         // When we add font-language-override, also add code to check for non-expressible values for it here.
         return variantSettingsOmittingExpressible.isAllNormal()
-            && fontStretch
+            && fontWidth
             && fontStyle
             && description.fontSizeAdjust().isNone()
             && description.kerning() == Kerning::Auto
@@ -3371,8 +3312,8 @@ static Ref<CSSFontValue> fontShorthandValue(const RenderStyle& style, ComputedSt
         computedFont->variant = CSSPrimitiveValue::create(CSSValueSmallCaps);
     if (float weight = description.weight(); weight != 400)
         computedFont->weight = CSSPrimitiveValue::create(weight);
-    if (*fontStretch != CSSValueNormal)
-        computedFont->stretch = CSSPrimitiveValue::create(*fontStretch);
+    if (*fontWidth != CSSValueNormal)
+        computedFont->width = CSSPrimitiveValue::create(*fontWidth);
     if (*fontStyle != CSSValueNormal)
         computedFont->style = CSSPrimitiveValue::create(*fontStyle);
     computedFont->size = fontSize(style);
@@ -3605,18 +3546,14 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             ASSERT_NOT_REACHED();
         }
         return CSSPrimitiveValue::create(CSSValueNone);
+    case CSSPropertyBlockStep:
+        return blockStepShorthandValue(style);
+    case CSSPropertyBlockStepAlign:
+        return createConvertingToCSSValueID(style.blockStepAlign());
     case CSSPropertyBlockStepInsert:
-        switch (style.blockStepInsert()) {
-        case BlockStepInsert::MarginBox:
-            return CSSPrimitiveValue::create(CSSValueMarginBox);
-        case BlockStepInsert::PaddingBox:
-            return CSSPrimitiveValue::create(CSSValuePaddingBox);
-        case BlockStepInsert::ContentBox:
-            return CSSPrimitiveValue::create(CSSValueContentBox);
-        default:
-            ASSERT_NOT_REACHED();
-            return CSSPrimitiveValue::create(CSSValueNone);
-        }
+        return createConvertingToCSSValueID(style.blockStepInsert());
+    case CSSPropertyBlockStepRound:
+        return createConvertingToCSSValueID(style.blockStepRound());
     case CSSPropertyBlockStepSize: {
         auto blockStepSize = style.blockStepSize();
         if (!blockStepSize)
@@ -3688,7 +3625,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return valueForReflection(style.boxReflect(), style);
     case CSSPropertyBoxShadow:
     case CSSPropertyWebkitBoxShadow:
-        return valueForShadow(style.boxShadow(), propertyID, style);
+        return valueForBoxShadow(style.boxShadow(), style);
     case CSSPropertyCaptionSide:
         return createConvertingToCSSValueID(style.captionSide());
     case CSSPropertyCaretColor:
@@ -3827,8 +3764,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return fontSizeAdjustFromStyle(style);
     case CSSPropertyFontStyle:
         return fontStyle(style);
-    case CSSPropertyFontStretch:
-        return fontStretch(style);
+    case CSSPropertyFontWidth:
+        return fontWidth(style);
     case CSSPropertyFontVariant:
         return fontVariantShorthandValue();
     case CSSPropertyFontWeight:
@@ -4015,7 +3952,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             && rendererCanHaveTrimmedMargin(*box, MarginTrimType::BlockStart)
             && box->hasTrimmedMargin(toMarginTrimType(*box, propertyID)))
             return zoomAdjustedPixelValue(box->marginTop(), style);
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::marginTop, &RenderBoxModelObject::marginTop>(style, renderer);
+        return zoomAdjustedMarginPixelValue<&RenderStyle::marginTop, &RenderBoxModelObject::marginTop>(style, renderer);
     }
     case CSSPropertyMarginRight: {
         CheckedPtr box = dynamicDowncast<RenderBox>(renderer);
@@ -4040,13 +3977,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             && rendererCanHaveTrimmedMargin(*box, MarginTrimType::BlockEnd)
             && box->hasTrimmedMargin(toMarginTrimType(*box, propertyID)))
             return zoomAdjustedPixelValue(box->marginBottom(), style);
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::marginBottom, &RenderBoxModelObject::marginBottom>(style, renderer);
+        return zoomAdjustedMarginPixelValue<&RenderStyle::marginBottom, &RenderBoxModelObject::marginBottom>(style, renderer);
     case CSSPropertyMarginLeft: {
         if (auto* box = dynamicDowncast<RenderBox>(renderer);  box
             && rendererCanHaveTrimmedMargin(*box, MarginTrimType::InlineStart)
             && box->hasTrimmedMargin(toMarginTrimType(*box, propertyID)))
             return zoomAdjustedPixelValue(box->marginLeft(), style);
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::marginLeft, &RenderBoxModelObject::marginLeft>(style, renderer);
+        return zoomAdjustedMarginPixelValue<&RenderStyle::marginLeft, &RenderBoxModelObject::marginLeft>(style, renderer);
     }
     case CSSPropertyMarginTrim: {
         auto marginTrim = style.marginTrim();
@@ -4147,13 +4084,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyOverscrollBehaviorY:
         return createConvertingToCSSValueID(style.overscrollBehaviorY());
     case CSSPropertyPaddingTop:
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingTop, &RenderBoxModelObject::computedCSSPaddingTop>(style, renderer);
+        return zoomAdjustedPaddingPixelValue<&RenderStyle::paddingTop, &RenderBoxModelObject::computedCSSPaddingTop>(style, renderer);
     case CSSPropertyPaddingRight:
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingRight, &RenderBoxModelObject::computedCSSPaddingRight>(style, renderer);
+        return zoomAdjustedPaddingPixelValue<&RenderStyle::paddingRight, &RenderBoxModelObject::computedCSSPaddingRight>(style, renderer);
     case CSSPropertyPaddingBottom:
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingBottom, &RenderBoxModelObject::computedCSSPaddingBottom>(style, renderer);
+        return zoomAdjustedPaddingPixelValue<&RenderStyle::paddingBottom, &RenderBoxModelObject::computedCSSPaddingBottom>(style, renderer);
     case CSSPropertyPaddingLeft:
-        return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::paddingLeft, &RenderBoxModelObject::computedCSSPaddingLeft>(style, renderer);
+        return zoomAdjustedPaddingPixelValue<&RenderStyle::paddingLeft, &RenderBoxModelObject::computedCSSPaddingLeft>(style, renderer);
     case CSSPropertyPage:
         // FIXME: This is missing a computed style.
         return nullptr;
@@ -4240,7 +4177,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return textIndent;
     }
     case CSSPropertyTextShadow:
-        return valueForShadow(style.textShadow(), propertyID, style);
+        return valueForTextShadow(style.textShadow(), style);
     case CSSPropertyTextSpacingTrim:
         return textSpacingTrimFromStyle(style);
     case CSSPropertyTextAutospace:
@@ -4614,7 +4551,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyTransitionProperty:
         return valueListForAnimationOrTransitionProperty(style, propertyID, style.transitions());
     case CSSPropertyTransition:
-        return transitionShorthandValue(style.transitions());
+        return transitionShorthandValue(style, style.transitions());
     case CSSPropertyPointerEvents:
         return createConvertingToCSSValueID(style.pointerEvents());
     case CSSPropertyWebkitLineGrid:
@@ -4662,12 +4599,12 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyShapeOutside:
         return shapePropertyValue(style, style.shapeOutside());
     case CSSPropertyFilter:
-        return valueForFilter(style, style.filter());
+        return cssValueForFilter(style, style.filter());
     case CSSPropertyAppleColorFilter:
-        return valueForFilter(style, style.appleColorFilter());
+        return cssValueForAppleColorFilter(style, style.appleColorFilter());
     case CSSPropertyWebkitBackdropFilter:
     case CSSPropertyBackdropFilter:
-        return valueForFilter(style, style.backdropFilter());
+        return cssValueForFilter(style, style.backdropFilter());
     case CSSPropertyMathStyle:
         return createConvertingToCSSValueID(style.mathStyle());
     case CSSPropertyMixBlendMode:
@@ -4779,13 +4716,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyScrollMargin:
         return getCSSPropertyValuesFor4SidesShorthand(scrollMarginShorthand());
     case CSSPropertyScrollMarginBottom:
-        return zoomAdjustedPixelValueForLength(style.scrollMarginBottom(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollMarginBottom(), style));
     case CSSPropertyScrollMarginTop:
-        return zoomAdjustedPixelValueForLength(style.scrollMarginTop(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollMarginTop(), style));
     case CSSPropertyScrollMarginRight:
-        return zoomAdjustedPixelValueForLength(style.scrollMarginRight(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollMarginRight(), style));
     case CSSPropertyScrollMarginLeft:
-        return zoomAdjustedPixelValueForLength(style.scrollMarginLeft(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollMarginLeft(), style));
     case CSSPropertyScrollMarginBlock:
         return getCSSPropertyValuesFor2SidesShorthand(scrollMarginBlockShorthand());
     case CSSPropertyScrollMarginInline:
@@ -4793,13 +4730,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyScrollPadding:
         return getCSSPropertyValuesFor4SidesShorthand(scrollPaddingShorthand());
     case CSSPropertyScrollPaddingBottom:
-        return zoomAdjustedPixelValueForLength(style.scrollPaddingBottom(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingBottom(), style));
     case CSSPropertyScrollPaddingTop:
-        return zoomAdjustedPixelValueForLength(style.scrollPaddingTop(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingTop(), style));
     case CSSPropertyScrollPaddingRight:
-        return zoomAdjustedPixelValueForLength(style.scrollPaddingRight(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingRight(), style));
     case CSSPropertyScrollPaddingLeft:
-        return zoomAdjustedPixelValueForLength(style.scrollPaddingLeft(), style);
+        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingLeft(), style));
     case CSSPropertyScrollPaddingBlock:
         return getCSSPropertyValuesFor2SidesShorthand(scrollPaddingBlockShorthand());
     case CSSPropertyScrollPaddingInline:
@@ -4846,9 +4783,14 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return createConvertingToCSSValueID(style.applePayButtonType());
 #endif
 
+#if HAVE(CORE_MATERIAL)
+    case CSSPropertyAppleVisualEffect:
+        return createConvertingToCSSValueID(style.appleVisualEffect());
+#endif
+
 #if ENABLE(DARK_MODE_CSS)
     case CSSPropertyColorScheme:
-        return CSSColorSchemeValue::create(Style::toCSS(style.colorScheme(), style));
+        return CSS::createCSSValue(Style::toCSS(style.colorScheme(), style));
 #endif
 
     // Length properties for SVG.
@@ -4896,6 +4838,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         if (!style.positionAnchor())
             return CSSPrimitiveValue::create(CSSValueAuto);
         return valueForScopedName(*style.positionAnchor());
+    case CSSPropertyPositionTryFallbacks:
+        return valueForPositionTryFallbacks(style.positionTryFallbacks());
     case CSSPropertyPositionTryOrder: {
         switch (style.positionTryOrder()) {
         case Style::PositionTryOrder::Normal:
@@ -5107,9 +5051,11 @@ Ref<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForShorthandProper
 
 RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesFor2SidesShorthand(const StylePropertyShorthand& shorthand) const
 {
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Assume the properties are in the usual order start, end.
     auto startValue = propertyValue(shorthand.properties()[0], UpdateLayout::No);
     auto endValue = propertyValue(shorthand.properties()[1], UpdateLayout::No);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     // All 2 properties must be specified.
     if (!startValue || !endValue)
@@ -5122,11 +5068,13 @@ RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesFor2SidesShorth
 
 RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesFor4SidesShorthand(const StylePropertyShorthand& shorthand) const
 {
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Assume the properties are in the usual order top, right, bottom, left.
     auto topValue = propertyValue(shorthand.properties()[0], UpdateLayout::No);
     auto rightValue = propertyValue(shorthand.properties()[1], UpdateLayout::No);
     auto bottomValue = propertyValue(shorthand.properties()[2], UpdateLayout::No);
     auto leftValue = propertyValue(shorthand.properties()[3], UpdateLayout::No);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     // All 4 properties must be specified.
     if (!topValue || !rightValue || !bottomValue || !leftValue)
@@ -5253,5 +5201,3 @@ Ref<CSSValue> ComputedStyleExtractor::getMaskShorthandValue() const
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

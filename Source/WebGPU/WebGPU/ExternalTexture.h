@@ -27,7 +27,7 @@
 
 #import "Device.h"
 #import <wtf/Ref.h>
-#import <wtf/RefCounted.h>
+#import <wtf/RefCountedAndCanMakeWeakPtr.h>
 #import <wtf/TZoneMalloc.h>
 #import <wtf/WeakHashSet.h>
 #import <wtf/WeakPtr.h>
@@ -41,7 +41,7 @@ namespace WebGPU {
 
 class CommandEncoder;
 
-class ExternalTexture : public WGPUExternalTextureImpl, public RefCounted<ExternalTexture>, public CanMakeWeakPtr<ExternalTexture> {
+class ExternalTexture : public RefCountedAndCanMakeWeakPtr<ExternalTexture>, public WGPUExternalTextureImpl {
     WTF_MAKE_TZONE_ALLOCATED(ExternalTexture);
 public:
     static Ref<ExternalTexture> create(CVPixelBufferRef pixelBuffer, WGPUColorSpace colorSpace, Device& device)
@@ -66,6 +66,7 @@ public:
     bool isValid() const;
     void update(CVPixelBufferRef);
     size_t openCommandEncoderCount() const;
+    void updateExternalTextures(id<MTLTexture>, id<MTLTexture>);
 
 private:
     ExternalTexture(CVPixelBufferRef, WGPUColorSpace, Device&);
@@ -77,6 +78,8 @@ private:
     WGPUColorSpace m_colorSpace;
     const Ref<Device> m_device;
     bool m_destroyed { false };
+    id<MTLTexture> m_texture0 { nil };
+    id<MTLTexture> m_texture1 { nil };
     mutable WeakHashSet<CommandEncoder> m_commandEncoders;
 };
 

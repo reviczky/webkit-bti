@@ -33,6 +33,7 @@
 #include "NinePieceImage.h"
 #include "OffsetRotation.h"
 #include "PathOperation.h"
+#include "PositionTryFallback.h"
 #include "RotateTransformOperation.h"
 #include "ScaleTransformOperation.h"
 #include "ScopedName.h"
@@ -43,6 +44,9 @@
 #include "ShapeValue.h"
 #include "StyleColor.h"
 #include "StyleContentAlignmentData.h"
+#include "StylePrimitiveNumericTypes.h"
+#include "StyleScrollMargin.h"
+#include "StyleScrollPadding.h"
 #include "StyleScrollSnapPoints.h"
 #include "StyleSelfAlignmentData.h"
 #include "StyleTextEdge.h"
@@ -65,6 +69,8 @@ class TextStream;
 }
 
 namespace WebCore {
+
+using namespace CSS::Literals;
 
 class AnimationList;
 class ContentData;
@@ -123,10 +129,16 @@ public:
     Length perspectiveOriginY;
 
     LineClampValue lineClamp; // An Apple extension.
-    
+
+    float zoom;
+
     size_t maxLines { 0 };
 
     OverflowContinue overflowContinue { OverflowContinue::Auto };
+
+    OptionSet<TouchAction> touchActions;
+    OptionSet<MarginTrimType> marginTrim;
+    OptionSet<Containment> contain;
 
     IntSize initialLetter;
 
@@ -137,9 +149,11 @@ public:
     DataRef<StyleGridData> grid;
     DataRef<StyleGridItemData> gridItem;
 
+    // Only meaningful when `hasClip` is true.
     LengthBox clip;
-    LengthBox scrollMargin { 0, 0, 0, 0 };
-    LengthBox scrollPadding { Length(LengthType::Auto), Length(LengthType::Auto), Length(LengthType::Auto), Length(LengthType::Auto) };
+
+    Style::ScrollMargin scrollMargin { Style::ScrollMarginEdge { 0_css_px } };
+    Style::ScrollPadding scrollPadding { Style::ScrollPaddingEdge { CSS::Keyword::Auto { } } };
 
     CounterDirectiveMap counterDirectives;
 
@@ -159,10 +173,10 @@ public:
 
     RefPtr<PathOperation> clipPath;
 
-    StyleColor textDecorationColor;
+    Style::Color textDecorationColor;
 
     DataRef<StyleCustomPropertyData> customProperties;
-    HashSet<AtomString> customPaintWatchedProperties;
+    UncheckedKeyHashSet<AtomString> customPaintWatchedProperties;
 
     RefPtr<RotateTransformOperation> rotate;
     RefPtr<ScaleTransformOperation> scale;
@@ -184,14 +198,6 @@ public:
 
     TextDecorationThickness textDecorationThickness;
 
-    OptionSet<TouchAction> touchActions;
-    OptionSet<MarginTrimType> marginTrim;
-    OptionSet<Containment> contain;
-
-    ScrollSnapType scrollSnapType;
-    ScrollSnapAlign scrollSnapAlign;
-    ScrollSnapStop scrollSnapStop { ScrollSnapStop::Normal };
-
     Vector<Ref<ScrollTimeline>> scrollTimelines;
     Vector<ScrollAxis> scrollTimelineAxes;
     Vector<AtomString> scrollTimelineNames;
@@ -204,16 +210,21 @@ public:
     TimelineScope timelineScope;
 
     ScrollbarGutter scrollbarGutter;
-    ScrollbarWidth scrollbarWidth { ScrollbarWidth::Auto };
 
-    float zoom;
+    ScrollSnapType scrollSnapType;
+    ScrollSnapAlign scrollSnapAlign;
+    ScrollSnapStop scrollSnapStop { ScrollSnapStop::Normal };
+
     AtomString pseudoElementNameArgument;
 
     Vector<Style::ScopedName> anchorNames;
     std::optional<Style::ScopedName> positionAnchor;
+    Vector<PositionTryFallback> positionTryFallbacks;
 
     std::optional<Length> blockStepSize;
+    unsigned blockStepAlign : 2; // BlockStepAlign
     unsigned blockStepInsert : 2; // BlockStepInsert
+    unsigned blockStepRound : 2; // BlockStepRound
 
     unsigned overscrollBehaviorX : 2; // OverscrollBehavior
     unsigned overscrollBehaviorY : 2; // OverscrollBehavior
@@ -234,6 +245,8 @@ public:
     unsigned effectiveBlendMode: 5; // BlendMode
     unsigned isolation : 1; // Isolation
 
+    unsigned inputSecurity : 1; // InputSecurity
+
 #if ENABLE(APPLE_PAY)
     unsigned applePayButtonStyle : 2; // ApplePayButtonStyle
     unsigned applePayButtonType : 4; // ApplePayButtonType
@@ -243,8 +256,6 @@ public:
     unsigned breakAfter : 4; // BreakBetween
     unsigned breakInside : 3; // BreakInside
 
-    unsigned inputSecurity : 1; // InputSecurity
-
     unsigned containIntrinsicWidthType : 2; // ContainIntrinsicSizeType
     unsigned containIntrinsicHeightType : 2; // ContainIntrinsicSizeType
 
@@ -252,13 +263,21 @@ public:
 
     unsigned textBoxTrim : 2; // TextBoxTrim
 
-    unsigned overflowAnchor : 1; // Scroll Anchoring- OverflowAnchor
+    unsigned overflowAnchor : 1; // Scroll Anchoring - OverflowAnchor
 
     bool hasClip : 1;
 
     unsigned positionTryOrder : 3; // Style::PositionTryOrder; 5 values so 3 bits.
 
-    FieldSizing fieldSizing { FieldSizing::Fixed };
+    unsigned fieldSizing : 1; // FieldSizing
+
+    unsigned nativeAppearanceDisabled : 1;
+
+#if HAVE(CORE_MATERIAL)
+    unsigned appleVisualEffect : 4; // AppleVisualEffect
+#endif
+
+    unsigned scrollbarWidth : 2; // ScrollbarWidth
 
 private:
     StyleRareNonInheritedData();

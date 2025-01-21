@@ -212,6 +212,11 @@ struct RenderLayerCompositor::CompositingState {
 
         if ((layer.isComposited() && layer.hasBackdropFilter()) || (layer.hasBackdropFilterDescendantsWithoutRoot() && !layer.isBackdropRoot()))
             hasBackdropFilterDescendantsWithoutRoot = true;
+
+#if HAVE(CORE_MATERIAL)
+        if (layer.isComposited() && layer.hasAppleVisualEffectRequiringBackdropFilter())
+            hasBackdropFilterDescendantsWithoutRoot = true;
+#endif
     }
 
     bool hasNonRootCompositedAncestor() const
@@ -780,14 +785,24 @@ void RenderLayerCompositor::scheduleRenderingUpdate()
     page().scheduleRenderingUpdate(RenderingUpdateStep::LayerFlush);
 }
 
+static inline ScrollableArea::VisibleContentRectIncludesScrollbars scrollbarInclusionForVisibleRect()
+{
+#if USE(COORDINATED_GRAPHICS)
+    return ScrollableArea::VisibleContentRectIncludesScrollbars::Yes;
+#else
+    return ScrollableArea::VisibleContentRectIncludesScrollbars::No;
+#endif
+}
+
 FloatRect RenderLayerCompositor::visibleRectForLayerFlushing() const
 {
     const LocalFrameView& frameView = m_renderView.frameView();
 #if PLATFORM(IOS_FAMILY)
     return frameView.exposedContentRect();
 #else
+
     // Having a m_scrolledContentsLayer indicates that we're doing scrolling via GraphicsLayers.
-    FloatRect visibleRect = m_scrolledContentsLayer ? FloatRect({ }, frameView.sizeForVisibleContent()) : frameView.visibleContentRect();
+    FloatRect visibleRect = m_scrolledContentsLayer ? FloatRect({ }, frameView.sizeForVisibleContent(scrollbarInclusionForVisibleRect())) : frameView.visibleContentRect();
 
     if (auto exposedRect = frameView.viewExposedRect())
         visibleRect.intersect(*exposedRect);
@@ -2218,6 +2233,21 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
     if (!backing)
         return;
 
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
+    auto styleChangeAffectsSeparatedProperties = [](const RenderStyle* oldStyle, const RenderStyle& newStyle) {
+        if (!oldStyle)
+            return newStyle.usedTransformStyle3D() == TransformStyle3D::Separated;
+
+        return oldStyle->usedTransformStyle3D() != newStyle.usedTransformStyle3D()
+            && (oldStyle->usedTransformStyle3D() == TransformStyle3D::Separated
+                || newStyle.usedTransformStyle3D() == TransformStyle3D::Separated);
+    };
+
+    // We need a full compositing configuration update since this also impacts the clipping strategy.
+    if (styleChangeAffectsSeparatedProperties(oldStyle, newStyle))
+        layer.setNeedsCompositingConfigurationUpdate();
+#endif
+
     backing->updateConfigurationAfterStyleChange();
 
     if (diff >= StyleDifference::Repaint) {
@@ -3278,6 +3308,9 @@ bool RenderLayerCompositor::requiresOwnBackingStore(const RenderLayer& layer, co
         || renderer.hasMask()
         || renderer.hasReflection()
         || renderer.hasFilter()
+#if HAVE(CORE_MATERIAL)
+        || renderer.hasAppleVisualEffect()
+#endif
         || renderer.hasBackdropFilter())
         return true;
 
@@ -3381,6 +3414,11 @@ OptionSet<CompositingReason> RenderLayerCompositor::reasonsForCompositing(const 
         if (renderer.hasFilter() || renderer.hasBackdropFilter())
             reasons.add(CompositingReason::FilterWithCompositedDescendants);
 
+#if HAVE(CORE_MATERIAL)
+        if (renderer.hasAppleVisualEffect())
+            reasons.add(CompositingReason::FilterWithCompositedDescendants);
+#endif
+
         if (layer.isBackdropRoot())
             reasons.add(CompositingReason::BackdropRoot);
 
@@ -3463,7 +3501,7 @@ static bool canUseDescendantClippingLayer(const RenderLayer& layer)
     // the border box, because of interactions with border-radius clipping and compositing.
     if (auto* renderer = layer.renderBox(); renderer && renderer->hasClip()) {
         auto borderBoxRect = renderer->borderBoxRect();
-        auto clipRect = renderer->clipRect({ }, nullptr);
+        auto clipRect = renderer->clipRect({ });
         
         bool clipRectInsideBorderRect = intersection(borderBoxRect, clipRect) == clipRect;
         return clipRectInsideBorderRect;
@@ -3855,6 +3893,11 @@ bool RenderLayerCompositor::requiresCompositingForFilters(RenderLayerModelObject
     if (renderer.hasBackdropFilter())
         return true;
 
+#if HAVE(CORE_MATERIAL)
+    if (renderer.hasAppleVisualEffect())
+        return true;
+#endif
+
     if (!(m_compositingTriggers & ChromeClient::FilterTrigger))
         return false;
 
@@ -3945,7 +3988,7 @@ bool RenderLayerCompositor::requiresCompositingForScrollableFrame(RequiresCompos
     if (isRootFrameCompositor())
         return false;
 
-#if PLATFORM(COCOA) || USE(NICOSIA)
+#if PLATFORM(COCOA) || USE(COORDINATED_GRAPHICS)
     if (!m_renderView.settings().asyncFrameScrollingEnabled())
         return false;
 #endif
@@ -4443,8 +4486,8 @@ float RenderLayerCompositor::zoomedOutPageScaleFactor() const
 float RenderLayerCompositor::contentsScaleMultiplierForNewTiles(const GraphicsLayer*) const
 {
 #if PLATFORM(IOS_FAMILY)
-    LegacyTileCache* tileCache = nullptr;
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(page().mainFrame());
+    RefPtr<LegacyTileCache> tileCache;
+    RefPtr localMainFrame = page().localMainFrame();
     if (auto* frameView = localMainFrame ? localMainFrame->view() : nullptr)
         tileCache = frameView->legacyTileCache();
 
@@ -5799,7 +5842,7 @@ void RenderLayerCompositor::updateSynchronousScrollingNodes()
     ASSERT(scrollingCoordinator);
 
     auto rootScrollingNodeID = m_renderView.frameView().scrollingNodeID();
-    HashSet<ScrollingNodeID> nodesToClear;
+    UncheckedKeyHashSet<ScrollingNodeID> nodesToClear;
     nodesToClear.reserveInitialCapacity(m_scrollingNodeToLayerMap.size());
     for (auto key : m_scrollingNodeToLayerMap.keys())
         nodesToClear.add(key);

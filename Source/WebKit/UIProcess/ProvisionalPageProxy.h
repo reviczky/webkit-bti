@@ -55,6 +55,8 @@ class RegistrableDomain;
 class ResourceRequest;
 enum class CrossOriginOpenerPolicyValue : uint8_t;
 enum class ShouldTreatAsContinuingLoad : uint8_t;
+struct BackForwardItemIdentifierType;
+using BackForwardItemIdentifier = ProcessQualified<ObjectIdentifier<BackForwardItemIdentifierType>>;
 }
 
 namespace WebKit {
@@ -93,6 +95,9 @@ public:
     }
     ~ProvisionalPageProxy();
 
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     WebPageProxy* page() { return m_page.get(); }
     const WebPageProxy* page() const { return m_page.get(); }
     RefPtr<WebPageProxy> protectedPage() const;
@@ -111,7 +116,7 @@ public:
     bool isProcessSwappingOnNavigationResponse() const { return m_isProcessSwappingOnNavigationResponse; }
 
     DrawingAreaProxy* drawingArea() const { return m_drawingArea.get(); }
-    std::unique_ptr<DrawingAreaProxy> takeDrawingArea();
+    RefPtr<DrawingAreaProxy> takeDrawingArea();
 
     void setNavigation(API::Navigation&);
 
@@ -148,8 +153,10 @@ public:
 
     WebPageProxyMessageReceiverRegistration& messageReceiverRegistration() { return m_messageReceiverRegistration; }
 
+    bool needsMainFrameObserver() const { return m_needsMainFrameObserver; }
+
 private:
-    ProvisionalPageProxy(WebPageProxy&, Ref<FrameProcess>&&, BrowsingContextGroup&, std::unique_ptr<SuspendedPageProxy>, API::Navigation&, bool isServerRedirect, const WebCore::ResourceRequest&, ProcessSwapRequestedByClient, bool isProcessSwappingOnNavigationResponse, API::WebsitePolicies*, WebsiteDataStore* replacedDataStoreForWebArchiveLoad = nullptr);
+    ProvisionalPageProxy(WebPageProxy&, Ref<FrameProcess>&&, BrowsingContextGroup&, RefPtr<SuspendedPageProxy>&&, API::Navigation&, bool isServerRedirect, const WebCore::ResourceRequest&, ProcessSwapRequestedByClient, bool isProcessSwappingOnNavigationResponse, API::WebsitePolicies*, WebsiteDataStore* replacedDataStoreForWebArchiveLoad = nullptr);
 
     RefPtr<WebFrameProxy> protectedMainFrame() const;
 
@@ -177,9 +184,9 @@ private:
     void logDiagnosticMessageWithEnhancedPrivacyFromWebProcess(const String& message, const String& description, WebCore::ShouldSample);
     void logDiagnosticMessageWithValueDictionaryFromWebProcess(const String& message, const String& description, const WebCore::DiagnosticLoggingClient::ValueDictionary&, WebCore::ShouldSample);
     void startURLSchemeTask(IPC::Connection&, URLSchemeTaskParameters&&);
-    void backForwardGoToItem(IPC::Connection&, const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
+    void backForwardGoToItem(IPC::Connection&, WebCore::BackForwardItemIdentifier, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void decidePolicyForNavigationActionSync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
-    void backForwardAddItem(IPC::Connection&, WebCore::FrameIdentifier, Ref<FrameState>&&);
+    void backForwardAddItem(IPC::Connection&, Ref<FrameState>&&);
     void didDestroyNavigation(WebCore::NavigationIdentifier);
 #if USE(QUICK_LOOK)
     void requestPasswordForQuickLookDocumentInMainFrame(const String& fileName, CompletionHandler<void(const String&)>&&);
@@ -208,7 +215,7 @@ private:
     // Keep WebsiteDataStore alive for provisional page load.
     RefPtr<WebsiteDataStore> m_websiteDataStore;
 
-    std::unique_ptr<DrawingAreaProxy> m_drawingArea;
+    RefPtr<DrawingAreaProxy> m_drawingArea;
     RefPtr<WebFrameProxy> m_mainFrame;
     RefPtr<WebsiteDataStore> m_replacedDataStoreForWebArchiveLoad;
     WebCore::NavigationIdentifier m_navigationID;
@@ -220,6 +227,7 @@ private:
     bool m_needsCookieAccessAddedInNetworkProcess { false };
     bool m_needsDidStartProvisionalLoad { true };
     bool m_shouldClosePage { true };
+    bool m_needsMainFrameObserver { false };
     URL m_provisionalLoadURL;
     WebPageProxyMessageReceiverRegistration m_messageReceiverRegistration;
     std::unique_ptr<WebsitePoliciesData> m_mainFrameWebsitePoliciesData;

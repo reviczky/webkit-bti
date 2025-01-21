@@ -29,10 +29,13 @@
 #if USE(SKIA)
 
 #include "UpdateInfo.h"
-#include <WebCore/BitmapInfo.h>
 #include <WebCore/GraphicsContextSkia.h>
 #include <skia/core/SkBitmap.h>
 #include <skia/core/SkCanvas.h>
+
+#if PLATFORM(WIN)
+#include <WebCore/BitmapInfo.h>
+#endif
 
 namespace WebKit {
 
@@ -75,8 +78,7 @@ void BackingStore::incorporateUpdate(UpdateInfo&& updateInfo)
         return;
 
 #if ASSERT_ENABLED
-    WebCore::IntSize updateSize = updateInfo.updateRectBounds.size();
-    updateSize.scale(m_deviceScaleFactor);
+    WebCore::IntSize updateSize = expandedIntSize(updateInfo.updateRectBounds.size() * m_deviceScaleFactor);
     ASSERT(bitmap->size() == updateSize);
 #endif
 

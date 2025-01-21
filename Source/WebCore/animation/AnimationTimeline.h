@@ -29,7 +29,7 @@
 #include "TimelineRange.h"
 #include "WebAnimationTypes.h"
 #include <wtf/Forward.h>
-#include <wtf/RefCounted.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -37,7 +37,7 @@ namespace WebCore {
 class AnimationTimelinesController;
 class WebAnimation;
 
-class AnimationTimeline : public RefCounted<AnimationTimeline>, public CanMakeWeakPtr<AnimationTimeline> {
+class AnimationTimeline : public RefCountedAndCanMakeWeakPtr<AnimationTimeline> {
 public:
     virtual ~AnimationTimeline();
 
@@ -53,7 +53,7 @@ public:
     virtual void animationTimingDidChange(WebAnimation&);
     virtual void removeAnimation(WebAnimation&);
 
-    virtual std::optional<WebAnimationTime> currentTime(const TimelineRange& = { }) { return m_currentTime; }
+    virtual std::optional<WebAnimationTime> currentTime() { return m_currentTime; }
     virtual std::optional<WebAnimationTime> duration() const { return m_duration; }
 
     virtual void detachFromDocument();

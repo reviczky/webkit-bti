@@ -30,6 +30,7 @@
 #include "CSSPropertyParser.h"
 #include "ComputedStyleExtractor.h"
 #include "Document.h"
+#include "DocumentClasses.h"
 #include "ElementChildIteratorInlines.h"
 #include "Event.h"
 #include "EventNames.h"
@@ -819,10 +820,14 @@ bool SVGElement::filterOutAnimatableAttribute(const QualifiedName&) const
 
 String SVGElement::title() const
 {
+    RefPtr page = document().protectedPage();
+    if (!page)
+        return String();
+
     // According to spec, for stand-alone SVG documents we should not return a title when
     // hovering over the rootmost SVG element (the first <title> element is the title of
     // the document, not a tooltip) so we instantly return.
-    if (isOutermostSVGSVGElement() && document().topDocument().isSVGDocument())
+    if (isOutermostSVGSVGElement() && page->topDocumentHasDocumentClass(DocumentClass::SVG))
         return String();
     RefPtr firstTitle = childrenOfType<SVGTitleElement>(*this).first();
     return firstTitle ? const_cast<SVGTitleElement&>(*firstTitle).innerText() : String();
@@ -900,7 +905,8 @@ CSSPropertyID SVGElement::cssPropertyIdForSVGAttributeName(const QualifiedName& 
     case AttributeNames::font_size_adjustAttr:
         return CSSPropertyFontSizeAdjust;
     case AttributeNames::font_stretchAttr:
-        return CSSPropertyFontStretch;
+    case AttributeNames::font_widthAttr:
+        return CSSPropertyFontWidth;
     case AttributeNames::font_styleAttr:
         return CSSPropertyFontStyle;
     case AttributeNames::font_variantAttr:

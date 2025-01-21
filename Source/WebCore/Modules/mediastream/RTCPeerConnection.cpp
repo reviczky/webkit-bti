@@ -54,6 +54,7 @@
 #include "RTCConfiguration.h"
 #include "RTCController.h"
 #include "RTCDataChannel.h"
+#include "RTCDataChannelEvent.h"
 #include "RTCDtlsTransport.h"
 #include "RTCDtlsTransportBackend.h"
 #include "RTCIceCandidate.h"
@@ -75,8 +76,6 @@
 #if USE(LIBWEBRTC)
 #include "LibWebRTCProvider.h"
 #endif
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 
@@ -781,6 +780,7 @@ bool RTCPeerConnection::virtualHasPendingActivity() const
 
 void RTCPeerConnection::addInternalTransceiver(Ref<RTCRtpTransceiver>&& transceiver)
 {
+    ALWAYS_LOG(LOGIDENTIFIER, "Adding internal transceiver with mid "_s, transceiver->mid());
     transceiver->setConnection(*this);
     m_transceiverSet.append(WTFMove(transceiver));
 }
@@ -980,6 +980,19 @@ void RTCPeerConnection::dispatchEvent(Event& event)
     EventTarget::dispatchEvent(event);
 }
 
+void RTCPeerConnection::dispatchDataChannelEvent(UniqueRef<RTCDataChannelHandler>&& channelHandler, String&& label, RTCDataChannelInit&& channelInit)
+{
+    queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this, label = WTFMove(label), channelHandler = WTFMove(channelHandler), channelInit = WTFMove(channelInit)]() mutable {
+        if (isClosed())
+            return;
+
+        auto channel = RTCDataChannel::create(*document(), channelHandler.moveToUniquePtr(), WTFMove(label), WTFMove(channelInit), RTCDataChannelState::Open);
+        ALWAYS_LOG(LOGIDENTIFIER, makeString("Dispatching data-channel event for channel "_s, channel->label()));
+        dispatchEvent(RTCDataChannelEvent::create(eventNames().datachannelEvent, Event::CanBubble::No, Event::IsCancelable::No, Ref { channel }));
+        channel->fireOpenEventIfNeeded();
+    });
+}
+
 static inline ExceptionOr<PeerConnectionBackend::CertificateInformation> certificateTypeFromAlgorithmIdentifier(JSC::JSGlobalObject& lexicalGlobalObject, RTCPeerConnection::AlgorithmIdentifier&& algorithmIdentifier)
 {
     if (std::holds_alternative<String>(algorithmIdentifier))
@@ -1009,7 +1022,7 @@ static inline ExceptionOr<PeerConnectionBackend::CertificateInformation> certifi
             int publicExponent = 0;
             int value = 1;
             for (unsigned counter = 0; counter < parameters.publicExponent->byteLength(); ++counter) {
-                publicExponent += parameters.publicExponent->data()[counter] * value;
+                publicExponent += parameters.publicExponent->typedSpan()[counter] * value;
                 value <<= 8;
             }
 
@@ -1218,7 +1231,5 @@ void RTCPeerConnection::stopGatheringStatLogs()
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // ENABLE(WEB_RTC)

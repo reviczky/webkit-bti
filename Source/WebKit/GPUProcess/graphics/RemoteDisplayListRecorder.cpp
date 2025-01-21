@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "RemoteDisplayListRecorder.h"
+#include "SharedPreferencesForWebProcess.h"
 
 #if ENABLE(GPU_PROCESS)
 
@@ -91,13 +92,13 @@ std::optional<SourceImage> RemoteDisplayListRecorder::sourceImage(RenderingResou
 
 void RemoteDisplayListRecorder::startListeningForIPC()
 {
-    m_renderingBackend->streamConnection().startReceivingMessages(*this, Messages::RemoteDisplayListRecorder::messageReceiverName(), m_imageBufferIdentifier.toUInt64());
+    protectedRenderingBackend()->protectedStreamConnection()->startReceivingMessages(*this, Messages::RemoteDisplayListRecorder::messageReceiverName(), m_imageBufferIdentifier.toUInt64());
 }
 
 void RemoteDisplayListRecorder::stopListeningForIPC()
 {
-    if (auto renderingBackend = std::exchange(m_renderingBackend, { }))
-        renderingBackend->streamConnection().stopReceivingMessages(Messages::RemoteDisplayListRecorder::messageReceiverName(), m_imageBufferIdentifier.toUInt64());
+    if (RefPtr renderingBackend = std::exchange(m_renderingBackend, nullptr))
+        renderingBackend->protectedStreamConnection()->stopReceivingMessages(Messages::RemoteDisplayListRecorder::messageReceiverName(), m_imageBufferIdentifier.toUInt64());
 }
 
 void RemoteDisplayListRecorder::save()
@@ -335,11 +336,6 @@ void RemoteDisplayListRecorder::drawDecomposedGlyphs(RenderingResourceIdentifier
     handleItem(DisplayList::DrawDecomposedGlyphs(fontIdentifier, decomposedGlyphsIdentifier), *font, *decomposedGlyphs);
 }
 
-void RemoteDisplayListRecorder::drawDisplayListItems(Vector<WebCore::DisplayList::Item>&& items, const FloatPoint& destination)
-{
-    handleItem(DisplayList::DrawDisplayListItems(WTFMove(items), destination), resourceCache().resourceHeap(), protectedControlFactory());
-}
-
 void RemoteDisplayListRecorder::drawImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const FloatRect& destinationRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     RefPtr sourceImage = imageBuffer(imageBufferIdentifier);
@@ -525,9 +521,10 @@ void RemoteDisplayListRecorder::fillEllipse(const FloatRect& rect)
 #if PLATFORM(COCOA) && ENABLE(VIDEO)
 SharedVideoFrameReader& RemoteDisplayListRecorder::sharedVideoFrameReader()
 {
-    if (!m_sharedVideoFrameReader)
-        m_sharedVideoFrameReader = makeUnique<SharedVideoFrameReader>(Ref { m_renderingBackend->gpuConnectionToWebProcess().videoFrameObjectHeap() }, m_renderingBackend->gpuConnectionToWebProcess().webProcessIdentity());
-
+    if (!m_sharedVideoFrameReader) {
+        Ref gpuConnectionToWebProcess = m_renderingBackend->gpuConnectionToWebProcess();
+        m_sharedVideoFrameReader = makeUnique<SharedVideoFrameReader>(Ref { gpuConnectionToWebProcess->videoFrameObjectHeap() }, gpuConnectionToWebProcess->webProcessIdentity());
+    }
     return *m_sharedVideoFrameReader;
 }
 
@@ -630,6 +627,30 @@ void RemoteDisplayListRecorder::applyFillPattern()
 void RemoteDisplayListRecorder::applyDeviceScaleFactor(float scaleFactor)
 {
     handleItem(DisplayList::ApplyDeviceScaleFactor(scaleFactor));
+}
+
+void RemoteDisplayListRecorder::beginPage(const IntSize& pageSize)
+{
+    handleItem(DisplayList::BeginPage(pageSize));
+}
+
+void RemoteDisplayListRecorder::endPage()
+{
+    handleItem(DisplayList::EndPage());
+}
+
+void RemoteDisplayListRecorder::setURLForRect(const URL& link, const FloatRect& destRect)
+{
+    handleItem(DisplayList::SetURLForRect(link, destRect));
+}
+
+std::optional<SharedPreferencesForWebProcess> RemoteDisplayListRecorder::sharedPreferencesForWebProcess() const
+{
+    RefPtr renderingBackend = m_renderingBackend;
+    if (renderingBackend)
+        return renderingBackend->sharedPreferencesForWebProcess();
+
+    return std::nullopt;
 }
 
 } // namespace WebKit

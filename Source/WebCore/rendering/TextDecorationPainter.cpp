@@ -33,9 +33,8 @@
 #include "RenderStyleInlines.h"
 #include "RenderText.h"
 #include "ShadowData.h"
+#include "TextBoxPainter.h"
 #include "TextRun.h"
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 
@@ -123,24 +122,23 @@ static DashArray translateIntersectionPointsToSkipInkBoundaries(const DashArray&
     
     // Step 1: Make pairs so we can sort based on range starting-point. We dilate the ranges in this step as well.
     Vector<std::pair<float, float>> tuples;
-    for (auto i = intersections.begin(); i != intersections.end(); i++, i++)
-        tuples.append(std::make_pair(*i - dilationAmount, *(i + 1) + dilationAmount));
+    for (size_t i = 0; i < intersections.size(); i += 2)
+        tuples.append(std::pair { intersections[i] - dilationAmount, intersections[i + 1] + dilationAmount });
     std::sort(tuples.begin(), tuples.end(), &compareTuples);
 
     // Step 2: Deal with intersecting ranges.
     Vector<std::pair<float, float>> intermediateTuples;
     if (tuples.size() >= 2) {
-        intermediateTuples.append(*tuples.begin());
-        for (auto i = tuples.begin() + 1; i != tuples.end(); i++) {
+        intermediateTuples.append(tuples.first());
+        for (size_t i = 1; i < tuples.size(); ++i) {
+            auto [secondStart, secondEnd] = tuples[i];
             float& firstEnd = intermediateTuples.last().second;
-            float secondStart = i->first;
-            float secondEnd = i->second;
             if (secondStart <= firstEnd && secondEnd <= firstEnd) {
                 // Ignore this range completely
             } else if (secondStart <= firstEnd)
                 firstEnd = secondEnd;
             else
-                intermediateTuples.append(*i);
+                intermediateTuples.append(std::pair { secondStart, secondEnd });
         }
     } else {
         // XXX(274780): A plain assignment or move here makes Clang generate bad code in LTO builds.
@@ -195,10 +193,10 @@ bool TextDecorationPainter::Styles::operator==(const Styles& other) const
         && underline.decorationStyle == other.underline.decorationStyle && overline.decorationStyle == other.overline.decorationStyle && linethrough.decorationStyle == other.linethrough.decorationStyle;
 }
 
-TextDecorationPainter::TextDecorationPainter(GraphicsContext& context, const FontCascade& font, const ShadowData* shadow, const FilterOperations* colorFilter, bool isPrinting, bool isHorizontal)
+TextDecorationPainter::TextDecorationPainter(GraphicsContext& context, const FontCascade& font, const ShadowData* shadow, const FilterOperations* colorFilter, bool isPrinting, WritingMode writingMode)
     : m_context(context)
     , m_isPrinting(isPrinting)
-    , m_isHorizontal(isHorizontal)
+    , m_writingMode(writingMode)
     , m_shadow(shadow)
     , m_shadowColorFilter(colorFilter)
     , m_font(font)
@@ -216,7 +214,9 @@ void TextDecorationPainter::paintBackgroundDecorations(const RenderStyle& style,
         if (underlineStyle == TextDecorationStyle::Wavy)
             strokeWavyTextDecoration(m_context, rect, decorationGeometry.wavyStrokeParameters);
         else if (decoration == TextDecorationLine::Underline || decoration == TextDecorationLine::Overline) {
-            if ((style.textDecorationSkipInk() == TextDecorationSkipInk::Auto || style.textDecorationSkipInk() == TextDecorationSkipInk::All) && m_isHorizontal) {
+            if ((style.textDecorationSkipInk() == TextDecorationSkipInk::Auto
+                || style.textDecorationSkipInk() == TextDecorationSkipInk::All)
+                && !m_writingMode.isVerticalTypographic()) {
                 if (!m_context.paintingDisabled()) {
                     auto underlineBoundingBox = m_context.computeUnderlineBoundsForText(rect, m_isPrinting);
                     auto intersections = m_font.dashesForIntersectionsWithRect(textRun, decorationGeometry.textOrigin, underlineBoundingBox);
@@ -250,11 +250,10 @@ void TextDecorationPainter::paintBackgroundDecorations(const RenderStyle& style,
             auto shadowExtent = shadow->paintingExtent();
             auto shadowRect = clipRect;
             shadowRect.inflate(shadowExtent);
-            auto shadowX = m_isHorizontal ? shadow->x().value() : shadow->y().value();
-            auto shadowY = m_isHorizontal ? shadow->y().value() : -shadow->x().value();
-            shadowRect.move(shadowX, shadowY);
+            auto shadowOffset = TextBoxPainter::rotateShadowOffset(shadow->location(), m_writingMode);
+            shadowRect.move(shadowOffset);
             clipRect.unite(shadowRect);
-            extraOffset = std::max(extraOffset, std::max(0.f, shadowY) + shadowExtent);
+            extraOffset = std::max(extraOffset, std::max(0.f, shadowOffset.height()) + shadowExtent);
         }
         m_context.save();
         m_context.clip(clipRect);
@@ -284,9 +283,9 @@ void TextDecorationPainter::paintBackgroundDecorations(const RenderStyle& style,
             if (m_shadowColorFilter)
                 m_shadowColorFilter->transformColor(shadowColor);
 
-            auto shadowX = m_isHorizontal ? shadow->x().value() : shadow->y().value();
-            auto shadowY = m_isHorizontal ? shadow->y().value() : -shadow->x().value();
-            m_context.setDropShadow({ { shadowX, shadowY - extraOffset }, shadow->radius().value(), shadowColor, ShadowRadiusMode::Default });
+            auto shadowOffset = TextBoxPainter::rotateShadowOffset(shadow->location(), m_writingMode);
+            shadowOffset.expand(0, -extraOffset);
+            m_context.setDropShadow({ shadowOffset, shadow->radius().value, shadowColor, ShadowRadiusMode::Default });
             shadow = shadow->next();
         };
         applyShadowIfNeeded();
@@ -424,5 +423,3 @@ OptionSet<TextDecorationLine> TextDecorationPainter::textDecorationsInEffectForS
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

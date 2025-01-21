@@ -134,8 +134,12 @@ MediaRecorderPrivateBackend::MediaRecorderPrivateBackend(MediaStreamPrivate& str
         }
     } else {
         containerType = selectedTracks.videoTrack ? "video/mp4"_s : "audio/mp4"_s;
-        if (codecs.isEmpty() && selectedTracks.audioTrack && !selectedTracks.videoTrack)
-            codecs.append("mp4a"_s);
+        if (codecs.isEmpty()) {
+            if (selectedTracks.videoTrack)
+                codecs.append("avc1.4d002a"_s);
+            if (selectedTracks.audioTrack)
+                codecs.append("mp4a"_s);
+        }
     }
 
     StringBuilder builder;
@@ -490,7 +494,7 @@ void MediaRecorderPrivateBackend::processSample(GRefPtr<GstSample>&& sample)
     Locker locker { m_dataLock };
 
     GST_LOG_OBJECT(m_transcoder.get(), "Queueing %zu bytes of encoded data, caps: %" GST_PTR_FORMAT, buffer.size(), gst_sample_get_caps(sample.get()));
-    m_data.append(std::span<const uint8_t> { buffer.data(), buffer.size() });
+    m_data.append(buffer.span<uint8_t>());
 }
 
 void MediaRecorderPrivateBackend::notifyPosition(GstClockTime position)

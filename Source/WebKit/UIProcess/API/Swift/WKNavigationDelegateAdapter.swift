@@ -24,19 +24,39 @@
 #if ENABLE_SWIFTUI && compiler(>=6.0)
 
 import Foundation
+internal import WebKit_Private
 
+fileprivate struct DefaultNavigationDecider: NavigationDeciding {
+}
+
+@MainActor
 final class WKNavigationDelegateAdapter: NSObject, WKNavigationDelegate {
-    private let navigationProgressContinuation: AsyncStream<WebPage_v0.NavigationEvent>.Continuation
-
-    init(navigationProgressContinuation: AsyncStream<WebPage_v0.NavigationEvent>.Continuation) {
+    init(
+        navigationProgressContinuation: AsyncStream<WebPage_v0.NavigationEvent>.Continuation,
+        downloadProgressContinuation: AsyncStream<WebPage_v0.DownloadEvent>.Continuation,
+        navigationDecider: (any NavigationDeciding)?
+    ) {
         self.navigationProgressContinuation = navigationProgressContinuation
+        self.downloadProgressContinuation = downloadProgressContinuation
+        self.navigationDecider = navigationDecider ?? DefaultNavigationDecider()
     }
+
+    weak var owner: WebPage_v0? = nil
+
+    private let navigationProgressContinuation: AsyncStream<WebPage_v0.NavigationEvent>.Continuation
+    private let downloadProgressContinuation: AsyncStream<WebPage_v0.DownloadEvent>.Continuation
+    private let navigationDecider: any NavigationDeciding
 
     // MARK: Navigation progress reporting
 
     private func yieldNavigationProgress(kind: WebPage_v0.NavigationEvent.Kind, cocoaNavigation: WKNavigation!) {
         let navigation = WebPage_v0.NavigationEvent(kind: kind, navigationID: .init(cocoaNavigation))
         navigationProgressContinuation.yield(navigation)
+    }
+
+    private func yieldDownloadProgress(kind: WebPage_v0.DownloadEvent.Kind, download: WKDownload) {
+        let downloadEvent = WebPage_v0.DownloadEvent(kind: kind, download: .init(download))
+        downloadProgressContinuation.yield(downloadEvent)
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -61,6 +81,52 @@ final class WKNavigationDelegateAdapter: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
         yieldNavigationProgress(kind: .failed(underlyingError: error), cocoaNavigation: navigation)
+    }
+
+    // MARK: Downloads
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = owner?.backingDownloadDelegate
+        yieldDownloadProgress(kind: .started, download: download)
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = owner?.backingDownloadDelegate
+        yieldDownloadProgress(kind: .started, download: download)
+    }
+
+    @objc(_webView:contextMenuDidCreateDownload:)
+    func _webView(_ webView: WKWebView!, contextMenuDidCreateDownload download: WKDownload!) {
+        download.delegate = owner?.backingDownloadDelegate
+        yieldDownloadProgress(kind: .started, download: download)
+    }
+
+    // MARK: Back-forward list support
+
+    @objc(_webView:backForwardListItemAdded:removed:)
+    func _webView(_ webView: WKWebView!, backForwardListItemAdded itemAdded: WKBackForwardListItem!, removed itemsRemoved: [WKBackForwardListItem]!) {
+        owner?.backForwardList = .init(webView.backForwardList)
+    }
+
+    // MARK: Navigation decisions
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
+        let convertedAction = WebPage_v0.NavigationAction(navigationAction)
+        var convertedPreferences = WebPage_v0.NavigationPreferences(preferences)
+
+        let result = await navigationDecider.decidePolicy(for: convertedAction, preferences: &convertedPreferences)
+        let newPreferences = WKWebpagePreferences(convertedPreferences)
+
+        return (result, newPreferences)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+        let convertedResponse = WebPage_v0.NavigationResponse(navigationResponse)
+        return await navigationDecider.decidePolicy(for: convertedResponse)
+    }
+
+    func webView(_ webView: WKWebView, respondTo challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        await navigationDecider.decideAuthenticationChallengeDisposition(for: challenge)
     }
 }
 

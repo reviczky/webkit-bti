@@ -160,6 +160,7 @@ inline CapabilityLevel canCompile(Node* node)
     case PutToArguments:
     case GetArgument:
     case InvalidationPoint:
+    case StringAt:
     case StringCharAt:
     case StringLocaleCompare:
     case CheckIsConstant:
@@ -283,6 +284,7 @@ inline CapabilityLevel canCompile(Node* node)
     case MapIterationEntryKey:
     case MapIterationEntryValue:
     case MapStorage:
+    case MapStorageOrSentinel:
     case MapIteratorNext:
     case MapIteratorKey:
     case MapIteratorValue:

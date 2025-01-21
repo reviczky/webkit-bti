@@ -26,6 +26,9 @@
 #pragma once
 
 #import "Instance.h"
+#import "SwiftCXXThunk.h"
+#import "WebGPU.h"
+#import "WebGPUExt.h"
 #import <Metal/Metal.h>
 #import <utility>
 #import <wtf/CompletionHandler.h>
@@ -34,7 +37,7 @@
 #import <wtf/Range.h>
 #import <wtf/RangeSet.h>
 #import <wtf/Ref.h>
-#import <wtf/RefCounted.h>
+#import <wtf/RefCountedAndCanMakeWeakPtr.h>
 #import <wtf/RetainReleaseSwift.h>
 #import <wtf/TZoneMalloc.h>
 #import <wtf/WeakHashSet.h>
@@ -70,7 +73,7 @@ public:
     ~Buffer();
 
     void destroy();
-    std::span<uint8_t> getMappedRange(size_t offset, size_t);
+    std::span<uint8_t> getMappedRange(size_t offset, size_t) HAS_SWIFTCXX_THUNK;
     void mapAsync(WGPUMapModeFlags, size_t offset, size_t, CompletionHandler<void(WGPUBufferMapAsyncStatus)>&& callback);
     void unmap();
     void setLabel(String&&);
@@ -108,11 +111,11 @@ public:
     void indirectBufferRecomputed(uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount);
     void indirectIndexedBufferRecomputed(MTLIndexType, NSUInteger indexBufferOffsetInBytes, uint64_t indirectOffset, uint32_t minVertexCount, uint32_t minInstanceCount);
 
-    bool canSkipDrawIndexedValidation(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, MTLIndexType) const;
-    void drawIndexedValidated(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, MTLIndexType);
+    bool canSkipDrawIndexedValidation(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, MTLIndexType, id<MTLIndirectCommandBuffer> = nil) const;
+    void drawIndexedValidated(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, MTLIndexType, id<MTLIndirectCommandBuffer> = nil);
 
-    bool didReadOOB() const { return m_didReadOOB; }
-    void didReadOOB(uint32_t v) { m_didReadOOB = !!v; }
+    bool didReadOOB(id<MTLIndirectCommandBuffer> = nil) const;
+    void didReadOOB(uint32_t v, id<MTLIndirectCommandBuffer> = nil);
 
     void indirectBufferInvalidated();
 #if ENABLE(WEBGPU_SWIFT)
@@ -123,7 +126,11 @@ private:
     Buffer(id<MTLBuffer>, uint64_t initialSize, WGPUBufferUsageFlags, State initialState, MappingRange initialMappingRange, Device&);
     Buffer(Device&);
 
+
+private PUBLIC_IN_WEBGPU_SWIFT:
     bool validateGetMappedRange(size_t offset, size_t rangeSize) const;
+
+private:
     NSString* errorValidatingMapAsync(WGPUMapModeFlags, size_t offset, size_t rangeSize) const;
     bool validateUnmap() const;
     void setState(State);
@@ -144,7 +151,9 @@ private:
     // [[mapping]] is unnecessary; we can just use m_device.contents.
     MappingRange m_mappingRange { 0, 0 };
     using MappedRanges = RangeSet<Range<size_t>>;
+private PUBLIC_IN_WEBGPU_SWIFT:
     MappedRanges m_mappedRanges;
+private:
     WGPUMapModeFlags m_mapMode { WGPUMapMode_None };
     struct IndirectArgsCache {
         uint64_t indirectOffset { UINT64_MAX };
@@ -154,24 +163,25 @@ private:
         MTLIndexType indexType { MTLIndexTypeUInt16 };
     } m_indirectCache;
 
-    HashMap<uint64_t, uint64_t, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_drawIndexedCache;
+    using DrawIndexCacheContainer = HashMap<uint64_t, uint64_t, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>>;
+    HashMap<uint64_t, DrawIndexCacheContainer, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_drawIndexedCache;
 
     const Ref<Device> m_device;
     mutable WeakHashSet<CommandEncoder> m_commandEncoders;
 #if CPU(X86_64)
     bool m_mappedAtCreation { false };
 #endif
-    bool m_didReadOOB { false };
-} SWIFT_SHARED_REFERENCE(retainBuffer, releaseBuffer);
+    HashMap<uint64_t, bool, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_didReadOOB;
+} SWIFT_SHARED_REFERENCE(refBuffer, derefBuffer);
 
 } // namespace WebGPU
 
-inline void retainBuffer(WebGPU::Buffer* obj)
+inline void refBuffer(WebGPU::Buffer* obj)
 {
-    WTF::retainThreadSafeRefCounted(obj);
+    WTF::ref(obj);
 }
 
-inline void releaseBuffer(WebGPU::Buffer* obj)
+inline void derefBuffer(WebGPU::Buffer* obj)
 {
-    WTF::releaseThreadSafeRefCounted(obj);
+    WTF::deref(obj);
 }

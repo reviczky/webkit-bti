@@ -206,6 +206,7 @@ enum AutoplayPolicy {
     boolean isVideoAndRequiresUserGestureForVideoRateChange;
     boolean isAudioAndRequiresUserGestureForAudioRateChange;
     boolean isVideoAndRequiresUserGestureForVideoDueToLowPowerMode;
+    boolean isVideoAndRequiresUserGestureForVideoDueToAggressiveThermalMitigation;
     boolean noUserGestureRequired;
     boolean requiresPlaybackAndIsNotPlaying;
     boolean hasEverNotifiedAboutPlaying;
@@ -337,16 +338,18 @@ enum AV1ConfigurationRange {
 [
     ExportMacro=WEBCORE_TESTSUPPORT_EXPORT,
     JSGenerateToJSObject,
+    JSGenerateToNativeObject
 ] dictionary CookieData {
     DOMString name;
     DOMString value;
-    DOMString domain;
-    double expires;
-    boolean isHttpOnly;
-    boolean isSecure;
-    boolean isSession;
-    boolean isSameSiteLax;
-    boolean isSameSiteStrict;
+    DOMString domain = "";
+    DOMString path = "";
+    double? expires = null;
+    boolean isHttpOnly = false;
+    boolean isSecure = false;
+    boolean isSession = false;
+    boolean isSameSiteLax = false;
+    boolean isSameSiteStrict = false;
 };
 
 [
@@ -812,6 +815,7 @@ enum RenderingMode {
     unsigned long numberOfLiveNodes();
     unsigned long numberOfLiveDocuments();
     unsigned long referencingNodeCount(Document document);
+    undefined executeOpportunisticallyScheduledTasks();
     unsigned long numberOfIntersectionObservers(Document document);
     unsigned long numberOfResizeObservers(Document document);
     WindowProxy? openDummyInspectorFrontend(DOMString url);
@@ -886,6 +890,7 @@ enum RenderingMode {
     boolean areTimersThrottled();
 
     undefined setLowPowerModeEnabled(boolean enabled);
+    undefined setAggressiveThermalMitigationEnabled(boolean enabled);
     undefined setOutsideViewportThrottlingEnabled(boolean enabled);
     readonly attribute double requestAnimationFrameInterval;
     readonly attribute boolean scriptedAnimationsAreSuspended;
@@ -1164,6 +1169,7 @@ enum RenderingMode {
     [Conditional=MEDIA_STREAM] boolean isMediaStreamSourceEnded(MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] boolean isMockRealtimeMediaSourceCenterEnabled();
     [Conditional=MEDIA_STREAM] boolean shouldAudioTrackPlay(AudioTrack track);
+    [Conditional=MEDIA_STREAM] DOMString mediaStreamTrackPersistentId(MediaStreamTrack track);
 
     [Conditional=WEB_RTC] readonly attribute DOMString rtcNetworkInterfaceName;
 
@@ -1264,8 +1270,6 @@ enum RenderingMode {
     undefined reloadWithoutContentExtensions();
     undefined disableContentExtensionsChecks();
 
-    undefined setUseSystemAppearance(boolean value);
-
     unsigned long pluginCount();
     unsigned long pluginScrollPositionX(Element element);
     unsigned long pluginScrollPositionY(Element element);
@@ -1286,6 +1290,7 @@ enum RenderingMode {
     boolean validateAV1ConfigurationRecord(DOMString codecParameters);
     boolean validateAV1PerLevelConstraints(DOMString codecParameters, VideoConfiguration configuration);
 
+    undefined setCookie(CookieData cookieData);
     sequence<CookieData> getCookies();
 
     undefined setAlwaysAllowLocalWebarchive(boolean alwaysAllowLocalWebarchive);

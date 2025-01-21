@@ -34,6 +34,7 @@ namespace WebCore {
 class RenderLineBreak;
 class RenderObject;
 class RenderStyle;
+class RenderSVGText;
 
 namespace InlineIterator {
 
@@ -95,10 +96,17 @@ public:
     const LegacyInlineBox* legacyInlineBox() const;
     const InlineDisplay::Box* inlineBox() const;
 
-    LeafBoxIterator nextOnLine() const;
-    LeafBoxIterator previousOnLine() const;
-    LeafBoxIterator nextOnLineIgnoringLineBreak() const;
-    LeafBoxIterator previousOnLineIgnoringLineBreak() const;
+    // Text-relative left/right
+    LeafBoxIterator nextLineRightwardOnLine() const;
+    LeafBoxIterator nextLineLeftwardOnLine() const;
+    LeafBoxIterator nextLineRightwardOnLineIgnoringLineBreak() const;
+    LeafBoxIterator nextLineLeftwardOnLineIgnoringLineBreak() const;
+
+    // Coordinate-relative left/right
+    inline LeafBoxIterator nextLogicalRightwardOnLine() const;
+    inline LeafBoxIterator nextLogicalLeftwardOnLine() const;
+    inline LeafBoxIterator nextLogicalRightwardOnLineIgnoringLineBreak() const;
+    inline LeafBoxIterator nextLogicalLeftwardOnLineIgnoringLineBreak() const;
 
     InlineBoxIterator parentInlineBox() const;
 
@@ -122,6 +130,10 @@ private:
 
 class BoxIterator {
 public:
+    BoxIterator() : m_box(BoxLegacyPath { nullptr }) { };
+    BoxIterator(Box::PathVariant&&);
+    BoxIterator(const Box&);
+
     explicit operator bool() const { return !atEnd(); }
 
     bool operator==(const BoxIterator&) const;
@@ -130,13 +142,14 @@ public:
     const Box& operator*() const { return m_box; }
     const Box* operator->() const { return &m_box; }
 
+    BoxIterator& traverseLineRightwardOnLine();
+    BoxIterator& traverseLineRightwardOnLineSkippingChildren();
+
+    BoxIterator& operator++() { return traverseLineRightwardOnLine(); }
+
     bool atEnd() const;
 
 protected:
-    BoxIterator() : m_box(BoxLegacyPath { nullptr }) { };
-    BoxIterator(Box::PathVariant&&);
-    BoxIterator(const Box&);
-
     Box m_box;
 };
 
@@ -146,10 +159,19 @@ public:
     LeafBoxIterator(Box::PathVariant&&);
     LeafBoxIterator(const Box&);
 
-    LeafBoxIterator& traverseNextOnLine();
-    LeafBoxIterator& traversePreviousOnLine();
-    LeafBoxIterator& traverseNextOnLineIgnoringLineBreak();
-    LeafBoxIterator& traversePreviousOnLineIgnoringLineBreak();
+    // Text-relative left/right
+    LeafBoxIterator& traverseLineRightwardOnLine();
+    LeafBoxIterator& traverseLineLeftwardOnLine();
+    LeafBoxIterator& traverseLineRightwardOnLineIgnoringLineBreak();
+    LeafBoxIterator& traverseLineLeftwardOnLineIgnoringLineBreak();
+
+    // Coordinate-relative left/right
+    inline LeafBoxIterator& traverseLogicalRightwardOnLine();
+    inline LeafBoxIterator& traverseLogicalLeftwardOnLine();
+    inline LeafBoxIterator& traverseLogicalRightwardOnLineIgnoringLineBreak();
+    inline LeafBoxIterator& traverseLogicalLeftwardOnLineIgnoringLineBreak();
+
+    LeafBoxIterator& operator++() { return traverseLineRightwardOnLine(); }
 };
 
 template<class IteratorType>

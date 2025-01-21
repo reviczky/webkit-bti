@@ -514,9 +514,8 @@ public:
 
     bool canRender3DTransforms() const;
 
-    void updateLayerPositionsAfterStyleChange();
-    enum class CanUseSimplifiedRepaintPass : uint8_t { No, Yes };
-    void updateLayerPositionsAfterLayout(RenderElement::LayoutIdentifier, bool didFullRepaint, CanUseSimplifiedRepaintPass);
+    void updateLayerPositionsAfterStyleChange(bool environmentChanged = false);
+    void updateLayerPositionsAfterLayout(bool didFullRepaint, bool environmentChanged);
     void updateLayerPositionsAfterOverflowScroll();
     void updateLayerPositionsAfterDocumentScroll();
 
@@ -638,13 +637,14 @@ public:
         PaintingCompositingMaskPhase          = 1 << 7,
         PaintingCompositingClipPathPhase      = 1 << 8,
         PaintingOverflowContainer             = 1 << 9,
-        PaintingOverflowContents              = 1 << 10,
-        PaintingRootBackgroundOnly            = 1 << 11,
-        PaintingSkipRootBackground            = 1 << 12,
-        PaintingChildClippingMaskPhase        = 1 << 13,
-        PaintingSVGClippingMask               = 1 << 14,
-        CollectingEventRegion                 = 1 << 15,
-        PaintingSkipDescendantViewTransition  = 1 << 16,
+        PaintingOverflowContentsRoot          = 1 << 10,
+        PaintingOverflowContents              = 1 << 11,
+        PaintingRootBackgroundOnly            = 1 << 12,
+        PaintingSkipRootBackground            = 1 << 13,
+        PaintingChildClippingMaskPhase        = 1 << 14,
+        PaintingSVGClippingMask               = 1 << 15,
+        CollectingEventRegion                 = 1 << 16,
+        PaintingSkipDescendantViewTransition  = 1 << 17,
     };
     static constexpr OptionSet<PaintLayerFlag> paintLayerPaintingCompositingAllPhasesFlags() { return { PaintLayerFlag::PaintingCompositingBackgroundPhase, PaintLayerFlag::PaintingCompositingForegroundPhase }; }
 
@@ -755,7 +755,6 @@ public:
     void setRepaintStatus(RepaintStatus status) { m_repaintStatus = status; }
     RepaintStatus repaintStatus() const { return m_repaintStatus; }
     bool needsFullRepaint() const { return m_repaintStatus == RepaintStatus::NeedsFullRepaint || m_repaintStatus == RepaintStatus::NeedsFullRepaintForPositionedMovementLayout; }
-    void setIsSimplifiedLayoutRoot() { m_isSimplifiedLayoutRoot = true; }
 
     LayoutUnit staticInlinePosition() const { return m_offsetForPosition.width(); }
     LayoutUnit staticBlockPosition() const { return m_offsetForPosition.height(); }
@@ -805,6 +804,11 @@ public:
     }
     bool canBeBackdropRoot() const { return m_canBeBackdropRoot; }
     bool isBackdropRoot() const { return hasBackdropFilterDescendantsWithoutRoot() && canBeBackdropRoot(); }
+
+#if HAVE(CORE_MATERIAL)
+    inline bool hasAppleVisualEffect() const;
+    inline bool hasAppleVisualEffectRequiringBackdropFilter() const;
+#endif
 
     inline bool hasBlendMode() const;
     BlendMode blendMode() const { return static_cast<BlendMode>(m_blendMode); }
@@ -1032,6 +1036,7 @@ private:
         Seen3DTransformedLayer              = 1 << 7,
         SeenCompositedScrollingLayer        = 1 << 8,
         SubtreeNeedsUpdate                  = 1 << 9,
+        EnvironmentChanged                  = 1 << 10,
     };
     static OptionSet<UpdateLayerPositionsFlag> flagsForUpdateLayerPositions(RenderLayer& startingLayer);
 
@@ -1042,6 +1047,7 @@ private:
             UpdateLayerPositionsFlag::NeedsFullRepaintInBacking,
             UpdateLayerPositionsFlag::ContainingClippingLayerChangedSize,
             UpdateLayerPositionsFlag::SubtreeNeedsUpdate,
+            UpdateLayerPositionsFlag::EnvironmentChanged,
         };
     }
 
@@ -1054,7 +1060,7 @@ private:
     bool updateLayerPosition(OptionSet<UpdateLayerPositionsFlag>* = nullptr, UpdateLayerPositionsMode = Write);
 
     template<UpdateLayerPositionsMode = Write>
-    void recursiveUpdateLayerPositions(RenderElement::LayoutIdentifier, OptionSet<UpdateLayerPositionsFlag>, CanUseSimplifiedRepaintPass = CanUseSimplifiedRepaintPass::No);
+    void recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFlag>);
     bool ancestorLayerPositionStateChanged(OptionSet<UpdateLayerPositionsFlag>);
 
     enum UpdateLayerPositionsAfterScrollFlag {
@@ -1085,15 +1091,6 @@ private:
         return { };
     }
 
-    LayoutRect rendererBorderBoxRectInFragment(RenderFragmentContainer* fragment, RenderBox::RenderBoxFragmentInfoFlags flags = RenderBox::RenderBoxFragmentInfoFlags::CacheRenderBoxFragmentInfo) const
-    {
-        if (auto* box = dynamicDowncast<RenderBox>(renderer()))
-            return box->borderBoxRectInFragment(fragment, flags);
-        if (auto* svgModelObject = dynamicDowncast<RenderSVGModelObject>(renderer()))
-            return svgModelObject->borderBoxRectInFragmentEquivalent(fragment, flags);
-        return { };
-    }
-
     LayoutRect rendererVisualOverflowRect() const
     {
         if (auto* box = dynamicDowncast<RenderBox>(renderer()))
@@ -1103,21 +1100,21 @@ private:
         return { };
     }
 
-    LayoutRect rendererOverflowClipRect(const LayoutPoint& location, RenderFragmentContainer* fragment, OverlayScrollbarSizeRelevancy relevancy) const
+    LayoutRect rendererOverflowClipRect(const LayoutPoint& location, OverlayScrollbarSizeRelevancy relevancy) const
     {
         if (auto* box = dynamicDowncast<RenderBox>(renderer()))
-            return box->overflowClipRect(location, fragment, relevancy);
+            return box->overflowClipRect(location, relevancy);
         if (auto* svgModelObject = dynamicDowncast<RenderSVGModelObject>(renderer()))
-            return svgModelObject->overflowClipRect(location, fragment, relevancy);
+            return svgModelObject->overflowClipRect(location, relevancy);
         return { };
     }
 
-    LayoutRect rendererOverflowClipRectForChildLayers(const LayoutPoint& location, RenderFragmentContainer* fragment, OverlayScrollbarSizeRelevancy relevancy) const
+    LayoutRect rendererOverflowClipRectForChildLayers(const LayoutPoint& location, OverlayScrollbarSizeRelevancy relevancy) const
     {
         if (auto* box = dynamicDowncast<RenderBox>(renderer()))
-            return box->overflowClipRectForChildLayers(location, fragment, relevancy);
+            return box->overflowClipRectForChildLayers(location, relevancy);
         if (auto* svgModelObject = dynamicDowncast<RenderSVGModelObject>(renderer()))
-            return svgModelObject->overflowClipRectForChildLayers(location, fragment, relevancy);
+            return svgModelObject->overflowClipRectForChildLayers(location, relevancy);
         return { };
     }
 
@@ -1343,7 +1340,7 @@ private:
     bool m_hasNotIsolatedCompositedBlendingDescendants : 1;
     bool m_hasNotIsolatedBlendingDescendants : 1;
     bool m_hasNotIsolatedBlendingDescendantsStatusDirty : 1;
-    bool m_repaintRectsValid : 1;
+    bool m_repaintRectsValid : 1 { false };
 
     bool m_intrinsicallyComposited : 1 { false };
     bool m_alwaysIncludedInZOrderLists : 1 { false };
@@ -1351,8 +1348,6 @@ private:
     bool m_hasAlwaysIncludedInZOrderListsDescendantsStatusDirty : 1 { true };
 
     bool m_wasOmittedFromZOrderTree : 1 { false };
-
-    bool m_isSimplifiedLayoutRoot : 1 { false };
 
     RenderLayerModelObject& m_renderer;
 

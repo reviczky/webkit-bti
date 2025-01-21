@@ -932,6 +932,7 @@ public:
     static TypeInformation& singleton();
 
     static const TypeDefinition& signatureForLLIntBuiltin(LLIntBuiltin);
+    static const TypeDefinition& signatureForJSException();
 
     static RefPtr<TypeDefinition> typeDefinitionForFunction(const Vector<Type, 16>& returnTypes, const Vector<Type, 16>& argumentTypes);
     static RefPtr<TypeDefinition> typeDefinitionForStruct(const Vector<FieldType>& fields);
@@ -962,10 +963,10 @@ public:
 
     static void tryCleanup();
 private:
-    HashSet<Wasm::TypeHash> m_typeSet;
+    UncheckedKeyHashSet<Wasm::TypeHash> m_typeSet;
     UncheckedKeyHashMap<TypeIndex, RefPtr<const TypeDefinition>> m_unrollingCache;
     UncheckedKeyHashMap<TypeIndex, RefPtr<RTT>> m_rttMap;
-    HashSet<RefPtr<TypeDefinition>> m_placeholders;
+    UncheckedKeyHashSet<RefPtr<TypeDefinition>> m_placeholders;
     const FunctionSignature* thunkTypes[numTypes];
     RefPtr<TypeDefinition> m_I64_Void;
     RefPtr<TypeDefinition> m_Void_I32;
@@ -977,6 +978,7 @@ private:
     RefPtr<TypeDefinition> m_Ref_RefI32I32;
     RefPtr<TypeDefinition> m_Arrayref_I32I32I32I32;
     RefPtr<TypeDefinition> m_Anyref_Externref;
+    RefPtr<TypeDefinition> m_Void_Externref;
     RefPtr<TypeDefinition> m_Void_I32AnyrefI32;
     RefPtr<TypeDefinition> m_Void_I32AnyrefI32I32I32I32;
     RefPtr<TypeDefinition> m_Void_I32AnyrefI32I32AnyrefI32I32;

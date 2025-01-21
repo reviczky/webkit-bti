@@ -1,6 +1,7 @@
 /*
  * (C) 1999-2003 Lars Knoll (knoll@kde.org)
  * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2025 Samuel Weinig <sam@webkit.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -36,9 +37,7 @@ namespace WebCore {
 class CSSPrimitiveValue;
 class CSSStyleDeclaration;
 class CSSToLengthConversionData;
-class CSSUnresolvedColor;
 class CachedResource;
-class Color;
 class DeprecatedCSSOMValue;
 class Quad;
 class Rect;
@@ -64,24 +63,28 @@ public:
 
     WEBCORE_EXPORT String cssText() const;
 
+    bool isAppleColorFilterPropertyValue() const { return m_classType == ClassType::AppleColorFilterProperty; }
     bool isAttrValue() const { return m_classType == ClassType::Attr; }
     bool isAspectRatioValue() const { return m_classType == ClassType::AspectRatio; }
     bool isBackgroundRepeatValue() const { return m_classType == ClassType::BackgroundRepeat; }
     bool isBasicShape() const { return m_classType == ClassType::BasicShape; }
     bool isBorderImageSliceValue() const { return m_classType == ClassType::BorderImageSlice; }
     bool isBorderImageWidthValue() const { return m_classType == ClassType::BorderImageWidth; }
+    bool isBoxShadowPropertyValue() const { return m_classType == ClassType::BoxShadowProperty; }
     bool isCalcValue() const { return m_classType == ClassType::Calculation; }
     bool isCanvasValue() const { return m_classType == ClassType::Canvas; }
+    bool isColor() const { return m_classType == ClassType::Color; }
 #if ENABLE(DARK_MODE_CSS)
     bool isColorScheme() const { return m_classType == ClassType::ColorScheme; }
 #endif
     bool isContentDistributionValue() const { return m_classType == ClassType::ContentDistribution; }
     bool isCounter() const { return m_classType == ClassType::Counter; }
     bool isCrossfadeValue() const { return m_classType == ClassType::Crossfade; }
-    bool isCubicBezierTimingFunctionValue() const { return m_classType == ClassType::CubicBezierTimingFunction; }
     bool isCursorImageValue() const { return m_classType == ClassType::CursorImage; }
     bool isCustomPropertyValue() const { return m_classType == ClassType::CustomProperty; }
+    bool isEasingFunctionValue() const { return m_classType == ClassType::EasingFunction; }
     bool isFilterImageValue() const { return m_classType == ClassType::FilterImage; }
+    bool isFilterPropertyValue() const { return m_classType == ClassType::FilterProperty; }
     bool isFontFaceSrcLocalValue() const { return m_classType == ClassType::FontFaceSrcLocal; }
     bool isFontFaceSrcResourceValue() const { return m_classType == ClassType::FontFaceSrcResource; }
     bool isFontFeatureValue() const { return m_classType == ClassType::FontFeature; }
@@ -102,7 +105,6 @@ public:
     bool isImageSetValue() const { return m_classType == ClassType::ImageSet; }
     bool isImageValue() const { return m_classType == ClassType::Image; }
     bool isLineBoxContainValue() const { return m_classType == ClassType::LineBoxContain; }
-    bool isLinearTimingFunctionValue() const { return m_classType == ClassType::LinearTimingFunction; }
     bool isNamedImageValue() const { return m_classType == ClassType::NamedImage; }
     bool isOffsetRotateValue() const { return m_classType == ClassType::OffsetRotate; }
     bool isPair() const { return m_classType == ClassType::ValuePair; }
@@ -113,11 +115,11 @@ public:
     bool isRayValue() const { return m_classType == ClassType::Ray; }
     bool isRect() const { return m_classType == ClassType::Rect; }
     bool isReflectValue() const { return m_classType == ClassType::Reflect; }
+    bool isScrollMarginEdgeValue() const { return m_classType == ClassType::ScrollMarginEdge; }
+    bool isScrollPaddingEdgeValue() const { return m_classType == ClassType::ScrollPaddingEdge; }
     bool isScrollValue() const { return m_classType == ClassType::Scroll; }
-    bool isShadowValue() const { return m_classType == ClassType::Shadow; }
-    bool isSpringTimingFunctionValue() const { return m_classType == ClassType::SpringTimingFunction; }
-    bool isStepsTimingFunctionValue() const { return m_classType == ClassType::StepsTimingFunction; }
     bool isSubgridValue() const { return m_classType == ClassType::Subgrid; }
+    bool isTextShadowPropertyValue() const { return m_classType == ClassType::TextShadowProperty; }
     bool isTransformListValue() const { return m_classType == ClassType::TransformList; }
     bool isUnicodeRangeValue() const { return m_classType == ClassType::UnicodeRange; }
     bool isValueList() const { return m_classType == ClassType::ValueList; }
@@ -167,9 +169,6 @@ public:
     static constexpr size_t ValueSeparatorBits = 2;
     enum ValueSeparator : uint8_t { SpaceSeparator, CommaSeparator, SlashSeparator };
 
-    inline bool isColor() const;
-    inline const Color& color() const;
-
     inline bool isCustomIdent() const;
     inline String customIdent() const;
 
@@ -211,26 +210,25 @@ protected:
         FilterImage,
         Gradient,
 
-        // Timing function classes.
-        LinearTimingFunction,
-        CubicBezierTimingFunction,
-        SpringTimingFunction,
-        StepsTimingFunction,
-
         // Other non-list classes.
+        AppleColorFilterProperty,
         AspectRatio,
         Attr,
         BackgroundRepeat,
         BasicShape,
         BorderImageSlice,
         BorderImageWidth,
+        BoxShadowProperty,
         Calculation,
+        Color,
 #if ENABLE(DARK_MODE_CSS)
         ColorScheme,
 #endif
         ContentDistribution,
         Counter,
         CustomProperty,
+        EasingFunction,
+        FilterProperty,
         Font,
         FontFaceSrcLocal,
         FontFaceSrcResource,
@@ -251,8 +249,10 @@ protected:
         Ray,
         Rect,
         Reflect,
+        ScrollMarginEdge,
+        ScrollPaddingEdge,
         Scroll,
-        Shadow,
+        TextShadowProperty,
         UnicodeRange,
         ValuePair,
         VariableReference,

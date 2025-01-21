@@ -515,11 +515,27 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
     }
 
     if (m_shaderModule.usesMin()) {
-        m_stringBuilder.append(m_indent, "static uint __attribute((always_inline)) __wgslMin(uint a, uint b)\n"_s,
+        m_stringBuilder.append(m_indent, "template<typename T>\n"_s,
+            m_indent, "static T __attribute((always_inline)) __wgslMin(T a, T b)\n"_s,
             m_indent, "{\n"_s);
         {
             IndentationScope scope(m_indent);
-            m_stringBuilder.append("return select(b, a, a < b);\n"_s);
+            m_stringBuilder.append(m_indent, "volatile T va = a;\n"_s,
+                m_indent, "volatile T vb = b;\n"_s,
+                m_indent, "return min(va, vb);\n"_s);
+        }
+        m_stringBuilder.append(m_indent, "}\n\n"_s);
+    }
+
+    if (m_shaderModule.usesFtoi()) {
+        m_stringBuilder.append(m_indent, "template <typename T, typename S>\n"_s,
+            m_indent, "static T __wgslFtoi(S value)\n"_s,
+            m_indent, "{\n"_s);
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "auto min = numeric_limits<T>::min();\n"_s,
+                m_indent, "auto max = numeric_limits<T>::max();\n"_s,
+                m_indent, "return T(clamp(value, S(min), S(max)));\n"_s);
         }
         m_stringBuilder.append(m_indent, "}\n\n"_s);
     }
@@ -601,10 +617,19 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
             auto& name = member.name();
             auto* type = member.type().inferredType();
             if (isPrimitive(type, Types::Primitive::TextureExternal) || isPrimitiveReference(type, Types::Primitive::TextureExternal))  {
-                m_stringBuilder.append(m_indent, "texture2d<float> __"_s, name, "_FirstPlane;\n"_s,
-                    m_indent, "texture2d<float> __"_s, name, "_SecondPlane;\n"_s,
-                    m_indent, "float3x2 __"_s, name, "_UVRemapMatrix;\n"_s,
-                    m_indent, "float4x3 __"_s, name, "_ColorSpaceConversionMatrix;\n"_s);
+                decltype(std::declval<ConstantValue>().integerValue()) bindingIndex = 0;
+                for (auto& attribute : member.attributes()) {
+                    if (auto* bindingAttribute = dynamicDowncast<AST::BindingAttribute>(attribute)) {
+                        if (auto bindingIndexValue = bindingAttribute->binding().constantValue()) {
+                            bindingIndex = bindingIndexValue->integerValue();
+                            break;
+                        }
+                    }
+                }
+                m_stringBuilder.append(m_indent, "texture2d<float> __"_s, name, "_FirstPlane [[id("_s, bindingIndex, ")]];\n"_s,
+                    m_indent, "texture2d<float> __"_s, name, "_SecondPlane [[id("_s, (bindingIndex + 1), ")]];\n"_s,
+                    m_indent, "float3x2 __"_s, name, "_UVRemapMatrix [[id("_s, (bindingIndex + 2), ")]];\n"_s,
+                    m_indent, "float4x3 __"_s, name, "_ColorSpaceConversionMatrix [[id("_s, (bindingIndex + 3), ")]];\n"_s);
                 continue;
             }
 
@@ -2019,7 +2044,12 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
         };
         static constexpr SortedArrayMap mappedNames { directMappings };
         if (call.isConstructor()) {
-            visit(type);
+            if (satisfies(type, Constraints::Integer) && call.arguments().size() == 1 && satisfies(call.arguments()[0].inferredType(), Constraints::Float) && !satisfies(call.arguments()[0].inferredType(), Constraints::AbstractInt)) {
+                m_stringBuilder.append("__wgslFtoi<"_s);
+                visit(type);
+                m_stringBuilder.append(">"_s);
+            } else
+                visit(type);
         } else if (auto mappedName = mappedNames.get(targetName))
             m_stringBuilder.append(mappedName);
         else
@@ -2422,13 +2452,14 @@ void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
         m_stringBuilder.append(' ');
         visit(*update);
     }
-    m_stringBuilder.append(") "_s);
+    m_stringBuilder.append(") { volatile bool __wgslEnsureForwardProgress = true; "_s);
     visit(statement.body());
+    m_stringBuilder.append('}');
 }
 
 void FunctionDefinitionWriter::visit(AST::LoopStatement& statement)
 {
-    m_stringBuilder.append("while (true) {\n"_s);
+    m_stringBuilder.append("while (true) { volatile bool __wgslEnsureForwardProgress = true; \n"_s);
     {
         if (statement.containsSwitch())
             m_stringBuilder.append("bool __continuing = false;\n"_s, m_indent);
@@ -2472,8 +2503,9 @@ void FunctionDefinitionWriter::visit(AST::WhileStatement& statement)
 {
     m_stringBuilder.append("while ("_s);
     visit(statement.test());
-    m_stringBuilder.append(") "_s);
+    m_stringBuilder.append(") { volatile bool __wgslEnsureForwardProgress = true; "_s);
     visit(statement.body());
+    m_stringBuilder.append('}');
 }
 
 void FunctionDefinitionWriter::visit(AST::SwitchStatement& statement)

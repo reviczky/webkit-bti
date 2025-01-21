@@ -359,6 +359,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/filesystemaccess/FileSystemFileHandle.idl \
     $(WebCore)/Modules/filesystemaccess/FileSystemHandle.idl \
     $(WebCore)/Modules/filesystemaccess/FileSystemSyncAccessHandle.idl \
+	$(WebCore)/Modules/filesystemaccess/FileSystemWritableFileStream.idl \
     $(WebCore)/Modules/filesystemaccess/StorageManager+FileSystemAccess.idl \
     $(WebCore)/Modules/gamepad/Gamepad.idl \
     $(WebCore)/Modules/gamepad/GamepadButton.idl \
@@ -379,10 +380,10 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/highlight/HighlightRegistry.idl \
     $(WebCore)/Modules/highlight/Highlight.idl \
     $(WebCore)/Modules/identity/DigitalCredential.idl \
+    $(WebCore)/Modules/identity/DigitalCredentialRequest.idl \
     $(WebCore)/Modules/identity/DigitalCredentialRequestOptions.idl \
     $(WebCore)/Modules/identity/OpenID4VPRequest.idl \
     $(WebCore)/Modules/identity/IdentityCredentialProtocol.idl \
-    $(WebCore)/Modules/identity/IdentityRequestProvider.idl \
     $(WebCore)/Modules/identity/Navigator+Identity.idl \
     $(WebCore)/Modules/indexeddb/IDBCursor.idl \
     $(WebCore)/Modules/indexeddb/IDBCursorDirection.idl \
@@ -584,14 +585,11 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/pictureinpicture/HTMLVideoElement+PictureInPicture.idl \
     $(WebCore)/Modules/pictureinpicture/PictureInPictureEvent.idl \
     $(WebCore)/Modules/pictureinpicture/PictureInPictureWindow.idl \
-    $(WebCore)/Modules/push-api/NavigatorPush.idl \
     $(WebCore)/Modules/push-api/PushEncryptionKeyName.idl \
     $(WebCore)/Modules/push-api/PushEvent.idl \
     $(WebCore)/Modules/push-api/PushEventInit.idl \
     $(WebCore)/Modules/push-api/PushManager.idl \
     $(WebCore)/Modules/push-api/PushMessageData.idl \
-    $(WebCore)/Modules/push-api/PushNotificationEvent.idl \
-    $(WebCore)/Modules/push-api/PushNotificationEventInit.idl \
     $(WebCore)/Modules/push-api/PushPermissionState.idl \
     $(WebCore)/Modules/push-api/PushSubscription.idl \
     $(WebCore)/Modules/push-api/PushSubscriptionChangeEvent.idl \
@@ -601,6 +599,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/push-api/PushSubscriptionOptionsInit.idl \
     $(WebCore)/Modules/push-api/ServiceWorkerGlobalScope+PushAPI.idl \
     $(WebCore)/Modules/push-api/ServiceWorkerRegistration+PushAPI.idl \
+    $(WebCore)/Modules/push-api/WindowPush.idl \
     $(WebCore)/Modules/remoteplayback/HTMLMediaElement+RemotePlayback.idl \
     $(WebCore)/Modules/remoteplayback/RemotePlayback.idl \
     $(WebCore)/Modules/remoteplayback/RemotePlaybackAvailabilityCallback.idl \
@@ -993,6 +992,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/CSSPageRule.idl \
     $(WebCore)/css/CSSPaintCallback.idl \
     $(WebCore)/css/CSSPaintSize.idl \
+    $(WebCore)/css/CSSPositionTryRule.idl \
     $(WebCore)/css/CSSPropertyRule.idl \
     $(WebCore)/css/CSSRule.idl \
     $(WebCore)/css/CSSRuleList.idl \
@@ -1002,7 +1002,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/CSSStyleRule.idl \
     $(WebCore)/css/CSSStyleSheet.idl \
     $(WebCore)/css/CSSSupportsRule.idl \
-    $(WebCore)/css/CSSUnknownRule.idl \
     $(WebCore)/css/CSSViewTransitionRule.idl \
     $(WebCore)/css/DocumentOrShadowRoot+CSSOM.idl \
     $(WebCore)/css/DOMCSSCustomPropertyDescriptor.idl \
@@ -1040,14 +1039,14 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/typedom/CSSUnitValue.idl \
     $(WebCore)/css/typedom/CSSUnparsedValue.idl \
     $(WebCore)/css/typedom/CSSOMVariableReferenceValue.idl \
-    $(WebCore)/css/typedom/color/CSSColor.idl \
-    $(WebCore)/css/typedom/color/CSSColorValue.idl \
     $(WebCore)/css/typedom/color/CSSHSL.idl \
     $(WebCore)/css/typedom/color/CSSHWB.idl \
     $(WebCore)/css/typedom/color/CSSLCH.idl \
     $(WebCore)/css/typedom/color/CSSLab.idl \
     $(WebCore)/css/typedom/color/CSSOKLCH.idl \
     $(WebCore)/css/typedom/color/CSSOKLab.idl \
+    $(WebCore)/css/typedom/color/CSSOMColor.idl \
+    $(WebCore)/css/typedom/color/CSSOMColorValue.idl \
     $(WebCore)/css/typedom/color/CSSRGB.idl \
     $(WebCore)/css/typedom/numeric/CSSMathClamp.idl \
     $(WebCore)/css/typedom/numeric/CSSMathInvert.idl \
@@ -1186,6 +1185,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/NonDocumentTypeChildNode.idl \
     $(WebCore)/dom/NonElementParentNode.idl \
     $(WebCore)/dom/Observable.idl \
+    $(WebCore)/dom/ObservableInspector.idl \
+    $(WebCore)/dom/ObservableInspectorAbortCallback.idl \
     $(WebCore)/dom/PageRevealEvent.idl \
     $(WebCore)/dom/PageSwapEvent.idl \
     $(WebCore)/dom/PageTransitionEvent.idl \
@@ -1200,6 +1201,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/Range+CSSOMView.idl \
     $(WebCore)/dom/Range+DOMParsing.idl \
     $(WebCore)/dom/Range.idl \
+    $(WebCore)/dom/ReducerCallback.idl \
     $(WebCore)/dom/RequestAnimationFrameCallback.idl \
     $(WebCore)/dom/SecurityPolicyViolationEvent.idl \
     $(WebCore)/dom/SecurityPolicyViolationEventDisposition.idl \
@@ -1343,6 +1345,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/ImageBitmapOptions.idl \
     $(WebCore)/html/ImageData.idl \
     $(WebCore)/html/ImageDataSettings.idl \
+    $(WebCore)/html/ImageDataStorageFormat.idl \
     $(WebCore)/html/InvokerElement.idl \
     $(WebCore)/html/MediaController.idl \
     $(WebCore)/html/MediaEncryptedEvent.idl \
@@ -2108,7 +2111,6 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/htmlSwitchControl.css \
     $(WebCore)/css/mathml.css \
     $(WebCore)/css/mediaControls.css \
-    $(WebCore)/css/plugIns.css \
     $(WebCore)/css/popover.css \
     $(WebCore)/css/quirks.css \
     $(WebCore)/css/svg.css \
@@ -2239,21 +2241,6 @@ all : $(USER_AGENT_SCRIPTS_FILES)
 
 $(USER_AGENT_SCRIPTS_FILES_PATTERNS) : $(JavaScriptCore_SCRIPTS_DIR)/make-js-file-arrays.py $(USER_AGENT_SCRIPTS)
 	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/make-js-file-arrays.py -n WebCore --fail-if-non-ascii $(USER_AGENT_SCRIPTS_FILES) $(USER_AGENT_SCRIPTS)
-
-# --------
-
-# plug-ins resources
-
-PLUG_INS_RESOURCES = $(WebCore)/Resources/plugIns.js
-
-# order matters -- make-css-file-arrays.pl takes the header and then the source file path
-PLUG_INS_RESOURCES_FILES = PlugInsResources.h PlugInsResourcesData.cpp
-PLUG_INS_RESOURCES_FILES_PATTERNS = $(call to-pattern, $(PLUG_INS_RESOURCES_FILES))
-
-all : $(PLUG_INS_RESOURCES_FILES)
-
-$(PLUG_INS_RESOURCES_FILES_PATTERNS) : $(WebCore)/css/make-css-file-arrays.pl $(WebCore)/bindings/scripts/preprocessor.pm $(PLUG_INS_RESOURCES) $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
-	$(PERL) $< --defines "$(FEATURE_AND_PLATFORM_DEFINES)" $(PLUG_INS_RESOURCES_FILES) $(PLUG_INS_RESOURCES)
 
 # --------
 
@@ -2683,6 +2670,8 @@ PROCESS_SYNC_DATA_INPUT_FILES = \
     $(WebCore)/page/ProcessSyncData.in \
 
 GENERATED_PROCESS_SYNC_CLIENT_OUTPUT_FILES = \
+	DocumentSyncData.cpp \
+	DocumentSyncData.h \
 	ProcessSyncClient.cpp \
 	ProcessSyncClient.h \
 	ProcessSyncData.h \
@@ -2696,3 +2685,15 @@ $(GENERATED_PROCESS_SYNC_CLIENT_OUTPUT_PATTERNS) : $(WebCore)/Scripts/generate-p
 	$(PYTHON) $(WebCore)/Scripts/generate-process-sync-data.py $(PROCESS_SYNC_DATA_INPUT_FILES)
 
 # ------------------------
+
+# Log messages
+
+all : WebCoreLogDefinitions.h
+
+WEBCORE_LOG_DECLARATIONS_FILES = \
+    WebCoreLogDefinitions.h \
+    WebCoreVirtualLogFunctions.h \
+
+$(WEBCORE_LOG_DECLARATIONS_FILES) : $(WebCore)/platform/LogMessages.in
+	@echo Creating WebCore log definitions $@
+	$(PYTHON) $(WebCore)/Scripts/generate-log-declarations.py $< $(WEBCORE_LOG_DECLARATIONS_FILES)

@@ -31,6 +31,7 @@
 #include "PropertyCascade.h"
 #include "RuleSet.h"
 #include "SelectorChecker.h"
+#include "StyleForVisitedLink.h"
 #include <wtf/BitSet.h>
 
 namespace WebCore {
@@ -38,18 +39,26 @@ namespace WebCore {
 class FilterOperations;
 class FontCascadeDescription;
 class RenderStyle;
-class StyleColor;
 class StyleImage;
 class StyleResolver;
+
+namespace Calculation {
+class RandomKeyMap;
+}
+
+namespace CSS {
+struct AppleColorFilterProperty;
+struct FilterProperty;
+}
 
 namespace Style {
 
 class Builder;
 class BuilderState;
+struct Color;
 
 void maybeUpdateFontForLetterSpacing(BuilderState&, CSSValue&);
 
-enum class ForVisitedLink : bool { No, Yes };
 enum class ApplyValueType : uint8_t { Value, Initial, Inherit };
 
 struct BuilderContext {
@@ -95,10 +104,11 @@ public:
     ScopeOrdinal styleScopeOrdinal() const { return m_currentProperty->styleScopeOrdinal; }
 
     RefPtr<StyleImage> createStyleImage(const CSSValue&) const;
+    FilterOperations createFilterOperations(const CSS::FilterProperty&) const;
     FilterOperations createFilterOperations(const CSSValue&) const;
-
-    static bool isColorFromPrimitiveValueDerivedFromElement(const CSSPrimitiveValue&);
-    StyleColor colorFromPrimitiveValue(const CSSPrimitiveValue&, ForVisitedLink = ForVisitedLink::No) const;
+    FilterOperations createAppleColorFilterOperations(const CSS::AppleColorFilterProperty&) const;
+    FilterOperations createAppleColorFilterOperations(const CSSValue&) const;
+    Color createStyleColor(const CSSValue&, ForVisitedLink = ForVisitedLink::No) const;
 
     const Vector<AtomString>& registeredContentAttributes() const { return m_registeredContentAttributes; }
     void registerContentAttribute(const AtomString& attributeLocalName);
@@ -117,6 +127,8 @@ public:
 
     bool isCurrentPropertyInvalidAtComputedValueTime() const;
     void setCurrentPropertyInvalidAtComputedValueTime();
+
+    Ref<Calculation::RandomKeyMap> randomKeyMap(bool perElement) const;
 
 private:
     // See the comment in maybeUpdateFontForLetterSpacing() about why this needs to be a friend.
@@ -142,9 +154,9 @@ private:
 
     const CSSToLengthConversionData m_cssToLengthConversionData;
 
-    HashSet<AtomString> m_appliedCustomProperties;
-    HashSet<AtomString> m_inProgressCustomProperties;
-    HashSet<AtomString> m_inCycleCustomProperties;
+    UncheckedKeyHashSet<AtomString> m_appliedCustomProperties;
+    UncheckedKeyHashSet<AtomString> m_inProgressCustomProperties;
+    UncheckedKeyHashSet<AtomString> m_inCycleCustomProperties;
     WTF::BitSet<numCSSProperties> m_inProgressProperties;
     WTF::BitSet<numCSSProperties> m_invalidAtComputedValueTimeProperties;
 

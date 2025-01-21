@@ -40,7 +40,6 @@
 
 OBJC_CLASS JSValue;
 OBJC_CLASS NSDictionary;
-OBJC_CLASS _WKWebExtensionLocalization;
 
 namespace WebKit {
 
@@ -51,6 +50,7 @@ class WebExtensionMatchPattern;
 class WebFrame;
 
 struct WebExtensionAlarmParameters;
+struct WebExtensionFrameParameters;
 struct WebExtensionTabParameters;
 struct WebExtensionWindowParameters;
 
@@ -63,6 +63,9 @@ public:
     static Ref<WebExtensionContextProxy> getOrCreate(const WebExtensionContextParameters&, WebExtensionControllerProxy&, WebPage* = nullptr);
 
     ~WebExtensionContextProxy();
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     using WeakFrameSet = WeakHashSet<WebFrame>;
     using TabWindowIdentifierPair = std::pair<std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>>;
@@ -77,12 +80,13 @@ public:
     const URL& baseURL() const { return m_baseURL; }
     const String& uniqueIdentifier() const { return m_uniqueIdentifier; }
 
+#if PLATFORM(COCOA)
     NSDictionary *manifest() const { return m_manifest.get(); }
 
     double manifestVersion() const { return m_manifestVersion; }
     bool supportsManifestVersion(double version) const { return manifestVersion() >= version; }
-
-    _WKWebExtensionLocalization *localization() const { return m_localization.get(); }
+#endif
+    RefPtr<WebExtensionLocalization> localization() const { return m_localization; }
 
     bool isSessionStorageAllowedInContentScripts() const { return m_isSessionStorageAllowedInContentScripts; }
 
@@ -136,7 +140,7 @@ public:
 private:
     explicit WebExtensionContextProxy(const WebExtensionContextParameters&);
 
-    static _WKWebExtensionLocalization *parseLocalization(API::Data&, const URL& baseURL);
+    static RefPtr<WebExtensionLocalization> parseLocalization(RefPtr<API::Data>, const URL& baseURL);
 
     // Action
     void dispatchActionClickedEvent(const std::optional<WebExtensionTabParameters>&);
@@ -200,11 +204,14 @@ private:
     void dispatchTabsHighlightedEvent(const Vector<WebExtensionTabIdentifier>&, WebExtensionWindowIdentifier);
     void dispatchTabsRemovedEvent(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, WebExtensionContext::WindowIsClosing);
 
+    // Test
+    void dispatchTestMessageEvent(const String& message, const String& argumentJSON);
+
     // Web Navigation
-    void dispatchWebNavigationEvent(WebExtensionEventListenerType, WebExtensionTabIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
+    void dispatchWebNavigationEvent(WebExtensionEventListenerType, WebExtensionTabIdentifier, const WebExtensionFrameParameters&, WallTime);
 
     // Web Request
-    void resourceLoadDidSendRequest(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const WebCore::ResourceRequest&, const ResourceLoadInfo&);
+    void resourceLoadDidSendRequest(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const WebCore::ResourceRequest&, const ResourceLoadInfo&, const std::optional<IPC::FormDataReference>&);
     void resourceLoadDidPerformHTTPRedirection(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const WebCore::ResourceResponse&, const ResourceLoadInfo&, const WebCore::ResourceRequest& newRequest);
     void resourceLoadDidReceiveChallenge(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const WebCore::AuthenticationChallenge&, const ResourceLoadInfo&);
     void resourceLoadDidReceiveResponse(WebExtensionTabIdentifier, WebExtensionWindowIdentifier, const WebCore::ResourceResponse&, const ResourceLoadInfo&);
@@ -221,8 +228,10 @@ private:
     URL m_baseURL;
     String m_uniqueIdentifier;
     HashSet<String> m_unsupportedAPIs;
-    RetainPtr<_WKWebExtensionLocalization> m_localization;
+    RefPtr<WebExtensionLocalization> m_localization;
+#if PLATFORM(COCOA)
     RetainPtr<NSDictionary> m_manifest;
+#endif
     double m_manifestVersion { 0 };
     bool m_isSessionStorageAllowedInContentScripts { false };
     mutable PermissionsMap m_grantedPermissions;

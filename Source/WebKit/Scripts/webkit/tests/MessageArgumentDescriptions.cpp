@@ -71,6 +71,9 @@
 #if ENABLE(GPU_PROCESS) && ENABLE(LEGACY_ENCRYPTED_MEDIA)
 #include "RemoteLegacyCDMSessionIdentifier.h"
 #endif
+#if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_RECORDER)
+#include "RemoteMediaRecorderPrivateWriterIdentifier.h"
+#endif
 #include "RemoteMediaResourceIdentifier.h"
 #if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_SOURCE)
 #include "RemoteMediaSourceIdentifier.h"
@@ -149,6 +152,7 @@
 #include <WebCore/ServiceWorkerTypes.h>
 #include <WebCore/SharedWorkerIdentifier.h>
 #include <WebCore/SleepDisablerIdentifier.h>
+#include <WebCore/SnapshotIdentifier.h>
 #include <WebCore/SpeechRecognitionConnectionClientIdentifier.h>
 #include <WebCore/TextCheckingRequestIdentifier.h>
 #include <WebCore/TextManipulationItemIdentifier.h>
@@ -157,6 +161,7 @@
 #include <WebCore/WebSocketIdentifier.h>
 #include "TestWithCVPixelBufferMessages.h" // NOLINT
 #include "TestWithDeferSendingOptionMessages.h" // NOLINT
+#include "TestWithDispatchedFromAndToMessages.h" // NOLINT
 #include "TestWithEnabledByMessages.h" // NOLINT
 #include "TestWithEnabledByAndConjunctionMessages.h" // NOLINT
 #include "TestWithEnabledByOrConjunctionMessages.h" // NOLINT
@@ -165,6 +170,7 @@
 #if (ENABLE(WEBKIT2) && (NESTED_MASTER_CONDITION || MASTER_OR && MASTER_AND))
 #include "TestWithLegacyReceiverMessages.h" // NOLINT
 #endif
+#include "TestWithMultiLineExtendedAttributesMessages.h" // NOLINT
 #if (ENABLE(WEBKIT2) && (NESTED_MASTER_CONDITION || MASTER_OR && MASTER_AND))
 #include "TestWithoutAttributesMessages.h" // NOLINT
 #endif
@@ -203,6 +209,8 @@ std::optional<JSC::JSValue> jsValueForArguments(JSC::JSGlobalObject* globalObjec
         return jsValueForDecodedMessage<MessageName::TestWithDeferSendingOption_OneIndex>(globalObject, decoder);
     case MessageName::TestWithDeferSendingOption_MultipleIndices:
         return jsValueForDecodedMessage<MessageName::TestWithDeferSendingOption_MultipleIndices>(globalObject, decoder);
+    case MessageName::TestWithDispatchedFromAndTo_AlwaysEnabled:
+        return jsValueForDecodedMessage<MessageName::TestWithDispatchedFromAndTo_AlwaysEnabled>(globalObject, decoder);
     case MessageName::TestWithEnabledBy_AlwaysEnabled:
         return jsValueForDecodedMessage<MessageName::TestWithEnabledBy_AlwaysEnabled>(globalObject, decoder);
     case MessageName::TestWithEnabledBy_ConditionallyEnabled:
@@ -287,6 +295,8 @@ std::optional<JSC::JSValue> jsValueForArguments(JSC::JSGlobalObject* globalObjec
         return jsValueForDecodedMessage<MessageName::TestWithLegacyReceiver_ExperimentalOperation>(globalObject, decoder);
 #endif
 #endif
+    case MessageName::TestWithMultiLineExtendedAttributes_AlwaysEnabled:
+        return jsValueForDecodedMessage<MessageName::TestWithMultiLineExtendedAttributes_AlwaysEnabled>(globalObject, decoder);
 #if (ENABLE(WEBKIT2) && (NESTED_MASTER_CONDITION || MASTER_OR && MASTER_AND))
     case MessageName::TestWithoutAttributes_LoadURL:
         return jsValueForDecodedMessage<MessageName::TestWithoutAttributes_LoadURL>(globalObject, decoder);
@@ -534,6 +544,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
 #if PLATFORM(COCOA)
     static_assert(sizeof(uint64_t) == sizeof(WebCore::AttributedStringTextTableID));
 #endif
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::BackForwardFrameItemIdentifierID));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::BackForwardItemIdentifierID));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::BackgroundFetchRecordIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::BroadcastChannelIdentifier));
@@ -578,6 +589,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::SharedWorkerIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::SharedWorkerObjectIdentifierID));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::SleepDisablerIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::SnapshotIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::SpeechRecognitionConnectionClientIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::TextCheckingRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::TextManipulationItemIdentifier));
@@ -587,6 +599,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::UserMediaRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::WebLockIdentifierID));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::WebSocketIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::WebTransportStreamIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::WindowIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::AuthenticationChallengeIdentifier));
@@ -630,6 +643,9 @@ Vector<ASCIILiteral> serializedIdentifiers()
 #if ENABLE(GPU_PROCESS) && ENABLE(LEGACY_ENCRYPTED_MEDIA)
     static_assert(sizeof(uint64_t) == sizeof(WebKit::RemoteLegacyCDMSessionIdentifier));
 #endif
+#if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_RECORDER)
+    static_assert(sizeof(uint64_t) == sizeof(WebKit::RemoteMediaRecorderPrivateWriterIdentifier));
+#endif
     static_assert(sizeof(uint64_t) == sizeof(WebKit::RemoteMediaResourceIdentifier));
 #if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_SOURCE)
     static_assert(sizeof(uint64_t) == sizeof(WebKit::RemoteMediaSourceIdentifier));
@@ -668,7 +684,6 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebGPUIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebPageProxyIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebTransportSessionIdentifier));
-    static_assert(sizeof(uint64_t) == sizeof(WebKit::WebTransportStreamIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebURLSchemeHandlerIdentifier));
     return {
         "IPC::AsyncReplyID"_s,
@@ -681,6 +696,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
 #if PLATFORM(COCOA)
         "WebCore::AttributedStringTextTableID"_s,
 #endif
+        "WebCore::BackForwardFrameItemIdentifierID"_s,
         "WebCore::BackForwardItemIdentifierID"_s,
         "WebCore::BackgroundFetchRecordIdentifier"_s,
         "WebCore::BroadcastChannelIdentifier"_s,
@@ -725,6 +741,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::SharedWorkerIdentifier"_s,
         "WebCore::SharedWorkerObjectIdentifierID"_s,
         "WebCore::SleepDisablerIdentifier"_s,
+        "WebCore::SnapshotIdentifier"_s,
         "WebCore::SpeechRecognitionConnectionClientIdentifier"_s,
         "WebCore::TextCheckingRequestIdentifier"_s,
         "WebCore::TextManipulationItemIdentifier"_s,
@@ -734,6 +751,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::UserMediaRequestIdentifier"_s,
         "WebCore::WebLockIdentifierID"_s,
         "WebCore::WebSocketIdentifier"_s,
+        "WebCore::WebTransportStreamIdentifier"_s,
         "WebCore::WindowIdentifier"_s,
         "WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier"_s,
         "WebKit::AuthenticationChallengeIdentifier"_s,
@@ -777,6 +795,9 @@ Vector<ASCIILiteral> serializedIdentifiers()
 #if ENABLE(GPU_PROCESS) && ENABLE(LEGACY_ENCRYPTED_MEDIA)
         "WebKit::RemoteLegacyCDMSessionIdentifier"_s,
 #endif
+#if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_RECORDER)
+        "WebKit::RemoteMediaRecorderPrivateWriterIdentifier"_s,
+#endif
         "WebKit::RemoteMediaResourceIdentifier"_s,
 #if ENABLE(GPU_PROCESS) && ENABLE(MEDIA_SOURCE)
         "WebKit::RemoteMediaSourceIdentifier"_s,
@@ -815,7 +836,6 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebKit::WebGPUIdentifier"_s,
         "WebKit::WebPageProxyIdentifier"_s,
         "WebKit::WebTransportSessionIdentifier"_s,
-        "WebKit::WebTransportStreamIdentifier"_s,
         "WebKit::WebURLSchemeHandlerIdentifier"_s,
     };
 }
@@ -851,6 +871,10 @@ std::optional<Vector<ArgumentDescription>> messageArgumentDescriptions(MessageNa
             { "foo"_s, "int"_s, ASCIILiteral(), false },
             { "bar"_s, "int"_s, ASCIILiteral(), false },
             { "baz"_s, "int"_s, ASCIILiteral(), false },
+        };
+    case MessageName::TestWithDispatchedFromAndTo_AlwaysEnabled:
+        return Vector<ArgumentDescription> {
+            { "url"_s, "String"_s, ASCIILiteral(), false },
         };
     case MessageName::TestWithEnabledBy_AlwaysEnabled:
         return Vector<ArgumentDescription> {
@@ -1000,6 +1024,10 @@ std::optional<Vector<ArgumentDescription>> messageArgumentDescriptions(MessageNa
         };
 #endif
 #endif
+    case MessageName::TestWithMultiLineExtendedAttributes_AlwaysEnabled:
+        return Vector<ArgumentDescription> {
+            { "url"_s, "String"_s, ASCIILiteral(), false },
+        };
 #if (ENABLE(WEBKIT2) && (NESTED_MASTER_CONDITION || MASTER_OR && MASTER_AND))
     case MessageName::TestWithoutAttributes_LoadURL:
         return Vector<ArgumentDescription> {

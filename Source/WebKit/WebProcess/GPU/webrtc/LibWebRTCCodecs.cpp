@@ -35,7 +35,6 @@
 #include "Logging.h"
 #include "RemoteVideoFrameObjectHeapProxy.h"
 #include "RemoteVideoFrameProxy.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebProcess.h"
 #include <WebCore/CVUtilities.h>
 #include <WebCore/LibWebRTCDav1dDecoder.h>
@@ -88,8 +87,8 @@ static webrtc::WebKitVideoDecoder createVideoDecoder(const webrtc::SdpVideoForma
 }
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(LibWebRTCCodecs);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(LibWebRTCCodecs, Decoder);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(LibWebRTCCodecs, Encoder);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LibWebRTCCodecs::Decoder);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LibWebRTCCodecs::Encoder);
 
 std::optional<WebCore::VideoCodecType> LibWebRTCCodecs::videoCodecTypeFromWebCodec(const String& codec)
 {
@@ -439,9 +438,9 @@ int32_t LibWebRTCCodecs::decodeWebRTCFrame(Decoder& decoder, int64_t timeStamp, 
     return promise ? WEBRTC_VIDEO_CODEC_OK : WEBRTC_VIDEO_CODEC_ERROR;
 }
 
-Ref<LibWebRTCCodecs::FramePromise> LibWebRTCCodecs::decodeFrame(Decoder& decoder, int64_t timeStamp, std::span<const uint8_t> data, uint16_t width, uint16_t height)
+Ref<LibWebRTCCodecs::FramePromise> LibWebRTCCodecs::decodeFrame(Decoder& decoder, int64_t timeStamp, std::span<const uint8_t> data)
 {
-    auto promise = decodeFrameInternal(decoder, timeStamp, data, width, height);
+    auto promise = decodeFrameInternal(decoder, timeStamp, data, 0, 0);
     return promise ? promise.releaseNonNull() : FramePromise::createAndReject("Decoding task did not complete"_s);
 }
 
@@ -519,7 +518,8 @@ void LibWebRTCCodecs::completedDecoding(VideoDecoderIdentifier decoderIdentifier
     if (!decoder->decodedImageCallback)
         return;
     auto& frame = remoteVideoFrame.leakRef(); // Balanced by the release callback of videoDecoderTaskComplete.
-    webrtc::videoDecoderTaskComplete(decoder->decodedImageCallback, timeStamp, timeStampNs / 1000, &frame,
+
+    webrtc::videoDecoderTaskComplete(decoder->decodedImageCallback, timeStamp, &frame,
         [](auto* pointer) { return static_cast<RemoteVideoFrameProxy*>(pointer)->pixelBuffer(); },
         [](auto* pointer) { static_cast<RemoteVideoFrameProxy*>(pointer)->deref(); },
         frame.size().width(), frame.size().height());
@@ -549,7 +549,7 @@ void LibWebRTCCodecs::completedDecodingCV(VideoDecoderIdentifier decoderIdentifi
     if (!decoder->decodedImageCallback)
         return;
 
-    webrtc::videoDecoderTaskComplete(decoder->decodedImageCallback, timeStamp, timeStampNs / 1000, pixelBuffer.get());
+    webrtc::videoDecoderTaskComplete(decoder->decodedImageCallback, timeStamp, pixelBuffer.get());
 }
 
 static inline webrtc::VideoCodecType toWebRTCCodecType(WebCore::VideoCodecType type)
@@ -707,7 +707,7 @@ template<typename Frame> RefPtr<LibWebRTCCodecs::FramePromise> LibWebRTCCodecs::
 
 int32_t LibWebRTCCodecs::encodeFrame(Encoder& encoder, const webrtc::VideoFrame& frame, bool shouldEncodeAsKeyFrame)
 {
-    auto promise = encodeFrameInternal(encoder, frame, shouldEncodeAsKeyFrame, toVideoRotation(frame.rotation()), MediaTime::createWithDouble(Seconds::fromMicroseconds(frame.timestamp_us()).value()), frame.timestamp(), { });
+    auto promise = encodeFrameInternal(encoder, frame, shouldEncodeAsKeyFrame, toVideoRotation(frame.rotation()), MediaTime::createWithDouble(Seconds::fromMicroseconds(frame.timestamp_us()).value()), frame.timestamp_us(), { });
     return promise ? WEBRTC_VIDEO_CODEC_OK : WEBRTC_VIDEO_CODEC_ERROR;
 }
 

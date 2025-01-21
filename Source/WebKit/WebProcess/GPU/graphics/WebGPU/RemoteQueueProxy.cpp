@@ -30,6 +30,9 @@
 
 #include "RemoteQueueMessages.h"
 #include "WebGPUConvertToBackingContext.h"
+#include "WebProcess.h"
+#include <WebCore/NativeImage.h>
+#include <WebCore/WebCodecsVideoFrame.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit::WebGPU {
@@ -40,6 +43,9 @@ RemoteQueueProxy::RemoteQueueProxy(RemoteAdapterProxy& parent, ConvertToBackingC
     : m_backing(identifier)
     , m_convertToBackingContext(convertToBackingContext)
     , m_parent(parent)
+#if ENABLE(VIDEO)
+    , m_videoFrameObjectHeapProxy(WebProcess::singleton().ensureProtectedGPUProcessConnection()->protectedVideoFrameObjectHeapProxy())
+#endif
 {
 }
 
@@ -161,6 +167,25 @@ Ref<ConvertToBackingContext> RemoteQueueProxy::protectedConvertToBackingContext(
 {
     return m_convertToBackingContext;
 }
+
+RefPtr<WebCore::NativeImage> RemoteQueueProxy::getNativeImage(WebCore::VideoFrame& videoFrame)
+{
+    RefPtr<WebCore::NativeImage> nativeImage;
+#if ENABLE(VIDEO) && PLATFORM(COCOA) && ENABLE(WEB_CODECS)
+    callOnMainRunLoopAndWait([&nativeImage, videoFrame = Ref { videoFrame }, videoFrameHeap = protectedVideoFrameObjectHeapProxy()] {
+        nativeImage = videoFrameHeap->getNativeImage(videoFrame);
+    });
+#endif
+    return nativeImage;
+}
+
+#if ENABLE(VIDEO)
+RefPtr<RemoteVideoFrameObjectHeapProxy> RemoteQueueProxy::protectedVideoFrameObjectHeapProxy() const
+{
+    return m_videoFrameObjectHeapProxy;
+}
+#endif
+
 
 } // namespace WebKit::WebGPU
 

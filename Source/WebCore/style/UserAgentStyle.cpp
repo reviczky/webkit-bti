@@ -84,7 +84,6 @@ StyleSheetContents* UserAgentStyle::mathMLStyleSheet;
 StyleSheetContents* UserAgentStyle::mediaControlsStyleSheet;
 StyleSheetContents* UserAgentStyle::mediaQueryStyleSheet;
 StyleSheetContents* UserAgentStyle::popoverStyleSheet;
-StyleSheetContents* UserAgentStyle::plugInsStyleSheet;
 StyleSheetContents* UserAgentStyle::horizontalFormControlsStyleSheet;
 StyleSheetContents* UserAgentStyle::htmlSwitchControlStyleSheet;
 StyleSheetContents* UserAgentStyle::counterStylesStyleSheet;
@@ -101,9 +100,7 @@ StyleSheetContents* UserAgentStyle::attachmentStyleSheet;
 #if ENABLE(DATALIST_ELEMENT)
 StyleSheetContents* UserAgentStyle::dataListStyleSheet;
 #endif
-#if ENABLE(INPUT_TYPE_COLOR)
 StyleSheetContents* UserAgentStyle::colorInputStyleSheet;
-#endif
 
 static const MQ::MediaQueryEvaluator& screenEval()
 {
@@ -186,14 +183,12 @@ void UserAgentStyle::initDefaultStyleSheet()
     defaultStyleSheet = parseUASheet(defaultRules);
     addToDefaultStyle(*defaultStyleSheet);
 
+    // Counter rules.
+    counterStylesStyleSheet = parseUASheet(StringImpl::createWithoutCopying(counterStylesUserAgentStyleSheet));
+    addToCounterStyleRegistry(*counterStylesStyleSheet);
+
     // Quirks-mode rules.
-    String quirksRules;
-    auto extraQuirksStyleSheet = RenderTheme::singleton().extraQuirksStyleSheet();
-    if (extraQuirksStyleSheet.isEmpty())
-        quirksRules = StringImpl::createWithoutCopying(quirksUserAgentStyleSheet);
-    else
-        quirksRules = makeString(std::span { quirksUserAgentStyleSheet }, extraQuirksStyleSheet);
-    quirksStyleSheet = parseUASheet(quirksRules);
+    quirksStyleSheet = parseUASheet(StringImpl::createWithoutCopying(quirksUserAgentStyleSheet));
 
     RuleSetBuilder quirkBuilder(*defaultQuirksStyle, screenEval());
     quirkBuilder.addRulesFromSheet(*quirksStyleSheet);
@@ -204,13 +199,13 @@ void UserAgentStyle::initDefaultStyleSheet()
 void UserAgentStyle::ensureDefaultStyleSheetsForElement(const Element& element)
 {
     if (is<HTMLElement>(element)) {
-        if (is<HTMLObjectElement>(element) || is<HTMLEmbedElement>(element)) {
-            if (!plugInsStyleSheet && element.document().page()) {
-                auto plugInsRules = makeString(RenderTheme::singleton().extraPlugInsStyleSheet(),  element.document().page()->chrome().client().plugInExtraStyleSheet());
-                if (plugInsRules.isEmpty())
-                    plugInsRules = String(StringImpl::createWithoutCopying(plugInsUserAgentStyleSheet));
-                plugInsStyleSheet = parseUASheet(plugInsRules);
-                addToDefaultStyle(*plugInsStyleSheet);
+        if (RefPtr input = dynamicDowncast<HTMLInputElement>(element)) {
+            if (!colorInputStyleSheet && input->isColorControl()) {
+                colorInputStyleSheet = parseUASheet(RenderTheme::singleton().colorInputStyleSheet());
+                addToDefaultStyle(*colorInputStyleSheet);
+            } else if (!htmlSwitchControlStyleSheet && input->isSwitch()) {
+                htmlSwitchControlStyleSheet = parseUASheet(StringImpl::createWithoutCopying(htmlSwitchControlUserAgentStyleSheet));
+                addToDefaultStyle(*htmlSwitchControlStyleSheet);
             }
         }
 #if ENABLE(VIDEO) && !ENABLE(MODERN_MEDIA_CONTROLS)
@@ -236,16 +231,6 @@ void UserAgentStyle::ensureDefaultStyleSheetsForElement(const Element& element)
             addToDefaultStyle(*dataListStyleSheet);
         }
 #endif // ENABLE(DATALIST_ELEMENT)
-#if ENABLE(INPUT_TYPE_COLOR)
-        else if (RefPtr input = dynamicDowncast<HTMLInputElement>(element); !colorInputStyleSheet && input && input->isColorControl()) {
-            colorInputStyleSheet = parseUASheet(RenderTheme::singleton().colorInputStyleSheet());
-            addToDefaultStyle(*colorInputStyleSheet);
-        }
-#endif // ENABLE(INPUT_TYPE_COLOR)
-        else if (RefPtr input = dynamicDowncast<HTMLInputElement>(element); !htmlSwitchControlStyleSheet && input && input->isSwitch()) {
-            htmlSwitchControlStyleSheet = parseUASheet(StringImpl::createWithoutCopying(htmlSwitchControlUserAgentStyleSheet));
-            addToDefaultStyle(*htmlSwitchControlStyleSheet);
-        }
     } else if (is<SVGElement>(element)) {
         if (!svgStyleSheet) {
             // SVG rules.
@@ -267,11 +252,6 @@ void UserAgentStyle::ensureDefaultStyleSheetsForElement(const Element& element)
     if (!popoverStyleSheet && popoverAttributeEnabled && element.hasAttributeWithoutSynchronization(popoverAttr)) {
         popoverStyleSheet = parseUASheet(StringImpl::createWithoutCopying(popoverUserAgentStyleSheet));
         addToDefaultStyle(*popoverStyleSheet);
-    }
-
-    if (!counterStylesStyleSheet) {
-        counterStylesStyleSheet = parseUASheet(StringImpl::createWithoutCopying(counterStylesUserAgentStyleSheet));
-        addToCounterStyleRegistry(*counterStylesStyleSheet);
     }
 
 #if ENABLE(FULLSCREEN_API)

@@ -57,6 +57,7 @@ typedef struct CGColorSpace *CGColorSpaceRef;
 namespace WebCore {
 
 class DestinationColorSpace;
+class FloatPoint;
 class FloatRect;
 class FloatSize;
 class PlatformCALayerClient;
@@ -82,6 +83,7 @@ FloatRect screenRect(Widget*);
 FloatRect screenAvailableRect(Widget*);
 
 WEBCORE_EXPORT ContentsFormat screenContentsFormat(Widget* = nullptr, PlatformCALayerClient* = nullptr);
+WEBCORE_EXPORT bool screenSupportsExtendedColor(Widget* = nullptr);
 
 enum class DynamicRangeMode : uint8_t {
     None,
@@ -118,12 +120,13 @@ WEBCORE_EXPORT PlatformDisplayID displayID(NSScreen *);
 WEBCORE_EXPORT NSScreen *screen(NSWindow *);
 NSScreen *screen(PlatformDisplayID);
 
-FloatRect screenRectForDisplay(PlatformDisplayID);
+WEBCORE_EXPORT FloatRect screenRectForDisplay(PlatformDisplayID);
 WEBCORE_EXPORT FloatRect screenRectForPrimaryScreen();
 WEBCORE_EXPORT FloatRect availableScreenRect(NSScreen *);
 
 WEBCORE_EXPORT FloatRect toUserSpace(const NSRect&, NSWindow *destination);
 WEBCORE_EXPORT FloatRect toUserSpaceForPrimaryScreen(const NSRect&);
+WEBCORE_EXPORT FloatPoint toUserSpaceForPrimaryScreen(const NSPoint&);
 WEBCORE_EXPORT NSRect toDeviceSpace(const FloatRect&, NSWindow *source);
 
 NSPoint flipScreenPoint(const NSPoint&, NSScreen *);

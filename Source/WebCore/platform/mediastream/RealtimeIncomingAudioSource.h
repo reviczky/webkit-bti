@@ -35,15 +35,11 @@
 #include "LibWebRTCMacros.h"
 #include "RealtimeMediaSource.h"
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-ALLOW_UNUSED_PARAMETERS_BEGIN
-ALLOW_COMMA_BEGIN
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 
 #include <webrtc/api/media_stream_interface.h>
 
-ALLOW_UNUSED_PARAMETERS_END
-ALLOW_COMMA_END
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 #include <wtf/RetainPtr.h>
 
@@ -63,9 +59,7 @@ public:
     void setAudioModule(RefPtr<LibWebRTCAudioModule>&&);
     LibWebRTCAudioModule* audioModule() { return m_audioModule.get(); }
 
-    void ref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RealtimeIncomingAudioSource, WTF::DestructionThread::MainRunLoop>::ref(); }
-    void deref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RealtimeIncomingAudioSource, WTF::DestructionThread::MainRunLoop>::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RealtimeIncomingAudioSource, WTF::DestructionThread::MainRunLoop>::controlBlock(); }
+    WTF_ABSTRACT_THREAD_SAFE_REF_COUNTED_AND_CAN_MAKE_WEAK_PTR_IMPL;
     ~RealtimeIncomingAudioSource();
 protected:
     RealtimeIncomingAudioSource(rtc::scoped_refptr<webrtc::AudioTrackInterface>&&, String&&);

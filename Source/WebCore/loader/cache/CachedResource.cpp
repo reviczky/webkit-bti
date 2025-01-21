@@ -100,7 +100,7 @@ CachedResource::CachedResource(CachedResourceRequest&& request, Type type, PAL::
 {
     ASSERT(m_sessionID.isValid());
 
-    setLoadPriority(request.priority(), request.fetchPriorityHint());
+    setLoadPriority(request.priority(), request.fetchPriority());
 #ifndef NDEBUG
     cachedResourceLeakCounter.increment();
 #endif
@@ -169,7 +169,7 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
     // We query the top document because new frames may be created in pagehide event handlers
     // and their backForwardCacheState will not reflect the fact that they are about to enter page
     // cache.
-    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame->mainFrame())) {
+    if (RefPtr localFrame = frame->localMainFrame()) {
         if (RefPtr topDocument = localFrame->document()) {
             switch (topDocument->backForwardCacheState()) {
             case Document::NotInBackForwardCache:
@@ -917,13 +917,13 @@ unsigned CachedResource::overheadSize() const
     return sizeof(CachedResource) + response().memoryUsage() + kAverageClientsHashMapSize + m_resourceRequest.url().string().length() * 2;
 }
 
-void CachedResource::setLoadPriority(const std::optional<ResourceLoadPriority>& loadPriority, RequestPriority fetchPriorityHint)
+void CachedResource::setLoadPriority(const std::optional<ResourceLoadPriority>& loadPriority, RequestPriority fetchPriority)
 {
     ResourceLoadPriority priority = loadPriority ? loadPriority.value() : DefaultResourceLoadPriority::forResourceType(type());
-    if (fetchPriorityHint == RequestPriority::Low) {
+    if (fetchPriority == RequestPriority::Low) {
         if (priority != ResourceLoadPriority::Lowest)
             --priority;
-    } else if (fetchPriorityHint == RequestPriority::High) {
+    } else if (fetchPriority == RequestPriority::High) {
         if (priority != ResourceLoadPriority::Highest)
             ++priority;
     }

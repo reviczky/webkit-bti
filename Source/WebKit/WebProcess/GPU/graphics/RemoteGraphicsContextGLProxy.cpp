@@ -42,6 +42,7 @@
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/PixelBufferConversion.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/ParsingUtilities.h>
 
 #if ENABLE(VIDEO)
 #include "RemoteVideoFrameObjectHeapProxy.h"
@@ -74,7 +75,7 @@ IPC::ArrayReferenceTuple<Types...> toArrayReferenceTuple(const GCGLSpanTuple<Spa
 
 RefPtr<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::create(const WebCore::GraphicsContextGLAttributes& attributes, WebPage& page)
 {
-    return RemoteGraphicsContextGLProxy::create(attributes, page.ensureRemoteRenderingBackendProxy(), RunLoop::protectedMain().get());
+    return RemoteGraphicsContextGLProxy::create(attributes, page.ensureProtectedRemoteRenderingBackendProxy(), RunLoop::protectedMain().get());
 }
 
 RefPtr<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::create(const WebCore::GraphicsContextGLAttributes& attributes, RemoteRenderingBackendProxy& renderingBackend, SerialFunctionDispatcher& dispatcher)
@@ -112,11 +113,11 @@ void RemoteGraphicsContextGLProxy::initializeIPC(Ref<IPC::StreamClientConnection
     m_streamConnection = streamConnection.ptr();
     streamConnection->open(*this, dispatcher);
     callOnMainRunLoopAndWait([&]() {
-        auto& gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
-        gpuProcessConnection.createGraphicsContextGL(m_identifier, contextAttributes(), renderingBackend, WTFMove(serverHandle));
-        m_gpuProcessConnection = gpuProcessConnection;
+        Ref gpuProcessConnection = WebProcess::singleton().ensureGPUProcessConnection();
+        gpuProcessConnection->createGraphicsContextGL(m_identifier, contextAttributes(), renderingBackend, WTFMove(serverHandle));
+        m_gpuProcessConnection = gpuProcessConnection.get();
 #if ENABLE(VIDEO)
-        m_videoFrameObjectHeapProxy = &gpuProcessConnection.videoFrameObjectHeapProxy();
+        m_videoFrameObjectHeapProxy = &gpuProcessConnection->videoFrameObjectHeapProxy();
 #endif
     });
 
@@ -202,7 +203,7 @@ RefPtr<WebCore::VideoFrame> RemoteGraphicsContextGLProxy::surfaceBufferToVideoFr
     auto [result] = sendResult.takeReply();
     if (!result)
         return nullptr;
-    return RemoteVideoFrameProxy::create(WebProcess::singleton().ensureGPUProcessConnection().protectedConnection(), WebProcess::singleton().ensureGPUProcessConnection().protectedVideoFrameObjectHeapProxy(), WTFMove(*result));
+    return RemoteVideoFrameProxy::create(WebProcess::singleton().ensureGPUProcessConnection().protectedConnection(), WebProcess::singleton().ensureProtectedGPUProcessConnection()->protectedVideoFrameObjectHeapProxy(), WTFMove(*result));
 }
 #endif
 
@@ -308,7 +309,7 @@ void RemoteGraphicsContextGLProxy::getBufferSubData(GCGLenum target, GCGLintptr 
             if (!valid)
                 return;
             std::ranges::copy(replyBuffer->span().subspan(0, transferSize), data.begin());
-            data = data.subspan(transferSize);
+            skip(data, transferSize);
             offset += transferSize;
         }
         return;
@@ -326,7 +327,7 @@ inlineCase:
             return;
         RELEASE_ASSERT(transferSize == inlineBuffer.size());
         std::ranges::copy(inlineBuffer, data.begin());
-        data = data.subspan(transferSize);
+        skip(data, transferSize);
         offset += transferSize;
     }
 }
@@ -364,7 +365,7 @@ void RemoteGraphicsContextGLProxy::readPixels(IntRect rect, GCGLenum format, GCG
         // Will not overflow, because rect.size() * { dataStoreRowBytes, bytesPerGroup } is validated and it will fit to the uint32_t.
         // bottomLeftOutOfBounds must be smaller than rect.size() in case adjusted rect is non-empty.
         unsigned skipRowBytes = bottomLeftOutOfBounds.width() * bytesPerGroup;
-        dataStore = dataStore.subspan(dataStoreRowBytes * bottomLeftOutOfBounds.height() + skipRowBytes);
+        skip(dataStore, dataStoreRowBytes * bottomLeftOutOfBounds.height() + skipRowBytes);
     }
 
     static constexpr size_t readPixelsInlineSizeLimit = 64 * KB; // NOTE: when changing, change the value in RemoteGraphicsContextGL too.

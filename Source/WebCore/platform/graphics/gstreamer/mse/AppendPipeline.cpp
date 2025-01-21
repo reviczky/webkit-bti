@@ -46,13 +46,13 @@
 #include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/MakeString.h>
 
-GST_DEBUG_CATEGORY_EXTERN(webkit_mse_debug);
-#define GST_CAT_DEFAULT webkit_mse_debug
+GST_DEBUG_CATEGORY_STATIC(webkit_mse_append_pipeline_debug);
+#define GST_CAT_DEFAULT webkit_mse_append_pipeline_debug
 
 namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AppendPipeline);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(AppendPipeline, Track);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AppendPipeline::Track);
 
 GType AppendPipeline::s_endOfAppendMetaType = 0;
 const GstMetaInfo* AppendPipeline::s_webKitEndOfAppendMetaInfo = nullptr;
@@ -68,6 +68,7 @@ struct EndOfAppendMeta {
 void AppendPipeline::staticInitialization()
 {
     ASSERT(isMainThread());
+    GST_DEBUG_CATEGORY_INIT(webkit_mse_append_pipeline_debug, "webkitmseappendpipeline", 0, "WebKit MSE AppendPipeline");
 
     const char* tags[] = { nullptr };
     s_endOfAppendMetaType = gst_meta_api_type_register("WebKitEndOfAppendMetaAPI", tags);
@@ -439,9 +440,9 @@ void AppendPipeline::didReceiveInitializationSegment()
                 linkPadWithTrack(pad, *track);
         }
     } else {
-        HashSet<String> videoPadStreamIDs;
-        HashSet<String> audioPadStreamIDs;
-        HashSet<String> textPadStreamIDs;
+        UncheckedKeyHashSet<String> videoPadStreamIDs;
+        UncheckedKeyHashSet<String> audioPadStreamIDs;
+        UncheckedKeyHashSet<String> textPadStreamIDs;
         for (auto pad : GstIteratorAdaptor<GstPad>(GUniquePtr<GstIterator>(gst_element_iterate_src_pads(m_demux.get())))) {
             auto [parsedCaps, streamType, presentationSize] = parseDemuxerSrcPadCaps(adoptGRef(gst_pad_get_current_caps(pad)).get());
             UNUSED_VARIABLE(parsedCaps);

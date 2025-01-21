@@ -640,6 +640,14 @@ private:
             }
             break;
         }
+
+        case StringAt: {
+            if (node->arrayMode().isOutOfBounds())
+                changed |= mergePrediction(SpecString | SpecOther);
+            else
+                changed |= mergePrediction(SpecString);
+            break;
+        }
             
         case ToThis: {
             // ToThis in methods for primitive types should speculate primitive types in strict mode.
@@ -1127,6 +1135,7 @@ private:
             break;
 
         case MapStorage:
+        case MapStorageOrSentinel:
         case MapIterationNext:
             setPrediction(SpecCellOther);
             break;
@@ -1518,7 +1527,8 @@ private:
         case AtomicsOr:
         case AtomicsStore:
         case AtomicsSub:
-        case AtomicsXor: {
+        case AtomicsXor:
+        case StringAt: {
             m_dependentNodes.append(m_currentNode);
             break;
         }

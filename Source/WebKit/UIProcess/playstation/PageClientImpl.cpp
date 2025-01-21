@@ -58,12 +58,12 @@ uint64_t PageClientImpl::viewWidget()
 #endif
 
 // PageClient's pure virtual functions
-std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
+Ref<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
 {
 #if USE(GRAPHICS_LAYER_WC)
-    return makeUnique<DrawingAreaProxyWC>(*m_view.page(), webProcessProxy);
+    return DrawingAreaProxyWC::create(*m_view.page(), webProcessProxy);
 #else
-    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(*m_view.page(), webProcessProxy);
+    return DrawingAreaProxyCoordinatedGraphics::create(*m_view.page(), webProcessProxy);
 #endif
 }
 
@@ -181,6 +181,11 @@ WebCore::IntPoint PageClientImpl::screenToRootView(const WebCore::IntPoint& poin
     return point;
 }
 
+WebCore::IntPoint PageClientImpl::rootViewToScreen(const WebCore::IntPoint& point)
+{
+    return point;
+}
+
 WebCore::IntRect PageClientImpl::rootViewToScreen(const WebCore::IntRect& rect)
 {
     return rect;
@@ -221,6 +226,11 @@ bool PageClientImpl::usesOffscreenRendering() const
 }
 #endif
 
+RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy&, const WebCore::Color&, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&)
+{
+    return nullptr;
+}
+
 void PageClientImpl::enterAcceleratedCompositingMode(const LayerTreeContext& context)
 {
     notImplemented();
@@ -252,9 +262,9 @@ bool PageClientImpl::isFullScreen()
     return m_view.isFullScreen();
 }
 
-void PageClientImpl::enterFullScreen()
+void PageClientImpl::enterFullScreen(CompletionHandler<void(bool)>&& completionHandler)
 {
-    m_view.enterFullScreen();
+    m_view.enterFullScreen(WTFMove(completionHandler));
 }
 
 void PageClientImpl::exitFullScreen()

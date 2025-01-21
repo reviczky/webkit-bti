@@ -72,7 +72,7 @@ String WebCookieCache::cookiesForDOM(const URL& firstParty, const SameSiteInfo& 
         auto host = url.host().toString();
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
         if (!hasCacheForHost)
-            WebProcess::singleton().protectedCookieJar()->addChangeListener(host, *this);
+            WebProcess::singleton().protectedCookieJar()->addChangeListenerWithAccess(url, firstParty, frameID, pageID, ShouldRelaxThirdPartyCookieBlocking::No, *this);
 #endif
         auto sendResult = WebProcess::singleton().ensureNetworkProcessConnection().protectedConnection()->sendSync(Messages::NetworkConnectionToWebProcess::DomCookiesForHost(url), 0);
         if (!sendResult.succeeded())
@@ -168,6 +168,13 @@ NetworkStorageSession& WebCookieCache::inMemoryStorageSession()
     ASSERT_NOT_IMPLEMENTED_YET();
     return *m_inMemoryStorageSession;
 }
+
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
+void WebCookieCache::setOptInCookiePartitioningEnabled(bool)
+{
+    ASSERT_NOT_IMPLEMENTED_YET();
+}
+#endif
 #endif
 
 bool WebCookieCache::cacheMayBeOutOfSync() const

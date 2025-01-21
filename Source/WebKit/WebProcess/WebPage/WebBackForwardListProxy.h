@@ -39,19 +39,20 @@ class WebBackForwardListProxy : public WebCore::BackForwardClient {
 public: 
     static Ref<WebBackForwardListProxy> create(WebPage& page) { return adoptRef(*new WebBackForwardListProxy(page)); }
 
-    static void removeItem(const WebCore::BackForwardItemIdentifier&);
+    static void removeItem(WebCore::BackForwardItemIdentifier);
 
     void clearCachedListCounts();
 
 private:
     WebBackForwardListProxy(WebPage&);
 
-    void addItem(WebCore::FrameIdentifier, Ref<WebCore::HistoryItem>&&) override;
-    void setChildItem(WebCore::BackForwardItemIdentifier, Ref<WebCore::HistoryItem>&&) final;
+    void addItem(Ref<WebCore::HistoryItem>&&) override;
+    void setChildItem(WebCore::BackForwardFrameItemIdentifier, Ref<WebCore::HistoryItem>&&) final;
 
     void goToItem(WebCore::HistoryItem&) override;
     void goToProvisionalItem(const WebCore::HistoryItem&) final;
     void clearProvisionalItem(const WebCore::HistoryItem&) final;
+    void commitProvisionalItem(const WebCore::HistoryItem&) final;
 
     RefPtr<WebCore::HistoryItem> itemAtIndex(int, WebCore::FrameIdentifier) override;
     unsigned backListCount() const override;

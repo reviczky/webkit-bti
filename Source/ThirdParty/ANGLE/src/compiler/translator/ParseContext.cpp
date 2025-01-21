@@ -1400,24 +1400,23 @@ void TParseContext::checkCanBeDeclaredWithoutInitializer(const TSourceLoc &line,
             error(line, "variables with qualifier 'const' must be initialized", identifier);
         }
     }
+}
+
+void TParseContext::checkDeclarationIsValidArraySize(const TSourceLoc &line,
+                                                     const ImmutableString &identifier,
+                                                     TType *type)
+{
 
     // Implicitly declared arrays are only allowed with tessellation or geometry shader inputs
-    if (type->isArray() &&
+    if (type->isUnsizedArray() &&
         ((mShaderType != GL_TESS_CONTROL_SHADER && mShaderType != GL_TESS_EVALUATION_SHADER &&
           mShaderType != GL_GEOMETRY_SHADER) ||
          (mShaderType == GL_GEOMETRY_SHADER && type->getQualifier() == EvqGeometryOut)))
     {
-        const TSpan<const unsigned int> &arraySizes = type->getArraySizes();
-        for (unsigned int size : arraySizes)
-        {
-            if (size == 0)
-            {
-                error(line,
-                      "implicitly sized arrays only allowed for tessellation shaders "
-                      "or geometry shader inputs",
-                      identifier);
-            }
-        }
+        error(line,
+              "implicitly sized arrays only allowed for tessellation shaders "
+              "or geometry shader inputs",
+              identifier);
     }
 }
 
@@ -3508,6 +3507,7 @@ TIntermDeclaration *TParseContext::parseSingleDeclaration(
         nonEmptyDeclarationErrorCheck(publicType, identifierOrTypeLocation);
 
         checkCanBeDeclaredWithoutInitializer(identifierOrTypeLocation, identifier, type);
+        checkDeclarationIsValidArraySize(identifierOrTypeLocation, identifier, type);
 
         if (IsAtomicCounter(type->getBasicType()))
         {
@@ -3558,6 +3558,7 @@ TIntermDeclaration *TParseContext::parseSingleArrayDeclaration(
     checkTessellationShaderUnsizedArraysAndSetSize(indexLocation, identifier, arrayType);
 
     checkCanBeDeclaredWithoutInitializer(identifierLocation, identifier, arrayType);
+    checkDeclarationIsValidArraySize(identifierLocation, identifier, arrayType);
 
     if (IsAtomicCounter(arrayType->getBasicType()))
     {
@@ -3735,6 +3736,7 @@ void TParseContext::parseDeclarator(TPublicType &publicType,
     checkTessellationShaderUnsizedArraysAndSetSize(identifierLocation, identifier, type);
 
     checkCanBeDeclaredWithoutInitializer(identifierLocation, identifier, type);
+    checkDeclarationIsValidArraySize(identifierLocation, identifier, type);
 
     if (IsAtomicCounter(type->getBasicType()))
     {
@@ -3778,6 +3780,7 @@ void TParseContext::parseArrayDeclarator(TPublicType &elementType,
         checkTessellationShaderUnsizedArraysAndSetSize(identifierLocation, identifier, arrayType);
 
         checkCanBeDeclaredWithoutInitializer(identifierLocation, identifier, arrayType);
+        checkDeclarationIsValidArraySize(identifierLocation, identifier, arrayType);
 
         if (IsAtomicCounter(arrayType->getBasicType()))
         {
@@ -5202,10 +5205,10 @@ TIntermDeclaration *TParseContext::addInterfaceBlock(
     if (arraySizes)
     {
         interfaceBlockType->makeArrays(*arraySizes);
-
         checkGeometryShaderInputAndSetArraySize(instanceLine, instanceName, interfaceBlockType);
         checkTessellationShaderUnsizedArraysAndSetSize(instanceLine, instanceName,
                                                        interfaceBlockType);
+        checkDeclarationIsValidArraySize(instanceLine, instanceName, interfaceBlockType);
     }
 
     // The instance variable gets created to refer to the interface block type from the AST
@@ -7062,6 +7065,52 @@ bool TParseContext::binaryOpCommonCheck(TOperator op,
             break;
     }
 
+    switch (op)
+    {
+        case EOpLogicalOr:
+        case EOpLogicalXor:
+        case EOpLogicalAnd:
+            // Above operations are only supported on booleans
+            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
+                   !right->getType().getStruct());
+            if (left->getBasicType() != EbtBool || !left->isScalar() || !right->isScalar())
+            {
+                return false;
+            }
+            // Basic types matching should have been already checked.
+            ASSERT(right->getBasicType() == EbtBool);
+            break;
+        case EOpAdd:
+        case EOpAddAssign:
+        case EOpSub:
+        case EOpSubAssign:
+        case EOpDiv:
+        case EOpDivAssign:
+        case EOpMul:
+        case EOpMulAssign:
+            // Above operations are not supported on booleans
+            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
+                   !right->getType().getStruct());
+            if (left->getBasicType() == EbtBool)
+            {
+                return false;
+            }
+            break;
+        case EOpIMod:
+        case EOpIModAssign:
+            // Mod operator only supported on integers
+            // Note that this is only for the % operator, not for mod()
+            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
+                   !right->getType().getStruct());
+            if (left->getBasicType() != EbtInt && left->getBasicType() != EbtUInt)
+            {
+                return false;
+            }
+            break;
+        default:
+            break;
+    }
+
     return true;
 }
 
@@ -7114,51 +7163,8 @@ TIntermTyped *TParseContext::addBinaryMathInternal(TOperator op,
                                                    const TSourceLoc &loc)
 {
     if (!binaryOpCommonCheck(op, left, right, loc))
-        return nullptr;
-
-    switch (op)
     {
-        case EOpEqual:
-        case EOpNotEqual:
-        case EOpLessThan:
-        case EOpGreaterThan:
-        case EOpLessThanEqual:
-        case EOpGreaterThanEqual:
-            break;
-        case EOpLogicalOr:
-        case EOpLogicalXor:
-        case EOpLogicalAnd:
-            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
-                   !right->getType().getStruct());
-            if (left->getBasicType() != EbtBool || !left->isScalar() || !right->isScalar())
-            {
-                return nullptr;
-            }
-            // Basic types matching should have been already checked.
-            ASSERT(right->getBasicType() == EbtBool);
-            break;
-        case EOpAdd:
-        case EOpSub:
-        case EOpDiv:
-        case EOpMul:
-            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
-                   !right->getType().getStruct());
-            if (left->getBasicType() == EbtBool)
-            {
-                return nullptr;
-            }
-            break;
-        case EOpIMod:
-            ASSERT(!left->isArray() && !right->isArray() && !left->getType().getStruct() &&
-                   !right->getType().getStruct());
-            // Note that this is only for the % operator, not for mod()
-            if (left->getBasicType() == EbtBool || left->getBasicType() == EbtFloat)
-            {
-                return nullptr;
-            }
-            break;
-        default:
-            break;
+        return nullptr;
     }
 
     if (op == EOpMul)
@@ -7184,7 +7190,7 @@ TIntermTyped *TParseContext::addBinaryMath(TOperator op,
                                            const TSourceLoc &loc)
 {
     TIntermTyped *node = addBinaryMathInternal(op, left, right, loc);
-    if (node == 0)
+    if (node == nullptr)
     {
         binaryOpError(loc, GetOperatorString(op), left->getType(), right->getType());
         return left;

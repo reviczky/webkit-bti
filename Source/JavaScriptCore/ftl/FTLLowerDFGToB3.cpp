@@ -1305,6 +1305,9 @@ private:
         case MakeAtomString:
             compileMakeAtomString();
             break;
+        case StringAt:
+            compileStringAt();
+            break;
         case StringCharAt:
             compileStringCharAt();
             break;
@@ -1585,7 +1588,10 @@ private:
             compileMapIterationEntryValue();
             break;
         case MapStorage:
-            compileMapStorage();
+            compileMapStorage(operationMapStorage, operationSetStorage);
+            break;
+        case MapStorageOrSentinel:
+            compileMapStorage(operationMapStorageOrSentinel, operationSetStorageOrSentinel);
             break;
         case MapIteratorNext:
             compileMapIteratorNext();
@@ -10117,16 +10123,19 @@ IGNORE_CLANG_WARNINGS_END
     LValue compileStringCharAtImpl()
     {
         LValue base = lowString(m_graph.child(m_node, 0));
-        LValue index = lowInt32(m_graph.child(m_node, 1));
+        LValue originalIndex = lowInt32(m_graph.child(m_node, 1));
+
+        LValue stringImpl = m_out.loadPtr(base, m_heaps.JSString_value);
+        LValue stringLength = m_out.load32NonNegative(stringImpl, m_heaps.StringImpl_length);
+
+        LValue index = m_node->op() == StringAt ? m_out.select(m_out.lessThan(originalIndex, m_out.int32Zero), m_out.add(stringLength, originalIndex), originalIndex) : originalIndex;
 
         LBasicBlock fastPath = m_out.newBlock();
         LBasicBlock slowPath = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
 
-        LValue stringImpl = m_out.loadPtr(base, m_heaps.JSString_value);
         m_out.branch(
-            m_out.aboveOrEqual(
-                index, m_out.load32NonNegative(stringImpl, m_heaps.StringImpl_length)),
+            m_out.aboveOrEqual(index, stringLength),
             rarely(slowPath), usually(fastPath));
 
         LBasicBlock lastNext = m_out.appendTo(fastPath, slowPath);
@@ -10146,18 +10155,19 @@ IGNORE_CLANG_WARNINGS_END
 
         // FIXME: Need to cage strings!
         // https://bugs.webkit.org/show_bug.cgi?id=174924
-        ValueFromBlock char8Bit = m_out.anchor(
-            m_out.load8ZeroExt32(baseIndexWithProvenValue(m_heaps.characters8, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), index,
-                m_graph.child(m_node, 1))));
+        TypedPointer char8BitBaseIndex = m_node->op() == StringAt
+            ? m_out.baseIndex(m_heaps.characters8, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), m_out.zeroExtPtr(index))
+            : baseIndexWithProvenValue(m_heaps.characters8, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), index, m_graph.child(m_node, 1));
+        LValue char8BitValue = m_out.load8ZeroExt32(char8BitBaseIndex);
+        ValueFromBlock char8Bit = m_out.anchor(char8BitValue);
         m_out.jump(bitsContinuation);
 
         m_out.appendTo(is16Bit, bigCharacter);
 
-        LValue char16BitValue = m_out.load16ZeroExt32(baseIndexWithProvenValue(
-            m_heaps.characters16,
-            m_out.loadPtr(stringImpl, m_heaps.StringImpl_data),
-            index,
-            m_graph.child(m_node, 1)));
+        TypedPointer char16BitBaseIndex = m_node->op() == StringAt
+            ? m_out.baseIndex(m_heaps.characters16, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), m_out.zeroExtPtr(index))
+            : baseIndexWithProvenValue(m_heaps.characters16, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), index, m_graph.child(m_node, 1));
+        LValue char16BitValue = m_out.load16ZeroExt32(char16BitBaseIndex);
         ValueFromBlock char16Bit = m_out.anchor(char16BitValue);
         m_out.branch(
             m_out.above(char16BitValue, m_out.constInt32(maxSingleCharacterString)),
@@ -10191,25 +10201,30 @@ IGNORE_CLANG_WARNINGS_END
                 speculate(OutOfBounds, noValue(), nullptr, m_out.booleanTrue);
                 results.append(m_out.anchor(m_out.intPtrZero));
             } else {
-                // FIXME: Revisit JSGlobalObject.
-                // https://bugs.webkit.org/show_bug.cgi?id=203204
-                JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
-                if (m_graph.isWatchingStringPrototypeChainIsSaneWatchpoint(m_node)) {
-                    // FIXME: This could be captured using a Speculation mode that means
-                    // "out-of-bounds loads return a trivial value", something like
-                    // OutOfBoundsSaneChain.
-                    // https://bugs.webkit.org/show_bug.cgi?id=144668
-                    LBasicBlock negativeIndex = m_out.newBlock();
-
+                if (m_node->op() == StringAt) {
+                    // String#at can accept out of range index and it always returns undefined.
                     results.append(m_out.anchor(m_out.constInt64(JSValue::encode(jsUndefined()))));
-                    m_out.branch(
-                        m_out.lessThan(index, m_out.int32Zero),
-                        rarely(negativeIndex), usually(continuation));
+                } else {
+                    // FIXME: Revisit JSGlobalObject.
+                    // https://bugs.webkit.org/show_bug.cgi?id=203204
+                    JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+                    if (m_graph.isWatchingStringPrototypeChainIsSaneWatchpoint(m_node)) {
+                        // FIXME: This could be captured using a Speculation mode that means
+                        // "out-of-bounds loads return a trivial value", something like
+                        // OutOfBoundsSaneChain.
+                        // https://bugs.webkit.org/show_bug.cgi?id=144668
+                        LBasicBlock negativeIndex = m_out.newBlock();
 
-                    m_out.appendTo(negativeIndex, continuation);
+                        results.append(m_out.anchor(m_out.constInt64(JSValue::encode(jsUndefined()))));
+                        m_out.branch(
+                            m_out.lessThan(index, m_out.int32Zero),
+                            rarely(negativeIndex), usually(continuation));
+
+                        m_out.appendTo(negativeIndex, continuation);
+                    }
+
+                    results.append(m_out.anchor(vmCall(Int64, operationGetByValStringInt, weakPointer(globalObject), base, index)));
                 }
-
-                results.append(m_out.anchor(vmCall(Int64, operationGetByValStringInt, weakPointer(globalObject), base, index)));
             }
         }
         m_out.jump(continuation);
@@ -10221,6 +10236,11 @@ IGNORE_CLANG_WARNINGS_END
     }
 
     void compileStringCharAt()
+    {
+        setJSValue(compileStringCharAtImpl());
+    }
+
+    void compileStringAt()
     {
         setJSValue(compileStringCharAtImpl());
     }
@@ -12194,6 +12214,9 @@ IGNORE_CLANG_WARNINGS_END
                     jit.andPtr(CCallHelpers::TrustedImm32(~(stackAlignmentRegisters() - 1)), scratchGPR1);
                     jit.negPtr(scratchGPR1);
                     jit.getEffectiveAddress(CCallHelpers::BaseIndex(GPRInfo::callFrameRegister, scratchGPR1, CCallHelpers::TimesEight), scratchGPR1);
+
+                    slowCase.append(jit.branchPtr(CCallHelpers::Above, scratchGPR1, GPRInfo::callFrameRegister));
+                    slowCase.append(jit.branchPtr(CCallHelpers::Above, CCallHelpers::AbsoluteAddress(vm->addressOfSoftStackLimit()), scratchGPR1));
 
                     // Before touching stack values, we should update the stack pointer to protect them from signal stack.
                     jit.addPtr(CCallHelpers::TrustedImm32(sizeof(CallerFrameAndPC)), scratchGPR1, CCallHelpers::stackPointerRegister);
@@ -14246,7 +14269,8 @@ IGNORE_CLANG_WARNINGS_END
         setJSValue(result);
     }
 
-    void compileMapStorage()
+    template<typename Operation>
+    void compileMapStorage(Operation mapOperation, Operation setOperation)
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
 
@@ -14258,7 +14282,7 @@ IGNORE_CLANG_WARNINGS_END
         else
             RELEASE_ASSERT_NOT_REACHED();
 
-        auto operation = m_node->child1().useKind() == MapObjectUse ? operationMapStorage : operationSetStorage;
+        auto operation = m_node->child1().useKind() == MapObjectUse ? mapOperation : setOperation;
         LValue result = vmCall(Int64, operation, weakPointer(globalObject), map);
         setJSValue(result);
     }
@@ -20309,7 +20333,7 @@ IGNORE_CLANG_WARNINGS_END
 
         Vector<SwitchCase> cases;
         // These may be negative, or zero, or probably other stuff, too. We don't want to mess with HashSet's corner cases and we don't really care about throughput here.
-        HashSet<GenericHashKey<int32_t>> alreadyHandled;
+        UncheckedKeyHashSet<GenericHashKey<int32_t>> alreadyHandled;
         for (unsigned i = 0; i < data->cases.size(); ++i) {
             // FIXME: The fact that we're using the bytecode's switch table means that the
             // following DFG IR transformation would be invalid.

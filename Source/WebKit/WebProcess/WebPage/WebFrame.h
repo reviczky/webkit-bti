@@ -232,12 +232,18 @@ public:
     bool isFocused() const;
 
     String frameTextForTesting(bool);
+
+    void markAsRemovedInAnotherProcess() { m_wasRemovedInAnotherProcess = true; }
+    bool wasRemovedInAnotherProcess() const { return m_wasRemovedInAnotherProcess; }
+
 private:
     WebFrame(WebPage&, WebCore::FrameIdentifier);
 
     void setLayerHostingContextIdentifier(WebCore::LayerHostingContextIdentifier identifier) { m_layerHostingContextIdentifier = identifier; }
 
     inline WebCore::DocumentLoader* policySourceDocumentLoader() const;
+
+    RefPtr<WebCore::LocalFrame> localFrame();
 
     WeakPtr<WebCore::Frame> m_coreFrame;
     WeakPtr<WebPage> m_page;
@@ -252,6 +258,7 @@ private:
     std::optional<DownloadID> m_policyDownloadID;
 
     const WebCore::FrameIdentifier m_frameID;
+    bool m_wasRemovedInAnotherProcess { false };
 
 #if PLATFORM(IOS_FAMILY)
     TransactionID m_firstLayerTreeTransactionIDAfterDidCommitLoad;

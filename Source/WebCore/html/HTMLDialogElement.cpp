@@ -33,6 +33,7 @@
 #include "FocusOptions.h"
 #include "HTMLElement.h"
 #include "HTMLNames.h"
+#include "Logging.h"
 #include "PopoverData.h"
 #include "PseudoClassChangeInvalidation.h"
 #include "RenderBlock.h"
@@ -89,7 +90,7 @@ ExceptionOr<void> HTMLDialogElement::showModal()
     if (isPopoverShowing())
         return Exception { ExceptionCode::InvalidStateError, "Element is already an open popover."_s };
 
-    if (!document().isFullyActive())
+    if (!protectedDocument()->isFullyActive())
         return Exception { ExceptionCode::InvalidStateError, "Invalid for dialogs within documents that are not fully active."_s };
 
     // setBooleanAttribute will dispatch a DOMSubtreeModified event.
@@ -193,6 +194,10 @@ void HTMLDialogElement::runFocusingSteps()
     if (!control)
         control = this;
 
+    RefPtr page = control->document().protectedPage();
+    if (!page)
+        return;
+
     if (control->isFocusable())
         control->runFocusingStepsForAutofocus();
     else if (m_isModal)
@@ -201,9 +206,11 @@ void HTMLDialogElement::runFocusingSteps()
     if (!control->document().isSameOriginAsTopDocument())
         return;
 
-    Ref topDocument = control->document().topDocument();
-    topDocument->clearAutofocusCandidates();
-    topDocument->setAutofocusProcessed();
+    if (RefPtr mainFrameDocument = control->document().mainFrameDocument())
+        mainFrameDocument->clearAutofocusCandidates();
+    else
+        LOG_ONCE(SiteIsolation, "Unable to fully perform HTMLDialogElement::runFocusingSteps() without access to the main frame document ");
+    page->setAutofocusProcessed();
 }
 
 bool HTMLDialogElement::supportsFocus() const

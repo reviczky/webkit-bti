@@ -20,6 +20,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+[ExceptionForEnabledBy]
 messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
     InitializeNetworkProcess(struct WebKit::NetworkProcessCreationParameters processCreationParameters) -> ()
 
@@ -161,7 +162,9 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
 
     SetBlobRegistryTopOriginPartitioningEnabled(PAL::SessionID sessionID, bool enabled)
     SetShouldSendPrivateTokenIPCForTesting(PAL::SessionID sessionID, bool enabled)
+#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
     SetOptInCookiePartitioningEnabled(PAL::SessionID sessionID, bool enabled)
+#endif
 
     SetSessionIsControlledByAutomation(PAL::SessionID sessionID, bool controlled);
 
@@ -231,7 +234,7 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
 
     GetPendingPushMessage(PAL::SessionID sessionID) -> (std::optional<WebKit::WebPushMessage> message)
     GetPendingPushMessages(PAL::SessionID sessionID) -> (Vector<WebKit::WebPushMessage> messages)
-    ProcessPushMessage(PAL::SessionID sessionID, struct WebKit::WebPushMessage pushMessage, enum:uint8_t WebCore::PushPermissionState pushPermissionState) -> (bool didSucceed, std::optional<WebCore::NotificationPayload> displayPayload)
+    ProcessPushMessage(PAL::SessionID sessionID, struct WebKit::WebPushMessage pushMessage, enum:uint8_t WebCore::PushPermissionState pushPermissionState, bool builtInNotificationsEnabled) -> (bool didSucceed, std::optional<WebCore::NotificationPayload> displayPayload)
     ProcessNotificationEvent(struct WebCore::NotificationData data, enum:bool WebCore::NotificationEventType eventType) -> (bool didSucceed)
 
     GetAllBackgroundFetchIdentifiers(PAL::SessionID sessionID) -> (Vector<String> fetches);
@@ -257,4 +260,10 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
     SetPersistedDomains(PAL::SessionID sessionsID, HashSet<WebCore::RegistrableDomain> domains)
 
     GetAppBadgeForTesting(PAL::SessionID sessionID) -> (std::optional<uint64_t> badge)
+
+    FetchLocalStorage(PAL::SessionID sessionID) -> (HashMap<WebCore::ClientOrigin, HashMap<String, String>> localStorageMap)
+    RestoreLocalStorage(PAL::SessionID sessionID, HashMap<WebCore::ClientOrigin, HashMap<String, String>> localStorageMap) -> (bool succeeded)
+
+    FetchSessionStorage(PAL::SessionID sessionID, WebKit::WebPageProxyIdentifier pageID) -> (HashMap<WebCore::ClientOrigin, HashMap<String, String>> sessionStorageMap)
+    RestoreSessionStorage(PAL::SessionID sessionID, WebKit::WebPageProxyIdentifier pageID, HashMap<WebCore::ClientOrigin, HashMap<String, String>> localStorageMap) -> (bool succeeded)
 }

@@ -98,11 +98,14 @@ struct CSSParserContext {
     bool imageControlsEnabled : 1 { false };
 #endif
     bool colorLayersEnabled : 1 { false };
-    bool lightDarkEnabled : 1 { false };
+    bool lightDarkColorEnabled : 1 { false };
     bool contrastColorEnabled : 1 { false };
     bool targetTextPseudoElementEnabled : 1 { false };
     bool viewTransitionTypesEnabled : 1 { false };
     bool cssProgressFunctionEnabled : 1 { false };
+    bool cssMediaProgressFunctionEnabled : 1 { false };
+    bool cssContainerProgressFunctionEnabled : 1 { false };
+    bool cssRandomFunctionEnabled : 1 { false };
 
     // Settings, those affecting properties.
     CSSPropertySettings propertySettings;

@@ -33,7 +33,6 @@
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "RemoteWorkerType.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebSWServerConnection.h"
 #include "WebSharedWorker.h"
 #include "WebSharedWorkerContextManagerConnectionMessages.h"
@@ -64,6 +63,7 @@ WebSharedWorkerServerToContextConnection::WebSharedWorkerServerToContextConnecti
     , m_idleTerminationTimer(*this, &WebSharedWorkerServerToContextConnection::idleTerminationTimerFired)
 {
     CONTEXT_CONNECTION_RELEASE_LOG("WebSharedWorkerServerToContextConnection:");
+    relaxAdoptionRequirement();
     server.addContextConnection(*this);
 }
 
@@ -143,8 +143,8 @@ void WebSharedWorkerServerToContextConnection::launchSharedWorker(WebSharedWorke
         }
     }
     send(Messages::WebSharedWorkerContextManagerConnection::LaunchSharedWorker { sharedWorker.origin(), sharedWorker.identifier(), sharedWorker.workerOptions(), sharedWorker.fetchResult(), initializationData });
-    sharedWorker.forEachSharedWorkerObject([&](auto, auto& port) {
-        postConnectEvent(sharedWorker, port, [](bool) { });
+    sharedWorker.forEachSharedWorkerObject([protectedThis = Ref { *this }, sharedWorker = Ref { sharedWorker }](auto, auto& port) {
+        protectedThis->postConnectEvent(sharedWorker, port, [](bool) { });
     });
 }
 

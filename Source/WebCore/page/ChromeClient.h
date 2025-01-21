@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "AXObjectCache.h"
 #include "AutoplayEvent.h"
 #include "ContactInfo.h"
 #include "DatabaseDetails.h"
@@ -59,6 +58,7 @@ class WAKResponder;
 #else
 @class WAKResponder;
 #endif
+OBJC_CLASS NSData;
 #endif
 
 #if ENABLE(MEDIA_USAGE)
@@ -98,6 +98,7 @@ class HTMLImageElement;
 class HTMLInputElement;
 class HTMLMediaElement;
 class HTMLSelectElement;
+class HTMLTextFormControlElement;
 class HTMLVideoElement;
 class HitTestResult;
 class Icon;
@@ -137,11 +138,17 @@ struct TextRecognitionOptions;
 struct ViewportArguments;
 struct WindowFeatures;
 
+enum class ActivityStateForCPUSampling : uint8_t;
+enum class AXLoadingEvent : uint8_t;
+enum class AXNotification;
+enum class AXTextChange : uint8_t;
 enum class CookieConsentDecisionResult : uint8_t;
 enum class DidFilterLinkDecoration : bool { No, Yes };
 enum class IsLoggedIn : uint8_t;
+enum class LinkDecorationFilteringTrigger : uint8_t;
 enum class ModalContainerControlType : uint8_t;
 enum class ModalContainerDecision : uint8_t;
+enum class PlatformEventModifier : uint8_t;
 enum class PluginUnavailabilityReason : uint8_t;
 enum class RouteSharingPolicy : uint8_t;
 enum class TextAnimationRunMode : uint8_t;
@@ -238,6 +245,7 @@ public:
     virtual void scroll(const IntSize&, const IntRect&, const IntRect&) = 0;
 
     virtual IntPoint screenToRootView(const IntPoint&) const = 0;
+    virtual IntPoint rootViewToScreen(const IntPoint&) const = 0;
     virtual IntRect rootViewToScreen(const IntRect&) const = 0;
     virtual IntPoint accessibilityScreenToRootView(const IntPoint&) const = 0;
     virtual IntRect rootViewToAccessibilityScreen(const IntRect&) const = 0;
@@ -348,9 +356,7 @@ public:
     virtual IntDegrees deviceOrientation() const = 0;
 #endif
 
-#if ENABLE(INPUT_TYPE_COLOR)
     virtual RefPtr<ColorChooser> createColorChooser(ColorChooserClient&, const Color&) = 0;
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
     virtual RefPtr<DataListSuggestionPicker> createDataListSuggestionPicker(DataListSuggestionsClient&) = 0;
@@ -385,7 +391,7 @@ public:
     
     virtual DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const { return nullptr; }
 
-    virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingPurpose, float, const DestinationColorSpace&, ImageBufferPixelFormat, OptionSet<ImageBufferOptions>) const { return nullptr; }
+    virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float, const DestinationColorSpace&, ImageBufferPixelFormat) const { return nullptr; }
     WEBCORE_EXPORT virtual RefPtr<WebCore::ImageBuffer> sinkIntoImageBuffer(std::unique_ptr<WebCore::SerializedImageBuffer>);
 
 #if ENABLE(WEBGL)
@@ -512,9 +518,9 @@ public:
 #endif
 
 #if PLATFORM(PLAYSTATION)
-    virtual void postAccessibilityNotification(AccessibilityObject&, AXObjectCache::AXNotification) = 0;
+    virtual void postAccessibilityNotification(AccessibilityObject&, AXNotification) = 0;
     virtual void postAccessibilityNodeTextChangeNotification(AccessibilityObject*, AXTextChange, unsigned, const String&) = 0;
-    virtual void postAccessibilityFrameLoadingEventNotification(AccessibilityObject*, AXObjectCache::AXLoadingEvent) = 0;
+    virtual void postAccessibilityFrameLoadingEventNotification(AccessibilityObject*, AXLoadingEvent) = 0;
 #endif
 
     virtual bool selectItemWritingDirectionIsNatural() = 0;
@@ -541,11 +547,6 @@ public:
 
     virtual bool isEmptyChromeClient() const { return false; }
 
-    virtual String plugInStartLabelTitle(const String& mimeType) const { UNUSED_PARAM(mimeType); return String(); }
-    virtual String plugInStartLabelSubtitle(const String& mimeType) const { UNUSED_PARAM(mimeType); return String(); }
-    virtual String plugInExtraStyleSheet() const { return String(); }
-    virtual String plugInExtraScript() const { return String(); }
-
     virtual void didAssociateFormControls(const Vector<RefPtr<Element>>&, LocalFrame&) { };
     virtual bool shouldNotifyOnFormChanges() { return false; };
 
@@ -557,6 +558,8 @@ public:
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     virtual void isAnyAnimationAllowedToPlayDidChange(bool /* anyAnimationCanPlay */) { };
 #endif
+    virtual void resolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier, const IntPoint&, CompletionHandler<void(String)>&& callback) { callback(""_s); };
+
     virtual void isPlayingMediaDidChange(MediaProducerMediaStateFlags) { }
     virtual void handleAutoplayEvent(AutoplayEvent, OptionSet<AutoplayEventFlags>) { }
 
@@ -709,7 +712,9 @@ public:
 
     virtual void callAfterPendingSyntheticClick(CompletionHandler<void(SyntheticClickResult)>&& completion) { completion(SyntheticClickResult::Failed); }
 
-    virtual void didSwallowClickEvent(const PlatformMouseEvent&, Node&) { }
+    virtual void didDispatchClickEvent(const PlatformMouseEvent&, Node&) { }
+
+    virtual void didProgrammaticallyClearTextFormControl(const HTMLTextFormControlElement&) { }
 
     WEBCORE_EXPORT virtual ~ChromeClient();
 

@@ -50,6 +50,8 @@
 #include <wtf/DataLog.h>
 #endif
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WTF {
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
@@ -359,7 +361,7 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits, ShouldValidateKey shouldValidateKey>
     class HashTable {
     public:
-        using HashTableType = HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits>;
+        using HashTableType = HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, shouldValidateKey>;
         typedef HashTableIterator<HashTableType, Key, Value, Extractor, HashFunctions, Traits, KeyTraits> iterator;
         typedef HashTableConstIterator<HashTableType, Key, Value, Extractor, HashFunctions, Traits, KeyTraits> const_iterator;
         typedef Traits ValueTraits;
@@ -655,8 +657,6 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
             ValueType& deletedValue = *deletedValuePtr;
             Traits::constructDeletedValue(deletedValue);
             RELEASE_ASSERT(!HashTranslator::equal(Extractor::extract(deletedValue), key));
-        } else if constexpr (shouldValidateKey == ShouldValidateKey::Yes) {
-            STATIC_ASSERT_NOT_REACHED_FOR_TYPE(Key, "ShouldValidateKey::Yes was specified, but no way to validate key.");
         }
     }
 
@@ -855,7 +855,7 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
             // This initializes the bucket without copying the empty value.
             // That makes it possible to use this with types that don't support copying.
             // The memset to 0 looks like a slow operation but is optimized by the compilers.
-            memset(static_cast<void*>(std::addressof(bucket)), 0, sizeof(bucket));
+            zeroBytes(bucket);
         }
     };
     
@@ -1537,8 +1537,8 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
 #endif // CHECK_HASHTABLE_ITERATORS
 
     struct HashTableTraits {
-        template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
-        using TableType = HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits>;
+        template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits, ShouldValidateKey shouldValidateKey>
+        using TableType = HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits, shouldValidateKey>;
     };
 
     // iterator adapters
@@ -1613,5 +1613,7 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
     }
 
 } // namespace WTF
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #include <wtf/HashIterators.h>

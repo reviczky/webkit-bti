@@ -272,22 +272,26 @@ using DescriptorPoolWeakPointer = WeakPtr<DescriptorPoolHelper>;
 class DescriptorSetHelper final : public Resource
 {
   public:
-    DescriptorSetHelper() : mDescriptorSet(VK_NULL_HANDLE) {}
+    DescriptorSetHelper() : mDescriptorSet(VK_NULL_HANDLE), mLastUsedFrame(0) {}
     DescriptorSetHelper(const VkDescriptorSet &descriptorSet, const DescriptorPoolPointer &pool)
-        : mDescriptorSet(descriptorSet), mPool(pool)
+        : mDescriptorSet(descriptorSet), mPool(pool), mLastUsedFrame(0)
     {}
     DescriptorSetHelper(const ResourceUse &use,
                         const VkDescriptorSet &descriptorSet,
-                        const DescriptorPoolPointer pool)
-        : mDescriptorSet(descriptorSet), mPool(pool)
+                        const DescriptorPoolPointer &pool)
+        : mDescriptorSet(descriptorSet), mPool(pool), mLastUsedFrame(0)
     {
         mUse = use;
     }
     DescriptorSetHelper(DescriptorSetHelper &&other)
-        : Resource(std::move(other)), mDescriptorSet(other.mDescriptorSet), mPool(other.mPool)
+        : Resource(std::move(other)),
+          mDescriptorSet(other.mDescriptorSet),
+          mPool(other.mPool),
+          mLastUsedFrame(other.mLastUsedFrame)
     {
         other.mDescriptorSet = VK_NULL_HANDLE;
         other.mPool.reset();
+        other.mLastUsedFrame = 0;
     }
 
     ~DescriptorSetHelper() override
@@ -296,12 +300,15 @@ class DescriptorSetHelper final : public Resource
         ASSERT(!mPool);
     }
 
-    void destroy();
+    void destroy(VkDevice device);
 
     VkDescriptorSet getDescriptorSet() const { return mDescriptorSet; }
     DescriptorPoolWeakPointer &getPool() { return mPool; }
 
     bool valid() const { return mDescriptorSet != VK_NULL_HANDLE; }
+
+    void updateLastUsedFrame(uint32_t frame) { mLastUsedFrame = frame; }
+    uint32_t getLastUsedFrame() const { return mLastUsedFrame; }
 
   private:
     VkDescriptorSet mDescriptorSet;
@@ -311,6 +318,8 @@ class DescriptorSetHelper final : public Resource
     // DynamicDescriptorPool::checkAndReleaseUnusedPool() rely on pool's refcount to tell if it is
     // eligible for eviction or not.
     DescriptorPoolWeakPointer mPool;
+    // The frame that it was last used.
+    uint32_t mLastUsedFrame;
 };
 using DescriptorSetPointer = SharedPtr<DescriptorSetHelper>;
 using DescriptorSetList    = std::deque<DescriptorSetPointer>;
@@ -321,66 +330,67 @@ using DescriptorSetList    = std::deque<DescriptorSetPointer>;
 
 // Shared handle to a descriptor pool. Each helper is allocated from the dynamic descriptor pool.
 // Can be used to share descriptor pools between multiple ProgramVks and the ContextVk.
-class CommandBufferHelperCommon;
-
-class DescriptorPoolHelper final : public Resource
+class DescriptorPoolHelper final : angle::NonCopyable
 {
   public:
     DescriptorPoolHelper();
-    ~DescriptorPoolHelper() override;
+    ~DescriptorPoolHelper();
 
     bool valid() { return mDescriptorPool.valid(); }
 
     angle::Result init(Context *context,
                        const std::vector<VkDescriptorPoolSize> &poolSizesIn,
                        uint32_t maxSets);
-    // This only get called by SharedPtr. Nothing to do here since we explictly destroy/release pool
-    // before we reach here.
-    void destroy() { ASSERT(!valid()); }
-    void destroy(Renderer *renderer);
-    void release(Renderer *renderer);
+    void destroy(VkDevice device);
 
     bool allocateDescriptorSet(Context *context,
                                const DescriptorSetLayout &descriptorSetLayout,
                                const DescriptorPoolPointer &pool,
                                DescriptorSetPointer *descriptorSetOut);
 
-    void addGarbage(DescriptorSetPointer &&garbage)
+    void addPendingGarbage(DescriptorSetPointer &&garbage)
     {
         ASSERT(garbage.unique());
-        mUse.merge(garbage->getResourceUse());
         mValidDescriptorSets--;
-        mDescriptorSetGarbageList.emplace_back(std::move(garbage));
+        mPendingGarbageList.emplace_back(std::move(garbage));
     }
-
-    void onNewDescriptorSetAllocated(const vk::SharedDescriptorSetCacheKey &sharedCacheKey)
+    void addFinishedGarbage(DescriptorSetPointer &&garbage)
     {
-        mDescriptorSetCacheManager.addKey(sharedCacheKey);
+        ASSERT(garbage.unique());
+        mValidDescriptorSets--;
+        mFinishedGarbageList.emplace_back(std::move(garbage));
     }
+    bool recycleFromGarbage(Renderer *renderer, DescriptorSetPointer *descriptorSetOut);
+    void destroyGarbage();
+    void cleanupPendingGarbage();
+
     bool hasValidDescriptorSet() const { return mValidDescriptorSets != 0; }
+    bool canDestroy() const { return mValidDescriptorSets == 0 && mPendingGarbageList.empty(); }
 
   private:
     bool allocateVkDescriptorSet(Context *context,
                                  const DescriptorSetLayout &descriptorSetLayout,
                                  VkDescriptorSet *descriptorSetOut);
 
-    bool recycleGarbage(Renderer *renderer, DescriptorSetPointer *descriptorSetOut);
+    Renderer *mRenderer;
 
-    void resetGarbage();
-
+    // The initial number of descriptorSets when the pool is created. This should equal to
+    // mValidDescriptorSets+mGarbageList.size()+mFreeDescriptorSets.
+    uint32_t mMaxDescriptorSets;
     // Track the number of descriptorSets allocated out of this pool that are valid. DescriptorSets
-    // that have been allocated but in the mDescriptorSetGarbageList is considered as invalid.
+    // that have been allocated but in the mGarbageList is considered as invalid.
     uint32_t mValidDescriptorSets;
-    // Track the number of remaining descriptorSets in the pool that can be allocated.
+    // The number of remaining descriptorSets in the pool that remain to be allocated.
     uint32_t mFreeDescriptorSets;
+
     DescriptorPool mDescriptorPool;
+
     // Keeps track descriptorSets that has been released. Because freeing descriptorSet require
     // DescriptorPool, we store individually released descriptor sets here instead of usual garbage
     // list in the renderer to avoid complicated threading issues and other weirdness associated
     // with pooled object destruction. This list is mutually exclusive with mDescriptorSetCache.
-    DescriptorSetList mDescriptorSetGarbageList;
-    // Manages the texture descriptor set cache that allocated from this pool
-    vk::DescriptorSetCacheManager mDescriptorSetCacheManager;
+    DescriptorSetList mFinishedGarbageList;
+    DescriptorSetList mPendingGarbageList;
 };
 
 class DynamicDescriptorPool final : angle::NonCopyable
@@ -399,11 +409,8 @@ class DynamicDescriptorPool final : angle::NonCopyable
                        const VkDescriptorPoolSize *setSizes,
                        size_t setSizeCount,
                        const DescriptorSetLayout &descriptorSetLayout);
-    void destroy(Renderer *renderer);
-    // Used only by SharedPtr. Since MetaDescriptorPool always keep the last refCount and it
-    // explicitly calls destroy(renderer) before last refcount goes away, we should just do
-    // assertion here.
-    void destroy() { ASSERT(!valid()); }
+
+    void destroy(VkDevice device);
 
     bool valid() const { return !mDescriptorPools.empty(); }
 
@@ -414,6 +421,7 @@ class DynamicDescriptorPool final : angle::NonCopyable
                                         DescriptorSetPointer *descriptorSetOut);
 
     angle::Result getOrAllocateDescriptorSet(Context *context,
+                                             uint32_t currentFrame,
                                              const DescriptorSetDesc &desc,
                                              const DescriptorSetLayout &descriptorSetLayout,
                                              DescriptorSetPointer *descriptorSetOut,
@@ -434,7 +442,8 @@ class DynamicDescriptorPool final : angle::NonCopyable
     }
 
     // Release the pool if it is no longer been used and contains no valid descriptorSet.
-    void checkAndReleaseUnusedPool(Renderer *renderer, const DescriptorPoolWeakPointer &pool);
+    void destroyUnusedPool(Renderer *renderer, const DescriptorPoolWeakPointer &pool);
+    void checkAndDestroyUnusedPool(Renderer *renderer);
 
     // For testing only!
     static uint32_t GetMaxSetsPerPoolForTesting();
@@ -444,20 +453,36 @@ class DynamicDescriptorPool final : angle::NonCopyable
 
   private:
     angle::Result allocateNewPool(Context *context);
+    bool allocateFromExistingPool(Context *context,
+                                  const DescriptorSetLayout &descriptorSetLayout,
+                                  DescriptorSetPointer *descriptorSetOut);
+    bool recycleFromGarbage(Renderer *renderer, DescriptorSetPointer *descriptorSetOut);
+    bool evictStaleDescriptorSets(Renderer *renderer,
+                                  uint32_t oldestFrameToKeep,
+                                  uint32_t currentFrame);
 
     static constexpr uint32_t kMaxSetsPerPoolMax = 512;
     static uint32_t mMaxSetsPerPool;
     static uint32_t mMaxSetsPerPoolMultiplier;
-    size_t mCurrentPoolIndex;
     std::vector<DescriptorPoolPointer> mDescriptorPools;
     std::vector<VkDescriptorPoolSize> mPoolSizes;
     // This cached handle is used for verifying the layout being used to allocate descriptor sets
     // from the pool matches the layout that the pool was created for, to ensure that the free
     // descriptor count is accurate and new pools are created appropriately.
     VkDescriptorSetLayout mCachedDescriptorSetLayout;
+
+    // LRU list for cache eviction: most recent used at front, least used at back.
+    struct DescriptorSetLRUEntry
+    {
+        SharedDescriptorSetCacheKey sharedCacheKey;
+        DescriptorSetPointer descriptorSet;
+    };
+    using DescriptorSetLRUList         = std::list<DescriptorSetLRUEntry>;
+    using DescriptorSetLRUListIterator = DescriptorSetLRUList::iterator;
+    DescriptorSetLRUList mLRUList;
     // Tracks cache for descriptorSet. Note that cached DescriptorSet can be reuse even if it is GPU
     // busy.
-    DescriptorSetCache<DescriptorSetPointer> mDescriptorSetCache;
+    DescriptorSetCache<DescriptorSetLRUListIterator> mDescriptorSetCache;
     // Statistics for the cache.
     CacheStats mCacheStats;
 };
@@ -1312,7 +1337,7 @@ class SecondaryCommandBufferCollector final
 
     void collectCommandBuffer(priv::SecondaryCommandBuffer &&commandBuffer);
     void collectCommandBuffer(VulkanSecondaryCommandBuffer &&commandBuffer);
-    void retireCommandBuffers();
+    void releaseCommandBuffers();
 
     bool empty() const { return mCollectedCommandBuffers.empty(); }
 
@@ -1365,8 +1390,7 @@ constexpr uint32_t kInfiniteCmdCount = 0xFFFFFFFF;
 // CommandBufferHelperCommon and derivatives OutsideRenderPassCommandBufferHelper and
 // RenderPassCommandBufferHelper wrap the outside/inside render pass secondary command buffers,
 // together with other information such as barriers to issue before the command buffer, tracking of
-// resource usages, etc.  When the asyncCommandQueue feature is enabled, objects of these classes
-// are handed off to the worker thread to be executed on the primary command buffer.
+// resource usages, etc.
 class CommandBufferHelperCommon : angle::NonCopyable
 {
   public:
@@ -1953,11 +1977,6 @@ class RenderPassCommandBufferHelper final : public CommandBufferHelperCommon
                    VK_ATTACHMENT_LOAD_OP_CLEAR;
     }
 
-    bool hasDepthStencilWriteOrClear() const
-    {
-        return hasDepthWriteOrClear() || hasStencilWriteOrClear();
-    }
-
     const RenderPassDesc &getRenderPassDesc() const { return mRenderPassDesc; }
     const AttachmentOpsArray &getAttachmentOps() const { return mAttachmentOps; }
 
@@ -2196,7 +2215,8 @@ class ImageHelper final : public Resource, public angle::Subject
                                uint32_t layerCount,
                                bool isRobustResourceInitEnabled,
                                bool hasProtectedContent,
-                               YcbcrConversionDesc conversionDesc);
+                               YcbcrConversionDesc conversionDesc,
+                               const void *compressionControl);
     VkResult initMemory(Context *context,
                         const MemoryProperties &memoryProperties,
                         VkMemoryPropertyFlags flags,
@@ -2326,6 +2346,7 @@ class ImageHelper final : public Resource, public angle::Subject
                                     VkImageTiling tilingMode,
                                     VkImageUsageFlags usageFlags,
                                     VkImageCreateFlags createFlags,
+                                    void *formatInfoPNext,
                                     void *propertiesPNext,
                                     const FormatSupportCheck formatSupportCheck);
 
@@ -2381,6 +2402,9 @@ class ImageHelper final : public Resource, public angle::Subject
     VkImageTiling getTilingMode() const { return mTilingMode; }
     VkImageCreateFlags getCreateFlags() const { return mCreateFlags; }
     VkImageUsageFlags getUsage() const { return mUsage; }
+    bool getCompressionFixedRate(VkImageCompressionControlEXT *compressionInfo,
+                                 VkImageCompressionFixedRateFlagsEXT *compressionRates,
+                                 GLenum glCompressionRate) const;
     VkImageType getType() const { return mImageType; }
     const VkExtent3D &getExtents() const { return mExtents; }
     const VkExtent3D getRotatedExtents() const;
@@ -2409,10 +2433,10 @@ class ImageHelper final : public Resource, public angle::Subject
         ASSERT(valid());
         return mActualFormatID;
     }
-    VkFormat getActualVkFormat() const
+    VkFormat getActualVkFormat(const Renderer *renderer) const
     {
         ASSERT(valid());
-        return GetVkFormatFromFormatID(mActualFormatID);
+        return GetVkFormatFromFormatID(renderer, mActualFormatID);
     }
     const angle::Format &getActualFormat() const
     {
@@ -2885,7 +2909,12 @@ class ImageHelper final : public Resource, public angle::Subject
 
     // Create event if needed and record the event in ImageHelper::mCurrentEvent.
     void setCurrentRefCountedEvent(Context *context, EventMaps &eventMaps);
-
+    void releaseCurrentRefCountedEvent(Context *context)
+    {
+        // This will also force next barrier use pipelineBarrier
+        mCurrentEvent.release(context);
+        mLastNonShaderReadOnlyEvent.release(context);
+    }
     void updatePipelineStageAccessHistory();
 
   private:
@@ -3740,6 +3769,7 @@ class BufferViewHelper final : public Resource
     void init(Renderer *renderer, VkDeviceSize offset, VkDeviceSize size);
     bool isInitialized() const { return mInitialized; }
     void release(ContextVk *contextVk);
+    void release(Renderer *renderer);
     void destroy(VkDevice device);
 
     angle::Result getView(Context *context,
@@ -3803,7 +3833,7 @@ class ShaderProgramHelper : angle::NonCopyable
     void destroy(Renderer *renderer);
     void release(ContextVk *contextVk);
 
-    void setShader(gl::ShaderType shaderType, RefCounted<ShaderModule> *shader);
+    void setShader(gl::ShaderType shaderType, const ShaderModulePtr &shader);
 
     // Create a graphics pipeline and place it in the cache.  Must not be called if the pipeline
     // exists in cache.
@@ -3860,7 +3890,7 @@ class ActiveHandleCounter final : angle::NonCopyable
         mAllocatedCounts[handleType]++;
     }
 
-    void onDeallocate(HandleType handleType) { mActiveCounts[handleType]--; }
+    void onDeallocate(HandleType handleType, uint32_t count) { mActiveCounts[handleType] -= count; }
 
     uint32_t getActive(HandleType handleType) const { return mActiveCounts[handleType]; }
     uint32_t getAllocated(HandleType handleType) const { return mAllocatedCounts[handleType]; }

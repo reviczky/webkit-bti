@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,6 +65,8 @@
 #if !ASSERT_ENABLED
 IGNORE_RETURN_TYPE_WARNINGS_BEGIN
 #endif
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace JSC { namespace B3 {
 
@@ -3917,7 +3919,7 @@ private:
         }
 
         case Depend: {
-            RELEASE_ASSERT(isARM64());
+            RELEASE_ASSERT(m_value->type() == Int32); // Should have been lowered to 32-bit Depends.
             appendUnOp<Depend32, Depend64>(m_value->child(0));
             return;
         }
@@ -4286,7 +4288,7 @@ private:
                 }
             }
 
-            append(Add64, Arg(address->pinnedGPR()), tmp(m_value->child(0)), tmp(address));
+            append(Add32, Arg(address->pinnedGPR()), tmp(m_value->child(0)), tmp(address));
             return;
         }
 
@@ -5172,11 +5174,11 @@ private:
             append(Inst(Move32, value, pointer, ptrPlusImm));
             if (value->offset()) {
                 if (imm(value->offset()))
-                    append(Add64, imm(value->offset()), ptrPlusImm);
+                    append(Add32, imm(value->offset()), ptrPlusImm);
                 else {
                     Arg bigImm = m_code.newTmp(GP);
                     append(Move, Arg::bigImm(value->offset()), bigImm);
-                    append(Add64, bigImm, ptrPlusImm);
+                    append(Add32, bigImm, ptrPlusImm);
                 }
             }
 
@@ -5601,6 +5603,8 @@ void lowerToAir(Procedure& procedure)
 }
 
 } } // namespace JSC::B3
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #if !ASSERT_ENABLED
 IGNORE_RETURN_TYPE_WARNINGS_END

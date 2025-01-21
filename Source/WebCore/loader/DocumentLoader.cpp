@@ -86,6 +86,7 @@
 #include "ProgressTracker.h"
 #include "Quirks.h"
 #include "ResourceLoadObserver.h"
+#include "ResourceMonitor.h"
 #include "SWClientConnection.h"
 #include "ScriptableDocumentParser.h"
 #include "SecurityPolicy.h"
@@ -136,6 +137,7 @@
 #define FRAME_ID (m_frame ? m_frame->frameID().object().toUInt64() : 0)
 #define IS_MAIN_FRAME (m_frame ? m_frame->isMainFrame() : false)
 #define DOCUMENTLOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] DocumentLoader::" fmt, this, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
+#define DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(fmt, ...) RELEASE_LOG_FORWARDABLE(Network, fmt, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -325,7 +327,7 @@ void DocumentLoader::frameDestroyed()
 // but not loads initiated by child frames' data sources -- that's the WebFrame's job.
 void DocumentLoader::stopLoading()
 {
-    DOCUMENTLOADER_RELEASE_LOG("DocumentLoader::stopLoading: m_frame=%p", m_frame.get());
+    DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(DOCUMENTLOADER_STOPLOADING);
 
     ASSERT(m_frame);
     if (!m_frame)
@@ -784,7 +786,7 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
 
     // FIXME: Add a load type check.
     auto& policyChecker = frameLoader()->policyChecker();
-    RELEASE_ASSERT(!isBackForwardLoadType(policyChecker.loadType()) || m_frame->history().provisionalItem());
+    RELEASE_ASSERT(!isBackForwardLoadType(policyChecker.loadType()) || m_frame->loader().history().provisionalItem());
     policyChecker.checkNavigationPolicy(WTFMove(newRequest), redirectResponse, WTFMove(navigationPolicyCompletionHandler));
 }
 
@@ -1136,7 +1138,7 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
         // m_mainResource can be null, e.g. when loading a substitute resource from application cache.
         if (!m_mainResource) {
             DOCUMENTLOADER_RELEASE_LOG("continueAfterContentPolicy: cannot show URL");
-            mainReceivedError(protectedFrameLoader()->protectedClient()->cannotShowURLError(m_request));
+            mainReceivedError(platformStrategies()->loaderStrategy()->cannotShowURLError(m_request));
             return;
         }
 
@@ -1238,7 +1240,7 @@ ResourceError DocumentLoader::interruptedForPolicyChangeError() const
         return error;
     }
 
-    auto error = protectedFrameLoader()->protectedClient()->interruptedForPolicyChangeError(request());
+    auto error = platformStrategies()->loaderStrategy()->interruptedForPolicyChangeError(request());
     error.setType(ResourceError::Type::Cancellation);
     return error;
 }
@@ -1251,8 +1253,18 @@ void DocumentLoader::stopLoadingForPolicyChange(LoadWillContinueInAnotherProcess
 // https://w3c.github.io/ServiceWorker/#control-and-use-window-client
 static inline bool shouldUseActiveServiceWorkerFromParent(const Document& document, const Document& parent)
 {
-    return !document.url().protocolIsInHTTPFamily() && !document.securityOrigin().isOpaque() && parent.protectedSecurityOrigin()->isSameOriginDomain(document.securityOrigin());
+    return !document.url().protocolIsInHTTPFamily() && !document.securityOrigin().isOpaque() && parent.protectedSecurityOrigin()->isSameOriginDomain(document.protectedSecurityOrigin());
 }
+
+#if ENABLE(CONTENT_EXTENSIONS)
+static inline bool shouldEnableResourceMonitor(const Frame& frame)
+{
+    if (frame.isMainFrame())
+        return false;
+
+    return frame.settings().iFrameResourceMonitoringEnabled();
+}
+#endif
 
 void DocumentLoader::commitData(const SharedBuffer& data)
 {
@@ -1264,7 +1276,8 @@ void DocumentLoader::commitData(const SharedBuffer& data)
 
         m_writer.setDocumentWasLoadedAsPartOfNavigation();
 
-        RefPtr documentOrNull = m_frame ? m_frame->document() : nullptr;
+        RefPtr frame = m_frame.get();
+        RefPtr documentOrNull = frame ? frame->document() : nullptr;
 
         auto scope = makeScopeExit([&] {
             if (auto createdCallback = std::exchange(m_whenDocumentIsCreatedCallback, { }))
@@ -1274,6 +1287,16 @@ void DocumentLoader::commitData(const SharedBuffer& data)
         if (!documentOrNull)
             return;
         auto& document = *documentOrNull;
+        ASSERT(frame);
+
+#if ENABLE(CONTENT_EXTENSIONS)
+        if (shouldEnableResourceMonitor(*frame)) {
+            URL url = documentURL();
+
+            if (!url.isEmpty() && url.protocolIsInHTTPFamily())
+                document.protectedResourceMonitor()->setDocumentURL(WTFMove(url));
+        }
+#endif
 
         if (SecurityPolicy::allowSubstituteDataAccessToLocal() && m_originalSubstituteDataWasValid) {
             // If this document was loaded with substituteData, then the document can
@@ -1495,12 +1518,12 @@ void DocumentLoader::attachToFrame(LocalFrame& frame)
 void DocumentLoader::attachToFrame()
 {
     ASSERT(m_frame);
-    DOCUMENTLOADER_RELEASE_LOG("DocumentLoader::attachToFrame: m_frame=%p", m_frame.get());
+    DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(DOCUMENTLOADER_ATTACHTOFRAME);
 }
 
 void DocumentLoader::detachFromFrame(LoadWillContinueInAnotherProcess loadWillContinueInAnotherProcess)
 {
-    DOCUMENTLOADER_RELEASE_LOG("DocumentLoader::detachFromFrame: m_frame=%p", m_frame.get());
+    DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(DOCUMENTLOADER_DETACHFROMFRAME);
 
 #if ASSERT_ENABLED
     if (m_hasEverBeenAttached)
@@ -2123,12 +2146,12 @@ void DocumentLoader::startLoadingMainResource()
     Ref<DocumentLoader> protectedThis(*this);
 
     if (shouldCancelLoadingAboutURL(m_request.url())) {
-        cancelMainResourceLoad(protectedFrameLoader()->protectedClient()->cannotShowURLError(m_request));
+        cancelMainResourceLoad(platformStrategies()->loaderStrategy()->cannotShowURLError(m_request));
         return;
     }
 
     if (maybeLoadEmpty()) {
-        DOCUMENTLOADER_RELEASE_LOG("startLoadingMainResource: Returning empty document");
+        DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(DOCUMENTLOADER_STARTLOADINGMAINRESOURCE_EMTPY_DOCUMENT);
         return;
     }
 
@@ -2170,7 +2193,7 @@ void DocumentLoader::startLoadingMainResource()
         // If this is a reload the cache layer might have made the previous request conditional. DocumentLoader can't handle 304 responses itself.
         request.makeUnconditional();
 
-        DOCUMENTLOADER_RELEASE_LOG("startLoadingMainResource: Starting load");
+        DOCUMENTLOADER_RELEASE_LOG_FORWARDABLE(DOCUMENTLOADER_STARTLOADINGMAINRESOURCE_STARTING_LOAD);
 
         if (m_applicationCacheHost->canLoadMainResource(request) || m_substituteData.isValid()) {
             auto url = request.url();
@@ -2273,12 +2296,12 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
 
         if (!m_request.url().isValid()) {
             DOCUMENTLOADER_RELEASE_LOG("loadMainResource: Unable to load main resource, URL is invalid");
-            cancelMainResourceLoad(protectedFrameLoader()->protectedClient()->cannotShowURLError(m_request));
+            cancelMainResourceLoad(platformStrategies()->loaderStrategy()->cannotShowURLError(m_request));
             return;
         }
 
         if (advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnly)) {
-            if (auto httpNavigationWithHTTPSOnlyError = protectedFrameLoader()->protectedClient()->httpNavigationWithHTTPSOnlyError(m_request); mainResourceOrError.error().domain() == httpNavigationWithHTTPSOnlyError.domain()
+            if (auto httpNavigationWithHTTPSOnlyError = platformStrategies()->loaderStrategy()->httpNavigationWithHTTPSOnlyError(m_request); mainResourceOrError.error().domain() == httpNavigationWithHTTPSOnlyError.domain()
                 && mainResourceOrError.error().errorCode() == httpNavigationWithHTTPSOnlyError.errorCode()) {
                 DOCUMENTLOADER_RELEASE_LOG("loadMainResource: Unable to load main resource, URL has HTTP scheme with HTTPSOnly enabled");
                 cancelMainResourceLoad(mainResourceOrError.error());
@@ -2492,7 +2515,8 @@ ShouldOpenExternalURLsPolicy DocumentLoader::shouldOpenExternalURLsPolicyToPropa
 // https://www.w3.org/TR/css-view-transitions-2/#navigation-can-trigger-a-cross-document-view-transition
 bool DocumentLoader::navigationCanTriggerCrossDocumentViewTransition(Document& oldDocument, bool fromBackForwardCache)
 {
-    // FIXME: Consider adding implementation-defined navigation experience step.
+    if (loadStartedDuringSwipeAnimation())
+        return false;
 
     if (std::holds_alternative<Document::SkipTransition>(oldDocument.resolveViewTransitionRule()))
         return false;
@@ -2501,7 +2525,7 @@ bool DocumentLoader::navigationCanTriggerCrossDocumentViewTransition(Document& o
         return false;
 
     Ref newOrigin = SecurityOrigin::create(documentURL());
-    if (!newOrigin->isSameOriginAs(oldDocument.securityOrigin()))
+    if (!newOrigin->isSameOriginAs(oldDocument.protectedSecurityOrigin()))
         return false;
 
     if (const auto* metrics = response().deprecatedNetworkLoadMetricsOrNull(); metrics && !fromBackForwardCache) {
@@ -2512,7 +2536,8 @@ bool DocumentLoader::navigationCanTriggerCrossDocumentViewTransition(Document& o
     if (*m_triggeringAction.navigationAPIType() == NavigationNavigationType::Traverse)
         return true;
 
-    // FIXME: If isBrowserUINavigation is true, then return false.
+    if (isRequestFromClientOrUserInput())
+        return false;
 
     return true;
 }

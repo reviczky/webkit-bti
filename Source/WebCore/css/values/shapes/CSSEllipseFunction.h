@@ -34,7 +34,7 @@ namespace CSS {
 // <ellipse()> = ellipse( <radial-size>? [ at <position> ]? )
 // https://drafts.csswg.org/css-shapes-1/#funcdef-basic-shape-ellipse
 struct Ellipse {
-    using Extent = std::variant<ClosestCorner, ClosestSide, FarthestCorner, FarthestSide>;
+    using Extent = std::variant<Keyword::ClosestCorner, Keyword::ClosestSide, Keyword::FarthestCorner, Keyword::FarthestSide>;
     using Length = CSS::LengthPercentage<Nonnegative>;
     using RadialSize = std::variant<Length, Extent>;
 
@@ -59,4 +59,4 @@ template<> struct Serialize<Ellipse> { void operator()(StringBuilder&, const Ell
 } // namespace CSS
 } // namespace WebCore
 
-CSS_TUPLE_LIKE_CONFORMANCE(Ellipse, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::CSS::Ellipse, 2)

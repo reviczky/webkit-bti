@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 Canon Inc.
+ * Copyright (C) 2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted, provided that the following conditions
@@ -43,8 +44,11 @@
 #include "SharedBuffer.h"
 #include "TextResourceDecoder.h"
 #include "ThreadableBlobRegistry.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FetchLoaderClient);
 
 void FetchLoader::start(ScriptExecutionContext& context, const Blob& blob)
 {
@@ -91,9 +95,7 @@ void FetchLoader::start(ScriptExecutionContext& context, const FetchRequest& req
     options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
     options.navigationPreloadIdentifier = request.navigationPreloadIdentifier();
     options.contentEncodingSniffingPolicy = ContentEncodingSniffingPolicy::Disable;
-    if (context.settingsValues().fetchPriorityEnabled)
-        options.fetchPriorityHint = request.fetchPriorityHint();
-
+    options.fetchPriority = request.priority();
     options.shouldEnableContentExtensionsCheck = request.shouldEnableContentExtensionsCheck() ? ShouldEnableContentExtensionsCheck::Yes : ShouldEnableContentExtensionsCheck::No;
 
     ResourceRequest fetchRequest = request.resourceRequest();

@@ -31,23 +31,44 @@ namespace CSS {
 
 // MARK: - Serialization
 
-// Type-erased helper to allow for shared code.
-void rawNumericSerialization(StringBuilder&, double, CSSUnitType);
+struct SerializableNumber {
+    double value;
+    ASCIILiteral suffix;
+};
 
-template<RawNumeric RawType> struct Serialize<RawType> {
+void formatNonfiniteCSSNumberValue(StringBuilder&, const SerializableNumber&);
+String formatNonfiniteCSSNumberValue(const SerializableNumber&);
+
+void formatCSSNumberValue(StringBuilder&, const SerializableNumber&);
+String formatCSSNumberValue(const SerializableNumber&);
+
+template<> struct Serialize<SerializableNumber> {
+    void operator()(StringBuilder&, const SerializableNumber&);
+};
+
+template<NumericRaw RawType> struct Serialize<RawType> {
     void operator()(StringBuilder& builder, const RawType& value)
     {
-        rawNumericSerialization(builder, value.value, value.type);
+        serializationForCSS(builder, SerializableNumber { value.value, unitString(value.unit) });
     }
 };
 
-template<RawNumeric RawType> struct Serialize<PrimitiveNumeric<RawType>> {
-    void operator()(StringBuilder& builder, const PrimitiveNumeric<RawType>& value)
+template<auto nR, auto pR> struct Serialize<NumberOrPercentageResolvedToNumber<nR, pR>> {
+    void operator()(StringBuilder& builder, const NumberOrPercentageResolvedToNumber<nR, pR>& value)
     {
-        WTF::switchOn(value, [&](const auto& value) { serializationForCSS(builder, value); });
+        WTF::switchOn(value,
+            [&](const Number<nR>& number) {
+                serializationForCSS(builder, number);
+            },
+            [&](const Percentage<pR>& percentage) {
+                if (auto raw = percentage.raw())
+                    serializationForCSS(builder, NumberRaw<nR> { raw->value / 100.0 });
+                else
+                    serializationForCSS(builder, percentage);
+            }
+        );
     }
 };
-
 
 } // namespace CSS
 } // namespace WebCore

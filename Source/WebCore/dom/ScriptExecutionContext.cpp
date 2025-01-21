@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008-2024 Apple Inc. All Rights Reserved.
  * Copyright (C) 2012 Google Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,7 @@ static UncheckedKeyHashMap<ScriptExecutionContextIdentifier, ScriptExecutionCont
 }
 
 struct ScriptExecutionContext::PendingException {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(PendingException);
+    WTF_MAKE_TZONE_ALLOCATED(PendingException);
 public:
     PendingException(const String& errorMessage, int lineNumber, int columnNumber, const String& sourceURL, RefPtr<ScriptCallStack>&& callStack)
         : m_errorMessage(errorMessage)
@@ -120,6 +120,9 @@ public:
     String m_sourceURL;
     RefPtr<ScriptCallStack> m_callStack;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ScriptExecutionContext::PendingException);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ScriptExecutionContext::Task);
 
 ScriptExecutionContext::ScriptExecutionContext(Type type, std::optional<ScriptExecutionContextIdentifier> contextIdentifier)
     : m_identifier(contextIdentifier ? *contextIdentifier : ScriptExecutionContextIdentifier::generate())
@@ -315,7 +318,7 @@ JSC::ScriptExecutionStatus ScriptExecutionContext::jscScriptExecutionStatus() co
     return JSC::ScriptExecutionStatus::Running;
 }
 
-URL ScriptExecutionContext::currentSourceURL() const
+URL ScriptExecutionContext::currentSourceURL(CallStackPosition position) const
 {
     auto* globalObject = this->globalObject();
     if (!globalObject)
@@ -327,7 +330,7 @@ URL ScriptExecutionContext::currentSourceURL() const
         return { };
 
     URL sourceURL;
-    JSC::StackVisitor::visit(topCallFrame, vm, [&sourceURL](auto& visitor) {
+    JSC::StackVisitor::visit(topCallFrame, vm, [&sourceURL, position](auto& visitor) {
         if (visitor->isNativeFrame())
             return IterationStatus::Continue;
 
@@ -335,11 +338,12 @@ URL ScriptExecutionContext::currentSourceURL() const
         if (urlString.isEmpty())
             return IterationStatus::Continue;
 
-        sourceURL = URL { WTFMove(urlString) };
-        if (sourceURL.isValid())
+        auto newSourceURL = URL { WTFMove(urlString) };
+        if (!newSourceURL.isValid())
             return IterationStatus::Continue;
 
-        return IterationStatus::Done;
+        sourceURL = WTFMove(newSourceURL);
+        return position == CallStackPosition::BottomMost ? IterationStatus::Continue : IterationStatus::Done;
     });
     return sourceURL;
 }
@@ -751,6 +755,13 @@ bool ScriptExecutionContext::postTaskForModeToWorkerOrWorklet(ScriptExecutionCon
 
     context->postTaskForMode(WTFMove(task), mode);
     return true;
+}
+
+bool ScriptExecutionContext::isContextThread(ScriptExecutionContextIdentifier identifier)
+{
+    Locker locker { allScriptExecutionContextsMapLock };
+    auto* context = allScriptExecutionContextsMap().get(identifier);
+    return context && context->isContextThread();
 }
 
 bool ScriptExecutionContext::ensureOnContextThread(ScriptExecutionContextIdentifier identifier, Task&& task)

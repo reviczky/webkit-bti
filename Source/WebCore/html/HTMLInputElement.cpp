@@ -83,7 +83,6 @@
 #include <wtf/Language.h>
 #include <wtf/MathExtras.h>
 #include <wtf/Ref.h>
-#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
@@ -99,16 +98,18 @@ using namespace HTMLNames;
 
 #if ENABLE(DATALIST_ELEMENT)
 class ListAttributeTargetObserver final : public IdTargetObserver {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(ListAttributeTargetObserver);
+    WTF_MAKE_TZONE_ALLOCATED(ListAttributeTargetObserver);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ListAttributeTargetObserver);
 public:
     ListAttributeTargetObserver(const AtomString& id, HTMLInputElement&);
 
-    void idTargetChanged() override;
+    void idTargetChanged(Element&) override;
 
 private:
     WeakPtr<HTMLInputElement, WeakPtrImplWithEventTargetData> m_element;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ListAttributeTargetObserver);
 #endif
 
 static constexpr int maxSavedResults = 256;
@@ -128,9 +129,9 @@ Ref<HTMLInputElement> HTMLInputElement::create(const QualifiedName& tagName, Doc
     return adoptRef(*new HTMLInputElement(tagName, document, form, createdByParser ? CreationType::ByParser : CreationType::Normal));
 }
 
-Ref<Element> HTMLInputElement::cloneElementWithoutAttributesAndChildren(Document& targetDocument)
+Ref<Element> HTMLInputElement::cloneElementWithoutAttributesAndChildren(TreeScope& treeScope)
 {
-    return adoptRef(*new HTMLInputElement(tagQName(), targetDocument, nullptr, CreationType::ByCloning));
+    return adoptRef(*new HTMLInputElement(tagQName(), treeScope.documentScope(), nullptr, CreationType::ByCloning));
 }
 
 HTMLImageLoader& HTMLInputElement::ensureImageLoader()
@@ -792,12 +793,12 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
     switch (name.nodeName()) {
     case AttributeNames::typeAttr:
         if (attributeModificationReason != AttributeModificationReason::Directly)
-            return; // initializeInputTypeAfterParsingOrCloning has taken care of this.
+            return; // initializeInputTypeAfterParsingOrCloning will take care of this.
         updateType(newValue);
         break;
     case AttributeNames::valueAttr:
         if (attributeModificationReason != AttributeModificationReason::Directly)
-            return; // initializeInputTypeAfterParsingOrCloning has taken care of this.
+            return; // initializeInputTypeAfterParsingOrCloning will take care of this.
         // Changes to the value attribute may change whether or not this element has a default value.
         // If this field is autocomplete=off that might affect the return value of needsSuspensionCallback.
         if (m_autocomplete == Off) {
@@ -888,6 +889,8 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
         if (document().settings().switchControlEnabled()) {
             auto hasSwitchAttribute = !newValue.isNull();
             m_hasSwitchAttribute = hasSwitchAttribute;
+            if (attributeModificationReason != AttributeModificationReason::Directly)
+                return; // initializeInputTypeAfterParsingOrCloning and updateUserAgentShadowTree will take care of this.
             if (isSwitch())
                 m_inputType->createShadowSubtreeIfNeeded();
             else if (isCheckbox())
@@ -899,7 +902,6 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
 #endif
         }
         break;
-#if ENABLE(INPUT_TYPE_COLOR)
     case AttributeNames::alphaAttr:
     case AttributeNames::colorspaceAttr:
         if (isColorControl() && document().settings().inputTypeColorEnhancementsEnabled()) {
@@ -907,7 +909,6 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
             updateValidity();
         }
         break;
-#endif
     default:
         break;
     }
@@ -1156,7 +1157,7 @@ void HTMLInputElement::copyNonAttributePropertiesFromElement(const Element& sour
 
 String HTMLInputElement::value() const
 {
-    if (document().requiresScriptExecutionTelemetry(ScriptTelemetryCategory::FormControls))
+    if (protectedDocument()->requiresScriptExecutionTelemetry(ScriptTelemetryCategory::FormControls))
         return m_inputType->defaultValue();
     if (auto* fileInput = dynamicDowncast<FileInputType>(*m_inputType))
         return fileInput->firstElementPathForInputValue();
@@ -1205,6 +1206,11 @@ ExceptionOr<void> HTMLInputElement::setValue(const String& value, TextFieldEvent
 
         if (m_isAutoFilledAndObscured)
             setAutofilledAndObscured(false);
+
+        if (valueChanged && value.isEmpty()) {
+            if (RefPtr page = document().page())
+                page->chrome().client().didProgrammaticallyClearTextFormControl(*this);
+        }
     }
 
     return { };
@@ -1362,7 +1368,7 @@ void HTMLInputElement::defaultEventHandler(Event& event)
         if (commandForElement())
             handleCommand();
         else
-            handlePopoverTargetAction();
+            handlePopoverTargetAction(event.target());
         if (event.defaultHandled())
             return;
     }
@@ -1432,12 +1438,12 @@ ExceptionOr<void> HTMLInputElement::showPicker()
     // https://github.com/whatwg/html/issues/6909#issuecomment-917138991
     if (!m_inputType->allowsShowPickerAcrossFrames()) {
         auto* localTopFrame = dynamicDowncast<LocalFrame>(frame->tree().top());
-        if (!localTopFrame || !frame->document()->protectedSecurityOrigin()->isSameOriginAs(localTopFrame->document()->protectedSecurityOrigin()))
+        if (!localTopFrame || !frame->protectedDocument()->protectedSecurityOrigin()->isSameOriginAs(localTopFrame->protectedDocument()->protectedSecurityOrigin()))
             return Exception { ExceptionCode::SecurityError, "Input showPicker() called from cross-origin iframe."_s };
     }
 
     auto* window = frame->window();
-    if (!window || !window->hasTransientActivation())
+    if (!window || !window->consumeTransientActivation())
         return Exception { ExceptionCode::NotAllowedError, "Input showPicker() requires a user gesture."_s };
 
     m_inputType->showPicker();
@@ -1608,7 +1614,6 @@ void HTMLInputElement::setAutofillVisibility(AutofillVisibility state)
     }
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
 bool HTMLInputElement::alpha()
 {
     return document().settings().inputTypeColorEnhancementsEnabled() && hasAttributeWithoutSynchronization(alphaAttr);
@@ -1630,7 +1635,6 @@ void HTMLInputElement::setColorSpace(const AtomString& value)
     ASSERT(document().settings().inputTypeColorEnhancementsEnabled());
     setAttributeWithoutSynchronization(colorspaceAttr, value);
 }
-#endif // ENABLE(INPUT_TYPE_COLOR)
 
 FileList* HTMLInputElement::files()
 {
@@ -1749,23 +1753,19 @@ void HTMLInputElement::resumeFromDocumentSuspension()
 {
     ASSERT(needsSuspensionCallback());
 
-#if ENABLE(INPUT_TYPE_COLOR)
     // <input type=color> uses prepareForDocumentSuspension to detach the color picker UI,
     // so it should not be reset when being loaded from page cache.
     if (isColorControl())
         return;
-#endif // ENABLE(INPUT_TYPE_COLOR)
     document().postTask([inputElement = Ref { *this }] (ScriptExecutionContext&) {
         inputElement->reset();
     });
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
 void HTMLInputElement::prepareForDocumentSuspension()
 {
     m_inputType->detach();
 }
-#endif // ENABLE(INPUT_TYPE_COLOR)
 
 void HTMLInputElement::willChangeForm()
 {
@@ -1880,29 +1880,21 @@ void HTMLInputElement::requiredStateChanged()
 
 Color HTMLInputElement::valueAsColor() const
 {
-#if ENABLE(INPUT_TYPE_COLOR)
     if (auto* colorInputType = dynamicDowncast<ColorInputType>(*m_inputType))
         return colorInputType->valueAsColor();
-#endif
     return Color::black;
 }
 
 void HTMLInputElement::selectColor(StringView color)
 {
-#if ENABLE(INPUT_TYPE_COLOR)
     if (auto* colorInputType = dynamicDowncast<ColorInputType>(*m_inputType))
         colorInputType->selectColor(color);
-#else
-    UNUSED_PARAM(color);
-#endif
 }
 
 Vector<Color> HTMLInputElement::suggestedColors() const
 {
-#if ENABLE(INPUT_TYPE_COLOR)
     if (auto* colorInputType = dynamicDowncast<ColorInputType>(*m_inputType))
         return colorInputType->suggestedColors();
-#endif
     return { };
 }
 
@@ -2001,12 +1993,10 @@ bool HTMLInputElement::isRangeControl() const
     return m_inputType->isRangeControl();
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
 bool HTMLInputElement::isColorControl() const
 {
     return m_inputType->isColorControl();
 }
-#endif
 
 bool HTMLInputElement::isText() const
 {
@@ -2101,6 +2091,24 @@ void HTMLInputElement::updatePlaceholderText()
 bool HTMLInputElement::isEmptyValue() const
 {
     return m_inputType->isEmptyValue();
+}
+
+bool HTMLInputElement::isDevolvableWidget() const
+{
+    return m_inputType->isColorControl()
+        || m_inputType->isDateField()
+        || m_inputType->isDateTimeLocalField()
+        || m_inputType->isEmailField()
+        || m_inputType->isMonthField()
+        || m_inputType->isNumberField()
+        || m_inputType->isPasswordField()
+        || m_inputType->isSearchField()
+        || m_inputType->isTelephoneField()
+        || m_inputType->isTextButton()
+        || m_inputType->isTextType()
+        || m_inputType->isTimeField()
+        || m_inputType->isURLField()
+        || m_inputType->isWeekField();
 }
 
 void HTMLInputElement::maxLengthAttributeChanged(const AtomString& newValue)
@@ -2244,7 +2252,7 @@ ListAttributeTargetObserver::ListAttributeTargetObserver(const AtomString& id, H
 {
 }
 
-void ListAttributeTargetObserver::idTargetChanged()
+void ListAttributeTargetObserver::idTargetChanged(Element&)
 {
     m_element->document().eventLoop().queueTask(TaskSource::DOMManipulation, [element = m_element] {
         if (element)
@@ -2340,13 +2348,13 @@ ExceptionOr<void> HTMLInputElement::setSelectionRangeForBindings(unsigned start,
 static Ref<StyleGradientImage> autoFillStrongPasswordMaskImage()
 {
     return StyleGradientImage::create(
-        Style::FunctionNotation<CSSValueLinearGradient, Style::LinearGradient> {
+        FunctionNotation<CSSValueLinearGradient, Style::LinearGradient> {
             .parameters = {
                 .colorInterpolationMethod = Style::GradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied),
                 .gradientLine = { Style::Angle<> { 90 } },
                 .stops = {
-                    { Color::black,            Style::LengthPercentage<> { Style::Percentage<> { 50 } } },
-                    { Color::transparentBlack, Style::LengthPercentage<> { Style::Percentage<> { 100 } } }
+                    { Style::Color { Color::black },            Style::LengthPercentage<> { Style::Percentage<> { 50 } } },
+                    { Style::Color { Color::transparentBlack }, Style::LengthPercentage<> { Style::Percentage<> { 100 } } }
                 }
             }
         }

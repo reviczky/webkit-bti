@@ -47,7 +47,7 @@
 #include "RealtimeMediaSourceFactory.h"
 #include "RealtimeMediaSourceIdentifier.h"
 #include "VideoFrameTimeMetadata.h"
-#include <wtf/AbstractRefCounted.h>
+#include <wtf/AbstractThreadSafeRefCountedAndCanMakeWeakPtr.h>
 #include <wtf/CheckedPtr.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
@@ -113,7 +113,7 @@ public:
     virtual void hasStartedProducingData() { }
 };
 
-class WEBCORE_EXPORT RealtimeMediaSource : public AbstractRefCounted
+class WEBCORE_EXPORT RealtimeMediaSource : public AbstractThreadSafeRefCountedAndCanMakeWeakPtr
 #if !RELEASE_LOG_DISABLED
     , public LoggerHelper
 #endif
@@ -150,6 +150,7 @@ public:
     virtual Ref<RealtimeMediaSource> clone() { return *this; }
 
     const String& hashedId() const;
+    const String& hashedGroupId() const;
     const MediaDeviceHashSalts& deviceIDHashSalts() const;
 
     const String& persistentID() const { return m_device.persistentId(); }
@@ -226,7 +227,6 @@ public:
 
     virtual const RealtimeMediaSourceCapabilities& capabilities() = 0;
     virtual const RealtimeMediaSourceSettings& settings() = 0;
-    virtual ThreadSafeWeakPtrControlBlock& controlBlock() const = 0;
 
     using TakePhotoNativePromise = NativePromise<std::pair<Vector<uint8_t>, String>, String>;
     virtual Ref<TakePhotoNativePromise> takePhoto(PhotoSettings&&);
@@ -367,7 +367,7 @@ private:
     virtual double observedFrameRate() const { return 0.0; }
 
     void updateHasStartedProducingData();
-    void initializePersistentId();
+    void initializeIds();
 
 #if !RELEASE_LOG_DISABLED
     RefPtr<const Logger> m_logger;
@@ -380,12 +380,13 @@ private:
     MediaDeviceHashSalts m_idHashSalts;
     String m_hashedID;
     String m_ephemeralHashedID;
+    String m_hashedGroupId;
     Type m_type;
     String m_name;
     WeakHashSet<RealtimeMediaSourceObserver> m_observers;
 
     mutable Lock m_audioSampleObserversLock;
-    HashSet<CheckedPtr<AudioSampleObserver>> m_audioSampleObservers WTF_GUARDED_BY_LOCK(m_audioSampleObserversLock);
+    UncheckedKeyHashSet<CheckedPtr<AudioSampleObserver>> m_audioSampleObservers WTF_GUARDED_BY_LOCK(m_audioSampleObserversLock);
 
     mutable Lock m_videoFrameObserversLock;
     HashMap<VideoFrameObserver*, std::unique_ptr<VideoFrameAdaptor>> m_videoFrameObservers WTF_GUARDED_BY_LOCK(m_videoFrameObserversLock);
@@ -470,6 +471,11 @@ inline bool RealtimeMediaSource::isProducingData() const
 
 inline void RealtimeMediaSource::setIsInBackground(bool)
 {
+}
+
+inline const String& RealtimeMediaSource::hashedGroupId() const
+{
+    return m_hashedGroupId;
 }
 
 } // namespace WebCore

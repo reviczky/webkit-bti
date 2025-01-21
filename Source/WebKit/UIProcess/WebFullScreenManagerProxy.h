@@ -67,9 +67,9 @@ public:
     virtual void closeFullScreenManager() = 0;
     virtual bool isFullScreen() = 0;
 #if PLATFORM(IOS_FAMILY)
-    virtual void enterFullScreen(WebCore::FloatSize mediaDimensions) = 0;
+    virtual void enterFullScreen(WebCore::FloatSize mediaDimensions, CompletionHandler<void(bool)>&&) = 0;
 #else
-    virtual void enterFullScreen() = 0;
+    virtual void enterFullScreen(CompletionHandler<void(bool)>&&) = 0;
 #endif
 #if ENABLE(QUICKLOOK_FULLSCREEN)
     virtual void updateImageSource() = 0;
@@ -89,6 +89,9 @@ public:
     static Ref<WebFullScreenManagerProxy> create(WebPageProxy&, WebFullScreenManagerProxyClient&);
     virtual ~WebFullScreenManagerProxy();
 
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
     bool isFullScreen();
@@ -101,6 +104,7 @@ public:
     void prepareQuickLookImageURL(CompletionHandler<void(URL&&)>&&) const;
 #endif // QUICKLOOK_FULLSCREEN
     void close();
+    void detachFromClient();
 
     enum class FullscreenState : uint8_t {
         NotInFullscreen,
@@ -109,7 +113,7 @@ public:
         ExitingFullscreen,
     };
     FullscreenState fullscreenState() const { return m_fullscreenState; }
-    void willEnterFullScreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard);
+    void willEnterFullScreen(CompletionHandler<void(bool)>&&);
     void didEnterFullScreen();
     void willExitFullScreen();
     void didExitFullScreen();
@@ -124,11 +128,14 @@ public:
     bool lockFullscreenOrientation(WebCore::ScreenOrientationType);
     void unlockFullscreenOrientation();
 
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
+
 private:
     WebFullScreenManagerProxy(WebPageProxy&, WebFullScreenManagerProxyClient&);
 
     void supportsFullScreen(bool withKeyboard, CompletionHandler<void(bool)>&&);
-    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&&);
+    void enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&&, CompletionHandler<void(bool)>&&);
 #if ENABLE(QUICKLOOK_FULLSCREEN)
     void updateImageSource(FullScreenMediaDetails&&);
 #endif
@@ -136,9 +143,6 @@ private:
     void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame);
     void callCloseCompletionHandlers();
-
-    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }

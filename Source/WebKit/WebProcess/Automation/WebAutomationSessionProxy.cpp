@@ -29,14 +29,15 @@
 #include "AutomationProtocolObjects.h"
 #include "CoordinateSystem.h"
 #include "WebAutomationDOMWindowObserver.h"
+#include "WebAutomationSessionMessages.h"
 #include "WebAutomationSessionProxyMessages.h"
 #include "WebAutomationSessionProxyScriptSource.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
 #include "WebImage.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include <JavaScriptCore/APICast.h>
+#include <JavaScriptCore/ConsoleMessage.h>
 #include <JavaScriptCore/Exception.h>
 #include <JavaScriptCore/JSObject.h>
 #include <JavaScriptCore/JSStringRefPrivate.h>
@@ -68,6 +69,10 @@
 
 #if ENABLE(DATALIST_ELEMENT)
 #include <WebCore/HTMLDataListElement.h>
+#endif
+
+#if ENABLE(WEBDRIVER_BIDI)
+#include <WebCore/AutomationInstrumentation.h>
 #endif
 
 namespace WebKit {
@@ -114,11 +119,19 @@ static inline JSValueRef callPropertyFunction(JSContextRef context, JSObjectRef 
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebAutomationSessionProxy);
 
+Ref<WebAutomationSessionProxy> WebAutomationSessionProxy::create(const String& sessionIdentifier)
+{
+    return adoptRef(*new WebAutomationSessionProxy(sessionIdentifier));
+}
+
 WebAutomationSessionProxy::WebAutomationSessionProxy(const String& sessionIdentifier)
     : m_sessionIdentifier(sessionIdentifier)
     , m_scriptObjectIdentifier(JSC::PrivateName::Description, "automationSessionProxy"_s)
 {
     WebProcess::singleton().addMessageReceiver(Messages::WebAutomationSessionProxy::messageReceiverName(), *this);
+#if ENABLE(WEBDRIVER_BIDI)
+    AutomationInstrumentation::setClient(*this);
+#endif
 }
 
 WebAutomationSessionProxy::~WebAutomationSessionProxy()
@@ -126,6 +139,9 @@ WebAutomationSessionProxy::~WebAutomationSessionProxy()
     m_frameObservers.clear();
 
     WebProcess::singleton().removeMessageReceiver(Messages::WebAutomationSessionProxy::messageReceiverName());
+#if ENABLE(WEBDRIVER_BIDI)
+    AutomationInstrumentation::clearClient();
+#endif
 }
 
 static bool isValidNodeHandle(const String& nodeHandle)
@@ -258,7 +274,7 @@ static JSValueRef evaluateJavaScriptCallback(JSContextRef context, JSObjectRef f
 JSObjectRef WebAutomationSessionProxy::scriptObject(JSGlobalContextRef context)
 {
     JSC::JSGlobalObject* globalObject = toJS(context);
-    JSC::VM& vm = globalObject->vm();
+    SUPPRESS_UNCOUNTED_LOCAL JSC::VM& vm = globalObject->vm();
     JSC::JSLockHolder locker(vm);
     auto scriptObjectID = JSC::Identifier::fromUid(m_scriptObjectIdentifier);
     if (!globalObject->hasProperty(globalObject, scriptObjectID))
@@ -270,7 +286,7 @@ JSObjectRef WebAutomationSessionProxy::scriptObject(JSGlobalContextRef context)
 void WebAutomationSessionProxy::setScriptObject(JSGlobalContextRef context, JSObjectRef object)
 {
     JSC::JSGlobalObject* globalObject = toJS(context);
-    JSC::VM& vm = globalObject->vm();
+    SUPPRESS_UNCOUNTED_LOCAL JSC::VM& vm = globalObject->vm();
     JSC::JSLockHolder locker(vm);
     auto scriptObjectID = JSC::Identifier::fromUid(m_scriptObjectIdentifier);
     JSC::PutPropertySlot slot(globalObject);
@@ -951,7 +967,7 @@ void WebAutomationSessionProxy::takeScreenshot(WebCore::PageIdentifier pageID, s
         RefPtr localMainFrame = dynamicDowncast<LocalFrame>(frame->coreFrame()->mainFrame());
         if (!localMainFrame)
             return;
-        auto snapshotRect = WebCore::IntRect(localMainFrame->view()->clientToDocumentRect(rect));
+        auto snapshotRect = WebCore::IntRect(localMainFrame->protectedView()->clientToDocumentRect(rect));
         RefPtr<WebImage> image = page->scaledSnapshotWithOptions(snapshotRect, 1, SnapshotOption::Shareable);
         if (!image)
             return completionHandler(std::nullopt, Inspector::Protocol::AutomationHelpers::getEnumConstantValue(Inspector::Protocol::Automation::ErrorMessage::ScreenshotError));
@@ -1009,7 +1025,7 @@ void WebAutomationSessionProxy::snapshotRectForScreenshot(WebCore::PageIdentifie
         return;
     }
 
-    completionHandler(std::nullopt, WebCore::IntRect(localMainFrame->view()->documentToClientRect(snapshotRect)));
+    completionHandler(std::nullopt, WebCore::IntRect(localMainFrame->protectedView()->documentToClientRect(snapshotRect)));
 }
 
 void WebAutomationSessionProxy::getCookiesForFrame(WebCore::PageIdentifier pageID, std::optional<WebCore::FrameIdentifier> frameID, CompletionHandler<void(std::optional<String>, Vector<WebCore::Cookie>)>&& completionHandler)
@@ -1060,5 +1076,12 @@ void WebAutomationSessionProxy::deleteCookie(WebCore::PageIdentifier pageID, std
         completionHandler(std::nullopt);
     });
 }
+
+#if ENABLE(WEBDRIVER_BIDI)
+void WebAutomationSessionProxy::addMessageToConsole(const JSC::MessageSource& source, const JSC::MessageLevel& level, const String& messageText, const JSC::MessageType& type, const WallTime& timestamp)
+{
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebAutomationSession::LogEntryAdded(source, level, messageText, type, timestamp), 0);
+}
+#endif
 
 } // namespace WebKit

@@ -42,9 +42,9 @@
 #include "RefPtrCairo.h"
 #elif USE(SKIA)
 #include <hb.h>
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkFont.h>
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 #if ENABLE(MATHML) && USE(HARFBUZZ)
@@ -111,7 +111,7 @@ struct FontPlatformDataAttributes {
         { }
 #endif
 
-#if USE(WIN) && USE(CAIRO)
+#if PLATFORM(WIN) && USE(CAIRO)
     FontPlatformDataAttributes(float size, FontOrientation orientation, FontWidthVariant widthVariant, TextRenderingMode textRenderingMode, bool syntheticBold, bool syntheticOblique, LOGFONT font)
         : m_size(size)
         , m_orientation(orientation)
@@ -240,6 +240,17 @@ struct FontPlatformSerializedCreationData {
 struct FontPlatformSerializedData {
     sk_sp<SkData> typefaceData;
 };
+#elif USE(CAIRO)
+struct FontPlatformSerializedCreationData {
+    Vector<uint8_t> fontFaceData;
+    String itemInCollection;
+};
+
+struct FontPlatformSerializedData {
+#if PLATFORM(WIN)
+    LOGFONT logFont;
+#endif
+};
 #endif
 
 // This class is conceptually immutable. Once created, no instances should ever change (in an observable way).
@@ -309,19 +320,15 @@ public:
     HFONT hfont() const { return m_hfont ? m_hfont->get() : 0; }
 #endif
 
-#if USE(CORE_TEXT) || USE(SKIA)
     using IPCData = std::variant<FontPlatformSerializedData, FontPlatformSerializedCreationData>;
-#endif
 #if USE(CORE_TEXT)
     WEBCORE_EXPORT FontPlatformData(float size, FontOrientation&&, FontWidthVariant&&, TextRenderingMode&&, bool syntheticBold, bool syntheticOblique, RetainPtr<CTFontRef>&&, RefPtr<FontCustomPlatformData>&&);
 #elif USE(SKIA)
     WEBCORE_EXPORT FontPlatformData(float size, FontOrientation&&, FontWidthVariant&&, TextRenderingMode&&, bool syntheticBold, bool syntheticOblique, RefPtr<FontCustomPlatformData>&&);
 #endif
 
-#if USE(CORE_TEXT) || USE(SKIA)
     WEBCORE_EXPORT static std::optional<FontPlatformData> fromIPCData(float size, FontOrientation&&, FontWidthVariant&&, TextRenderingMode&&, bool syntheticBold, bool syntheticOblique, FontPlatformData::IPCData&& toIPCData);
     WEBCORE_EXPORT IPCData toIPCData() const;
-#endif
 
 #if USE(CORE_TEXT)
     WEBCORE_EXPORT CTFontRef registeredFont() const; // Returns nullptr iff the font is not registered, such as web fonts (otherwise returns font()).

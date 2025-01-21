@@ -174,7 +174,7 @@ constexpr bool typeExposedByDefault = true;
 
 #if ENABLE(WEBASSEMBLY)
 #define FOR_EACH_WEBASSEMBLY_CONSTRUCTOR_TYPE(macro) \
-    macro(WebAssemblyArray,        webAssemblyArray,        webAssemblyArray,        JSWebAssemblyArray,        Array,        object, Options::useWasmGC()) \
+    macro(WebAssemblyArray,        webAssemblyArray,        webAssemblyArray,        JSWebAssemblyArray,        Array,        object, typeExposedByDefault) \
     macro(WebAssemblyCompileError, webAssemblyCompileError, webAssemblyCompileError, ErrorInstance,             CompileError, error,  typeExposedByDefault) \
     macro(WebAssemblyException,    webAssemblyException,    webAssemblyException,    JSWebAssemblyException,    Exception,    object, typeExposedByDefault) \
     macro(WebAssemblyGlobal,       webAssemblyGlobal,       webAssemblyGlobal,       JSWebAssemblyGlobal,       Global,       object, typeExposedByDefault) \
@@ -183,7 +183,7 @@ constexpr bool typeExposedByDefault = true;
     macro(WebAssemblyMemory,       webAssemblyMemory,       webAssemblyMemory,       JSWebAssemblyMemory,       Memory,       object, typeExposedByDefault) \
     macro(WebAssemblyModule,       webAssemblyModule,       webAssemblyModule,       JSWebAssemblyModule,       Module,       object, typeExposedByDefault) \
     macro(WebAssemblyRuntimeError, webAssemblyRuntimeError, webAssemblyRuntimeError, ErrorInstance,             RuntimeError, error,  typeExposedByDefault) \
-    macro(WebAssemblyStruct,       webAssemblyStruct,       webAssemblyStruct,       JSWebAssemblyStruct,       Struct,       object, Options::useWasmGC()) \
+    macro(WebAssemblyStruct,       webAssemblyStruct,       webAssemblyStruct,       JSWebAssemblyStruct,       Struct,       object, typeExposedByDefault) \
     macro(WebAssemblyTable,        webAssemblyTable,        webAssemblyTable,        JSWebAssemblyTable,        Table,        object, typeExposedByDefault) \
     macro(WebAssemblyTag,          webAssemblyTag,          webAssemblyTag,          JSWebAssemblyTag,          Tag,          object, typeExposedByDefault) 
 #else
@@ -312,6 +312,7 @@ public:
     LazyProperty<JSGlobalObject, Structure> m_callbackConstructorStructure;
     LazyProperty<JSGlobalObject, Structure> m_callbackFunctionStructure;
     LazyProperty<JSGlobalObject, Structure> m_callbackObjectStructure;
+    LazyProperty<JSGlobalObject, Structure> m_rawJSONObjectStructure;
 #if JSC_OBJC_API_ENABLED
     LazyProperty<JSGlobalObject, Structure> m_objcCallbackFunctionStructure;
     LazyProperty<JSGlobalObject, Structure> m_objcWrapperObjectStructure;
@@ -367,6 +368,7 @@ public:
     WriteBarrierStructureID m_regExpMatchesArrayWithIndicesStructure;
     WriteBarrierStructureID m_regExpMatchesIndicesArrayStructure;
     LazyProperty<JSGlobalObject, Structure> m_regExpStringIteratorStructure;
+    WriteBarrierStructureID m_trustedScriptStructure;
 
     LazyProperty<JSGlobalObject, Structure> m_customGetterFunctionStructure;
     LazyProperty<JSGlobalObject, Structure> m_customSetterFunctionStructure;
@@ -425,8 +427,6 @@ public:
     LazyProperty<JSGlobalObject, Structure> m_resizableOrGrowableSharedTypedArray ## name ## Structure;
     FOR_EACH_TYPED_ARRAY_TYPE(DECLARE_TYPED_ARRAY_TYPE_STRUCTURE)
 #undef DECLARE_TYPED_ARRAY_TYPE_STRUCTURE
-
-    LazyProperty<JSGlobalObject, JSInternalPromise> m_importMapStatusPromise;
 
     FixedVector<LazyProperty<JSGlobalObject, JSCell>> m_linkTimeConstants;
 
@@ -812,6 +812,7 @@ public:
     Structure* callbackConstructorStructure() const { return m_callbackConstructorStructure.get(this); }
     Structure* callbackFunctionStructure() const { return m_callbackFunctionStructure.get(this); }
     Structure* callbackObjectStructure() const { return m_callbackObjectStructure.get(this); }
+    Structure* rawJSONObjectStructure() const { return m_rawJSONObjectStructure.get(this); }
 #if JSC_OBJC_API_ENABLED
     Structure* objcCallbackFunctionStructure() const { return m_objcCallbackFunctionStructure.get(this); }
     Structure* objcWrapperObjectStructure() const { return m_objcWrapperObjectStructure.get(this); }
@@ -863,7 +864,7 @@ public:
     Structure* asyncGeneratorFunctionStructure() const { return m_asyncGeneratorFunctionStructure.get(); }
     Structure* iteratorStructure() const { return m_iteratorStructure.get(); }
     Structure* iteratorHelperStructure() const { return m_iteratorHelperStructure.get(); }
-    Structure* arrayIteratorStructure() const { return m_arrayIteratorStructure.get(); }    
+    Structure* arrayIteratorStructure() const { return m_arrayIteratorStructure.get(); }
     Structure* mapIteratorStructure() const { return m_mapIteratorStructure.get(); }
     Structure* setIteratorStructure() const { return m_setIteratorStructure.get(); }
     Structure* wrapForValidIteratorStructure() const { return m_wrapForValidIteratorStructure.get(this); }
@@ -902,6 +903,7 @@ public:
     Structure* segmentIteratorStructure() { return m_segmentIteratorStructure.get(this); }
     Structure* segmenterStructure() { return m_segmenterStructure.get(this); }
     Structure* segmentsStructure() { return m_segmentsStructure.get(this); }
+    Structure* trustedScriptStructure() { return m_trustedScriptStructure.get(); }
 
     JSObject* dateTimeFormatConstructor() { return m_dateTimeFormatStructure.constructor(this); }
     JSObject* dateTimeFormatPrototype() { return m_dateTimeFormatStructure.prototype(this); }
@@ -969,9 +971,10 @@ public:
     static void reportUncaughtExceptionAtEventLoop(JSGlobalObject*, Exception*);
     static JSObject* currentScriptExecutionOwner(JSGlobalObject* global) { return global; }
     static ScriptExecutionStatus scriptExecutionStatus(JSGlobalObject*, JSObject*) { return ScriptExecutionStatus::Running; }
-    static void reportViolationForUnsafeEval(JSGlobalObject*, JSString*) { }
+    static void reportViolationForUnsafeEval(JSGlobalObject*, const String&) { }
     static String codeForEval(JSGlobalObject*, JSValue) { return nullString(); }
-    static bool canCompileStrings(JSGlobalObject*, CompilationType, String, JSValue) { return true; }
+    static bool canCompileStrings(JSGlobalObject*, CompilationType, String, const ArgList&) { return true; }
+    static Structure* trustedScriptStructure(JSGlobalObject*) { return nullptr; }
 
     inline JSObject* arrayBufferPrototype(ArrayBufferSharingMode) const;
     inline Structure* arrayBufferStructure(ArrayBufferSharingMode) const;
@@ -1067,8 +1070,7 @@ public:
     JS_EXPORT_PRIVATE void queueMicrotask(Ref<Microtask>&&);
     JS_EXPORT_PRIVATE void queueMicrotask(JSValue job, JSValue, JSValue, JSValue, JSValue);
 
-    static void reportViolationForUnsafeEval(const JSGlobalObject*, JSString*) { }
-    static String codeForEval(const JSGlobalObject*, JSValue) { return nullString(); }
+    static void reportViolationForUnsafeEval(const JSGlobalObject*, const String&) { }
 
     bool evalEnabled() const { return m_evalEnabled; }
     bool webAssemblyEnabled() const { return m_webAssemblyEnabled; }
@@ -1141,16 +1143,6 @@ public:
 
     const ImportMap& importMap() const { return m_importMap.get(); }
     ImportMap& importMap() { return m_importMap.get(); }
-    JSInternalPromise* importMapStatusPromise() const
-    {
-        if (m_importMapStatusPromise.isInitialized())
-            return m_importMapStatusPromise.get(this);
-        return nullptr;
-    }
-    JS_EXPORT_PRIVATE bool isAcquiringImportMaps() const;
-    JS_EXPORT_PRIVATE void setAcquiringImportMaps();
-    JS_EXPORT_PRIVATE void setPendingImportMaps();
-    JS_EXPORT_PRIVATE void clearPendingImportMaps();
 
 protected:
     enum class HasSpeciesProperty : bool { No, Yes };

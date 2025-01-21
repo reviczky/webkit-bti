@@ -992,11 +992,6 @@ angle::Result FramebufferVk::readPixels(const gl::Context *context,
     return angle::Result::Continue;
 }
 
-RenderTargetVk *FramebufferVk::getDepthStencilRenderTarget() const
-{
-    return mRenderTargetCache.getDepthStencil();
-}
-
 RenderTargetVk *FramebufferVk::getColorDrawRenderTarget(size_t colorIndexGL) const
 {
     RenderTargetVk *renderTarget = mRenderTargetCache.getColorDraw(mState, colorIndexGL);
@@ -3734,14 +3729,6 @@ gl::Extents FramebufferVk::getReadImageExtents() const
     return readRenderTarget->getExtents();
 }
 
-// Return the framebuffer's non-rotated render area.  This is a gl::Rectangle that is based on the
-// dimensions of the framebuffer, IS NOT rotated, and IS NOT y-flipped
-gl::Rectangle FramebufferVk::getNonRotatedCompleteRenderArea() const
-{
-    const gl::Box &dimensions = mState.getDimensions();
-    return gl::Rectangle(0, 0, dimensions.width, dimensions.height);
-}
-
 // Return the framebuffer's rotated render area.  This is a gl::Rectangle that is based on the
 // dimensions of the framebuffer, IS ROTATED for the draw FBO, and IS NOT y-flipped
 //
@@ -3804,6 +3791,55 @@ GLint FramebufferVk::getSamples() const
     // If none of the attachments are multisampled-render-to-texture, take the sample count from the
     // last attachment (any would have worked, as they would all have the same sample count).
     return std::max(lastAttachment ? lastAttachment->getSamples() : 1, 1);
+}
+
+angle::Result FramebufferVk::flushDepthStencilDeferredClear(ContextVk *contextVk,
+                                                            VkImageAspectFlagBits aspect)
+{
+    const bool isDepth = aspect == VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    // Pick out the deferred clear for the given aspect, and issue it ahead of the render pass.
+    // This is used when switching this aspect to read-only mode, in which case the clear operation
+    // for the aspect cannot be done as part of the render pass loadOp.
+    ASSERT(!isDepth || hasDeferredDepthClear());
+    ASSERT(isDepth || hasDeferredStencilClear());
+    ASSERT(mState.getDepthOrStencilAttachment() != nullptr);
+
+    RenderTargetVk *renderTarget = getDepthStencilRenderTarget();
+    vk::ImageHelper &image       = renderTarget->getImageForCopy();
+
+    // Depth/stencil attachments cannot be 3D.
+    ASSERT(!renderTarget->is3DImage());
+
+    vk::CommandBufferAccess access;
+    access.onImageTransferWrite(renderTarget->getLevelIndex(), 1, renderTarget->getLayerIndex(), 1,
+                                image.getAspectFlags(), &image);
+    vk::OutsideRenderPassCommandBuffer *commandBuffer;
+    ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer(access, &commandBuffer));
+
+    VkImageSubresourceRange range = {};
+    range.aspectMask              = aspect;
+    range.baseMipLevel            = image.toVkLevel(renderTarget->getLevelIndex()).get();
+    range.levelCount              = 1;
+    range.baseArrayLayer          = renderTarget->getLayerIndex();
+    range.layerCount              = 1;
+
+    VkClearDepthStencilValue clearValue = {};
+
+    if (isDepth)
+    {
+        clearValue.depth = mDeferredClears.getDepthValue();
+        mDeferredClears.reset(vk::kUnpackedDepthIndex);
+    }
+    else
+    {
+        clearValue.stencil = mDeferredClears.getStencilValue();
+        mDeferredClears.reset(vk::kUnpackedStencilIndex);
+    }
+
+    commandBuffer->clearDepthStencilImage(
+        image.getImage(), image.getCurrentLayout(contextVk->getRenderer()), clearValue, 1, &range);
+    return angle::Result::Continue;
 }
 
 angle::Result FramebufferVk::flushDeferredClears(ContextVk *contextVk)

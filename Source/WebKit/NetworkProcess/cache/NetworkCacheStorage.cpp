@@ -40,6 +40,8 @@
 #include <wtf/RunLoop.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/persistence/PersistentCoders.h>
+#include <wtf/persistence/PersistentDecoder.h>
+#include <wtf/persistence/PersistentEncoder.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringToIntegerConversion.h>
@@ -53,8 +55,8 @@ static constexpr auto recordsDirectoryName = "Records"_s;
 static constexpr auto blobsDirectoryName = "Blobs"_s;
 static constexpr auto blobSuffix = "-blob"_s;
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(Storage, Record);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(Storage, Timings);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Storage::Record);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Storage::Timings);
 
 static inline size_t maximumInlineBodySize()
 {
@@ -104,7 +106,7 @@ private:
     std::optional<SHA1::Digest> m_blobBodyHash;
 };
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(Storage, ReadOperation);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Storage::ReadOperation);
 
 bool Storage::isHigherPriority(const std::unique_ptr<ReadOperation>& a, const std::unique_ptr<ReadOperation>& b)
 {
@@ -232,7 +234,7 @@ private:
     CompletionHandler<void(int)> m_completionHandler;
 };
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(Storage, WriteOperation);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Storage::WriteOperation);
 
 void Storage::WriteOperation::invokeMappedBodyHandler(const Data& data)
 {
@@ -1342,7 +1344,9 @@ void Storage::deleteOldVersions()
                 return;
             if (!subdirName.startsWith(versionDirectoryPrefix))
                 return;
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
             auto directoryVersion = parseInteger<unsigned>(StringView { subdirName }.substring(strlen(versionDirectoryPrefix)));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
             if (!directoryVersion || *directoryVersion >= version)
                 return;
             auto oldVersionPath = FileSystem::pathByAppendingComponent(cachePath, subdirName);

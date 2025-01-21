@@ -89,16 +89,14 @@ std::optional<SharedPreferencesForWebProcess> WebFullScreenManagerProxy::sharedP
     return std::nullopt;
 }
 
-void WebFullScreenManagerProxy::willEnterFullScreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode mode)
+void WebFullScreenManagerProxy::willEnterFullScreen(CompletionHandler<void(bool)>&& completionHandler)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
     m_fullscreenState = FullscreenState::EnteringFullscreen;
 
-    RefPtr page = m_page.get();
-    if (!page)
-        return;
-    page->fullscreenClient().willEnterFullscreen(page.get());
-    page->protectedLegacyMainFrameProcess()->send(Messages::WebFullScreenManager::WillEnterFullScreen(mode), page->webPageIDInMainFrameProcess());
+    if (RefPtr page = m_page.get())
+        page->fullscreenClient().willEnterFullscreen(page.get());
+    completionHandler(true);
 }
 
 void WebFullScreenManagerProxy::didEnterFullScreen()
@@ -214,8 +212,14 @@ void WebFullScreenManagerProxy::setFullscreenAutoHideDuration(Seconds duration)
 
 void WebFullScreenManagerProxy::close()
 {
-    if (CheckedPtr client = std::exchange(m_client, nullptr))
+    if (CheckedPtr client = m_client)
         client->closeFullScreenManager();
+}
+
+void WebFullScreenManagerProxy::detachFromClient()
+{
+    close();
+    m_client = nullptr;
 }
 
 bool WebFullScreenManagerProxy::isFullScreen()
@@ -228,7 +232,7 @@ bool WebFullScreenManagerProxy::blocksReturnToFullscreenFromPictureInPicture() c
     return m_blocksReturnToFullscreenFromPictureInPicture;
 }
 
-void WebFullScreenManagerProxy::enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&& mediaDetails)
+void WebFullScreenManagerProxy::enterFullScreen(bool blocksReturnToFullscreenFromPictureInPicture, FullScreenMediaDetails&& mediaDetails, CompletionHandler<void(bool)>&& completionHandler)
 {
     m_blocksReturnToFullscreenFromPictureInPicture = blocksReturnToFullscreenFromPictureInPicture;
 #if PLATFORM(IOS_FAMILY)
@@ -247,11 +251,15 @@ void WebFullScreenManagerProxy::enterFullScreen(bool blocksReturnToFullscreenFro
 
     auto mediaDimensions = mediaDetails.mediaDimensions;
     if (CheckedPtr client = m_client)
-        client->enterFullScreen(mediaDimensions);
+        client->enterFullScreen(mediaDimensions, WTFMove(completionHandler));
+    else
+        completionHandler(false);
 #else
     UNUSED_PARAM(mediaDetails);
     if (CheckedPtr client = m_client)
-        client->enterFullScreen();
+        client->enterFullScreen(WTFMove(completionHandler));
+    else
+        completionHandler(false);
 #endif
 }
 

@@ -32,7 +32,6 @@
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkSession.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebSharedWorker.h"
 #include "WebSharedWorkerObjectConnectionMessages.h"
 #include "WebSharedWorkerServer.h"
@@ -97,7 +96,7 @@ NetworkSession* WebSharedWorkerServerConnection::session()
 
 void WebSharedWorkerServerConnection::requestSharedWorker(WebCore::SharedWorkerKey&& sharedWorkerKey, WebCore::SharedWorkerObjectIdentifier sharedWorkerObjectIdentifier, WebCore::TransferredMessagePort&& port, WebCore::WorkerOptions&& workerOptions)
 {
-    MESSAGE_CHECK(protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorkerKey.origin.topOrigin.host())));
+    MESSAGE_CHECK(protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorkerKey.origin.topOrigin.host())) != NetworkProcess::AllowCookieAccess::Terminate);
     MESSAGE_CHECK(sharedWorkerObjectIdentifier.processIdentifier() == m_webProcessIdentifier);
     MESSAGE_CHECK(sharedWorkerKey.name == workerOptions.name);
     CONNECTION_RELEASE_LOG("requestSharedWorker: sharedWorkerObjectIdentifier=%" PUBLIC_LOG_STRING, sharedWorkerObjectIdentifier.toString().utf8().data());

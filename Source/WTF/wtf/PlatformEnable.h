@@ -264,10 +264,6 @@
 #define ENABLE_INLINE_PATH_DATA 0
 #endif
 
-#if !defined(ENABLE_INPUT_TYPE_COLOR)
-#define ENABLE_INPUT_TYPE_COLOR 1
-#endif
-
 #if !defined(ENABLE_INPUT_TYPE_DATE)
 #define ENABLE_INPUT_TYPE_DATE 0
 #endif
@@ -848,6 +844,11 @@
 #define ENABLE_YARR_JIT_UNICODE_EXPRESSIONS 1
 #endif
 
+/* Enables an optimiztion to advance two codepoints when we fail to match a non-BMP character */
+#if ENABLE(YARR_JIT) && CPU(ARM64)
+#define ENABLE_YARR_JIT_UNICODE_CAN_INCREMENT_INDEX_FOR_NON_BMP 1
+#endif
+
 /* If either the JIT or the RegExp JIT is enabled, then the Assembler must be
    enabled as well: */
 #if ENABLE(JIT) || ENABLE(YARR_JIT) || !ENABLE(C_LOOP)
@@ -936,7 +937,7 @@
    that executes each opcode. It cannot be supported by the CLoop since there's no way to embed the
    OpcodeID word in the CLoop's switch statement cases. It is also currently not implemented for MSVC.
 */
-#if !defined(ENABLE_LLINT_EMBEDDED_OPCODE_ID) && !ENABLE(C_LOOP) && !COMPILER(MSVC) && (CPU(X86) || CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && OS(DARWIN)) || CPU(RISCV64))
+#if !defined(ENABLE_LLINT_EMBEDDED_OPCODE_ID) && !ENABLE(C_LOOP) && (CPU(X86) || CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && OS(DARWIN)) || CPU(RISCV64))
 #define ENABLE_LLINT_EMBEDDED_OPCODE_ID 1
 #endif
 

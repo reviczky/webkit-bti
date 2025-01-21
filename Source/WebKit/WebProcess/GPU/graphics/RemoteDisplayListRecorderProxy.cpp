@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,7 +34,6 @@
 #include "RemoteRenderingBackendProxy.h"
 #include "SharedVideoFrame.h"
 #include "StreamClientConnection.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebProcess.h"
 #include <WebCore/DisplayList.h>
 #include <WebCore/DisplayListDrawingContext.h>
@@ -93,7 +92,7 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
 
 ALWAYS_INLINE RefPtr<IPC::StreamClientConnection> RemoteDisplayListRecorderProxy::connection() const
 {
-    auto* backend = m_renderingBackend.get();
+    RefPtr backend = m_renderingBackend.get();
     if (UNLIKELY(!backend))
         return nullptr;
     return backend->connection();
@@ -101,7 +100,7 @@ ALWAYS_INLINE RefPtr<IPC::StreamClientConnection> RemoteDisplayListRecorderProxy
 
 void RemoteDisplayListRecorderProxy::didBecomeUnresponsive() const
 {
-    auto* backend = m_renderingBackend.get();
+    RefPtr backend = m_renderingBackend.get();
     if (UNLIKELY(!backend))
         return;
     backend->didBecomeUnresponsive();
@@ -260,19 +259,14 @@ void RemoteDisplayListRecorderProxy::recordDrawFilteredImageBuffer(ImageBuffer* 
     send(Messages::RemoteDisplayListRecorder::DrawFilteredImageBuffer(WTFMove(identifier), sourceImageRect, filter));
 }
 
-void RemoteDisplayListRecorderProxy::recordDrawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode mode)
+void RemoteDisplayListRecorderProxy::recordDrawGlyphs(const Font& font, std::span<const GlyphBufferGlyph> glyphs, std::span<const GlyphBufferAdvance> advances, const FloatPoint& localAnchor, FontSmoothingMode mode)
 {
-    send(Messages::RemoteDisplayListRecorder::DrawGlyphs(DisplayList::DrawGlyphs { font, glyphs, advances, count, localAnchor, mode }));
+    send(Messages::RemoteDisplayListRecorder::DrawGlyphs(DisplayList::DrawGlyphs { font, glyphs, advances, localAnchor, mode }));
 }
 
 void RemoteDisplayListRecorderProxy::recordDrawDecomposedGlyphs(const Font& font, const DecomposedGlyphs& decomposedGlyphs)
 {
     send(Messages::RemoteDisplayListRecorder::DrawDecomposedGlyphs(font.renderingResourceIdentifier(), decomposedGlyphs.renderingResourceIdentifier()));
-}
-
-void RemoteDisplayListRecorderProxy::recordDrawDisplayListItems(const Vector<DisplayList::Item>& items, const FloatPoint& destination)
-{
-    send(Messages::RemoteDisplayListRecorder::DrawDisplayListItems(items, destination));
 }
 
 void RemoteDisplayListRecorderProxy::recordDrawImageBuffer(ImageBuffer& imageBuffer, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
@@ -559,6 +553,24 @@ void RemoteDisplayListRecorderProxy::applyDeviceScaleFactor(float scaleFactor)
     send(Messages::RemoteDisplayListRecorder::ApplyDeviceScaleFactor(scaleFactor));
 }
 
+void RemoteDisplayListRecorderProxy::beginPage(const IntSize& pageSize)
+{
+    appendStateChangeItemIfNecessary();
+    send(Messages::RemoteDisplayListRecorder::BeginPage(pageSize));
+}
+
+void RemoteDisplayListRecorderProxy::endPage()
+{
+    appendStateChangeItemIfNecessary();
+    send(Messages::RemoteDisplayListRecorder::EndPage());
+}
+
+void RemoteDisplayListRecorderProxy::setURLForRect(const URL& link, const FloatRect& destRect)
+{
+    appendStateChangeItemIfNecessary();
+    send(Messages::RemoteDisplayListRecorder::SetURLForRect(link, destRect));
+}
+
 bool RemoteDisplayListRecorderProxy::recordResourceUse(NativeImage& image)
 {
     if (UNLIKELY(!m_renderingBackend)) {
@@ -572,15 +584,18 @@ bool RemoteDisplayListRecorderProxy::recordResourceUse(NativeImage& image)
 
 bool RemoteDisplayListRecorderProxy::recordResourceUse(ImageBuffer& imageBuffer)
 {
-    if (UNLIKELY(!m_renderingBackend)) {
+    RefPtr renderingBackend = m_renderingBackend.get();
+    if (UNLIKELY(!renderingBackend)) {
         ASSERT_NOT_REACHED();
         return false;
     }
 
-    if (!m_renderingBackend->isCached(imageBuffer))
+    if (!renderingBackend->isCached(imageBuffer)) {
+        LOG_WITH_STREAM(DisplayLists, stream << "RemoteDisplayListRecorderProxy::recordResourceUse - failed to record use of image buffer " << imageBuffer.renderingResourceIdentifier());
         return false;
+    }
 
-    m_renderingBackend->remoteResourceCacheProxy().recordImageBufferUse(imageBuffer);
+    renderingBackend->remoteResourceCacheProxy().recordImageBufferUse(imageBuffer);
     return true;
 }
 
@@ -641,7 +656,8 @@ bool RemoteDisplayListRecorderProxy::recordResourceUse(Filter& filter)
 
 RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createImageBuffer(const FloatSize& size, float resolutionScale, const DestinationColorSpace& colorSpace, std::optional<RenderingMode> renderingMode, std::optional<RenderingMethod> renderingMethod) const
 {
-    if (UNLIKELY(!m_renderingBackend)) {
+    RefPtr renderingBackend = m_renderingBackend.get();
+    if (UNLIKELY(!renderingBackend)) {
         ASSERT_NOT_REACHED();
         return nullptr;
     }
@@ -651,22 +667,18 @@ RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createImageBuffer(const Floa
 
     // FIXME: Ideally we'd plumb the purpose through for callers of GraphicsContext::createImageBuffer().
     RenderingPurpose purpose = RenderingPurpose::Unspecified;
-    // FIXME: Use purpose to decide the acceleration status and remove this.
-    OptionSet<ImageBufferOptions> options;
-    if (renderingMode.value_or(this->renderingMode()) == RenderingMode::Accelerated)
-        options.add(ImageBufferOptions::Accelerated);
-    return m_renderingBackend->createImageBuffer(size, purpose, resolutionScale, colorSpace, ImageBufferPixelFormat::BGRA8, options);
+    return renderingBackend->createImageBuffer(size, renderingMode.value_or(this->renderingModeForCompatibleBuffer()), purpose, resolutionScale, colorSpace, ImageBufferPixelFormat::BGRA8);
 }
 
 RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createAlignedImageBuffer(const FloatSize& size, const DestinationColorSpace& colorSpace, std::optional<RenderingMethod> renderingMethod) const
 {
-    auto renderingMode = !renderingMethod ? this->renderingMode() : RenderingMode::Unaccelerated;
+    auto renderingMode = !renderingMethod ? this->renderingModeForCompatibleBuffer() : RenderingMode::Unaccelerated;
     return GraphicsContext::createScaledImageBuffer(size, scaleFactor(), colorSpace, renderingMode, renderingMethod);
 }
 
 RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createAlignedImageBuffer(const FloatRect& rect, const DestinationColorSpace& colorSpace, std::optional<RenderingMethod> renderingMethod) const
 {
-    auto renderingMode = !renderingMethod ? this->renderingMode() : RenderingMode::Unaccelerated;
+    auto renderingMode = !renderingMethod ? this->renderingModeForCompatibleBuffer() : RenderingMode::Unaccelerated;
     return GraphicsContext::createScaledImageBuffer(rect, scaleFactor(), colorSpace, renderingMode, renderingMethod);
 }
 

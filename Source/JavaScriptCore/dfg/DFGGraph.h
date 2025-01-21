@@ -75,24 +75,36 @@ using SSADominators = Dominators<SSACFG>;
 using CPSNaturalLoops = NaturalLoops<CPSCFG>;
 using SSANaturalLoops = NaturalLoops<SSACFG>;
 
-#define DFG_NODE_DO_TO_CHILDREN(graph, node, thingToDo) do {            \
-        Node* _node = (node);                                           \
-        if (_node->flags() & NodeHasVarArgs) {                          \
-            for (unsigned _childIdx = _node->firstChild();              \
-                _childIdx < _node->firstChild() + _node->numChildren(); \
-                _childIdx++) {                                          \
-                if (!!(graph).m_varArgChildren[_childIdx])              \
-                    thingToDo(_node, (graph).m_varArgChildren[_childIdx]); \
-            }                                                           \
-        } else {                                                        \
+#define APPLY_THING_TO_DO(node, edge, thingToDo) thingToDo(node, edge);
+#define APPLY_THING_TO_DO_WITH_CHECK(node, edge, thingToDo) \
+    if (thingToDo(node, edge) == IterationStatus::Done)     \
+        return;
+
+#define DFG_NODE_DO_TO_CHILDREN_COMMON(graph, node, thingToDo, THING_TO_DO)                 \
+    do {                                                                                    \
+        Node* _node = (node);                                                               \
+        if (_node->flags() & NodeHasVarArgs) {                                              \
+            for (unsigned _childIdx = _node->firstChild();                                  \
+                 _childIdx < _node->firstChild() + _node->numChildren();                    \
+                 _childIdx++) {                                                             \
+                if (!!(graph).m_varArgChildren[_childIdx])                                  \
+                    THING_TO_DO(_node, (graph).m_varArgChildren[_childIdx], thingToDo)      \
+            }                                                                               \
+        } else {                                                                            \
             for (unsigned _edgeIndex = 0; _edgeIndex < AdjacencyList::Size; _edgeIndex++) { \
-                Edge& _edge = _node->children.child(_edgeIndex);        \
-                if (!_edge)                                             \
-                    break;                                              \
-                thingToDo(_node, _edge);                                \
-            }                                                           \
-        }                                                               \
+                Edge& _edge = _node->children.child(_edgeIndex);                            \
+                if (!_edge)                                                                 \
+                    break;                                                                  \
+                THING_TO_DO(_node, _edge, thingToDo)                                        \
+            }                                                                               \
+        }                                                                                   \
     } while (false)
+
+#define DFG_NODE_DO_TO_CHILDREN(graph, node, thingToDo) \
+    DFG_NODE_DO_TO_CHILDREN_COMMON(graph, node, thingToDo, APPLY_THING_TO_DO)
+
+#define DFG_NODE_DO_TO_CHILDREN_WITH_CHECK(graph, node, thingToDo) \
+    DFG_NODE_DO_TO_CHILDREN_COMMON(graph, node, thingToDo, APPLY_THING_TO_DO_WITH_CHECK)
 
 #define DFG_ASSERT(graph, node, assertion, ...) do {                    \
         if (!!(assertion))                                              \
@@ -217,7 +229,12 @@ public:
         // have a replacement.
         ASSERT(!child->replacement());
     }
-    
+
+    Node* cloneAndAdd(const Node& node)
+    {
+        return m_nodes.cloneAndAdd(node);
+    }
+
     template<typename... Params>
     Node* addNode(Params... params)
     {
@@ -780,6 +797,29 @@ public:
     
         doToChildrenWithNode(node, ForwardingFunc(functor));
     }
+
+    template<typename ChildFunctor>
+    ALWAYS_INLINE void doToChildrenWithCheck(Node* node, const ChildFunctor& functor)
+    {
+        class ForwardingFunc {
+        public:
+            ForwardingFunc(const ChildFunctor& functor)
+                : m_functor(functor)
+            {
+            }
+
+            // This is a manually written func because we want ALWAYS_INLINE.
+            ALWAYS_INLINE IterationStatus operator()(Node*, Edge& edge) const
+            {
+                return m_functor(edge);
+            }
+
+        private:
+            const ChildFunctor& m_functor;
+        };
+
+        DFG_NODE_DO_TO_CHILDREN_WITH_CHECK(*this, node, ForwardingFunc(functor));
+    }
     
     bool uses(Node* node, Node* child)
     {
@@ -1246,7 +1286,7 @@ public:
     Bag<BitVector> m_bitVectors;
     Vector<InlineVariableData, 4> m_inlineVariableData;
     UncheckedKeyHashMap<CodeBlock*, std::unique_ptr<FullBytecodeLiveness>> m_bytecodeLiveness;
-    HashSet<std::pair<JSObject*, PropertyOffset>> m_safeToLoad;
+    UncheckedKeyHashSet<std::pair<JSObject*, PropertyOffset>> m_safeToLoad;
     Vector<Ref<Snippet>> m_domJITSnippets;
     std::unique_ptr<CPSDominators> m_cpsDominators;
     std::unique_ptr<SSADominators> m_ssaDominators;
@@ -1273,8 +1313,8 @@ public:
     UncheckedKeyHashMap<unsigned, BytecodeIndex> m_entrypointIndexToCatchBytecodeIndex;
     Vector<CatchEntrypointData> m_catchEntrypoints;
 
-    HashSet<String> m_localStrings;
-    HashSet<String> m_copiedStrings;
+    UncheckedKeyHashSet<String> m_localStrings;
+    UncheckedKeyHashSet<String> m_copiedStrings;
 
 #if USE(JSVALUE32_64)
     UncheckedKeyHashMap<GenericHashKey<int64_t>, double*> m_doubleConstantsMap;
@@ -1302,8 +1342,8 @@ public:
     RegisteredStructure stringStructure;
     RegisteredStructure symbolStructure;
 
-    HashSet<Node*> m_slowGetByVal;
-    HashSet<Node*> m_slowPutByVal;
+    UncheckedKeyHashSet<Node*> m_slowGetByVal;
+    UncheckedKeyHashSet<Node*> m_slowPutByVal;
 
 private:
     template<typename Visitor> void visitChildrenImpl(Visitor&);

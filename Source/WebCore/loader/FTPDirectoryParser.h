@@ -70,6 +70,7 @@
 
 #pragma once
 
+#include <wtf/StdLibExtras.h>
 #include <wtf/text/WTFString.h>
 
 #include <time.h>
@@ -83,8 +84,6 @@
 #define SUPPORT_OS2  /* Support for IBM TCP/IP for OS/2 - FTP Server */
 #define SUPPORT_W16  /* Support for win16 hosts: SuperTCP or NetManage Chameleon */
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 typedef struct tm FTPTime;
@@ -97,7 +96,7 @@ struct ListState {
         , carryBufferLength(0)
         , numLines(0)
     { 
-        memset(&nowFTPTime, 0, sizeof(FTPTime));
+        zeroBytes(nowFTPTime);
     }
     
     double      now;               /* needed for year determination */
@@ -128,26 +127,18 @@ struct ListResult
     {
         valid = false;
         type = FTPJunkEntry;
-        filename = nullptr;
-        filenameLength = 0;
-        linkname = nullptr;
-        linknameLength = 0;
+        filename = { };
+        linkname = { };
         fileSize = { };
         caseSensitive = false;
-        memset(&modifiedTime, 0, sizeof(FTPTime));
+        zeroBytes(modifiedTime);
     }
-
-    std::span<const char> filenameSpan() const { return { filename, filenameLength }; }
-    std::span<const char> linknameSpan() const { return { linkname, linknameLength }; }
     
     bool valid;
     FTPEntryType type;        
     
-    const char* filename; // FIXME: Should be stored as a std::span.
-    uint32_t filenameLength;
-    
-    const char* linkname; // FIXME: Should be stored as a std::span.
-    uint32_t linknameLength;
+    std::span<const char> filename;
+    std::span<const char> linkname;
     
     String fileSize;      
     FTPTime modifiedTime; 
@@ -157,5 +148,3 @@ struct ListResult
 FTPEntryType parseOneFTPLine(const char* inputLine, ListState&, ListResult&);
                  
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

@@ -25,11 +25,13 @@
 #include "AudioSampleFormat.h"
 #include "GStreamerCommon.h"
 #include "GUniquePtrGStreamer.h"
+#include "MediaSampleGStreamer.h"
 #include "SharedBuffer.h"
 #include "WebCodecsAudioDataAlgorithms.h"
 #include <gst/audio/audio-converter.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/text/StringCommon.h>
 
 GST_DEBUG_CATEGORY(webkit_audio_data_debug);
 #define GST_CAT_DEFAULT webkit_audio_data_debug
@@ -75,6 +77,12 @@ static std::pair<GstAudioFormat, GstAudioLayout> convertAudioSampleFormatToGStre
     }
     RELEASE_ASSERT_NOT_REACHED();
     return { GST_AUDIO_FORMAT_UNKNOWN, GST_AUDIO_LAYOUT_INTERLEAVED };
+}
+
+Ref<PlatformRawAudioData> PlatformRawAudioData::create(Ref<MediaSample>&& sample)
+{
+    ASSERT(sample->platformSample().type == PlatformSample::GStreamerSampleType);
+    return PlatformRawAudioDataGStreamer::create(GRefPtr { sample->platformSample().sample.gstSample });
 }
 
 RefPtr<PlatformRawAudioData> PlatformRawAudioData::create(std::span<const uint8_t> sourceData, AudioSampleFormat format, float sampleRate, int64_t timestamp, size_t numberOfFrames, size_t numberOfChannels)
@@ -157,8 +165,8 @@ size_t PlatformRawAudioDataGStreamer::numberOfChannels() const
 
 size_t PlatformRawAudioDataGStreamer::numberOfFrames() const
 {
-    auto totalFrames = gst_buffer_get_size(gst_sample_get_buffer(m_sample.get())) / GST_AUDIO_INFO_BPS(&m_info);
-    return totalFrames / numberOfChannels();
+    auto totalSamples = gst_buffer_get_size(gst_sample_get_buffer(m_sample.get())) / GST_AUDIO_INFO_BPS(&m_info);
+    return totalSamples / numberOfChannels();
 }
 
 std::optional<uint64_t> PlatformRawAudioDataGStreamer::duration() const
@@ -225,7 +233,7 @@ void PlatformRawAudioData::copyTo(std::span<uint8_t> destination, AudioSampleFor
 
     GUniquePtr<GstAudioInfo> sourceInfo(gst_audio_info_copy(self.info()));
     GUniquePtr<char> key(gst_info_strdup_printf("%" GST_PTR_FORMAT ";%" GST_PTR_FORMAT, gst_sample_get_caps(self.sample()), outputCaps.get()));
-    auto converter = getAudioConvertedForFormat(StringView { std::span { key.get(), strlen(key.get()) } }, *sourceInfo.get(), destinationInfo);
+    auto converter = getAudioConvertedForFormat(StringView { span(key.get()) }, *sourceInfo.get(), destinationInfo);
 
     auto inFrames = gst_buffer_get_size(gst_sample_get_buffer(self.sample())) / GST_AUDIO_INFO_BPF(sourceInfo.get());
     auto outFrames = gst_audio_converter_get_out_frames(converter, inFrames);

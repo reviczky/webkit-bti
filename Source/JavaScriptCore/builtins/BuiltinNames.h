@@ -91,6 +91,7 @@ namespace JSC {
     macro(set) \
     macro(clear) \
     macro(context) \
+    macro(defer) \
     macro(delete) \
     macro(size) \
     macro(shift) \
@@ -118,7 +119,6 @@ namespace JSC {
     macro(this) \
     macro(toIntegerOrInfinity) \
     macro(toLength) \
-    macro(importMapStatus) \
     macro(importInRealm) \
     macro(evalFunction) \
     macro(evalInRealm) \
@@ -203,7 +203,6 @@ namespace JSC {
     macro(isRemoteFunction) \
     macro(arrayFromFastFillWithUndefined) \
     macro(arrayFromFastFillWithEmpty) \
-    macro(arraySort) \
     macro(jsonParse) \
     macro(jsonStringify) \
     macro(String) \

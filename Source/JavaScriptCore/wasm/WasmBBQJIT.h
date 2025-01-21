@@ -865,6 +865,7 @@ public:
     static constexpr bool shouldFuseBranchCompare = is64Bit();
 
     static constexpr bool tierSupportsSIMD = true;
+    static constexpr bool validateFunctionBodySize = true;
 
     BBQJIT(CCallHelpers& jit, const TypeDefinition& signature, BBQCallee& callee, const FunctionData& function, FunctionCodeIndex functionIndex, const ModuleInformation& info, Vector<UnlinkedWasmToWasmCall>& unlinkedWasmToWasmCalls, MemoryMode mode, InternalFunction* compilation, std::optional<bool> hasExceptionHandlers, unsigned loopIndexForOSREntry);
 
@@ -1971,6 +1972,8 @@ private:
     Location bind(Value value, Location loc);
 
     void unbind(Value value, Location loc);
+
+    void unbindAllRegisters();
 
     template<typename Register>
     static Register fromJSCReg(Reg reg)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2024-2025 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,30 +27,56 @@
 
 #include "AnchorPositionEvaluator.h"
 #include "CSSCalcSymbolTable.h"
+#include "CSSCalcTree+ContainerProgressEvaluator.h"
 #include "CSSCalcTree+Copy.h"
 #include "CSSCalcTree+Evaluation.h"
+#include "CSSCalcTree+MediaProgressEvaluator.h"
 #include "CSSCalcTree+NumericIdentity.h"
 #include "CSSCalcTree+Traversal.h"
 #include "CSSCalcTree.h"
 #include "CSSPrimitiveValue.h"
 #include "CalculationCategory.h"
 #include "CalculationExecutor.h"
+#include "ContainerQueryFeatures.h"
+#include "MediaQueryFeatures.h"
 #include "RenderStyle.h"
 #include "RenderStyleInlines.h"
 #include "StyleBuilderState.h"
+#include "StyleLengthResolution.h"
 #include <wtf/StdLibExtras.h>
 
 namespace WebCore {
 namespace CSSCalc {
 
+static auto copyAndSimplify(const MQ::MediaProgressProviding*, const SimplificationOptions&) -> const MQ::MediaProgressProviding*;
+static auto copyAndSimplify(const CQ::ContainerProgressProviding*, const SimplificationOptions&) -> const CQ::ContainerProgressProviding*;
+static auto copyAndSimplify(const Random::CachingOptions&, const SimplificationOptions&) -> Random::CachingOptions;
+static auto copyAndSimplify(const AtomString&, const SimplificationOptions&) -> AtomString;
+static auto copyAndSimplify(const CSS::Keyword::None&, const SimplificationOptions&) -> CSS::Keyword::None;
 static auto copyAndSimplify(const Children&, const SimplificationOptions&) -> Children;
-static auto copyAndSimplify(const std::optional<Child>&, const SimplificationOptions&) -> std::optional<Child>;
-static auto copyAndSimplify(const CSS::NoneRaw&, const SimplificationOptions&) -> CSS::NoneRaw;
-static auto copyAndSimplify(const ChildOrNone&, const SimplificationOptions&) -> ChildOrNone;
+template<typename T>
+static auto copyAndSimplify(const std::optional<T>&, const SimplificationOptions&) -> std::optional<T>;
+template<typename... Ts>
+static auto copyAndSimplify(const std::variant<Ts...>&, const SimplificationOptions&) -> std::variant<Ts...>;
 
 template<typename Op, typename... Args> static double executeMathOperation(Args&&... args)
 {
     return Calculation::executeOperation<typename Op::Base>(std::forward<Args>(args)...);
+}
+
+template<typename... F> static decltype(auto) switchTogether(const Child& a, const Child& b, F&&... f)
+{
+    auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
+    using ResultType = decltype(visitor(std::declval<Number>(), std::declval<Number>()));
+
+    if (a.index() != b.index())
+        return visitor(std::nullopt, std::nullopt);
+
+    return WTF::switchOn(a,
+        [&]<typename T>(const T& aT) -> ResultType {
+            return visitor(aT, std::get<T>(b));
+        }
+    );
 }
 
 // MARK: Predicate: percentageResolveToDimension
@@ -95,9 +121,9 @@ static bool unitsMatch(const CanonicalDimension& a, const CanonicalDimension& b,
     return a.dimension == b.dimension;
 }
 
-static bool unitsMatch(const NonCanonicalDimension& a, const NonCanonicalDimension& b, const SimplificationOptions& options)
+static bool unitsMatch(const NonCanonicalDimension& a, const NonCanonicalDimension& b, const SimplificationOptions&)
 {
-    return a.unit == b.unit || options.allowNonMatchingUnits;
+    return a.unit == b.unit;
 }
 
 // MARK: Predicate: magnitudeComparable
@@ -139,9 +165,9 @@ constexpr bool fullyResolved(const CanonicalDimension&, const SimplificationOpti
     return true;
 }
 
-constexpr bool fullyResolved(const NonCanonicalDimension&, const SimplificationOptions& options)
+constexpr bool fullyResolved(const NonCanonicalDimension&, const SimplificationOptions&)
 {
-    return options.allowUnresolvedUnits;
+    return false;
 }
 
 std::optional<CanonicalDimension> canonicalize(NonCanonicalDimension root, const std::optional<CSSToLengthConversionData>& conversionData)
@@ -150,10 +176,12 @@ std::optional<CanonicalDimension> canonicalize(NonCanonicalDimension root, const
         return CanonicalDimension { .value = value, .dimension = dimension };
     };
 
-    auto tryMakeCanonical = [&](double value, CSSUnitType unit) -> std::optional<CanonicalDimension> {
+    auto tryMakeCanonical = [&](double value, CSS::LengthUnit lengthUnit) -> std::optional<CanonicalDimension> {
         if (conversionData) {
-            // We are only interested in canonicalizing to `px`, not adjusting for zoom, which will be handled later.
-            return CanonicalDimension { .value = CSSPrimitiveValue::computeNonCalcLengthDouble(*conversionData, unit, value) / conversionData->style()->usedZoom(), .dimension = CanonicalDimension::Dimension::Length };
+            // We are only interested in canonicalizing to `px`, not adjusting for zoom, which will be handled later. When computing font-size, zoom is not applied in the same way, so must be special cased here.
+            if (conversionData->computingFontSize())
+                return CanonicalDimension { .value = Style::computeNonCalcLengthDouble(value, lengthUnit, *conversionData), .dimension = CanonicalDimension::Dimension::Length };
+            return CanonicalDimension { .value = Style::computeNonCalcLengthDouble(value, lengthUnit, *conversionData) / conversionData->style()->usedZoom(), .dimension = CanonicalDimension::Dimension::Length };
         }
         return std::nullopt;
     };
@@ -216,7 +244,7 @@ std::optional<CanonicalDimension> canonicalize(NonCanonicalDimension root, const
     case CSSUnitType::CSS_CQB:
     case CSSUnitType::CSS_CQMIN:
     case CSSUnitType::CSS_CQMAX:
-        return tryMakeCanonical(root.value, root.unit);
+        return tryMakeCanonical(root.value, *CSS::toLengthUnit(root.unit));
 
     // <angle>
     case CSSUnitType::CSS_RAD:
@@ -263,10 +291,8 @@ std::optional<CanonicalDimension> canonicalize(NonCanonicalDimension root, const
     case CSSUnitType::CSS_IDENT:
     case CSSUnitType::CSS_PROPERTY_ID:
     case CSSUnitType::CSS_QUIRKY_EM:
-    case CSSUnitType::CSS_RGBCOLOR:
     case CSSUnitType::CSS_STRING:
     case CSSUnitType::CSS_UNKNOWN:
-    case CSSUnitType::CSS_UNRESOLVED_COLOR:
     case CSSUnitType::CSS_URI:
     case CSSUnitType::CSS_VALUE_ID:
     case CSSUnitType::CustomIdent:
@@ -282,18 +308,14 @@ std::optional<CanonicalDimension> canonicalize(NonCanonicalDimension root, const
 
 template<typename Op> static std::optional<Child> simplifyForOperation(Child& a, Child& b, const SimplificationOptions& options)
 {
-    if (a.index() != b.index())
-        return std::nullopt;
-
-    return WTF::switchOn(a,
-        [&]<Numeric T>(T& numericA) -> std::optional<Child> {
-            auto& numericB = std::get<T>(b);
+    return switchTogether(a, b,
+        [&]<Numeric T>(const T& numericA, const T& numericB) -> std::optional<Child> {
             if (!unitsMatch(numericA, numericB, options) || !fullyResolved(numericA, options))
                 return std::nullopt;
 
             return makeChildWithValueBasedOn(executeMathOperation<Op>(numericA.value, numericB.value), numericA);
         },
-        [](auto&) -> std::optional<Child> {
+        [](const auto&, const auto&) -> std::optional<Child> {
             return std::nullopt;
         }
     );
@@ -301,18 +323,14 @@ template<typename Op> static std::optional<Child> simplifyForOperation(Child& a,
 
 template<typename Op, typename Completion> static std::optional<Child> simplifyForOperationWithCompletion(Child& a, Child& b, const SimplificationOptions& options, Completion&& completion)
 {
-    if (a.index() != b.index())
-        return std::nullopt;
-
-    return WTF::switchOn(a,
-        [&]<Numeric T>(T& numericA) -> std::optional<Child> {
-            auto& numericB = std::get<T>(b);
+    return switchTogether(a, b,
+        [&]<Numeric T>(const T& numericA, const T& numericB) -> std::optional<Child> {
             if (!unitsMatch(numericA, numericB, options) || !fullyResolved(numericA, options))
                 return std::nullopt;
 
             return completion(executeMathOperation<Op>(numericA.value, numericB.value));
         },
-        [](auto&) -> std::optional<Child> {
+        [](const auto&, const auto&) -> std::optional<Child> {
             return std::nullopt;
         }
     );
@@ -963,8 +981,8 @@ std::optional<Child> simplify(Max& root, const SimplificationOptions& options)
 
 std::optional<Child> simplify(Clamp& root, const SimplificationOptions& options)
 {
-    auto minIsNone = std::holds_alternative<CSS::NoneRaw>(root.min);
-    auto maxIsNone = std::holds_alternative<CSS::NoneRaw>(root.max);
+    auto minIsNone = std::holds_alternative<CSS::Keyword::None>(root.min);
+    auto maxIsNone = std::holds_alternative<CSS::Keyword::None>(root.max);
 
     if (minIsNone && maxIsNone) {
         // - clamp(none, VAL, none) is equivalent to just calc(VAL).
@@ -1108,14 +1126,11 @@ std::optional<Child> simplify(Pow& root, const SimplificationOptions&)
     // NOTE: `a` and `b` have been type checked by this point to be `<number>`, though they may not
     // be able to be fully resolved yet.
 
-    if (root.a.index() != root.b.index())
-        return std::nullopt;
-
-    return WTF::switchOn(root.a,
-        [&](const Number& a) -> std::optional<Child> {
-            return makeChild(Number { .value = executeMathOperation<Pow>(a.value, std::get<Number>(root.b).value) });
+    return switchTogether(root.a, root.b,
+        [&](const Number& a, const Number& b) -> std::optional<Child> {
+            return makeChild(Number { .value = executeMathOperation<Pow>(a.value, b.value) });
         },
-        [](const auto&) -> std::optional<Child> {
+        [](const auto&, const auto&) -> std::optional<Child> {
             return std::nullopt;
         }
     );
@@ -1219,14 +1234,11 @@ std::optional<Child> simplify(Log& root, const SimplificationOptions&)
     // be able to be fully resolved yet.
 
     if (root.b) {
-        if (root.a.index() != root.b->index())
-            return std::nullopt;
-
-        return WTF::switchOn(root.a,
-            [&](const Number& a) -> std::optional<Child> {
-                return makeChild(Number { .value = executeMathOperation<Log>(a.value, std::get<Number>(*root.b).value) });
+        return switchTogether(root.a, *root.b,
+            [&](const Number& a, const Number& b) -> std::optional<Child> {
+                return makeChild(Number { .value = executeMathOperation<Log>(a.value, b.value) });
             },
-            [](const auto&) -> std::optional<Child> {
+            [](const auto&, const auto&) -> std::optional<Child> {
                 return std::nullopt;
             }
         );
@@ -1285,22 +1297,131 @@ std::optional<Child> simplify(Sign& root, const SimplificationOptions& options)
     );
 }
 
-std::optional<Child> simplify(Progress& root, const SimplificationOptions& options)
+std::optional<Child> simplify(Random& root, const SimplificationOptions& options)
 {
-    if (root.progress.index() != root.from.index() || root.from.index() != root.to.index())
-        return std::nullopt;
+    if (!options.conversionData || !options.conversionData->styleBuilderState())
+        return { };
+    if (root.cachingOptions.perElement && !options.conversionData->styleBuilderState()->element())
+        return { };
+    if (root.min.index() != root.max.index() || (root.step && root.step->index() != root.min.index()))
+        return { };
 
-    return WTF::switchOn(root.progress,
-        [&]<Numeric T>(T& numericProgress) -> std::optional<Child> {
-            auto& numericFrom = std::get<T>(root.from);
-            auto& numericTo = std::get<T>(root.to);
+    return WTF::switchOn(root.min,
+        [&]<Numeric T>(T& numericMin) -> std::optional<Child> {
+            auto numericMax = std::get<T>(root.max);
 
-            if (!unitsMatch(numericProgress, numericFrom, options) || !unitsMatch(numericFrom, numericTo, options) || !fullyResolved(numericProgress, options))
+            if (!unitsMatch(numericMin, numericMax, options) || !fullyResolved(numericMin, options))
                 return std::nullopt;
 
-            return makeChild(Number { .value = executeMathOperation<Progress>(numericProgress.value, numericFrom.value, numericTo.value) });
+            std::optional<double> valueStep;
+            if (root.step) {
+                auto numericStep = std::get<T>(*root.step);
+
+                if (!unitsMatch(numericMin, numericStep, options))
+                    return { };
+
+                valueStep = numericStep.value;
+            }
+
+            auto valueMin = numericMin.value;
+            auto valueMax = numericMax.value;
+
+            // RandomKeyMap relies on using NaN for HashTable deleted/empty values but
+            // the result is always NaN if either is NaN, so we can return early here.
+            if (std::isnan(valueMin) || std::isnan(valueMax))
+                return makeChildWithValueBasedOn(std::numeric_limits<double>::quiet_NaN(), numericMin);
+
+            auto keyMap = options.conversionData->styleBuilderState()->randomKeyMap(
+                root.cachingOptions.perElement
+            );
+
+            auto randomUnitInterval = keyMap->lookupUnitInterval(
+                root.cachingOptions.identifier,
+                valueMin,
+                valueMax,
+                valueStep
+            );
+
+            auto result = Calculation::executeOperation<Random::Base>(
+                randomUnitInterval,
+                valueMin,
+                valueMax,
+                valueStep
+            );
+
+            return makeChildWithValueBasedOn(result, numericMin);
         },
         [](auto&) -> std::optional<Child> {
+            return { };
+        }
+    );
+
+    return { };
+}
+
+std::optional<Child> simplify(Progress& root, const SimplificationOptions& options)
+{
+    if (root.value.index() != root.start.index() || root.start.index() != root.end.index())
+        return std::nullopt;
+
+    return WTF::switchOn(root.value,
+        [&]<Numeric T>(T& numericValue) -> std::optional<Child> {
+            auto& numericStart = std::get<T>(root.start);
+            auto& numericEnd = std::get<T>(root.end);
+
+            if (!unitsMatch(numericValue, numericStart, options) || !unitsMatch(numericStart, numericEnd, options) || !fullyResolved(numericValue, options))
+                return std::nullopt;
+
+            return makeChild(Number { .value = executeMathOperation<Progress>(numericValue.value, numericStart.value, numericEnd.value) });
+        },
+        [](auto&) -> std::optional<Child> {
+            return std::nullopt;
+        }
+    );
+}
+
+std::optional<Child> simplify(MediaProgress& root, const SimplificationOptions& options)
+{
+    ASSERT(root.feature->category() == options.category);
+
+    if (!options.conversionData || !options.conversionData->styleBuilderState())
+        return std::nullopt;
+
+    return switchTogether(root.start, root.end,
+        [&]<Numeric T>(const T& start, const T& end) -> std::optional<Child> {
+            if (!unitsMatch(start, end, options) || !fullyResolved(start, options))
+                return std::nullopt;
+
+            Ref document = options.conversionData->styleBuilderState()->document();
+            auto value = evaluateMediaProgress(root, document, *options.conversionData);
+            return makeChild(Number { .value = executeMathOperation<Progress>(value, start.value, end.value) });
+        },
+        [](const auto&, const auto&) -> std::optional<Child> {
+            return std::nullopt;
+        }
+    );
+}
+
+std::optional<Child> simplify(ContainerProgress& root, const SimplificationOptions& options)
+{
+    ASSERT(root.feature->category() == options.category);
+
+    if (!options.conversionData || !options.conversionData->styleBuilderState() || !options.conversionData->styleBuilderState()->element())
+        return std::nullopt;
+
+    return switchTogether(root.start, root.end,
+        [&]<Numeric T>(const T& start, const T& end) -> std::optional<Child> {
+            if (!unitsMatch(start, end, options) || !fullyResolved(start, options))
+                return std::nullopt;
+
+            Ref element = *options.conversionData->styleBuilderState()->element();
+            auto value = evaluateContainerProgress(root, element, *options.conversionData);
+            if (!value)
+                return std::nullopt;
+
+            return makeChild(Number { .value = executeMathOperation<Progress>(*value, start.value, end.value) });
+        },
+        [](const auto&, const auto&) -> std::optional<Child> {
             return std::nullopt;
         }
     );
@@ -1311,7 +1432,12 @@ std::optional<Child> simplify(Anchor& anchor, const SimplificationOptions& optio
     if (!options.conversionData || !options.conversionData->styleBuilderState())
         return { };
 
-    auto evaluationOptions = EvaluationOptions { .conversionData = options.conversionData, .symbolTable = options.symbolTable };
+    auto evaluationOptions = EvaluationOptions {
+        .category = options.category,
+        .range = CSS::All,
+        .conversionData = options.conversionData,
+        .symbolTable = options.symbolTable
+    };
 
     auto result = evaluateWithoutFallback(anchor, evaluationOptions);
     if (!result) {
@@ -1357,26 +1483,46 @@ std::optional<Child> simplify(AnchorSize& anchorSize, const SimplificationOption
 
 // MARK: Copy & Simplify.
 
-CSS::NoneRaw copyAndSimplify(const CSS::NoneRaw& root, const SimplificationOptions&)
+const MQ::MediaProgressProviding* copyAndSimplify(const MQ::MediaProgressProviding* root, const SimplificationOptions&)
 {
     return root;
 }
 
-static ChildOrNone copyAndSimplify(const ChildOrNone& root, const SimplificationOptions& options)
+const CQ::ContainerProgressProviding* copyAndSimplify(const CQ::ContainerProgressProviding* root, const SimplificationOptions&)
 {
-    return WTF::switchOn(root, [&](auto& root) { return ChildOrNone { copyAndSimplify(root, options) }; });
+    return root;
 }
 
-std::optional<Child> copyAndSimplify(const std::optional<Child>& root, const SimplificationOptions& options)
+Random::CachingOptions copyAndSimplify(const Random::CachingOptions& root, const SimplificationOptions&)
+{
+    return root;
+}
+
+AtomString copyAndSimplify(const AtomString& root, const SimplificationOptions&)
+{
+    return root;
+}
+
+CSS::Keyword::None copyAndSimplify(const CSS::Keyword::None& root, const SimplificationOptions&)
+{
+    return root;
+}
+
+Children copyAndSimplify(const Children& children, const SimplificationOptions& options)
+{
+    return WTF::map(children, [&](auto& child) { return copyAndSimplify(child, options); });
+}
+
+template<typename T> auto copyAndSimplify(const std::optional<T>& root, const SimplificationOptions& options) -> std::optional<T>
 {
     if (root)
         return copyAndSimplify(*root, options);
     return std::nullopt;
 }
 
-Children copyAndSimplify(const Children& children, const SimplificationOptions& options)
+template<typename... Ts> auto copyAndSimplify(const std::variant<Ts...>& root, const SimplificationOptions& options) -> std::variant<Ts...>
 {
-    return WTF::map(children, [&](auto& child) { return copyAndSimplify(child, options); });
+    return WTF::switchOn(root, [&](auto& root) { return std::variant<Ts...> { copyAndSimplify(root, options) }; });
 }
 
 template<Leaf Op> static auto copyAndSimplifyChildren(const Op& op, const SimplificationOptions&) -> Op
@@ -1387,6 +1533,26 @@ template<Leaf Op> static auto copyAndSimplifyChildren(const Op& op, const Simpli
 template<typename Op> static auto copyAndSimplifyChildren(const IndirectNode<Op>& root, const SimplificationOptions& options) -> Op
 {
     return WTF::apply([&](const auto& ...x) { return Op { copyAndSimplify(x, options)... }; } , *root);
+}
+
+static auto copyAndSimplifyChildren(const IndirectNode<MediaProgress>& root, const SimplificationOptions& options) -> MediaProgress
+{
+    // Modify the category to match the media-progress() category following non-"math function" rules.
+    // FIXME: Catching cases like this would be a good reason to make non-"math function" nodes distinct, perhaps even using an explicitly nested Tree in some fashion.
+    SimplificationOptions nestedOptions = options;
+    nestedOptions.category = root->feature->category();
+
+    return WTF::apply([&](const auto& ...x) { return MediaProgress { copyAndSimplify(x, nestedOptions)... }; } , *root);
+}
+
+static auto copyAndSimplifyChildren(const IndirectNode<ContainerProgress>& root, const SimplificationOptions& options) -> ContainerProgress
+{
+    // Modify the category to match the container-progress() category following non-"math function" rules.
+    // FIXME: Catching cases like this would be a good reason to make non-"math function" nodes distinct, perhaps even using an explicitly nested Tree in some fashion.
+    SimplificationOptions nestedOptions = options;
+    nestedOptions.category = root->feature->category();
+
+    return WTF::apply([&](const auto& ...x) { return ContainerProgress { copyAndSimplify(x, nestedOptions)... }; } , *root);
 }
 
 static auto copyAndSimplifyChildren(const IndirectNode<Anchor>& anchor, const SimplificationOptions& options) -> Anchor
@@ -1424,11 +1590,33 @@ Tree copyAndSimplify(const Tree& tree, const SimplificationOptions& options)
     return Tree {
         .root = copyAndSimplify(tree.root, options),
         .type = tree.type,
-        .category = tree.category,
         .stage = tree.stage,
-        .range = tree.range,
-        .requiresConversionData = tree.requiresConversionData
+        .requiresConversionData = tree.requiresConversionData,
+        .unique = tree.unique,
     };
+}
+
+// MARK: - Can Simplify
+
+bool canSimplify(const Tree& tree, const SimplificationOptions&)
+{
+    // NOTE: This is a simple and conservative implementation of `canSimplify`. A more precise implementation
+    // is possible by utilizing the provided `SimplificationOptions` if that should be necessary.
+
+    return WTF::switchOn(tree.root,
+        [&](const Number&) -> bool {
+            return false;
+        },
+        [&](const Percentage&) -> bool {
+            return false;
+        },
+        [&](const CanonicalDimension&) -> bool {
+            return false;
+        },
+        [&](auto const&) -> bool {
+            return true;
+        }
+    );
 }
 
 } // namespace CSSCalc

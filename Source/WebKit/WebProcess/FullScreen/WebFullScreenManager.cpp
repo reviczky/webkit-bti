@@ -29,8 +29,9 @@
 #if ENABLE(FULLSCREEN_API)
 
 #include "Connection.h"
+#include "FullScreenMediaDetails.h"
+#include "InjectedBundlePageFullScreenClient.h"
 #include "Logging.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
 #include "WebFullScreenManagerProxyMessages.h"
 #include "WebPage.h"
@@ -246,15 +247,11 @@ FullScreenMediaDetails WebFullScreenManager::getImageMediaDetails(CheckedPtr<Ren
 }
 #endif // ENABLE(QUICKLOOK_FULLSCREEN)
 
-void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element, WebCore::HTMLMediaElementEnums::VideoFullscreenMode mode)
+void WebFullScreenManager::enterFullScreenForElement(WebCore::Element& element, WebCore::HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
-    ASSERT(element);
-    if (!element)
-        return;
+    ALWAYS_LOG(LOGIDENTIFIER, "<", element.tagName(), " id=\"", element.getIdAttribute(), "\">");
 
-    ALWAYS_LOG(LOGIDENTIFIER, "<", element->tagName(), " id=\"", element->getIdAttribute(), "\">");
-
-    setElement(*element);
+    setElement(element);
 
 
     FullScreenMediaDetails mediaDetails;
@@ -267,7 +264,7 @@ void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element, 
 #endif
 
 #if PLATFORM(VISION) && ENABLE(QUICKLOOK_FULLSCREEN)
-    if (CheckedPtr renderImage = dynamicDowncast<RenderImage>(element->renderer()))
+    if (CheckedPtr renderImage = dynamicDowncast<RenderImage>(element.renderer()))
         mediaDetails = getImageMediaDetails(renderImage, IsUpdating::No);
 
     if (m_willUseQuickLookForFullscreen)
@@ -285,7 +282,7 @@ void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element, 
 
         auto mainVideoElementSize = [&]() -> FloatSize {
 #if PLATFORM(VISION)
-            if (!fullscreenElementIsVideoElement && element->document().quirks().shouldDisableFullscreenVideoAspectRatioAdaptiveSizing())
+            if (!fullscreenElementIsVideoElement && element.document().quirks().shouldDisableFullscreenVideoAspectRatioAdaptiveSizing())
                 return { };
 #endif
             return FloatSize(m_mainVideoElement->videoWidth(), m_mainVideoElement->videoHeight());
@@ -299,7 +296,7 @@ void WebFullScreenManager::enterFullScreenForElement(WebCore::Element* element, 
 #endif
 
     m_page->prepareToEnterElementFullScreen();
-    m_page->injectedBundleFullScreenClient().enterFullScreenForElement(m_page.ptr(), element, m_element->document().quirks().blocksReturnToFullscreenFromPictureInPictureQuirk(), mode, WTFMove(mediaDetails));
+    m_page->injectedBundleFullScreenClient().enterFullScreenForElement(m_page.get(), element, m_element->document().quirks().blocksReturnToFullscreenFromPictureInPictureQuirk(), mode, WTFMove(mediaDetails));
 
     if (mode == WebCore::HTMLMediaElementEnums::VideoFullscreenModeInWindow) {
         willEnterFullScreen(mode);
@@ -535,12 +532,19 @@ void WebFullScreenManager::requestExitFullScreen()
         return;
     }
 
-    auto& topDocument = m_element->document().topDocument();
-    if (!topDocument.fullscreenManager().fullscreenElement()) {
+    RefPtr corePage = m_page->protectedCorePage();
+    if (!corePage) {
+        ALWAYS_LOG(LOGIDENTIFIER, "no page, closing");
+        close();
+        return;
+    }
+
+    if (!corePage->topDocumentHasFullscreenElement()) {
         ALWAYS_LOG(LOGIDENTIFIER, "top document not in fullscreen, closing");
         close();
         return;
     }
+
     ALWAYS_LOG(LOGIDENTIFIER);
     m_element->document().fullscreenManager().cancelFullscreen();
 }
@@ -563,7 +567,7 @@ void WebFullScreenManager::saveScrollPosition()
 
 void WebFullScreenManager::restoreScrollPosition()
 {
-    if (auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->corePage()->mainFrame())) {
+    if (RefPtr localMainFrame = m_page->corePage()->localMainFrame()) {
         // Make sure overflow: hidden is unapplied from the root element before restoring.
         localMainFrame->view()->forceLayout();
         localMainFrame->view()->setScrollPosition(m_scrollPosition);

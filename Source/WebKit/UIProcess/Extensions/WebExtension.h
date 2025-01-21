@@ -30,6 +30,7 @@
 #include "APIData.h"
 #include "APIObject.h"
 #include "WebExtensionContentWorldType.h"
+#include "WebExtensionLocalization.h"
 #include "WebExtensionMatchPattern.h"
 #include <WebCore/FloatSize.h>
 #include <WebCore/Icon.h>
@@ -40,6 +41,8 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
+
+#if PLATFORM(COCOA)
 #include <wtf/spi/cocoa/SecuritySPI.h>
 
 OBJC_CLASS NSBundle;
@@ -48,11 +51,7 @@ OBJC_CLASS NSDictionary;
 OBJC_CLASS NSError;
 OBJC_CLASS NSURL;
 OBJC_CLASS WKWebExtension;
-OBJC_CLASS _WKWebExtensionLocalization;
-
-namespace API {
-class Data;
-}
+#endif // PLATFORM(COCOA)
 
 namespace WebKit {
 
@@ -62,7 +61,7 @@ class WebExtension : public API::ObjectImpl<API::Object::Type::WebExtension>, pu
 public:
     using IconCacheEntry = std::variant<RefPtr<WebCore::Icon>, Vector<double>>;
     using IconsCache = HashMap<String, IconCacheEntry>;
-    using Resources = HashMap<String, Ref<API::Data>>;
+    using Resources = HashMap<String, std::variant<String, Ref<API::Data>>>;
 
     template<typename... Args>
     static Ref<WebExtension> create(Args&&... args)
@@ -70,11 +69,14 @@ public:
         return adoptRef(*new WebExtension(std::forward<Args>(args)...));
     }
 
+#if PLATFORM(COCOA)
     explicit WebExtension(NSBundle *appExtensionBundle, NSURL *resourceURL, RefPtr<API::Error>&);
     explicit WebExtension(NSDictionary *manifest, Resources&& = { });
+#endif
+
     explicit WebExtension(Resources&& = { });
 
-    ~WebExtension() { }
+    ~WebExtension();
 
     enum class CacheResult : bool { No, Yes };
     enum class SuppressNotFoundErrors : bool { No, Yes };
@@ -212,18 +214,23 @@ public:
     bool operator==(const WebExtension& other) const { return (this == &other); }
 
     bool manifestParsedSuccessfully();
-    NSDictionary *manifest();
-    RefPtr<const JSON::Object> manifestObject() { return manifestParsedSuccessfully() ? m_manifestJSON->asObject() : nullptr; }
-    Ref<API::Data> serializeManifest();
+    RefPtr<const JSON::Object> manifestObject();
+    RefPtr<API::Data> serializeManifest();
+
+#if PLATFORM(COCOA)
+    NSDictionary *manifestDictionary();
+#endif
 
     double manifestVersion();
     bool supportsManifestVersion(double version) { ASSERT(version > 2); return manifestVersion() >= version; }
 
-    Ref<API::Data> serializeLocalization();
+    RefPtr<API::Data> serializeLocalization();
 
+#if PLATFORM(COCOA)
     NSBundle *bundle() const { return m_bundle.get(); }
     SecStaticCodeRef bundleStaticCode() const;
     NSData *bundleHash() const;
+#endif
 
 #if PLATFORM(MAC)
     bool validateResourceData(NSURL *, NSData *, NSError **);
@@ -236,7 +243,7 @@ public:
     String resourceStringForPath(const String&, RefPtr<API::Error>&, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
     RefPtr<API::Data> resourceDataForPath(const String&, RefPtr<API::Error>&, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
 
-    _WKWebExtensionLocalization *localization();
+    RefPtr<WebExtensionLocalization> localization();
 
     const Vector<String>& supportedLocales();
     const String& defaultLocale();
@@ -269,7 +276,7 @@ public:
     const String& sidebarTitle();
 #endif
 
-    RefPtr<WebCore::Icon> iconForPath(const String&, RefPtr<API::Error>&, WebCore::FloatSize sizeForResizing = { });
+    RefPtr<WebCore::Icon> iconForPath(const String&, RefPtr<API::Error>&, WebCore::FloatSize sizeForResizing = { }, std::optional<double> displayScale = std::nullopt);
 
     size_t bestIconSize(const JSON::Object&, size_t idealPixelSize);
     String pathForBestImage(const JSON::Object&, size_t idealPixelSize);
@@ -340,12 +347,14 @@ public:
 
     Vector<Ref<API::Error>> errors();
 
-#ifdef __OBJC__
+#if PLATFORM(COCOA) && defined(__OBJC__)
     WKWebExtension *wrapper() const { return (WKWebExtension *)API::ObjectImpl<API::Object::Type::WebExtension>::wrapper(); }
 #endif
 
 private:
-    bool parseManifest(NSData *);
+    static String processFileAndExtractZipArchive(const String&);
+
+    bool parseManifest(StringView);
 
     void parseWebAccessibleResourcesVersion3();
     void parseWebAccessibleResourcesVersion2();
@@ -370,7 +379,7 @@ private:
 
     URL resourceFileURLForPath(const String&);
 
-    std::optional<WebExtension::DeclarativeNetRequestRulesetData> parseDeclarativeNetRequestRulesetDictionary(NSDictionary *, RefPtr<API::Error>&);
+    std::optional<WebExtension::DeclarativeNetRequestRulesetData> parseDeclarativeNetRequestRulesetObject(const JSON::Object&, RefPtr<API::Error>&);
 
     InjectedContentVector m_staticInjectedContents;
     WebAccessibleResourcesVector m_webAccessibleResources;
@@ -385,16 +394,19 @@ private:
 
     MatchPatternSet m_externallyConnectableMatchPatterns;
 
+#if PLATFORM(COCOA)
     RetainPtr<NSBundle> m_bundle;
     mutable RetainPtr<SecStaticCodeRef> m_bundleStaticCode;
+#endif
+
     URL m_resourceBaseURL;
-    RetainPtr<NSDictionary> m_manifest;
+    bool m_resourcesAreTemporary { false };
     Ref<const JSON::Value> m_manifestJSON;
     Resources m_resources;
 
     String m_defaultLocale;
     Vector<String> m_supportedLocales;
-    RetainPtr<_WKWebExtensionLocalization> m_localization;
+    RefPtr<WebExtensionLocalization> m_localization;
 
     Vector<Ref<API::Error>> m_errors;
 

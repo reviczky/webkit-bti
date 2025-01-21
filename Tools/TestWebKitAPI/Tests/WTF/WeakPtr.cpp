@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -2714,6 +2714,9 @@ TEST(WTF_WeakPtr, WeakListHashSetInsertBefore)
 
 class MultipleInheritanceBase1 : public CanMakeWeakPtr<MultipleInheritanceBase1> {
 public:
+    MultipleInheritanceBase1() = default;
+    virtual ~MultipleInheritanceBase1() = default;
+
     virtual void meow() = 0;
 
     int dummy; // Prevent empty base class optimization, to make testing more interesting.
@@ -2721,6 +2724,9 @@ public:
 
 class MultipleInheritanceBase2 : public CanMakeWeakPtr<MultipleInheritanceBase2> {
 public:
+    MultipleInheritanceBase2() = default;
+    virtual ~MultipleInheritanceBase2() = default;
+
     virtual void woof() = 0;
 
     int dummy; // Prevent empty base class optimization, to make testing more interesting.
@@ -2728,6 +2734,9 @@ public:
 
 class MultipleInheritanceDerived : public MultipleInheritanceBase1, public MultipleInheritanceBase2 {
 public:
+    MultipleInheritanceDerived() = default;
+    virtual ~MultipleInheritanceDerived() = default;
+
     bool meowCalled() const
     {
         return m_meowCalled;
@@ -2925,16 +2934,13 @@ public:
 
     ~ObjectAddingAndRemovingItself()
     {
-        EXPECT_FALSE(m_set.contains(*this));
         auto sizeBefore = m_set.sizeIncludingEmptyEntriesForTesting();
-        EXPECT_FALSE(m_set.remove(*this));
+        EXPECT_FALSE(m_set.contains(*this));
         auto sizeAfter = m_set.sizeIncludingEmptyEntriesForTesting();
-        static size_t i { 0 };
-        if (++i == 8) {
-            // Amortized cleanup gets this one during the contains call.
-            EXPECT_EQ(sizeBefore, sizeAfter);
-        } else
-            EXPECT_EQ(sizeBefore, sizeAfter + 1);
+        EXPECT_FALSE(m_set.remove(*this));
+        auto sizeAfterRemove = m_set.sizeIncludingEmptyEntriesForTesting();
+        EXPECT_EQ(sizeBefore, sizeAfter + 1);
+        EXPECT_EQ(sizeAfter, sizeAfterRemove);
         EXPECT_FALSE(m_set.contains(*this));
     }
 
@@ -2969,6 +2975,37 @@ TEST(WTF_ThreadSafeWeakPtr, ThreadSafeWeakHashSetRemoveOnDestruction)
     setSize = 0;
     set.forEach([&](auto& object) { ++setSize; });
     EXPECT_EQ(setSize, 0u);
+}
+
+class ObjectRemovingItself : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ObjectRemovingItself> {
+public:
+    static Ref<ObjectRemovingItself> create(ThreadSafeWeakHashSet<ObjectRemovingItself>& set)
+    {
+        return adoptRef(*new ObjectRemovingItself(set));
+    }
+
+    ~ObjectRemovingItself()
+    {
+        EXPECT_FALSE(m_set.contains(*this));
+        EXPECT_FALSE(m_set.remove(*this));
+    }
+
+private:
+    ObjectRemovingItself(ThreadSafeWeakHashSet<ObjectRemovingItself>& set)
+        : m_set(set)
+    {
+    }
+
+    ThreadSafeWeakHashSet<ObjectRemovingItself>& m_set;
+};
+
+// Test removing an object that was never inserted during its destructor is ok.
+TEST(WTF_ThreadSafeWeakPtr, ThreadSafeWeakHashSetRemoveNonExistantOnDestruction)
+{
+    ThreadSafeWeakHashSet<ObjectRemovingItself> set;
+    {
+        Ref<ObjectRemovingItself> object = ObjectRemovingItself::create(set);
+    }
 }
 
 class ObjectAddingItselfOnly : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ObjectAddingAndRemovingItself> {
@@ -3031,12 +3068,13 @@ TEST(WTF_ThreadSafeWeakPtr, MultipleInheritance)
     };
 
     struct Dog {
-        ~Dog() { destructors.append(Destructor::Dog); }
+        virtual ~Dog() { destructors.append(Destructor::Dog); }
         virtual void woof() = 0;
 
         virtual void ref() const = 0;
         virtual void deref() const = 0;
         virtual ThreadSafeWeakPtrControlBlock& controlBlock() const = 0;
+        virtual size_t weakRefCount() const = 0;
 
         bool dog { true };
     };
@@ -3047,6 +3085,7 @@ TEST(WTF_ThreadSafeWeakPtr, MultipleInheritance)
         void ref() const final { Cat::ref(); }
         void deref() const final { Cat::deref(); }
         ThreadSafeWeakPtrControlBlock& controlBlock() const final { return Cat::controlBlock(); }
+        size_t weakRefCount() const final { return Cat::weakRefCount(); }
 
         void meow() final { meowed = true; }
         void woof() final { barked = true; }

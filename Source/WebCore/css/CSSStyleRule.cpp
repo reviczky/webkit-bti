@@ -1,7 +1,7 @@
 /*
  * (C) 1999-2003 Lars Knoll (knoll@kde.org)
  * (C) 2002-2003 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2002, 2005, 2006, 2008, 2012, 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2002-2024 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -317,7 +317,7 @@ CSSRuleList& CSSStyleRule::cssRules() const
     return *m_ruleListCSSOMWrapper;
 }
 
-void CSSStyleRule::getChildStyleSheets(HashSet<RefPtr<CSSStyleSheet>>& childStyleSheets)
+void CSSStyleRule::getChildStyleSheets(UncheckedKeyHashSet<RefPtr<CSSStyleSheet>>& childStyleSheets)
 {
     for (unsigned index = 0; index < length(); ++index)
         item(index)->getChildStyleSheets(childStyleSheets);

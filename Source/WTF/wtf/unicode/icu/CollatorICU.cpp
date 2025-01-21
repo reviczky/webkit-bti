@@ -33,8 +33,6 @@
 
 #if !UCONFIG_NO_COLLATION
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 #include <mutex>
 #include <unicode/ucol.h>
 #include <wtf/Lock.h>
@@ -63,11 +61,13 @@ static inline const char* resolveDefaultLocale(const char* locale)
 
 static inline char* copyShortASCIIString(CFStringRef string)
 {
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // OK to have a fixed size buffer and to only handle ASCII since we only use this for locale names.
     char buffer[256];
     if (!string || !CFStringGetCString(string, buffer, sizeof(buffer), kCFStringEncodingASCII))
         return strdup("");
     return strdup(buffer);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 static char* copyDefaultLocale()
@@ -98,8 +98,10 @@ static inline const char* resolveDefaultLocale(const char* locale)
 
 static inline bool localesMatch(const char* a, const char* b)
 {
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Two null locales are equal, other locales are compared with strcmp.
     return a == b || (a && b && !strcmp(a, b));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 Collator::Collator(const char* locale, bool shouldSortLowercaseFirst)
@@ -180,6 +182,7 @@ static UBool hasPreviousLatin1(UCharIterator* iterator)
     return iterator->index > iterator->start;
 }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 static UChar32 currentLatin1(UCharIterator* iterator)
 {
     ASSERT(iterator->index >= iterator->start);
@@ -202,6 +205,7 @@ static UChar32 previousLatin1(UCharIterator* iterator)
         return U_SENTINEL;
     return static_cast<const LChar*>(iterator->context)[--iterator->index];
 }
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 static uint32_t getStateLatin1(const UCharIterator* iterator)
 {
@@ -258,7 +262,9 @@ int Collator::collate(StringView a, StringView b) const
 static UCharIterator createIterator(const char8_t* string)
 {
     UCharIterator iterator;
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     uiter_setUTF8(&iterator, byteCast<char>(string), strlen(byteCast<char>(string)));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     return iterator;
 }
 
@@ -273,7 +279,5 @@ int Collator::collate(const char8_t* a, const char8_t* b) const
 }
 
 } // namespace WTF
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif

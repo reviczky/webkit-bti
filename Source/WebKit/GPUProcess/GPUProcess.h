@@ -33,8 +33,10 @@
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/IntDegrees.h>
 #include <WebCore/MediaPlayerIdentifier.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/ShareableBitmap.h>
+#include <WebCore/SnapshotIdentifier.h>
 #include <WebCore/Timer.h>
 #include <pal/SessionID.h>
 #include <wtf/Function.h>
@@ -69,6 +71,7 @@ namespace WebKit {
 
 class GPUConnectionToWebProcess;
 class RemoteAudioSessionProxyManager;
+struct CoreIPCAuditToken;
 struct GPUProcessConnectionParameters;
 struct GPUProcessCreationParameters;
 struct GPUProcessSessionParameters;
@@ -84,6 +87,9 @@ public:
 
     static GPUProcess& singleton();
     static constexpr WTF::AuxiliaryProcessType processType = WTF::AuxiliaryProcessType::GPU;
+
+    void ref() const final { ThreadSafeRefCounted::ref(); }
+    void deref() const final { ThreadSafeRefCounted::deref(); }
 
     void removeGPUConnectionToWebProcess(GPUConnectionToWebProcess&);
 
@@ -141,6 +147,14 @@ public:
     std::optional<WebCore::ProcessIdentity> immersiveModeProcessIdentity() const;
 #endif
 
+#if HAVE(AUDIT_TOKEN)
+    void setPresentingApplicationAuditToken(WebCore::ProcessIdentifier, WebCore::PageIdentifier, std::optional<CoreIPCAuditToken>&&);
+#endif
+
+#if PLATFORM(COCOA)
+    void didDrawRemoteToPDF(WebCore::PageIdentifier, RefPtr<WebCore::SharedBuffer>&&, WebCore::SnapshotIdentifier);
+#endif
+
 private:
     void lowMemoryHandler(Critical, Synchronous);
 
@@ -165,7 +179,7 @@ private:
     void addSession(PAL::SessionID, GPUProcessSessionParameters&&);
     void removeSession(PAL::SessionID);
     void updateSandboxAccess(const Vector<SandboxExtension::Handle>&);
-    
+
     bool updatePreference(std::optional<bool>& oldPreference, std::optional<bool>& newPreference);
     void userPreferredLanguagesChanged(Vector<String>&&);
 
@@ -260,9 +274,7 @@ private:
     std::optional<WebCore::ProcessIdentity> m_processIdentity;
 #endif
 #if ENABLE(VP9) && PLATFORM(COCOA)
-    bool m_haveEnabledVP8Decoder { false };
     bool m_haveEnabledVP9Decoder { false };
-    bool m_haveEnabledSWVPDecoders { false };
 #endif
 
 };

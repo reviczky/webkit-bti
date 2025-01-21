@@ -78,6 +78,9 @@ public:
     WebSWServerConnection(const WebSWServerConnection&) = delete;
     ~WebSWServerConnection() final;
 
+    void ref() const final { WebCore::SWServer::Connection::ref(); }
+    void deref() const final { WebCore::SWServer::Connection::deref(); }
+
     USING_CAN_MAKE_WEAKPTR(WebCore::SWServer::Connection);
 
     IPC::Connection& ipcConnection() const { return m_contentConnection.get(); }
@@ -174,6 +177,8 @@ private:
     NetworkProcess& networkProcess();
     Ref<NetworkProcess> protectedNetworkProcess();
 
+    bool isWebSWServerConnection() const final { return true; }
+
     WeakPtr<NetworkConnectionToWebProcess> m_networkConnectionToWebProcess;
     Ref<IPC::Connection> m_contentConnection;
     HashMap<WebCore::ScriptExecutionContextIdentifier, WebCore::ClientOrigin> m_clientOrigins;
@@ -182,3 +187,7 @@ private:
 };
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::WebSWServerConnection)
+    static bool isType(const WebCore::SWServer::Connection& connection) { return connection.isWebSWServerConnection(); }
+SPECIALIZE_TYPE_TRAITS_END()

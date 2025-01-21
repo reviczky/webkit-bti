@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003, 2006, 2007, 2008, 2009, 2010, 2011, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,10 +25,6 @@
 
 #pragma once
 
-#include <wtf/Compiler.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 #include "AXGeometryManager.h"
 #include "AXIsolatedTree.h"
 #include "AXTextMarker.h"
@@ -40,14 +36,13 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include "Timer.h"
 #include "VisibleUnits.h"
 #include <limits.h>
+#include <wtf/Compiler.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/text/MakeString.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 OBJC_CLASS NSMutableArray;
 
@@ -172,8 +167,10 @@ protected:
     macro(ContentEditableAttributeChanged) \
     macro(ControlledObjectsChanged) \
     macro(CurrentStateChanged) \
+    macro(DatetimeChanged) \
     macro(DescribedByChanged) \
     macro(DisabledStateChanged) \
+    macro(DraggableStateChanged) \
     macro(DropEffectChanged) \
     macro(ExtendedDescriptionChanged) \
     macro(FlowToChanged) \
@@ -212,6 +209,7 @@ protected:
     macro(URLChanged) \
     macro(ValueChanged) \
     macro(VisibilityChanged) \
+    macro(VisitedStateChanged) \
     macro(ScrolledToAnchor) \
     macro(LiveRegionCreated) \
     macro(LiveRegionChanged) \
@@ -236,6 +234,7 @@ protected:
     macro(ReadOnlyStatusChanged) \
     macro(RequiredStatusChanged) \
     macro(SortDirectionChanged) \
+    macro(SpeakAsChanged) \
     macro(TextChanged) \
     macro(TextCompositionChanged) \
     macro(TextUnderElementChanged) \
@@ -256,8 +255,21 @@ protected:
     WEBCORE_AXNOTIFICATION_KEYS_DEFAULT(macro)
 #endif
 
+enum class AXNotification {
+#define WEBCORE_DEFINE_AXNOTIFICATION_ENUM(name) name,
+WEBCORE_AXNOTIFICATION_KEYS(WEBCORE_DEFINE_AXNOTIFICATION_ENUM)
+#undef WEBCORE_DEFINE_AXNOTIFICATION_ENUM
+};
+
+enum class AXLoadingEvent : uint8_t {
+    Started,
+    Reloaded,
+    Failed,
+    Finished
+};
+
 #if !PLATFORM(COCOA)
-enum AXTextChange { AXTextInserted, AXTextDeleted, AXTextAttributesChanged };
+enum class AXTextChange : uint8_t { Inserted, Deleted, AttributesChanged };
 #endif
 
 enum class PostTarget { Element, ObservableParent };
@@ -266,7 +278,7 @@ DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(AXObjectCache);
 class AXObjectCache final : public CanMakeWeakPtr<AXObjectCache>, public CanMakeCheckedPtr<AXObjectCache>
     , public AXTreeStore<AXObjectCache> {
     WTF_MAKE_NONCOPYABLE(AXObjectCache);
-    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(AXObjectCache);
+    WTF_MAKE_TZONE_ALLOCATED(AXObjectCache);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(AXObjectCache);
     friend class AXIsolatedTree;
     friend class AXTextMarker;
@@ -343,15 +355,16 @@ public:
     void childrenChanged(Node*, Element* newChild = nullptr);
     void childrenChanged(RenderObject*, RenderObject* newChild = nullptr);
     void childrenChanged(AccessibilityObject*);
+    void onDragElementChanged(Element* oldElement, Element* newElement);
     void onEventListenerAdded(Node&, const AtomString& eventType);
     void onEventListenerRemoved(Node&, const AtomString& eventType);
-    void onExpandedChanged(HTMLDetailsElement&);
     void onFocusChange(Element* oldElement, Element* newElement);
     void onInertOrVisibilityChange(RenderElement&);
     void onPopoverToggle(const HTMLElement&);
     void onScrollbarFrameRectChange(const Scrollbar&);
     void onSelectedChanged(Element&);
-    void onStyleChange(Element&, Style::Change, const RenderStyle* newStyle, const RenderStyle* oldStyle);
+    void onStyleChange(Element&, Style::Change, const RenderStyle* oldStyle, const RenderStyle* newStyle);
+    void onStyleChange(RenderText&, StyleDifference, const RenderStyle* oldStyle, const RenderStyle& newStyle);
     void onTextSecurityChanged(HTMLInputElement&);
     void onTitleChange(Document&);
     void onValidityChange(Element&);
@@ -506,12 +519,6 @@ public:
     // Index
     CharacterOffset characterOffsetForIndex(int, const AXCoreObject*);
 
-    enum AXNotification {
-#define WEBCORE_DEFINE_AXNOTIFICATION_ENUM(name) AX##name,
-    WEBCORE_AXNOTIFICATION_KEYS(WEBCORE_DEFINE_AXNOTIFICATION_ENUM)
-#undef WEBCORE_DEFINE_AXNOTIFICATION_ENUM
-    };
-
     void postNotification(RenderObject*, AXNotification, PostTarget = PostTarget::Element);
     void postNotification(Node*, AXNotification, PostTarget = PostTarget::Element);
     void postNotification(AccessibilityObject*, Document*, AXNotification, PostTarget = PostTarget::Element);
@@ -538,13 +545,6 @@ public:
     void postTextStateChangeNotification(const Position&, const AXTextStateChangeIntent&, const VisibleSelection&);
     void postLiveRegionChangeNotification(AccessibilityObject&);
 
-    enum AXLoadingEvent {
-        AXLoadingStarted,
-        AXLoadingReloaded,
-        AXLoadingFailed,
-        AXLoadingFinished
-    };
-
     void frameLoadingEventNotification(LocalFrame*, AXLoadingEvent);
 
     void prepareForDocumentDestruction(const Document&);
@@ -554,8 +554,8 @@ public:
 
     AXComputedObjectAttributeCache* computedObjectAttributeCache() { return m_computedObjectAttributeCache.get(); }
 
-    Document& document() const { return const_cast<Document&>(m_document.get()); }
-    Ref<Document> protectedDocument() const;
+    Document* document() const { return m_document.get(); }
+    RefPtr<Document> protectedDocument() const;
     constexpr const std::optional<PageIdentifier>& pageID() const { return m_pageID; }
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
@@ -623,8 +623,8 @@ private:
     void updateIsolatedTree(AccessibilityObject&, AXNotification);
     void updateIsolatedTree(AccessibilityObject*, AXNotification);
     void updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityObject>, AXNotification>>&);
-    void updateIsolatedTree(AccessibilityObject*, AXPropertyName) const;
-    void updateIsolatedTree(AccessibilityObject&, AXPropertyName) const;
+    void updateIsolatedTree(AccessibilityObject*, AXProperty) const;
+    void updateIsolatedTree(AccessibilityObject&, AXProperty) const;
     void startUpdateTreeSnapshotTimer();
 #endif
 
@@ -693,8 +693,6 @@ private:
 
     void liveRegionChangedNotificationPostTimerFired();
 
-    void focusCurrentModal();
-    
     void performCacheUpdateTimerFired() { performDeferredCacheUpdate(ForceLayout::No); }
 
     void postTextStateChangeNotification(AccessibilityObject*, const AXTextStateChangeIntent&, const VisibleSelection&);
@@ -743,8 +741,7 @@ private:
     // aria-modal or modal <dialog> related
     bool isModalElement(Element&) const;
     void findModalNodes();
-    enum class WillRecomputeFocus : bool { No, Yes };
-    void updateCurrentModalNode(WillRecomputeFocus = WillRecomputeFocus::No);
+    void updateCurrentModalNode();
     bool isNodeVisible(Node*) const;
     bool modalElementHasAccessibleContent(Element&);
 
@@ -778,7 +775,7 @@ private:
     Ref<AccessibilityRenderObject> createObjectFromRenderer(RenderObject&);
     Ref<AccessibilityNodeObject> createFromNode(Node&);
 
-    WeakRef<Document, WeakPtrImplWithEventTargetData> m_document;
+    WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
     const std::optional<PageIdentifier> m_pageID; // constant for object's lifetime.
     OptionSet<ActivityState> m_pageActivityState;
     UncheckedKeyHashMap<AXID, Ref<AccessibilityObject>> m_objects;
@@ -945,8 +942,12 @@ bool hasAccNameAttribute(Element&);
 
 bool isNodeFocused(Node&);
 
-bool isDOMHidden(const RenderStyle*);
+bool isRenderHidden(const RenderStyle*);
+// Checks both CSS display properties, and CSS visibility properties.
+bool isRenderHidden(const RenderStyle&);
+// Only checks CSS visibility properties.
+bool isVisibilityHidden(const RenderStyle&);
 
-WTF::TextStream& operator<<(WTF::TextStream&, AXObjectCache::AXNotification);
+WTF::TextStream& operator<<(WTF::TextStream&, AXNotification);
 
 } // namespace WebCore

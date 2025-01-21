@@ -50,8 +50,6 @@
 
 #include <queue>
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 using namespace HTMLNames;
@@ -216,7 +214,7 @@ bool AccessibilityTable::isDataTable() const
     unsigned cellsWithRightBorder = 0;
 
     UncheckedKeyHashMap<Node*, unsigned> cellCountForEachRow;
-    Color alternatingRowColors[5];
+    std::array<Color, 5> alternatingRowColors;
     int alternatingRowColorCount = 0;
     unsigned rowCount = 0;
     unsigned maxColumnCount = 0;
@@ -475,7 +473,7 @@ void AccessibilityTable::addChildren()
         column->setColumnIndex(i);
         column->setParent(this);
         m_columns.append(column);
-        addChild(column.ptr(), DescendIfIgnored::No);
+        addChild(column.get(), DescendIfIgnored::No);
     }
     addChild(headerContainer(), DescendIfIgnored::No);
 
@@ -624,6 +622,16 @@ unsigned AccessibilityTable::computeCellSlots()
                     colSpan,
                     rowSpan - 1
                 });
+            } else if (!rowSpan) {
+                // Zero is a special value for rowspan that means it spans all remaining rows.
+                // Pass the max rowspan value for DownwardGrowingCell::remainingRowsToSpan, allowing
+                // this cell to span for as long as the table extends.
+                downwardGrowingCells.append({
+                    *currentCell,
+                    xCurrent,
+                    colSpan,
+                    HTMLTableCellElement::maxRowspan - yCurrent
+                });
             }
 
             // Step 15.
@@ -637,7 +645,7 @@ unsigned AccessibilityTable::computeCellSlots()
         m_rows.append(*row);
         row->setRowIndex(yCurrent);
 #if !ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
-        addChild(row);
+        addChild(*row);
 #endif // !ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE)
 
         // Step 16: If current cell is the last td or th element child in the tr element being processed, then increase ycurrent by 1, abort this set of steps, and return to the algorithm above.
@@ -710,7 +718,7 @@ unsigned AccessibilityTable::computeCellSlots()
             // Step 6: Associate the first caption element child of the table element with the table.
             if (!didAddCaption) {
                 if (RefPtr axCaption = cache->getOrCreate(*caption)) {
-                    addChild(axCaption.get(), DescendIfIgnored::No);
+                    addChild(*axCaption, DescendIfIgnored::No);
                     didAddCaption = true;
                 }
             }
@@ -778,7 +786,7 @@ unsigned AccessibilityTable::computeCellSlots()
     return xWidth;
 }
 
-AXCoreObject* AccessibilityTable::headerContainer()
+AccessibilityObject* AccessibilityTable::headerContainer()
 {
     if (m_headerContainer)
         return m_headerContainer.get();
@@ -960,5 +968,3 @@ void AccessibilityTable::ensureRowAndColumn(unsigned rowIndex, unsigned columnIn
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

@@ -36,14 +36,13 @@
 #include <float.h>
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/TextStream.h>
 
 #if CPU(X86_64)
 #include <emmintrin.h>
 #endif
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 
@@ -71,8 +70,8 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(TransformationMatrix);
 
-typedef double Vector4[4];
-typedef double Vector3[3];
+using Vector4 = std::array<double, 4>;
+using Vector3 = std::array<double, 3>;
 
 const TransformationMatrix TransformationMatrix::identity { };
 
@@ -242,7 +241,7 @@ static void transposeMatrix4(const TransformationMatrix::Matrix4& a, Transformat
 }
 
 // Multiply a homogeneous point by a matrix and return the transformed point
-static void v4MulPointByMatrix(const Vector4 p, const TransformationMatrix::Matrix4& m, Vector4 result)
+static void v4MulPointByMatrix(const Vector4& p, const TransformationMatrix::Matrix4& m, Vector4& result)
 {
     result[0] = (p[0] * m[0][0]) + (p[1] * m[1][0]) +
                 (p[2] * m[2][0]) + (p[3] * m[3][0]);
@@ -254,12 +253,12 @@ static void v4MulPointByMatrix(const Vector4 p, const TransformationMatrix::Matr
                 (p[2] * m[2][3]) + (p[3] * m[3][3]);
 }
 
-static double v3Length(Vector3 a)
+static double v3Length(const Vector3& a)
 {
     return std::hypot(a[0], a[1], a[2]);
 }
 
-static void v3Scale(Vector3 v, double desiredLength)
+static void v3Scale(Vector3& v, double desiredLength)
 {
     double len = v3Length(v);
     if (len != 0) {
@@ -270,14 +269,14 @@ static void v3Scale(Vector3 v, double desiredLength)
     }
 }
 
-static double v3Dot(const Vector3 a, const Vector3 b)
+static double v3Dot(const Vector3& a, const Vector3& b)
 {
     return (a[0] * b[0]) + (a[1] * b[1]) + (a[2] * b[2]);
 }
 
 // Make a linear combination of two vectors and return the result.
 // result = (a * ascl) + (b * bscl)
-static void v3Combine(const Vector3 a, const Vector3 b, Vector3 result, double ascl, double bscl)
+static void v3Combine(const Vector3& a, const Vector3& b, Vector3& result, double ascl, double bscl)
 {
     result[0] = (ascl * a[0]) + (bscl * b[0]);
     result[1] = (ascl * a[1]) + (bscl * b[1]);
@@ -285,7 +284,7 @@ static void v3Combine(const Vector3 a, const Vector3 b, Vector3 result, double a
 }
 
 // Return the cross product result = a cross b */
-static void v3Cross(const Vector3 a, const Vector3 b, Vector3 result)
+static void v3Cross(const Vector3& a, const Vector3& b, Vector3& result)
 {
     result[0] = (a[1] * b[2]) - (a[2] * b[1]);
     result[1] = (a[2] * b[0]) - (a[0] * b[2]);
@@ -425,7 +424,8 @@ static bool decompose4(const TransformationMatrix::Matrix4& mat, TransformationM
     // stored on column major order and not row major. Using the variable 'row'
     // instead of 'column' in the spec pseudocode has been the source of
     // confusion, specifically in sorting out rotations.
-    Vector3 column[3], pdum3;
+    std::array<Vector3, 3> column;
+    Vector3 pdum3;
 
     // Now get scale and shear.
     for (i = 0; i < 3; i++) {
@@ -1781,7 +1781,7 @@ void TransformationMatrix::blend(const TransformationMatrix& from, double progre
 bool TransformationMatrix::decompose2(Decomposed2Type& decomp) const
 {
     if (isIdentity()) {
-        memset(&decomp, 0, sizeof(decomp));
+        zeroBytes(decomp);
         decomp.scaleX = 1;
         decomp.scaleY = 1;
         decomp.m11 = 1;
@@ -1795,7 +1795,7 @@ bool TransformationMatrix::decompose2(Decomposed2Type& decomp) const
 bool TransformationMatrix::decompose4(Decomposed4Type& decomp) const
 {
     if (isIdentity()) {
-        memset(&decomp, 0, sizeof(decomp));
+        zeroBytes(decomp);
         decomp.perspectiveW = 1;
         decomp.scaleX = 1;
         decomp.scaleY = 1;
@@ -1949,5 +1949,3 @@ TextStream& operator<<(TextStream& ts, const TransformationMatrix& transform)
 }
 
 }
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
