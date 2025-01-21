@@ -1,6 +1,7 @@
 webkit2gtk (2.47.3-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh disable-nvidia-dmabuf.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2025 10:44:44 +0100
 

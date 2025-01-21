@@ -26,7 +26,7 @@ Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/mathutil.h
 ===================================================================
 --- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/mathutil.h
 +++ webkitgtk/Source/ThirdParty/ANGLE/src/common/mathutil.h
-@@ -550,7 +550,7 @@ inline R roundToNearest(T input)
+@@ -597,7 +597,7 @@ inline R roundToNearest(T input)
  {
      static_assert(std::is_floating_point<T>::value);
      static_assert(std::numeric_limits<R>::is_integer);
