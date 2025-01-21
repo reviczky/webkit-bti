@@ -9,7 +9,8 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
            2002-2020 Tony Finch <dot@dotat.at>
-           2003-2024 Apple Inc
+           2003-2024 Igalia S.L.
+           2003-2025 Apple Inc
            2004-2007 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
@@ -29,7 +30,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2007 Holger Hans Peter Freyther <zecke@selfish.org>
            2007 Justin Haygood <jhaygood@reaktix.com>
            2007, 2009-2010 Holger Hans Peter Freyther
-           2007, 2024 Samuel Weinig <sam@webkit.org>
+           2007, 2024-2025 Samuel Weinig <sam@webkit.org>
            2007-2008 Alp Toker <alp@atoker.com>
            2007-2009 Torch Mobile Inc
            2008 Alex Mathews <possessedpenguinbob@gmail.com>
@@ -47,7 +48,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2009 Joseph Pecoraro
            2009, 2011 Brent Fulgham <bfulgham@webkit.org>
            2009-2010 Alex Milowski <alex@milowski.com>
-           2009-2024 Igalia S.L.
            2010 Adam Barth
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Mozilla Corporation
@@ -117,7 +117,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2016 Caitlin Potter <caitp@igalia.com>
            2016 Konstantin Tokavev <annulen@yandex.ru>
            2016 Yusuke Suzuki <yusuke.suzuki@sslab.ics.keio.ac.jp>
-           2016, 2021 Red Hat Inc
+           2016, 2021, 2024 Red Hat Inc
            2016-2018 Akamai Technologies Inc
            2016-2019 Oleksandr Skachkov <gskachkov@gmail.com>
            2016-2024 Sony Interactive Entertainment
@@ -201,6 +201,7 @@ Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/EnumTraits.h
        Source/WTF/wtf/Float16.h
        Source/WTF/wtf/RobinHoodHashTable.h
+       Source/WTF/wtf/SIMDHelpers.h
 Copyright: 2011 the V8 project authors
            2015-2024 Apple Inc
 License: BSD-2-clause or Expat
@@ -302,7 +303,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WTF/wtf/AutodrainedPool.h
        Source/WTF/wtf/ConcurrentVector.h
        Source/WTF/wtf/Deque.h
-       Source/WTF/wtf/DisallowCType.h
        Source/WTF/wtf/FileSystem.h
        Source/WTF/wtf/Locker.h
        Source/WTF/wtf/MainThread.cpp
@@ -463,6 +463,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/css/CSSScrollValue.h
        Source/WebCore/css/CSSViewValue.cpp
        Source/WebCore/css/CSSViewValue.h
+       Source/WebCore/dom/AsyncNodeDeletionQueue.h
        Source/WebCore/dom/ClassCollection.cpp
        Source/WebCore/dom/ClassCollection.h
        Source/WebCore/dom/CurrentScriptIncrementer.h
@@ -480,6 +481,8 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/html/HTMLTableRowsCollection.h
        Source/WebCore/html/ImageData.cpp
        Source/WebCore/html/ImageData.h
+       Source/WebCore/html/ImageDataArray.cpp
+       Source/WebCore/html/ImageDataArray.h
        Source/WebCore/html/forms/*
        Source/WebCore/html/shadow/MediaControlTextTrackContainerElement.cpp
        Source/WebCore/html/shadow/MediaControlTextTrackContainerElement.h
@@ -649,6 +652,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/platform/graphics/coretext/GlyphPageCoreText.cpp
        Source/WebCore/platform/graphics/freetype/GlyphPageTreeNodeFreeType.cpp
        Source/WebCore/platform/graphics/freetype/SimpleFontDataFreeType.cpp
+       Source/WebCore/platform/graphics/gtk/IconGtk.cpp
        Source/WebCore/platform/graphics/skia/GlyphPageSkia.cpp
        Source/WebCore/platform/image-decoders/webp/*
        Source/WebCore/platform/mediastream/RealtimeOutgoingAudioSource.cpp
@@ -696,7 +700,7 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Tools/TestWebKitAPI/Tests/WTF/RedBlackTree.cpp
        Tools/TestWebKitAPI/Tests/WTF/SafeStrerror.cpp
        Tools/TestWebKitAPI/Tests/WTF/UTF8Conversion.cpp
-Copyright: 2003, 2005-2024 Apple Inc
+Copyright: 2003, 2005-2025 Apple Inc
            2006 Alexey Proskuryakov
            2006 Alexey Proskuryakov <ap@webkit.org>
            2006 Michael Emmel mike.emmel@gmail.com
@@ -859,6 +863,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WTF/wtf/dtoa/*
        Source/WTF/wtf/text/LineEnding.cpp
        Source/WTF/wtf/text/LineEnding.h
+       Source/WTF/wtf/text/ParsingUtilities.h
        Source/WebCore/Modules/mediasource/DOMURLMediaSource.cpp
        Source/WebCore/Modules/mediasource/DOMURLMediaSource.h
        Source/WebCore/Modules/mediasource/MediaSource.cpp
@@ -932,6 +937,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/PAL/pal/text/DecodeEscapeSequences.h
        Source/WebCore/PAL/pal/text/TextEncodingDetector.h
        Source/WebCore/PAL/pal/text/TextEncodingDetectorICU.cpp
+       Source/WebCore/automation/*
        Source/WebCore/bindings/js/JSBlobCustom.cpp
        Source/WebCore/bindings/js/JSErrorHandler.cpp
        Source/WebCore/bindings/js/JSErrorHandler.h
@@ -968,8 +974,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/css/CSSVariableReferenceValue.h
        Source/WebCore/css/calc/CSSCalcValue.cpp
        Source/WebCore/css/calc/CSSCalcValue.h
-       Source/WebCore/css/color/StyleColor.cpp
-       Source/WebCore/css/color/StyleColor.h
        Source/WebCore/css/parser/CSSAtRuleID.cpp
        Source/WebCore/css/parser/CSSAtRuleID.h
        Source/WebCore/css/parser/CSSParserEnum.h
@@ -1126,7 +1130,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/html/parser/HTMLDocumentParserFastPath.h
        Source/WebCore/html/parser/HTMLSrcsetParser.cpp
        Source/WebCore/html/parser/HTMLSrcsetParser.h
-       Source/WebCore/html/parser/ParsingUtilities.h
        Source/WebCore/html/parser/create-html-entity-table
        Source/WebCore/html/shadow/ProgressShadowElement.cpp
        Source/WebCore/html/shadow/ProgressShadowElement.h
@@ -1334,6 +1337,8 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/rendering/svg/RenderSVGModelObject.h
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGModelObject.cpp
        Source/WebCore/rendering/svg/legacy/LegacyRenderSVGModelObject.h
+       Source/WebCore/style/values/color/StyleColor.cpp
+       Source/WebCore/style/values/color/StyleColor.h
        Source/WebCore/testing/MemoryInfo.h
        Source/WebCore/workers/AbstractWorker.cpp
        Source/WebCore/workers/AbstractWorker.h
@@ -1381,8 +1386,8 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WebCore/U2fCommandConstructorTest.cpp
        Tools/TestWebKitAPI/Tests/WebCore/WritingModeTests.cpp
        Tools/TestWebKitAPI/WTFTestUtilities.h
-Copyright: 2004-2024 Apple Inc
-           2005-2023 Google Inc
+Copyright: 2004-2025 Apple Inc
+           2005-2024 Google Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -1469,7 +1474,7 @@ License: Expat
 Files: Source/JavaScriptCore/runtime/JSDateMath.h
        Source/WTF/wtf/DateMath.h
 Copyright: 1999-2000 Harri Porten <porten@kde.org>
-           2006-2023 Apple Inc
+           2006-2024 Apple Inc
            2009 Google Inc
            2010 Research In Motion Limited
            2012 the V8 project authors
@@ -1922,8 +1927,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/css/CSSRuleList.h
        Source/WebCore/css/CSSSelector.cpp
        Source/WebCore/css/CSSSelector.h
-       Source/WebCore/css/CSSShadowValue.cpp
-       Source/WebCore/css/CSSShadowValue.h
        Source/WebCore/css/CSSStyleDeclaration.h
        Source/WebCore/css/CSSStyleRule.cpp
        Source/WebCore/css/CSSStyleRule.h
@@ -1933,7 +1936,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/css/CSSToStyleMap.h
        Source/WebCore/css/CSSUnits.cpp
        Source/WebCore/css/CSSUnits.h
-       Source/WebCore/css/CSSUnknownRule.h
        Source/WebCore/css/CSSValue.h
        Source/WebCore/css/CSSValueList.cpp
        Source/WebCore/css/CSSValueList.h
@@ -2484,6 +2486,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.h
+       Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameConverter.cpp
+       Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameConverter.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoSinkCommon.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoSinkCommon.h
        Source/WebCore/platform/graphics/gstreamer/GUniquePtrGStreamer.h
@@ -2563,9 +2567,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedBackingStoreProxy.h
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedBackingStoreTile.cpp
        Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedBackingStoreTile.h
-       Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.cpp
-       Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayer.h
-       Source/WebCore/platform/graphics/texmap/coordinated/CoordinatedGraphicsLayerCairo.cpp
        Source/WebCore/platform/graphics/transforms/IdentityTransformOperation.h
        Source/WebCore/platform/graphics/transforms/MatrixTransformOperation.cpp
        Source/WebCore/platform/graphics/transforms/MatrixTransformOperation.h
@@ -2597,6 +2598,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkOpenMAX.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkOpenMAX.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.cpp
@@ -3321,6 +3324,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/xml/parser/XMLDocumentParser.cpp
        Source/WebCore/xml/parser/XMLDocumentParser.h
        Source/WebCore/xml/parser/XMLDocumentParserLibxml2.cpp
+       Source/WebDriver/unix/LoggingUnix.cpp
        Source/WebGPU/WGSL/config.h
        Source/WebGPU/WebGPU/config.h
        Source/WebKit/Platform/IPC/glib/ArgumentCodersGlib.h
@@ -3449,6 +3453,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitUserMediaPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitVersion.cpp
        Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitWebExtensionMatchPattern.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitWebExtensionMatchPatternPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitWebResource.cpp
        Source/WebKit/UIProcess/API/glib/WebKitWebResourceLoadManager.cpp
        Source/WebKit/UIProcess/API/glib/WebKitWebResourceLoadManager.h
@@ -3880,7 +3886,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2000-2003 Dirk Mueller <mueller@kde.org>
            2001 Tobias Anton <anton@stud.fbi.fh-darmstadt.de>
            2002-2003 The Karbon Developers
-           2002-2024 Apple Inc
+           2002-2025 Apple Inc
            2003-2017 Inc
            2004 Zack Rusin <zack@kde.org>
            2004, 2015, 2017, 2022 Red Hat Inc
@@ -3905,7 +3911,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2006-2007 Maks Orlovich
            2006-2007 Nicholas Shanks <webkit@nickshanks.com>
            2006-2007 Rob Buis
-           2006-2007, 2024 Samuel Weinig <sam@webkit.org>
+           2006-2007, 2024-2025 Samuel Weinig <sam@webkit.org>
            2007 Cameron Zwarich <cwzwarich@uwaterloo.ca>
            2007 Krzysztof Kowalczyk <kkowalczyk@gmail.com>
            2007 OpenedHand
@@ -3917,7 +3923,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2007-2009 Holger Hans Peter Freyther
            2007-2009 Torch Mobile Inc
            2007-2009, 2011, 2013-2014, 2017 Collabora Ltd
-           2007-2023 Google Inc
+           2007-2024 Google Inc
            2008 Alex Mathews <possessedpenguinbob@gmail.com>
            2008 David Levin <levin@chromium.org>
            2008 Luca Bruno <lethalman88@gmail.com>
@@ -3937,7 +3943,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2024 Igalia S.L.
+           2009-2025 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -4050,6 +4056,7 @@ Files: Source/WebCore/rendering/RenderLayerInlines.h
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentFilterStore.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentManager.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebContext.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebExtensionMatchPattern.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebView.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebProcessExtensions.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebsiteData.cpp
@@ -4102,7 +4109,7 @@ License: MPL-2.0
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2024 Alberto Garcia <berto@igalia.com>
+           2014-2025 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0
