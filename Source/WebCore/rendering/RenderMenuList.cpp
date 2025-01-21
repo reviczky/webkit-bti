@@ -204,7 +204,7 @@ void RenderMenuList::styleDidChange(StyleDifference diff, const RenderStyle* old
     if (m_innerBlock) // RenderBlock handled updating the anonymous block's style.
         adjustInnerStyle();
 
-    bool fontChanged = !oldStyle || oldStyle->fontCascade() != style().fontCascade();
+    bool fontChanged = !oldStyle || !oldStyle->fontCascadeEqual(style());
     if (fontChanged) {
         updateOptionsWidth();
         m_needsOptionsWidthUpdate = false;
@@ -223,7 +223,7 @@ void RenderMenuList::updateOptionsWidth()
             continue;
 
         String text = option->textIndentedToRespectGroupLabel();
-        text = applyTextTransform(style(), text, ' ');
+        text = applyTextTransform(style(), text);
         if (theme().popupOptionSupportsTextIndent()) {
             // Add in the option's text indent.  We can't calculate percentage values for now.
             float optionWidth = 0;
@@ -324,14 +324,14 @@ LayoutRect RenderMenuList::controlClipRect(const LayoutPoint& additionalOffset) 
     // This will leave room for the arrows which sit in the inner box padding,
     // and if the inner box ever spills out of the outer box, that will get clipped too.
     LayoutRect outerBox(additionalOffset.x() + borderLeft() + paddingLeft(), 
-                   additionalOffset.y() + borderTop() + paddingTop(),
-                   contentWidth(), 
-                   contentHeight());
+        additionalOffset.y() + borderTop() + paddingTop(),
+        contentBoxWidth(),
+        contentBoxHeight());
     
     LayoutRect innerBox(additionalOffset.x() + m_innerBlock->x() + m_innerBlock->paddingLeft(), 
-                   additionalOffset.y() + m_innerBlock->y() + m_innerBlock->paddingTop(),
-                   m_innerBlock->contentWidth(), 
-                   m_innerBlock->contentHeight());
+        additionalOffset.y() + m_innerBlock->y() + m_innerBlock->paddingTop(),
+        m_innerBlock->contentBoxWidth(),
+        m_innerBlock->contentBoxHeight());
 
     return intersection(outerBox, innerBox);
 }
@@ -470,7 +470,7 @@ String RenderMenuList::itemText(unsigned listIndex) const
     else if (auto* option = dynamicDowncast<HTMLOptionElement>(element))
         itemString = option->textIndentedToRespectGroupLabel();
 
-    return applyTextTransform(style(), itemString, ' ');
+    return applyTextTransform(style(), itemString);
 }
 
 String RenderMenuList::itemLabel(unsigned) const

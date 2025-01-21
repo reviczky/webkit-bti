@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2022 Apple Inc. All rights reserved.
- * Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2024-2025 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,14 +30,13 @@
 
 #include "ColorInterpolation.h"
 #include "ComputedStyleExtractor.h"
+#include "FloatConversion.h"
 #include "GeometryUtilities.h"
 #include "Gradient.h"
 #include "GradientColorStop.h"
 #include "RenderStyleInlines.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 namespace Style {
@@ -58,33 +57,11 @@ template<CSSValueID Name, typename T> static constexpr bool isRepeating(const Fu
 
 // MARK: - Conversion: Style -> CSS
 
-static RefPtr<CSSPrimitiveValue> toCSSColorStopColor(const std::optional<StyleColor>& color, const RenderStyle& style)
-{
-    if (!color)
-        return nullptr;
-    return ComputedStyleExtractor::currentColorOrValidColor(style, *color);
-}
-
-static auto toCSSColorStopPosition(const GradientLinearColorStop::Position& position, const RenderStyle& style) -> CSS::GradientLinearColorStopPosition
-{
-    return toCSS(position, style);
-}
-
-static auto toCSSColorStopPosition(const GradientAngularColorStop::Position& position, const RenderStyle& style) -> CSS::GradientAngularColorStopPosition
-{
-    return toCSS(position, style);
-}
-
-static auto toCSSColorStopPosition(const GradientDeprecatedColorStop::Position& position, const RenderStyle&) -> CSS::GradientDeprecatedColorStopPosition
-{
-    return CSS::NumberRaw<> { position.value };
-}
-
 template<typename CSSStop, typename StyleStop> static auto toCSSColorStop(const StyleStop& stop, const RenderStyle& style) -> CSSStop
 {
     return CSSStop {
-        toCSSColorStopColor(stop.color, style),
-        toCSSColorStopPosition(stop.position, style)
+        toCSS(stop.color, style),
+        toCSS(stop.position, style)
     };
 }
 
@@ -105,68 +82,43 @@ auto ToCSS<GradientDeprecatedColorStop>::operator()(const GradientDeprecatedColo
 
 // MARK: - Conversion: CSS -> Style
 
-static auto toStyleStopColor(const RefPtr<CSSPrimitiveValue>& color, const BuilderState& state, const CSSCalcSymbolTable&) -> std::optional<StyleColor>
-{
-    if (!color)
-        return std::nullopt;
-    return state.colorFromPrimitiveValue(*color);
-}
-
-static auto toStyleStopPosition(const CSS::GradientLinearColorStopPosition& position, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientLinearColorStopPosition
-{
-    return toStyle(position, state, symbolTable);
-}
-
-static auto toStyleStopPosition(const CSS::GradientAngularColorStopPosition& position, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientAngularColorStopPosition
-{
-    return toStyle(position, state, symbolTable);
-}
-
-static auto toStyleStopPosition(const CSS::GradientDeprecatedColorStopPosition& position, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientDeprecatedColorStopPosition
-{
-    return WTF::switchOn(position,
-        [&](const CSS::Number<>& number) {
-            return toStyle(number, state, symbolTable);
-        },
-        [&](const CSS::Percentage<>& percentage) {
-            return Number<> { toStyle(percentage, state, symbolTable).value / 100.0f };
-        }
-    );
-}
-
-template<typename T> decltype(auto) toStyleColorStop(const T& stop, const BuilderState& state, const CSSCalcSymbolTable& symbolTable)
+template<typename T> decltype(auto) toStyleColorStop(const T& stop, const BuilderState& state)
 {
     return GradientColorStop {
-        toStyleStopColor(stop.color, state, symbolTable),
-        toStyleStopPosition(stop.position, state, symbolTable)
+        toStyle(stop.color, state),
+        toStyle(stop.position, state)
     };
 }
 
-auto ToStyle<CSS::GradientAngularColorStop>::operator()(const CSS::GradientAngularColorStop& stop, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientAngularColorStop
+auto ToStyle<CSS::GradientAngularColorStop>::operator()(const CSS::GradientAngularColorStop& stop, const BuilderState& state) -> GradientAngularColorStop
 {
-    return toStyleColorStop(stop, state, symbolTable);
+    return toStyleColorStop(stop, state);
 }
 
-auto ToStyle<CSS::GradientLinearColorStop>::operator()(const CSS::GradientLinearColorStop& stop, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientLinearColorStop
+auto ToStyle<CSS::GradientLinearColorStop>::operator()(const CSS::GradientLinearColorStop& stop, const BuilderState& state) -> GradientLinearColorStop
 {
-    return toStyleColorStop(stop, state, symbolTable);
+    return toStyleColorStop(stop, state);
 }
 
-auto ToStyle<CSS::GradientDeprecatedColorStop>::operator()(const CSS::GradientDeprecatedColorStop& stop, const BuilderState& state, const CSSCalcSymbolTable& symbolTable) -> GradientDeprecatedColorStop
+auto ToStyle<CSS::GradientDeprecatedColorStop>::operator()(const CSS::GradientDeprecatedColorStop& stop, const BuilderState& state) -> GradientDeprecatedColorStop
 {
-    return toStyleColorStop(stop, state, symbolTable);
+    return toStyleColorStop(stop, state);
 }
 
 // MARK: - Platform Gradient Resolution
 
-static Color resolveColorStopColor(const std::optional<StyleColor>& styleColor, const RenderStyle& style, bool hasColorFilter)
+static WebCore::Color resolveColorStopColor(const Color& styleColor, const RenderStyle& style, bool hasColorFilter)
+{
+    if (hasColorFilter)
+        return style.colorWithColorFilter(styleColor);
+    return style.colorResolvingCurrentColor(styleColor);
+}
+
+static WebCore::Color resolveColorStopColor(const Markable<Color>& styleColor, const RenderStyle& style, bool hasColorFilter)
 {
     if (!styleColor)
         return { };
-
-    if (hasColorFilter)
-        return style.colorWithColorFilter(*styleColor);
-    return style.colorResolvingCurrentColor(*styleColor);
+    return resolveColorStopColor(*styleColor, style, hasColorFilter);
 }
 
 static std::optional<float> resolveColorStopPosition(const GradientLinearColorStop::Position& position, float gradientLength)
@@ -174,19 +126,19 @@ static std::optional<float> resolveColorStopPosition(const GradientLinearColorSt
     if (!position)
         return std::nullopt;
 
-    return position->value.switchOn(
-        [&](Length<> length) -> std::optional<float> {
+    return WTF::switchOn(*position,
+        [&](const Length<>& length) -> std::optional<float> {
             if (gradientLength <= 0)
                 return 0;
             return length.value / gradientLength;
         },
-        [&](Percentage<> percentage) -> std::optional<float> {
+        [&](const Percentage<>& percentage) -> std::optional<float> {
             return percentage.value / 100.0;
         },
-        [&](const CalculationValue& calc) -> std::optional<float> {
+        [&](const typename LengthPercentage<>::Calc& calc) -> std::optional<float> {
             if (gradientLength <= 0)
                 return 0;
-            return calc.evaluate(gradientLength) / gradientLength;
+            return calc.protectedCalculation()->evaluate(gradientLength) / gradientLength;
         }
     );
 }
@@ -196,26 +148,26 @@ static std::optional<float> resolveColorStopPosition(const GradientAngularColorS
     if (!position)
         return std::nullopt;
 
-    return position->value.switchOn(
-        [](Angle<> angle) -> std::optional<float> {
+    return WTF::switchOn(*position,
+        [](const Angle<>& angle) -> std::optional<float> {
             return angle.value / 360.0;
         },
-        [](Percentage<> percentage) -> std::optional<float> {
+        [](const Percentage<>& percentage) -> std::optional<float> {
             return percentage.value / 100.0;
         },
-        [](const CalculationValue& calc) -> std::optional<float> {
-            return calc.evaluate(100) / 100.0;
+        [&](const typename AnglePercentage<>::Calc& calc) -> std::optional<float> {
+            return calc.protectedCalculation()->evaluate(100) / 100.0;
         }
     );
 }
 
 static float resolveColorStopPosition(const GradientDeprecatedColorStop::Position& position)
 {
-    return static_cast<float>(position.value);
+    return narrowPrecisionToFloat(position.value.value);
 }
 
 struct ResolvedGradientStop {
-    Color color;
+    WebCore::Color color;
     std::optional<float> offset;
 
     bool isSpecified() const { return offset.has_value(); }
@@ -511,8 +463,8 @@ template<typename GradientAdapter, typename StyleGradient> GradientColorStops co
 
         // Find previous and next color so we know what to interpolate between.
         // We already know they have a color since we checked for that earlier.
-        Color color1 = stops[x - 1].color;
-        Color color2 = stops[x + 1].color;
+        auto color1 = stops[x - 1].color;
+        auto color2 = stops[x + 1].color;
         // Likewise find the position of previous and next color stop.
         float offset1 = *stops[x - 1].offset;
         float offset2 = *stops[x + 1].offset;
@@ -540,7 +492,7 @@ template<typename GradientAdapter, typename StyleGradient> GradientColorStops co
         }
 
         float midpoint = (offset - offset1) / (offset2 - offset1);
-        ResolvedGradientStop newStops[9];
+        std::array<ResolvedGradientStop, 9> newStops;
         if (midpoint > .5f) {
             for (size_t y = 0; y < 6; ++y)
                 newStops[y].offset = offset1 + (offset - offset1) * (7 + y) / 13;
@@ -564,7 +516,7 @@ template<typename GradientAdapter, typename StyleGradient> GradientColorStops co
         }
 
         stops.remove(x);
-        stops.insert(x, newStops, 9);
+        stops.insertSpan(x, std::span { newStops });
         x += 9;
     }
 
@@ -698,7 +650,7 @@ static inline float positionFromValue(const LengthPercentage<>& coordinate, floa
     return evaluate(coordinate, widthOrHeight);
 }
 
-static inline float positionFromValue(const PercentageOrNumber& coordinate, float widthOrHeight)
+static inline float positionFromValue(const NumberOrPercentage<>& coordinate, float widthOrHeight)
 {
     return WTF::switchOn(coordinate,
         [&](Number<> number) -> float { return number.value; },
@@ -872,20 +824,20 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
         },
         [&](const Horizontal& horizontal) -> std::pair<FloatPoint, FloatPoint> {
             return WTF::switchOn(horizontal,
-                [&](Left) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Left) -> std::pair<FloatPoint, FloatPoint> {
                     return { { size.width(), 0 }, { 0, 0 } };
                 },
-                [&](Right) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Right) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, 0 }, { size.width(), 0 } };
                 }
             );
         },
         [&](const Vertical& vertical) -> std::pair<FloatPoint, FloatPoint> {
             return WTF::switchOn(vertical,
-                [&](Top) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Top) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, size.height() }, { 0, 0 } };
                 },
-                [&](Bottom) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Bottom) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, 0 }, { 0, size.height() } };
                 }
             );
@@ -893,9 +845,9 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
         [&](const SpaceSeparatedTuple<Horizontal, Vertical>& pair) -> std::pair<FloatPoint, FloatPoint> {
             float rise = size.width();
             float run = size.height();
-            if (std::holds_alternative<Left>(get<0>(pair)))
+            if (std::holds_alternative<CSS::Keyword::Left>(get<0>(pair)))
                 run *= -1;
-            if (std::holds_alternative<Bottom>(get<1>(pair)))
+            if (std::holds_alternative<CSS::Keyword::Bottom>(get<1>(pair)))
                 rise *= -1;
             // Compute angle, and flip it back to "bearing angle" degrees.
             float angle = 90 - rad2deg(atan2(rise, run));
@@ -922,36 +874,36 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
         },
         [&](const Horizontal& horizontal) -> std::pair<FloatPoint, FloatPoint> {
             return WTF::switchOn(horizontal,
-                [&](Left) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Left) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, 0 }, { size.width(), 0 } };
                 },
-                [&](Right) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Right) -> std::pair<FloatPoint, FloatPoint> {
                     return { { size.width(), 0 }, { 0, 0 } };
                 }
             );
         },
         [&](const Vertical vertical) -> std::pair<FloatPoint, FloatPoint> {
             return WTF::switchOn(vertical,
-                [&](Top) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Top) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, 0 }, { 0, size.height() } };
                 },
-                [&](Bottom) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Bottom) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, size.height() }, { 0, 0 } };
                 }
             );
         },
         [&](const SpaceSeparatedTuple<Horizontal, Vertical>& pair) -> std::pair<FloatPoint, FloatPoint> {
             return std::visit(WTF::makeVisitor(
-                [&](Left, Top) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Left, CSS::Keyword::Top) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, 0 }, { size.width(), size.height() } };
                 },
-                [&](Left, Bottom) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Left, CSS::Keyword::Bottom) -> std::pair<FloatPoint, FloatPoint> {
                     return { { 0, size.height() }, { size.width(), 0 } };
                 },
-                [&](Right, Top) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Right, CSS::Keyword::Top) -> std::pair<FloatPoint, FloatPoint> {
                     return { { size.width(), 0 }, { 0, size.height() } };
                 },
-                [&](Right, Bottom) -> std::pair<FloatPoint, FloatPoint> {
+                [&](CSS::Keyword::Right, CSS::Keyword::Bottom) -> std::pair<FloatPoint, FloatPoint> {
                     return { { size.width(), size.height() }, { 0, 0 } };
                 }
             ), get<0>(pair), get<1>(pair));
@@ -998,16 +950,16 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
             },
             [&](const RadialGradient::Extent& extent) -> std::pair<float, float> {
                 return WTF::switchOn(extent,
-                    [&](ClosestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestSide) -> std::pair<float, float> {
                         return { distanceToClosestSide(centerPoint, size), 1 };
                     },
-                    [&](FarthestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestSide) -> std::pair<float, float> {
                         return { distanceToFarthestSide(centerPoint, size), 1 };
                     },
-                    [&](ClosestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestCorner) -> std::pair<float, float> {
                         return { distanceToClosestCorner(centerPoint, size), 1 };
                     },
-                    [&](FarthestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestCorner) -> std::pair<float, float> {
                         return { distanceToFarthestCorner(centerPoint, size), 1 };
                     }
                 );
@@ -1024,17 +976,17 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
             },
             [&](const RadialGradient::Extent& extent) -> std::pair<float, float> {
                 return WTF::switchOn(extent,
-                    [&](ClosestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestSide) -> std::pair<float, float> {
                         float xDist = std::min(centerPoint.x(), size.width() - centerPoint.x());
                         float yDist = std::min(centerPoint.y(), size.height() - centerPoint.y());
                         return { xDist, xDist / yDist };
                     },
-                    [&](FarthestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestSide) -> std::pair<float, float> {
                         float xDist = std::max(centerPoint.x(), size.width() - centerPoint.x());
                         float yDist = std::max(centerPoint.y(), size.height() - centerPoint.y());
                         return { xDist, xDist / yDist };
                     },
-                    [&](ClosestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestCorner) -> std::pair<float, float> {
                         auto [distance, corner] = findDistanceToClosestCorner(centerPoint, size);
                         // If <shape> is ellipse, the gradient-shape has the same ratio of width to height
                         // that it would if closest-side or farthest-side were specified, as appropriate.
@@ -1042,7 +994,7 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
                         float yDist = std::min(centerPoint.y(), size.height() - centerPoint.y());
                         return { horizontalEllipseRadius(corner - centerPoint, xDist / yDist), xDist / yDist };
                     },
-                    [&](FarthestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestCorner) -> std::pair<float, float> {
                         auto [distance, corner] = findDistanceToFarthestCorner(centerPoint, size);
                         // If <shape> is ellipse, the gradient-shape has the same ratio of width to height
                         // that it would if closest-side or farthest-side were specified, as appropriate.
@@ -1095,22 +1047,22 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
             },
             [&](const PrefixedRadialGradient::Extent& extent) -> std::pair<float, float> {
                 return WTF::switchOn(extent,
-                    [&](ClosestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestSide) -> std::pair<float, float> {
                         float xDist = std::min(centerPoint.x(), size.width() - centerPoint.x());
                         float yDist = std::min(centerPoint.y(), size.height() - centerPoint.y());
                         return { xDist, xDist / yDist };
                     },
-                    [&](Contain) -> std::pair<float, float> {
+                    [&](CSS::Keyword::Contain) -> std::pair<float, float> {
                         float xDist = std::min(centerPoint.x(), size.width() - centerPoint.x());
                         float yDist = std::min(centerPoint.y(), size.height() - centerPoint.y());
                         return { xDist, xDist / yDist };
                     },
-                    [&](FarthestSide) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestSide) -> std::pair<float, float> {
                         float xDist = std::max(centerPoint.x(), size.width() - centerPoint.x());
                         float yDist = std::max(centerPoint.y(), size.height() - centerPoint.y());
                         return { xDist, xDist / yDist };
                     },
-                    [&](ClosestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::ClosestCorner) -> std::pair<float, float> {
                         auto [distance, corner] = findDistanceToClosestCorner(centerPoint, size);
                         // If <shape> is ellipse, the gradient-shape has the same ratio of width to height
                         // that it would if closest-side or farthest-side were specified, as appropriate.
@@ -1118,7 +1070,7 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
                         float yDist = std::min(centerPoint.y(), size.height() - centerPoint.y());
                         return { horizontalEllipseRadius(corner - centerPoint, xDist / yDist), xDist / yDist };
                     },
-                    [&](FarthestCorner) -> std::pair<float, float> {
+                    [&](CSS::Keyword::FarthestCorner) -> std::pair<float, float> {
                         auto [distance, corner] = findDistanceToFarthestCorner(centerPoint, size);
                         // If <shape> is ellipse, the gradient-shape has the same ratio of width to height
                         // that it would if closest-side or farthest-side were specified, as appropriate.
@@ -1126,7 +1078,7 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
                         float yDist = std::max(centerPoint.y(), size.height() - centerPoint.y());
                         return { horizontalEllipseRadius(corner - centerPoint, xDist / yDist), xDist / yDist };
                     },
-                    [&](Cover) -> std::pair<float, float> {
+                    [&](CSS::Keyword::Cover) -> std::pair<float, float> {
                         auto [distance, corner] = findDistanceToFarthestCorner(centerPoint, size);
                         // If <shape> is ellipse, the gradient-shape has the same ratio of width to height
                         // that it would if closest-side or farthest-side were specified, as appropriate.
@@ -1141,22 +1093,22 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
 
     auto computeCircleRadius = [&](const PrefixedRadialGradient::Extent& extent, FloatPoint centerPoint) -> std::pair<float, float> {
         return WTF::switchOn(extent,
-            [&](ClosestSide) -> std::pair<float, float> {
+            [&](CSS::Keyword::ClosestSide) -> std::pair<float, float> {
                 return { std::min({ centerPoint.x(), size.width() - centerPoint.x(), centerPoint.y(), size.height() - centerPoint.y() }), 1 };
             },
-            [&](Contain) -> std::pair<float, float> {
+            [&](CSS::Keyword::Contain) -> std::pair<float, float> {
                 return { std::min({ centerPoint.x(), size.width() - centerPoint.x(), centerPoint.y(), size.height() - centerPoint.y() }), 1 };
             },
-            [&](FarthestSide) -> std::pair<float, float> {
+            [&](CSS::Keyword::FarthestSide) -> std::pair<float, float> {
                 return { std::max({ centerPoint.x(), size.width() - centerPoint.x(), centerPoint.y(), size.height() - centerPoint.y() }), 1 };
             },
-            [&](ClosestCorner) -> std::pair<float, float> {
+            [&](CSS::Keyword::ClosestCorner) -> std::pair<float, float> {
                 return { distanceToClosestCorner(centerPoint, size), 1 };
             },
-            [&](FarthestCorner) -> std::pair<float, float> {
+            [&](CSS::Keyword::FarthestCorner) -> std::pair<float, float> {
                 return { distanceToFarthestCorner(centerPoint, size), 1 };
             },
-            [&](Cover) -> std::pair<float, float> {
+            [&](CSS::Keyword::Cover) -> std::pair<float, float> {
                 return { distanceToFarthestCorner(centerPoint, size), 1 };
             }
         );
@@ -1165,13 +1117,13 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
     auto data = WTF::switchOn(radial.parameters.gradientBox,
         [&](const PrefixedRadialGradient::Ellipse& ellipse) {
             auto centerPoint = computeCenterPoint(ellipse.position);
-            auto [endRadius, aspectRatio] = computeEllipseRadii(ellipse.size.value_or(PrefixedRadialGradient::Extent { CSS::Cover { } }), centerPoint);
+            auto [endRadius, aspectRatio] = computeEllipseRadii(ellipse.size.value_or(PrefixedRadialGradient::Extent { CSS::Keyword::Cover { } }), centerPoint);
 
             return WebCore::Gradient::RadialData { centerPoint, centerPoint, 0, endRadius, aspectRatio };
         },
         [&](const PrefixedRadialGradient::Circle& circle) {
             auto centerPoint = computeCenterPoint(circle.position);
-            auto [endRadius, aspectRatio] = computeCircleRadius(circle.size.value_or(PrefixedRadialGradient::Extent { CSS::Cover { } }), centerPoint);
+            auto [endRadius, aspectRatio] = computeCircleRadius(circle.size.value_or(PrefixedRadialGradient::Extent { CSS::Keyword::Cover { } }), centerPoint);
 
             return WebCore::Gradient::RadialData { centerPoint, centerPoint, 0, endRadius, aspectRatio };
         }
@@ -1214,7 +1166,7 @@ template<CSSValueID Name> static Ref<WebCore::Gradient> createPlatformGradient(c
     };
 
     auto centerPoint = computeCenterPoint(conic.parameters.gradientBox.position);
-    float angleRadians = conic.parameters.gradientBox.angle ? CSSPrimitiveValue::computeRadians(conic.parameters.gradientBox.angle->unit, conic.parameters.gradientBox.angle->value) : 0;
+    float angleRadians = conic.parameters.gradientBox.angle ? CSS::convertToValueInUnitsOf<CSS::AngleUnit::Rad>(*conic.parameters.gradientBox.angle) : 0;
 
     WebCore::Gradient::ConicData data { centerPoint, angleRadians };
     ConicGradientAdapter adapter;
@@ -1232,10 +1184,20 @@ Ref<WebCore::Gradient> createPlatformGradient(const Gradient& gradient, const Fl
 
 // MARK: - stopsAreCacheable
 
+static bool stopColorIsCacheable(const Color& stopColor)
+{
+    return !containsCurrentColor(stopColor);
+}
+
+static bool stopColorIsCacheable(const Markable<Color>& stopColor)
+{
+    return !stopColor || stopColorIsCacheable(*stopColor);
+}
+
 template<typename Gradient> static bool stopsAreCacheable(const Gradient& gradient)
 {
-    return std::ranges::none_of(gradient.parameters.stops, [](auto& stop) {
-        return stop.color && stop.color->containsCurrentColor();
+    return std::ranges::all_of(gradient.parameters.stops, [](auto& stop) {
+        return stopColorIsCacheable(stop.color);
     });
 }
 
@@ -1262,5 +1224,3 @@ bool isOpaque(const Gradient& gradient, const RenderStyle& style)
 
 } // namespace Style
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

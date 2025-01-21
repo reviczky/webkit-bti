@@ -95,6 +95,10 @@
 #include "CocoaWindow.h"
 #endif
 
+#if PLATFORM(IOS_FAMILY) && ENABLE(MODEL_PROCESS)
+#include "ModelPresentationManagerProxy.h"
+#endif
+
 namespace WebKit {
 
 #if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
@@ -253,9 +257,7 @@ struct WebPageProxy::Internals final : WebPopupMenuProxy::Client
 #if ENABLE(APPLE_PAY)
     , WebPaymentCoordinatorProxy::Client
 #endif
-#if ENABLE(INPUT_TYPE_COLOR)
     , WebColorPickerClient
-#endif
 #if PLATFORM(MACCATALYST)
     , EndowmentStateTrackerClient
 #endif
@@ -277,6 +279,15 @@ public:
     uint32_t checkedPtrCountWithoutThreadCheck() const { return WebPopupMenuProxy::Client::checkedPtrCountWithoutThreadCheck(); }
     void incrementCheckedPtrCount() const { WebPopupMenuProxy::Client::incrementCheckedPtrCount(); }
     void decrementCheckedPtrCount() const { WebPopupMenuProxy::Client::decrementCheckedPtrCount(); }
+
+#if PLATFORM(MACCATALYST)
+    // EndowmentStateTrackerClient
+    void ref() const final { page->ref(); }
+    void deref() const final { page->deref(); }
+#else
+    void ref() const { page->ref(); }
+    void deref() const { page->deref(); }
+#endif
 
     WeakRef<WebPageProxy> page;
     OptionSet<WebCore::ActivityState> activityState;
@@ -363,9 +374,7 @@ public:
     WebCore::DragHandlingMethod currentDragHandlingMethod { WebCore::DragHandlingMethod::None };
 #endif
 
-#if ENABLE(INPUT_TYPE_COLOR)
     RefPtr<WebColorPicker> colorPicker;
-#endif
 
 #if ENABLE(MAC_GESTURE_EVENTS)
     Deque<NativeWebGestureEvent> gestureEventQueue;
@@ -441,6 +450,10 @@ public:
     WebCore::FloatPoint scrollPositionDuringLastEditorStateUpdate;
 #endif
 
+#if PLATFORM(IOS_FAMILY) && ENABLE(MODEL_PROCESS)
+    RefPtr<ModelPresentationManagerProxy> modelPresentationManagerProxy;
+#endif
+
     bool allowsLayoutViewportHeightExpansion { true };
 
     explicit Internals(WebPageProxy&);
@@ -480,11 +493,9 @@ public:
     CocoaWindow *paymentCoordinatorPresentingWindow(const WebPaymentCoordinatorProxy&) const final;
 #endif
 
-#if ENABLE(INPUT_TYPE_COLOR)
     // WebColorPickerClient
     void didChooseColor(const WebCore::Color&) final;
     void didEndColorPicker() final;
-#endif
 
 #if PLATFORM(MACCATALYST)
     // EndowmentStateTrackerClient
@@ -512,6 +523,13 @@ public:
     void playbackTargetPickerWasDismissed(WebCore::PlaybackTargetClientContextIdentifier) final;
     bool alwaysOnLoggingAllowed() const final { return protectedPage()->isAlwaysOnLoggingAllowed(); }
     RetainPtr<PlatformView> platformView() const final;
+#endif
+
+    Ref<PageLoadState> protectedPageLoadState() { return pageLoadState; }
+    Ref<WebNotificationManagerMessageHandler> protectedNotificationManagerMessageHandler() { return notificationManagerMessageHandler; }
+    Ref<PageLoadTimingFrameLoadStateObserver> protectedPageLoadTimingFrameLoadStateObserver() { return pageLoadTimingFrameLoadStateObserver; }
+#if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)
+    RefPtr<WebPageProxyFrameLoadStateObserver> protectedFrameLoadStateObserver() { return frameLoadStateObserver.get(); }
 #endif
 };
 

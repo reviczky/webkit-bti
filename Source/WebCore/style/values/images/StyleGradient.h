@@ -40,17 +40,10 @@ namespace Style {
 
 // MARK: - Common Types
 
-using DeprecatedGradientPosition = SpaceSeparatedArray<PercentageOrNumber, 2>;
+using DeprecatedGradientPosition   = SpaceSeparatedArray<NumberOrPercentage<>, 2>;
 
-using Horizontal     = CSS::Horizontal;
-using Vertical       = CSS::Vertical;
-
-using ClosestCorner  = CSS::ClosestCorner;
-using ClosestSide    = CSS::ClosestSide;
-using FarthestCorner = CSS::FarthestCorner;
-using FarthestSide   = CSS::FarthestSide;
-using Contain        = CSS::Contain;
-using Cover          = CSS::Cover;
+using Horizontal                   = CSS::Horizontal;
+using Vertical                     = CSS::Vertical;
 
 using RadialGradientExtent         = CSS::RadialGradientExtent;
 using PrefixedRadialGradientExtent = CSS::PrefixedRadialGradientExtent;
@@ -65,36 +58,48 @@ template<> inline constexpr bool TreatAsNonConverting<GradientColorInterpolation
 
 template<typename Stop> using GradientColorStopList = CommaSeparatedVector<Stop, 2>;
 
-template<typename T> struct GradientColorStop {
-    using Position = T;
-    using List = GradientColorStopList<GradientColorStop<T>>;
+template<typename C, typename P> struct GradientColorStop {
+    using Color = C;
+    using Position = P;
+    using List = GradientColorStopList<GradientColorStop<C, P>>;
 
-    std::optional<StyleColor> color;
+    Color color;
     Position position;
 
-    bool operator==(const GradientColorStop<T>&) const = default;
+    bool operator==(const GradientColorStop<C, P>&) const = default;
 };
-template<typename T> GradientColorStop(auto color, T position) -> GradientColorStop<T>;
+template<typename C, typename P> GradientColorStop(C color, P position) -> GradientColorStop<C, P>;
 
+template<size_t I, typename C, typename P> const auto& get(const GradientColorStop<C, P>& stop)
+{
+    if constexpr (!I)
+        return stop.color;
+    else if constexpr (I == 1)
+        return stop.position;
+}
+
+using GradientAngularColorStopColor = Markable<Color>;
 using GradientAngularColorStopPosition = std::optional<AnglePercentage<>>;
-using GradientAngularColorStop = GradientColorStop<GradientAngularColorStopPosition>;
+using GradientAngularColorStop = GradientColorStop<GradientAngularColorStopColor, GradientAngularColorStopPosition>;
 using GradientAngularColorStopList = GradientColorStopList<GradientAngularColorStop>;
 
+using GradientLinearColorStopColor = Markable<Color>;
 using GradientLinearColorStopPosition = std::optional<LengthPercentage<>>;
-using GradientLinearColorStop = GradientColorStop<GradientLinearColorStopPosition>;
+using GradientLinearColorStop = GradientColorStop<GradientLinearColorStopColor, GradientLinearColorStopPosition>;
 using GradientLinearColorStopList = GradientColorStopList<GradientLinearColorStop>;
 
-using GradientDeprecatedColorStopPosition = Number<>;
-using GradientDeprecatedColorStop = GradientColorStop<GradientDeprecatedColorStopPosition>;
+using GradientDeprecatedColorStopColor = Color;
+using GradientDeprecatedColorStopPosition = NumberOrPercentageResolvedToNumber<>;
+using GradientDeprecatedColorStop = GradientColorStop<GradientDeprecatedColorStopColor, GradientDeprecatedColorStopPosition>;
 using GradientDeprecatedColorStopList = GradientColorStopList<GradientDeprecatedColorStop>;
 
 template<> struct ToCSS<GradientAngularColorStop> { auto operator()(const GradientAngularColorStop&, const RenderStyle&) -> CSS::GradientAngularColorStop; };
 template<> struct ToCSS<GradientLinearColorStop> { auto operator()(const GradientLinearColorStop&, const RenderStyle&) -> CSS::GradientLinearColorStop; };
 template<> struct ToCSS<GradientDeprecatedColorStop> { auto operator()(const GradientDeprecatedColorStop&, const RenderStyle&) -> CSS::GradientDeprecatedColorStop; };
 
-template<> struct ToStyle<CSS::GradientAngularColorStop> { auto operator()(const CSS::GradientAngularColorStop&, const BuilderState&, const CSSCalcSymbolTable&) -> GradientAngularColorStop; };
-template<> struct ToStyle<CSS::GradientLinearColorStop> { auto operator()(const CSS::GradientLinearColorStop&, const BuilderState&, const CSSCalcSymbolTable&) -> GradientLinearColorStop; };
-template<> struct ToStyle<CSS::GradientDeprecatedColorStop> { auto operator()(const CSS::GradientDeprecatedColorStop&, const BuilderState&, const CSSCalcSymbolTable&) -> GradientDeprecatedColorStop; };
+template<> struct ToStyle<CSS::GradientAngularColorStop> { auto operator()(const CSS::GradientAngularColorStop&, const BuilderState&) -> GradientAngularColorStop; };
+template<> struct ToStyle<CSS::GradientLinearColorStop> { auto operator()(const CSS::GradientLinearColorStop&, const BuilderState&) -> GradientLinearColorStop; };
+template<> struct ToStyle<CSS::GradientDeprecatedColorStop> { auto operator()(const CSS::GradientDeprecatedColorStop&, const BuilderState&) -> GradientDeprecatedColorStop; };
 
 // MARK: - LinearGradient
 
@@ -118,7 +123,7 @@ template<size_t I> const auto& get(const LinearGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::LinearGradient, LinearGradient)
+DEFINE_TYPE_MAPPING(CSS::LinearGradient, LinearGradient)
 
 // MARK: - PrefixedLinearGradient
 
@@ -142,7 +147,7 @@ template<size_t I> const auto& get(const PrefixedLinearGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::PrefixedLinearGradient, PrefixedLinearGradient)
+DEFINE_TYPE_MAPPING(CSS::PrefixedLinearGradient, PrefixedLinearGradient)
 
 // MARK: - DeprecatedLinearGradient
 
@@ -166,7 +171,7 @@ template<size_t I> const auto& get(const DeprecatedLinearGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::DeprecatedLinearGradient, DeprecatedLinearGradient)
+DEFINE_TYPE_MAPPING(CSS::DeprecatedLinearGradient, DeprecatedLinearGradient)
 
 // MARK: - RadialGradient
 
@@ -219,9 +224,9 @@ template<size_t I> const auto& get(const RadialGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::RadialGradient::Ellipse, RadialGradient::Ellipse)
-DEFINE_CSS_STYLE_MAPPING(CSS::RadialGradient::Circle, RadialGradient::Circle)
-DEFINE_CSS_STYLE_MAPPING(CSS::RadialGradient, RadialGradient)
+DEFINE_TYPE_MAPPING(CSS::RadialGradient::Ellipse, RadialGradient::Ellipse)
+DEFINE_TYPE_MAPPING(CSS::RadialGradient::Circle, RadialGradient::Circle)
+DEFINE_TYPE_MAPPING(CSS::RadialGradient, RadialGradient)
 
 // MARK: - PrefixedRadialGradient
 
@@ -273,9 +278,9 @@ template<size_t I> const auto& get(const PrefixedRadialGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::PrefixedRadialGradient::Ellipse, PrefixedRadialGradient::Ellipse)
-DEFINE_CSS_STYLE_MAPPING(CSS::PrefixedRadialGradient::Circle, PrefixedRadialGradient::Circle)
-DEFINE_CSS_STYLE_MAPPING(CSS::PrefixedRadialGradient, PrefixedRadialGradient)
+DEFINE_TYPE_MAPPING(CSS::PrefixedRadialGradient::Ellipse, PrefixedRadialGradient::Ellipse)
+DEFINE_TYPE_MAPPING(CSS::PrefixedRadialGradient::Circle, PrefixedRadialGradient::Circle)
+DEFINE_TYPE_MAPPING(CSS::PrefixedRadialGradient, PrefixedRadialGradient)
 
 // MARK: - DeprecatedRadialGradient
 
@@ -318,8 +323,8 @@ template<size_t I> const auto& get(const DeprecatedRadialGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::DeprecatedRadialGradient::GradientBox, DeprecatedRadialGradient::GradientBox)
-DEFINE_CSS_STYLE_MAPPING(CSS::DeprecatedRadialGradient, DeprecatedRadialGradient)
+DEFINE_TYPE_MAPPING(CSS::DeprecatedRadialGradient::GradientBox, DeprecatedRadialGradient::GradientBox)
+DEFINE_TYPE_MAPPING(CSS::DeprecatedRadialGradient, DeprecatedRadialGradient)
 
 // MARK: - ConicGradient
 
@@ -356,8 +361,8 @@ template<size_t I> const auto& get(const ConicGradient& gradient)
         return gradient.stops;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::ConicGradient::GradientBox, ConicGradient::GradientBox)
-DEFINE_CSS_STYLE_MAPPING(CSS::ConicGradient, ConicGradient)
+DEFINE_TYPE_MAPPING(CSS::ConicGradient::GradientBox, ConicGradient::GradientBox)
+DEFINE_TYPE_MAPPING(CSS::ConicGradient, ConicGradient)
 
 // MARK: - Gradient (variant)
 
@@ -385,7 +390,7 @@ using Gradient = std::variant<
 Ref<WebCore::Gradient> createPlatformGradient(const Gradient&, const FloatSize&, const RenderStyle&);
 
 // Returns whether it caching based on the gradient's stops is allowed.
-bool stopsAreCacheable(const Gradient&);
+WEBCORE_EXPORT bool stopsAreCacheable(const Gradient&);
 
 // Returns whether the gradient is opaque.
 bool isOpaque(const Gradient&, const RenderStyle&);
@@ -393,16 +398,28 @@ bool isOpaque(const Gradient&, const RenderStyle&);
 } // namespace Style
 } // namespace WebCore
 
-STYLE_TUPLE_LIKE_CONFORMANCE(LinearGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(PrefixedLinearGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(DeprecatedLinearGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(RadialGradient::Ellipse, 2)
-STYLE_TUPLE_LIKE_CONFORMANCE(RadialGradient::Circle, 2)
-STYLE_TUPLE_LIKE_CONFORMANCE(RadialGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(PrefixedRadialGradient::Ellipse, 2)
-STYLE_TUPLE_LIKE_CONFORMANCE(PrefixedRadialGradient::Circle, 2)
-STYLE_TUPLE_LIKE_CONFORMANCE(PrefixedRadialGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(DeprecatedRadialGradient::GradientBox, 4)
-STYLE_TUPLE_LIKE_CONFORMANCE(DeprecatedRadialGradient, 3)
-STYLE_TUPLE_LIKE_CONFORMANCE(ConicGradient::GradientBox, 2)
-STYLE_TUPLE_LIKE_CONFORMANCE(ConicGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::LinearGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::PrefixedLinearGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::DeprecatedLinearGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::RadialGradient::Ellipse, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::RadialGradient::Circle, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::RadialGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::PrefixedRadialGradient::Ellipse, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::PrefixedRadialGradient::Circle, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::PrefixedRadialGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::DeprecatedRadialGradient::GradientBox, 4)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::DeprecatedRadialGradient, 3)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::ConicGradient::GradientBox, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::ConicGradient, 3)
+
+template<typename C, typename P> inline constexpr bool WebCore::TreatAsTupleLike<WebCore::Style::GradientColorStop<C, P>> = true;
+
+namespace std {
+
+template<typename C, typename P> class tuple_size<WebCore::Style::GradientColorStop<C, P>> : public std::integral_constant<size_t, 2> { };
+template<size_t I, typename C, typename P> class tuple_element<I, WebCore::Style::GradientColorStop<C, P>> {
+public:
+    using type = decltype(WebCore::Style::get<I>(std::declval<WebCore::Style::GradientColorStop<C, P>>()));
+};
+
+} // namespace std

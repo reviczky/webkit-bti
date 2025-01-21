@@ -1,8 +1,8 @@
 /*
  * Copyright (C) 2004, 2005, 2006, 2019 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005, 2006, 2007, 2008, 2010 Rob Buis <buis@kde.org>
- * Copyright (C) 2007-2022 Apple Inc. All rights reserved.
- * Copyright (C) 2015 Google Inc. All rights reserved.
+ * Copyright (C) 2007-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2022 Google Inc. All rights reserved.
  * Copyright (C) 2014 Adobe Systems Incorporated. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -587,7 +587,11 @@ FloatRect SVGSVGElement::currentViewBoxRect() const
     if (!viewBox.isEmpty())
         return viewBox;
 
-    auto isEmbeddedThroughSVGImage = [](const RenderElement* renderer) -> bool {
+    auto isEmbeddedThroughSVGImage = [this](const RenderElement* renderer) -> bool {
+        auto isDocumentElement = document().documentElement() == this;
+        if (!isDocumentElement)
+            return false;
+
         if (!renderer)
             return false;
 
@@ -717,13 +721,6 @@ bool SVGSVGElement::scrollToFragment(StringView fragmentIdentifier)
         LegacyRenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
     };
 
-    if (fragmentIdentifier.startsWith("xpointer("_s)) {
-        // FIXME: XPointer references are ignored (https://bugs.webkit.org/show_bug.cgi?id=17491)
-        if (renderer && hadUseCurrentView)
-            invalidateView(*renderer);
-        return false;
-    }
-
     if (fragmentIdentifier.startsWith("svgView("_s)) {
         if (!view)
             view = &currentView(); // Create the SVGViewSpec.
@@ -736,8 +733,8 @@ bool SVGSVGElement::scrollToFragment(StringView fragmentIdentifier)
         return m_useCurrentView;
     }
 
-    // Spec: If the SVG fragment identifier addresses a "view" element within an SVG document (e.g., MyDrawing.svg#MyView
-    // or MyDrawing.svg#xpointer(id('MyView'))) then the closest ancestor "svg" element is displayed in the viewport.
+    // Spec: If the SVG fragment identifier addresses a "view" element within an SVG document (e.g., MyDrawing.svg#MyView)
+    // then the closest ancestor "svg" element is displayed in the viewport.
     // Any view specification attributes included on the given "view" element override the corresponding view specification
     // attributes on the closest ancestor "svg" element.
     if (RefPtr viewElement = findViewAnchor(fragmentIdentifier)) {

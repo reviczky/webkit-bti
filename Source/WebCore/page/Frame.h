@@ -34,7 +34,7 @@
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashSet.h>
-#include <wtf/WeakRef.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
@@ -43,7 +43,6 @@ class FrameView;
 class FrameLoaderClient;
 class FrameLoadRequest;
 class HTMLFrameOwnerElement;
-class HistoryController;
 class NavigationScheduler;
 class Page;
 class RenderWidget;
@@ -76,8 +75,9 @@ public:
     inline RefPtr<Page> protectedPage() const; // Defined in Page.h.
     WEBCORE_EXPORT std::optional<PageIdentifier> pageID() const;
     Settings& settings() const { return m_settings.get(); }
-    Frame& mainFrame() const { return m_mainFrame.get(); }
-    bool isMainFrame() const { return this == m_mainFrame.ptr(); }
+    Frame& mainFrame() { return *m_mainFrame; }
+    const Frame& mainFrame() const { return *m_mainFrame; }
+    bool isMainFrame() const { return this == m_mainFrame.get(); }
     WEBCORE_EXPORT void disownOpener();
     WEBCORE_EXPORT void updateOpener(Frame&, NotifyUIProcess = NotifyUIProcess::Yes);
     WEBCORE_EXPORT void setOpenerForWebKitLegacy(Frame*);
@@ -100,9 +100,6 @@ public:
     NavigationScheduler& navigationScheduler() const { return m_navigationScheduler.get(); }
     Ref<NavigationScheduler> protectedNavigationScheduler() const;
     WEBCORE_EXPORT void takeWindowProxyAndOpenerFrom(Frame&);
-
-    HistoryController& history() const { return m_history.get(); }
-    WEBCORE_EXPORT CheckedRef<HistoryController> checkedHistory() const;
 
     virtual void frameDetached() = 0;
     virtual bool preventsParentFromBeingComplete() const = 0;
@@ -144,13 +141,12 @@ private:
     mutable FrameTree m_treeNode;
     Ref<WindowProxy> m_windowProxy;
     WeakPtr<HTMLFrameOwnerElement, WeakPtrImplWithEventTargetData> m_ownerElement;
-    const WeakRef<Frame> m_mainFrame;
+    const WeakPtr<Frame> m_mainFrame;
     const Ref<Settings> m_settings;
     FrameType m_frameType;
     mutable UniqueRef<NavigationScheduler> m_navigationScheduler;
     WeakPtr<Frame> m_opener;
     WeakHashSet<Frame> m_openedFrames;
-    mutable UniqueRef<HistoryController> m_history;
     std::optional<OwnerPermissionsPolicyData> m_ownerPermisssionsPolicyOverride;
 };
 

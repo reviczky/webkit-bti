@@ -54,7 +54,6 @@
 #include "CSSRayValue.h"
 #include "CSSReflectValue.h"
 #include "CSSSubgridValue.h"
-#include "CSSTimingFunctionValue.h"
 #include "CSSValuePair.h"
 #include "CalculationValue.h"
 #include "FontPalette.h"
@@ -78,11 +77,14 @@
 #include "StyleBasicShape.h"
 #include "StyleBuilderState.h"
 #include "StyleColorScheme.h"
+#include "StyleEasingFunction.h"
 #include "StylePathData.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StyleRayFunction.h"
 #include "StyleReflection.h"
 #include "StyleResolveForFont.h"
+#include "StyleScrollMargin.h"
+#include "StyleScrollPadding.h"
 #include "StyleScrollSnapPoints.h"
 #include "StyleTextEdge.h"
 #include "TabSize.h"
@@ -170,12 +172,13 @@ public:
     static std::optional<float> convertPerspective(const BuilderState&, const CSSValue&);
     static std::optional<WebCore::Length> convertMarqueeIncrement(const BuilderState&, const CSSValue&);
     static FilterOperations convertFilterOperations(const BuilderState&, const CSSValue&);
+    static FilterOperations convertAppleColorFilterOperations(const BuilderState&, const CSSValue&);
     static ListStyleType convertListStyleType(const BuilderState&, const CSSValue&);
 #if PLATFORM(IOS_FAMILY)
     static bool convertTouchCallout(const BuilderState&, const CSSValue&);
 #endif
 #if ENABLE(TOUCH_EVENTS)
-    static StyleColor convertTapHighlightColor(const BuilderState&, const CSSValue&);
+    static Color convertTapHighlightColor(const BuilderState&, const CSSValue&);
 #endif
     static OptionSet<TouchAction> convertTouchAction(const BuilderState&, const CSSValue&);
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
@@ -186,7 +189,7 @@ public:
     static FontSizeAdjust convertFontSizeAdjust(const BuilderState&, const CSSValue&);
     static std::optional<FontSelectionValue> convertFontStyleFromValue(const BuilderState&, const CSSValue&);
     static FontSelectionValue convertFontWeight(const BuilderState&, const CSSValue&);
-    static FontSelectionValue convertFontStretch(const BuilderState&, const CSSValue&);
+    static FontSelectionValue convertFontWidth(const BuilderState&, const CSSValue&);
     static FontSelectionValue convertFontStyle(const BuilderState&, const CSSValue&);
     static FontFeatureSettings convertFontFeatureSettings(const BuilderState&, const CSSValue&);
     static FontVariationSettings convertFontVariationSettings(const BuilderState&, const CSSValue&);
@@ -252,7 +255,12 @@ public:
     static SingleTimelineRange convertAnimationRangeStart(const BuilderState&, const CSSValue&);
     static SingleTimelineRange convertAnimationRangeEnd(const BuilderState&, const CSSValue&);
 
+    static Vector<PositionTryFallback> convertPositionTryFallbacks(const BuilderState&, const CSSValue&);
+
     template<CSSValueID, CSSValueID> static WebCore::Length convertPositionComponent(const BuilderState&, const CSSValue&);
+
+    static Style::ScrollPaddingEdge convertScrollPaddingEdge(const BuilderState&, const CSSValue&);
+    static Style::ScrollMarginEdge convertScrollMarginEdge(const BuilderState&, const CSSValue&);
 
 private:
     friend class BuilderCustom;
@@ -812,7 +820,7 @@ inline int BuilderConverter::convertMarqueeSpeed(const BuilderState& builderStat
 
     auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
     if (primitiveValue.isTime())
-        return primitiveValue.resolveAsTime<int, CSSPrimitiveValue::TimeUnit::Milliseconds>(conversionData);
+        return primitiveValue.resolveAsTime<int, CSS::TimeUnit::Ms>(conversionData);
 
     // For scrollamount support.
     ASSERT(primitiveValue.isNumber());
@@ -1122,8 +1130,8 @@ inline std::optional<ScrollbarColor> BuilderConverter::convertScrollbarColor(con
     auto& pair = downcast<CSSValuePair>(value);
 
     return ScrollbarColor {
-        builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(pair.first())),
-        builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(pair.second()))
+        builderState.createStyleColor(pair.first()),
+        builderState.createStyleColor(pair.second()),
     };
 }
 
@@ -1531,6 +1539,11 @@ inline FilterOperations BuilderConverter::convertFilterOperations(const BuilderS
     return builderState.createFilterOperations(value);
 }
 
+inline FilterOperations BuilderConverter::convertAppleColorFilterOperations(const BuilderState& builderState, const CSSValue& value)
+{
+    return builderState.createAppleColorFilterOperations(value);
+}
+
 // The input value needs to parsed and valid, this function returns std::nullopt if the input was "normal".
 inline std::optional<FontSelectionValue> BuilderConverter::convertFontStyleFromValue(const BuilderState& builderState, const CSSValue& value)
 {
@@ -1542,7 +1555,7 @@ inline FontSelectionValue BuilderConverter::convertFontWeight(const BuilderState
     return Style::fontWeightFromCSSValue(value, builderState.cssToLengthConversionData());
 }
 
-inline FontSelectionValue BuilderConverter::convertFontStretch(const BuilderState& builderState, const CSSValue& value)
+inline FontSelectionValue BuilderConverter::convertFontWidth(const BuilderState& builderState, const CSSValue& value)
 {
     return Style::fontStretchFromCSSValue(value, builderState.cssToLengthConversionData());
 }
@@ -1570,9 +1583,9 @@ inline bool BuilderConverter::convertTouchCallout(const BuilderState&, const CSS
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
-inline StyleColor BuilderConverter::convertTapHighlightColor(const BuilderState& builderState, const CSSValue& value)
+inline Color BuilderConverter::convertTapHighlightColor(const BuilderState& builderState, const CSSValue& value)
 {
-    return builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(value));
+    return builderState.createStyleColor(value);
 }
 #endif
 
@@ -2007,6 +2020,9 @@ inline Style::ViewTransitionName BuilderConverter::convertViewTransitionName(con
     if (value.valueID() == CSSValueAuto)
         return Style::ViewTransitionName::createWithAuto(state.styleScopeOrdinal());
 
+    if (value.valueID() == CSSValueMatchElement)
+        return Style::ViewTransitionName::createWithMatchElement(state.styleScopeOrdinal());
+
     return Style::ViewTransitionName::createWithCustomIdent(state.styleScopeOrdinal(), AtomString { primitiveValue->stringValue() });
 }
 
@@ -2158,9 +2174,9 @@ inline LineClampValue BuilderConverter::convertLineClamp(const BuilderState& bui
     return LineClampValue();
 }
 
-inline RefPtr<TimingFunction> BuilderConverter::convertTimingFunction(const BuilderState&, const CSSValue& value)
+inline RefPtr<TimingFunction> BuilderConverter::convertTimingFunction(const BuilderState& builderState, const CSSValue& value)
 {
-    return createTimingFunction(value);
+    return Style::createTimingFunction(value, builderState.cssToLengthConversionData());
 }
 
 inline TimelineScope BuilderConverter::convertTimelineScope(const BuilderState&, const CSSValue& value)
@@ -2183,6 +2199,54 @@ inline TimelineScope BuilderConverter::convertTimelineScope(const BuilderState&,
     return { TimelineScope::Type::Ident, WTF::map(*list, [&](auto& item) {
         return AtomString { downcast<CSSPrimitiveValue>(item).stringValue() };
     }) };
+}
+
+inline Vector<PositionTryFallback> BuilderConverter::convertPositionTryFallbacks(const BuilderState&, const CSSValue& value)
+{
+    auto fallbackForValueList = [&](const CSSValueList& valueList) -> std::optional<PositionTryFallback> {
+        if (valueList.separator() != CSSValueList::SpaceSeparator)
+            return { };
+
+        auto tactics = WTF::map(valueList, [&](auto& item) {
+            return fromCSSValueID<PositionTryFallback::Tactic>(item.valueID());
+        });
+        return PositionTryFallback { .tactics = WTFMove(tactics) };
+    };
+
+    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
+        switch (primitiveValue->valueID()) {
+        case CSSValueNone:
+            return { };
+        default:
+            ASSERT_NOT_REACHED();
+            return { };
+        }
+    }
+
+    auto* list = dynamicDowncast<CSSValueList>(value);
+    if (!list)
+        return { };
+
+    if (auto fallback = fallbackForValueList(*list))
+        return { *fallback };
+
+    return WTF::map(*list, [&](auto& item) {
+        auto* itemList = dynamicDowncast<CSSValueList>(item);
+        if (!itemList)
+            return PositionTryFallback { };
+        auto fallback = fallbackForValueList(*itemList);
+        return fallback ? *fallback : PositionTryFallback { };
+    });
+}
+
+inline Style::ScrollPaddingEdge BuilderConverter::convertScrollPaddingEdge(const BuilderState& builderState, const CSSValue& value)
+{
+    return Style::scrollPaddingEdgeFromCSSValue(value, builderState);
+}
+
+inline Style::ScrollMarginEdge BuilderConverter::convertScrollMarginEdge(const BuilderState& builderState, const CSSValue& value)
+{
+    return Style::scrollMarginEdgeFromCSSValue(value, builderState);
 }
 
 } // namespace Style

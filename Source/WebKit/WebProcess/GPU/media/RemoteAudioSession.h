@@ -53,9 +53,7 @@ public:
     static Ref<RemoteAudioSession> create();
     ~RemoteAudioSession();
 
-    void ref() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioSession>::ref(); }
-    void deref() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioSession>::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<RemoteAudioSession>::controlBlock(); }
+    WTF_ABSTRACT_THREAD_SAFE_REF_COUNTED_AND_CAN_MAKE_WEAK_PTR_IMPL;
 
 private:
     RemoteAudioSession();
@@ -82,6 +80,7 @@ private:
     size_t bufferSize() const final { return configuration().bufferSize; }
     size_t numberOfOutputChannels() const final { return configuration().numberOfOutputChannels; }
     size_t maximumNumberOfOutputChannels() const final { return configuration().maximumNumberOfOutputChannels; }
+    size_t outputLatency() const final { return configuration().outputLatency; }
 
     bool tryToSetActiveInternal(bool) final;
 

@@ -30,13 +30,10 @@
 
 #pragma once
 
-#include <wtf/Compiler.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 #include <mutex>
 #include <stdint.h>
 #include <wtf/Atomics.h>
+#include <wtf/Compiler.h>
 #include <wtf/Expected.h>
 #include <wtf/FastTLS.h>
 #include <wtf/Function.h>
@@ -55,8 +52,6 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <wtf/Vector.h>
 #include <wtf/WordLock.h>
 #include <wtf/text/AtomStringTable.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #if USE(PTHREADS) && !OS(DARWIN)
 #include <signal.h>
@@ -149,7 +144,7 @@ public:
     static Thread& current();
 
     // Set of all WTF::Thread created threads.
-    WTF_EXPORT_PRIVATE static HashSet<Thread*>& allThreads() WTF_REQUIRES_LOCK(allThreadsLock());
+    WTF_EXPORT_PRIVATE static UncheckedKeyHashSet<Thread*>& allThreads() WTF_REQUIRES_LOCK(allThreadsLock());
     WTF_EXPORT_PRIVATE static Lock& allThreadsLock() WTF_RETURNS_LOCK(s_allThreadsLock);
 
     WTF_EXPORT_PRIVATE unsigned numberOfThreadGroups();

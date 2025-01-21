@@ -25,6 +25,7 @@
 #include "Butterfly.h"
 #include "JSCell.h"
 #include "JSObject.h"
+#include "ResourceExhaustion.h"
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
@@ -117,6 +118,12 @@ public:
     IndexingType mergeIndexingTypeForCopying(IndexingType other, bool allowPromotion);
     bool appendMemcpy(JSGlobalObject*, VM&, unsigned startIndex, JSArray* otherArray);
     bool appendMemcpy(JSGlobalObject*, VM&, unsigned startIndex, IndexingType, std::span<const EncodedJSValue>);
+
+    bool fastFill(VM&, unsigned startIndex, unsigned endIndex, JSValue);
+
+    JSArray* fastToReversed(JSGlobalObject*, uint64_t length);
+
+    JSArray* fastWith(JSGlobalObject*, uint32_t index, JSValue, uint64_t length);
 
     ALWAYS_INLINE bool definitelyNegativeOneMiss() const;
 
@@ -259,8 +266,7 @@ inline JSArray* JSArray::tryCreate(VM& vm, Structure* structure, unsigned initia
 inline JSArray* JSArray::create(VM& vm, Structure* structure, unsigned initialLength)
 {
     JSArray* result = JSArray::tryCreate(vm, structure, initialLength);
-    RELEASE_ASSERT(result);
-
+    RELEASE_ASSERT_RESOURCE_AVAILABLE(result, MemoryExhaustion, "Crash intentionally because memory is exhausted.");
     return result;
 }
 
@@ -407,6 +413,11 @@ ALWAYS_INLINE uint64_t toLength(JSGlobalObject*, JSObject*);
 
 template<ArrayFillMode fillMode>
 JSArray* tryCloneArrayFromFast(JSGlobalObject*, JSValue arrayValue);
+
+ALWAYS_INLINE bool isHole(double value);
+ALWAYS_INLINE bool isHole(const WriteBarrier<Unknown>& value);
+template<typename T>
+ALWAYS_INLINE bool containsHole(const T* data, unsigned length);
 
 } // namespace JSC
 

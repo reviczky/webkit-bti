@@ -758,7 +758,12 @@ public:
         else
             xor32(imm, dest, dest);
     }
-    
+
+    void depend32(RegisterID src, RegisterID dest)
+    {
+        xor32(src, src, dest);
+    }
+
     void not32(RegisterID srcDest)
     {
         m_assembler.mvn(srcDest, srcDest);
@@ -1386,6 +1391,17 @@ public:
             return;
         load32(src, dataTempRegister);
         store32(dataTempRegister, dest);
+    }
+
+    // Warning: not atomic.
+    void transfer64(Address src, Address dest)
+    {
+        if (src == dest)
+            return;
+        load32(src, dataTempRegister);
+        store32(dataTempRegister, dest);
+        load32(src.withOffset(sizeof(int)), dataTempRegister);
+        store32(dataTempRegister, dest.withOffset(sizeof(int)));
     }
 
     void transferPtr(Address src, Address dest)

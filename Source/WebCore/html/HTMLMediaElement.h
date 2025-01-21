@@ -246,6 +246,7 @@ public:
 
     WEBCORE_EXPORT bool isActiveNowPlayingSession() const;
     void isActiveNowPlayingSessionChanged() final;
+    ProcessID presentingApplicationPID() const final;
 
 // DOM API
 // error state
@@ -499,7 +500,7 @@ public:
     // of one of them here.
     using HTMLElement::scriptExecutionContext;
 
-    bool didPassCORSAccessCheck() const { return m_player && m_player->didPassCORSAccessCheck(); }
+    bool didPassCORSAccessCheck() const { return m_player && protectedPlayer()->didPassCORSAccessCheck(); }
     bool taintsOrigin(const SecurityOrigin&) const;
     
     WEBCORE_EXPORT bool isFullscreen() const override;
@@ -984,8 +985,7 @@ private:
 
     void mediaCanStart(Document&) final;
 
-    void invalidateCachedTime() const;
-    void refreshCachedTime() const;
+    void invalidateOfficialPlaybackPosition();
 
     void configureMediaControls();
 
@@ -1222,9 +1222,7 @@ private:
 #endif
 
     MediaTime m_defaultPlaybackStartPosition = MediaTime::zeroTime();
-    mutable MediaTime m_cachedTime;
-    mutable MonotonicTime m_clockTimeAtLastCachedTimeUpdate;
-    mutable MonotonicTime m_minimumClockTimeToUpdateCachedTime;
+    mutable MediaTime m_officialPlaybackPosition { MediaTime::invalidTime() };
 
     MediaTime m_fragmentStartTime;
     MediaTime m_fragmentEndTime;
@@ -1290,8 +1288,8 @@ private:
     bool m_tracksAreReady : 1;
     bool m_haveVisibleTextTrack : 1;
     bool m_processingPreferenceChange : 1;
-    bool m_shouldAudioPlaybackRequireUserGesture : 1;
-    bool m_shouldVideoPlaybackRequireUserGesture : 1;
+    bool m_shouldAudioPlaybackRequireUserGesture : 1 { true };
+    bool m_shouldVideoPlaybackRequireUserGesture : 1 { true };
     bool m_volumeLocked : 1;
     bool m_cachedIsInVisibilityAdjustmentSubtree : 1 { false };
     bool m_requiresTextTrackRepresentation : 1 { false };

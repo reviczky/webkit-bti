@@ -119,6 +119,9 @@ public:
     friend class NetworkConnectionToWebProcess;
     ~WebPaymentCoordinatorProxy();
 
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     void webProcessExited();
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const
     {
@@ -197,6 +200,8 @@ private:
     RetainPtr<PKPaymentRequest> platformPaymentRequest(const URL& originatingURL, const Vector<URL>& linkIconURLs, const WebCore::ApplePaySessionPaymentRequest&);
     void platformSetPaymentRequestUserAgent(PKPaymentRequest *, const String& userAgent);
 #endif
+
+    RefPtr<PaymentAuthorizationPresenter> protectedAuthorizationPresenter() { return m_authorizationPresenter; }
 
     WeakPtr<Client> m_client;
     std::optional<WebCore::PageIdentifier> m_destinationID;

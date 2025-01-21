@@ -112,7 +112,7 @@ void RemoteCDMFactoryProxy::didReceiveCDMInstanceMessage(IPC::Connection& connec
 void RemoteCDMFactoryProxy::didReceiveCDMInstanceSessionMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     if (ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>::isValidIdentifier(decoder.destinationID())) {
-        if (auto* session = m_sessions.get(ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>(decoder.destinationID())))
+        if (RefPtr session = m_sessions.get(ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>(decoder.destinationID())))
             session->didReceiveMessage(connection, decoder);
     }
 }
@@ -138,7 +138,7 @@ bool RemoteCDMFactoryProxy::didReceiveSyncCDMInstanceMessage(IPC::Connection& co
 bool RemoteCDMFactoryProxy::didReceiveSyncCDMInstanceSessionMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& encoder)
 {
     if (ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>::isValidIdentifier(decoder.destinationID())) {
-        if (auto* session = m_sessions.get(ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>(decoder.destinationID())))
+        if (RefPtr session = m_sessions.get(ObjectIdentifier<RemoteCDMInstanceSessionIdentifierType>(decoder.destinationID())))
             return session->didReceiveSyncMessage(connection, decoder, encoder);
     }
     return false;
@@ -168,7 +168,7 @@ void RemoteCDMFactoryProxy::removeInstance(const RemoteCDMInstanceIdentifier& id
     m_instances.remove(identifier);
     auto connection = m_gpuConnectionToWebProcess.get();
     if (connection && allowsExitUnderMemoryPressure())
-        connection->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
+        connection->protectedGPUProcess()->tryExitIfUnusedAndUnderMemoryPressure();
 }
 
 RemoteCDMInstanceProxy* RemoteCDMFactoryProxy::getInstance(const RemoteCDMInstanceIdentifier& identifier)
@@ -176,7 +176,7 @@ RemoteCDMInstanceProxy* RemoteCDMFactoryProxy::getInstance(const RemoteCDMInstan
     return m_instances.get(identifier);
 }
 
-void RemoteCDMFactoryProxy::addSession(const RemoteCDMInstanceSessionIdentifier& identifier, std::unique_ptr<RemoteCDMInstanceSessionProxy>&& session)
+void RemoteCDMFactoryProxy::addSession(const RemoteCDMInstanceSessionIdentifier& identifier, Ref<RemoteCDMInstanceSessionProxy>&& session)
 {
     ASSERT(!m_sessions.contains(identifier));
     m_sessions.set(identifier, WTFMove(session));

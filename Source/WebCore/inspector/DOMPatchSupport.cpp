@@ -86,8 +86,8 @@ void DOMPatchSupport::patchDocument(const String& markup)
 
     ASSERT(newDocument);
     RefPtr<DocumentParser> parser;
-    if (newDocument->isHTMLDocument())
-        parser = HTMLDocumentParser::create(static_cast<HTMLDocument&>(*newDocument));
+    if (auto* htmlDocument = dynamicDowncast<HTMLDocument>(newDocument.get()))
+        parser = HTMLDocumentParser::create(*htmlDocument);
     else
         parser = XMLDocumentParser::create(*newDocument, XMLDocumentParser::IsInFrameView::No);
     parser->insert(markup); // Use insert() so that the parser will not yield.
@@ -190,7 +190,7 @@ ExceptionOr<void> DOMPatchSupport::innerPatchNode(Digest& oldDigest, Digest& new
 
         // FIXME: Create a function in Element for copying properties. cloneDataFromElement() is close but not enough for this case.
         if (newElement.hasAttributesWithoutUpdate()) {
-            for (auto& attribute : newElement.attributesIterator()) {
+            for (auto& attribute : newElement.attributes()) {
                 auto result = m_domEditor.setAttribute(oldElement, attribute.name().localName(), attribute.value());
                 if (result.hasException())
                     return result.releaseException();
@@ -424,7 +424,7 @@ std::unique_ptr<DOMPatchSupport::Digest> DOMPatchSupport::createDigest(Node& nod
 
         if (element.hasAttributesWithoutUpdate()) {
             SHA1 attrsSHA1;
-            for (auto& attribute : element.attributesIterator()) {
+            for (auto& attribute : element.attributes()) {
                 addStringToSHA1(attrsSHA1, attribute.name().toString());
                 addStringToSHA1(attrsSHA1, attribute.value());
             }

@@ -26,7 +26,6 @@
 #pragma once
 
 #include "CachedImageClient.h"
-#include "Element.h"
 #include "FloatQuad.h"
 #include "FrameDestructionObserverInlines.h"
 #include "HTMLNames.h"
@@ -168,7 +167,6 @@ public:
         Video,
         View,
         ViewTransitionCapture,
-        ViewTransitionRoot,
 #if ENABLE(MATHML)
         MathMLBlock,
         MathMLFenced,
@@ -246,7 +244,6 @@ public:
         IsFragmentedFlow = 1 << 1,
         IsTextControl = 1 << 2,
         IsSVGBlock = 1 << 3,
-        IsViewTransitionContainer = 1 << 4,
     };
 
     enum class LineBreakFlag : uint8_t {
@@ -445,7 +442,7 @@ public:
     bool isRenderFrame() const { return type() == Type::Frame; }
     bool isRenderFrameSet() const { return type() == Type::FrameSet; }
     virtual bool isImage() const { return false; }
-    virtual bool isInlineBlockOrInlineTable() const { return false; }
+    virtual bool isNonReplacedAtomicInline() const { return false; }
     bool isRenderListBox() const { return type() == Type::ListBox; }
     bool isRenderListItem() const { return type() == Type::ListItem; }
     bool isRenderListMarker() const { return type() == Type::ListMarker; }
@@ -461,8 +458,7 @@ public:
     bool isRenderModel() const { return type() == Type::Model; }
 #endif
     bool isRenderFragmentContainer() const { return isRenderBlockFlow() && m_typeSpecificFlags.blockFlowFlags().contains(BlockFlowFlag::IsFragmentContainer); }
-    bool isRenderViewTransitionContainer() const { return isRenderBlockFlow() && m_typeSpecificFlags.blockFlowFlags().contains(BlockFlowFlag::IsViewTransitionContainer); }
-    bool isRenderViewTransitionRoot() const { return type() == Type::ViewTransitionRoot; }
+    bool isViewTransitionContainer() const { return style().pseudoElementType() == PseudoId::ViewTransition || style().pseudoElementType() == PseudoId::ViewTransitionGroup || style().pseudoElementType() == PseudoId::ViewTransitionImagePair; }
     bool isRenderReplica() const { return type() == Type::Replica; }
 
     bool isRenderSlider() const { return type() == Type::Slider; }
@@ -503,7 +499,7 @@ public:
 
     bool isTablePart() const { return isRenderTableCell() || isRenderTableCol() || isRenderTableCaption() || isRenderTableRow() || isRenderTableSection(); }
 
-    bool isViewTransitionPseudo() const { return isRenderViewTransitionCapture() || isRenderViewTransitionContainer(); }
+    bool isViewTransitionPseudo() const { return isRenderViewTransitionCapture() || isViewTransitionContainer(); }
 
     inline bool isBeforeContent() const;
     inline bool isAfterContent() const;
@@ -653,7 +649,7 @@ public:
     // rest of the rendering tree will move to a similar model.
     virtual bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction);
 
-    virtual bool hasIntrinsicAspectRatio() const { return isReplacedOrInlineBlock() && (isImage() || isRenderVideo() || isRenderHTMLCanvas() || isRenderViewTransitionCapture()); }
+    virtual bool hasIntrinsicAspectRatio() const { return isReplacedOrAtomicInline() && (isImage() || isRenderVideo() || isRenderHTMLCanvas() || isRenderViewTransitionCapture()); }
     bool isAnonymous() const { return m_typeFlags.contains(TypeFlag::IsAnonymous); }
     bool isAnonymousBlock() const;
     bool isAnonymousForPercentageResolution() const { return isAnonymous() && !isViewTransitionPseudo(); }
@@ -682,7 +678,7 @@ public:
     bool isRenderTableRow() const { return type() == Type::TableRow; }
     bool isRenderView() const  { return type() == Type::View; }
     bool isInline() const { return !m_stateBitfields.hasFlag(StateFlag::IsBlock); } // inline object
-    bool isReplacedOrInlineBlock() const { return m_stateBitfields.hasFlag(StateFlag::IsReplacedOrInlineBlock); }
+    bool isReplacedOrAtomicInline() const { return m_stateBitfields.hasFlag(StateFlag::IsReplacedOrAtomicInline); }
     bool isHorizontalWritingMode() const { return !m_stateBitfields.hasFlag(StateFlag::VerticalWritingMode); }
 
     bool hasReflection() const { return hasRareData() && rareData().hasReflection; }
@@ -797,7 +793,7 @@ public:
     void invalidateBackgroundObscurationStatus();
     virtual bool computeBackgroundIsKnownToBeObscured(const LayoutPoint&) { return false; }
 
-    void setReplacedOrInlineBlock(bool b = true) { m_stateBitfields.setFlag(StateFlag::IsReplacedOrInlineBlock, b); }
+    void setReplacedOrAtomicInline(bool b = true) { m_stateBitfields.setFlag(StateFlag::IsReplacedOrAtomicInline, b); }
     void setHorizontalWritingMode(bool b = true) { m_stateBitfields.setFlag(StateFlag::VerticalWritingMode, !b); }
     void setHasNonVisibleOverflow(bool b = true) { m_stateBitfields.setFlag(StateFlag::HasNonVisibleOverflow, b); }
     void setHasLayer(bool b = true) { m_stateBitfields.setFlag(StateFlag::HasLayer, b); }
@@ -821,7 +817,7 @@ public:
     bool hitTest(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestFilter = HitTestAll);
     virtual Node* nodeForHitTest() const;
     RefPtr<Node> protectedNodeForHitTest() const;
-    virtual void updateHitTestResult(HitTestResult&, const LayoutPoint&);
+    virtual void updateHitTestResult(HitTestResult&, const LayoutPoint&) const;
 
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction);
 
@@ -954,7 +950,7 @@ public:
 
     struct RepaintRects {
         LayoutRect clippedOverflowRect; // Some rect (normally the visual overflow rect) mapped up to the repaint container, respecting clipping.
-        std::optional<LayoutRect> outlineBoundsRect; // A rect repsenting the extent of outlines and shadows, mapped to the repaint container, but not clipped.
+        std::optional<LayoutRect> outlineBoundsRect; // A rect representing the extent of outlines and shadows, mapped to the repaint container, but not clipped.
 
         RepaintRects(LayoutRect rect = { }, const std::optional<LayoutRect>& outlineBounds = { })
             : clippedOverflowRect(rect)
@@ -1191,7 +1187,7 @@ private:
     struct SelectionGeometries {
         Vector<SelectionGeometry> geometries;
         int maxLineNumber { 0 };
-        bool hasAnyRightToLeftText { false };
+        bool hasBidirectionalText { false };
     };
     WEBCORE_EXPORT static SelectionGeometries collectSelectionGeometriesInternal(const SimpleRange&);
 #endif
@@ -1217,7 +1213,7 @@ private:
 
     enum class StateFlag : uint32_t {
         IsBlock = 1 << 0,
-        IsReplacedOrInlineBlock = 1 << 1,
+        IsReplacedOrAtomicInline = 1 << 1,
         BeingDestroyed = 1 << 2,
         NeedsLayout = 1 << 3,
         NeedsPositionedMovementLayout = 1 << 4,

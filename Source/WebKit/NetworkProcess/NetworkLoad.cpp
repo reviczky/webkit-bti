@@ -35,8 +35,8 @@
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkSession.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
+#include <WebCore/AuthenticationChallenge.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SharedBuffer.h>
 #include <wtf/NeverDestroyed.h>
@@ -59,13 +59,6 @@ NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkLoadParameters&& para
         m_task = NetworkDataTaskBlob::create(networkSession, *this, m_parameters.request, m_parameters.blobFileReferences, m_parameters.topOrigin);
     else
         m_task = NetworkDataTask::create(networkSession, *this, m_parameters);
-}
-
-NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkSession& networkSession, const Function<RefPtr<NetworkDataTask>(NetworkDataTaskClient&)>& createTask)
-    : m_client(client)
-    , m_networkProcess(networkSession.networkProcess())
-    , m_task(createTask(*this))
-{
 }
 
 std::optional<WebCore::FrameIdentifier> NetworkLoad::webFrameID() const

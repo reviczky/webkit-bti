@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -304,18 +304,17 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
             if (!childElement->hasClass())
                 continue;
 
-            auto& classes = childElement->classList();
-            if (classes.contains(imageOverlayDataDetectorClass())) {
+            if (childElement->hasClassName(imageOverlayDataDetectorClass())) {
                 elements.dataDetectors.append(childElement.get());
                 continue;
             }
 
-            if (classes.contains(imageOverlayBlockClass())) {
+            if (childElement->hasClassName(imageOverlayBlockClass())) {
                 elements.blocks.append(childElement.get());
                 continue;
             }
 
-            ASSERT(classes.contains(imageOverlayLineClass()));
+            ASSERT(childElement->hasClassName(imageOverlayLineClass()));
             Vector<Ref<HTMLElement>> lineChildren;
             for (Ref text : childrenOfType<HTMLDivElement>(childElement.get()))
                 lineChildren.append(text.get());
@@ -665,7 +664,7 @@ void updateWithTextRecognitionResult(HTMLElement& element, const TextRecognition
                 continue;
 
             auto targetHeight = state.targetSize.height();
-            auto currentScore = box->contentHeight() / targetHeight;
+            auto currentScore = box->contentBoxHeight() / targetHeight;
             bool hasHorizontalOverflow = box->hasHorizontalOverflow();
             if (currentScore < minTargetScore && !hasHorizontalOverflow)
                 state.minScale = state.scale;

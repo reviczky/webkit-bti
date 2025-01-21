@@ -230,10 +230,14 @@ static Attr* findAttrNodeInList(Vector<RefPtr<Attr>>& attrNodeList, const Qualif
 
 static bool shouldAutofocus(const Element& element)
 {
+    Ref document = element.document();
+    RefPtr page = document->protectedPage();
+    if (!page || page->autofocusProcessed())
+        return false;
+
     if (!element.hasAttributeWithoutSynchronization(HTMLNames::autofocusAttr))
         return false;
 
-    Ref document = element.document();
     if (!element.isInDocumentTree() || !document->hasBrowsingContext())
         return false;
 
@@ -242,13 +246,11 @@ static bool shouldAutofocus(const Element& element)
         document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Blocked autofocusing on a form control because the form's frame is sandboxed and the 'allow-scripts' permission is not set."_s);
         return false;
     }
+
     if (!document->frame()->isMainFrame() && !document->topOrigin().isSameOriginDomain(document->securityOrigin())) {
         document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Blocked autofocusing on a form control in a cross-origin subframe."_s);
         return false;
     }
-
-    if (document->topDocument().isAutofocusProcessed())
-        return false;
 
     return true;
 }
@@ -358,7 +360,7 @@ bool Element::isNonceable() const
         static constexpr auto scriptString = "<script"_s;
         static constexpr auto styleString = "<style"_s;
 
-        for (const auto& attribute : attributesIterator()) {
+        for (auto& attribute : attributes()) {
             auto name = attribute.localNameLowercase();
             auto value = attribute.value().convertToASCIILowercase();
             if (name.contains(scriptString)
@@ -491,9 +493,6 @@ static ShouldIgnoreMouseEvent dispatchPointerEventIfNeeded(Element& element, con
 Element::DispatchMouseEventResult Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, IsSyntheticClick isSyntheticClick)
 {
     auto eventIsDefaultPrevented = Element::EventIsDefaultPrevented::No;
-    if (isDisabledFormControl() && !document().settings().sendMouseEventsToDisabledFormControlsEnabled())
-        return { Element::EventIsDispatched::No, eventIsDefaultPrevented };
-
     if (isForceEvent(platformEvent) && !document().hasListenerTypeForEventType(platformEvent.type()))
         return { Element::EventIsDispatched::No, eventIsDefaultPrevented };
 
@@ -611,12 +610,12 @@ bool Element::dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouse
     return simulateClick(*this, underlyingEvent, eventOptions, visualOptions, SimulatedClickSource::UserAgent);
 }
 
-Ref<Node> Element::cloneNodeInternal(Document& targetDocument, CloningOperation type)
+Ref<Node> Element::cloneNodeInternal(TreeScope& treeScope, CloningOperation type)
 {
     switch (type) {
     case CloningOperation::OnlySelf:
     case CloningOperation::SelfWithTemplateContent: {
-        Ref clone = cloneElementWithoutChildren(targetDocument);
+        Ref clone = cloneElementWithoutChildren(treeScope);
         ScriptDisallowedScope::EventAllowedScope eventAllowedScope { clone };
         cloneShadowTreeIfPossible(clone);
         return clone;
@@ -624,7 +623,7 @@ Ref<Node> Element::cloneNodeInternal(Document& targetDocument, CloningOperation 
     case CloningOperation::Everything:
         break;
     }
-    return cloneElementWithChildren(targetDocument);
+    return cloneElementWithChildren(treeScope);
 }
 
 void Element::cloneShadowTreeIfPossible(Element& newHost)
@@ -634,25 +633,25 @@ void Element::cloneShadowTreeIfPossible(Element& newHost)
         return;
 
     Ref clonedShadowRoot = [&] {
-        Ref clone = oldShadowRoot->cloneNodeInternal(newHost.document(), Node::CloningOperation::SelfWithTemplateContent);
+        Ref clone = oldShadowRoot->cloneNodeInternal(newHost.treeScope(), Node::CloningOperation::SelfWithTemplateContent);
         return downcast<ShadowRoot>(WTFMove(clone));
     }();
     newHost.addShadowRoot(clonedShadowRoot.copyRef());
-    oldShadowRoot->cloneChildNodes(clonedShadowRoot);
+    oldShadowRoot->cloneChildNodes(clonedShadowRoot, clonedShadowRoot);
 }
 
-Ref<Element> Element::cloneElementWithChildren(Document& targetDocument)
+Ref<Element> Element::cloneElementWithChildren(TreeScope& treeScope)
 {
-    Ref clone = cloneElementWithoutChildren(targetDocument);
+    Ref clone = cloneElementWithoutChildren(treeScope);
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { clone };
     cloneShadowTreeIfPossible(clone);
-    cloneChildNodes(clone);
+    cloneChildNodes(treeScope, clone);
     return clone;
 }
 
-Ref<Element> Element::cloneElementWithoutChildren(Document& targetDocument)
+Ref<Element> Element::cloneElementWithoutChildren(TreeScope& treeScope)
 {
-    Ref clone = cloneElementWithoutAttributesAndChildren(targetDocument);
+    Ref clone = cloneElementWithoutAttributesAndChildren(treeScope);
 
     // This will catch HTML elements in the wrong namespace that are not correctly copied.
     // This is a sanity check as HTML overloads some of the DOM methods.
@@ -662,9 +661,9 @@ Ref<Element> Element::cloneElementWithoutChildren(Document& targetDocument)
     return clone;
 }
 
-Ref<Element> Element::cloneElementWithoutAttributesAndChildren(Document& targetDocument)
+Ref<Element> Element::cloneElementWithoutAttributesAndChildren(TreeScope& treeScope)
 {
-    return targetDocument.createElement(tagQName(), false);
+    return treeScope.createElement(tagQName(), false);
 }
 
 Ref<Attr> Element::detachAttribute(unsigned index)
@@ -704,7 +703,7 @@ void Element::setBooleanAttribute(const QualifiedName& name, bool value)
         removeAttribute(name);
 }
 
-NamedNodeMap& Element::attributes() const
+NamedNodeMap& Element::attributesMap() const
 {
     ElementRareData& rareData = const_cast<Element*>(this)->ensureElementRareData();
     if (NamedNodeMap* attributeMap = rareData.attributeMap())
@@ -806,7 +805,7 @@ Vector<String> Element::getAttributeNames() const
     if (!hasAttributes())
         return { };
 
-    auto attributes = attributesIterator();
+    auto attributes = this->attributes();
     return WTF::map(attributes, [](auto& attribute) {
         return attribute.name().toString();
     });
@@ -942,7 +941,7 @@ void Element::setFocus(bool value, FocusVisibility visibility)
     for (RefPtr element = this; element; element = element->parentElementInComposedTree())
         element->setHasFocusWithin(value);
 
-    setHasFocusVisible(value && (visibility == FocusVisibility::Visible || shouldAlwaysHaveFocusVisibleWhenFocused(*this)));
+    setHasFocusVisible(value && (visibility == FocusVisibility::Visible || (visibility == FocusVisibility::Invisible && shouldAlwaysHaveFocusVisibleWhenFocused(*this))));
 }
 
 void Element::setHasFocusVisible(bool value)
@@ -951,7 +950,6 @@ void Element::setHasFocusVisible(bool value)
 
 #if ASSERT_ENABLED
     ASSERT(!value || focused());
-    ASSERT(!focused() || !shouldAlwaysHaveFocusVisibleWhenFocused(*this) || value);
 #endif
 
     if (hasFocusVisible() == value)
@@ -1367,9 +1365,9 @@ static int adjustOffsetForZoomAndSubpixelLayout(RenderBoxModelObject& renderer, 
     return convertToNonSubpixelValue(offsetLeft / zoomFactor, Round);
 }
 
-static HashSet<TreeScope*> collectAncestorTreeScopeAsHashSet(Node& node)
+static UncheckedKeyHashSet<TreeScope*> collectAncestorTreeScopeAsHashSet(Node& node)
 {
-    HashSet<TreeScope*> ancestors;
+    UncheckedKeyHashSet<TreeScope*> ancestors;
     for (auto* currentScope = &node.treeScope(); currentScope; currentScope = currentScope->parentTreeScope())
         ancestors.add(currentScope);
     return ancestors;
@@ -2240,9 +2238,9 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
 
         if (CheckedPtr observerRegistry = treeScope().idTargetObserverRegistryIfExists()) {
             if (!oldValue.isEmpty())
-                observerRegistry->notifyObservers(oldValue);
+                observerRegistry->notifyObservers(*this, oldValue);
             if (!newValue.isEmpty())
-                observerRegistry->notifyObservers(newValue);
+                observerRegistry->notifyObservers(*this, newValue);
         }
         break;
     }
@@ -2919,6 +2917,8 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
             if (newHTMLDocument)
                 updateNameForDocument(*newHTMLDocument, nullAtom(), nameValue);
         }
+        if (parentOfInsertedTree.isInTreeScope() && usesScopedCustomElementRegistryMap())
+            CustomElementRegistry::removeFromScopedCustomElementRegistryMap(*this);
     }
 
     if (insertionType.connectedToDocument) {
@@ -2928,8 +2928,12 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
         }
         if (UNLIKELY(isDefinedCustomElement()))
             CustomElementReactionQueue::enqueueConnectedCallbackIfNeeded(*this);
-        if (shouldAutofocus(*this))
-            Ref { document().topDocument() }->appendAutofocusCandidate(*this);
+        if (shouldAutofocus(*this)) {
+            if (RefPtr mainFrameDocument = document().mainFrameDocument())
+                mainFrameDocument->appendAutofocusCandidate(*this);
+            else
+                LOG_ONCE(SiteIsolation, "Unable to properly perform Element::insertedIntoAncestor() without access to the main frame document ");
+        }
     }
 
     if (parentNode() == &parentOfInsertedTree) {
@@ -3002,6 +3006,12 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
             oldTreeScope.removeElementByName(nameValue, *this);
             if (oldHTMLDocument)
                 updateNameForDocument(*oldHTMLDocument, nameValue, nullAtom());
+        }
+        if (oldParentOfRemovedTree.isInShadowTree()) {
+            if (RefPtr registry = oldTreeScope.customElementRegistry()) {
+                if (UNLIKELY(registry->isScoped()))
+                    CustomElementRegistry::addToScopedCustomElementRegistryMap(*this, *registry);
+            }
         }
     }
 
@@ -3417,6 +3427,7 @@ void Element::finishParsingChildren()
     setIsParsingChildrenFinished();
 
     Style::ChildChangeInvalidation::invalidateAfterFinishedParsingChildren(*this);
+    document().processInternalResourceLinks(this);
 }
 
 static void appendAttributes(StringBuilder& builder, const Element& element)
@@ -3885,11 +3896,13 @@ void Element::focus(const FocusOptions& options)
 
     if (RefPtr page = document->page()) {
         Ref frame = *document->frame();
-        if (!frame->hasHadUserInteraction() && !frame->isMainFrame() && !document->topOrigin().isSameOriginDomain(document->securityOrigin()))
+        if (!document->hasHadUserInteraction() && !frame->isMainFrame() && !document->topOrigin().isSameOriginDomain(document->securityOrigin()))
             return;
 
         FocusOptions optionsWithVisibility = options;
-        if (options.trigger == FocusTrigger::Bindings && document->wasLastFocusByClick())
+        if (options.focusVisible)
+            optionsWithVisibility.visibility = *options.focusVisible ? FocusVisibility::Visible : FocusVisibility::ForceInvisible;
+        else if (options.trigger == FocusTrigger::Bindings && document->wasLastFocusByClick())
             optionsWithVisibility.visibility = FocusVisibility::Invisible;
         else if (options.trigger != FocusTrigger::Click)
             optionsWithVisibility.visibility = FocusVisibility::Visible;
@@ -3994,16 +4007,16 @@ void Element::dispatchFocusOutEventIfNeeded(RefPtr<Element>&& newFocusedElement)
 
 void Element::dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, const FocusOptions& options)
 {
-    if (RefPtr page = document().page())
-        page->chrome().client().elementDidFocus(*this, options);
     dispatchEvent(FocusEvent::create(eventNames().focusEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(oldFocusedElement)));
+    if (RefPtr page = document().page(); page && document().focusedElement() == this)
+        page->chrome().client().elementDidFocus(*this, options);
 }
 
 void Element::dispatchBlurEvent(RefPtr<Element>&& newFocusedElement)
 {
+    dispatchEvent(FocusEvent::create(eventNames().blurEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(newFocusedElement)));
     if (RefPtr page = document().page())
         page->chrome().client().elementDidBlur(*this);
-    dispatchEvent(FocusEvent::create(eventNames().blurEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(newFocusedElement)));
 }
 
 void Element::dispatchWebKitImageReadyEventForTesting()
@@ -4060,7 +4073,7 @@ ExceptionOr<void> Element::replaceChildrenWithMarkup(const String& markup, Optio
         return { };
     }
 
-    auto fragment = createFragmentForInnerOuterHTML(*this, markup, policy);
+    auto fragment = createFragmentForInnerOuterHTML(*this, markup, policy, CustomElementRegistry::registryForNodeOrTreeScope(container, container->treeScope()));
     if (fragment.hasException())
         return fragment.releaseException();
 
@@ -4120,7 +4133,7 @@ ExceptionOr<void> Element::setOuterHTML(std::variant<RefPtr<TrustedHTML>, String
     RefPtr previous = previousSibling();
     RefPtr next = nextSibling();
 
-    auto fragment = createFragmentForInnerOuterHTML(*parent, stringValueHolder.releaseReturnValue(), { ParserContentPolicy::AllowScriptingContent });
+    auto fragment = createFragmentForInnerOuterHTML(*parent, stringValueHolder.releaseReturnValue(), { ParserContentPolicy::AllowScriptingContent }, CustomElementRegistry::registryForElement(*parent));
     if (fragment.hasException())
         return fragment.releaseException();
 
@@ -5335,7 +5348,7 @@ void Element::detachAllAttrNodesFromElement()
     auto* attrNodeList = attrNodeListForElement(*this);
     ASSERT(attrNodeList);
 
-    for (const Attribute& attribute : attributesIterator()) {
+    for (auto& attribute : attributes()) {
         if (RefPtr<Attr> attrNode = findAttrNodeInList(*attrNodeList, attribute.name()))
             attrNode->detachFromElementWithValue(attribute.value());
     }
@@ -5492,7 +5505,7 @@ void Element::cloneAttributesFromElement(const Element& other)
         inputElement->initializeInputTypeAfterParsingOrCloning();
     }
 
-    for (const Attribute& attribute : attributesIterator())
+    for (auto& attribute : attributes())
         notifyAttributeChanged(attribute.name(), nullAtom(), attribute.value(), AttributeModificationReason::ByCloning);
 
     setNonce(other.nonce());
@@ -5653,7 +5666,8 @@ ExceptionOr<void> Element::insertAdjacentHTML(const String& where, const String&
     if (contextElement.hasException())
         return contextElement.releaseException();
     // Step 3.
-    auto fragment = createFragmentForInnerOuterHTML(contextElement.releaseReturnValue(), markup, { ParserContentPolicy::AllowScriptingContent });
+    RefPtr registry = CustomElementRegistry::registryForElement(contextElement.returnValue());
+    auto fragment = createFragmentForInnerOuterHTML(contextElement.releaseReturnValue(), markup, { ParserContentPolicy::AllowScriptingContent }, registry.get());
     if (fragment.hasException())
         return fragment.releaseException();
 
@@ -6053,6 +6067,18 @@ HTMLElement* Element::topmostPopoverAncestor(TopLayerElementType topLayerType)
         checkAncestor(popoverData()->invoker());
 
     return topmostAncestor.get();
+}
+
+Ref<Calculation::RandomKeyMap> Element::randomKeyMap(const std::optional<Style::PseudoElementIdentifier>& pseudoElementIdentifier) const
+{
+    return const_cast<Element*>(this)->ensureElementRareData().ensureRandomKeyMap(pseudoElementIdentifier);
+}
+
+bool Element::hasRandomKeyMap() const
+{
+    if (!hasRareData())
+        return false;
+    return elementRareData()->hasRandomKeyMap();
 }
 
 } // namespace WebCore

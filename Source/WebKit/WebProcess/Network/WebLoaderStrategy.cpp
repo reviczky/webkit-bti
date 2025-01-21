@@ -33,7 +33,6 @@
 #include "NetworkResourceLoadParameters.h"
 #include "RemoteWorkerFrameLoaderClient.h"
 #include "WebCompiledContentRuleList.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebFrame.h"
 #include "WebLocalFrameLoaderClient.h"
@@ -50,7 +49,6 @@
 #include <WebCore/CachedResource.h>
 #include <WebCore/ContentSecurityPolicy.h>
 #include <WebCore/DataURLDecoder.h>
-#include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
 #include <WebCore/Document.h>
@@ -81,7 +79,7 @@
 #include <WebCore/QuickLook.h>
 #endif
 
-#if ENABLE(WK_WEB_EXTENSIONS)
+#if ENABLE(WK_WEB_EXTENSIONS) && PLATFORM(COCOA)
 #include "WebExtensionControllerProxy.h"
 #endif
 
@@ -93,6 +91,7 @@
 #define WEBLOADERSTRATEGY_WITH_FRAMELOADER_RELEASE_LOG_STANDARD_PARAMETERS this, nullptr, &frameLoader, &frameLoader.frame(), trackingParameters.pageID ? trackingParameters.pageID->toUInt64() : 0, trackingParameters.frameID ? trackingParameters.frameID->object().toUInt64() : 0, trackingParameters.resourceID ? trackingParameters.resourceID->toUInt64() : 0
 
 #define WEBLOADERSTRATEGY_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, WEBLOADERSTRATEGY_RELEASE_LOG_STANDARD_TEMPLATE fmt, WEBLOADERSTRATEGY_RELEASE_LOG_STANDARD_PARAMETERS, ##__VA_ARGS__)
+#define WEBLOADERSTRATEGY_RELEASE_LOG_FORWARDABLE(fmt, ...) RELEASE_LOG_FORWARDABLE(Network, fmt, trackingParameters.pageID ? trackingParameters.pageID->toUInt64() : 0, trackingParameters.frameID ? trackingParameters.frameID->object().toUInt64() : 0, trackingParameters.resourceID ? trackingParameters.resourceID->toUInt64() : 0, ##__VA_ARGS__)
 #define WEBLOADERSTRATEGY_RELEASE_LOG_ERROR(fmt, ...) RELEASE_LOG_ERROR(Network, WEBLOADERSTRATEGY_RELEASE_LOG_STANDARD_TEMPLATE fmt, WEBLOADERSTRATEGY_RELEASE_LOG_STANDARD_PARAMETERS, ##__VA_ARGS__)
 
 #define WEBLOADERSTRATEGY_WITH_FRAMELOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, WEBLOADERSTRATEGY_RELEASE_LOG_STANDARD_TEMPLATE fmt, WEBLOADERSTRATEGY_WITH_FRAMELOADER_RELEASE_LOG_STANDARD_PARAMETERS, ##__VA_ARGS__)
@@ -124,8 +123,8 @@ void WebLoaderStrategy::deref() const
 void WebLoaderStrategy::loadResource(LocalFrame& frame, CachedResource& resource, ResourceRequest&& request, const ResourceLoaderOptions& options, CompletionHandler<void(RefPtr<SubresourceLoader>&&)>&& completionHandler)
 {
     if (resource.type() != CachedResource::Type::MainResource || !frame.isMainFrame()) {
-        if (auto* localMainFrame = dynamicDowncast<LocalFrame>(frame.mainFrame())) {
-            if (auto* document = localMainFrame->document()) {
+        if (RefPtr localMainFrame = frame.localMainFrame()) {
+            if (RefPtr document = localMainFrame->document()) {
                 if (document && document->loader())
                     request.setIsAppInitiated(document->loader()->lastNavigationWasAppInitiated());
             }
@@ -179,7 +178,9 @@ static Seconds maximumBufferingTime(CachedResource* resource)
     case CachedResource::Type::RawResource:
     case CachedResource::Type::SVGDocumentResource:
     case CachedResource::Type::LinkPrefetch:
+#if ENABLE(VIDEO)
     case CachedResource::Type::TextTrackResource:
+#endif
 #if ENABLE(XSLT)
     case CachedResource::Type::XSLStyleSheet:
 #endif
@@ -263,7 +264,7 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
         return;
     }
 
-    WEBLOADERSTRATEGY_RELEASE_LOG("scheduleLoad: URL will be scheduled with the NetworkProcess");
+    WEBLOADERSTRATEGY_RELEASE_LOG_FORWARDABLE(WEBLOADERSTRATEGY_SCHEDULELOAD);
     scheduleLoadFromNetworkProcess(resourceLoader, resourceLoader.request(), trackingParameters, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime(resource));
 }
 
@@ -271,6 +272,9 @@ bool WebLoaderStrategy::tryLoadingUsingURLSchemeHandler(ResourceLoader& resource
 {
     RefPtr<WebPage> webPage;
     RefPtr<WebFrame> webFrame;
+
+    if (!resourceLoader.frameLoader())
+        return false;
 
     if (auto* webFrameLoaderClient = toWebLocalFrameLoaderClient(resourceLoader.frameLoader()->client())) {
         webFrame = &webFrameLoaderClient->webFrame();
@@ -315,7 +319,7 @@ bool WebLoaderStrategy::tryLoadingUsingPDFJSHandler(ResourceLoader& resourceLoad
 
 static RefPtr<DocumentLoader> policySourceDocumentLoaderForFrame(const LocalFrame& frame, bool isMainFrameNavigation = false)
 {
-    RefPtr mainFrame = dynamicDowncast<LocalFrame>(frame.mainFrame());
+    RefPtr mainFrame = frame.localMainFrame();
     if (!mainFrame)
         return { };
 
@@ -357,7 +361,7 @@ static void addParametersShared(const LocalFrame* frame, NetworkResourceLoadPara
         parameters.shouldRelaxThirdPartyCookieBlocking = page->shouldRelaxThirdPartyCookieBlocking();
         page->logMediaDiagnosticMessage(parameters.request.httpBody());
 
-#if ENABLE(WK_WEB_EXTENSIONS)
+#if ENABLE(WK_WEB_EXTENSIONS) && PLATFORM(COCOA)
         if (RefPtr webPage = WebPage::fromCorePage(*page)) {
             if (RefPtr extensionControllerProxy = webPage->webExtensionControllerProxy())
                 parameters.pageHasLoadedWebExtensions = extensionControllerProxy->hasLoadedContexts();
@@ -410,7 +414,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     loadParameters.webPageProxyID = trackingParameters.webPageProxyID;
     loadParameters.webPageID = trackingParameters.pageID;
     loadParameters.webFrameID = trackingParameters.frameID;
-    loadParameters.parentPID = presentingApplicationPID();
+    loadParameters.parentPID = legacyPresentingApplicationPID();
 #if HAVE(AUDIT_TOKEN)
     loadParameters.networkProcessAuditToken = WebProcess::singleton().ensureNetworkProcessConnection().networkProcessAuditToken();
 #endif
@@ -547,7 +551,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume;
     if (loadParameters.isMainFrameNavigation)
         existingNetworkResourceLoadIdentifierToResume = std::exchange(m_existingNetworkResourceLoadIdentifierToResume, std::nullopt);
-    WEBLOADERSTRATEGY_RELEASE_LOG("scheduleLoad: Resource is being scheduled with the NetworkProcess (priority=%d, existingNetworkResourceLoadIdentifierToResume=%" PRIu64 ")", static_cast<int>(resourceLoader.request().priority()), existingNetworkResourceLoadIdentifierToResume ? existingNetworkResourceLoadIdentifierToResume->toUInt64() : 0);
+    WEBLOADERSTRATEGY_RELEASE_LOG_FORWARDABLE(WEBLOADERSTRATEGY_SCHEDULELOAD_RESOURCE_SCHEDULED_WITH_NETWORKPROCESS, static_cast<int>(resourceLoader.request().priority()), existingNetworkResourceLoadIdentifierToResume ? existingNetworkResourceLoadIdentifierToResume->toUInt64() : 0);
 
     if (WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::ScheduleResourceLoad(loadParameters, existingNetworkResourceLoadIdentifierToResume), 0) != IPC::Error::NoError) {
         WEBLOADERSTRATEGY_RELEASE_LOG_ERROR("scheduleLoad: Unable to schedule resource with the NetworkProcess (priority=%d)", static_cast<int>(resourceLoader.request().priority()));
@@ -761,7 +765,7 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, WebC
     loadParameters.webPageProxyID = webPageProxyID;
     loadParameters.webPageID = pageID;
     loadParameters.webFrameID = frameID;
-    loadParameters.parentPID = presentingApplicationPID();
+    loadParameters.parentPID = legacyPresentingApplicationPID();
 #if HAVE(AUDIT_TOKEN)
     loadParameters.networkProcessAuditToken = WebProcess::singleton().ensureNetworkProcessConnection().networkProcessAuditToken();
 #endif
@@ -845,7 +849,7 @@ void WebLoaderStrategy::startPingLoad(LocalFrame& frame, ResourceRequest& reques
     loadParameters.request = request;
     loadParameters.sourceOrigin = &document->securityOrigin();
     loadParameters.topOrigin = &document->topOrigin();
-    loadParameters.parentPID = presentingApplicationPID();
+    loadParameters.parentPID = legacyPresentingApplicationPID();
 #if HAVE(AUDIT_TOKEN)
     loadParameters.networkProcessAuditToken = WebProcess::singleton().ensureNetworkProcessConnection().networkProcessAuditToken();
 #endif
@@ -885,21 +889,15 @@ void WebLoaderStrategy::didFinishPingLoad(WebCore::ResourceLoaderIdentifier ping
 
 void WebLoaderStrategy::preconnectTo(FrameLoader& frameLoader, const URL& url, StoredCredentialsPolicy storedCredentialsPolicy, ShouldPreconnectAsFirstParty shouldPreconnectAsFirstParty, PreconnectCompletionHandler&& completionHandler)
 {
-    auto* webFrameLoaderClient = toWebLocalFrameLoaderClient(frameLoader.client());
-    if (!webFrameLoaderClient) {
-        if (completionHandler)
-            completionHandler(internalError(url));
-        return;
-    }
-    auto& webFrame = webFrameLoaderClient->webFrame();
-    auto* webPage = webFrame.page();
-    if (!webPage) {
-        if (completionHandler)
-            completionHandler(internalError(url));
-        return;
-    }
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameLoader.frameID());
+    if (!webFrame)
+        return completionHandler(internalError(url));
 
-    preconnectTo(ResourceRequest { url }, *webPage, webFrame, storedCredentialsPolicy, shouldPreconnectAsFirstParty, WTFMove(completionHandler));
+    RefPtr webPage = webFrame->page();
+    if (!webPage)
+        return completionHandler(internalError(url));
+
+    preconnectTo(ResourceRequest { url }, *webPage, *webFrame, storedCredentialsPolicy, shouldPreconnectAsFirstParty, WTFMove(completionHandler));
 }
 
 void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage& webPage, WebFrame& webFrame, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, ShouldPreconnectAsFirstParty shouldPreconnectAsFirstParty, PreconnectCompletionHandler&& completionHandler)
@@ -933,7 +931,7 @@ void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage
     parameters.webPageProxyID = webPage.webPageProxyIdentifier();
     parameters.webPageID = webPage.identifier();
     parameters.webFrameID = webFrame.frameID();
-    parameters.parentPID = presentingApplicationPID();
+    parameters.parentPID = legacyPresentingApplicationPID();
 #if HAVE(AUDIT_TOKEN)
     parameters.networkProcessAuditToken = WebProcess::singleton().ensureNetworkProcessConnection().networkProcessAuditToken();
 #endif
@@ -1031,7 +1029,7 @@ NetworkLoadMetrics WebLoaderStrategy::networkMetricsFromResourceLoadIdentifier(W
 
 bool WebLoaderStrategy::shouldPerformSecurityChecks() const
 {
-    return DeprecatedGlobalSettings::restrictedHTTPResponseAccess();
+    return true;
 }
 
 bool WebLoaderStrategy::havePerformedSecurityChecks(const ResourceResponse& response) const
@@ -1070,6 +1068,63 @@ void WebLoaderStrategy::prioritizeResourceLoads(const Vector<WebCore::Subresourc
 
     auto& connection = WebProcess::singleton().ensureNetworkProcessConnection().connection();
     connection.send(Messages::NetworkConnectionToWebProcess::PrioritizeResourceLoads(identifiers), 0);
+}
+
+ResourceError WebLoaderStrategy::cancelledError(const ResourceRequest& request) const
+{
+    return WebKit::cancelledError(request);
+}
+
+ResourceError WebLoaderStrategy::blockedError(const ResourceRequest& request) const
+{
+    return WebKit::blockedError(request);
+}
+
+ResourceError WebLoaderStrategy::blockedByContentBlockerError(const ResourceRequest& request) const
+{
+    return WebKit::blockedByContentBlockerError(request);
+}
+
+ResourceError WebLoaderStrategy::cannotShowURLError(const ResourceRequest& request) const
+{
+    return WebKit::cannotShowURLError(request);
+}
+
+ResourceError WebLoaderStrategy::interruptedForPolicyChangeError(const ResourceRequest& request) const
+{
+    return WebKit::interruptedForPolicyChangeError(request);
+}
+
+#if ENABLE(CONTENT_FILTERING)
+ResourceError WebLoaderStrategy::blockedByContentFilterError(const ResourceRequest& request) const
+{
+    return WebKit::blockedByContentFilterError(request);
+}
+#endif
+
+ResourceError WebLoaderStrategy::cannotShowMIMETypeError(const ResourceResponse& response) const
+{
+    return WebKit::cannotShowMIMETypeError(response);
+}
+
+ResourceError WebLoaderStrategy::fileDoesNotExistError(const ResourceResponse& response) const
+{
+    return WebKit::fileDoesNotExistError(response);
+}
+
+ResourceError WebLoaderStrategy::httpsUpgradeRedirectLoopError(const ResourceRequest& request) const
+{
+    return WebKit::httpsUpgradeRedirectLoopError(request);
+}
+
+ResourceError WebLoaderStrategy::httpNavigationWithHTTPSOnlyError(const ResourceRequest& request) const
+{
+    return WebKit::httpNavigationWithHTTPSOnlyError(request);
+}
+
+ResourceError WebLoaderStrategy::pluginWillHandleLoadError(const ResourceResponse& response) const
+{
+    return WebKit::pluginWillHandleLoadError(response);
 }
 
 } // namespace WebKit

@@ -29,7 +29,9 @@
 
 #include "AudioMediaStreamTrackRendererInternalUnitIdentifier.h"
 #include "Connection.h"
+#include "GPUConnectionToWebProcess.h"
 #include "SharedCARingBuffer.h"
+#include "SharedPreferencesForWebProcess.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
@@ -62,12 +64,17 @@ public:
 
     void notifyLastToCaptureAudioChanged();
 
+    void ref() const final;
+    void deref() const final;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
+
 private:
     // Messages
     void createUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier, const String&, CompletionHandler<void(std::optional<WebCore::CAAudioStreamDescription>, size_t)>&& callback);
     void deleteUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier);
     void startUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier, ConsumerSharedCARingBuffer::Handle&&, IPC::Semaphore&&);
     void stopUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier);
+    void setLastDeviceUsed(const String&);
 
     HashMap<AudioMediaStreamTrackRendererInternalUnitIdentifier, Ref<class RemoteAudioMediaStreamTrackRendererInternalUnitManagerUnit>> m_units;
     ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;

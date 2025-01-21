@@ -46,7 +46,6 @@ public:
     static StyleSheetContents* mediaQueryStyleSheet;
     static StyleSheetContents* horizontalFormControlsStyleSheet;
     static StyleSheetContents* htmlSwitchControlStyleSheet;
-    static StyleSheetContents* plugInsStyleSheet;
     static StyleSheetContents* popoverStyleSheet;
     static StyleSheetContents* counterStylesStyleSheet;
     static StyleSheetContents* viewTransitionsStyleSheet;
@@ -62,9 +61,7 @@ public:
 #if ENABLE(DATALIST_ELEMENT)
     static StyleSheetContents* dataListStyleSheet;
 #endif
-#if ENABLE(INPUT_TYPE_COLOR)
     static StyleSheetContents* colorInputStyleSheet;
-#endif
 
     static void initDefaultStyleSheet();
     static void ensureDefaultStyleSheetsForElement(const Element&);

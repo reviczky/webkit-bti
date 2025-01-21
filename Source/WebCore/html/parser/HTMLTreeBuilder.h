@@ -56,7 +56,7 @@ class HTMLTreeBuilder {
     WTF_MAKE_TZONE_ALLOCATED(HTMLTreeBuilder);
 public:
     HTMLTreeBuilder(HTMLDocumentParser&, HTMLDocument&, OptionSet<ParserContentPolicy>, const HTMLParserOptions&);
-    HTMLTreeBuilder(HTMLDocumentParser&, DocumentFragment&, Element& contextElement, OptionSet<ParserContentPolicy>, const HTMLParserOptions&);
+    HTMLTreeBuilder(HTMLDocumentParser&, DocumentFragment&, Element& contextElement, OptionSet<ParserContentPolicy>, const HTMLParserOptions&, CustomElementRegistry*);
     void setShouldSkipLeadingNewline(bool);
 
     ~HTMLTreeBuilder();
@@ -77,6 +77,8 @@ public:
 
     // Done, close any open tags, etc.
     void finished();
+
+    bool isOnStackOfOpenElements(Element&) const;
 
 private:
     class ExternalCharacterTokenBuffer;

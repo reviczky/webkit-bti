@@ -248,7 +248,7 @@ bool DragController::performDragOperation(DragData&& dragData)
 
     IgnoreSelectionChangeForScope ignoreSelectionChanges { *focusedOrMainFrame };
 
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return false;
 
@@ -367,14 +367,10 @@ static RefPtr<HTMLInputElement> asFileInput(Node& node)
     return inputElement && inputElement->isFileUpload() ? inputElement : nullptr;
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
 static bool isEnabledColorInput(Node& node)
 {
     RefPtr input = dynamicDowncast<HTMLInputElement>(node);
-    if (!input)
-        return false;
-    return input->isColorControl() && !input->isDisabledFormControl();
+    return input && input->isColorControl() && !input->isDisabledFormControl();
 }
 
 static bool isInShadowTreeOfEnabledColorInput(Node& node)
@@ -382,8 +378,6 @@ static bool isInShadowTreeOfEnabledColorInput(Node& node)
     RefPtr host = node.shadowHost();
     return host && isEnabledColorInput(*host);
 }
-
-#endif
 
 // This can return null if an empty document is loaded.
 static Element* elementUnderMouse(Document& documentUnderMouse, const IntPoint& p)
@@ -522,7 +516,7 @@ OptionSet<DragSourceAction> DragController::delegateDragSourceAction(const IntPo
 
 std::optional<DragOperation> DragController::operationForLoad(const DragData& dragData)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return std::nullopt;
     RefPtr document = localMainFrame->documentAtPoint(dragData.clientPosition());
@@ -583,13 +577,11 @@ bool DragController::concludeEditDrag(const DragData& dragData)
         Color color = dragData.asColor();
         if (!color.isValid())
             return false;
-#if ENABLE(INPUT_TYPE_COLOR)
         if (isEnabledColorInput(*element)) {
             auto& input = downcast<HTMLInputElement>(*element);
             input.setValue(serializationForHTML(color), DispatchInputAndChangeEvent);
             return true;
         }
-#endif
         auto innerRange = innerFrame->selection().selection().toNormalizedRange();
         if (!innerRange)
             return false;
@@ -678,7 +670,7 @@ bool DragController::concludeEditDrag(const DragData& dragData)
 
 bool DragController::canProcessDrag(const DragData& dragData)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return false;
     IntPoint point = localMainFrame->protectedView()->windowToContents(dragData.clientPosition());
@@ -696,10 +688,8 @@ bool DragController::canProcessDrag(const DragData& dragData)
     DragData::DraggingPurpose dragPurpose = DragData::DraggingPurpose::ForEditing;
     if (asFileInput(*dragNode))
         dragPurpose = DragData::DraggingPurpose::ForFileUpload;
-#if ENABLE(INPUT_TYPE_COLOR)
     else if (isEnabledColorInput(*dragNode) || isInShadowTreeOfEnabledColorInput(*dragNode))
         dragPurpose = DragData::DraggingPurpose::ForColorControl;
-#endif
 
     if (!dragData.containsCompatibleContent(dragPurpose))
         return false;
@@ -707,10 +697,8 @@ bool DragController::canProcessDrag(const DragData& dragData)
     if (dragPurpose == DragData::DraggingPurpose::ForFileUpload)
         return true;
 
-#if ENABLE(INPUT_TYPE_COLOR)
     if (dragPurpose == DragData::DraggingPurpose::ForColorControl)
         return true;
-#endif
 
     if (!dragNode->hasEditableStyle())
         return false;
@@ -861,12 +849,10 @@ RefPtr<Element> DragController::draggableElement(const LocalFrame* sourceFrame, 
                 return element;
             }
 #endif
-#if ENABLE(INPUT_TYPE_COLOR)
             if (m_dragSourceAction.contains(DragSourceAction::Color) && isEnabledColorInput(*element)) {
                 state.type.add(DragSourceAction::Color);
                 return element;
             }
-#endif
 #if ENABLE(MODEL_ELEMENT)
             if (RefPtr model = dynamicDowncast<HTMLModelElement>(*element); model
                 && m_dragSourceAction.contains(DragSourceAction::Model)
@@ -1271,7 +1257,6 @@ bool DragController::startDrag(LocalFrame& src, const DragState& state, OptionSe
     }
 #endif
 
-#if ENABLE(INPUT_TYPE_COLOR)
     if (RefPtr input = dynamicDowncast<HTMLInputElement>(state.source); input
         && m_dragSourceAction.contains(DragSourceAction::Color)
         && input->isColorControl()) {
@@ -1288,7 +1273,6 @@ bool DragController::startDrag(LocalFrame& src, const DragState& state, OptionSe
         doSystemDrag(WTFMove(dragImage), dragLoc, dragOrigin, src, state, { });
         return true;
     }
-#endif
 
 #if ENABLE(MODEL_ELEMENT)
     if (RefPtr modelElement = dynamicDowncast<HTMLModelElement>(state.source); modelElement && m_dragSourceAction.contains(DragSourceAction::Model)) {
@@ -1584,7 +1568,7 @@ void DragController::finalizeDroppedImagePlaceholder(HTMLImageElement& placehold
 // Manual drag caret manipulation
 void DragController::placeDragCaret(const IntPoint& windowPoint)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return;
     mouseMovedIntoDocument(RefPtr { localMainFrame->documentAtPoint(windowPoint) });

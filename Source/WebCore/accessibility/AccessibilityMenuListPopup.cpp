@@ -69,23 +69,6 @@ bool AccessibilityMenuListPopup::computeIsIgnored() const
     return isIgnoredByDefault();
 }
 
-std::optional<AXCoreObject::AccessibilityChildrenVector> AccessibilityMenuListPopup::selectedChildren()
-{
-    if (!canHaveSelectedChildren())
-        return { };
-
-    if (!childrenInitialized())
-        addChildren();
-
-    AccessibilityChildrenVector result;
-    for (const auto& child : unignoredChildren()) {
-        auto* liveChild = dynamicDowncast<AccessibilityObject>(child.get());
-        if (liveChild && liveChild->isMenuListOption() && liveChild->isSelected())
-            result.append(child.get());
-    }
-    return result;
-}
-
 AccessibilityMenuListOption* AccessibilityMenuListPopup::menuListOptionAccessibilityObject(HTMLElement* element) const
 {
     if (!element || !element->inRenderedDocument())
@@ -117,7 +100,7 @@ void AccessibilityMenuListPopup::addChildren()
     for (const auto& listItem : select->listItems()) {
         if (auto* menuListOptionObject = menuListOptionAccessibilityObject(listItem.get())) {
             menuListOptionObject->setParent(this);
-            addChild(menuListOptionObject, DescendIfIgnored::No);
+            addChild(*menuListOptionObject, DescendIfIgnored::No);
         }
     }
 }
@@ -153,8 +136,8 @@ void AccessibilityMenuListPopup::didUpdateActiveOption(int optionIndex)
         return;
 
     auto& child = downcast<AccessibilityObject>(children[optionIndex].get());
-    cache->postNotification(&child, document(), AXObjectCache::AXFocusedUIElementChanged);
-    cache->postNotification(&child, document(), AXObjectCache::AXMenuListItemSelected);
+    cache->postNotification(&child, document(), AXNotification::FocusedUIElementChanged);
+    cache->postNotification(&child, document(), AXNotification::MenuListItemSelected);
 }
 
 } // namespace WebCore

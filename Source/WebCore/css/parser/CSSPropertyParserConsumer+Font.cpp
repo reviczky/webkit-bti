@@ -66,8 +66,8 @@
 #include "Document.h"
 #include "FontCustomPlatformData.h"
 #include "FontFace.h"
-#include "ParsingUtilities.h"
 #include "WebKitFontFamilyNames.h"
+#include <wtf/text/ParsingUtilities.h>
 
 #if ENABLE(VARIATION_FONTS)
 #include "CSSFontStyleRangeValue.h"
@@ -82,9 +82,9 @@ template<typename Result, typename... Ts> static Result forwardVariantTo(std::va
     return WTF::switchOn(WTFMove(variant), [](auto&& alternative) -> Result { return { WTFMove(alternative) }; });
 }
 
-template<typename T> static Ref<CSSPrimitiveValue> resolveToCSSPrimitiveValue(CSS::PrimitiveNumeric<T>&& primitive)
+static Ref<CSSPrimitiveValue> resolveToCSSPrimitiveValue(CSS::Numeric auto&& primitive)
 {
-    return WTF::switchOn(WTFMove(primitive), [](auto&& alternative) { return CSSPrimitiveValueResolverBase::resolve(WTFMove(alternative), { }, { }); }).releaseNonNull();
+    return WTF::switchOn(WTFMove(primitive), [](auto&& alternative) { return CSSPrimitiveValueResolverBase::resolve(WTFMove(alternative), { }); }).releaseNonNull();
 }
 
 static CSSParserMode parserMode(ScriptExecutionContext& context)
@@ -404,21 +404,16 @@ static std::optional<UnresolvedFontLineHeight> consumeLineHeightUnresolved(CSSPa
     // <'line-height'> = normal | <number [0,∞]> | <length-percentage [0,∞]>
     // https://www.w3.org/TR/css-inline-3/#line-height-property
 
-    if (range.peek().id() == CSSValueNormal) {
-        if (auto ident = consumeIdentRaw(range))
-            return { { *ident } };
-        return std::nullopt;
-    }
+    using Consumer = MetaConsumer<
+        CSS::Keyword::Normal,
+        CSS::Number<CSS::Nonnegative>,
+        CSS::LengthPercentage<CSS::Nonnegative>
+    >;
 
-    auto rangeCopy = range;
-
-    auto options = CSSPropertyParserOptions { .parserMode = context.mode };
-    auto lineHeight = MetaConsumer<CSS::Number<CSS::Nonnegative>, CSS::LengthPercentage<CSS::Nonnegative>>::consume(rangeCopy, context, { }, options);
-    if (!lineHeight)
-        return std::nullopt;
-
-    range = rangeCopy;
-    return forwardVariantTo<UnresolvedFontLineHeight>(WTFMove(*lineHeight));
+    return Consumer::consume(range, context, { }, { .parserMode = context.mode },
+        [&](CSS::Keyword::Normal) { return UnresolvedFontLineHeight { CSSValueNormal }; },
+        [&](auto&& value) { return UnresolvedFontLineHeight { WTFMove(value) }; }
+    );
 }
 
 // MARK: 'font' (shorthand)
@@ -1297,7 +1292,7 @@ RefPtr<CSSValue> consumeVariationTagValue(CSSParserTokenRange& range, const CSSP
 // MARK: @font-face 'font-stretch'
 // FIXME: Rename to 'font-width' to match spec. 'font-stretch' is now a legacy alias.
 
-RefPtr<CSSValue> parseFontFaceFontStretch(const String& string, ScriptExecutionContext& context)
+RefPtr<CSSValue> parseFontFaceFontWidth(const String& string, ScriptExecutionContext& context)
 {
     // <font-stretch> = auto | <'font-stretch'>{1,2}
     // https://drafts.csswg.org/css-fonts-4/#descdef-font-face-font-width
@@ -1311,7 +1306,7 @@ RefPtr<CSSValue> parseFontFaceFontStretch(const String& string, ScriptExecutionC
     if (range.atEnd())
         return nullptr;
 
-    RefPtr parsedValue = consumeFontFaceFontStretch(range, parserContext);
+    RefPtr parsedValue = consumeFontFaceFontWidth(range, parserContext);
     if (!parsedValue || !range.atEnd())
         return nullptr;
 
@@ -1320,7 +1315,7 @@ RefPtr<CSSValue> parseFontFaceFontStretch(const String& string, ScriptExecutionC
 
 #if ENABLE(VARIATION_FONTS)
 
-RefPtr<CSSValue> consumeFontFaceFontStretch(CSSParserTokenRange& range, const CSSParserContext& context)
+RefPtr<CSSValue> consumeFontFaceFontWidth(CSSParserTokenRange& range, const CSSParserContext& context)
 {
     // <font-stretch> = auto | <'font-stretch'>{1,2}
     // https://drafts.csswg.org/css-fonts-4/#descdef-font-face-font-width
@@ -1328,7 +1323,7 @@ RefPtr<CSSValue> consumeFontFaceFontStretch(CSSParserTokenRange& range, const CS
     // FIXME: Missing support for "auto" identifier.
     // FIXME: Both stretch values should allow keyword identifiers, not just the first.
 
-    if (RefPtr result = CSSPropertyParsing::consumeFontStretchAbsolute(range))
+    if (RefPtr result = CSSPropertyParsing::consumeFontWidthAbsolute(range))
         return result;
 
     RefPtr firstPercent = consumePercentage(range, context, ValueRange::NonNegative);
@@ -1350,12 +1345,12 @@ RefPtr<CSSValue> consumeFontFaceFontStretch(CSSParserTokenRange& range, const CS
 
 #else
 
-RefPtr<CSSValue> consumeFontFaceFontStretch(CSSParserTokenRange& range, const CSSParserContext& context)
+RefPtr<CSSValue> consumeFontFaceFontWidth(CSSParserTokenRange& range, const CSSParserContext& context)
 {
     // <font-stretch> = auto | <'font-stretch'>
     // NOTE: This is the pre-variation fonts definition.
 
-    if (RefPtr result = CSSPropertyParsing::consumeFontStretchAbsolute(range))
+    if (RefPtr result = CSSPropertyParsing::consumeFontWidthAbsolute(range))
         return result;
     if (RefPtr percent = consumePercentage(range, context, ValueRange::NonNegative))
         return percent;
@@ -1458,7 +1453,7 @@ RefPtr<CSSValue> consumeFontPaletteValuesOverrideColors(CSSParserTokenRange& ran
         auto key = consumeNonNegativeInteger(range, context);
         if (!key)
             return nullptr;
-        auto color = consumeColor(range, context, { .allowedColorTypes = StyleColor::CSSColorType::Absolute });
+        auto color = consumeColor(range, context, { .allowedColorTypes = CSS::ColorType::Absolute });
         if (!color)
             return nullptr;
         return CSSFontPaletteValuesOverrideColorsValue::create(key.releaseNonNull(), color.releaseNonNull());

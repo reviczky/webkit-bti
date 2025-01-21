@@ -157,8 +157,21 @@ egl::Error HardwareBufferImageSiblingVkAndroid::ValidateHardwareBuffer(
 {
     struct ANativeWindowBuffer *windowBuffer =
         angle::android::ClientBufferToANativeWindowBuffer(buffer);
-    struct AHardwareBuffer *hardwareBuffer =
-        angle::android::ANativeWindowBufferToAHardwareBuffer(windowBuffer);
+    struct AHardwareBuffer *hardwareBuffer = nullptr;
+    if (windowBuffer != nullptr)
+    {
+        hardwareBuffer = angle::android::ANativeWindowBufferToAHardwareBuffer(windowBuffer);
+        if (hardwareBuffer == nullptr)
+        {
+            return egl::EglBadParameter()
+                   << "Failed to obtain hardware buffer through given window buffer.";
+        }
+    }
+    else
+    {
+        return egl::EglBadParameter()
+               << "Failed to obtain Window buffer through given client buffer handler.";
+    }
 
     VkAndroidHardwareBufferFormatPropertiesANDROID bufferFormatProperties = {};
     bufferFormatProperties.sType =
@@ -430,11 +443,12 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
         displayVk, vkFormat->getActualRenderableImageFormatID(), &externalMemoryImageCreateInfo,
         &imageFormatListInfoStorage, &imageListFormatsStorage, &imageCreateFlags);
 
-    ANGLE_TRY(mImage->initExternal(
-        displayVk, textureType, vkExtents, vkFormat->getIntendedFormatID(),
-        vkFormat->getActualRenderableImageFormatID(), 1, usage, imageCreateFlags,
-        vk::ImageLayout::ExternalPreInitialized, imageCreateInfoPNext, gl::LevelIndex(0),
-        mLevelCount, layerCount, robustInitEnabled, hasProtectedContent(), conversionDesc));
+    ANGLE_TRY(
+        mImage->initExternal(displayVk, textureType, vkExtents, vkFormat->getIntendedFormatID(),
+                             vkFormat->getActualRenderableImageFormatID(), 1, usage,
+                             imageCreateFlags, vk::ImageLayout::ExternalPreInitialized,
+                             imageCreateInfoPNext, gl::LevelIndex(0), mLevelCount, layerCount,
+                             robustInitEnabled, hasProtectedContent(), conversionDesc, nullptr));
 
     VkImportAndroidHardwareBufferInfoANDROID importHardwareBufferInfo = {};
     importHardwareBufferInfo.sType  = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;

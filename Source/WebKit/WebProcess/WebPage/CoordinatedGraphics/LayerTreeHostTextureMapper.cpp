@@ -136,7 +136,7 @@ LayerTreeHost::LayerTreeHost(WebPage& webPage)
 
 LayerTreeHost::~LayerTreeHost() = default;
 
-void LayerTreeHost::setLayerFlushSchedulingEnabled(bool)
+void LayerTreeHost::setLayerTreeStateIsFrozen(bool)
 {
 }
 
@@ -254,10 +254,6 @@ void LayerTreeHost::contentsSizeChanged(const WebCore::IntSize&)
 }
 
 void LayerTreeHost::setIsDiscardable(bool)
-{
-}
-
-void LayerTreeHost::deviceOrPageScaleFactorChanged()
 {
 }
 

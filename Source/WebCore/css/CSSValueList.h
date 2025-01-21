@@ -23,8 +23,7 @@
 #include "CSSValue.h"
 #include <array>
 #include <unicode/umachine.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+#include <wtf/MallocSpan.h>
 
 namespace WebCore {
 
@@ -97,7 +96,7 @@ protected:
 private:
     unsigned m_size { 0 };
     std::array<const CSSValue*, 4> m_inlineStorage;
-    const CSSValue** m_additionalStorage;
+    MallocSpan<const CSSValue*> m_additionalStorage;
 };
 
 class CSSValueList final : public CSSValueContainingVector {
@@ -136,8 +135,6 @@ inline CSSValueContainingVector::~CSSValueContainingVector()
 {
     for (auto& value : *this)
         value.deref();
-    if (m_size > m_inlineStorage.size())
-        fastFree(m_additionalStorage);
 }
 
 inline const CSSValue& CSSValueContainingVector::operator[](unsigned index) const
@@ -147,7 +144,7 @@ inline const CSSValue& CSSValueContainingVector::operator[](unsigned index) cons
         ASSERT(index < m_size);
         return *m_inlineStorage[index];
     }
-    RELEASE_ASSERT(index < m_size);
+    ASSERT(index < m_size);
     return *m_additionalStorage[index - maxInlineSize];
 }
 
@@ -157,5 +154,3 @@ void add(Hasher&, const CSSValueContainingVector&);
 
 SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSValueContainingVector, containsVector())
 SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSValueList, isValueList())
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

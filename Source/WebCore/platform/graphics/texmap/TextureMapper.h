@@ -28,6 +28,7 @@
 #include "IntRect.h"
 #include "IntSize.h"
 #include "TextureMapperGLHeaders.h"
+#include "TextureMapperGPUBuffer.h"
 #include "TransformationMatrix.h"
 #include <array>
 #include <wtf/OptionSet.h>
@@ -39,10 +40,11 @@
 
 namespace WebCore {
 
+class ClipPath;
 class TextureMapperGLData;
+class TextureMapperGPUBuffer;
 class TextureMapperShaderProgram;
 class FilterOperations;
-class FloatPolygon;
 class FloatRoundedRect;
 enum class TextureMapperFlags : uint16_t;
 
@@ -78,12 +80,12 @@ public:
     void bindSurface(BitmapTexture* surface);
     BitmapTexture* currentSurface();
     void beginClip(const TransformationMatrix&, const FloatRoundedRect&);
-    void beginClip(const TransformationMatrix&, const FloatPolygon&);
+    void beginClip(const TransformationMatrix&, const ClipPath&);
     WEBCORE_EXPORT void beginPainting(FlipY = FlipY::No, BitmapTexture* = nullptr);
     WEBCORE_EXPORT void endPainting();
     void endClip();
     IntRect clipBounds();
-    IntSize maxTextureSize() const { return IntSize(2000, 2000); }
+    IntSize maxTextureSize() const;
     void setDepthRange(double zNear, double zFar);
     std::pair<double, double> depthRange() const;
     void setMaskMode(bool m) { m_isMaskMode = m; }
@@ -97,6 +99,8 @@ public:
 #if USE(GRAPHICS_LAYER_WC)
     WEBCORE_EXPORT void releaseUnusedTexturesNow();
 #endif
+
+    Ref<TextureMapperGPUBuffer> acquireBufferFromPool(size_t, TextureMapperGPUBuffer::Type);
 
 private:
     bool isInMaskMode() const { return m_isMaskMode; }

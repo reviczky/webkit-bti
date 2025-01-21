@@ -79,9 +79,9 @@ PageClientImpl::PageClientImpl(GtkWidget* viewWidget)
 }
 
 // PageClient's pure virtual functions
-std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
+Ref<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
 {
-    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(*webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(m_viewWidget)), webProcessProxy);
+    return DrawingAreaProxyCoordinatedGraphics::create(*webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(m_viewWidget)), webProcessProxy);
 }
 
 #if !USE(GTK4)
@@ -249,6 +249,11 @@ IntPoint PageClientImpl::screenToRootView(const IntPoint& point)
     return result;
 }
 
+IntPoint PageClientImpl::rootViewToScreen(const IntPoint& point)
+{
+    return convertWidgetPointToScreenPoint(m_viewWidget, point);
+}
+
 IntRect PageClientImpl::rootViewToScreen(const IntRect& rect)
 {
     return IntRect(convertWidgetPointToScreenPoint(m_viewWidget, rect.location()), rect.size());
@@ -304,14 +309,12 @@ Ref<WebContextMenuProxy> PageClientImpl::createContextMenuProxy(WebPageProxy& pa
 }
 #endif // ENABLE(CONTEXT_MENUS)
 
-#if ENABLE(INPUT_TYPE_COLOR)
-RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy* page, const WebCore::Color& color, const WebCore::IntRect& rect, ColorControlSupportsAlpha, Vector<WebCore::Color>&&)
+RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy& page, const WebCore::Color& color, const WebCore::IntRect& rect, ColorControlSupportsAlpha, Vector<WebCore::Color>&&)
 {
     if (WEBKIT_IS_WEB_VIEW(m_viewWidget))
-        return WebKitColorChooser::create(*page, color, rect);
-    return WebColorPickerGtk::create(*page, color, rect);
+        return WebKitColorChooser::create(page, color, rect);
+    return WebColorPickerGtk::create(page, color, rect);
 }
-#endif // ENABLE(INPUT_TYPE_COLOR)
 
 #if ENABLE(DATE_AND_TIME_INPUT_TYPES)
 RefPtr<WebDateTimePicker> PageClientImpl::createDateTimePicker(WebPageProxy& page)
@@ -409,15 +412,15 @@ bool PageClientImpl::isFullScreen()
     return webkitWebViewBaseIsFullScreen(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
 }
 
-void PageClientImpl::enterFullScreen()
+void PageClientImpl::enterFullScreen(CompletionHandler<void(bool)>&& completionHandler)
 {
     if (!m_viewWidget)
-        return;
+        return completionHandler(false);
 
     if (isFullScreen())
-        return;
+        return completionHandler(false);
 
-    webkitWebViewBaseWillEnterFullScreen(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
+    webkitWebViewBaseWillEnterFullScreen(WEBKIT_WEB_VIEW_BASE(m_viewWidget), WTFMove(completionHandler));
 
     if (!WEBKIT_IS_WEB_VIEW(m_viewWidget) || !webkitWebViewEnterFullScreen(WEBKIT_WEB_VIEW(m_viewWidget)))
         webkitWebViewBaseEnterFullScreen(WEBKIT_WEB_VIEW_BASE(m_viewWidget));

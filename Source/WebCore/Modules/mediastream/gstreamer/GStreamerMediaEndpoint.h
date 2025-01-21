@@ -117,9 +117,12 @@ public:
 
     void connectIncomingTrack(WebRTCTrackData&);
 
+    void startRTCLogs();
+    void stopRTCLogs();
+
 protected:
 #if !RELEASE_LOG_DISABLED
-    void onStatsDelivered(GUniquePtr<GstStructure>&&);
+    void onStatsDelivered(const GstStructure*);
 #endif
 
 private:
@@ -145,7 +148,7 @@ private:
     void prepareDataChannel(GstWebRTCDataChannel*, gboolean isLocal);
     void onDataChannel(GstWebRTCDataChannel*);
 
-    WARN_UNUSED_RETURN GstElement* requestAuxiliarySender();
+    WARN_UNUSED_RETURN GstElement* requestAuxiliarySender(GRefPtr<GstWebRTCDTLSTransport>&&);
 
     MediaStream& mediaStreamFromRTCStream(String mediaStreamId);
 
@@ -215,6 +218,15 @@ private:
     Vector<RefPtr<MediaStreamTrackPrivate>> m_pendingIncomingTracks;
 
     Vector<RefPtr<RealtimeOutgoingMediaSourceGStreamer>> m_unlinkedOutgoingSources;
+
+    bool m_isGatheringRTCLogs { false };
+
+    void maybeInsertNetSimForElement(GstBin*, GstElement*);
+
+    using NetSimOptions = HashMap<String, String>;
+    NetSimOptions netSimOptionsFromEnvironment(ASCIILiteral);
+    NetSimOptions m_srcNetSimOptions;
+    NetSimOptions m_sinkNetSimOptions;
 };
 
 } // namespace WebCore

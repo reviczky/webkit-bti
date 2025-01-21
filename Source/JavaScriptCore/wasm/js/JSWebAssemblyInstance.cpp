@@ -76,10 +76,9 @@ JSWebAssemblyInstance::JSWebAssemblyInstance(VM& vm, Structure* structure, JSWeb
     , m_tags(m_module->moduleInformation().exceptionIndexSpaceSize())
 {
     static_assert(static_cast<ptrdiff_t>(JSWebAssemblyInstance::offsetOfCachedMemory() + sizeof(void*)) == JSWebAssemblyInstance::offsetOfCachedBoundsCheckingSize());
-    for (unsigned i = 0; i < m_numImportFunctions; ++i) {
-        auto* info = new (importFunctionInfo(i)) ImportFunctionInfo();
-        info->callLinkInfo.initialize(vm, nullptr, CallLinkInfo::CallType::Call, CodeOrigin { });
-    }
+    for (unsigned i = 0; i < m_numImportFunctions; ++i)
+        new (importFunctionInfo(i)) WasmOrJSImportableFunctionCallLinkInfo();
+
     m_globals = std::bit_cast<Global::Value*>(std::bit_cast<char*>(this) + offsetOfGlobalPtr(m_numImportFunctions, m_module->moduleInformation().tableCount(), 0));
     memset(std::bit_cast<char*>(m_globals), 0, m_module->moduleInformation().globalCount() * sizeof(Global::Value));
     for (unsigned i = 0; i < m_module->moduleInformation().globals.size(); ++i) {
@@ -117,7 +116,11 @@ JSWebAssemblyInstance::~JSWebAssemblyInstance()
 {
     clearJSCallICs(*m_vm);
     for (unsigned i = 0; i < m_numImportFunctions; ++i)
-        importFunctionInfo(i)->~ImportFunctionInfo();
+        importFunctionInfo(i)->~WasmOrJSImportableFunctionCallLinkInfo();
+    for (unsigned i = 0; i < m_module->moduleInformation().tableCount(); ++i) {
+        if (Table* table = this->table(i))
+            table->deref();
+    }
 }
 
 void JSWebAssemblyInstance::destroy(JSCell* cell)
@@ -194,10 +197,19 @@ void JSWebAssemblyInstance::finalizeCreation(VM& vm, JSGlobalObject* globalObjec
         if (!info->targetInstance) {
             info->importFunctionStub = module().importFunctionStub(functionSpaceIndex);
             importCallees.append(adoptRef(*new WasmToJSCallee(functionSpaceIndex, { nullptr, nullptr })));
-            info->boxedTargetCalleeLoadLocation = reinterpret_cast<const uintptr_t*>(importCallees.last().ptr());
-        }
-        else
+            ASSERT(!*info->boxedWasmCalleeLoadLocation);
+            info->boxedCallee = CalleeBits::encodeNativeCallee(importCallees.last().ptr());
+            info->boxedWasmCalleeLoadLocation = &info->boxedCallee;
+
+            auto callLinkInfo = makeUnique<DataOnlyCallLinkInfo>();
+            callLinkInfo->initialize(vm, nullptr, CallLinkInfo::CallType::Call, CodeOrigin { });
+            WTF::storeStoreFence(); // CallLinkInfo is visited by concurrent GC already, thus, when we add it, we must ensure that it is fully initialized.
+            info->callLinkInfo = WTFMove(callLinkInfo);
+            vm.writeBarrier(this); // Materialized CallLinkInfo and we need rescan of JSWebAssemblyInstance.
+        } else {
             info->importFunctionStub = wasmCalleeGroup->wasmToWasmExitStub(functionSpaceIndex);
+            ASSERT(info->boxedWasmCalleeLoadLocation && *info->boxedWasmCalleeLoadLocation);
+        }
     }
 
     if (creationMode == CreationMode::FromJS) {
@@ -303,7 +315,8 @@ void JSWebAssemblyInstance::clearJSCallICs(VM& vm)
 {
     for (unsigned index = 0; index < numImportFunctions(); ++index) {
         auto* info = importFunctionInfo(index);
-        info->callLinkInfo.unlinkOrUpgrade(vm, nullptr, nullptr);
+        if (auto* callLinkInfo = info->callLinkInfo.get())
+            callLinkInfo->unlinkOrUpgrade(vm, nullptr, nullptr);
     }
 }
 
@@ -311,7 +324,8 @@ void JSWebAssemblyInstance::finalizeUnconditionally(VM& vm, CollectionScope)
 {
     for (unsigned index = 0; index < numImportFunctions(); ++index) {
         auto* info = importFunctionInfo(index);
-        info->callLinkInfo.visitWeak(vm);
+        if (auto* callLinkInfo = info->callLinkInfo.get())
+            callLinkInfo->visitWeak(vm);
     }
 }
 

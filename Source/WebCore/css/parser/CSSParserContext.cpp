@@ -57,7 +57,7 @@ CSSParserContext::CSSParserContext(CSSParserMode mode, const URL& baseURL)
     if (isUASheetBehavior(mode)) {
         cssAppearanceBaseEnabled = true;
         cssTextUnderlinePositionLeftRightEnabled = true;
-        lightDarkEnabled = true;
+        lightDarkColorEnabled = true;
         popoverAttributeEnabled = true;
         propertySettings.cssInputSecurityEnabled = true;
         propertySettings.cssCounterStyleAtRulesEnabled = true;
@@ -79,7 +79,7 @@ CSSParserContext::CSSParserContext(const Document& document, const URL& sheetBas
     , mode { document.inQuirksMode() ? HTMLQuirksMode : HTMLStandardMode }
     , isHTMLDocument { document.isHTMLDocument() }
     , hasDocumentSecurityOrigin { sheetBaseURL.isNull() || document.protectedSecurityOrigin()->canRequest(baseURL, OriginAccessPatternsForWebProcess::singleton()) }
-    , useSystemAppearance { document.page() ? document.page()->useSystemAppearance() : false }
+    , useSystemAppearance { document.settings().useSystemAppearance() }
     , counterStyleAtRuleImageSymbolsEnabled { document.settings().cssCounterStyleAtRuleImageSymbolsEnabled() }
     , springTimingFunctionEnabled { document.settings().springTimingFunctionEnabled() }
 #if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
@@ -104,11 +104,14 @@ CSSParserContext::CSSParserContext(const Document& document, const URL& sheetBas
     , imageControlsEnabled { document.settings().imageControlsEnabled() }
 #endif
     , colorLayersEnabled { document.settings().cssColorLayersEnabled() }
-    , lightDarkEnabled { document.settings().cssLightDarkEnabled() }
+    , lightDarkColorEnabled { document.settings().cssLightDarkEnabled() }
     , contrastColorEnabled { document.settings().cssContrastColorEnabled() }
     , targetTextPseudoElementEnabled { document.settings().targetTextPseudoElementEnabled() }
     , viewTransitionTypesEnabled { document.settings().viewTransitionsEnabled() && document.settings().viewTransitionTypesEnabled() }
     , cssProgressFunctionEnabled { document.settings().cssProgressFunctionEnabled() }
+    , cssMediaProgressFunctionEnabled { document.settings().cssMediaProgressFunctionEnabled() }
+    , cssContainerProgressFunctionEnabled { document.settings().cssContainerProgressFunctionEnabled() }
+    , cssRandomFunctionEnabled { document.settings().cssRandomFunctionEnabled() }
     , propertySettings { CSSPropertySettings { document.settings() } }
 {
 }
@@ -140,12 +143,15 @@ void add(Hasher& hasher, const CSSParserContext& context)
         | context.imageControlsEnabled                      << 19
 #endif
         | context.colorLayersEnabled                        << 20
-        | context.lightDarkEnabled                          << 21
+        | context.lightDarkColorEnabled                     << 21
         | context.contrastColorEnabled                      << 22
         | context.targetTextPseudoElementEnabled            << 23
         | context.viewTransitionTypesEnabled                << 24
         | context.cssProgressFunctionEnabled                << 25
-        | (uint32_t)context.mode                            << 26; // This is multiple bits, so keep it last.
+        | context.cssMediaProgressFunctionEnabled           << 26
+        | context.cssContainerProgressFunctionEnabled       << 27
+        | context.cssRandomFunctionEnabled                  << 28
+        | (uint32_t)context.mode                            << 29; // This is multiple bits, so keep it last.
     add(hasher, context.baseURL, context.charset, context.propertySettings, bits);
 }
 

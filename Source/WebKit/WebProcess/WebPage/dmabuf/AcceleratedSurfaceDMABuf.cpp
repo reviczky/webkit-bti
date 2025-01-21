@@ -30,6 +30,7 @@
 
 #include "AcceleratedBackingStoreDMABufMessages.h"
 #include "AcceleratedSurfaceDMABufMessages.h"
+#include "ThreadedCompositor.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include <WebCore/GLFence.h>
@@ -62,9 +63,19 @@ static uint64_t generateID()
     return ++identifier;
 }
 
-std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(WebPage& webPage, Function<void()>&& frameCompleteHandler)
+std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(ThreadedCompositor& compositor, WebPage& webPage, Function<void()>&& frameCompleteHandler)
 {
-    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(webPage, WTFMove(frameCompleteHandler)));
+    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(compositor, webPage, WTFMove(frameCompleteHandler)));
+}
+
+void AcceleratedSurfaceDMABuf::ref() const
+{
+    m_compositor->ref();
+}
+
+void AcceleratedSurfaceDMABuf::deref() const
+{
+    m_compositor->deref();
 }
 
 static bool useExplicitSync()
@@ -74,8 +85,9 @@ static bool useExplicitSync()
     return extensions.ANDROID_native_fence_sync && (display.eglCheckVersion(1, 5) || extensions.KHR_fence_sync);
 }
 
-AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Function<void()>&& frameCompleteHandler)
+AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(ThreadedCompositor& compositor, WebPage& webPage, Function<void()>&& frameCompleteHandler)
     : AcceleratedSurface(webPage, WTFMove(frameCompleteHandler))
+    , m_compositor(compositor)
     , m_id(generateID())
     , m_swapChain(m_id)
     , m_isVisible(webPage.activityState().contains(WebCore::ActivityState::IsVisible))
@@ -97,7 +109,7 @@ static uint64_t generateTargetID()
     return ++identifier;
 }
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(AcceleratedSurfaceDMABuf, RenderTarget);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedSurfaceDMABuf::RenderTarget);
 
 AcceleratedSurfaceDMABuf::RenderTarget::RenderTarget(uint64_t surfaceID, const WebCore::IntSize& size)
     : m_id(generateTargetID())
@@ -391,7 +403,7 @@ AcceleratedSurfaceDMABuf::SwapChain::SwapChain(uint64_t surfaceID)
     auto& display = WebCore::PlatformDisplay::sharedDisplay();
     switch (display.type()) {
     case WebCore::PlatformDisplay::Type::Surfaceless:
-        if (display.eglExtensions().MESA_image_dma_buf_export && WebProcess::singleton().dmaBufRendererBufferMode().contains(DMABufRendererBufferMode::Hardware))
+        if (display.eglExtensions().MESA_image_dma_buf_export && WebProcess::singleton().rendererBufferTransportMode().contains(RendererBufferTransportMode::Hardware))
             m_type = Type::Texture;
         else
             m_type = Type::SharedMemory;
@@ -637,9 +649,13 @@ uint64_t AcceleratedSurfaceDMABuf::surfaceID() const
     return m_id;
 }
 
-void AcceleratedSurfaceDMABuf::clientResize(const WebCore::IntSize& size)
+bool AcceleratedSurfaceDMABuf::resize(const WebCore::IntSize& size)
 {
-    m_swapChain.resize(size);
+    if (!AcceleratedSurface::resize(size))
+        return false;
+
+    m_swapChain.resize(m_size);
+    return true;
 }
 
 void AcceleratedSurfaceDMABuf::willRenderFrame()
@@ -657,7 +673,7 @@ void AcceleratedSurfaceDMABuf::willRenderFrame()
         WTFLogAlways("AcceleratedSurfaceDMABuf was unable to construct a complete framebuffer");
 }
 
-void AcceleratedSurfaceDMABuf::didRenderFrame(WebCore::Region&& damage)
+void AcceleratedSurfaceDMABuf::didRenderFrame()
 {
     TraceScope traceScope(WaitForCompositionCompletionStart, WaitForCompositionCompletionEnd);
 
@@ -673,11 +689,13 @@ void AcceleratedSurfaceDMABuf::didRenderFrame(WebCore::Region&& damage)
         glFlush();
 
     m_target->didRenderFrame();
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::Frame(m_target->id(), WTFMove(damage), WTFMove(renderingFence)), m_id);
+    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::Frame(m_target->id(), m_frameDamage.region(), WTFMove(renderingFence)), m_id);
+    m_frameDamage = WebCore::Damage();
 }
 
 const WebCore::Damage& AcceleratedSurfaceDMABuf::addDamage(const WebCore::Damage& damage)
 {
+    m_frameDamage = damage;
     m_swapChain.addDamage(damage);
     return m_target ? m_target->damage() : WebCore::Damage::invalid();
 }

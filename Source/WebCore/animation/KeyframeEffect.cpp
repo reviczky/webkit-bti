@@ -33,10 +33,9 @@
 #include "CSSPropertyAnimation.h"
 #include "CSSPropertyNames.h"
 #include "CSSPropertyParser.h"
-#include "CSSPropertyParserConsumer+TimingFunction.h"
+#include "CSSPropertyParserConsumer+Easing.h"
 #include "CSSSelector.h"
 #include "CSSStyleDeclaration.h"
-#include "CSSTimingFunctionValue.h"
 #include "CSSTransition.h"
 #include "CSSValue.h"
 #include "CSSValueKeywords.h"
@@ -128,6 +127,10 @@ static inline CSSPropertyID IDLAttributeNameToAnimationPropertyName(const AtomSt
     // 3. If attribute is the string "cssOffset", then return an animation property representing the CSS offset property.
     if (idlAttributeName == "cssOffset"_s)
         return CSSPropertyOffset;
+
+    // If the attribute is the string "fontStretch" return the CSS font-width property that it aliases.
+    if (idlAttributeName == "fontStretch"_s)
+        return CSSPropertyFontWidth;
 
     // 4. Otherwise, return the result of applying the IDL attribute to CSS property algorithm [CSSOM] to attribute.
     auto cssPropertyId = CSSStyleDeclaration::getCSSPropertyIDFromJavaScriptPropertyName(idlAttributeName);
@@ -672,14 +675,13 @@ void KeyframeEffect::copyPropertiesFromSource(Ref<KeyframeEffect>&& source)
     m_parsedKeyframes = WTFMove(parsedKeyframes);
 
     setFill(source->fill());
-    setDelay(source->delay());
-    setEndDelay(source->endDelay());
+    setDelay(source->specifiedDelay());
+    setEndDelay(source->specifiedEndDelay());
     setDirection(source->direction());
     setIterations(source->iterations());
     setTimingFunction(source->timingFunction());
     setIterationStart(source->iterationStart());
-    setIterationDuration(source->iterationDuration());
-    updateStaticTimingProperties();
+    setIterationDuration(source->specifiedIterationDuration());
 
     BlendingKeyframes blendingKeyframes(m_keyframesName);
     blendingKeyframes.copyKeyframes(source->m_blendingKeyframes);
@@ -929,7 +931,9 @@ ExceptionOr<void> KeyframeEffect::processKeyframes(JSGlobalObject& lexicalGlobal
         // Let the timing function of frame be the result of parsing the “easing” property on frame using the CSS syntax
         // defined for the easing property of the AnimationEffectTiming interface.
         // If parsing the “easing” property fails, throw a TypeError and abort this procedure.
-        auto timingFunctionResult = CSSPropertyParserHelpers::parseTimingFunction(keyframe.easing, parserContext);
+
+        // FIXME: Determine the how calc() and relative units should be resolved and switch to the non-deprecated parsing function.
+        auto timingFunctionResult = CSSPropertyParserHelpers::parseEasingFunctionDeprecated(keyframe.easing, parserContext);
         if (!timingFunctionResult)
             return Exception { ExceptionCode::TypeError };
         keyframe.timingFunction = WTFMove(timingFunctionResult);
@@ -939,7 +943,8 @@ ExceptionOr<void> KeyframeEffect::processKeyframes(JSGlobalObject& lexicalGlobal
     //    AnimationEffectTiming interface, and if any of the values fail to parse, throw a TypeError
     //    and abort this procedure.
     for (auto& easing : unusedEasings) {
-        auto timingFunctionResult = CSSPropertyParserHelpers::parseTimingFunction(easing, parserContext);
+        // FIXME: Determine the how calc() and relative units should be resolved and switch to the non-deprecated parsing function.
+        auto timingFunctionResult = CSSPropertyParserHelpers::parseEasingFunctionDeprecated(easing, parserContext);
         if (!timingFunctionResult)
             return Exception { ExceptionCode::TypeError };
     }
@@ -988,7 +993,7 @@ void KeyframeEffect::updateBlendingKeyframes(RenderStyle& elementStyle, const St
     setBlendingKeyframes(WTFMove(blendingKeyframes));
 }
 
-const HashSet<AnimatableCSSProperty>& KeyframeEffect::animatedProperties()
+const UncheckedKeyHashSet<AnimatableCSSProperty>& KeyframeEffect::animatedProperties()
 {
     if (!m_blendingKeyframes.isEmpty())
         return m_blendingKeyframes.properties();
@@ -1423,7 +1428,7 @@ bool KeyframeEffect::isRunningAcceleratedAnimationForProperty(CSSPropertyID prop
     return CSSPropertyAnimation::animationOfPropertyIsAccelerated(property, document()->settings()) && m_blendingKeyframes.properties().contains(property);
 }
 
-static bool propertiesContainTransformRelatedProperty(const HashSet<AnimatableCSSProperty>& properties)
+static bool propertiesContainTransformRelatedProperty(const UncheckedKeyHashSet<AnimatableCSSProperty>& properties)
 {
     return properties.contains(CSSPropertyTranslate)
         || properties.contains(CSSPropertyScale)
@@ -2048,10 +2053,12 @@ void KeyframeEffect::applyPendingAcceleratedActions()
     auto pendingAcceleratedActions = m_pendingAcceleratedActions;
     m_pendingAcceleratedActions.clear();
 
-    // To simplify the code we use a default of 0s for an unresolved current time since for a Stop action that is acceptable.
-    auto cssNumberishTimeOffset = animation()->currentTime().value_or(0_s) - delay();
-    ASSERT(cssNumberishTimeOffset.time());
-    auto timeOffset = cssNumberishTimeOffset.time()->seconds();
+    auto timeOffset = [&] {
+        // To simplify the code we use a default of 0s for an unresolved current time since for a Stop action that is acceptable.
+        auto cssNumberishTimeOffset = animation()->currentTime().value_or(0_s) - delay();
+        ASSERT(cssNumberishTimeOffset.time());
+        return cssNumberishTimeOffset.time()->seconds();
+    };
 
     auto startAnimation = [&]() -> RunningAccelerated {
         if (isRunningAccelerated())
@@ -2069,7 +2076,7 @@ void KeyframeEffect::applyPendingAcceleratedActions()
             return RunningAccelerated::Prevented;
 
         if (!m_hasImplicitKeyframeForAcceleratedProperty)
-            return renderer->startAnimation(timeOffset, backingAnimationForCompositedRenderer(), m_blendingKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::Failed;
+            return renderer->startAnimation(timeOffset(), backingAnimationForCompositedRenderer(), m_blendingKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::Failed;
 
         // We need to resolve all animations up to this point to ensure any forward-filling
         // effect is accounted for when computing the "from" value for the accelerated animation.
@@ -2090,7 +2097,7 @@ void KeyframeEffect::applyPendingAcceleratedActions()
         BlendingKeyframes explicitKeyframes(m_blendingKeyframes.animationName());
         explicitKeyframes.copyKeyframes(m_blendingKeyframes);
         explicitKeyframes.fillImplicitKeyframes(*this, *underlyingStyle);
-        return renderer->startAnimation(timeOffset, backingAnimationForCompositedRenderer(), explicitKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::Failed;
+        return renderer->startAnimation(timeOffset(), backingAnimationForCompositedRenderer(), explicitKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::Failed;
     };
 
     for (const auto& action : pendingAcceleratedActions) {
@@ -2104,13 +2111,13 @@ void KeyframeEffect::applyPendingAcceleratedActions()
             }
             break;
         case AcceleratedAction::Pause:
-            renderer->animationPaused(timeOffset, m_blendingKeyframes.animationName());
+            renderer->animationPaused(timeOffset(), m_blendingKeyframes.animationName());
             break;
         case AcceleratedAction::UpdateProperties:
             m_runningAccelerated = startAnimation();
             LOG_WITH_STREAM(Animations, stream << "KeyframeEffect " << this << " applyPendingAcceleratedActions " << m_blendingKeyframes.animationName() << " UpdateProperties, started accelerated: " << isRunningAccelerated());
             if (animation()->playState() == WebAnimation::PlayState::Paused)
-                renderer->animationPaused(timeOffset, m_blendingKeyframes.animationName());
+                renderer->animationPaused(timeOffset(), m_blendingKeyframes.animationName());
             break;
         case AcceleratedAction::Stop:
             ASSERT(document());
@@ -2126,7 +2133,7 @@ void KeyframeEffect::applyPendingAcceleratedActions()
     }
 }
 
-Ref<const Animation> KeyframeEffect::backingAnimationForCompositedRenderer() const
+Ref<const Animation> KeyframeEffect::backingAnimationForCompositedRenderer()
 {
     auto effectAnimation = animation();
 
@@ -2134,7 +2141,7 @@ Ref<const Animation> KeyframeEffect::backingAnimationForCompositedRenderer() con
     // corresponding Animation properties.
     auto animation = Animation::create();
     animation->setDuration(iterationDuration().time()->seconds());
-    animation->setDelay(delay().seconds());
+    animation->setDelay(delay().time()->seconds());
     animation->setIterationCount(iterations());
     animation->setTimingFunction(timingFunction()->clone());
     animation->setPlaybackRate(effectAnimation->playbackRate());
@@ -2400,7 +2407,7 @@ bool KeyframeEffect::ticksContinuouslyWhileActive() const
     return true;
 }
 
-Seconds KeyframeEffect::timeToNextTick(const BasicEffectTiming& timing) const
+Seconds KeyframeEffect::timeToNextTick(const BasicEffectTiming& timing)
 {
     // CSS Animations need to trigger "animationiteration" events even if there is no need to
     // update styles while animating, so if we're dealing with one we must wait until the next iteration.
@@ -2501,9 +2508,9 @@ void KeyframeEffect::computeHasImplicitKeyframeForAcceleratedProperty()
             // We keep three property lists, one which contains all properties seen across keyframes
             // which will be filtered eventually to only contain implicit properties, one containing
             // properties seen on the 0% keyframe and one containing properties seen on the 100% keyframe.
-            HashSet<CSSPropertyID> implicitProperties;
-            HashSet<CSSPropertyID> explicitZeroProperties;
-            HashSet<CSSPropertyID> explicitOneProperties;
+            UncheckedKeyHashSet<CSSPropertyID> implicitProperties;
+            UncheckedKeyHashSet<CSSPropertyID> explicitZeroProperties;
+            UncheckedKeyHashSet<CSSPropertyID> explicitOneProperties;
             auto styleProperties = keyframe.style;
             for (auto propertyReference : styleProperties.get()) {
                 auto property = propertyReference.id();

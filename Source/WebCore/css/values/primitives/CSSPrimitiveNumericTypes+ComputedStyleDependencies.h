@@ -33,40 +33,34 @@ namespace CSS {
 
 // What properties does this value rely on (eg, font-size for em units)?
 
-// Core unit based dependency analysis.
-template<> struct ComputedStyleDependenciesCollector<CSSUnitType> { void operator()(ComputedStyleDependencies& dependencies, CSSUnitType); };
-
-// Most raw primitives have no dependencies.
-template<RawNumeric RawType> struct ComputedStyleDependenciesCollector<RawType> {
-    constexpr void operator()(ComputedStyleDependencies&, const RawType&)
+// Most unit types have no dependencies.
+template<UnitEnum Unit> struct ComputedStyleDependenciesCollector<Unit> {
+    constexpr void operator()(ComputedStyleDependencies&, Unit)
     {
         // Nothing to do.
     }
 };
 
-// The exception being LengthRaw/LengthPercentageRaw.
-template<auto R> struct ComputedStyleDependenciesCollector<LengthRaw<R>> {
-    void operator()(ComputedStyleDependencies& dependencies, const LengthRaw<R>& value)
+// Let composite units dispatch to their component parts.
+template<CompositeUnitEnum Unit> struct ComputedStyleDependenciesCollector<Unit> {
+    constexpr void operator()(ComputedStyleDependencies& dependencies, Unit unit)
     {
-        collectComputedStyleDependencies(dependencies, value.type);
-    }
-};
-template<auto R> struct ComputedStyleDependenciesCollector<LengthPercentageRaw<R>> {
-    void operator()(ComputedStyleDependencies& dependencies, const LengthPercentageRaw<R>& value)
-    {
-        collectComputedStyleDependencies(dependencies, value.type);
-    }
-
-};
-
-// All primitives that can contain calc() may have dependencies, as calc() can contain relative lengths even in non-length contexts.
-template<RawNumeric RawType> struct ComputedStyleDependenciesCollector<PrimitiveNumeric<RawType>> {
-    void operator()(ComputedStyleDependencies& dependencies, const PrimitiveNumeric<RawType>& value)
-    {
-        WTF::switchOn(value, [&](const auto& value) { collectComputedStyleDependencies(dependencies, value); });
+        switchOnUnitType(unit, [&](auto unit) { collectComputedStyleDependencies(dependencies, unit); });
     }
 };
 
+// The one leaf unit type that does need to do work is `LengthUnit`.
+template<> struct ComputedStyleDependenciesCollector<LengthUnit> {
+    void operator()(ComputedStyleDependencies&, LengthUnit);
+};
+
+// Dependencies are based only on the unit; primitives to dispatch to the unit type analysis.
+template<NumericRaw RawType> struct ComputedStyleDependenciesCollector<RawType> {
+    constexpr void operator()(ComputedStyleDependencies& dependencies, const RawType& value)
+    {
+        collectComputedStyleDependencies(dependencies, value.unit);
+    }
+};
 
 } // namespace CSS
 } // namespace WebCore

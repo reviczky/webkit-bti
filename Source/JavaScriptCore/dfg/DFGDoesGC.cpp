@@ -175,7 +175,7 @@ bool doesGC(Graph& graph, Node* node)
     case MapIteratorNext:
     case MapIteratorKey:
     case MapIteratorValue:
-    case MapStorage:
+    case MapStorageOrSentinel:
     case MapIterationNext:
     case MapIterationEntry:
     case MapIterationEntryKey:
@@ -364,6 +364,7 @@ bool doesGC(Graph& graph, Node* node)
     case ResolveScope:
     case ResolveScopeForHoistingFuncDeclInEval:
     case Return:
+    case StringAt:
     case StringCharAt:
     case StringLocaleCompare:
     case TailCall:
@@ -448,6 +449,7 @@ bool doesGC(Graph& graph, Node* node)
     case SetAdd:
     case MapSet:
     case MapOrSetDelete:
+    case MapStorage:
     case ValueBitAnd:
     case ValueBitOr:
     case ValueBitXor:

@@ -282,6 +282,13 @@ additional_forward_declaration: typedef struct __CFBar * CFBarRef
 }
 #endif
 
+#if USE(SKIA)
+[Wrapper=CoreIPCSkFooBar, AdditionalEncoder=OtherEncoder] class SkFooBar {
+    int foo();
+    double bar();
+}
+#endif
+
 [RValue] class WebKit::RValueWithFunctionCalls {
     SandboxExtensionHandle callFunction()
 }
@@ -346,3 +353,13 @@ NSNull wrapped by CoreIPCNull
     bool bottom();
     bool left();
 }
+
+using WebCore::ConditionalVariant = std::variant<
+    int,
+#if USE(CHAR)
+    char,
+#endif
+    double
+>;
+
+using WebCore::NonConditionalVariant = std::variant<int, double>

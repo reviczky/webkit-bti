@@ -47,6 +47,7 @@
 #include <wtf/Scope.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/UUID.h>
+#include <wtf/glib/GSpanExtras.h>
 #include <wtf/glib/GThreadSafeWeakPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
@@ -334,13 +335,13 @@ void setGStreamerOptionsFromUIProcess(Vector<String>&& options)
 
 Vector<String> extractGStreamerOptionsFromCommandLine()
 {
-    GUniqueOutPtr<char> contents;
-    gsize length;
-    if (!g_file_get_contents("/proc/self/cmdline", &contents.outPtr(), &length, nullptr))
+    GUniqueOutPtr<GError> error;
+    GMallocSpan<char> contents = gFileGetContents("/proc/self/cmdline", error);
+    if (!contents)
         return { };
 
     Vector<String> options;
-    auto optionsString = String::fromUTF8(std::span(contents.get(), length));
+    auto optionsString = String::fromUTF8(contents.span());
     optionsString.split('\0', [&options](StringView item) {
         if (item.startsWith("--gst"_s))
             options.append(item.toString());
@@ -749,6 +750,12 @@ int GstMappedFrame::componentStride(int stride) const
     return GST_VIDEO_FRAME_COMP_STRIDE(&m_frame, stride);
 }
 
+int GstMappedFrame::componentWidth(int index) const
+{
+    RELEASE_ASSERT(isValid());
+    return GST_VIDEO_FRAME_COMP_WIDTH(&m_frame, index);
+}
+
 GstVideoInfo* GstMappedFrame::info()
 {
     RELEASE_ASSERT(isValid());
@@ -914,7 +921,7 @@ void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMess
 template<>
 Vector<uint8_t> GstMappedBuffer::createVector() const
 {
-    return std::span<const uint8_t> { data(), size() };
+    return span<uint8_t>();
 }
 
 bool isGStreamerPluginAvailable(const char* name)
@@ -1732,7 +1739,7 @@ void gstStructureFilterAndMapInPlace(GstStructure* structure, Function<bool(GstI
 #endif
 }
 
-#if !GST_CHECK_VERSION(1, 24, 0)
+#if USE(GBM) && !GST_CHECK_VERSION(1, 24, 0)
 static GstVideoFormat drmFourccToGstVideoFormat(uint32_t fourcc)
 {
     switch (fourcc) {
@@ -1767,7 +1774,7 @@ static GstVideoFormat drmFourccToGstVideoFormat(uint32_t fourcc)
     RELEASE_ASSERT_NOT_REACHED();
     return GST_VIDEO_FORMAT_UNKNOWN;
 }
-#endif // !GST_CHECK_VERSION(1, 24, 0)
+#endif // USE(GBM) && !GST_CHECK_VERSION(1, 24, 0)
 
 #if USE(GBM)
 GRefPtr<GstCaps> buildDMABufCaps()
@@ -1811,7 +1818,7 @@ GRefPtr<GstCaps> buildDMABufCaps()
                 gst_value_list_append_and_take_value(&supportedFormats, &value);
             }
         }
-#else
+#elif USE(GBM)
         GValue value = G_VALUE_INIT;
         g_value_init(&value, G_TYPE_STRING);
         g_value_set_string(&value, gst_video_format_to_string(drmFourccToGstVideoFormat(format.fourcc)));
@@ -1821,7 +1828,7 @@ GRefPtr<GstCaps> buildDMABufCaps()
 
 #if GST_CHECK_VERSION(1, 24, 0)
     gst_caps_set_value(caps.get(), "drm-format", &supportedFormats);
-#else
+#elif USE(GBM)
     gst_caps_set_value(caps.get(), "format", &supportedFormats);
 #endif
     g_value_unset(&supportedFormats);
@@ -1829,6 +1836,43 @@ GRefPtr<GstCaps> buildDMABufCaps()
     return caps;
 }
 #endif // USE(GBM)
+
+static std::optional<GRefPtr<GstContext>> requestGLContext(const char* contextType)
+{
+    auto& sharedDisplay = PlatformDisplay::sharedDisplay();
+    auto* gstGLDisplay = sharedDisplay.gstGLDisplay();
+    auto* gstGLContext = sharedDisplay.gstGLContext();
+
+    if (!gstGLDisplay || !gstGLContext)
+        return std::nullopt;
+
+    if (!g_strcmp0(contextType, GST_GL_DISPLAY_CONTEXT_TYPE)) {
+        GRefPtr<GstContext> displayContext = adoptGRef(gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, FALSE));
+        gst_context_set_gl_display(displayContext.get(), gstGLDisplay);
+        return displayContext;
+    }
+
+    if (!g_strcmp0(contextType, "gst.gl.app_context")) {
+        GRefPtr<GstContext> appContext = adoptGRef(gst_context_new("gst.gl.app_context", FALSE));
+        GstStructure* structure = gst_context_writable_structure(appContext.get());
+        gst_structure_set(structure, "context", GST_TYPE_GL_CONTEXT, gstGLContext, nullptr);
+        return appContext;
+    }
+
+    return std::nullopt;
+}
+
+bool setGstElementGLContext(GstElement* element, const char* contextType)
+{
+    GRefPtr<GstContext> oldContext = adoptGRef(gst_element_get_context(element, contextType));
+    if (!oldContext) {
+        auto newContext = requestGLContext(contextType);
+        if (!newContext)
+            return false;
+        gst_element_set_context(element, newContext->get());
+    }
+    return true;
+}
 
 #undef GST_CAT_DEFAULT
 

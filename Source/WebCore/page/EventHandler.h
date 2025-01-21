@@ -216,7 +216,7 @@ public:
     WEBCORE_EXPORT HandleUserInputEventResult handleMouseReleaseEvent(const PlatformMouseEvent&);
     WEBCORE_EXPORT bool handleMouseForceEvent(const PlatformMouseEvent&);
 
-    WEBCORE_EXPORT HandleUserInputEventResult handleWheelEvent(const PlatformWheelEvent&, OptionSet<WheelEventProcessingSteps>);
+    WEBCORE_EXPORT std::pair<HandleUserInputEventResult, OptionSet<EventHandling>> handleWheelEvent(const PlatformWheelEvent&, OptionSet<WheelEventProcessingSteps>);
     void defaultWheelEventHandler(Node*, WheelEvent&);
     void wheelEventWasProcessedByMainThread(const PlatformWheelEvent&, OptionSet<EventHandling>);
 
@@ -230,7 +230,7 @@ public:
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS) || ENABLE(IOS_GESTURE_EVENTS) || ENABLE(MAC_GESTURE_EVENTS)
-    using EventTargetSet = HashSet<RefPtr<EventTarget>>;
+    using EventTargetSet = UncheckedKeyHashSet<RefPtr<EventTarget>>;
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -321,6 +321,8 @@ public:
 
     WEBCORE_EXPORT static NSEvent *currentNSEvent();
     static NSEvent *correspondingPressureEvent();
+
+    WEBCORE_EXPORT static IntSize autoscrollAdjustmentFactorForScreenBoundaries(const FloatPoint& screenPoint, const FloatRect& screenRect);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -384,16 +386,17 @@ private:
 #if ENABLE(DRAG_SUPPORT)
     static DragState& dragState();
     static const Seconds TextDragDelay;
+    void setDragStateSource(Element*) const;
     SimpleRange createSimpleRangeFromDragStartSelection() const;
     std::optional<WeakSimpleRange> getWeakSimpleRangeFromSelection(const VisibleSelection&) const;
 #endif
 
     bool eventActivatedView(const PlatformMouseEvent&) const;
     bool updateSelectionForMouseDownDispatchingSelectStart(Node*, const VisibleSelection&, TextGranularity);
+    bool expandAndUpdateSelectionForMouseDownIfNeeded(Node& targetNode, const VisibleSelection&, TextGranularity);
     void selectClosestWordFromHitTestResult(const HitTestResult&, AppendTrailingWhitespace);
     VisibleSelection selectClosestWordFromHitTestResultBasedOnLookup(const HitTestResult&);
     void selectClosestContextualWordFromHitTestResult(const HitTestResult&, AppendTrailingWhitespace);
-    
 
     bool handleMouseDoubleClickEvent(const PlatformMouseEvent&);
 

@@ -20,7 +20,12 @@ Copyright (C) 2010-2024 Apple Inc. All rights reserved.
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[SharedPreferencesNeedsConnection]
+[
+    ExceptionForEnabledBy,
+    DispatchedFrom=WebContent,
+    DispatchedTo=UI,
+    SharedPreferencesNeedsConnection
+]
 messages -> WebPageProxy {
     # UI messages
     CreateNewPage(struct WebCore::WindowFeatures windowFeatures, struct WebKit::NavigationActionData navigationActionData) -> (std::optional<WebCore::PageIdentifier> newPageID, std::optional<WebKit::WebPageCreationParameters> newPageParameters) Synchronous
@@ -49,12 +54,14 @@ messages -> WebPageProxy {
     SetWindowFrame(WebCore::FloatRect windowFrame)
     GetWindowFrame() -> (WebCore::FloatRect windowFrame) Synchronous
     ScreenToRootView(WebCore::IntPoint screenPoint) -> (WebCore::IntPoint windowPoint) Synchronous
-    RootViewToScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame) Synchronous
+    RootViewPointToScreen(WebCore::IntPoint rect) -> (WebCore::IntPoint viewPoint) Synchronous
+    RootViewRectToScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame) Synchronous
     AccessibilityScreenToRootView(WebCore::IntPoint screenPoint) -> (WebCore::IntPoint windowPoint) Synchronous
     RootViewToAccessibilityScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame) Synchronous
 #if PLATFORM(IOS_FAMILY)
     RelayAccessibilityNotification(String notificationName, std::span<const uint8_t> notificationData)
 #endif
+    EnableAccessibilityForAllProcesses()
 
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     ShowValidationMessage(WebCore::IntRect anchorRect, String message)
@@ -84,11 +91,9 @@ messages -> WebPageProxy {
     DidChangeContentSize(WebCore::IntSize newSize)
     DidChangeIntrinsicContentSize(WebCore::IntSize newIntrinsicContentSize)
 
-#if ENABLE(INPUT_TYPE_COLOR)
     [EnabledBy=InputTypeColorEnabled] ShowColorPicker(WebCore::Color initialColor, WebCore::IntRect elementRect, enum:bool WebKit::ColorControlSupportsAlpha supportsAlpha, Vector<WebCore::Color> suggestions);
     [EnabledBy=InputTypeColorEnabled] SetColorPickerColor(WebCore::Color color);
     [EnabledBy=InputTypeColorEnabled] EndColorPicker();
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
     [EnabledBy=DataListElementEnabled] ShowDataListSuggestions(struct WebCore::DataListSuggestionInformation suggestionInformation);
@@ -119,6 +124,7 @@ messages -> WebPageProxy {
 
     # Frame lifetime messages
     DidCreateSubframe(WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, String frameName, WebCore::SandboxFlags sandboxFlags, enum:uint8_t WebCore::ScrollbarMode scrollingMode) CanDispatchOutOfOrder
+    DidDestroyFrame(WebCore::FrameIdentifier frameID)
 
     # Frame load messages
     DidStartProvisionalLoadForFrame(WebCore::FrameIdentifier frameID, struct WebKit::FrameInfoData frameInfo, WebCore::ResourceRequest request, std::optional<WebCore::NavigationIdentifier> navigationID, URL url, URL unreachableURL, WebKit::UserData userData, WallTime timestamp)
@@ -146,6 +152,7 @@ messages -> WebPageProxy {
     UpdateOpener(WebCore::FrameIdentifier frameID, WebCore::FrameIdentifier newOpener)
     [EnabledBy=SiteIsolationEnabled] UpdateScrollingMode(WebCore::FrameIdentifier frameID, enum:uint8_t WebCore::ScrollbarMode scrollingMode)
     [EnabledBy=SiteIsolationEnabled] UpdateRemoteFrameSize(WebCore::FrameIdentifier frameID, WebCore::IntSize size)
+    ResolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier frameID, WebCore::IntPoint point) -> (String result)
 
     MainFramePluginHandlesPageScaleGestureDidChange(bool mainFramePluginHandlesPageScaleGesture, double minScale, double maxScale)
 
@@ -200,15 +207,17 @@ messages -> WebPageProxy {
 #endif
 
     # BackForward messages
-    BackForwardAddItem(WebCore::FrameIdentifier targetFrameID, Ref<WebKit::FrameState> rootFrameState)
-    BackForwardSetChildItem(WebCore::BackForwardItemIdentifier identifier, Ref<WebKit::FrameState> frameState)
+    BackForwardAddItem(Ref<WebKit::FrameState> navigatedFrameState)
+    BackForwardSetChildItem(WebCore::BackForwardFrameItemIdentifier frameItemID, Ref<WebKit::FrameState> frameState)
+    BackForwardUpdateItem(Ref<WebKit::FrameState> frameState)
     BackForwardGoToItem(WebCore::BackForwardItemIdentifier itemID) -> (struct WebKit::WebBackForwardListCounts counts) Synchronous
     BackForwardItemAtIndex(int32_t itemIndex, WebCore::FrameIdentifier frameID) -> (RefPtr<WebKit::FrameState> frameState) Synchronous
     BackForwardListContainsItem(WebCore::BackForwardItemIdentifier itemID) -> (bool contains) Synchronous
     BackForwardListCounts() -> (struct WebKit::WebBackForwardListCounts counts) Synchronous
     WillGoToBackForwardListItem(WebCore::BackForwardItemIdentifier itemID, bool inBackForwardCache)
     BackForwardGoToProvisionalItem(WebCore::BackForwardItemIdentifier itemID) -> (struct WebKit::WebBackForwardListCounts counts) Synchronous
-    BackForwardClearProvisionalItem(WebCore::BackForwardItemIdentifier itemID)
+    BackForwardClearProvisionalItem(WebCore::BackForwardItemIdentifier itemID, WebCore::BackForwardFrameItemIdentifier frameItemID) -> (struct WebKit::WebBackForwardListCounts counts) Synchronous
+    BackForwardCommitProvisionalItem(WebCore::BackForwardItemIdentifier itemID, WebCore::BackForwardFrameItemIdentifier frameItemID)
 
     # Undo/Redo messages
     RegisterEditCommandForUndo(uint64_t commandID, String label) AllowedWhenWaitingForSyncReply
@@ -253,7 +262,7 @@ messages -> WebPageProxy {
 #endif
 
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
-    ShowMediaControlsContextMenu(WebCore::FloatRect targetFrame, Vector<WebCore::MediaControlsContextMenuItem> items) -> (WebCore::MediaControlsContextMenuItem::ID selectedItemID)
+    [EnabledBy=MediaControlsContextMenusEnabled] ShowMediaControlsContextMenu(WebCore::FloatRect targetFrame, Vector<WebCore::MediaControlsContextMenuItem> items) -> (WebCore::MediaControlsContextMenuItem::ID selectedItemID)
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
 #if HAVE(TOUCH_BAR)
@@ -395,6 +404,7 @@ messages -> WebPageProxy {
     ElementDidFocus(struct WebKit::FocusedElementInformation information, bool userIsInteracting, bool blurPreviousNode, OptionSet<WebCore::ActivityState> activityStateChanges, WebKit::UserData userData)
     ElementDidBlur()
     UpdateInputContextAfterBlurringAndRefocusingElement()
+    DidProgrammaticallyClearFocusedElement(struct WebCore::ElementContext context)
     UpdateFocusedElementInformation(struct WebKit::FocusedElementInformation information)
     FocusedElementDidChangeInputMode(enum:uint8_t WebCore::InputMode mode)
     ScrollingNodeScrollWillStartScroll(std::optional<WebCore::ScrollingNodeID> nodeID)
@@ -427,6 +437,7 @@ messages -> WebPageProxy {
     DidUpdateActivityState() CanDispatchOutOfOrder
 
     WrapCryptoKey(Vector<uint8_t> key) -> (std::optional<Vector<uint8_t>> wrappedKey) Synchronous
+    SerializeAndWrapCryptoKey(struct WebCore::CryptoKeyData key) -> (std::optional<Vector<uint8_t>> wrappedKey) Synchronous
     UnwrapCryptoKey(struct WebCore::WrappedCryptoKey wrappedKey) -> (std::optional<Vector<uint8_t>> key) Synchronous
 
 
@@ -501,10 +512,6 @@ messages -> WebPageProxy {
     RequestScrollToRect(WebCore::FloatRect targetRect, WebCore::FloatPoint origin)
 
     GetLoadDecisionForIcon(struct WebCore::LinkIcon icon, WebKit::CallbackID callbackID)
-
-#if PLATFORM(MAC)
-    DidHandleAcceptedCandidate()
-#endif
 
     StartURLSchemeTask(struct WebKit::URLSchemeTaskParameters parameters)
     StopURLSchemeTask(WebKit::WebURLSchemeHandlerIdentifier handlerIdentifier, WebCore::ResourceLoaderIdentifier taskIdentifier)
@@ -639,6 +646,7 @@ messages -> WebPageProxy {
 
     DidApplyLinkDecorationFiltering(URL originalURL, URL adjustedURL)
     [EnabledBy=SiteIsolationEnabled] BroadcastProcessSyncData(struct WebCore::ProcessSyncData processSyncData)
+    [EnabledBy=SiteIsolationEnabled] BroadcastTopDocumentSyncData(Ref<WebCore::DocumentSyncData> documentSyncData)
 
     [EnabledBy=SiteIsolationEnabled] DispatchLoadEventToFrameOwnerElement(WebCore::FrameIdentifier frameID)
 
@@ -664,4 +672,8 @@ messages -> WebPageProxy {
     HasActiveNowPlayingSessionChanged(bool hasActiveNowPlayingSessionChanged)
 
     SetAllowsLayoutViewportHeightExpansion(bool newValue)
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    ShouldOffloadIFrameForHost(String host) -> (bool wasGranted)
+#endif
 }

@@ -105,6 +105,7 @@ public:
     void invalidateContentsForSlowScroll(const IntRect&) override;
     void scroll(const IntSize&, const IntRect&, const IntRect&) override;
     IntPoint screenToRootView(const IntPoint&) const override;
+    IntPoint rootViewToScreen(const IntPoint&) const override;
     IntRect rootViewToScreen(const IntRect&) const override;
     IntPoint accessibilityScreenToRootView(const IntPoint&) const override;
     IntRect rootViewToAccessibilityScreen(const IntRect&) const override;
@@ -115,7 +116,7 @@ public:
     void setCursor(const Cursor&) override;
     void setCursorHiddenUntilMouseMoves(bool) override;
 
-    RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingPurpose, float resolutionScale, const DestinationColorSpace&, ImageBufferPixelFormat, OptionSet<ImageBufferOptions>) const override;
+    RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float resolutionScale, const DestinationColorSpace&, ImageBufferPixelFormat) const override;
     RefPtr<WebCore::ImageBuffer> sinkIntoImageBuffer(std::unique_ptr<WebCore::SerializedImageBuffer>) override;
 
 #if ENABLE(WEBGL)
@@ -192,9 +193,7 @@ public:
     WEBCORE_EXPORT void enableSuddenTermination();
     WEBCORE_EXPORT void disableSuddenTermination();
 
-#if ENABLE(INPUT_TYPE_COLOR)
     RefPtr<ColorChooser> createColorChooser(ColorChooserClient&, const Color& initialColor);
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
     RefPtr<DataListSuggestionPicker> createDataListSuggestionPicker(DataListSuggestionsClient&);

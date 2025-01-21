@@ -57,7 +57,7 @@ class CanvasRenderingContext : public ScriptWrappable, public CanMakeWeakPtr<Can
 public:
     virtual ~CanvasRenderingContext();
 
-    static HashSet<CanvasRenderingContext*>& instances() WTF_REQUIRES_LOCK(instancesLock());
+    static UncheckedKeyHashSet<CanvasRenderingContext*>& instances() WTF_REQUIRES_LOCK(instancesLock());
     static Lock& instancesLock() WTF_RETURNS_LOCK(s_instancesLock);
 
     WEBCORE_EXPORT void ref() const;
@@ -116,7 +116,7 @@ public:
     virtual ImageBufferPixelFormat pixelFormat() const;
     virtual DestinationColorSpace colorSpace() const;
     virtual bool willReadFrequently() const;
-    virtual OptionSet<ImageBufferOptions> adjustImageBufferOptionsForTesting(OptionSet<ImageBufferOptions> bufferOptions) { return bufferOptions; }
+    virtual std::optional<RenderingMode> renderingModeForTesting() const { return std::nullopt; }
 
     void setIsInPreparationForDisplayOrFlush(bool flag) { m_isInPreparationForDisplayOrFlush = flag; }
     bool isInPreparationForDisplayOrFlush() const { return m_isInPreparationForDisplayOrFlush; }

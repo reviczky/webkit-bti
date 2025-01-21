@@ -24,8 +24,10 @@
 
 #pragma once
 
+#include "FloatConversion.h"
 #include "FloatPoint.h"
 #include "FloatSize.h"
+#include "LayoutUnit.h"
 #include "StylePrimitiveNumericTypes+Calculation.h"
 #include "StylePrimitiveNumericTypes.h"
 
@@ -34,14 +36,14 @@ namespace Style {
 
 // MARK: - Number
 
-template<auto R> constexpr double evaluate(const Number<R>& number, double)
-{
-    return number.value;
-}
-
 template<auto R> constexpr float evaluate(const Number<R>& number, float)
 {
     return narrowPrecisionToFloat(number.value);
+}
+
+template<auto R> constexpr double evaluate(const Number<R>& number, double)
+{
+    return number.value;
 }
 
 // MARK: - Percentage
@@ -56,16 +58,27 @@ template<auto R> constexpr double evaluate(const Percentage<R>& percentage, doub
     return percentage.value / 100.0 * referenceLength;
 }
 
-// MARK: - StyleNumericPrimitive
+template<auto R> constexpr LayoutUnit evaluate(const Percentage<R>& percentage, LayoutUnit referenceLength)
+{
+    // Don't remove the extra cast to float. It is needed for rounding on 32-bit Intel machines that use the FPU stack.
+    return LayoutUnit(static_cast<float>(percentage.value / 100.0 * referenceLength));
+}
 
-template<StyleNumericPrimitive T> constexpr float evaluate(const T& value, float)
+// MARK: - Numeric
+
+constexpr float evaluate(Numeric auto const& value, float)
 {
     return value.value;
 }
 
-template<StyleNumericPrimitive T> constexpr double evaluate(const T& value, double)
+constexpr double evaluate(Numeric auto const& value, double)
 {
     return value.value;
+}
+
+constexpr LayoutUnit evaluate(Numeric auto const& value, LayoutUnit)
+{
+    return LayoutUnit(value.value);
 }
 
 inline float evaluate(const CalculationValue& calculation, float referenceValue)
@@ -78,21 +91,56 @@ inline double evaluate(const CalculationValue& calculation, double referenceValu
     return calculation.evaluate(referenceValue);
 }
 
-// MARK: - StyleDimensionPercentage (e.g. AnglePercentage/LengthPercentage)
+inline LayoutUnit evaluate(const CalculationValue& calculation, LayoutUnit referenceValue)
+{
+    return LayoutUnit(calculation.evaluate(referenceValue));
+}
 
-template<StyleDimensionPercentage T> float evaluate(const T& value, float referenceValue)
+inline float evaluate(Calc auto const& calculation, float referenceValue)
+{
+    return evaluate(calculation.protectedCalculation(), referenceValue);
+}
+
+inline double evaluate(Calc auto const& calculation, double referenceValue)
+{
+    return evaluate(calculation.protectedCalculation(), referenceValue);
+}
+
+inline LayoutUnit evaluate(Calc auto const& calculation, LayoutUnit referenceValue)
+{
+    return evaluate(calculation.protectedCalculation(), referenceValue);
+}
+
+// MARK: - DimensionPercentageNumeric (e.g. AnglePercentage/LengthPercentage)
+
+inline float evaluate(DimensionPercentageNumeric auto const& value, float referenceValue)
 {
     return WTF::switchOn(value, [&referenceValue](const auto& value) -> float { return evaluate(value, referenceValue); });
 }
 
-template<StyleDimensionPercentage T> double evaluate(const T& value, double referenceValue)
+inline double evaluate(DimensionPercentageNumeric auto const& value, double referenceValue)
 {
     return WTF::switchOn(value, [&referenceValue](const auto& value) -> double { return evaluate(value, referenceValue); });
 }
 
-// MARK: - Point
+inline LayoutUnit evaluate(DimensionPercentageNumeric auto const& value, LayoutUnit referenceValue)
+{
+    return WTF::switchOn(value, [&referenceValue](const auto& value) -> LayoutUnit { return evaluate(value, referenceValue); });
+}
 
-template<typename T> FloatPoint evaluate(const Point<T>& value, FloatSize referenceBox)
+// MARK: - NumberOrPercentage
+
+template<auto nR, auto pR> double evaluate(const NumberOrPercentage<nR, pR>& value)
+{
+    return WTF::switchOn(value,
+        [](const Number<nR>& number) -> double { return number.value; },
+        [](const Percentage<pR>& percentage) -> double { return percentage.value / 100.0; }
+    );
+}
+
+// MARK: - SpaceSeparatedPoint
+
+template<typename T> FloatPoint evaluate(const SpaceSeparatedPoint<T>& value, FloatSize referenceBox)
 {
     return {
         evaluate(value.x(), referenceBox.width()),
@@ -100,14 +148,28 @@ template<typename T> FloatPoint evaluate(const Point<T>& value, FloatSize refere
     };
 }
 
-// MARK: - Size
+// MARK: - SpaceSeparatedSize
 
-template<typename T> FloatSize evaluate(const Size<T>& value, FloatSize referenceBox)
+template<typename T> FloatSize evaluate(const SpaceSeparatedSize<T>& value, FloatSize referenceBox)
 {
     return {
         evaluate(value.width(), referenceBox.width()),
         evaluate(value.height(), referenceBox.height())
     };
+}
+
+// MARK: - VariantLike
+
+template<VariantLike CSSType, typename... Rest> decltype(auto) evaluate(const CSSType& value, Rest&& ...rest)
+{
+    return WTF::switchOn(value, [&](const auto& alternative) { return evaluate(alternative, std::forward<Rest>(rest)...); });
+}
+
+// MARK: - TupleLike
+
+template<TupleLike CSSType, typename... Rest> requires (std::tuple_size_v<CSSType> == 1) decltype(auto) evaluate(const CSSType& value, Rest&& ...rest)
+{
+    return evaluate(get<0>(value), std::forward<Rest>(rest)...);
 }
 
 // MARK: - Calculated Evaluations
@@ -116,7 +178,7 @@ template<typename T> FloatSize evaluate(const Size<T>& value, FloatSize referenc
 template<auto R> LengthPercentage<R> reflect(const LengthPercentage<R>& value)
 {
     return WTF::switchOn(value,
-        [&](Length<R> value) -> LengthPercentage<R> {
+        [&](const Length<R>& value) -> LengthPercentage<R> {
             // If `value` is 0, we can avoid the `calc` altogether.
             if (value.value == 0)
                 return { Percentage<R> { 100 } };
@@ -124,11 +186,11 @@ template<auto R> LengthPercentage<R> reflect(const LengthPercentage<R>& value)
             // Turn this into a calc expression: `calc(100% - value)`.
             return { Calculation::subtract(Calculation::percentage(100), copyCalculation(value)) };
         },
-        [&](Percentage<R> value) -> LengthPercentage<R> {
+        [&](const Percentage<R>& value) -> LengthPercentage<R> {
             // If `value` is a percentage, we can avoid the `calc` altogether.
             return { Percentage<R> { 100 - value.value } };
         },
-        [&](Ref<CalculationValue> value) -> LengthPercentage<> {
+        [&](const typename LengthPercentage<R>::Calc& value) -> LengthPercentage<> {
             // Turn this into a calc expression: `calc(100% - value)`.
             return { Calculation::subtract(Calculation::percentage(100), copyCalculation(value)) };
         }
@@ -148,14 +210,8 @@ template<auto aR, auto bR> auto reflectSum(const LengthPercentage<aR>& a, const 
 {
     constexpr auto resultR = mergeRanges(aR, bR);
 
-    bool aIsZero = a.value.switchOn(
-        [](const Ref<CalculationValue>&) { return false; },
-        [](const auto& a) { return a.value == 0; }
-    );
-    bool bIsZero = b.value.switchOn(
-        [](const Ref<CalculationValue>&) { return false; },
-        [](const auto& b) { return b.value == 0; }
-    );
+    bool aIsZero = a.isZero();
+    bool bIsZero = b.isZero();
 
     // If both `a` and `b` are 0, turn this into a calc expression: `calc(100% - (0 + 0))` aka `100%`.
     if (aIsZero && bIsZero)
@@ -163,12 +219,12 @@ template<auto aR, auto bR> auto reflectSum(const LengthPercentage<aR>& a, const 
 
     // If just `a` is 0, we can just consider the case of `calc(100% - b)`.
     if (aIsZero) {
-        return b.value.switchOn(
-            [&](Percentage<bR> b) -> LengthPercentage<resultR> {
+        return WTF::switchOn(b,
+            [&](const Percentage<bR>& b) -> LengthPercentage<resultR> {
                 // And if `b` is a percent, we can avoid the `calc` altogether.
                 return { Percentage<resultR> { 100 - b.value } };
             },
-            [&](auto b) -> LengthPercentage<resultR> {
+            [&](const auto& b) -> LengthPercentage<resultR> {
                 // Otherwise, turn this into a calc expression: `calc(100% - b)`.
                 return { Calculation::subtract(Calculation::percentage(100), copyCalculation(b)) };
             }
@@ -177,12 +233,12 @@ template<auto aR, auto bR> auto reflectSum(const LengthPercentage<aR>& a, const 
 
     // If just `b` is 0, we can just consider the case of `calc(100% - a)`.
     if (bIsZero) {
-        return a.value.switchOn(
-            [&](Percentage<aR> a) -> LengthPercentage<resultR> {
+        return WTF::switchOn(a,
+            [&](const Percentage<aR>& a) -> LengthPercentage<resultR> {
                 // And if `a` is a percent, we can avoid the `calc` altogether.
                 return { Percentage<resultR> { 100 - a.value } };
             },
-            [&](auto a) -> LengthPercentage<resultR> {
+            [&](const auto& a) -> LengthPercentage<resultR> {
                 // Otherwise, turn this into a calc expression: `calc(100% - a)`.
                 return { Calculation::subtract(Calculation::percentage(100), copyCalculation(a)) };
             }
@@ -190,8 +246,8 @@ template<auto aR, auto bR> auto reflectSum(const LengthPercentage<aR>& a, const 
     }
 
     // If both and `a` and `b` are percentages, we can avoid the `calc` altogether.
-    if (a.value.isPercentage() && b.value.isPercentage())
-        return { Percentage<resultR> { 100 - (a.value.asPercentage().value + b.value.asPercentage().value) } };
+    if (WTF::holdsAlternative<Percentage<aR>>(a) && WTF::holdsAlternative<Percentage<bR>>(b))
+        return { Percentage<resultR> { 100 - (get<Percentage<aR>>(a).value + get<Percentage<bR>>(b).value) } };
 
     // Otherwise, turn this into a calc expression: `calc(100% - (a + b))`.
     return { Calculation::subtract(Calculation::percentage(100), Calculation::add(copyCalculation(a), copyCalculation(b))) };

@@ -65,15 +65,11 @@ public:
     static Ref<HTMLInputElement> create(const QualifiedName&, Document&, HTMLFormElement*, bool createdByParser);
     virtual ~HTMLInputElement();
 
-#if ENABLE(INPUT_TYPE_COLOR)
     WEBCORE_EXPORT bool alpha();
-#endif
     bool checked() const { return m_isChecked; }
     WEBCORE_EXPORT void setChecked(bool, WasSetByJavaScript = WasSetByJavaScript::Yes);
-#if ENABLE(INPUT_TYPE_COLOR)
     String colorSpace();
     void setColorSpace(const AtomString&);
-#endif
     WEBCORE_EXPORT FileList* files();
     WEBCORE_EXPORT void setFiles(RefPtr<FileList>&&, WasSetByJavaScript = WasSetByJavaScript::No);
     FileList* filesForBindings() { return files(); }
@@ -157,9 +153,7 @@ public:
     bool isCheckbox() const;
     bool isSwitch() const;
     bool isRangeControl() const;
-#if ENABLE(INPUT_TYPE_COLOR)
     WEBCORE_EXPORT bool isColorControl() const;
-#endif
     // FIXME: It's highly likely that any call site calling this function should instead
     // be using a different one. Many input elements behave like text fields, and in addition
     // any unknown input type is treated as text. Consider, for example, isTextField or
@@ -179,6 +173,8 @@ public:
     WEBCORE_EXPORT bool isMonthField() const;
     WEBCORE_EXPORT bool isTimeField() const;
     WEBCORE_EXPORT bool isWeekField() const;
+
+    bool isDevolvableWidget() const override;
 
     DateComponentsType dateType() const;
 
@@ -278,6 +274,8 @@ public:
     };
     AutofillVisibility autofillVisibility() const;
     void setAutofillVisibility(AutofillVisibility);
+    bool autofillSpellcheck() const { return !m_isSpellcheckDisabledExceptTextReplacement; }
+    void setAutofillSpellcheck(bool value) { m_isSpellcheckDisabledExceptTextReplacement = !value; }
 
 #if ENABLE(DRAG_SUPPORT)
     // Returns true if the given DragData has more than one dropped file.
@@ -371,7 +369,7 @@ private:
 
     void defaultEventHandler(Event&) final;
 
-    Ref<Element> cloneElementWithoutAttributesAndChildren(Document&) override;
+    Ref<Element> cloneElementWithoutAttributesAndChildren(TreeScope&) override;
 
     enum AutoCompleteSetting : uint8_t { Uninitialized, On, Off };
     static constexpr int defaultSize = 20;
@@ -427,9 +425,7 @@ private:
     bool isOutOfRange() const final;
 
     void resumeFromDocumentSuspension() final;
-#if ENABLE(INPUT_TYPE_COLOR)
     void prepareForDocumentSuspension() final;
-#endif
 
     void addSubresourceAttributeURLs(ListHashSet<URL>&) const final;
 

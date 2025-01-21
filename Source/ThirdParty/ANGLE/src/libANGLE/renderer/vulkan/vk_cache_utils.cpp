@@ -33,9 +33,22 @@ constexpr bool kDumpPipelineCacheGraph = true;
 constexpr bool kDumpPipelineCacheGraph = false;
 #endif  // ANGLE_DUMP_PIPELINE_CACHE_GRAPH
 
+template <typename T>
+bool AllCacheEntriesHaveUniqueReference(const T &payload)
+{
+    bool unique = true;
+    for (auto &item : payload)
+    {
+        if (!item.second.unique())
+        {
+            unique = false;
+        }
+    }
+    return unique;
+}
+
 namespace vk
 {
-
 namespace
 {
 static_assert(static_cast<uint32_t>(RenderPassLoadOp::Load) == VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -357,7 +370,7 @@ void DeriveRenderingInfo(Renderer *renderer,
 
         angle::FormatID attachmentFormatID = desc[colorIndexGL];
         ASSERT(attachmentFormatID != angle::FormatID::NONE);
-        VkFormat attachmentFormat = GetVkFormatFromFormatID(attachmentFormatID);
+        VkFormat attachmentFormat = GetVkFormatFromFormatID(renderer, attachmentFormatID);
 
         const bool isYUVExternalFormat = vk::IsYUVExternalFormat(attachmentFormatID);
 #if defined(ANGLE_PLATFORM_ANDROID)
@@ -428,7 +441,7 @@ void DeriveRenderingInfo(Renderer *renderer,
         const angle::FormatID attachmentFormatID = desc[depthStencilIndexGL];
         ASSERT(attachmentFormatID != angle::FormatID::NONE);
         const angle::Format &angleFormat = angle::Format::Get(attachmentFormatID);
-        const VkFormat attachmentFormat  = GetVkFormatFromFormatID(attachmentFormatID);
+        const VkFormat attachmentFormat  = GetVkFormatFromFormatID(renderer, attachmentFormatID);
 
         infoOut->depthAttachmentFormat =
             angleFormat.depthBits == 0 ? VK_FORMAT_UNDEFINED : attachmentFormat;
@@ -608,7 +621,7 @@ void UnpackAttachmentDesc(Renderer *renderer,
 {
     *desc         = {};
     desc->sType   = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-    desc->format  = GetVkFormatFromFormatID(formatID);
+    desc->format  = GetVkFormatFromFormatID(renderer, formatID);
     desc->samples = gl_vk::GetSamples(samples, renderer->getFeatures().limitSampleCountTo2.enabled);
     desc->loadOp  = ConvertRenderPassLoadOpToVkLoadOp(static_cast<RenderPassLoadOp>(ops.loadOp));
     desc->storeOp =
@@ -640,7 +653,7 @@ void UnpackColorResolveAttachmentDesc(Renderer *renderer,
 {
     *desc        = {};
     desc->sType  = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-    desc->format = GetVkFormatFromFormatID(formatID);
+    desc->format = GetVkFormatFromFormatID(renderer, formatID);
 
     // This function is for color resolve attachments.
     const angle::Format &angleFormat = angle::Format::Get(formatID);
@@ -670,9 +683,10 @@ void UnpackDepthStencilResolveAttachmentDesc(vk::Context *context,
                                              const AttachmentInfo &depthInfo,
                                              const AttachmentInfo &stencilInfo)
 {
-    *desc        = {};
-    desc->sType  = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-    desc->format = GetVkFormatFromFormatID(formatID);
+    vk::Renderer *renderer = context->getRenderer();
+    *desc                  = {};
+    desc->sType            = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    desc->format           = GetVkFormatFromFormatID(renderer, formatID);
 
     // This function is for depth/stencil resolve attachment.
     const angle::Format &angleFormat = angle::Format::Get(formatID);
@@ -2675,43 +2689,16 @@ void DumpPipelineCacheGraph(
 }
 
 // Used by SharedCacheKeyManager
-void MakeEmptyCachedObject(SharedFramebufferCacheKey *cacheKeyOut)
+void MakeInvalidCachedObject(SharedFramebufferCacheKey *cacheKeyOut)
 {
-    *cacheKeyOut = std::make_shared<FramebufferDescPointer>();
-}
-void ReleaseCachedObject(ContextVk *contextVk, const FramebufferDesc &desc)
-{
-    contextVk->getShareGroup()->getFramebufferCache().erase(contextVk, desc);
-}
-void ReleaseCachedObject(Renderer *renderer, const FramebufferDesc &desc)
-{
-    UNREACHABLE();
+    *cacheKeyOut = SharedFramebufferCacheKey::MakeShared(VK_NULL_HANDLE);
+    // So that it will mark as invalid.
+    (*cacheKeyOut)->destroy(VK_NULL_HANDLE);
 }
 
-void MakeEmptyCachedObject(SharedDescriptorSetCacheKey *cacheKeyOut)
+void MakeInvalidCachedObject(SharedDescriptorSetCacheKey *cacheKeyOut)
 {
-    *cacheKeyOut = std::make_shared<DescriptorSetAndPoolPointer>();
-}
-void ReleaseCachedObject(ContextVk *contextVk, const DescriptorSetDescAndPool &descAndPool)
-{
-    UNREACHABLE();
-}
-void ReleaseCachedObject(Renderer *renderer, const DescriptorSetDescAndPool &descAndPool)
-{
-    ASSERT(descAndPool.mPool != nullptr);
-    descAndPool.mPool->releaseCachedDescriptorSet(renderer, descAndPool.mDesc);
-}
-
-void DestroyCachedObject(Renderer *renderer, const FramebufferDesc &desc)
-{
-    // Framebuffer cache are implemented in a way that each cache entry tracks GPU progress and we
-    // always guarantee cache entries are released before calling destroy.
-}
-
-void DestroyCachedObject(Renderer *renderer, const DescriptorSetDescAndPool &descAndPool)
-{
-    ASSERT(descAndPool.mPool != nullptr);
-    descAndPool.mPool->destroyCachedDescriptorSet(renderer, descAndPool.mDesc);
+    *cacheKeyOut = SharedDescriptorSetCacheKey::MakeShared(VK_NULL_HANDLE);
 }
 
 angle::Result InitializePipelineFromLibraries(Context *context,
@@ -3692,10 +3679,11 @@ VkFormat GraphicsPipelineDesc::getPipelineVertexInputStateFormat(
     const gl::ComponentType programAttribType,
     uint32_t attribIndex)
 {
+    vk::Renderer *renderer = context->getRenderer();
     // Get the corresponding VkFormat for the attrib's format.
-    const Format &format                = context->getRenderer()->getFormat(formatID);
+    const Format &format                = renderer->getFormat(formatID);
     const angle::Format &intendedFormat = format.getIntendedFormat();
-    VkFormat vkFormat                   = format.getActualBufferVkFormat(compressed);
+    VkFormat vkFormat                   = format.getActualBufferVkFormat(renderer, compressed);
 
     const gl::ComponentType attribType = GetVertexAttributeComponentType(
         intendedFormat.isPureInt(), intendedFormat.vertexAttribType);
@@ -3707,31 +3695,28 @@ VkFormat GraphicsPipelineDesc::getPipelineVertexInputStateFormat(
         {
             angle::FormatID patchFormatID =
                 patchVertexAttribComponentType(formatID, programAttribType);
-            vkFormat = context->getRenderer()
-                           ->getFormat(patchFormatID)
-                           .getActualBufferVkFormat(compressed);
+            vkFormat =
+                renderer->getFormat(patchFormatID).getActualBufferVkFormat(renderer, compressed);
         }
         else
         {
             // When converting from an unsigned to a signed format or vice versa, attempt to
             // match the bit width.
             angle::FormatID convertedFormatID = gl::ConvertFormatSignedness(intendedFormat);
-            const Format &convertedFormat = context->getRenderer()->getFormat(convertedFormatID);
+            const Format &convertedFormat     = renderer->getFormat(convertedFormatID);
             ASSERT(intendedFormat.channelCount == convertedFormat.getIntendedFormat().channelCount);
             ASSERT(intendedFormat.redBits == convertedFormat.getIntendedFormat().redBits);
             ASSERT(intendedFormat.greenBits == convertedFormat.getIntendedFormat().greenBits);
             ASSERT(intendedFormat.blueBits == convertedFormat.getIntendedFormat().blueBits);
             ASSERT(intendedFormat.alphaBits == convertedFormat.getIntendedFormat().alphaBits);
 
-            vkFormat = convertedFormat.getActualBufferVkFormat(compressed);
+            vkFormat = convertedFormat.getActualBufferVkFormat(renderer, compressed);
         }
-        const Format &origFormat =
-            context->getRenderer()->getFormat(GetFormatIDFromVkFormat(origVkFormat));
-        const Format &patchFormat =
-            context->getRenderer()->getFormat(GetFormatIDFromVkFormat(vkFormat));
+        const Format &origFormat  = renderer->getFormat(GetFormatIDFromVkFormat(origVkFormat));
+        const Format &patchFormat = renderer->getFormat(GetFormatIDFromVkFormat(vkFormat));
         ASSERT(origFormat.getIntendedFormat().pixelBytes ==
                patchFormat.getIntendedFormat().pixelBytes);
-        ASSERT(context->getRenderer()->getNativeExtensions().relaxedVertexAttributeTypeANGLE);
+        ASSERT(renderer->getNativeExtensions().relaxedVertexAttributeTypeANGLE);
     }
 
     return vkFormat;
@@ -3843,7 +3828,7 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
                                  &stateOut->specializationInfo);
 
     // Vertex shader is always expected to be present.
-    const ShaderModule &vertexModule = shaders[gl::ShaderType::Vertex].get();
+    const ShaderModule &vertexModule = *shaders[gl::ShaderType::Vertex];
     ASSERT(vertexModule.valid());
     VkPipelineShaderStageCreateInfo vertexStage = {};
     SetPipelineShaderStageInfo(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -3851,10 +3836,10 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
                                stateOut->specializationInfo, &vertexStage);
     stateOut->shaderStages.push_back(vertexStage);
 
-    const ShaderModulePointer &tessControlPointer = shaders[gl::ShaderType::TessControl];
-    if (tessControlPointer.valid())
+    const ShaderModulePtr &tessControlPointer = shaders[gl::ShaderType::TessControl];
+    if (tessControlPointer)
     {
-        const ShaderModule &tessControlModule            = tessControlPointer.get();
+        const ShaderModule &tessControlModule            = *tessControlPointer;
         VkPipelineShaderStageCreateInfo tessControlStage = {};
         SetPipelineShaderStageInfo(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                    VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -3863,10 +3848,10 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
         stateOut->shaderStages.push_back(tessControlStage);
     }
 
-    const ShaderModulePointer &tessEvaluationPointer = shaders[gl::ShaderType::TessEvaluation];
-    if (tessEvaluationPointer.valid())
+    const ShaderModulePtr &tessEvaluationPointer = shaders[gl::ShaderType::TessEvaluation];
+    if (tessEvaluationPointer)
     {
-        const ShaderModule &tessEvaluationModule            = tessEvaluationPointer.get();
+        const ShaderModule &tessEvaluationModule            = *tessEvaluationPointer;
         VkPipelineShaderStageCreateInfo tessEvaluationStage = {};
         SetPipelineShaderStageInfo(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                    VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
@@ -3875,10 +3860,10 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
         stateOut->shaderStages.push_back(tessEvaluationStage);
     }
 
-    const ShaderModulePointer &geometryPointer = shaders[gl::ShaderType::Geometry];
-    if (geometryPointer.valid())
+    const ShaderModulePtr &geometryPointer = shaders[gl::ShaderType::Geometry];
+    if (geometryPointer)
     {
-        const ShaderModule &geometryModule            = geometryPointer.get();
+        const ShaderModule &geometryModule            = *geometryPointer;
         VkPipelineShaderStageCreateInfo geometryStage = {};
         SetPipelineShaderStageInfo(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                    VK_SHADER_STAGE_GEOMETRY_BIT, geometryModule.getHandle(),
@@ -3887,10 +3872,10 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
     }
 
     // Fragment shader is optional.
-    const ShaderModulePointer &fragmentPointer = shaders[gl::ShaderType::Fragment];
-    if (fragmentPointer.valid() && !mShaders.shaders.bits.rasterizerDiscardEnable)
+    const ShaderModulePtr &fragmentPointer = shaders[gl::ShaderType::Fragment];
+    if (fragmentPointer && !mShaders.shaders.bits.rasterizerDiscardEnable)
     {
-        const ShaderModule &fragmentModule            = fragmentPointer.get();
+        const ShaderModule &fragmentModule            = *fragmentPointer;
         VkPipelineShaderStageCreateInfo fragmentStage = {};
         SetPipelineShaderStageInfo(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                    VK_SHADER_STAGE_FRAGMENT_BIT, fragmentModule.getHandle(),
@@ -4003,7 +3988,7 @@ void GraphicsPipelineDesc::initializePipelineShadersState(
     }
 
     // tessellation State
-    if (tessControlPointer.valid() && tessEvaluationPointer.valid())
+    if (tessControlPointer && tessEvaluationPointer)
     {
         stateOut->domainOriginState.sType =
             VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_DOMAIN_ORIGIN_STATE_CREATE_INFO;
@@ -4842,16 +4827,6 @@ AttachmentOpsArray &AttachmentOpsArray::operator=(const AttachmentOpsArray &othe
     return *this;
 }
 
-const PackedAttachmentOpsDesc &AttachmentOpsArray::operator[](PackedAttachmentIndex index) const
-{
-    return mOps[index.get()];
-}
-
-PackedAttachmentOpsDesc &AttachmentOpsArray::operator[](PackedAttachmentIndex index)
-{
-    return mOps[index.get()];
-}
-
 void AttachmentOpsArray::initWithLoadStore(PackedAttachmentIndex index,
                                            ImageLayout initialLayout,
                                            ImageLayout finalLayout)
@@ -5363,12 +5338,15 @@ size_t FramebufferDesc::hash() const
 
 void FramebufferDesc::reset()
 {
-    mMaxIndex                = 0;
+    mMaxIndex                 = 0;
     mHasColorFramebufferFetch = false;
-    mLayerCount              = 0;
-    mSrgbWriteControlMode    = 0;
-    mUnresolveAttachmentMask = 0;
-    mIsRenderToTexture       = 0;
+    mLayerCount               = 0;
+    mSrgbWriteControlMode     = 0;
+    mUnresolveAttachmentMask  = 0;
+    mIsRenderToTexture        = 0;
+    // An empty FramebufferDesc is still a valid desc. It becomes invalid when it is explicitly
+    // destroyed or released by SharedFramebufferCacheKey.
+    mIsValid = 1;
     memset(&mSerials, 0, sizeof(mSerials));
 }
 
@@ -5418,6 +5396,21 @@ void FramebufferDesc::setColorFramebufferFetchMode(bool hasColorFramebufferFetch
 void FramebufferDesc::updateRenderToTexture(bool isRenderToTexture)
 {
     SetBitField(mIsRenderToTexture, isRenderToTexture);
+}
+
+void FramebufferDesc::destroyCachedObject(Renderer *renderer)
+{
+    ASSERT(valid());
+    // Framebuffer cache are implemented in a way that each cache entry tracks GPU progress and we
+    // always guarantee cache entries are released before calling destroy.
+    SetBitField(mIsValid, 0);
+}
+
+void FramebufferDesc::releaseCachedObject(ContextVk *contextVk)
+{
+    ASSERT(valid());
+    contextVk->getShareGroup()->getFramebufferCache().erase(contextVk, *this);
+    SetBitField(mIsValid, 0);
 }
 
 // YcbcrConversionDesc implementation
@@ -5477,9 +5470,9 @@ void YcbcrConversionDesc::update(Renderer *renderer,
     SetBitField(mIsExternalFormat, (externalFormat) ? 1 : 0);
     SetBitField(mLinearFilterSupported,
                 linearFilterSupported == YcbcrLinearFilterSupport::Supported);
-    mExternalOrVkFormat = (externalFormat)
-                              ? externalFormat
-                              : vkFormat.getActualImageVkFormat(vk::ImageAccess::SampleOnly);
+    mExternalOrVkFormat =
+        (externalFormat) ? externalFormat
+                         : vkFormat.getActualImageVkFormat(renderer, vk::ImageAccess::SampleOnly);
 
     updateChromaFilter(renderer, chromaFilter);
 
@@ -5574,13 +5567,14 @@ SamplerDesc::SamplerDesc(const SamplerDesc &other) = default;
 
 SamplerDesc &SamplerDesc::operator=(const SamplerDesc &rhs) = default;
 
-SamplerDesc::SamplerDesc(ContextVk *contextVk,
+SamplerDesc::SamplerDesc(Context *context,
                          const gl::SamplerState &samplerState,
                          bool stencilMode,
                          const YcbcrConversionDesc *ycbcrConversionDesc,
                          angle::FormatID intendedFormatID)
 {
-    update(contextVk, samplerState, stencilMode, ycbcrConversionDesc, intendedFormatID);
+    update(context->getRenderer(), samplerState, stencilMode, ycbcrConversionDesc,
+           intendedFormatID);
 }
 
 void SamplerDesc::reset()
@@ -5607,13 +5601,13 @@ void SamplerDesc::reset()
     mReserved          = 0;
 }
 
-void SamplerDesc::update(ContextVk *contextVk,
+void SamplerDesc::update(Renderer *renderer,
                          const gl::SamplerState &samplerState,
                          bool stencilMode,
                          const YcbcrConversionDesc *ycbcrConversionDesc,
                          angle::FormatID intendedFormatID)
 {
-    const angle::FeaturesVk &featuresVk = contextVk->getFeatures();
+    const angle::FeaturesVk &featuresVk = renderer->getFeatures();
     mMipLodBias                         = 0.0f;
     if (featuresVk.forceTextureLodOffset1.enabled)
     {
@@ -5656,7 +5650,7 @@ void SamplerDesc::update(ContextVk *contextVk,
                (angle::Format::Get(intendedFormatID).isYUV));
         const bool filtersMustMatch =
             (mYcbcrConversionDesc.getExternalFormat() != 0) ||
-            !contextVk->getRenderer()->hasImageFormatFeatureBits(
+            !renderer->hasImageFormatFeatureBits(
                 intendedFormatID,
                 VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT);
         if (filtersMustMatch)
@@ -5714,7 +5708,7 @@ void SamplerDesc::update(ContextVk *contextVk,
         (samplerState.getBorderColor().type == angle::ColorGeneric::Type::Float) ? 0 : 1;
 
     // Adjust border color according to intended format
-    const vk::Format &vkFormat = contextVk->getRenderer()->getFormat(intendedFormatID);
+    const vk::Format &vkFormat = renderer->getFormat(intendedFormatID);
     gl::ColorGeneric adjustedBorderColor =
         AdjustBorderColor(samplerState.getBorderColor(), vkFormat.getIntendedFormat(), stencilMode);
     mBorderColor = adjustedBorderColor.colorF;
@@ -5804,12 +5798,6 @@ bool SamplerDesc::operator==(const SamplerDesc &other) const
     return memcmp(this, &other, sizeof(SamplerDesc)) == 0;
 }
 
-SamplerHelper::SamplerHelper(vk::Context *context)
-    : mSamplerSerial(context->getRenderer()->getResourceSerialFactory().generateSamplerSerial())
-{}
-
-SamplerHelper::~SamplerHelper() {}
-
 SamplerHelper::SamplerHelper(SamplerHelper &&samplerHelper)
 {
     *this = std::move(samplerHelper);
@@ -5820,6 +5808,18 @@ SamplerHelper &SamplerHelper::operator=(SamplerHelper &&rhs)
     std::swap(mSampler, rhs.mSampler);
     std::swap(mSamplerSerial, rhs.mSamplerSerial);
     return *this;
+}
+
+angle::Result SamplerHelper::init(Context *context, const VkSamplerCreateInfo &createInfo)
+{
+    mSamplerSerial = context->getRenderer()->getResourceSerialFactory().generateSamplerSerial();
+    ANGLE_VK_TRY(context, mSampler.init(context->getDevice(), createInfo));
+    return angle::Result::Continue;
+}
+angle::Result SamplerHelper::init(ContextVk *contextVk, const SamplerDesc &desc)
+{
+    mSamplerSerial = contextVk->getRenderer()->getResourceSerialFactory().generateSamplerSerial();
+    return desc.init(contextVk, &mSampler);
 }
 
 // RenderPassHelper implementation.
@@ -5991,22 +5991,27 @@ void WriteDescriptorDescs::updateInputAttachments(
     const ShaderInterfaceVariableInfoMap &variableInfoMap,
     FramebufferVk *framebufferVk)
 {
-    if (executable.usesDepthFramebufferFetch())
+    if (framebufferVk->getDepthStencilRenderTarget() != nullptr)
     {
-        const uint32_t depthBinding =
-            variableInfoMap
-                .getVariableById(gl::ShaderType::Fragment, sh::vk::spirv::kIdDepthInputAttachment)
-                .binding;
-        updateWriteDesc(depthBinding, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
-    }
+        if (executable.usesDepthFramebufferFetch())
+        {
+            const uint32_t depthBinding =
+                variableInfoMap
+                    .getVariableById(gl::ShaderType::Fragment,
+                                     sh::vk::spirv::kIdDepthInputAttachment)
+                    .binding;
+            updateWriteDesc(depthBinding, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+        }
 
-    if (executable.usesStencilFramebufferFetch())
-    {
-        const uint32_t stencilBinding =
-            variableInfoMap
-                .getVariableById(gl::ShaderType::Fragment, sh::vk::spirv::kIdStencilInputAttachment)
-                .binding;
-        updateWriteDesc(stencilBinding, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+        if (executable.usesStencilFramebufferFetch())
+        {
+            const uint32_t stencilBinding =
+                variableInfoMap
+                    .getVariableById(gl::ShaderType::Fragment,
+                                     sh::vk::spirv::kIdStencilInputAttachment)
+                    .binding;
+            updateWriteDesc(stencilBinding, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+        }
     }
 
     if (!executable.usesColorFramebufferFetch())
@@ -6215,6 +6220,21 @@ std::ostream &operator<<(std::ostream &os, const DescriptorSetDesc &desc)
     return os;
 }
 
+// DescriptorSetDescAndPool implementation
+void DescriptorSetDescAndPool::destroyCachedObject(Renderer *renderer)
+{
+    ASSERT(valid());
+    mPool->destroyCachedDescriptorSet(renderer, mDesc);
+    mPool = nullptr;
+}
+
+void DescriptorSetDescAndPool::releaseCachedObject(Renderer *renderer)
+{
+    ASSERT(valid());
+    mPool->releaseCachedDescriptorSet(renderer, mDesc);
+    mPool = nullptr;
+}
+
 // DescriptorSetDescBuilder implementation.
 DescriptorSetDescBuilder::DescriptorSetDescBuilder() = default;
 DescriptorSetDescBuilder::DescriptorSetDescBuilder(size_t descriptorCount)
@@ -6272,7 +6292,7 @@ void DescriptorSetDescBuilder::updateTransformFeedbackBuffer(
 
     uint32_t infoIndex = writeDescriptorDescs[baseBinding].descriptorInfoIndex + xfbBufferIndex;
     DescriptorInfoDesc &infoDesc   = mDesc.getInfoDesc(infoIndex);
-    infoDesc.samplerOrBufferSerial = bufferHelper.getBlockSerial().getValue();
+    infoDesc.samplerOrBufferSerial = bufferHelper.getBufferSerial().getValue();
     SetBitField(infoDesc.imageViewSerialOrOffset, alignedOffset);
     SetBitField(infoDesc.imageLayoutOrRange, adjustedRange);
     infoDesc.imageSubresourceRange = 0;
@@ -6326,7 +6346,7 @@ void DescriptorSetDescBuilder::updatePreCacheActiveTextures(
 {
     const std::vector<gl::SamplerBinding> &samplerBindings = executable.getSamplerBindings();
     const gl::ActiveTextureMask &activeTextures            = executable.getActiveSamplersMask();
-    const ProgramExecutableVk *executableVk = vk::GetImpl(&executable);
+    const ProgramExecutableVk *executableVk                = vk::GetImpl(&executable);
 
     resize(executableVk->getTextureWriteDescriptorDescs().getTotalDescriptorCount());
     const WriteDescriptorDescs &writeDescriptorDescs =
@@ -6815,39 +6835,45 @@ angle::Result DescriptorSetDescBuilder::updateInputAttachments(
         RenderTargetVk *renderTargetVk = framebufferVk->getDepthStencilRenderTarget();
         ASSERT(context->getFeatures().preferDynamicRendering.enabled);
 
-        const ImageOrBufferViewSubresourceSerial serial =
-            renderTargetVk->getDrawSubresourceSerial();
-        const VkImageAspectFlags aspects = renderTargetVk->getImageForRenderPass().getAspectFlags();
-
-        if (executable.usesDepthFramebufferFetch() && (aspects & VK_IMAGE_ASPECT_DEPTH_BIT) != 0)
+        if (renderTargetVk != nullptr)
         {
-            const vk::ImageView *imageView = nullptr;
-            ANGLE_TRY(renderTargetVk->getDepthOrStencilImageView(context, VK_IMAGE_ASPECT_DEPTH_BIT,
-                                                                 &imageView));
+            const ImageOrBufferViewSubresourceSerial serial =
+                renderTargetVk->getDrawSubresourceSerial();
+            const VkImageAspectFlags aspects =
+                renderTargetVk->getImageForRenderPass().getAspectFlags();
 
-            const uint32_t depthBinding =
-                variableInfoMap
-                    .getVariableById(gl::ShaderType::Fragment,
-                                     sh::vk::spirv::kIdDepthInputAttachment)
-                    .binding;
-            updateInputAttachment(context, depthBinding, ImageLayout::DepthStencilWriteAndInput,
-                                  imageView, serial, writeDescriptorDescs);
-        }
+            if (executable.usesDepthFramebufferFetch() &&
+                (aspects & VK_IMAGE_ASPECT_DEPTH_BIT) != 0)
+            {
+                const vk::ImageView *imageView = nullptr;
+                ANGLE_TRY(renderTargetVk->getDepthOrStencilImageView(
+                    context, VK_IMAGE_ASPECT_DEPTH_BIT, &imageView));
 
-        if (executable.usesStencilFramebufferFetch() &&
-            (aspects & VK_IMAGE_ASPECT_STENCIL_BIT) != 0)
-        {
-            const vk::ImageView *imageView = nullptr;
-            ANGLE_TRY(renderTargetVk->getDepthOrStencilImageView(
-                context, VK_IMAGE_ASPECT_STENCIL_BIT, &imageView));
+                const uint32_t depthBinding =
+                    variableInfoMap
+                        .getVariableById(gl::ShaderType::Fragment,
+                                         sh::vk::spirv::kIdDepthInputAttachment)
+                        .binding;
+                updateInputAttachment(context, depthBinding, ImageLayout::DepthStencilWriteAndInput,
+                                      imageView, serial, writeDescriptorDescs);
+            }
 
-            const uint32_t stencilBinding =
-                variableInfoMap
-                    .getVariableById(gl::ShaderType::Fragment,
-                                     sh::vk::spirv::kIdStencilInputAttachment)
-                    .binding;
-            updateInputAttachment(context, stencilBinding, ImageLayout::DepthStencilWriteAndInput,
-                                  imageView, serial, writeDescriptorDescs);
+            if (executable.usesStencilFramebufferFetch() &&
+                (aspects & VK_IMAGE_ASPECT_STENCIL_BIT) != 0)
+            {
+                const vk::ImageView *imageView = nullptr;
+                ANGLE_TRY(renderTargetVk->getDepthOrStencilImageView(
+                    context, VK_IMAGE_ASPECT_STENCIL_BIT, &imageView));
+
+                const uint32_t stencilBinding =
+                    variableInfoMap
+                        .getVariableById(gl::ShaderType::Fragment,
+                                         sh::vk::spirv::kIdStencilInputAttachment)
+                        .binding;
+                updateInputAttachment(context, stencilBinding,
+                                      ImageLayout::DepthStencilWriteAndInput, imageView, serial,
+                                      writeDescriptorDescs);
+            }
         }
     }
 
@@ -6925,7 +6951,7 @@ size_t SharedCacheKeyManager<SharedCacheKeyT>::updateEmptySlotBits()
     for (size_t slot = 0; slot < mSharedCacheKeys.size(); ++slot)
     {
         SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
-        if (*sharedCacheKey.get() == nullptr)
+        if (!sharedCacheKey->valid())
         {
             mEmptySlotBits[slot / kSlotBitCount].set(slot % kSlotBitCount);
             emptySlot = slot;
@@ -6945,7 +6971,7 @@ void SharedCacheKeyManager<SharedCacheKeyT>::addKey(const SharedCacheKeyT &key)
         {
             slot += emptyBits.first();
             SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
-            ASSERT(*sharedCacheKey.get() == nullptr);
+            ASSERT(!sharedCacheKey->valid());
             sharedCacheKey = key;
             emptyBits.reset(slot % kSlotBitCount);
             return;
@@ -6958,7 +6984,7 @@ void SharedCacheKeyManager<SharedCacheKeyT>::addKey(const SharedCacheKeyT &key)
     if (slot != kInvalidSlot)
     {
         SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys[slot];
-        ASSERT(*sharedCacheKey.get() == nullptr);
+        ASSERT(!sharedCacheKey->valid());
         sharedCacheKey         = key;
         SlotBitMask &emptyBits = mEmptySlotBits[slot / kSlotBitCount];
         emptyBits.reset(slot % kSlotBitCount);
@@ -6981,8 +7007,8 @@ void SharedCacheKeyManager<SharedCacheKeyT>::addKey(const SharedCacheKeyT &key)
         mSharedCacheKeys.emplace_back();
         SharedCacheKeyT &sharedCacheKey = mSharedCacheKeys.back();
         // Insert an empty cache key so that sharedCacheKey will not be null.
-        MakeEmptyCachedObject(&sharedCacheKey);
-        ASSERT(*sharedCacheKey.get() == nullptr);
+        MakeInvalidCachedObject(&sharedCacheKey);
+        ASSERT(!sharedCacheKey->valid());
     }
 }
 
@@ -6992,12 +7018,11 @@ void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(ContextVk *contextVk)
     ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
-        if (*sharedCacheKey.get() != nullptr)
+        if (sharedCacheKey->valid())
         {
             // Immediate destroy the cached object and the key itself when first releaseRef call is
             // made
-            ReleaseCachedObject(contextVk, *(*sharedCacheKey.get()));
-            *sharedCacheKey.get() = nullptr;
+            sharedCacheKey->releaseCachedObject(contextVk);
         }
     }
     mSharedCacheKeys.clear();
@@ -7010,12 +7035,11 @@ void SharedCacheKeyManager<SharedCacheKeyT>::releaseKeys(Renderer *renderer)
     ASSERT(mSharedCacheKeys.size() == mEmptySlotBits.size() * kSlotBitCount);
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
-        if (*sharedCacheKey.get() != nullptr)
+        if (sharedCacheKey->valid())
         {
             // Immediate destroy the cached object and the key itself when first releaseKeys call is
             // made
-            ReleaseCachedObject(renderer, *(*sharedCacheKey.get()));
-            *sharedCacheKey.get() = nullptr;
+            sharedCacheKey->releaseCachedObject(renderer);
         }
     }
     mSharedCacheKeys.clear();
@@ -7029,11 +7053,10 @@ void SharedCacheKeyManager<SharedCacheKeyT>::destroyKeys(Renderer *renderer)
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
         // destroy the cache key
-        if (*sharedCacheKey.get() != nullptr)
+        if (sharedCacheKey->valid())
         {
             // Immediate destroy the cached object and the key
-            DestroyCachedObject(renderer, *(*sharedCacheKey.get()));
-            *sharedCacheKey.get() = nullptr;
+            sharedCacheKey->destroyCachedObject(renderer);
         }
     }
     mSharedCacheKeys.clear();
@@ -7054,7 +7077,7 @@ bool SharedCacheKeyManager<SharedCacheKeyT>::containsKey(const SharedCacheKeyT &
 {
     for (const SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
-        if (key == sharedCacheKey)
+        if (*key == *sharedCacheKey)
         {
             return true;
         }
@@ -7068,7 +7091,7 @@ void SharedCacheKeyManager<SharedCacheKeyT>::assertAllEntriesDestroyed()
     // Caller must have already freed all caches
     for (SharedCacheKeyT &sharedCacheKey : mSharedCacheKeys)
     {
-        ASSERT(*sharedCacheKey.get() == nullptr);
+        ASSERT(!sharedCacheKey->valid());
     }
 }
 
@@ -7531,7 +7554,7 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
         else
         {
             attachmentDescs[attachmentCount.get()].format =
-                vk::GetVkFormatFromFormatID(attachmentFormatID);
+                vk::GetVkFormatFromFormatID(renderer, attachmentFormatID);
         }
         ASSERT(attachmentDescs[attachmentCount.get()].format != VK_FORMAT_UNDEFINED);
 
@@ -8156,23 +8179,14 @@ DescriptorSetLayoutCache::~DescriptorSetLayoutCache()
 void DescriptorSetLayoutCache::destroy(vk::Renderer *renderer)
 {
     renderer->accumulateCacheStats(VulkanCacheType::DescriptorSetLayout, mCacheStats);
-
-    VkDevice device = renderer->getDevice();
-
-    for (auto &item : mPayload)
-    {
-        vk::RefCountedDescriptorSetLayout &layout = item.second;
-        ASSERT(!layout.isReferenced());
-        layout.get().destroy(device);
-    }
-
+    ASSERT(AllCacheEntriesHaveUniqueReference(mPayload));
     mPayload.clear();
 }
 
 angle::Result DescriptorSetLayoutCache::getDescriptorSetLayout(
     vk::Context *context,
     const vk::DescriptorSetLayoutDesc &desc,
-    vk::AtomicBindingPointer<vk::DescriptorSetLayout> *descriptorSetLayoutOut)
+    vk::DescriptorSetLayoutPtr *descriptorSetLayoutOut)
 {
     // Note: this function may be called without holding the share group lock.
     std::unique_lock<angle::SimpleMutex> lock(mMutex);
@@ -8180,8 +8194,7 @@ angle::Result DescriptorSetLayoutCache::getDescriptorSetLayout(
     auto iter = mPayload.find(desc);
     if (iter != mPayload.end())
     {
-        vk::RefCountedDescriptorSetLayout &layout = iter->second;
-        descriptorSetLayoutOut->set(&layout);
+        *descriptorSetLayoutOut = iter->second;
         mCacheStats.hit();
         return angle::Result::Continue;
     }
@@ -8189,7 +8202,7 @@ angle::Result DescriptorSetLayoutCache::getDescriptorSetLayout(
     // If DescriptorSetLayoutDesc is empty, reuse placeholder descriptor set layout handle
     if (desc.empty())
     {
-        descriptorSetLayoutOut->set(context->getRenderer()->getDescriptorLayoutForEmptyDesc());
+        *descriptorSetLayoutOut = context->getRenderer()->getEmptyDescriptorLayout();
         return angle::Result::Continue;
     }
 
@@ -8204,12 +8217,12 @@ angle::Result DescriptorSetLayoutCache::getDescriptorSetLayout(
     createInfo.bindingCount = static_cast<uint32_t>(bindingVector.size());
     createInfo.pBindings    = bindingVector.data();
 
-    vk::DescriptorSetLayout newLayout;
-    ANGLE_VK_TRY(context, newLayout.init(context->getDevice(), createInfo));
+    vk::DescriptorSetLayoutPtr newLayout =
+        vk::DescriptorSetLayoutPtr::MakeShared(context->getDevice());
+    ANGLE_VK_TRY(context, newLayout->init(context->getDevice(), createInfo));
 
-    auto insertedItem = mPayload.emplace(desc, std::move(newLayout));
-    vk::RefCountedDescriptorSetLayout &insertedLayout = insertedItem.first->second;
-    descriptorSetLayoutOut->set(&insertedLayout);
+    *descriptorSetLayoutOut = newLayout;
+    mPayload.emplace(desc, std::move(newLayout));
 
     return angle::Result::Continue;
 }
@@ -8225,15 +8238,7 @@ PipelineLayoutCache::~PipelineLayoutCache()
 void PipelineLayoutCache::destroy(vk::Renderer *renderer)
 {
     accumulateCacheStats(renderer);
-
-    VkDevice device = renderer->getDevice();
-
-    for (auto &item : mPayload)
-    {
-        vk::RefCountedPipelineLayout &layout = item.second;
-        layout.get().destroy(device);
-    }
-
+    ASSERT(AllCacheEntriesHaveUniqueReference(mPayload));
     mPayload.clear();
 }
 
@@ -8241,7 +8246,7 @@ angle::Result PipelineLayoutCache::getPipelineLayout(
     vk::Context *context,
     const vk::PipelineLayoutDesc &desc,
     const vk::DescriptorSetLayoutPointerArray &descriptorSetLayouts,
-    vk::AtomicBindingPointer<vk::PipelineLayout> *pipelineLayoutOut)
+    vk::PipelineLayoutPtr *pipelineLayoutOut)
 {
     // Note: this function may be called without holding the share group lock.
     std::unique_lock<angle::SimpleMutex> lock(mMutex);
@@ -8249,8 +8254,7 @@ angle::Result PipelineLayoutCache::getPipelineLayout(
     auto iter = mPayload.find(desc);
     if (iter != mPayload.end())
     {
-        vk::RefCountedPipelineLayout &layout = iter->second;
-        pipelineLayoutOut->set(&layout);
+        *pipelineLayoutOut = iter->second;
         mCacheStats.hit();
         return angle::Result::Continue;
     }
@@ -8258,11 +8262,11 @@ angle::Result PipelineLayoutCache::getPipelineLayout(
     mCacheStats.missAndIncrementSize();
     // Note this does not handle gaps in descriptor set layouts gracefully.
     angle::FixedVector<VkDescriptorSetLayout, vk::kMaxDescriptorSetLayouts> setLayoutHandles;
-    for (const vk::AtomicBindingPointer<vk::DescriptorSetLayout> &layoutPtr : descriptorSetLayouts)
+    for (const vk::DescriptorSetLayoutPtr &layoutPtr : descriptorSetLayouts)
     {
-        if (layoutPtr.valid())
+        if (layoutPtr)
         {
-            VkDescriptorSetLayout setLayout = layoutPtr.get().getHandle();
+            VkDescriptorSetLayout setLayout = layoutPtr->getHandle();
             ASSERT(setLayout != VK_NULL_HANDLE);
             setLayoutHandles.push_back(setLayout);
         }
@@ -8286,12 +8290,11 @@ angle::Result PipelineLayoutCache::getPipelineLayout(
         createInfo.pPushConstantRanges    = &pushConstantRange;
     }
 
-    vk::PipelineLayout newLayout;
-    ANGLE_VK_TRY(context, newLayout.init(context->getDevice(), createInfo));
+    vk::PipelineLayoutPtr newLayout = vk::PipelineLayoutPtr::MakeShared(context->getDevice());
+    ANGLE_VK_TRY(context, newLayout->init(context->getDevice(), createInfo));
 
-    auto insertedItem                            = mPayload.emplace(desc, std::move(newLayout));
-    vk::RefCountedPipelineLayout &insertedLayout = insertedItem.first->second;
-    pipelineLayoutOut->set(&insertedLayout);
+    *pipelineLayoutOut = newLayout;
+    mPayload.emplace(desc, std::move(newLayout));
 
     return angle::Result::Continue;
 }
@@ -8310,21 +8313,21 @@ void SamplerYcbcrConversionCache::destroy(vk::Renderer *renderer)
 
     VkDevice device = renderer->getDevice();
 
+    uint32_t count = static_cast<uint32_t>(mExternalFormatPayload.size());
     for (auto &iter : mExternalFormatPayload)
     {
         vk::SamplerYcbcrConversion &samplerYcbcrConversion = iter.second;
         samplerYcbcrConversion.destroy(device);
-
-        renderer->onDeallocateHandle(vk::HandleType::SamplerYcbcrConversion);
     }
+    renderer->onDeallocateHandle(vk::HandleType::SamplerYcbcrConversion, count);
 
+    count = static_cast<uint32_t>(mExternalFormatPayload.size());
     for (auto &iter : mVkFormatPayload)
     {
         vk::SamplerYcbcrConversion &samplerYcbcrConversion = iter.second;
         samplerYcbcrConversion.destroy(device);
-
-        renderer->onDeallocateHandle(vk::HandleType::SamplerYcbcrConversion);
     }
+    renderer->onDeallocateHandle(vk::HandleType::SamplerYcbcrConversion, count);
 
     mExternalFormatPayload.clear();
     mVkFormatPayload.clear();
@@ -8377,41 +8380,30 @@ void SamplerCache::destroy(vk::Renderer *renderer)
 {
     renderer->accumulateCacheStats(VulkanCacheType::Sampler, mCacheStats);
 
-    VkDevice device = renderer->getDevice();
-
-    for (auto &iter : mPayload)
-    {
-        vk::RefCountedSampler &sampler = iter.second;
-        ASSERT(!sampler.isReferenced());
-        sampler.get().get().destroy(device);
-
-        renderer->onDeallocateHandle(vk::HandleType::Sampler);
-    }
-
+    uint32_t count = static_cast<uint32_t>(mPayload.size());
+    ASSERT(AllCacheEntriesHaveUniqueReference(mPayload));
     mPayload.clear();
+    renderer->onDeallocateHandle(vk::HandleType::Sampler, count);
 }
 
 angle::Result SamplerCache::getSampler(ContextVk *contextVk,
                                        const vk::SamplerDesc &desc,
-                                       vk::SamplerBinding *samplerOut)
+                                       vk::SharedSamplerPtr *samplerOut)
 {
     auto iter = mPayload.find(desc);
     if (iter != mPayload.end())
     {
-        vk::RefCountedSampler &sampler = iter->second;
-        samplerOut->set(&sampler);
+        *samplerOut = iter->second;
         mCacheStats.hit();
         return angle::Result::Continue;
     }
 
     mCacheStats.missAndIncrementSize();
-    vk::SamplerHelper samplerHelper(contextVk);
-    ANGLE_TRY(desc.init(contextVk, &samplerHelper.get()));
+    vk::SharedSamplerPtr newSampler = vk::SharedSamplerPtr::MakeShared(contextVk->getDevice());
+    ANGLE_TRY(newSampler->init(contextVk, desc));
 
-    vk::RefCountedSampler newSampler(std::move(samplerHelper));
-    auto insertedItem                      = mPayload.emplace(desc, std::move(newSampler));
-    vk::RefCountedSampler &insertedSampler = insertedItem.first->second;
-    samplerOut->set(&insertedSampler);
+    (*samplerOut) = newSampler;
+    mPayload.emplace(desc, std::move(newSampler));
 
     contextVk->getRenderer()->onAllocateHandle(vk::HandleType::Sampler);
 

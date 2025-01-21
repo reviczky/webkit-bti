@@ -51,9 +51,9 @@ struct WebKit::EditorState {
     bool isContentEditable;
     bool isContentRichlyEditable;
     bool isInPasswordField;
-    bool isInPlugin;
     bool hasComposition;
     bool triggeredByAccessibilitySelectionChange;
+    bool isInPlugin;
 #if PLATFORM(MAC)
     bool canEnableAutomaticSpellingCorrection;
 #endif
@@ -61,7 +61,7 @@ struct WebKit::EditorState {
     std::optional<WebKit::EditorState::VisualData> visualData;
 };
 
-using WebCore::ScrollPosition = WebCore::IntPoint;
+using WebCore::ScrollOffset = WebCore::IntPoint;
 
 [Nested] struct WebKit::EditorState::PostLayoutData {
     OptionSet<WebKit::TypingAttribute> typingAttributes;
@@ -129,6 +129,8 @@ using WebCore::ScrollPosition = WebCore::IntPoint;
     WebCore::IntRect markedTextCaretRectAtEnd;
     std::optional<WebCore::PlatformLayerIdentifier> enclosingLayerID;
     std::optional<WebCore::ScrollingNodeID> enclosingScrollingNodeID;
-    WebCore::ScrollPosition enclosingScrollPosition;
+    std::optional<WebCore::ScrollingNodeID> scrollingNodeIDAtStart;
+    std::optional<WebCore::ScrollingNodeID> scrollingNodeIDAtEnd;
+    WebCore::ScrollOffset enclosingScrollOffset;
 #endif
 };

@@ -52,7 +52,7 @@ template<size_t I> const auto& get(const Ellipse& value)
         return value.position;
 }
 
-DEFINE_CSS_STYLE_MAPPING(CSS::Ellipse, Ellipse)
+DEFINE_TYPE_MAPPING(CSS::Ellipse, Ellipse)
 
 FloatPoint resolvePosition(const Ellipse& value, FloatSize boxSize);
 FloatSize resolveRadii(const Ellipse&, FloatSize boxSize, FloatPoint center);
@@ -68,4 +68,4 @@ template<> struct Blending<Ellipse> {
 } // namespace Style
 } // namespace WebCore
 
-STYLE_TUPLE_LIKE_CONFORMANCE(Ellipse, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::Ellipse, 2)

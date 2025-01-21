@@ -457,6 +457,7 @@ class StylePropertyCodeGenProperties:
         Schema.Entry("conditional-converter", allowed_types=[str]),
         Schema.Entry("converter", allowed_types=[str]),
         Schema.Entry("custom", allowed_types=[str]),
+        Schema.Entry("disables-native-appearance", allowed_types=[bool], default_value=False),
         Schema.Entry("enable-if", allowed_types=[str]),
         Schema.Entry("fast-path-inherited", allowed_types=[bool], default_value=False),
         Schema.Entry("fill-layer-property", allowed_types=[bool], default_value=False),
@@ -2859,6 +2860,12 @@ class GenerateCSSPropertyNames:
 
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
+                signature="bool CSSProperty::disablesNativeAppearance(CSSPropertyID id)",
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if p.codegen_properties.disables_native_appearance)
+            )
+
+            self.generation_context.generate_property_id_switch_function_bool(
+                to=writer,
                 signature="bool CSSProperty::isDirectionAwareProperty(CSSPropertyID id)",
                 iterable=self.properties_and_descriptors.style_properties.all_direction_aware_properties
             )
@@ -3284,7 +3291,7 @@ class GenerateStyleBuilderGenerated:
 
     def _generate_color_property_initial_value_setter(self, to, property):
         if property.codegen_properties.initial == "currentColor":
-            initial_function = "StyleColor::currentColor"
+            initial_function = "Style::Color::currentColor"
         else:
             initial_function = "RenderStyle::" + property.codegen_properties.initial
         to.write(f"if (builderState.applyPropertyToRegularStyle())")
@@ -3300,9 +3307,9 @@ class GenerateStyleBuilderGenerated:
 
     def _generate_color_property_value_setter(self, to, property, value):
         to.write(f"if (builderState.applyPropertyToRegularStyle())")
-        to.write(f"    builderState.style().{property.codegen_properties.setter}(builderState.colorFromPrimitiveValue({value}, ForVisitedLink::No));")
+        to.write(f"    builderState.style().{property.codegen_properties.setter}(builderState.createStyleColor({value}, ForVisitedLink::No));")
         to.write(f"if (builderState.applyPropertyToVisitedLinkStyle())")
-        to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}(builderState.colorFromPrimitiveValue({value}, ForVisitedLink::Yes));")
+        to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}(builderState.createStyleColor({value}, ForVisitedLink::Yes));")
 
     # Animation property setters.
 
@@ -3358,7 +3365,8 @@ class GenerateStyleBuilderGenerated:
 
     def _generate_font_property_inherit_value_setter(self, to, property):
         to.write(f"auto fontDescription = builderState.fontDescription();")
-        to.write(f"fontDescription.{property.codegen_properties.setter}(builderState.parentFontDescription().{property.codegen_properties.getter}());")
+        to.write(f"auto inheritedValue = builderState.parentFontDescription().{property.codegen_properties.getter}();")
+        to.write(f"fontDescription.{property.codegen_properties.setter}(WTFMove(inheritedValue));")
         to.write(f"builderState.setFontDescription(WTFMove(fontDescription));")
 
     def _generate_font_property_value_setter(self, to, property, value):
@@ -3515,7 +3523,7 @@ class GenerateStyleBuilderGenerated:
                 elif property.codegen_properties.conditional_converter:
                     return f"WTFMove(convertedValue.value())"
                 elif property.codegen_properties.color_property and not property.codegen_properties.visited_link_color_support:
-                    return f"builderState.colorFromPrimitiveValue(downcast<CSSPrimitiveValue>(value), ForVisitedLink::No)"
+                    return f"builderState.createStyleColor(value, ForVisitedLink::No)"
                 else:
                     return "fromCSSValueDeducingType(builderState, value)"
 
@@ -3943,6 +3951,7 @@ class GenerateCSSPropertyParsing:
                     "CSSPropertyParserConsumer+Content.h",
                     "CSSPropertyParserConsumer+CounterStyles.h",
                     "CSSPropertyParserConsumer+Display.h",
+                    "CSSPropertyParserConsumer+Easing.h",
                     "CSSPropertyParserConsumer+Filter.h",
                     "CSSPropertyParserConsumer+Font.h",
                     "CSSPropertyParserConsumer+Grid.h",
@@ -3963,6 +3972,7 @@ class GenerateCSSPropertyParsing:
                     "CSSPropertyParserConsumer+Percentage.h",
                     "CSSPropertyParserConsumer+PointerEvents.h",
                     "CSSPropertyParserConsumer+Position.h",
+                    "CSSPropertyParserConsumer+PositionTry.h",
                     "CSSPropertyParserConsumer+Primitives.h",
                     "CSSPropertyParserConsumer+Resolution.h",
                     "CSSPropertyParserConsumer+Ruby.h",
@@ -3978,7 +3988,6 @@ class GenerateCSSPropertyParsing:
                     "CSSPropertyParserConsumer+TextDecoration.h",
                     "CSSPropertyParserConsumer+Time.h",
                     "CSSPropertyParserConsumer+Timeline.h",
-                    "CSSPropertyParserConsumer+TimingFunction.h",
                     "CSSPropertyParserConsumer+Transform.h",
                     "CSSPropertyParserConsumer+Transitions.h",
                     "CSSPropertyParserConsumer+UI.h",

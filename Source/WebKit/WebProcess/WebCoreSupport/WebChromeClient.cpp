@@ -56,7 +56,6 @@
 #include "SharedBufferReference.h"
 #include "UserData.h"
 #include "WebColorChooser.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebDataListSuggestionPicker.h"
 #include "WebDateTimeChooser.h"
 #include "WebFrame.h"
@@ -77,6 +76,7 @@
 #include "WebWorkerClient.h"
 #include <WebCore/AppHighlight.h>
 #include <WebCore/AXObjectCache.h>
+#include <WebCore/BarcodeDetectorInterface.h>
 #include <WebCore/ColorChooser.h>
 #include <WebCore/ContentRuleListResults.h>
 #include <WebCore/CookieConsentDecisionResult.h>
@@ -85,6 +85,7 @@
 #include <WebCore/DocumentLoader.h>
 #include <WebCore/DocumentStorageAccess.h>
 #include <WebCore/ElementInlines.h>
+#include <WebCore/FaceDetectorInterface.h>
 #include <WebCore/FileChooser.h>
 #include <WebCore/FileIconLoader.h>
 #include <WebCore/FrameLoader.h>
@@ -103,6 +104,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/Settings.h>
+#include <WebCore/TextDetectorInterface.h>
 #include <WebCore/TextIndicator.h>
 #include <WebCore/TextRecognitionOptions.h>
 #include <WebCore/ViewportConfiguration.h>
@@ -667,11 +669,11 @@ void WebChromeClient::invalidateRootView(const IntRect&)
 void WebChromeClient::invalidateContentsAndRootView(const IntRect& rect)
 {
     auto page = protectedPage();
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->corePage()->mainFrame());
-    if (!localMainFrame)
+    RefPtr corePage = page->protectedCorePage();
+    if (!corePage)
         return;
 
-    if (RefPtr document = localMainFrame->document()) {
+    if (RefPtr document = corePage->localTopDocument()) {
         if (document->printing())
             return;
     }
@@ -682,11 +684,11 @@ void WebChromeClient::invalidateContentsAndRootView(const IntRect& rect)
 void WebChromeClient::invalidateContentsForSlowScroll(const IntRect& rect)
 {
     auto page = protectedPage();
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->corePage()->mainFrame());
-    if (!localMainFrame)
+    RefPtr corePage = page->protectedCorePage();
+    if (!corePage)
         return;
 
-    if (RefPtr document = localMainFrame->document()) {
+    if (RefPtr document = corePage->localTopDocument()) {
         if (document->printing())
             return;
     }
@@ -705,6 +707,11 @@ void WebChromeClient::scroll(const IntSize& scrollDelta, const IntRect& scrollRe
 IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
 {
     return protectedPage()->screenToRootView(point);
+}
+
+IntPoint WebChromeClient::rootViewToScreen(const IntPoint& point) const
+{
+    return protectedPage()->rootViewToScreen(point);
 }
 
 IntRect WebChromeClient::rootViewToScreen(const IntRect& rect) const
@@ -836,14 +843,10 @@ void WebChromeClient::print(LocalFrame& frame, const StringWithDirection& title)
     page->sendSyncWithDelayedReply(Messages::WebPageProxy::PrintFrame(webFrame->frameID(), truncatedTitle.string, pdfFirstPageSize));
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
 RefPtr<ColorChooser> WebChromeClient::createColorChooser(ColorChooserClient& client, const Color& initialColor)
 {
     return WebColorChooser::create(protectedPage().ptr(), &client, initialColor);
 }
-
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
 
@@ -967,16 +970,15 @@ WebCore::DisplayRefreshMonitorFactory* WebChromeClient::displayRefreshMonitorFac
 }
 
 #if ENABLE(GPU_PROCESS)
-RefPtr<ImageBuffer> WebChromeClient::createImageBuffer(const FloatSize& size, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, ImageBufferPixelFormat pixelFormat, OptionSet<ImageBufferOptions> options) const
+RefPtr<ImageBuffer> WebChromeClient::createImageBuffer(const FloatSize& size, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, ImageBufferPixelFormat pixelFormat) const
 {
-    if (!WebProcess::singleton().shouldUseRemoteRenderingFor(purpose)) {
-        if (purpose != RenderingPurpose::ShareableSnapshot && purpose != RenderingPurpose::ShareableLocalSnapshot)
-            return nullptr;
+    if (WebProcess::singleton().shouldUseRemoteRenderingFor(purpose))
+        return protectedPage()->ensureRemoteRenderingBackendProxy().createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat);
 
+    if (purpose == RenderingPurpose::ShareableSnapshot || purpose == RenderingPurpose::ShareableLocalSnapshot)
         return ImageBuffer::create<ImageBufferShareableBitmapBackend>(size, resolutionScale, colorSpace, ImageBufferPixelFormat::BGRA8, purpose, { });
-    }
 
-    return protectedPage()->ensureRemoteRenderingBackendProxy().createImageBuffer(size, purpose, resolutionScale, colorSpace, pixelFormat, options);
+    return nullptr;
 }
 
 RefPtr<ImageBuffer> WebChromeClient::sinkIntoImageBuffer(std::unique_ptr<SerializedImageBuffer> imageBuffer)
@@ -1320,14 +1322,14 @@ void WebChromeClient::clearVideoFullscreenMode(HTMLVideoElement& videoElement, H
 
 bool WebChromeClient::supportsFullScreenForElement(const Element& element, bool withKeyboard)
 {
-    return protectedPage()->fullScreenManager()->supportsFullScreenForElement(element, withKeyboard);
+    return protectedPage()->fullScreenManager().supportsFullScreenForElement(element, withKeyboard);
 }
 
 void WebChromeClient::enterFullScreenForElement(Element& element, HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
-    protectedPage()->fullScreenManager()->enterFullScreenForElement(&element, mode);
+    protectedPage()->fullScreenManager().enterFullScreenForElement(element, mode);
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (RefPtr videoElement = dynamicDowncast<HTMLVideoElement>(&element); videoElement && mode == HTMLMediaElementEnums::VideoFullscreenModeInWindow)
+    if (RefPtr videoElement = dynamicDowncast<HTMLVideoElement>(element); videoElement && mode == HTMLMediaElementEnums::VideoFullscreenModeInWindow)
         setVideoFullscreenMode(*videoElement, mode);
 #endif
 }
@@ -1335,7 +1337,7 @@ void WebChromeClient::enterFullScreenForElement(Element& element, HTMLMediaEleme
 #if ENABLE(QUICKLOOK_FULLSCREEN)
 void WebChromeClient::updateImageSource(Element& element)
 {
-    protectedPage()->fullScreenManager()->updateImageSource(element);
+    protectedPage()->fullScreenManager().updateImageSource(element);
 }
 #endif // ENABLE(QUICKLOOK_FULLSCREEN)
 
@@ -1348,7 +1350,7 @@ void WebChromeClient::exitFullScreenForElement(Element* element)
             exitingInWindowFullscreen = videoElement->fullscreenMode() == HTMLMediaElementEnums::VideoFullscreenModeInWindow;
     }
 #endif
-    protectedPage()->fullScreenManager()->exitFullScreenForElement(element);
+    protectedPage()->fullScreenManager().exitFullScreenForElement(element);
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     if (exitingInWindowFullscreen)
         clearVideoFullscreenMode(*dynamicDowncast<HTMLVideoElement>(*element), HTMLMediaElementEnums::VideoFullscreenModeInWindow);
@@ -1443,26 +1445,6 @@ void WebChromeClient::wheelEventHandlersChanged(bool hasHandlers)
     protectedPage()->wheelEventHandlersChanged(hasHandlers);
 }
 
-String WebChromeClient::plugInStartLabelTitle(const String& mimeType) const
-{
-    return protectedPage()->injectedBundleUIClient().plugInStartLabelTitle(mimeType);
-}
-
-String WebChromeClient::plugInStartLabelSubtitle(const String& mimeType) const
-{
-    return protectedPage()->injectedBundleUIClient().plugInStartLabelSubtitle(mimeType);
-}
-
-String WebChromeClient::plugInExtraStyleSheet() const
-{
-    return protectedPage()->injectedBundleUIClient().plugInExtraStyleSheet();
-}
-
-String WebChromeClient::plugInExtraScript() const
-{
-    return protectedPage()->injectedBundleUIClient().plugInExtraScript();
-}
-
 void WebChromeClient::enableSuddenTermination()
 {
     protectedPage()->send(Messages::WebProcessProxy::EnableSuddenTermination());
@@ -1506,6 +1488,11 @@ void WebChromeClient::isAnyAnimationAllowedToPlayDidChange(bool anyAnimationCanP
     protectedPage()->isAnyAnimationAllowedToPlayDidChange(anyAnimationCanPlay);
 }
 #endif
+
+void WebChromeClient::resolveAccessibilityHitTestForTesting(FrameIdentifier frameID, const IntPoint& point, CompletionHandler<void(String)>&& callback)
+{
+    protectedPage()->sendWithAsyncReply(Messages::WebPageProxy::ResolveAccessibilityHitTestForTesting(frameID, point), WTFMove(callback));
+}
 
 void WebChromeClient::isPlayingMediaDidChange(MediaProducerMediaStateFlags state)
 {
@@ -1569,7 +1556,7 @@ bool WebChromeClient::shouldDispatchFakeMouseMoveEvents() const
     return protectedPage()->shouldDispatchFakeMouseMoveEvents();
 }
 
-static RefPtr<API::Object> userDataFromJSONData(JSON::Value& value)
+RefPtr<API::Object> userDataFromJSONData(JSON::Value& value)
 {
     switch (value.type()) {
     case JSON::Value::Type::Null:
@@ -1762,7 +1749,7 @@ void WebChromeClient::setMockWebAuthenticationConfiguration(const MockWebAuthent
 #endif
 
 #if PLATFORM(PLAYSTATION)
-void WebChromeClient::postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXObjectCache::AXNotification)
+void WebChromeClient::postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXNotification)
 {
     notImplemented();
 }
@@ -1772,7 +1759,7 @@ void WebChromeClient::postAccessibilityNodeTextChangeNotification(WebCore::Acces
     notImplemented();
 }
 
-void WebChromeClient::postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXObjectCache::AXLoadingEvent)
+void WebChromeClient::postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXLoadingEvent)
 {
     notImplemented();
 }
@@ -1986,9 +1973,14 @@ void WebChromeClient::callAfterPendingSyntheticClick(CompletionHandler<void(Synt
     protectedPage()->callAfterPendingSyntheticClick(WTFMove(completion));
 }
 
-void WebChromeClient::didSwallowClickEvent(const PlatformMouseEvent& event, Node& node)
+void WebChromeClient::didDispatchClickEvent(const PlatformMouseEvent& event, Node& node)
 {
-    protectedPage()->didSwallowClickEvent(event, node);
+    protectedPage()->didDispatchClickEvent(event, node);
+}
+
+void WebChromeClient::didProgrammaticallyClearTextFormControl(const HTMLTextFormControlElement& element)
+{
+    protectedPage()->didProgrammaticallyClearTextFormControl(element);
 }
 
 } // namespace WebKit

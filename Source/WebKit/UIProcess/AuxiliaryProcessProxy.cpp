@@ -59,6 +59,8 @@
 #include "ExtensionCapabilityGrant.h"
 #endif
 
+#include "WebPageProxyMessages.h"
+
 namespace WebKit {
 
 static HashMap<IPC::Connection::UniqueID, WeakPtr<AuxiliaryProcessProxy>>& connectionToProcessMap()
@@ -79,7 +81,7 @@ static Seconds adjustedTimeoutForThermalState(Seconds timeout)
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AuxiliaryProcessProxy);
 
 AuxiliaryProcessProxy::AuxiliaryProcessProxy(ShouldTakeUIBackgroundAssertion shouldTakeUIBackgroundAssertion, AlwaysRunsAtBackgroundPriority alwaysRunsAtBackgroundPriority, Seconds responsivenessTimeout)
-    : m_responsivenessTimer(*this, adjustedTimeoutForThermalState(responsivenessTimeout))
+    : m_responsivenessTimer(ResponsivenessTimer::create(*this, adjustedTimeoutForThermalState(responsivenessTimeout)))
     , m_alwaysRunsAtBackgroundPriority(alwaysRunsAtBackgroundPriority == AlwaysRunsAtBackgroundPriority::Yes)
     , m_throttler(*this, shouldTakeUIBackgroundAssertion == ShouldTakeUIBackgroundAssertion::Yes)
 {
@@ -87,6 +89,9 @@ AuxiliaryProcessProxy::AuxiliaryProcessProxy(ShouldTakeUIBackgroundAssertion sho
 
 AuxiliaryProcessProxy::~AuxiliaryProcessProxy()
 {
+    if (state() != State::Terminated)
+        platformStartConnectionTerminationWatchdog();
+
     protectedThrottler()->didDisconnectFromProcess();
 
     if (RefPtr connection = m_connection)
@@ -184,6 +189,9 @@ void AuxiliaryProcessProxy::connect()
 void AuxiliaryProcessProxy::terminate()
 {
     RELEASE_LOG(Process, "AuxiliaryProcessProxy::terminate: PID=%d", processID());
+
+    if (state() != State::Terminated)
+        platformStartConnectionTerminationWatchdog();
 
 #if PLATFORM(COCOA) && !USE(EXTENSIONKIT_PROCESS_TERMINATION)
     if (RefPtr connection = m_connection) {
@@ -327,7 +335,7 @@ bool AuxiliaryProcessProxy::dispatchSyncMessage(IPC::Connection& connection, IPC
     return m_messageReceiverMap.dispatchSyncMessage(connection, decoder, replyEncoder);
 }
 
-void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
+void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier&& connectionIdentifier)
 {
     ASSERT(!m_connection);
     ASSERT(isMainRunLoop());
@@ -344,7 +352,7 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::C
     m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
 #endif
 
-    RefPtr connection = IPC::Connection::createServerConnection(connectionIdentifier, Thread::QOS::UserInteractive);
+    RefPtr connection = IPC::Connection::createServerConnection(WTFMove(connectionIdentifier), Thread::QOS::UserInteractive);
     m_connection = connection.copyRef();
     auto addResult = connectionToProcessMap().add(m_connection->uniqueID(), *this);
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
@@ -408,8 +416,8 @@ void AuxiliaryProcessProxy::replyToPendingMessages()
 
 void AuxiliaryProcessProxy::shutDownProcess()
 {
-    auto scopeExit = WTF::makeScopeExit([&] {
-        protectedThrottler()->didDisconnectFromProcess();
+    auto scopeExit = WTF::makeScopeExit([protectedThis = Ref { *this }] {
+        protectedThis->protectedThrottler()->didDisconnectFromProcess();
     });
 
     switch (state()) {
@@ -438,7 +446,7 @@ void AuxiliaryProcessProxy::shutDownProcess()
     ASSERT(connectionToProcessMap().get(connection->uniqueID()) == this);
     connectionToProcessMap().remove(connection->uniqueID());
     m_connection = nullptr;
-    m_responsivenessTimer.invalidate();
+    protectedResponsivenessTimer()->invalidate();
 }
 
 AuxiliaryProcessProxy* AuxiliaryProcessProxy::fromConnection(const IPC::Connection& connection)
@@ -488,7 +496,7 @@ bool AuxiliaryProcessProxy::platformIsBeingDebugged() const
 
 void AuxiliaryProcessProxy::stopResponsivenessTimer()
 {
-    checkedResponsivenessTimer()->stop();
+    protectedResponsivenessTimer()->stop();
 }
 
 void AuxiliaryProcessProxy::beginResponsivenessChecks()
@@ -507,9 +515,9 @@ void AuxiliaryProcessProxy::startResponsivenessTimer(UseLazyStop useLazyStop)
     }
 
     if (useLazyStop == UseLazyStop::Yes)
-        checkedResponsivenessTimer()->startWithLazyStop();
+        protectedResponsivenessTimer()->startWithLazyStop();
     else
-        checkedResponsivenessTimer()->start();
+        protectedResponsivenessTimer()->start();
 }
 
 bool AuxiliaryProcessProxy::mayBecomeUnresponsive()

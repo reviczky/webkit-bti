@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2025 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -119,6 +120,19 @@ template<typename Raw> bool isValidCanonicalValue(Raw raw)
         return raw.value >= raw.range.min && raw.value <= raw.range.max;
 }
 
+// Shared clamping utility.
+template<typename Raw> Raw performParseTimeClamp(Raw raw)
+{
+    static_assert(raw.range.options != CSS::RangeOptions::Default);
+
+    if constexpr (raw.range.options == CSS::RangeOptions::ClampLower)
+        return { std::max<typename Raw::ResolvedValueType>(raw.value, raw.range.min) };
+    else if constexpr (raw.range.options == CSS::RangeOptions::ClampUpper)
+        return { std::min<typename Raw::ResolvedValueType>(raw.value, raw.range.max) };
+    else if constexpr (raw.range.options == CSS::RangeOptions::ClampBoth)
+        return { std::clamp<typename Raw::ResolvedValueType>(raw.value, raw.range.min, raw.range.max) };
+}
+
 // Shared consumer for `Dimension` tokens.
 template<typename Primitive, typename Validator> struct DimensionConsumer {
     static constexpr CSSParserTokenType tokenType = DimensionToken;
@@ -129,11 +143,15 @@ template<typename Primitive, typename Validator> struct DimensionConsumer {
 
         auto& token = range.peek();
 
-        auto unitType = token.unitType();
-        if (!Validator::isValid(unitType, options))
+        auto validatedUnit = Validator::validate(token.unitType(), options);
+        if (!validatedUnit)
             return std::nullopt;
 
-        auto rawValue = typename Primitive::Raw { unitType, token.numericValue() };
+        auto rawValue = typename Primitive::Raw { *validatedUnit, token.numericValue() };
+
+        if constexpr (rawValue.range.options != CSS::RangeOptions::Default)
+            rawValue = performParseTimeClamp(rawValue);
+
         if (!Validator::isValid(rawValue, options))
             return std::nullopt;
 
@@ -150,7 +168,11 @@ template<typename Primitive, typename Validator> struct PercentageConsumer {
     {
         ASSERT(range.peek().type() == PercentageToken);
 
-        auto rawValue = typename Primitive::Raw { CSSUnitType::CSS_PERCENTAGE, range.peek().numericValue() };
+        auto rawValue = typename Primitive::Raw { CSS::PercentageUnit::Percentage, range.peek().numericValue() };
+
+        if constexpr (rawValue.range.options != CSS::RangeOptions::Default)
+            rawValue = performParseTimeClamp(rawValue);
+
         if (!Validator::isValid(rawValue, options))
             return std::nullopt;
 
@@ -167,7 +189,11 @@ template<typename Primitive, typename Validator> struct NumberConsumer {
     {
         ASSERT(range.peek().type() == NumberToken);
 
-        auto rawValue = typename Primitive::Raw { CSSUnitType::CSS_NUMBER, range.peek().numericValue() };
+        auto rawValue = typename Primitive::Raw { CSS::NumberUnit::Number, range.peek().numericValue() };
+
+        if constexpr (rawValue.range.options != CSS::RangeOptions::Default)
+            rawValue = performParseTimeClamp(rawValue);
+
         if (!Validator::isValid(rawValue, options))
             return std::nullopt;
 
@@ -177,7 +203,7 @@ template<typename Primitive, typename Validator> struct NumberConsumer {
 };
 
 // Shared consumer for `Number` tokens for use by dimensional primitives that support "unitless" values.
-template<typename Primitive, typename Validator, CSSUnitType unitType> struct NumberConsumerForUnitlessValues {
+template<typename Primitive, typename Validator, auto unit> struct NumberConsumerForUnitlessValues {
     static constexpr CSSParserTokenType tokenType = NumberToken;
 
     static std::optional<typename Primitive::Raw> consume(CSSParserTokenRange& range, const CSSParserContext&, CSSCalcSymbolsAllowed, CSSPropertyParserOptions options)
@@ -188,7 +214,11 @@ template<typename Primitive, typename Validator, CSSUnitType unitType> struct Nu
         if (!shouldAcceptUnitlessValue(numericValue, options))
             return std::nullopt;
 
-        auto rawValue = typename Primitive::Raw { unitType, numericValue };
+        auto rawValue = typename Primitive::Raw { unit, numericValue };
+
+        if constexpr (rawValue.range.options != CSS::RangeOptions::Default)
+            rawValue = performParseTimeClamp(rawValue);
+
         if (!Validator::isValid(rawValue, options))
             return std::nullopt;
 
@@ -209,6 +239,22 @@ template<typename Primitive> struct FunctionConsumerForCalcValues {
         if (RefPtr value = CSSCalcValue::parse(rangeCopy, context, Primitive::category, Primitive::range, WTFMove(symbolsAllowed), options)) {
             range = rangeCopy;
             return {{ value.releaseNonNull() }};
+        }
+
+        return std::nullopt;
+    }
+};
+
+template<typename T> struct KeywordConsumer {
+    static constexpr CSSParserTokenType tokenType = IdentToken;
+
+    static std::optional<T> consume(CSSParserTokenRange& range, const CSSParserContext&, CSSCalcSymbolsAllowed, CSSPropertyParserOptions)
+    {
+        ASSERT(range.peek().type() == IdentToken);
+
+        if (range.peek().id() == T::value) {
+            range.consumeIncludingWhitespace();
+            return T { };
         }
 
         return std::nullopt;

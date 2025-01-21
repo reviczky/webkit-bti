@@ -365,6 +365,7 @@ public:
     void invalidateFontCache();
 
     ExceptionOr<void> setLowPowerModeEnabled(bool);
+    ExceptionOr<void> setAggressiveThermalMitigationEnabled(bool);
     ExceptionOr<void> setOutsideViewportThrottlingEnabled(bool);
 
     ExceptionOr<void> setScrollViewPosition(int x, int y);
@@ -586,6 +587,7 @@ public:
     unsigned numberOfLiveNodes() const;
     unsigned numberOfLiveDocuments() const;
     unsigned referencingNodeCount(const Document&) const;
+    ExceptionOr<void> executeOpportunisticallyScheduledTasks() const;
 
 #if ENABLE(WEB_AUDIO)
     // BaseAudioContext lifetime testing.
@@ -1012,6 +1014,7 @@ public:
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
     void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
     void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
+    const String& mediaStreamTrackPersistentId(const MediaStreamTrack&);
     bool isMediaStreamSourceInterrupted(MediaStreamTrack&) const;
     bool isMediaStreamSourceEnded(MediaStreamTrack&) const;
     bool isMockRealtimeMediaSourceCenterEnabled();
@@ -1193,6 +1196,7 @@ public:
         bool isVideoAndRequiresUserGestureForVideoRateChange;
         bool isAudioAndRequiresUserGestureForAudioRateChange;
         bool isVideoAndRequiresUserGestureForVideoDueToLowPowerMode;
+        bool isVideoAndRequiresUserGestureForVideoDueToAggressiveThermalMitigation;
         bool noUserGestureRequired;
         bool requiresPlaybackAndIsNotPlaying;
         bool hasEverNotifiedAboutPlaying;
@@ -1236,8 +1240,6 @@ public:
 
     void reloadWithoutContentExtensions();
     void disableContentExtensionsChecks();
-
-    void setUseSystemAppearance(bool);
 
     size_t pluginCount();
     ExceptionOr<unsigned> pluginScrollPositionX(Element&);
@@ -1285,7 +1287,7 @@ public:
         String domain;
         String path;
         // Expiration dates are expressed as milliseconds since the UNIX epoch.
-        double expires { 0 };
+        std::optional<double> expires;
         bool isHttpOnly { false };
         bool isSecure { false };
         bool isSession { false };
@@ -1298,7 +1300,7 @@ public:
             , value(cookie.value)
             , domain(cookie.domain)
             , path(cookie.path)
-            , expires(cookie.expires.value_or(0))
+            , expires(cookie.expires)
             , isHttpOnly(cookie.httpOnly)
             , isSecure(cookie.secure)
             , isSession(cookie.session)
@@ -1312,7 +1314,27 @@ public:
         CookieData()
         {
         }
+
+        static Cookie toCookie(CookieData&& cookieData)
+        {
+            Cookie cookie;
+            cookie.name = WTFMove(cookieData.name);
+            cookie.value = WTFMove(cookieData.value);
+            cookie.domain = WTFMove(cookieData.domain);
+            cookie.path = WTFMove(cookieData.path);
+            cookie.expires = WTFMove(cookieData.expires);
+            if (cookieData.isSameSiteNone)
+                cookie.sameSite = Cookie::SameSitePolicy::None;
+            else if (cookieData.isSameSiteLax)
+                cookie.sameSite = Cookie::SameSitePolicy::Lax;
+            else if (cookieData.isSameSiteStrict)
+                cookie.sameSite = Cookie::SameSitePolicy::Strict;
+
+            return cookie;
+        }
     };
+
+    void setCookie(CookieData&&);
     Vector<CookieData> getCookies() const;
 
     void setAlwaysAllowLocalWebarchive(bool);

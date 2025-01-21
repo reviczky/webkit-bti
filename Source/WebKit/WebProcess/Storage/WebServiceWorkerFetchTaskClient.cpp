@@ -31,7 +31,6 @@
 #include "ServiceWorkerDownloadTaskMessages.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "SharedBufferReference.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include <WebCore/FetchEvent.h>
 #include <WebCore/ResourceError.h>
@@ -43,7 +42,7 @@
 namespace WebKit {
 using namespace WebCore;
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(WebServiceWorkerFetchTaskClient, BlobLoader);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebServiceWorkerFetchTaskClient::BlobLoader);
 
 WebServiceWorkerFetchTaskClient::WebServiceWorkerFetchTaskClient(Ref<IPC::Connection>&& connection, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, bool needsContinueDidReceiveResponseMessage)
     : m_connection(WTFMove(connection))
@@ -60,11 +59,12 @@ void WebServiceWorkerFetchTaskClient::didReceiveRedirection(const WebCore::Resou
 {
     Locker lock(m_connectionLock);
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     m_didSendResponse = true;
-    m_connection->send(Messages::ServiceWorkerFetchTask::DidReceiveRedirectResponse { response }, m_fetchIdentifier);
+    connection->send(Messages::ServiceWorkerFetchTask::DidReceiveRedirectResponse { response }, m_fetchIdentifier);
 
     cleanup();
 }
@@ -73,14 +73,15 @@ void WebServiceWorkerFetchTaskClient::didReceiveResponse(const ResourceResponse&
 {
     Locker lock(m_connectionLock);
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     m_didSendResponse = true;
     if (m_needsContinueDidReceiveResponseMessage)
         m_waitingForContinueDidReceiveResponseMessage = true;
 
-    m_connection->send(Messages::ServiceWorkerFetchTask::DidReceiveResponse { response, m_needsContinueDidReceiveResponseMessage }, m_fetchIdentifier);
+    connection->send(Messages::ServiceWorkerFetchTask::DidReceiveResponse { response, m_needsContinueDidReceiveResponseMessage }, m_fetchIdentifier);
 }
 
 void WebServiceWorkerFetchTaskClient::didReceiveData(const SharedBuffer& buffer)
@@ -91,7 +92,8 @@ void WebServiceWorkerFetchTaskClient::didReceiveData(const SharedBuffer& buffer)
 
 void WebServiceWorkerFetchTaskClient::didReceiveDataInternal(const SharedBuffer& buffer)
 {
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (m_waitingForContinueDidReceiveResponseMessage) {
@@ -102,9 +104,9 @@ void WebServiceWorkerFetchTaskClient::didReceiveDataInternal(const SharedBuffer&
     }
 
     if (m_isDownload)
-        m_connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
     else
-        m_connection->send(Messages::ServiceWorkerFetchTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerFetchTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
 }
 
 void WebServiceWorkerFetchTaskClient::didReceiveFormDataAndFinish(Ref<FormData>&& formData)
@@ -121,7 +123,8 @@ void WebServiceWorkerFetchTaskClient::didReceiveFormDataAndFinishInternal(Ref<Fo
         return;
     }
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (m_waitingForContinueDidReceiveResponseMessage) {
@@ -134,9 +137,9 @@ void WebServiceWorkerFetchTaskClient::didReceiveFormDataAndFinishInternal(Ref<Fo
     URL blobURL = formData->asBlobURL();
     if (blobURL.isNull()) {
         if (m_isDownload)
-            m_connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveFormData { IPC::FormDataReference { WTFMove(formData) } }, m_fetchIdentifier);
+            connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveFormData { IPC::FormDataReference { WTFMove(formData) } }, m_fetchIdentifier);
         else
-            m_connection->send(Messages::ServiceWorkerFetchTask::DidReceiveFormData { IPC::FormDataReference { WTFMove(formData) } }, m_fetchIdentifier);
+            connection->send(Messages::ServiceWorkerFetchTask::DidReceiveFormData { IPC::FormDataReference { WTFMove(formData) } }, m_fetchIdentifier);
         return;
     }
 
@@ -162,13 +165,15 @@ void WebServiceWorkerFetchTaskClient::didReceiveFormDataAndFinishInternal(Ref<Fo
 void WebServiceWorkerFetchTaskClient::didReceiveBlobChunk(const SharedBuffer& buffer)
 {
     Locker lock(m_connectionLock);
-    if (!m_connection)
+
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (m_isDownload)
-        m_connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerDownloadTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
     else
-        m_connection->send(Messages::ServiceWorkerFetchTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerFetchTask::DidReceiveData { IPC::SharedBufferReference(buffer), buffer.size() }, m_fetchIdentifier);
 }
 
 void WebServiceWorkerFetchTaskClient::didFinishBlobLoading()
@@ -186,7 +191,8 @@ void WebServiceWorkerFetchTaskClient::didFail(const ResourceError& error)
 
 void WebServiceWorkerFetchTaskClient::didFailInternal(const ResourceError& error)
 {
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (m_waitingForContinueDidReceiveResponseMessage) {
@@ -197,9 +203,9 @@ void WebServiceWorkerFetchTaskClient::didFailInternal(const ResourceError& error
     }
 
     if (m_isDownload)
-        m_connection->send(Messages::ServiceWorkerDownloadTask::DidFail { error }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerDownloadTask::DidFail { error }, m_fetchIdentifier);
     else
-        m_connection->send(Messages::ServiceWorkerFetchTask::DidFail { error }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerFetchTask::DidFail { error }, m_fetchIdentifier);
 
     cleanup();
 }
@@ -212,7 +218,8 @@ void WebServiceWorkerFetchTaskClient::didFinish(const NetworkLoadMetrics& metric
 
 void WebServiceWorkerFetchTaskClient::didFinishInternal(const NetworkLoadMetrics& metrics)
 {
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (m_waitingForContinueDidReceiveResponseMessage) {
@@ -224,9 +231,9 @@ void WebServiceWorkerFetchTaskClient::didFinishInternal(const NetworkLoadMetrics
     }
 
     if (m_isDownload)
-        m_connection->send(Messages::ServiceWorkerDownloadTask::DidFinish { }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerDownloadTask::DidFinish { }, m_fetchIdentifier);
     else
-        m_connection->send(Messages::ServiceWorkerFetchTask::DidFinish { metrics }, m_fetchIdentifier);
+        connection->send(Messages::ServiceWorkerFetchTask::DidFinish { metrics }, m_fetchIdentifier);
 
     cleanup();
 }
@@ -239,10 +246,11 @@ void WebServiceWorkerFetchTaskClient::didNotHandle()
 
 void WebServiceWorkerFetchTaskClient::didNotHandleInternal()
 {
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
-    m_connection->send(Messages::ServiceWorkerFetchTask::DidNotHandle { }, m_fetchIdentifier);
+    connection->send(Messages::ServiceWorkerFetchTask::DidNotHandle { }, m_fetchIdentifier);
 
     cleanup();
 }
@@ -273,10 +281,11 @@ void WebServiceWorkerFetchTaskClient::usePreload()
 {
     Locker lock(m_connectionLock);
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
-    m_connection->send(Messages::ServiceWorkerFetchTask::UsePreload { }, m_fetchIdentifier);
+    connection->send(Messages::ServiceWorkerFetchTask::UsePreload { }, m_fetchIdentifier);
 
     cleanup();
 }
@@ -323,7 +332,8 @@ void WebServiceWorkerFetchTaskClient::contextIsStopping()
 {
     Locker lock(m_connectionLock);
 
-    if (!m_connection)
+    RefPtr connection = m_connection;
+    if (!connection)
         return;
 
     if (!m_didSendResponse) {
@@ -336,7 +346,7 @@ void WebServiceWorkerFetchTaskClient::contextIsStopping()
         return;
     }
 
-    m_connection->send(Messages::ServiceWorkerFetchTask::WorkerClosed { }, m_fetchIdentifier);
+    connection->send(Messages::ServiceWorkerFetchTask::WorkerClosed { }, m_fetchIdentifier);
     cleanup();
 }
 

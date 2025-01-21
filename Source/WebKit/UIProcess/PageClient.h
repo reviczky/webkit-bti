@@ -30,7 +30,6 @@
 #include "PDFPluginIdentifier.h"
 #include "PasteboardAccessIntent.h"
 #include "SameDocumentNavigationType.h"
-#include "WebColorPicker.h"
 #include "WebDateTimePicker.h"
 #include "WebPopupMenuProxy.h"
 #include "WindowKind.h"
@@ -131,6 +130,7 @@ enum class ScrollIsAnimated : bool;
 struct AppHighlight;
 struct DataDetectorElementInfo;
 struct DictionaryPopupInfo;
+struct ElementContext;
 struct TextIndicatorData;
 struct ShareDataWithParsedURL;
 
@@ -185,6 +185,7 @@ class BrowsingWarning;
 class UserData;
 class ViewSnapshot;
 class WebBackForwardListItem;
+class WebColorPicker;
 class WebContextMenuProxy;
 class WebEditCommandProxy;
 class WebFrameProxy;
@@ -204,10 +205,6 @@ struct WebHitTestResultData;
 
 #if ENABLE(TOUCH_EVENTS)
 class NativeWebTouchEvent;
-#endif
-
-#if ENABLE(INPUT_TYPE_COLOR)
-class WebColorPicker;
 #endif
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -243,7 +240,7 @@ public:
     void deref() { derefView(); }
 
     // Create a new drawing area proxy for the given page.
-    virtual std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) = 0;
+    virtual Ref<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) = 0;
 
     // Tell the view to invalidate the given region. The region is in view coordinates.
     virtual void setViewNeedsDisplay(const WebCore::Region&) = 0;
@@ -389,6 +386,7 @@ public:
     virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) = 0;
     virtual WebCore::FloatRect rootViewToWebView(const WebCore::FloatRect& rect) const { return rect; }
     virtual WebCore::FloatPoint webViewToRootView(const WebCore::FloatPoint& point) const { return point; }
+    virtual WebCore::IntPoint rootViewToScreen(const WebCore::IntPoint&) = 0;
     virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) = 0;
     virtual WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) = 0;
     virtual WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) = 0;
@@ -446,9 +444,7 @@ public:
     virtual void didDismissContextMenu() { }
 #endif
 
-#if ENABLE(INPUT_TYPE_COLOR)
-    virtual RefPtr<WebColorPicker> createColorPicker(WebPageProxy*, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) = 0;
-#endif
+    virtual RefPtr<WebColorPicker> createColorPicker(WebPageProxy&, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) = 0;
 
 #if ENABLE(DATALIST_ELEMENT)
     virtual RefPtr<WebDataListSuggestionsDropdown> createDataListSuggestionsDropdown(WebPageProxy&) = 0;
@@ -551,6 +547,7 @@ public:
 
     virtual void elementDidFocus(const FocusedElementInformation&, bool userIsInteracting, bool blurPreviousNode, OptionSet<WebCore::ActivityState> activityStateChanges, API::Object* userData) = 0;
     virtual void updateInputContextAfterBlurringAndRefocusingElement() = 0;
+    virtual void didProgrammaticallyClearFocusedElement(WebCore::ElementContext&&) = 0;
     virtual void updateFocusedElementInformation(const FocusedElementInformation&) = 0;
     virtual void elementDidBlur() = 0;
     virtual void focusedElementDidChangeInputMode(WebCore::InputMode) = 0;
@@ -586,6 +583,8 @@ public:
 #if HAVE(UISCROLLVIEW_ASYNCHRONOUS_SCROLL_EVENT_HANDLING)
     virtual void handleAsynchronousCancelableScrollEvent(WKBaseScrollView *, WKBEScrollViewScrollUpdate *, void (^completion)(BOOL handled)) = 0;
 #endif
+
+    virtual bool isSimulatingCompatibilityPointerTouches() const = 0;
 
     virtual WebCore::Color contentViewBackgroundColor() = 0;
     virtual WebCore::Color insertionPointColor() = 0;
@@ -630,8 +629,6 @@ public:
     virtual void themeColorDidChange() { }
     virtual void underPageBackgroundColorWillChange() { }
     virtual void underPageBackgroundColorDidChange() { }
-    virtual void pageExtendedBackgroundColorWillChange() { }
-    virtual void pageExtendedBackgroundColorDidChange() { }
     virtual void sampledPageTopColorWillChange() { }
     virtual void sampledPageTopColorDidChange() { }
     virtual void didChangeBackgroundColor() = 0;
@@ -665,7 +662,6 @@ public:
 #if PLATFORM(MAC)
     virtual void didPerformImmediateActionHitTest(const WebHitTestResultData&, bool contentPreventsDefault, API::Object*) = 0;
     virtual NSObject *immediateActionAnimationControllerForHitTestResult(RefPtr<API::HitTestResult>, uint64_t, RefPtr<API::Object>) = 0;
-    virtual void didHandleAcceptedCandidate() = 0;
 #endif
 
     virtual void microphoneCaptureWillChange() { }
@@ -807,6 +803,11 @@ public:
     virtual void hasActiveNowPlayingSessionChanged(bool) { }
 
     virtual void scheduleVisibleContentRectUpdate() { }
+
+#if ENABLE(SCREEN_TIME)
+    virtual void installScreenTimeWebpageController() { }
+    virtual void didChangeScreenTimeWebpageControllerURL() { };
+#endif
 };
 
 } // namespace WebKit

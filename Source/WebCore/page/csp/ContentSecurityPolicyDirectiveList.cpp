@@ -31,10 +31,10 @@
 #include "Document.h"
 #include "HTTPParsers.h"
 #include "LocalFrame.h"
-#include "ParsingUtilities.h"
 #include "SecurityContext.h"
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
+#include <wtf/text/ParsingUtilities.h>
 #include <wtf/text/StringParsingBuffer.h>
 
 namespace WebCore {
@@ -774,6 +774,20 @@ bool ContentSecurityPolicyDirectiveList::shouldReportSample(const String& violat
         return true;
 
     return directive && directive->shouldReportSample();
+}
+
+const ContentSecurityPolicySourceListDirective* ContentSecurityPolicyDirectiveList::hashReportDirectiveForScript() const
+{
+    auto* directive = this->operativeDirectiveScript(m_scriptSrcElem.get(), ContentSecurityPolicyDirectiveNames::scriptSrcElem);
+    if (!directive || !directive->reportHash())
+        return nullptr;
+    return directive;
+}
+
+HashAlgorithmSet ContentSecurityPolicyDirectiveList::reportHash() const
+{
+    auto* directive = hashReportDirectiveForScript();
+    return directive ? directive->reportHash() : 0;
 }
 
 } // namespace WebCore

@@ -256,8 +256,8 @@ template<typename T, typename... Arguments>
 T invoke(CodePtr<JITCompilationPtrTag> ptr, Arguments... arguments)
 {
     void* executableAddress = untagCFunctionPtr<JITCompilationPtrTag>(ptr.taggedPtr());
-    T (SYSV_ABI *function)(Arguments...) = std::bit_cast<T(SYSV_ABI *)(Arguments...)>(executableAddress);
-    return function(arguments...);
+    T (SYSV_ABI *function)(TweakedArgument<Arguments>...) = std::bit_cast<T(SYSV_ABI *)(TweakedArgument<Arguments>...)>(executableAddress);
+    return function(ArgumentTweaker<Arguments>::tweak(arguments)...);
 }
 
 template<typename T, typename... Arguments>
@@ -301,6 +301,8 @@ void checkDisassembly(Compilation& compilation, const Func& func, const CString&
     CRASH();
 }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 inline void checkUsesInstruction(Compilation& compilation, const char* text, bool regex = false)
 {
     checkDisassembly(
@@ -322,6 +324,8 @@ inline void checkDoesNotUseInstruction(Compilation& compilation, const char* tex
         },
         toCString("Did not expected to find ", text, " but it's there!"));
 }
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 template<typename Type>
 struct B3Operand {

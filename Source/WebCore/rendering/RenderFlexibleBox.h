@@ -54,7 +54,6 @@ public:
 
     ASCIILiteral renderName() const override;
 
-    bool avoidsFloats() const final { return true; }
     bool canDropAnonymousBlockChild() const final { return false; }
     void layoutBlock(bool relayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) final;
 
@@ -100,7 +99,9 @@ public:
     virtual bool isFlexibleBoxImpl() const { return false; };
     
     std::optional<LayoutUnit> usedFlexItemOverridingLogicalHeightForPercentageResolution(const RenderBox&);
-    
+    bool canUseFlexItemForPercentageResolution(const RenderBox&);
+    bool canUseFlexItemForPercentageResolutionByStyle(const RenderBox&);
+
     void clearCachedMainSizeForFlexItem(const RenderBox& flexItem);
     
     LayoutUnit cachedFlexItemIntrinsicContentLogicalHeight(const RenderBox& flexItem) const;
@@ -126,7 +127,7 @@ public:
 
     static std::optional<TextDirection> leftRightAxisDirectionFromStyle(const RenderStyle&);
 
-    bool hasModernLayout() const { return m_hasFlexFormattingContextLayout; }
+    bool hasModernLayout() const { return m_hasFlexFormattingContextLayout && *m_hasFlexFormattingContextLayout; }
 
 protected:
     void computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const override;
@@ -192,7 +193,7 @@ private:
     bool crossAxisIsPhysicalWidth() const;
     bool flexItemCrossSizeShouldUseContainerCrossSize(const RenderBox& flexItem) const;
     LayoutUnit computeCrossSizeForFlexItemUsingContainerCrossSize(const RenderBox& flexItem) const;
-    void computeChildIntrinsicLogicalWidths(RenderObject&, LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const override;
+    void computeChildIntrinsicLogicalWidths(RenderBox&, LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const override;
     LayoutUnit computeMainSizeFromAspectRatioUsing(const RenderBox& flexItem, Length crossSizeLength) const;
     void setFlowAwareLocationForFlexItem(RenderBox& flexItem, const LayoutPoint&);
     LayoutUnit computeFlexBaseSizeForFlexItem(RenderBox& flexItem, LayoutUnit mainAxisBorderAndPadding, bool relayoutChildren);
@@ -208,8 +209,6 @@ private:
     Overflow mainAxisOverflowForFlexItem(const RenderBox& flexItem) const;
     Overflow crossAxisOverflowForFlexItem(const RenderBox& flexItem) const;
     void cacheFlexItemMainSize(const RenderBox& flexItem);
-    std::optional<LayoutUnit> usedFlexItemOverridingCrossSizeForPercentageResolution(const RenderBox&);
-    std::optional<LayoutUnit> usedFlexItemOverridingMainSizeForPercentageResolution(const RenderBox&);
 
     void performFlexLayout(bool relayoutChildren);
     LayoutUnit autoMarginOffsetInMainAxis(const FlexLayoutItems&, LayoutUnit& availableFreeSpace);
@@ -301,9 +300,13 @@ private:
     // This is SizeIsUnknown outside of layoutBlock()
     SizeDefiniteness m_hasDefiniteHeight { SizeDefiniteness::Unknown };
     bool m_inLayout { false };
+    bool m_inCrossAxisLayout { false };
+    bool m_inFlexItemLayout { false };
+    bool m_inPostFlexUpdateScrollbarLayout { false };
+    mutable bool m_inFlexItemIntrinsicWidthComputation { false };
     bool m_shouldResetFlexItemLogicalHeightBeforeLayout { false };
     bool m_isComputingFlexBaseSizes { false };
-    bool m_hasFlexFormattingContextLayout { false };
+    std::optional<bool> m_hasFlexFormattingContextLayout;
 };
 
 } // namespace WebCore

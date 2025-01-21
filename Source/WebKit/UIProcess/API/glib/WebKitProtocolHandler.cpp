@@ -22,9 +22,9 @@
 
 #include "APIPageConfiguration.h"
 #include "BuildRevision.h"
-#include "DMABufRendererBufferMode.h"
 #include "DRMDevice.h"
 #include "DisplayVBlankMonitor.h"
+#include "RendererBufferTransportMode.h"
 #include "WebKitError.h"
 #include "WebKitURISchemeRequestPrivate.h"
 #include "WebKitVersion.h"
@@ -188,18 +188,18 @@ static String dmabufRendererWithSupportedBuffers()
     buffers.append("DMABuf (Supported buffers: "_s);
 
 #if PLATFORM(GTK)
-    auto mode = AcceleratedBackingStoreDMABuf::rendererBufferMode();
+    auto mode = AcceleratedBackingStoreDMABuf::rendererBufferTransportMode();
 #else
-    OptionSet<DMABufRendererBufferMode> mode;
+    OptionSet<RendererBufferTransportMode> mode;
     if (wpe_display_get_drm_render_node(wpe_display_get_primary()))
-        mode.add(DMABufRendererBufferMode::Hardware);
-    mode.add(DMABufRendererBufferMode::SharedMemory);
+        mode.add(RendererBufferTransportMode::Hardware);
+    mode.add(RendererBufferTransportMode::SharedMemory);
 #endif
 
-    if (mode.contains(DMABufRendererBufferMode::Hardware))
+    if (mode.contains(RendererBufferTransportMode::Hardware))
         buffers.append("Hardware"_s);
-    if (mode.contains(DMABufRendererBufferMode::SharedMemory)) {
-        if (mode.contains(DMABufRendererBufferMode::Hardware))
+    if (mode.contains(RendererBufferTransportMode::SharedMemory)) {
+        if (mode.contains(RendererBufferTransportMode::Hardware))
             buffers.append(", "_s);
         buffers.append("Shared Memory"_s);
     }
@@ -532,12 +532,16 @@ void WebKitProtocolHandler::handleGPU(WebKitURISchemeRequest* request)
 #if PLATFORM(GTK)
         if (usingDMABufRenderer) {
             addTableRow(hardwareAccelerationObject, "Renderer"_s, dmabufRendererWithSupportedBuffers());
+#if USE(LIBDRM)
             addTableRow(hardwareAccelerationObject, "Buffer format"_s, renderBufferFormat(request));
+#endif
         }
 #elif PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
         if (usingWPEPlatformAPI) {
             addTableRow(hardwareAccelerationObject, "Renderer"_s, dmabufRendererWithSupportedBuffers());
+#if USE(LIBDRM)
             addTableRow(hardwareAccelerationObject, "Buffer format"_s, renderBufferFormat(request));
+#endif
         }
 #endif
         addTableRow(hardwareAccelerationObject, "Native interface"_s, uiProcessContextIsEGL() ? "EGL"_s : "None"_s);

@@ -23,6 +23,7 @@
 #include "config.h"
 #include "StyleProperties.h"
 
+#include "CSSColorValue.h"
 #include "CSSCustomPropertyValue.h"
 #include "CSSParser.h"
 #include "CSSPendingSubstitutionValue.h"
@@ -108,7 +109,8 @@ std::optional<Color> StyleProperties::propertyAsColor(CSSPropertyID property) co
     auto value = getPropertyCSSValue(property);
     if (!value)
         return std::nullopt;
-    return value->isColor() ? value->color()
+    return value->isColor()
+        ? CSSColorValue::absoluteColor(*value)
         : CSSParser::parseColorWithoutContext(WebCore::serializeLonghandValue(property, *value));
 }
 
@@ -430,7 +432,9 @@ static_assert(sizeof(StyleProperties) == sizeof(SameSizeAsStyleProperties), "sty
 #ifndef NDEBUG
 void StyleProperties::showStyle()
 {
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     fprintf(stderr, "%s\n", asText().ascii().data());
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 #endif
 

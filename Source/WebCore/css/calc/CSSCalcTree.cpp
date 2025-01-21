@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,6 +32,40 @@
 
 namespace WebCore {
 namespace CSSCalc {
+
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Abs);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Acos);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Anchor);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(AnchorSize);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Asin);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Atan);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Atan2);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Clamp);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(ContainerProgress);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Cos);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Exp);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Hypot);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Invert);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Log);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Max);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(MediaProgress);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Min);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Mod);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Negate);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Pow);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Product);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Progress);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Random);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Rem);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(RoundDown);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(RoundNearest);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(RoundToZero);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(RoundUp);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Sign);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Sin);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Sqrt);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Sum);
+WTF_MAKE_STRUCT_TZONE_ALLOCATED_IMPL(Tan);
 
 Child makeNumeric(double value, CSSUnitType unit)
 {
@@ -131,10 +166,8 @@ Child makeNumeric(double value, CSSUnitType unit)
     case CSSUnitType::CSS_IDENT:
     case CSSUnitType::CSS_PROPERTY_ID:
     case CSSUnitType::CSS_QUIRKY_EM:
-    case CSSUnitType::CSS_RGBCOLOR:
     case CSSUnitType::CSS_STRING:
     case CSSUnitType::CSS_UNKNOWN:
-    case CSSUnitType::CSS_UNRESOLVED_COLOR:
     case CSSUnitType::CSS_URI:
     case CSSUnitType::CSS_VALUE_ID:
     case CSSUnitType::CustomIdent:
@@ -383,17 +416,38 @@ std::optional<Type> toType(const Sign& root)
     return transformTypeFor(root, getValidatedTypeFor(root, root.a));
 }
 
+std::optional<Type> toType(const Random& root)
+{
+    auto type = getValidatedTypeFor(root, root.min);
+    type = mergeTypesFor(root, type, getValidatedTypeFor(root, root.max));
+    if (root.step)
+        type = mergeTypesFor(root, type, getValidatedTypeFor(root, *root.step));
+    return transformTypeFor(root, type);
+}
+
 std::optional<Type> toType(const Progress& root)
 {
-    auto type = getValidatedTypeFor(root, root.progress);
-    type = mergeTypesFor(root, type, getValidatedTypeFor(root, root.from));
-    type = mergeTypesFor(root, type, getValidatedTypeFor(root, root.to));
+    auto type = getValidatedTypeFor(root, root.value);
+    type = mergeTypesFor(root, type, getValidatedTypeFor(root, root.start));
+    type = mergeTypesFor(root, type, getValidatedTypeFor(root, root.end));
     return transformTypeFor(root, type);
+}
+
+std::optional<Type> toType(const MediaProgress&)
+{
+    // `media-progress()` always has type `number`.
+    return Type { };
+}
+
+std::optional<Type> toType(const ContainerProgress&)
+{
+    // `container-progress()` always has type `number`.
+    return Type { };
 }
 
 TextStream& operator<<(TextStream& ts, Tree tree)
 {
-    return ts << "CSSCalc::Tree [ " << serializationForCSS(tree) << " ]";
+    return ts << "CSSCalc::Tree [ " << serializationForCSS(tree, { .range = CSS::All }) << " ]";
 }
 
 } // namespace CSSCalc

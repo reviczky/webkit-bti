@@ -64,6 +64,7 @@ GMallocSpan<T, Malloc> adoptGMallocSpan(std::span<T> span)
     return adoptMallocSpan<T, Malloc>(span);
 }
 
+WTF_EXPORT_PRIVATE GMallocSpan<char> gFileGetContents(const char* path, GUniqueOutPtr<GError>&);
 WTF_EXPORT_PRIVATE GMallocSpan<char*, GMallocStrv> gKeyFileGetKeys(GKeyFile*, const char* groupName, GUniqueOutPtr<GError>&);
 WTF_EXPORT_PRIVATE GMallocSpan<GParamSpec*> gObjectClassGetProperties(GObjectClass*);
 WTF_EXPORT_PRIVATE GMallocSpan<const char*> gVariantGetStrv(const GRefPtr<GVariant>&);
@@ -108,8 +109,26 @@ static inline std::span<char*> span(char** strv)
     return unsafeMakeSpan(strv, size);
 }
 
+template <typename T = void*, typename = std::enable_if_t<std::is_pointer_v<T>>>
+inline std::span<T> span(GPtrArray* array)
+{
+    if (!array)
+        return unsafeMakeSpan<T>(nullptr, 0);
+
+    return unsafeMakeSpan(static_cast<T*>(static_cast<void*>(array->pdata)), array->len);
+}
+
+template <typename T = void*, typename = std::enable_if_t<std::is_pointer_v<T>>>
+inline std::span<T> span(GRefPtr<GPtrArray>& array)
+{
+    return span<T>(array.get());
+}
+
 } // namespace WTF
 
+using WTF::GMallocSpan;
+using WTF::gFileGetContents;
 using WTF::gKeyFileGetKeys;
 using WTF::gObjectClassGetProperties;
+using WTF::gVariantGetStrv;
 using WTF::span;

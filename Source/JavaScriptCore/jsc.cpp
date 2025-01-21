@@ -163,6 +163,8 @@
 #include <wtf/linux/ProcessMemoryFootprint.h>
 #endif
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #if OS(DARWIN) || OS(LINUX)
 struct MemoryFootprint : ProcessMemoryFootprint {
     MemoryFootprint(const ProcessMemoryFootprint& src)
@@ -594,11 +596,11 @@ private:
         }
 
         bool contains(UniquedStringImpl* name) const { return m_names.contains(name); }
-        const HashSet<UniquedStringImpl*>& names() const { return m_names; }
+        const UncheckedKeyHashSet<UniquedStringImpl*>& names() const { return m_names; }
 
     private:
         Vector<AtomString> m_strings; // To keep the UniqueStringImpls alive.
-        HashSet<UniquedStringImpl*> m_names;
+        UncheckedKeyHashSet<UniquedStringImpl*> m_names;
     };
 
     void finishCreation(VM& vm, const Vector<String>& arguments)
@@ -956,6 +958,7 @@ const GlobalObjectMethodTable GlobalObject::s_globalObjectMethodTable = {
     &deriveShadowRealmGlobalObject,
     &codeForEval,
     &canCompileStrings,
+    &trustedScriptStructure,
 };
 
 GlobalObject::GlobalObject(VM& vm, Structure* structure)
@@ -3235,9 +3238,11 @@ JSC_DEFINE_HOST_FUNCTION(functionSamplingProfilerStackTraces, (JSGlobalObject* g
 }
 #endif // ENABLE(SAMPLING_PROFILER)
 
-JSC_DEFINE_HOST_FUNCTION(functionMaxArguments, (JSGlobalObject*, CallFrame*))
+JSC_DEFINE_HOST_FUNCTION(functionMaxArguments, (JSGlobalObject* globalObject, CallFrame*))
 {
-    return JSValue::encode(jsNumber(JSC::maxArguments));
+    VM& vm = globalObject->vm();
+    unsigned result = std::min<unsigned>(JSC::maxArguments, static_cast<unsigned>((std::bit_cast<uint8_t*>(Thread::current().stack().origin()) - std::bit_cast<uint8_t*>(vm.softStackLimit())) / sizeof(EncodedJSValue)));
+    return JSValue::encode(jsNumber(result));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionAsyncTestStart, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -4393,7 +4398,7 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         JSLockHolder locker(vm);
         // This is needed because we don't want the worker's main
         // thread to die before its compilation threads finish.
-        vm.deref();
+        vm.derefSuppressingSaferCPPChecking();
     }
 
     return result;
@@ -4523,3 +4528,5 @@ int jscmain(int argc, char** argv)
 
     return result;
 }
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

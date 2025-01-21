@@ -39,6 +39,7 @@
 #include "ResourceResponse.h"
 #include "SharedBuffer.h"
 #include <wtf/Forward.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/WeakPtr.h>
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -59,8 +60,12 @@ class LegacyPreviewLoader;
 class LocalFrame;
 class NetworkLoadMetrics;
 
+#if ENABLE(CONTENT_EXTENSIONS)
+class ResourceMonitor;
+#endif
+
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(ResourceLoader);
-class ResourceLoader : public CanMakeWeakPtr<ResourceLoader>, public RefCounted<ResourceLoader>, protected ResourceHandleClient {
+class ResourceLoader : public RefCountedAndCanMakeWeakPtr<ResourceLoader>, protected ResourceHandleClient {
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(ResourceLoader);
 public:
     virtual ~ResourceLoader() = 0;
@@ -159,7 +164,7 @@ public:
     void unschedule(WTF::SchedulePair&);
 #endif
 
-    LocalFrame* frame() const { return m_frame.get(); }
+    WEBCORE_EXPORT LocalFrame* frame() const;
     RefPtr<LocalFrame> protectedFrame() const;
 
     const ResourceLoaderOptions& options() const { return m_options; }
@@ -187,7 +192,7 @@ protected:
     virtual void willSendRequestInternal(ResourceRequest&&, const ResourceResponse& redirectResponse, CompletionHandler<void(ResourceRequest&&)>&&);
 
     RefPtr<ResourceHandle> m_handle;
-    RefPtr<LocalFrame> m_frame;
+    WeakPtr<LocalFrame> m_frame;
     RefPtr<DocumentLoader> m_documentLoader;
     ResourceResponse m_response;
     ResourceLoadTiming m_loadTiming;
@@ -224,6 +229,10 @@ private:
     void receivedCancellation(ResourceHandle*, const AuthenticationChallenge& challenge) override { receivedCancellation(challenge); }
 #if PLATFORM(IOS_FAMILY)
     RetainPtr<CFDictionaryRef> connectionProperties(ResourceHandle*) override;
+#endif
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    ResourceMonitor* resourceMonitorIfExists();
 #endif
 
 #if USE(SOUP)

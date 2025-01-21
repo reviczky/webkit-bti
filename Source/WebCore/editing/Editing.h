@@ -44,6 +44,8 @@ class VisibleSelection;
 
 struct SimpleRange;
 
+enum class TextDirection : bool;
+
 // -------------------------------------------------------------------------
 // Node
 // -------------------------------------------------------------------------
@@ -110,6 +112,7 @@ bool positionBeforeOrAfterNodeIsCandidate(Node&);
 // SimpleRange
 // -------------------------------------------------------------------------
 
+PositionRange positionsForRange(const SimpleRange&);
 WEBCORE_EXPORT HashSet<RefPtr<HTMLImageElement>> visibleImageElementsInRangeWithNonLoadedImages(const SimpleRange&);
 WEBCORE_EXPORT SimpleRange adjustToVisuallyContiguousRange(const SimpleRange&);
 
@@ -139,6 +142,7 @@ unsigned numEnclosingMailBlockquotes(const Position&);
 void updatePositionForNodeRemoval(Position&, Node&);
 
 WEBCORE_EXPORT TextDirection directionOfEnclosingBlock(const Position&);
+TextDirection primaryDirectionForSingleLineRange(const Position& start, const Position& end);
 
 // -------------------------------------------------------------------------
 // VisiblePosition
@@ -156,6 +160,13 @@ WEBCORE_EXPORT VisiblePosition visiblePositionForIndex(int index, Node* scope, T
 VisiblePosition visiblePositionForIndexUsingCharacterIterator(Node&, int index); // FIXME: Why do we need this version?
 
 WEBCORE_EXPORT VisiblePosition closestEditablePositionInElementForAbsolutePoint(const Element&, const IntPoint&);
+
+enum class SelectionExtentMovement : uint8_t {
+    Closest,
+    Left,
+    Right,
+};
+void adjustVisibleExtentPreservingVisualContiguity(const VisiblePosition& base, VisiblePosition& extent, SelectionExtentMovement);
 
 // -------------------------------------------------------------------------
 // HTMLElement

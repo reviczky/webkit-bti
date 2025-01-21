@@ -53,7 +53,6 @@
 namespace WebCore {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderFragmentedFlow);
-WTF_MAKE_TZONE_ALLOCATED_IMPL_TEMPLATE(FragmentIntervalTree);
 
 RenderFragmentedFlow::RenderFragmentedFlow(Type type, Document& document, RenderStyle&& style)
     : RenderBlockFlow(type, document, WTFMove(style), BlockFlowFlag::IsFragmentedFlow)
@@ -315,7 +314,7 @@ LayoutUnit RenderFragmentedFlow::pageLogicalTopForOffset(LayoutUnit offset) cons
 LayoutUnit RenderFragmentedFlow::pageLogicalWidthForOffset(LayoutUnit offset) const
 {
     RenderFragmentContainer* fragment = fragmentAtBlockOffset(0, offset, true);
-    return fragment ? fragment->pageLogicalWidth() : contentLogicalWidth();
+    return fragment ? fragment->pageLogicalWidth() : contentBoxLogicalWidth();
 }
 
 LayoutUnit RenderFragmentedFlow::pageLogicalHeightForOffset(LayoutUnit offset) const
@@ -475,7 +474,7 @@ LayoutUnit RenderFragmentedFlow::contentLogicalWidthOfFirstFragment() const
     RenderFragmentContainer* firstValidFragmentInFlow = firstFragment();
     if (!firstValidFragmentInFlow)
         return 0;
-    return isHorizontalWritingMode() ? firstValidFragmentInFlow->contentWidth() : firstValidFragmentInFlow->contentHeight();
+    return isHorizontalWritingMode() ? firstValidFragmentInFlow->contentBoxWidth() : firstValidFragmentInFlow->contentBoxHeight();
 }
 
 LayoutUnit RenderFragmentedFlow::contentLogicalHeightOfFirstFragment() const
@@ -483,7 +482,7 @@ LayoutUnit RenderFragmentedFlow::contentLogicalHeightOfFirstFragment() const
     RenderFragmentContainer* firstValidFragmentInFlow = firstFragment();
     if (!firstValidFragmentInFlow)
         return 0;
-    return isHorizontalWritingMode() ? firstValidFragmentInFlow->contentHeight() : firstValidFragmentInFlow->contentWidth();
+    return isHorizontalWritingMode() ? firstValidFragmentInFlow->contentBoxHeight() : firstValidFragmentInFlow->contentBoxWidth();
 }
 
 LayoutUnit RenderFragmentedFlow::contentLogicalLeftOfFirstFragment() const
@@ -948,7 +947,7 @@ void RenderFragmentedFlow::addFragmentsVisualEffectOverflow(const RenderBox& box
     for (auto iter = m_fragmentList.find(*startFragment), end = m_fragmentList.end(); iter != end; ++iter) {
         RenderFragmentContainer& fragment = *iter;
 
-        LayoutRect borderBox = box.borderBoxRectInFragment(&fragment);
+        LayoutRect borderBox = box.borderBoxRect();
         borderBox = box.applyVisualEffectOverflow(borderBox);
         borderBox = fragment.rectFlowPortionForBox(box, borderBox);
 
@@ -968,7 +967,7 @@ void RenderFragmentedFlow::addFragmentsVisualOverflowFromTheme(const RenderBlock
     for (auto iter = m_fragmentList.find(*startFragment), end = m_fragmentList.end(); iter != end; ++iter) {
         RenderFragmentContainer& fragment = *iter;
 
-        LayoutRect borderBox = block.borderBoxRectInFragment(&fragment);
+        LayoutRect borderBox = block.borderBoxRect();
         borderBox = fragment.rectFlowPortionForBox(block, borderBox);
 
         FloatRect inflatedRect = borderBox;

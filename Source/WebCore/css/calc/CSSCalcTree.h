@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2024-2025 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,24 +26,27 @@
 #pragma once
 
 #include "CSSCalcType.h"
-#include "CSSNone.h"
 #include "CSSPrimitiveNumericRange.h"
 #include "CSSUnits.h"
 #include "CSSValueKeywords.h"
 #include "CalculationTree.h"
 #include <variant>
 #include <wtf/StdLibExtras.h>
-#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomString.h>
 
 namespace WebCore {
 
+namespace CQ {
+struct ContainerProgressProviding;
+}
+
+namespace MQ {
+struct MediaProgressProviding;
+}
+
 namespace Style {
-
-// Forward declared from AnchorPositionEvaluator.h
 enum class AnchorSizeDimension : uint8_t;
-
 }
 
 enum class CSSUnitType : uint8_t;
@@ -79,7 +83,11 @@ struct Log;
 struct Exp;
 struct Abs;
 struct Sign;
+struct Random;
 struct Progress;
+
+struct MediaProgress;
+struct ContainerProgress;
 
 // CSS Anchor Positioning functions.
 struct Anchor;
@@ -201,13 +209,16 @@ using Node = std::variant<
     IndirectNode<Exp>,
     IndirectNode<Abs>,
     IndirectNode<Sign>,
+    IndirectNode<Random>,
     IndirectNode<Progress>,
+    IndirectNode<MediaProgress>,
+    IndirectNode<ContainerProgress>,
     IndirectNode<Anchor>,
     IndirectNode<AnchorSize>
 >;
 
 using Child = Node;
-using ChildOrNone = std::variant<Child, CSS::NoneRaw>;
+using ChildOrNone = std::variant<Child, CSS::Keyword::None>;
 using Children = Vector<Child>;
 
 enum class Stage : bool { Specified, Computed };
@@ -215,19 +226,19 @@ enum class Stage : bool { Specified, Computed };
 struct Tree {
     Child root;
     Type type;
-    Calculation::Category category;
     Stage stage;
-    CSS::Range range;
 
     // `requiresConversionData` is used both to both indicate whether eager evaluation of the tree (at parse time) is possible or not and to trigger a warning in `CSSCalcValue::doubleValueDeprecated` that the evaluation results will be incorrect.
     bool requiresConversionData = false;
+
+    // `unique` is used to indicate if the calculation tree disqualifies styles it used by for style sharing.
+    bool unique = false;
 
     bool operator==(const Tree&) const = default;
 };
 
 struct Sum {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Sum);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Sum);
     using Base = Calculation::Sum;
 
     Children children;
@@ -236,8 +247,7 @@ public:
 };
 
 struct Product {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Product);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Product);
     using Base = Calculation::Product;
 
     Children children;
@@ -246,8 +256,7 @@ public:
 };
 
 struct Negate {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Negate);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Negate);
     using Base = Calculation::Negate;
 
     Child a;
@@ -256,8 +265,7 @@ public:
 };
 
 struct Invert {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Invert);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Invert);
     using Base = Calculation::Invert;
 
     Child a;
@@ -269,8 +277,7 @@ public:
 
 // Comparison Functions - https://drafts.csswg.org/css-values-4/#comp-func
 struct Min {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Min);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Min);
     using Base = Calculation::Min;
     static constexpr auto id = CSSValueMin;
 
@@ -287,8 +294,7 @@ public:
 };
 
 struct Max {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Max);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Max);
     using Base = Calculation::Max;
     static constexpr auto id = CSSValueMax;
 
@@ -305,8 +311,7 @@ public:
 };
 
 struct Clamp {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Clamp);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Clamp);
     using Base = Calculation::Clamp;
     static constexpr auto id = CSSValueClamp;
 
@@ -326,8 +331,7 @@ public:
 
 // Stepped Value Functions - https://drafts.csswg.org/css-values-4/#round-func
 struct RoundNearest {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(RoundNearest);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(RoundNearest);
     using Base = Calculation::RoundNearest;
     static constexpr auto id = CSSValueNearest;
 
@@ -353,8 +357,7 @@ public:
 };
 
 struct RoundUp {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(RoundUp);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(RoundUp);
     using Base = Calculation::RoundUp;
     static constexpr auto id = CSSValueUp;
 
@@ -380,8 +383,7 @@ public:
 };
 
 struct RoundDown {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(RoundDown);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(RoundDown);
     using Base = Calculation::RoundDown;
     static constexpr auto id = CSSValueDown;
 
@@ -407,8 +409,7 @@ public:
 };
 
 struct RoundToZero {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(RoundToZero);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(RoundToZero);
     using Base = Calculation::RoundToZero;
     static constexpr auto id = CSSValueToZero;
 
@@ -434,8 +435,7 @@ public:
 };
 
 struct Mod {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Mod);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Mod);
     using Base = Calculation::Mod;
     static constexpr auto id = CSSValueMod;
 
@@ -454,8 +454,7 @@ public:
 };
 
 struct Rem {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Rem);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Rem);
     using Base = Calculation::Rem;
     static constexpr auto id = CSSValueRem;
 
@@ -475,8 +474,7 @@ public:
 
 // Trigonometric Functions - https://drafts.csswg.org/css-values-4/#trig-funcs
 struct Sin {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Sin);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Sin);
     using Base = Calculation::Sin;
     static constexpr auto id = CSSValueSin;
 
@@ -492,8 +490,7 @@ public:
 };
 
 struct Cos {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Cos);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Cos);
     using Base = Calculation::Cos;
     static constexpr auto id = CSSValueCos;
 
@@ -509,8 +506,7 @@ public:
 };
 
 struct Tan {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Tan);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Tan);
     using Base = Calculation::Tan;
     static constexpr auto id = CSSValueTan;
 
@@ -526,8 +522,7 @@ public:
 };
 
 struct Asin {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Asin);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Asin);
     using Base = Calculation::Asin;
     static constexpr auto id = CSSValueAsin;
 
@@ -543,8 +538,7 @@ public:
 };
 
 struct Acos {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Acos);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Acos);
     using Base = Calculation::Acos;
     static constexpr auto id = CSSValueAcos;
 
@@ -560,8 +554,7 @@ public:
 };
 
 struct Atan {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Atan);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Atan);
     using Base = Calculation::Atan;
     static constexpr auto id = CSSValueAtan;
 
@@ -577,8 +570,7 @@ public:
 };
 
 struct Atan2 {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Atan2);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Atan2);
     using Base = Calculation::Atan2;
     static constexpr auto id = CSSValueAtan2;
 
@@ -597,8 +589,7 @@ public:
 
 // Exponential Functions - https://drafts.csswg.org/css-values-4/#exponent-funcs
 struct Pow {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Pow);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Pow);
     using Base = Calculation::Pow;
     static constexpr auto id = CSSValuePow;
 
@@ -616,8 +607,7 @@ public:
 };
 
 struct Sqrt {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Sqrt);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Sqrt);
     using Base = Calculation::Sqrt;
     static constexpr auto id = CSSValueSqrt;
 
@@ -633,8 +623,7 @@ public:
 };
 
 struct Hypot {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Hypot);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Hypot);
     using Base = Calculation::Hypot;
     static constexpr auto id = CSSValueHypot;
 
@@ -651,8 +640,7 @@ public:
 };
 
 struct Log {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Log);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Log);
     using Base = Calculation::Log;
     static constexpr auto id = CSSValueLog;
 
@@ -670,8 +658,7 @@ public:
 };
 
 struct Exp {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Exp);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Exp);
     using Base = Calculation::Exp;
     static constexpr auto id = CSSValueExp;
 
@@ -688,8 +675,7 @@ public:
 
 // Sign-Related Functions - https://drafts.csswg.org/css-values-4/#sign-funcs
 struct Abs {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Abs);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Abs);
     using Base = Calculation::Abs;
     static constexpr auto id = CSSValueAbs;
 
@@ -705,8 +691,7 @@ public:
 };
 
 struct Sign {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Sign);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Sign);
     using Base = Calculation::Sign;
     static constexpr auto id = CSSValueSign;
 
@@ -721,30 +706,96 @@ public:
     bool operator==(const Sign&) const = default;
 };
 
+// Random Function - https://drafts.csswg.org/css-values-5/#random
+struct Random {
+    WTF_MAKE_TZONE_ALLOCATED(Random);
+public:
+    using Base = Calculation::Random;
+    static constexpr auto id = CSSValueRandom;
+
+    // <random-caching-options> = <dashed-ident> || per-element
+    struct CachingOptions {
+        AtomString identifier;
+        bool perElement { false };
+
+        bool operator==(const CachingOptions&) const = default;
+    };
+
+    // <random()> = random( <random-caching-options>? , <calc-sum>, <calc-sum>, [by <calc-sum>]? )
+    //     - INPUT: "same" <number>, <dimension>, or <percentage>
+    //     - OUTPUT: same type
+    static constexpr auto input = AllowedTypes::Any;
+    static constexpr auto merge = MergePolicy::Same;
+    static constexpr auto output = OutputTransform::None;
+
+    CachingOptions cachingOptions;
+    Child min;
+    Child max;
+    std::optional<Child> step;
+
+    bool operator==(const Random&) const = default;
+};
+
 // Progress-Related Functions - https://drafts.csswg.org/css-values-5/#progress
 struct Progress {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Progress);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Progress);
     using Base = Calculation::Progress;
     static constexpr auto id = CSSValueProgress;
 
-    // <progress()> = progress( <calc-sum> from <calc-sum> to <calc-sum> )
+    // <progress()> = progress( <calc-sum>, <calc-sum>, <calc-sum> )
     //     - INPUT: "consistent" <number>, <dimension>, or <percentage>
     //     - OUTPUT: <number> "made consistent"
     static constexpr auto input = AllowedTypes::Any;
     static constexpr auto merge = MergePolicy::Consistent;
     static constexpr auto output = OutputTransform::NumberMadeConsistent;
 
-    Child progress;
-    Child from;
-    Child to;
+    Child value;
+    Child start;
+    Child end;
 
     bool operator==(const Progress&) const = default;
 };
 
+struct MediaProgress {
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(MediaProgress);
+    static constexpr auto id = CSSValueMediaProgress;
+
+    // <media-progress()> = media-progress( <mf-name>, <calc-sum>, <calc-sum> )
+    //     - INPUT: "consistent" <number>, <dimension>, or <percentage>, dependent on type of <mf-name> feature.
+    //     - OUTPUT: <number>
+
+    // media-progress() is not a "math function", so its children do not inherit
+    // nor contribute to the type of the overall calculation tree.
+
+    const MQ::MediaProgressProviding* feature;
+    Child start;
+    Child end;
+
+    bool operator==(const MediaProgress&) const = default;
+};
+
+struct ContainerProgress {
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(ContainerProgress);
+    static constexpr auto id = CSSValueContainerProgress;
+
+    // <container-progress()> = container-progress( <mf-name> [ of <container-name> ]?, <calc-sum>, <calc-sum> )
+    //     - INPUT: "consistent" <number>, <dimension>, or <percentage>, dependent on type of <mf-name> feature.
+    //     - OUTPUT: <number>
+
+    // container-progress() is not a "math function", so its children do not inherit
+    // nor contribute to the type of the overall calculation tree.
+
+    const CQ::ContainerProgressProviding* feature;
+    AtomString container;
+    Child start;
+    Child end;
+
+    bool operator==(const ContainerProgress&) const = default;
+};
+
+// Anchor Positioning Related Functions - https://drafts.csswg.org/css-anchor-position-1/
 struct Anchor {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(Anchor);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(Anchor);
     static constexpr auto id = CSSValueAnchor;
 
     // <anchor()> = anchor( <anchor-element>? && <anchor-side>, <length-percentage>? )
@@ -761,8 +812,7 @@ public:
 };
 
 struct AnchorSize {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(AnchorSize);
-public:
+    WTF_MAKE_STRUCT_TZONE_ALLOCATED(AnchorSize);
     static constexpr auto id = CSSValueAnchorSize;
 
     // anchor-size() = anchor-size( [ <anchor-element> || <anchor-size> ]? , <length-percentage>? )
@@ -812,6 +862,7 @@ template<> struct ReverseMapping<Calculation::Log> { using Op = Log; };
 template<> struct ReverseMapping<Calculation::Exp> { using Op = Exp; };
 template<> struct ReverseMapping<Calculation::Abs> { using Op = Abs; };
 template<> struct ReverseMapping<Calculation::Sign> { using Op = Sign; };
+template<> struct ReverseMapping<Calculation::Random> { using Op = Random; };
 template<> struct ReverseMapping<Calculation::Progress> { using Op = Progress; };
 
 // MARK: TextStream
@@ -914,7 +965,10 @@ std::optional<Type> toType(const Log&);
 std::optional<Type> toType(const Exp&);
 std::optional<Type> toType(const Abs&);
 std::optional<Type> toType(const Sign&);
+std::optional<Type> toType(const Random&);
 std::optional<Type> toType(const Progress&);
+std::optional<Type> toType(const MediaProgress&);
+std::optional<Type> toType(const ContainerProgress&);
 
 // MARK: CSSUnitType Evaluation
 
@@ -1184,14 +1238,48 @@ template<size_t I> const auto& get(const Sign& root)
     return root.a;
 }
 
+template<size_t I> const auto& get(const Random& root)
+{
+    if constexpr (!I)
+        return root.cachingOptions;
+    else if constexpr (I == 1)
+        return root.min;
+    else if constexpr (I == 2)
+        return root.max;
+    else if constexpr (I == 3)
+        return root.step;
+}
+
 template<size_t I> const auto& get(const Progress& root)
 {
     if constexpr (!I)
-        return root.progress;
+        return root.value;
     else if constexpr (I == 1)
-        return root.from;
+        return root.start;
     else if constexpr (I == 2)
-        return root.to;
+        return root.end;
+}
+
+template<size_t I> const auto& get(const MediaProgress& root)
+{
+    if constexpr (!I)
+        return root.feature;
+    else if constexpr (I == 1)
+        return root.start;
+    else if constexpr (I == 2)
+        return root.end;
+}
+
+template<size_t I> const auto& get(const ContainerProgress& root)
+{
+    if constexpr (!I)
+        return root.feature;
+    else if constexpr (I == 1)
+        return root.container;
+    else if constexpr (I == 2)
+        return root.start;
+    else if constexpr (I == 3)
+        return root.end;
 }
 
 } // namespace CSSCalc
@@ -1235,6 +1323,9 @@ OP_TUPLE_LIKE_CONFORMANCE(Exp, 1);
 OP_TUPLE_LIKE_CONFORMANCE(Abs, 1);
 OP_TUPLE_LIKE_CONFORMANCE(Sign, 1);
 OP_TUPLE_LIKE_CONFORMANCE(Progress, 3);
+OP_TUPLE_LIKE_CONFORMANCE(MediaProgress, 3);
+OP_TUPLE_LIKE_CONFORMANCE(ContainerProgress, 4);
+OP_TUPLE_LIKE_CONFORMANCE(Random, 4);
 // FIXME (webkit.org/b/280798): make Anchor and AnchorSize tuple-like
 OP_TUPLE_LIKE_CONFORMANCE(Anchor, 0);
 OP_TUPLE_LIKE_CONFORMANCE(AnchorSize, 0);

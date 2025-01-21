@@ -24,7 +24,6 @@
 
 #pragma once
 
-#include "CSSMinimallySerializingRectEdges.h"
 #include "CSSPrimitiveNumericTypes.h"
 
 namespace WebCore {
@@ -34,7 +33,7 @@ namespace CSS {
 // https://drafts.csswg.org/css-backgrounds-3/#propdef-border-radius
 struct BorderRadius {
     using Axis = SpaceSeparatedArray<LengthPercentage<Nonnegative>, 4>;
-    using Corner = Size<LengthPercentage<Nonnegative>>;
+    using Corner = SpaceSeparatedSize<LengthPercentage<Nonnegative>>;
 
     static BorderRadius defaultValue();
 
@@ -64,18 +63,8 @@ bool hasDefaultValue(const BorderRadius&);
 inline BorderRadius BorderRadius::defaultValue()
 {
     return BorderRadius {
-        .horizontal = {
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-        },
-        .vertical = {
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-            LengthPercentage<Nonnegative> { LengthPercentageRaw<Nonnegative> { CSSUnitType::CSS_PX, 0 } },
-        }
+        .horizontal = { 0_css_px, 0_css_px, 0_css_px, 0_css_px },
+        .vertical   = { 0_css_px, 0_css_px, 0_css_px, 0_css_px },
     };
 }
 
@@ -84,4 +73,4 @@ template<> struct Serialize<BorderRadius> { void operator()(StringBuilder&, cons
 } // namespace CSS
 } // namespace WebCore
 
-CSS_TUPLE_LIKE_CONFORMANCE(BorderRadius, 2)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::CSS::BorderRadius, 2)

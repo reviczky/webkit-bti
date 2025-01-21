@@ -110,7 +110,6 @@ colspan
 command
 commandfor
 compact
-composite
 content
 contenteditable
 controls
@@ -201,6 +200,7 @@ name
 nohref
 nomodule
 nonce
+noportal
 noresize
 noshade
 novalidate

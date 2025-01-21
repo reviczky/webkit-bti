@@ -66,8 +66,8 @@ public:
     // This method is called whenever style has been computed for an element and the appearance
     // property has been set to a value other than "none".  The theme should map in all of the appropriate
     // metrics and defaults given the contents of the style.  This includes sophisticated operations like
-    // selection of control size based off the font, the disabling of appearance when certain other properties like
-    // "border" are set, or if the appearance is not supported by the theme.
+    // selection of control size based off the font, the disabling of appearance when CSS properties that
+    // disable native appearance are set, or if the appearance is not supported by the theme.
     void adjustStyle(RenderStyle&, const Element*, const RenderStyle* userAgentAppearanceStyle);
 
     virtual bool canCreateControlPartForRenderer(const RenderObject&) const { return false; }
@@ -89,11 +89,7 @@ public:
     // The remaining methods should be implemented by the platform-specific portion of the theme, e.g.,
     // RenderThemeMac.cpp for Mac OS X.
 
-    // These methods return the theme's extra style sheets rules, to let each platform
-    // adjust the default CSS rules in html.css, quirks.css, mediaControls.css, or plugIns.css
     virtual String extraDefaultStyleSheet() { return String(); }
-    virtual String extraQuirksStyleSheet() { return String(); }
-    virtual String extraPlugInsStyleSheet() { return String(); }
 #if ENABLE(VIDEO)
     virtual String mediaControlsStyleSheet() { return String(); }
     virtual String extraMediaControlsStyleSheet() { return String(); }
@@ -109,9 +105,7 @@ public:
 #if ENABLE(DATALIST_ELEMENT)
     String dataListStyleSheet() const;
 #endif
-#if ENABLE(INPUT_TYPE_COLOR)
     virtual String colorInputStyleSheet() const;
-#endif
 
     virtual LayoutRect adjustedPaintRect(const RenderBox&, const LayoutRect& paintRect) const { return paintRect; }
 
@@ -298,11 +292,9 @@ protected:
     virtual void adjustButtonStyle(RenderStyle&, const Element*) const;
     virtual bool paintButton(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
 
-#if ENABLE(INPUT_TYPE_COLOR)
     virtual void adjustColorWellStyle(RenderStyle&, const Element*) const;
     virtual bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
     virtual void paintColorWellDecorations(const RenderObject&, const PaintInfo&, const FloatRect&) { }
-#endif
 
     virtual void adjustInnerSpinButtonStyle(RenderStyle&, const Element*) const;
 

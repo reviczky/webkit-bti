@@ -29,13 +29,18 @@
 
 #include "WasmCallee.h"
 
-extern "C" void ipint_entry();
-extern "C" void ipint_entry_simd();
-extern "C" void ipint_catch_entry();
-extern "C" void ipint_catch_all_entry();
+extern "C" void SYSV_ABI ipint_entry();
+extern "C" void SYSV_ABI ipint_entry_simd();
+extern "C" void SYSV_ABI ipint_catch_entry();
+extern "C" void SYSV_ABI ipint_catch_all_entry();
+
+extern "C" void SYSV_ABI ipint_table_catch_entry();
+extern "C" void SYSV_ABI ipint_table_catch_ref_entry();
+extern "C" void SYSV_ABI ipint_table_catch_all_entry();
+extern "C" void SYSV_ABI ipint_table_catch_allref_entry();
 
 #define IPINT_VALIDATE_DEFINE_FUNCTION(opcode, name) \
-    extern "C" void ipint_ ## name ## _validate() REFERENCED_FROM_ASM WTF_INTERNAL NO_REORDER;
+    extern "C" void SYSV_ABI ipint_ ## name ## _validate() REFERENCED_FROM_ASM WTF_INTERNAL NO_REORDER;
 
 #define FOR_EACH_IPINT_OPCODE(m) \
     m(0x00, unreachable) \
@@ -48,7 +53,7 @@ extern "C" void ipint_catch_all_entry();
     m(0x07, catch) \
     m(0x08, throw) \
     m(0x09, rethrow) \
-    m(0x0a, reserved_0xa) \
+    m(0x0a, throw_ref) \
     m(0x0b, end) \
     m(0x0c, br) \
     m(0x0d, br_if) \
@@ -58,8 +63,8 @@ extern "C" void ipint_catch_all_entry();
     m(0x11, call_indirect) \
     m(0x12, return_call) \
     m(0x13, return_call_indirect) \
-    m(0x14, reserved_0x14) \
-    m(0x15, reserved_0x15) \
+    m(0x14, call_ref) \
+    m(0x15, return_call_ref) \
     m(0x16, reserved_0x16) \
     m(0x17, reserved_0x17) \
     m(0x18, delegate) \
@@ -69,7 +74,7 @@ extern "C" void ipint_catch_all_entry();
     m(0x1c, select_t) \
     m(0x1d, reserved_0x1d) \
     m(0x1e, reserved_0x1e) \
-    m(0x1f, reserved_0x1f) \
+    m(0x1f, try_table) \
     m(0x20, local_get) \
     m(0x21, local_set) \
     m(0x22, local_tee) \
@@ -249,10 +254,10 @@ extern "C" void ipint_catch_all_entry();
     m(0xd0, ref_null_t) \
     m(0xd1, ref_is_null) \
     m(0xd2, ref_func) \
-    m(0xd3, reserved_0xd3) \
-    m(0xd4, reserved_0xd4) \
-    m(0xd5, reserved_0xd5) \
-    m(0xd6, reserved_0xd6) \
+    m(0xd3, ref_eq) \
+    m(0xd4, ref_as_non_null) \
+    m(0xd5, br_on_null) \
+    m(0xd6, br_on_non_null) \
     m(0xd7, reserved_0xd7) \
     m(0xd8, reserved_0xd8) \
     m(0xd9, reserved_0xd9) \
@@ -289,11 +294,44 @@ extern "C" void ipint_catch_all_entry();
     m(0xf8, reserved_0xf8) \
     m(0xf9, reserved_0xf9) \
     m(0xfa, reserved_0xfa) \
-    m(0xfb, reserved_0xfb) \
+    m(0xfb, fb_block) \
     m(0xfc, fc_block) \
     m(0xfd, simd) \
     m(0xfe, atomic) \
     m(0xff, reserved_0xff)
+
+#define FOR_EACH_IPINT_0xFB_OPCODE(m) \
+    m(0x00, struct_new) \
+    m(0x01, struct_new_default) \
+    m(0x02, struct_get) \
+    m(0x03, struct_get_s) \
+    m(0x04, struct_get_u) \
+    m(0x05, struct_set) \
+    m(0x06, array_new) \
+    m(0x07, array_new_default) \
+    m(0x08, array_new_fixed) \
+    m(0x09, array_new_data) \
+    m(0x0a, array_new_elem) \
+    m(0x0b, array_get) \
+    m(0x0c, array_get_s) \
+    m(0x0d, array_get_u) \
+    m(0x0e, array_set) \
+    m(0x0f, array_len) \
+    m(0x10, array_fill) \
+    m(0x11, array_copy) \
+    m(0x12, array_init_data) \
+    m(0x13, array_init_elem) \
+    m(0x14, ref_test) \
+    m(0x15, ref_test_nullable) \
+    m(0x16, ref_cast) \
+    m(0x17, ref_cast_nullable) \
+    m(0x18, br_on_cast) \
+    m(0x19, br_on_cast_fail) \
+    m(0x1a, any_convert_extern) \
+    m(0x1b, extern_convert_any) \
+    m(0x1c, ref_i31) \
+    m(0x1d, i31_get_s) \
+    m(0x1e, i31_get_u)
 
 #define FOR_EACH_IPINT_0xFC_TRUNC_OPCODE(m) \
     m(0x00, i32_trunc_sat_f32_s) \
@@ -723,7 +761,8 @@ extern "C" void ipint_catch_all_entry();
     m(0x0e, mint_fr6) \
     m(0x0f, mint_fr7) \
     m(0x10, mint_stack) \
-    m(0x11, mint_end) \
+    m(0x11, mint_stack_gap) \
+    m(0x12, mint_end) \
 
 #define FOR_EACH_IPINT_UINT_OPCODE(m) \
     m(0x00, uint_r0) \
@@ -745,8 +784,9 @@ extern "C" void ipint_catch_all_entry();
     m(0x10, uint_stack) \
     m(0x11, uint_ret) \
 
-#if !ENABLE(C_LOOP) && (CPU(ADDRESS64) && (CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS))) || (CPU(ADDRESS32) && CPU(ARM_THUMB2)))
+#if !ENABLE(C_LOOP) && (CPU(ADDRESS64) && (CPU(ARM64) || CPU(X86_64)) || (CPU(ADDRESS32) && CPU(ARM_THUMB2)))
 FOR_EACH_IPINT_OPCODE(IPINT_VALIDATE_DEFINE_FUNCTION);
+FOR_EACH_IPINT_0xFB_OPCODE(IPINT_VALIDATE_DEFINE_FUNCTION);
 FOR_EACH_IPINT_0xFC_TRUNC_OPCODE(IPINT_VALIDATE_DEFINE_FUNCTION);
 FOR_EACH_IPINT_SIMD_OPCODE(IPINT_VALIDATE_DEFINE_FUNCTION);
 FOR_EACH_IPINT_ATOMIC_OPCODE(IPINT_VALIDATE_DEFINE_FUNCTION);

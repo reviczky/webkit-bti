@@ -33,7 +33,9 @@
 #include "GPUProcessConnectionMessages.h"
 #include "IPCSemaphore.h"
 #include "Logging.h"
+#include "RemoteAudioSessionProxy.h"
 #include "SharedCARingBuffer.h"
+#include <WebCore/AVAudioSessionCaptureDeviceManager.h>
 #include <WebCore/AudioMediaStreamTrackRenderer.h>
 #include <WebCore/AudioMediaStreamTrackRendererInternalUnit.h>
 #include <WebCore/AudioSampleBufferList.h>
@@ -113,8 +115,16 @@ RemoteAudioMediaStreamTrackRendererInternalUnitManager::RemoteAudioMediaStreamTr
 {
 }
 
-RemoteAudioMediaStreamTrackRendererInternalUnitManager::~RemoteAudioMediaStreamTrackRendererInternalUnitManager()
+RemoteAudioMediaStreamTrackRendererInternalUnitManager::~RemoteAudioMediaStreamTrackRendererInternalUnitManager() = default;
+
+void RemoteAudioMediaStreamTrackRendererInternalUnitManager::ref() const
 {
+    m_gpuConnectionToWebProcess.get()->ref();
+}
+
+void RemoteAudioMediaStreamTrackRendererInternalUnitManager::deref() const
+{
+    m_gpuConnectionToWebProcess.get()->deref();
 }
 
 void RemoteAudioMediaStreamTrackRendererInternalUnitManager::createUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier identifier, const String& deviceID,  CompletionHandler<void(std::optional<WebCore::CAAudioStreamDescription>, size_t)>&& callback)
@@ -131,7 +141,7 @@ void RemoteAudioMediaStreamTrackRendererInternalUnitManager::deleteUnit(AudioMed
 
     if (m_units.isEmpty()) {
         if (auto connection = m_gpuConnectionToWebProcess.get())
-            connection->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
+            connection->protectedGPUProcess()->tryExitIfUnusedAndUnderMemoryPressure();
     }
 }
 
@@ -151,6 +161,23 @@ void RemoteAudioMediaStreamTrackRendererInternalUnitManager::notifyLastToCapture
 {
     for (Ref unit : m_units.values())
         unit->updateShouldRegisterAsSpeakerSamplesProducer();
+}
+
+void RemoteAudioMediaStreamTrackRendererInternalUnitManager::setLastDeviceUsed(const String& deviceID)
+{
+#if PLATFORM(IOS_FAMILY) && USE(AUDIO_SESSION)
+    RefPtr connection = m_gpuConnectionToWebProcess.get();
+    Ref audioSession = connection->audioSessionProxy();
+    audioSession->setPreferredSpeakerID(deviceID != AudioMediaStreamTrackRenderer::defaultDeviceID() ? deviceID : emptyString());
+#endif
+}
+
+std::optional<SharedPreferencesForWebProcess> RemoteAudioMediaStreamTrackRendererInternalUnitManager::sharedPreferencesForWebProcess() const
+{
+    if (RefPtr gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get())
+        return gpuConnectionToWebProcess->sharedPreferencesForWebProcess();
+
+    return std::nullopt;
 }
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteAudioMediaStreamTrackRendererInternalUnitManagerUnit);

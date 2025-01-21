@@ -20,16 +20,11 @@
 
 #pragma once
 
-#include <wtf/Compiler.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 #include <wtf/Assertions.h>
+#include <wtf/Compiler.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/MainThread.h>
 #include <wtf/Noncopyable.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 namespace WTF {
 
@@ -189,10 +184,11 @@ inline RefCountedBase::~RefCountedBase()
     ASSERT(m_deletionHasBegun);
     ASSERT(!m_adoptionIsRequired);
 
-    // FIXME: Test performance, then add a RELEASE_ASSERT for this too.
     if (m_refCount != 1)
         printRefDuringDestructionLogAndCrash(this);
 #endif
+
+    RELEASE_ASSERT(m_refCount == 1);
 }
 
 template<typename T> class RefCounted : public RefCountedBase {
@@ -212,19 +208,15 @@ protected:
 };
 
 template<typename T>
-inline void retainRefCounted(T* obj)
+inline void ref(T* obj)
 {
-    RELEASE_ASSERT(obj != nullptr);
-    static_assert(std::derived_from<T, WTF::RefCounted<T>>);
-    static_cast<WTF::RefCounted<T>*>(obj)->ref();
+    obj->ref();
 }
 
 template<typename T>
-inline void releaseRefCounted(T* obj)
+inline void deref(T* obj)
 {
-    RELEASE_ASSERT(obj != nullptr);
-    static_assert(std::derived_from<T, WTF::RefCounted<T>>);
-    static_cast<WTF::RefCounted<T>*>(obj)->deref();
+    obj->deref();
 }
 
 } // namespace WTF

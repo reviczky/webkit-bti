@@ -110,8 +110,12 @@ void CSSAnimation::syncPropertiesWithBackingAnimation()
     if (!m_overriddenProperties.contains(Property::Delay))
         animationEffect->setDelay(Seconds(animation.delay()));
 
-    if (!m_overriddenProperties.contains(Property::Duration))
-        animationEffect->setIterationDuration(Seconds(animation.duration().value_or(0)));
+    if (!m_overriddenProperties.contains(Property::Duration)) {
+        if (auto duration = animation.duration())
+            animationEffect->setIterationDuration(Seconds(*duration));
+        else
+            animationEffect->setIterationDuration(std::nullopt);
+    }
 
     if (!m_overriddenProperties.contains(Property::CompositeOperation)) {
         if (auto* keyframeEffect = dynamicDowncast<KeyframeEffect>(animationEffect))
@@ -128,20 +132,24 @@ void CSSAnimation::syncPropertiesWithBackingAnimation()
             }, [&] (const AtomString& name) {
                 CheckedRef timelinesController = document->ensureTimelinesController();
                 timelinesController->setTimelineForName(name, target, *this);
-            }, [&] (Ref<ScrollTimeline> anonymousTimeline) {
-                if (RefPtr viewTimeline = dynamicDowncast<ViewTimeline>(anonymousTimeline))
-                    viewTimeline->setSubject(target.ptr());
-                else
-                    anonymousTimeline->setSource(target.ptr());
-                setTimeline(RefPtr { anonymousTimeline.ptr() });
+            }, [&] (const Animation::AnonymousScrollTimeline& anonymousScrollTimeline) {
+                auto scrollTimeline = ScrollTimeline::create(anonymousScrollTimeline.scroller, anonymousScrollTimeline.axis);
+                scrollTimeline->setSource(target.ptr());
+                setTimeline(WTFMove(scrollTimeline));
+            }, [&] (const Animation::AnonymousViewTimeline& anonymousViewTimeline) {
+                auto insets = anonymousViewTimeline.insets;
+                auto viewTimeline = ViewTimeline::create(nullAtom(), anonymousViewTimeline.axis, WTFMove(insets));
+                viewTimeline->setSubject(target.ptr());
+                setTimeline(WTFMove(viewTimeline));
             }
         );
     }
 
-    if (!m_overriddenProperties.contains(Property::Range))
-        setRange(animation.range());
+    if (!m_overriddenProperties.contains(Property::RangeStart))
+        setRangeStart(animation.range().start);
+    if (!m_overriddenProperties.contains(Property::RangeEnd))
+        setRangeEnd(animation.range().end);
 
-    animationEffect->updateStaticTimingProperties();
     effectTimingDidChange();
 
     // Synchronize the play state
@@ -169,13 +177,13 @@ void CSSAnimation::setBindingsTimeline(RefPtr<AnimationTimeline>&& timeline)
 
 void CSSAnimation::setBindingsRangeStart(TimelineRangeValue&& range)
 {
-    m_overriddenProperties.add(Property::Range);
-    StyleOriginatedAnimation::setBindingsRangeEnd(WTFMove(range));
+    m_overriddenProperties.add(Property::RangeStart);
+    StyleOriginatedAnimation::setBindingsRangeStart(WTFMove(range));
 }
 
 void CSSAnimation::setBindingsRangeEnd(TimelineRangeValue&& range)
 {
-    m_overriddenProperties.add(Property::Range);
+    m_overriddenProperties.add(Property::RangeEnd);
     StyleOriginatedAnimation::setBindingsRangeEnd(WTFMove(range));
 }
 

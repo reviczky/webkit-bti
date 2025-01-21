@@ -436,7 +436,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
     }
 
     // Bookkeep the strongly referenced module environments.
-    HashSet<JSModuleEnvironment*> stronglyReferencedModuleEnvironments;
+    UncheckedKeyHashSet<JSModuleEnvironment*> stronglyReferencedModuleEnvironments;
 
     auto link_objectAllocationProfile = [&](const auto& /*instruction*/, auto bytecode, auto& metadata) {
         metadata.m_objectAllocationProfile.initializeProfile(vm, m_globalObject.get(), this, m_globalObject->objectPrototype(), bytecode.m_inlineCapacity);
@@ -2557,7 +2557,7 @@ bool CodeBlock::checkIfOptimizationThresholdReached()
 {
 #if ENABLE(DFG_JIT)
     if (JITWorklist* worklist = JITWorklist::existingGlobalWorklistOrNull()) {
-        if (worklist->compilationState(JITCompilationKey(this, JITCompilationMode::DFG)) == JITWorklist::Compiled) {
+        if (worklist->compilationState(*m_vm, JITCompilationKey(this, JITCompilationMode::DFG)) == JITWorklist::Compiled) {
             optimizeNextInvocation();
             return true;
         }
@@ -2766,7 +2766,7 @@ bool CodeBlock::hasIdentifier(UniquedStringImpl* uid)
         if (m_cachedIdentifierUids.size() != numberOfIdentifiers) {
             Locker locker(m_cachedIdentifierUidsLock);
             createRareDataIfNecessary();
-            HashSet<UniquedStringImpl*> cachedIdentifierUids;
+            UncheckedKeyHashSet<UniquedStringImpl*> cachedIdentifierUids;
             cachedIdentifierUids.reserveInitialCapacity(numberOfIdentifiers);
             for (unsigned index = 0; index < unlinkedIdentifiers; ++index) {
                 const Identifier& identifier = unlinkedCode->identifier(index);

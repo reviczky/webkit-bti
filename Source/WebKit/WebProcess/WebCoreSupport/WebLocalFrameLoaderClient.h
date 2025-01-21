@@ -32,6 +32,11 @@
 #include <WebCore/LocalFrameLoaderClient.h>
 #include <pal/SessionID.h>
 
+namespace WebCore {
+struct BackForwardItemIdentifierType;
+using BackForwardItemIdentifier = ProcessQualified<ObjectIdentifier<BackForwardItemIdentifierType>>;
+}
+
 namespace WebKit {
 
 class PluginView;
@@ -165,21 +170,6 @@ private:
     void didRunInsecureContent(WebCore::SecurityOrigin&) final;
 
     void didFinishServiceWorkerPageRegistration(bool success) final;
-
-    WebCore::ResourceError cancelledError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError blockedError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError blockedByContentBlockerError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError cannotShowURLError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError interruptedForPolicyChangeError(const WebCore::ResourceRequest&) const final;
-#if ENABLE(CONTENT_FILTERING)
-    WebCore::ResourceError blockedByContentFilterError(const WebCore::ResourceRequest&) const final;
-#endif
-    
-    WebCore::ResourceError cannotShowMIMETypeError(const WebCore::ResourceResponse&) const final;
-    WebCore::ResourceError fileDoesNotExistError(const WebCore::ResourceResponse&) const final;
-    WebCore::ResourceError httpsUpgradeRedirectLoopError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError httpNavigationWithHTTPSOnlyError(const WebCore::ResourceRequest&) const final;
-    WebCore::ResourceError pluginWillHandleLoadError(const WebCore::ResourceResponse&) const final;
     
     void loadStorageAccessQuirksIfNeeded() final;
 
@@ -258,6 +248,7 @@ private:
     Ref<WebCore::FrameNetworkingContext> createNetworkingContext() final;
 
     void completePageTransitionIfNeeded() final;
+    void setDocumentVisualUpdatesAllowed(bool) final;
 
 #if USE(QUICK_LOOK)
     RefPtr<WebCore::LegacyPreviewLoaderClient> createPreviewLoaderClient(const String& fileName, const String& uti) final;
@@ -283,6 +274,10 @@ private:
 #endif
 
     bool siteIsolationEnabled() const;
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    void didExceedNetworkUsageThreshold();
+#endif
 
 #if ENABLE(PDF_PLUGIN)
     RefPtr<PluginView> m_pluginView;
@@ -314,6 +309,8 @@ private:
     void dispatchLoadEventToOwnerElementInAnotherProcess() final;
 
     void frameNameChanged(const String&) final;
+
+    RefPtr<WebCore::HistoryItem> createHistoryItemTree(bool clipAtTarget, WebCore::BackForwardItemIdentifier) const final;
 };
 
 // As long as EmptyFrameLoaderClient exists in WebCore, this can return nullptr.

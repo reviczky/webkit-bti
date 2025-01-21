@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,6 +46,7 @@
 
 namespace WebCore {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DetachedRTCDataChannel);
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RTCDataChannel);
 
 Ref<RTCDataChannel> RTCDataChannel::create(ScriptExecutionContext& context, std::unique_ptr<RTCDataChannelHandler>&& handler, String&& label, RTCDataChannelInit&& options, RTCDataChannelState state)
@@ -211,7 +212,7 @@ void RTCDataChannel::didReceiveRawData(std::span<const uint8_t> data)
 {
     switch (m_binaryType) {
     case BinaryType::Blob:
-        scheduleDispatchEvent(MessageEvent::create(Blob::create(scriptExecutionContext(), Vector(data), emptyString()), { }));
+        scheduleDispatchEvent(MessageEvent::create(Blob::create(protectedScriptExecutionContext().get(), Vector(data), emptyString()), { }));
         return;
     case BinaryType::Arraybuffer:
         scheduleDispatchEvent(MessageEvent::create(ArrayBuffer::create(data)));

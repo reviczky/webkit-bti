@@ -1671,6 +1671,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
 
     case MapStorage:
+    case MapStorageOrSentinel:
     case MapIterationNext:
         setTypeForNode(node, SpecCellOther);
         break;
@@ -2439,6 +2440,14 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case StringCharAt:
         setForNode(node, m_vm.stringStructure.get());
         break;
+
+    case StringAt: {
+        if (node->arrayMode().isOutOfBounds())
+            setTypeForNode(node, SpecString | SpecOther);
+        else
+            setForNode(node, m_vm.stringStructure.get());
+        break;
+    }
 
     case StringLocaleCompare:
         setNonCellTypeForNode(node, SpecInt32Only);
@@ -5688,7 +5697,7 @@ template<typename AbstractStateType>
 void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out)
 {
     CommaPrinter comma(" "_s);
-    HashSet<NodeFlowProjection> seen;
+    UncheckedKeyHashSet<NodeFlowProjection> seen;
     if (m_graph.m_form == SSA) {
         for (NodeFlowProjection node : m_state.block()->ssa->liveAtHead) {
             seen.add(node);

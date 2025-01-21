@@ -640,6 +640,11 @@ const TypeDefinition& TypeInformation::signatureForLLIntBuiltin(LLIntBuiltin bui
     return *singleton().m_I64_Void;
 }
 
+const TypeDefinition& TypeInformation::signatureForJSException()
+{
+    return *singleton().m_Void_Externref;
+}
+
 struct FunctionParameterTypes {
     const Vector<Type, 16>& returnTypes;
     const Vector<Type, 16>& argumentTypes;
@@ -926,12 +931,11 @@ TypeInformation::TypeInformation()
     m_Void_I32I32I32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { }, { Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_Void_I32I32I32I32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { }, { Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_I32_I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { Wasm::Types::I32 }, { Wasm::Types::I32 } }).iterator->key;
-    if (!Options::useWasmGC())
-        return;
     m_I32_RefI32I32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { Wasm::Types::I32 }, { anyrefType(), Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_Ref_RefI32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { anyrefType() }, { anyrefType(), Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_Arrayref_I32I32I32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { arrayrefType(false) }, { Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_Anyref_Externref = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { anyrefType() }, { externrefType() } }).iterator->key;
+    m_Void_Externref = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { }, { externrefType() } }).iterator->key;
     m_Void_I32AnyrefI32I32AnyrefI32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { }, { Wasm::Types::I32, anyrefType(), Wasm::Types::I32, Wasm::Types::I32, anyrefType(), Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
     m_Void_I32AnyrefI32I32I32I32 = m_typeSet.template add<FunctionParameterTypes>(FunctionParameterTypes { { }, { Wasm::Types::I32, anyrefType(), Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32, Wasm::Types::I32 } }).iterator->key;
 }
@@ -1089,13 +1093,9 @@ std::optional<RefPtr<const RTT>> TypeInformation::tryGetCanonicalRTT(TypeIndex t
 
 RefPtr<const RTT> TypeInformation::getCanonicalRTT(TypeIndex type)
 {
-    if (Options::useWasmGC()) {
-        const auto result = TypeInformation::tryGetCanonicalRTT(type);
-        ASSERT(result.has_value());
-        return result.value();
-    }
-
-    return { };
+    const auto result = TypeInformation::tryGetCanonicalRTT(type);
+    ASSERT(result.has_value());
+    return result.value();
 }
 
 bool TypeInformation::castReference(JSValue refValue, bool allowNull, TypeIndex typeIndex)

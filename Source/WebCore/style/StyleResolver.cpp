@@ -41,7 +41,6 @@
 #include "CSSSelector.h"
 #include "CSSStyleRule.h"
 #include "CSSStyleSheet.h"
-#include "CSSTimingFunctionValue.h"
 #include "CSSViewTransitionRule.h"
 #include "CachedResourceLoader.h"
 #include "CompositeOperation.h"
@@ -72,6 +71,7 @@
 #include "SharedStringHash.h"
 #include "StyleAdjuster.h"
 #include "StyleBuilder.h"
+#include "StyleEasingFunction.h"
 #include "StyleFontSizeFunctions.h"
 #include "StyleProperties.h"
 #include "StylePropertyShorthand.h"
@@ -420,13 +420,13 @@ Vector<Ref<StyleRuleKeyframe>> Resolver::keyframeRulesForName(const AtomString& 
 
     auto timingFunctionForKeyframe = [](Ref<StyleRuleKeyframe> keyframe) -> RefPtr<const TimingFunction> {
         if (auto timingFunctionCSSValue = keyframe->properties().getPropertyCSSValue(CSSPropertyAnimationTimingFunction)) {
-            if (auto timingFunction = createTimingFunction(*timingFunctionCSSValue))
+            if (auto timingFunction = createTimingFunctionDeprecated(*timingFunctionCSSValue))
                 return timingFunction;
         }
         return &CubicBezierTimingFunction::defaultTimingFunction();
     };
 
-    HashSet<RefPtr<const TimingFunction>> timingFunctions;
+    UncheckedKeyHashSet<RefPtr<const TimingFunction>> timingFunctions;
     auto uniqueTimingFunctionForKeyframe = [&](Ref<StyleRuleKeyframe> keyframe) -> RefPtr<const TimingFunction> {
         auto timingFunction = timingFunctionForKeyframe(keyframe);
         for (auto existingTimingFunction : timingFunctions) {
@@ -442,7 +442,7 @@ Vector<Ref<StyleRuleKeyframe>> Resolver::keyframeRulesForName(const AtomString& 
 
     using KeyframeUniqueKey = std::tuple<double, RefPtr<const TimingFunction>, CompositeOperation>;
     auto hasDuplicateKeys = [&]() -> bool {
-        HashSet<KeyframeUniqueKey> uniqueKeyframeKeys;
+        UncheckedKeyHashSet<KeyframeUniqueKey> uniqueKeyframeKeys;
         for (auto& keyframe : *keyframes) {
             auto compositeOperation = compositeOperationForKeyframe(keyframe);
             auto timingFunction = uniqueTimingFunctionForKeyframe(keyframe);
@@ -498,7 +498,7 @@ void Resolver::keyframeStylesForAnimation(Element& element, const RenderStyle& e
             blendingKeyframe.setStyle(styleForKeyframe(element, elementStyle, context, keyframeRule.get(), blendingKeyframe));
             blendingKeyframe.setOffset(key);
             if (auto timingFunctionCSSValue = keyframeRule->properties().getPropertyCSSValue(CSSPropertyAnimationTimingFunction))
-                blendingKeyframe.setTimingFunction(createTimingFunction(*timingFunctionCSSValue));
+                blendingKeyframe.setTimingFunction(createTimingFunctionDeprecated(*timingFunctionCSSValue));
             if (auto compositeOperationCSSValue = keyframeRule->properties().getPropertyCSSValue(CSSPropertyAnimationComposition)) {
                 if (auto compositeOperation = toCompositeOperation(*compositeOperationCSSValue))
                     blendingKeyframe.setCompositeOperation(*compositeOperation);
@@ -591,8 +591,6 @@ std::unique_ptr<RenderStyle> Resolver::defaultStyleForElement(const Element* ele
 
     fontDescription.setShouldAllowUserInstalledFonts(settings().shouldAllowUserInstalledFonts() ? AllowUserInstalledFonts::Yes : AllowUserInstalledFonts::No);
     style->setFontDescription(WTFMove(fontDescription));
-
-    style->fontCascade().update(&document().fontSelector());
 
     return style;
 }
@@ -696,7 +694,7 @@ void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResu
 
         if (!inheritedStyleEqual) {
             includedProperties.add(PropertyCascade::PropertyType::Inherited);
-            // FIXME: See colorFromPrimitiveValueWithResolvedCurrentColor().
+            // FIXME: See toStyleColorWithResolvedCurrentColor().
             bool mayContainResolvedCurrentcolor = style.disallowsFastPathInheritance() && hasExplicitlyInherited;
             if (mayContainResolvedCurrentcolor && parentStyle.color() != cacheEntry->parentRenderStyle->color())
                 includedProperties.add(PropertyCascade::PropertyType::NonInherited);

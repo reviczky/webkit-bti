@@ -39,18 +39,20 @@ public:
 
     const RenderBoxModelObject& renderer() const { return downcast<RenderBoxModelObject>(Box::renderer()); }
 
-    std::pair<bool, bool> hasClosedLeftAndRightEdge() const;
+    RectEdges<bool> closedEdges() const;
 
     // FIXME: Remove. For intermediate porting steps only.
     const LegacyInlineFlowBox* legacyInlineBox() const { return downcast<LegacyInlineFlowBox>(Box::legacyInlineBox()); }
 
-    InlineBoxIterator nextInlineBox() const;
-    InlineBoxIterator previousInlineBox() const;
+    InlineBoxIterator nextInlineBoxLineRightward() const;
+    InlineBoxIterator nextInlineBoxLineLeftward() const;
     InlineBoxIterator iterator() const;
 
     LeafBoxIterator firstLeafBox() const;
     LeafBoxIterator lastLeafBox() const;
     LeafBoxIterator endLeafBox() const;
+
+    IteratorRange<BoxIterator> descendants() const;
 };
 
 class InlineBoxIterator : public BoxIterator {
@@ -62,14 +64,14 @@ public:
     const InlineBox& operator*() const { return get(); }
     const InlineBox* operator->() const { return &get(); }
 
-    InlineBoxIterator& traverseNextInlineBox();
-    InlineBoxIterator& traversePreviousInlineBox();
+    InlineBoxIterator& traverseInlineBoxLineRightward();
+    InlineBoxIterator& traverseInlineBoxLineLeftward();
 
 private:
     const InlineBox& get() const { return downcast<InlineBox>(m_box); }
 };
 
-InlineBoxIterator firstInlineBoxFor(const RenderInline&);
+InlineBoxIterator lineLeftmostInlineBoxFor(const RenderInline&);
 InlineBoxIterator firstRootInlineBoxFor(const RenderBlockFlow&);
 
 InlineBoxIterator inlineBoxFor(const LegacyInlineFlowBox&);

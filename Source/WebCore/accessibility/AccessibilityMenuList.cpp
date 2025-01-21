@@ -39,7 +39,7 @@ AccessibilityMenuList::AccessibilityMenuList(AXID axID, RenderMenuList& renderer
 {
     m_popup->setParent(this);
 
-    addChild(m_popup.ptr());
+    addChild(m_popup.get());
     m_childrenInitialized = true;
 }
 
@@ -55,13 +55,13 @@ bool AccessibilityMenuList::press()
 
 #if !PLATFORM(IOS_FAMILY)
     RefPtr element = this->element();
-    AXObjectCache::AXNotification notification = AXObjectCache::AXPressDidFail;
+    auto notification = AXNotification::PressDidFail;
     if (CheckedPtr menuList = dynamicDowncast<RenderMenuList>(renderer()); menuList && element && !element->isDisabledFormControl()) {
         if (menuList->popupIsVisible())
             menuList->hidePopup();
         else
             menuList->showPopup();
-        notification = AXObjectCache::AXPressDidSucceed;
+        notification = AXNotification::PressDidSucceed;
     }
     if (CheckedPtr cache = axObjectCache())
         cache->postNotification(element.get(), notification);

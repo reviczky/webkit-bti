@@ -38,15 +38,17 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/Hasher.h>
 #include <wtf/OptionSet.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/Seconds.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+class FragmentedSharedBuffer;
 class LowPowerModeNotifier;
 class ResourceRequest;
-class FragmentedSharedBuffer;
+class ThermalMitigationNotifier;
 enum class AdvancedPrivacyProtections : uint16_t;
 }
 
@@ -152,7 +154,7 @@ enum class CacheOption : uint8_t {
 #endif
 };
 
-class Cache : public RefCounted<Cache>, public CanMakeWeakPtr<Cache> {
+class Cache : public RefCountedAndCanMakeWeakPtr<Cache> {
 public:
     ~Cache();
     static RefPtr<Cache> open(NetworkProcess&, const String& cachePath, OptionSet<CacheOption>, PAL::SessionID);
@@ -232,7 +234,11 @@ private:
     Ref<NetworkProcess> m_networkProcess;
 
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+    bool shouldUseSpeculativeLoadManager() const;
+    void updateSpeculativeLoadManagerEnabledState();
+
     std::unique_ptr<WebCore::LowPowerModeNotifier> m_lowPowerModeNotifier;
+    std::unique_ptr<WebCore::ThermalMitigationNotifier> m_thermalMitigationNotifier;
     std::unique_ptr<SpeculativeLoadManager> m_speculativeLoadManager;
 #endif
 

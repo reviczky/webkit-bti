@@ -3698,8 +3698,9 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case StringAt:
     case StringCharAt: {
-        // Relies on StringCharAt node having same basic layout as GetByVal
+        // Relies on StringCharAt and StringAt node having same basic layout as GetByVal
         JSValueRegsTemporary result;
         compileGetByValOnString(node, scopedLambda<std::tuple<JSValueRegs, DataFormat>(DataFormat preferredFormat, bool needsFlush)>([&] (DataFormat preferredFormat, bool needsFlush) {
             result = JSValueRegsTemporary(this);
@@ -5362,6 +5363,10 @@ void SpeculativeJIT::compile(Node* node)
         compileMapStorage(node);
         break;
 
+    case MapStorageOrSentinel:
+        compileMapStorageOrSentinel(node);
+        break;
+
     case MapIteratorNext:
         compileMapIteratorNext(node);
         break;
@@ -6140,7 +6145,7 @@ void SpeculativeJIT::compile(Node* node)
         case DoubleRepUse:
             doubleValue.emplace(this, valueEdge);
             valueFPR = doubleValue->fpr();
-            if (data.byteSize == 4) {
+            if (data.byteSize < 8) {
                 fprTemporary.emplace(this);
                 tempFPR = fprTemporary->fpr();
             }
@@ -6192,6 +6197,7 @@ void SpeculativeJIT::compile(Node* node)
         auto baseIndex = BaseIndex(t2, t1, TimesOne);
 
         if (data.isFloatingPoint) {
+            ASSERT(valueEdge.useKind() == DoubleRepUse);
             RELEASE_ASSERT(valueFPR != InvalidFPRReg);
             if (data.byteSize == 2) {
                 RELEASE_ASSERT(tempFPR != InvalidFPRReg);

@@ -152,6 +152,7 @@ namespace WebCore {
     macro(CSSOKLab) \
     macro(CSSPaintSize) \
     macro(CSSPerspective) \
+    macro(CSSPositionTryRule) \
     macro(CSSRGB) \
     macro(CSSRotate) \
     macro(CSSScale) \
@@ -207,6 +208,7 @@ namespace WebCore {
     macro(FileSystemFileHandle) \
     macro(FileSystemHandle) \
     macro(FileSystemSyncAccessHandle) \
+    macro(FileSystemWritableFileStream) \
     macro(FragmentDirective) \
     macro(GainNode) \
     macro(GPU) \
@@ -365,7 +367,6 @@ namespace WebCore {
     macro(PushEvent) \
     macro(PushManager) \
     macro(PushMessageData) \
-    macro(PushNotificationEvent) \
     macro(PushSubscription) \
     macro(PushSubscriptionChangeEvent) \
     macro(PushSubscriptionOptions) \
@@ -674,6 +675,7 @@ namespace WebCore {
     macro(pullAgain) \
     macro(pullAlgorithm) \
     macro(pulling) \
+    macro(pushManager) \
     macro(queue) \
     macro(queuedAddIceCandidate) \
     macro(queuedCreateAnswer) \

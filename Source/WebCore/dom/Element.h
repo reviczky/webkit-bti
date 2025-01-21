@@ -148,6 +148,10 @@ enum class ContentRelevancy : uint8_t {
     Selected = 1 << 3,
 };
 
+namespace Calculation {
+class RandomKeyMap;
+}
+
 namespace Style {
 class Resolver;
 enum class Change : uint8_t;
@@ -239,7 +243,7 @@ public:
 
     // Internal methods that assume the existence of attribute storage, one should use hasAttributes()
     // before calling them.
-    inline AttributeIteratorAccessor attributesIterator() const;
+    inline std::span<const Attribute> attributes() const;
     inline unsigned attributeCount() const;
     inline const Attribute& attributeAt(unsigned index) const;
     inline const Attribute* findAttributeByName(const QualifiedName&) const;
@@ -344,15 +348,15 @@ public:
 
     String nodeName() const override;
 
-    Ref<Element> cloneElementWithChildren(Document&);
-    Ref<Element> cloneElementWithoutChildren(Document&);
+    Ref<Element> cloneElementWithChildren(TreeScope&);
+    Ref<Element> cloneElementWithoutChildren(TreeScope&);
 
     void normalizeAttributes();
 
     WEBCORE_EXPORT void setBooleanAttribute(const QualifiedName& name, bool);
 
     // For exposing to DOM only.
-    WEBCORE_EXPORT NamedNodeMap& attributes() const;
+    WEBCORE_EXPORT NamedNodeMap& attributesMap() const;
 
     enum class AttributeModificationReason : uint8_t { Directly, ByCloning, Parser };
     // This function is called whenever an attribute is added, changed or removed.
@@ -604,6 +608,8 @@ public:
     virtual bool isSliderThumbElement() const { return false; }
     virtual bool isHTMLTablePartElement() const { return false; }
 
+    virtual bool isDevolvableWidget() const { return false; }
+
     bool canContainRangeEndPoint() const override;
 
     // Used for disabled form elements; if true, prevents mouse events from being dispatched
@@ -830,6 +836,9 @@ public:
     AtomString viewTransitionCapturedName(const std::optional<Style::PseudoElementIdentifier>&) const;
     void setViewTransitionCapturedName(const std::optional<Style::PseudoElementIdentifier>&, AtomString);
 
+    Ref<Calculation::RandomKeyMap> randomKeyMap(const std::optional<Style::PseudoElementIdentifier>&) const;
+    bool hasRandomKeyMap() const;
+
 protected:
     Element(const QualifiedName&, Document&, OptionSet<TypeFlag>);
 
@@ -921,9 +930,9 @@ private:
     void disconnectFromResizeObserversSlow(ResizeObserverData&);
 
     // The cloneNode function is private so that non-virtual cloneElementWith/WithoutChildren are used instead.
-    Ref<Node> cloneNodeInternal(Document&, CloningOperation) override;
+    Ref<Node> cloneNodeInternal(TreeScope&, CloningOperation) override;
     void cloneShadowTreeIfPossible(Element& newHost);
-    virtual Ref<Element> cloneElementWithoutAttributesAndChildren(Document&);
+    virtual Ref<Element> cloneElementWithoutAttributesAndChildren(TreeScope&);
 
     inline void removeShadowRoot(); // Defined in ElementRareData.h.
     void removeShadowRootSlow(ShadowRoot&);

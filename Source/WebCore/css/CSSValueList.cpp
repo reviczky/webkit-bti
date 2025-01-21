@@ -25,8 +25,6 @@
 #include <wtf/Hasher.h>
 #include <wtf/text/StringBuilder.h>
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 CSSValueContainingVector::CSSValueContainingVector(ClassType type, ValueSeparator separator)
@@ -49,7 +47,7 @@ CSSValueContainingVector::CSSValueContainingVector(ClassType type, ValueSeparato
     } else {
         for (unsigned i = 0; i < maxInlineSize; ++i)
             m_inlineStorage[i] = &values[i].leakRef();
-        m_additionalStorage = static_cast<const CSSValue**>(fastMalloc(sizeof(const CSSValue*) * (m_size - maxInlineSize)));
+        m_additionalStorage = MallocSpan<const CSSValue*>::malloc(sizeof(const CSSValue*) * (m_size - maxInlineSize));
         for (unsigned i = maxInlineSize; i < m_size; ++i)
             m_additionalStorage[i - maxInlineSize] = &values[i].leakRef();
     }
@@ -299,5 +297,3 @@ IterationStatus CSSValueContainingVector::customVisitChildren(const Function<Ite
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

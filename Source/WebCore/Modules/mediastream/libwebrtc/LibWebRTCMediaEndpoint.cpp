@@ -202,6 +202,8 @@ bool LibWebRTCMediaEndpoint::addTrack(LibWebRTCRtpSenderBackend& sender, MediaSt
 {
     ASSERT(m_backend);
 
+    ALWAYS_LOG(LOGIDENTIFIER, "Adding "_s, track.privateTrack().type() == RealtimeMediaSource::Type::Audio ? "audio"_s : "video"_s, " track with id "_s, track.id());
+
     LibWebRTCRtpSenderBackend::Source source;
     rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> rtcTrack;
     switch (track.privateTrack().type()) {
@@ -275,7 +277,11 @@ rtc::scoped_refptr<LibWebRTCStatsCollector> LibWebRTCMediaEndpoint::createStatsC
         if (protectedThis->isStopped())
             return;
 
-        promise->resolve<IDLInterface<RTCStatsReport>>(LibWebRTCStatsCollector::createReport(rtcReport));
+        Ref peerConnectionBackend = protectedThis->m_peerConnectionBackend.get();
+        Ref peerConnection = peerConnectionBackend->connection();
+        peerConnection->queueTaskKeepingObjectAlive(peerConnection.get(), TaskSource::Networking, [promise = WTFMove(promise), rtcReport = WTFMove(rtcReport)] {
+            promise->resolve<IDLInterface<RTCStatsReport>>(LibWebRTCStatsCollector::createReport(rtcReport));
+        });
     });
 }
 
@@ -376,6 +382,8 @@ ExceptionOr<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::createTran
 
 ExceptionOr<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(const String& trackKind, const RTCRtpTransceiverInit& init, PeerConnectionBackend::IgnoreNegotiationNeededFlag ignoreNegotiationNeededFlag)
 {
+    auto direction = convertEnumerationToString(init.direction);
+    ALWAYS_LOG(LOGIDENTIFIER, "Adding "_s, trackKind, " ", direction, " transceiver"_s);
     auto type = trackKind == "audio"_s ? cricket::MediaType::MEDIA_TYPE_AUDIO : cricket::MediaType::MEDIA_TYPE_VIDEO;
     return createTransceiverBackends(type, fromRtpTransceiverInit(init, type), nullptr, ignoreNegotiationNeededFlag);
 }
@@ -408,6 +416,9 @@ std::pair<LibWebRTCRtpSenderBackend::Source, rtc::scoped_refptr<webrtc::MediaStr
 
 ExceptionOr<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(MediaStreamTrack& track, const RTCRtpTransceiverInit& init, PeerConnectionBackend::IgnoreNegotiationNeededFlag ignoreNegotiationNeededFlag)
 {
+    auto direction = convertEnumerationToString(init.direction);
+    ALWAYS_LOG(LOGIDENTIFIER, "Adding "_s, track.kind().string(), " ", direction, " transceiver for track "_s, track.id());
+
     auto type = track.source().type() == RealtimeMediaSource::Type::Audio ? cricket::MediaType::MEDIA_TYPE_AUDIO : cricket::MediaType::MEDIA_TYPE_VIDEO;
     auto sourceAndTrack = createSourceAndRTCTrack(track);
     return createTransceiverBackends(WTFMove(sourceAndTrack.second), fromRtpTransceiverInit(init, type), WTFMove(sourceAndTrack.first), ignoreNegotiationNeededFlag);
@@ -839,8 +850,18 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
 
         for (auto iterator = report->begin(); iterator != report->end(); ++iterator) {
             RTCStatsLogger statsLogger { *iterator };
-            if (m_isGatheringRTCLogs)
-                protectedPeerConnectionBackend()->provideStatLogs(statsLogger.toJSONString());
+            auto backend = protectedPeerConnectionBackend();
+            if (m_isGatheringRTCLogs) {
+                auto event = backend->generateJSONLogEvent(String::fromLatin1(iterator->ToJson().c_str()), true);
+                backend->provideStatLogs(WTFMove(event));
+            }
+
+#if PLATFORM(WPE) || PLATFORM(GTK)
+            if (backend->isJSONLogStreamingEnabled()) {
+                auto event = backend->generateJSONLogEvent(String::fromLatin1(iterator->ToJson().c_str()), false);
+                backend->emitJSONLogEvent(WTFMove(event));
+            }
+#endif
 
             if (logger().willLog(logChannel(), WTFLogLevel::Debug)) {
                 // Stats are very verbose, let's only display them in inspector console in verbose mode.
@@ -849,8 +870,6 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
                 logger().logAlways(LogWebRTCStats, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint"_s, "OnStatsDelivered"_s, logIdentifier()), statsLogger);
         }
     });
-#else
-    UNUSED_PARAM(report);
 #endif
 }
 

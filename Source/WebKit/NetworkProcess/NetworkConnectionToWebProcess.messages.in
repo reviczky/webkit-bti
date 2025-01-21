@@ -20,6 +20,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+[
+    ExceptionForEnabledBy,
+    DispatchedFrom=WebContent,
+    DispatchedTo=Networking
+]
 messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
 
     ScheduleResourceLoad(WebKit::NetworkResourceLoadParameters resourceLoadParameters, std::optional<WebKit::NetworkResourceLoadIdentifier> existingLoaderToResume)
@@ -43,7 +48,7 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
     CookiesEnabled(URL firstParty, URL url, std::optional<WebCore::FrameIdentifier> frameID, std::optional<WebCore::PageIdentifier> pageID, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) -> (bool enabled)
     CookieRequestHeaderFieldValue(URL firstParty, struct WebCore::SameSiteInfo sameSiteInfo, URL url, std::optional<WebCore::FrameIdentifier> frameID, std::optional<WebCore::PageIdentifier> pageID, enum:bool WebCore::IncludeSecureCookies includeSecureCookies, enum:bool WebCore::ApplyTrackingPrevention applyTrackingPrevention, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) -> (String cookieString, bool didAccessSecureCookies) Synchronous
     GetRawCookies(URL firstParty, struct WebCore::SameSiteInfo sameSiteInfo, URL url, std::optional<WebCore::FrameIdentifier> frameID, std::optional<WebCore::PageIdentifier> pageID, enum:bool WebCore::ApplyTrackingPrevention applyTrackingPrevention, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) -> (Vector<WebCore::Cookie> cookies) Synchronous
-    SetRawCookie(struct WebCore::Cookie cookie)
+    SetRawCookie(URL firstParty, struct WebCore::Cookie cookie, enum:bool WebCore::ShouldPartitionCookie shouldPartitionCookie)
     DeleteCookie(URL url, String cookieName) -> ()
     DomCookiesForHost(URL host) -> (Vector<WebCore::Cookie> cookies) Synchronous
 
@@ -52,7 +57,7 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
     SetCookieFromDOMAsync(URL firstParty, struct WebCore::SameSiteInfo sameSiteInfo, URL url, std::optional<WebCore::FrameIdentifier> frameID, std::optional<WebCore::PageIdentifier> pageID, enum:bool WebCore::ApplyTrackingPrevention applyTrackingPrevention, struct WebCore::Cookie cookie, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) -> (bool setSuccessfully)
 
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
-    SubscribeToCookieChangeNotifications(String host) AllowedWhenWaitingForSyncReply
+    SubscribeToCookieChangeNotifications(URL url, URL firstParty, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) -> (bool result) AllowedWhenWaitingForSyncReply
     UnsubscribeFromCookieChangeNotifications(String host) AllowedWhenWaitingForSyncReply
 #endif
 
@@ -93,6 +98,7 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
 
     EstablishSWContextConnection(WebKit::WebPageProxyIdentifier webPageProxyID, WebCore::Site site, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier) -> ()
     CloseSWContextConnection()
+    PingPongForServiceWorkers() -> (bool isSuccess)
 
     EstablishSharedWorkerContextConnection(WebKit::WebPageProxyIdentifier webPageProxyID, WebCore::Site site) -> ()
     CloseSharedWorkerContextConnection()
@@ -131,7 +137,7 @@ messages -> NetworkConnectionToWebProcess WantsDispatchMessage {
     NavigatorGetPushPermissionState(URL scopeURL) -> (Expected<uint8_t, WebCore::ExceptionData> result)
 #endif
 
-    [EnabledBy=WebTransportEnabled] InitializeWebTransportSession(URL url) -> (std::optional<WebKit::WebTransportSessionIdentifier> identifier)
+    [EnabledBy=WebTransportEnabled] InitializeWebTransportSession(URL url, WebKit::WebPageProxyIdentifier pageID, struct WebCore::ClientOrigin clientOrigin) -> (std::optional<WebKit::WebTransportSessionIdentifier> identifier)
     [EnabledBy=WebTransportEnabled] DestroyWebTransportSession(WebKit::WebTransportSessionIdentifier identifier)
 
     ClearFrameLoadRecordsForStorageAccess(WebCore::FrameIdentifier frameID)

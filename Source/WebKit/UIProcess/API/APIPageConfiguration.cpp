@@ -156,11 +156,6 @@ void PageConfiguration::setOpenerInfo(std::optional<OpenerInfo>&& info)
 
 bool PageConfiguration::OpenerInfo::operator==(const OpenerInfo&) const = default;
 
-WebCore::SandboxFlags PageConfiguration::initialSandboxFlags() const
-{
-    return m_data.initialSandboxFlags;
-}
-
 void PageConfiguration::setInitialSandboxFlags(WebCore::SandboxFlags sandboxFlags)
 {
     m_data.initialSandboxFlags = sandboxFlags;
@@ -169,6 +164,11 @@ void PageConfiguration::setInitialSandboxFlags(WebCore::SandboxFlags sandboxFlag
 WebProcessPool& PageConfiguration::processPool() const
 {
     return m_data.processPool.get();
+}
+
+Ref<WebKit::WebProcessPool> PageConfiguration::protectedProcessPool() const
+{
+    return processPool();
 }
 
 void PageConfiguration::setProcessPool(RefPtr<WebProcessPool>&& processPool)
@@ -223,7 +223,7 @@ HashSet<WTF::String> PageConfiguration::maskedURLSchemes() const
 {
     if (m_data.maskedURLSchemesWasSet)
         return m_data.maskedURLSchemes;
-#if ENABLE(WK_WEB_EXTENSIONS)
+#if ENABLE(WK_WEB_EXTENSIONS) && PLATFORM(COCOA)
     if (webExtensionController() || weakWebExtensionController())
         return WebKit::WebExtensionMatchPattern::extensionSchemes();
 #endif

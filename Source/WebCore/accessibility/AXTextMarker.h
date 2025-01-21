@@ -25,7 +25,7 @@
 #pragma once
 
 #include "AccessibilityObject.h"
-#include <wtf/TZoneMallocInlines.h>
+#include <wtf/StdLibExtras.h>
 
 namespace WebCore {
 
@@ -64,6 +64,8 @@ enum class SentenceRangeType : uint8_t {
 enum class CoalesceObjectBreaks : bool { No, Yes };
 enum class IgnoreBRs : bool { No, Yes };
 
+enum class IncludeTrailingLineBreak : bool { No, Yes };
+
 struct TextMarkerData {
     unsigned treeID;
     unsigned objectID;
@@ -81,7 +83,7 @@ struct TextMarkerData {
     // For an example of such byte-comparison, see the TestRunner WTR::AccessibilityTextMarker::isEqual.
     TextMarkerData()
     {
-        memset(static_cast<void*>(this), 0, sizeof(*this));
+        zeroBytes(*this);
     }
 
     TextMarkerData(std::optional<AXID> axTreeID, std::optional<AXID> axObjectID,
@@ -90,7 +92,7 @@ struct TextMarkerData {
         Affinity affinityParam = Affinity::Downstream,
         unsigned charStart = 0, unsigned charOffset = 0, bool ignoredParam = false)
     {
-        memset(static_cast<void*>(this), 0, sizeof(*this));
+        zeroBytes(*this);
         treeID = axTreeID ? axTreeID->toUInt64() : 0;
         objectID = axObjectID ? axObjectID->toUInt64() : 0;
         offset = offsetParam;
@@ -183,27 +185,46 @@ public:
 
     // Find the next or previous marker, optionally stopping at the given ID and returning an invalid marker.
     AXTextMarker findMarker(AXDirection, CoalesceObjectBreaks = CoalesceObjectBreaks::Yes, IgnoreBRs = IgnoreBRs::No, std::optional<AXID> = std::nullopt) const;
-    // Starting from this text marker, creates a new position for the given direction and text unit type.
-    AXTextMarker findMarker(AXDirection, AXTextUnit, AXTextUnitBoundary, std::optional<AXID> stopAtID = std::nullopt) const;
-    AXTextMarker previousLineStart(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Previous, AXTextUnit::Line, AXTextUnitBoundary::Start, stopAtID); }
-    AXTextMarker nextLineEnd(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Next, AXTextUnit::Line, AXTextUnitBoundary::End, stopAtID); }
-    AXTextMarker nextWordStart(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Next, AXTextUnit::Word, AXTextUnitBoundary::Start, stopAtID); }
-    AXTextMarker nextWordEnd(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Next, AXTextUnit::Word, AXTextUnitBoundary::End, stopAtID); }
-    AXTextMarker previousWordStart(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Previous, AXTextUnit::Word, AXTextUnitBoundary::Start, stopAtID); }
-    AXTextMarker previousWordEnd(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Previous, AXTextUnit::Word, AXTextUnitBoundary::End, stopAtID); }
-    AXTextMarker previousSentenceStart(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Previous, AXTextUnit::Sentence, AXTextUnitBoundary::Start, stopAtID); }
-    AXTextMarker nextSentenceEnd(std::optional<AXID> stopAtID = std::nullopt) const { return findMarker(AXDirection::Next, AXTextUnit::Sentence, AXTextUnitBoundary::End, stopAtID); }
-    AXTextMarker previousParagraphStart(std::optional<AXID> stopAtID = std::nullopt) const;
-    AXTextMarker nextParagraphEnd(std::optional<AXID> stopAtID = std::nullopt) const;
+
+    // Starting from this text marker, these functions find a position representing the given boundary (start / end) and text unit type (e.g. line, word, paragraph).
+    AXTextMarker findWord(AXDirection direction, AXTextUnitBoundary boundary) const
+    {
+        return findWordOrSentence(direction, /* findWord */ true, boundary);
+    }
+    AXTextMarker findSentence(AXDirection direction, AXTextUnitBoundary boundary) const
+    {
+        return findWordOrSentence(direction, /* findWord */ false, boundary);
+    }
+    AXTextMarker findWordOrSentence(AXDirection, bool findWord, AXTextUnitBoundary) const;
+    AXTextMarker findLine(AXDirection, AXTextUnitBoundary, IncludeTrailingLineBreak = IncludeTrailingLineBreak::No, std::optional<AXID> stopAtID = std::nullopt) const;
+    AXTextMarker findLine(AXDirection direction, AXTextUnitBoundary boundary, std::optional<AXID> stopAtID = std::nullopt) const
+    {
+        return findLine(direction, boundary, IncludeTrailingLineBreak::No, stopAtID);
+    }
+    AXTextMarker findParagraph(AXDirection, AXTextUnitBoundary) const;
+
+    AXTextMarker previousLineStart(std::optional<AXID> stopAtID = std::nullopt) const { return findLine(AXDirection::Previous, AXTextUnitBoundary::Start, stopAtID); }
+    AXTextMarker nextLineEnd(std::optional<AXID> stopAtID = std::nullopt) const { return findLine(AXDirection::Next, AXTextUnitBoundary::End, stopAtID); }
+    AXTextMarker nextLineEnd(IncludeTrailingLineBreak includeTrailingLineBreak, std::optional<AXID> stopAtID = std::nullopt) const { return findLine(AXDirection::Next, AXTextUnitBoundary::End, includeTrailingLineBreak, stopAtID); }
+    AXTextMarker nextWordStart() const { return findWord(AXDirection::Next, AXTextUnitBoundary::Start); }
+    AXTextMarker nextWordEnd() const { return findWord(AXDirection::Next, AXTextUnitBoundary::End); }
+    AXTextMarker previousWordStart() const { return findWord(AXDirection::Previous, AXTextUnitBoundary::Start); }
+    AXTextMarker previousWordEnd() const { return findWord(AXDirection::Previous, AXTextUnitBoundary::End); }
+    AXTextMarker previousSentenceStart() const { return findSentence(AXDirection::Previous, AXTextUnitBoundary::Start); }
+    AXTextMarker nextSentenceEnd() const { return findSentence(AXDirection::Next, AXTextUnitBoundary::End); }
+    AXTextMarker previousParagraphStart() const;
+    AXTextMarker nextParagraphEnd() const;
 
     // Creates a range for the line this marker points to.
-    AXTextMarkerRange lineRange(LineRangeType) const;
+    AXTextMarkerRange lineRange(LineRangeType, IncludeTrailingLineBreak = IncludeTrailingLineBreak::No) const;
     // Creates a range for the word specified by the line range type.
     AXTextMarkerRange wordRange(WordRangeType) const;
     // Creates a range for the sentence specified by the sentence range type;
     AXTextMarkerRange sentenceRange(SentenceRangeType) const;
     // Creates a range for the paragraph at the current marker.
     AXTextMarkerRange paragraphRange() const;
+    // Returns a range pointing to the start and end positions that have the same text styles as `this`.
+    AXTextMarkerRange rangeWithSameStyle() const;
     // Given a character offset relative to this marker, find the next marker the offset points to.
     AXTextMarker nextMarkerFromOffset(unsigned) const;
     // Returns the number of intermediate text markers between this and the root.
@@ -244,13 +265,14 @@ private:
 };
 
 class AXTextMarkerRange {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(AXTextMarkerRange);
+    WTF_MAKE_TZONE_ALLOCATED(AXTextMarkerRange);
     friend bool operator==(const AXTextMarkerRange&, const AXTextMarkerRange&);
     friend bool operator<(const AXTextMarkerRange&, const AXTextMarkerRange&);
     friend bool operator>(const AXTextMarkerRange&, const AXTextMarkerRange&);
 public:
     // Constructors.
     AXTextMarkerRange(const VisiblePositionRange&);
+    AXTextMarkerRange(const VisibleSelection&);
     AXTextMarkerRange(const std::optional<SimpleRange>&);
     AXTextMarkerRange(const AXTextMarker&, const AXTextMarker&);
     AXTextMarkerRange(AXTextMarker&&, AXTextMarker&&);
@@ -284,13 +306,17 @@ public:
 
     AXTextMarker start() const { return m_start; }
     AXTextMarker end() const { return m_end; }
+    bool isCollapsed() const { return m_start.isEqual(m_end); }
     bool isConfinedTo(std::optional<AXID>) const;
     bool isConfined() const;
 
 #if ENABLE(AX_THREAD_TEXT_APIS)
     // Traverses from m_start to m_end, collecting all text along the way.
     String toString() const;
-#endif
+#if PLATFORM(COCOA)
+    RetainPtr<NSAttributedString> toAttributedString(AXCoreObject::SpellCheck) const;
+#endif // PLATFORM(COCOA)
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
 
     String debugDescription() const;
 private:
@@ -338,5 +364,13 @@ inline bool operator>=(const AXTextMarkerRange& range1, const AXTextMarkerRange&
 {
     return range1 == range2 || range1 > range2;
 }
+
+namespace Accessibility {
+
+#if ENABLE(AX_THREAD_TEXT_APIS)
+AXIsolatedObject* findObjectWithRuns(AXIsolatedObject& start, AXDirection direction, std::optional<AXID> stopAtID = std::nullopt, const std::function<void(AXIsolatedObject&)>& exitObject = [] (AXIsolatedObject&) { });
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
+
+} // namespace Accessibility
 
 } // namespace WebCore

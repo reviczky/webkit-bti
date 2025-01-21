@@ -134,7 +134,7 @@ public:
         UniqueRef<ContextMenuClient>&&,
 #endif
 #if ENABLE(APPLE_PAY)
-        UniqueRef<PaymentCoordinatorClient>&&,
+        Ref<PaymentCoordinatorClient>&&,
 #endif
         UniqueRef<ChromeClient>&&,
         UniqueRef<CryptoClient>&&,
@@ -155,7 +155,7 @@ public:
     std::unique_ptr<DragClient> dragClient;
     std::unique_ptr<InspectorClient> inspectorClient;
 #if ENABLE(APPLE_PAY)
-    UniqueRef<PaymentCoordinatorClient> paymentCoordinatorClient;
+    Ref<PaymentCoordinatorClient> paymentCoordinatorClient;
 #endif
 
 #if ENABLE(WEB_AUTHN)
@@ -230,6 +230,10 @@ public:
 
 #if PLATFORM(VISION) && ENABLE(GAMEPAD)
     ShouldRequireExplicitConsentForGamepadAccess gamepadAccessRequiresExplicitConsent { ShouldRequireExplicitConsentForGamepadAccess::No };
+#endif
+
+#if HAVE(AUDIT_TOKEN)
+    std::optional<audit_token_t> presentingApplicationAuditToken;
 #endif
 };
 

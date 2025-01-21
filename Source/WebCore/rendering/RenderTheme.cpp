@@ -188,11 +188,20 @@ static bool isAppearanceAllowedForAllElements(StyleAppearance appearance)
     return false;
 }
 
+static bool devolvableWidgetsEnabledAndSupported(const Element* element)
+{
+    bool devolvableWidgetsEnabled = element->document().settings().devolvableWidgetsEnabled();
+#if PLATFORM(COCOA)
+    return devolvableWidgetsEnabled && WTF::linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::DevolvableWidgets);
+#else
+    return devolvableWidgetsEnabled;
+#endif
+}
+
 void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const RenderStyle* userAgentAppearanceStyle)
 {
     auto autoAppearance = autoAppearanceForElement(style, element);
     auto appearance = adjustAppearanceForElement(style, element, autoAppearance);
-
     if (appearance == StyleAppearance::None || appearance == StyleAppearance::Base)
         return;
 
@@ -205,11 +214,20 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
     else if (style.display() == DisplayType::ListItem || style.display() == DisplayType::Table)
         style.setEffectiveDisplay(DisplayType::Block);
 
-    if (userAgentAppearanceStyle && isControlStyled(style, *userAgentAppearanceStyle)) {
+    bool widgetMayDevolve = devolvableWidgetsEnabledAndSupported(element);
+    bool widgetHasNativeAppearanceDisabled = widgetMayDevolve && element->isDevolvableWidget() && style.nativeAppearanceDisabled() && !isAppearanceAllowedForAllElements(appearance);
+
+    if (widgetHasNativeAppearanceDisabled || (userAgentAppearanceStyle && isControlStyled(style, *userAgentAppearanceStyle))) {
         switch (appearance) {
         case StyleAppearance::Menulist:
             appearance = StyleAppearance::MenulistButton;
             break;
+        case StyleAppearance::MenulistButton:
+            appearance = widgetMayDevolve ? StyleAppearance::MenulistButton : StyleAppearance::None;
+            break;
+#if PLATFORM(IOS_FAMILY) && ENABLE(DATALIST_ELEMENT)
+        case StyleAppearance::ListButton:
+#endif
         default:
             appearance = StyleAppearance::None;
             break;
@@ -240,10 +258,8 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
         return adjustCheckboxStyle(style, element);
     case StyleAppearance::Radio:
         return adjustRadioStyle(style, element);
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
         return adjustColorWellStyle(style, element);
-#endif
     case StyleAppearance::PushButton:
     case StyleAppearance::SquareButton:
     case StyleAppearance::DefaultButton:
@@ -332,10 +348,8 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
 #endif
         }
 
-#if ENABLE(INPUT_TYPE_COLOR)
         if (input->isColorControl())
             return StyleAppearance::ColorWell;
-#endif
 
         if (input->isRangeControl())
             return style.writingMode().isHorizontal() ? StyleAppearance::SliderHorizontal : StyleAppearance::SliderVertical;
@@ -585,10 +599,9 @@ RefPtr<ControlPart> RenderTheme::createControlPart(const RenderObject& renderer)
     case StyleAppearance::TextField:
         return TextFieldPart::create();
 
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
         return ColorWellPart::create();
-#endif
+
 #if ENABLE(SERVICE_CONTROLS)
     case StyleAppearance::ImageControlsButton:
         return ImageControlsButtonPart::create();
@@ -696,8 +709,8 @@ OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRenderer
         states.add(ControlStyle::State::FormSemanticContext);
     if (renderer.useDarkAppearance())
         states.add(ControlStyle::State::DarkAppearance);
-    if (!renderer.style().isLeftToRightDirection())
-        states.add(ControlStyle::State::RightToLeft);
+    if (renderer.writingMode().isInlineFlipped())
+        states.add(ControlStyle::State::InlineFlippedWritingMode);
     if (supportsLargeFormControls())
         states.add(ControlStyle::State::LargeControls);
     if (isReadOnlyControl(renderer))
@@ -808,10 +821,8 @@ bool RenderTheme::paint(const RenderBox& box, const PaintInfo& paintInfo, const 
         return paintCheckbox(box, paintInfo, devicePixelSnappedRect);
     case StyleAppearance::Radio:
         return paintRadio(box, paintInfo, devicePixelSnappedRect);
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
         return paintColorWell(box, paintInfo, integralSnappedRect);
-#endif
     case StyleAppearance::PushButton:
     case StyleAppearance::SquareButton:
     case StyleAppearance::DefaultButton:
@@ -894,9 +905,7 @@ bool RenderTheme::paintBorderOnly(const RenderBox& box, const PaintInfo& paintIn
     case StyleAppearance::Radio:
     case StyleAppearance::PushButton:
     case StyleAppearance::SquareButton:
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
-#endif
     case StyleAppearance::DefaultButton:
     case StyleAppearance::Button:
     case StyleAppearance::Menulist:
@@ -946,11 +955,9 @@ void RenderTheme::paintDecorations(const RenderBox& box, const PaintInfo& paintI
     case StyleAppearance::SquareButton:
         paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
         break;
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
         paintColorWellDecorations(box, paintInfo, devicePixelSnappedRect);
         break;
-#endif
     case StyleAppearance::Menulist:
         paintMenuListDecorations(box, paintInfo, integralSnappedRect);
         break;
@@ -1109,9 +1116,7 @@ bool RenderTheme::isControlStyled(const RenderStyle& style, const RenderStyle& u
     switch (style.usedAppearance()) {
     case StyleAppearance::PushButton:
     case StyleAppearance::SquareButton:
-#if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
-#endif
     case StyleAppearance::DefaultButton:
     case StyleAppearance::Button:
     case StyleAppearance::Listbox:
@@ -1254,9 +1259,7 @@ void RenderTheme::adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioStyle
 
     auto supportsVerticalWritingMode = [](StyleAppearance appearance) {
         return appearance == StyleAppearance::Button
-#if ENABLE(INPUT_TYPE_COLOR)
             || appearance == StyleAppearance::ColorWell
-#endif
             || appearance == StyleAppearance::DefaultButton
             || appearance == StyleAppearance::SquareButton
             || appearance == StyleAppearance::PushButton;
@@ -1323,8 +1326,7 @@ void RenderTheme::adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioStyle
     if (auto themeFont = Theme::singleton().controlFont(appearance, style.fontCascade(), style.usedZoom())) {
         // If overriding the specified font with the theme font, also override the line height with the standard line height.
         style.setLineHeight(RenderStyle::initialLineHeight());
-        if (style.setFontDescription(WTFMove(themeFont.value())))
-            style.fontCascade().update(nullptr);
+        style.setFontDescription(WTFMove(themeFont.value()));
     }
 
     // Special style that tells enabled default buttons in active windows to use the ActiveButtonText color.
@@ -1342,12 +1344,10 @@ void RenderTheme::adjustRadioStyle(RenderStyle& style, const Element* element) c
     adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioStyle(style, element);
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
 void RenderTheme::adjustColorWellStyle(RenderStyle& style, const Element* element) const
 {
     adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioStyle(style, element);
 }
-#endif
 
 void RenderTheme::adjustButtonStyle(RenderStyle& style, const Element* element) const
 {
@@ -1385,14 +1385,10 @@ String RenderTheme::attachmentStyleSheet() const
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
 String RenderTheme::colorInputStyleSheet() const
 {
     return "input[type=\"color\"] { appearance: auto; inline-size: 44px; block-size: 23px; box-sizing: border-box; outline: none; } "_s;
 }
-
-#endif // ENABLE(INPUT_TYPE_COLOR)
 
 #if ENABLE(DATALIST_ELEMENT)
 
@@ -1460,11 +1456,11 @@ void RenderTheme::paintSliderTicks(const RenderObject& renderer, const PaintInfo
     }
     GraphicsContextStateSaver stateSaver(paintInfo.context());
     paintInfo.context().setFillColor(renderer.style().visitedDependentColorWithColorFilter(CSSPropertyColor));
-    bool isReversedInlineDirection = (!isHorizontal && renderer.writingMode().isHorizontal()) || !renderer.style().isLeftToRightDirection();
+    bool isInlineFlipped = (!isHorizontal && renderer.writingMode().isHorizontal()) || renderer.writingMode().isInlineFlipped();
     for (auto& optionElement : dataList->suggestions()) {
         if (auto optionValue = input->listOptionValueAsDouble(optionElement)) {
             double tickFraction = (*optionValue - min) / (max - min);
-            double tickRatio = isReversedInlineDirection ? 1.0 - tickFraction : tickFraction;
+            double tickRatio = isInlineFlipped ? 1.0 - tickFraction : tickFraction;
             double tickPosition = round(tickRegionSideMargin + tickRegionWidth * tickRatio);
             if (isHorizontal)
                 tickRect.setX(tickPosition);

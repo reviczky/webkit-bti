@@ -30,6 +30,7 @@
 #include "PDFDocumentLayout.h"
 #include "PDFPageCoverage.h"
 #include "PDFPluginBase.h"
+#include <WebCore/ContextMenuItem.h>
 #include <WebCore/ElementIdentifier.h>
 #include <WebCore/GraphicsLayer.h>
 #include <WebCore/GraphicsLayerClient.h>
@@ -69,6 +70,9 @@ class PDFPluginPasswordForm;
 class PDFPresentationController;
 class WebFrame;
 class WebMouseEvent;
+struct EditorState;
+struct DocumentEditingContextRequest;
+struct DocumentEditingContext;
 struct PDFContextMenu;
 struct PDFContextMenuItem;
 
@@ -210,6 +214,10 @@ public:
 
     double minScaleFactor() const final;
     double maxScaleFactor() const final;
+
+    bool shouldRespectPageScaleAdjustments() const final;
+
+    bool shouldSizeToFitContent() const final;
 
 private:
     explicit UnifiedPDFPlugin(WebCore::HTMLPlugInElement&);
@@ -356,6 +364,7 @@ private:
     Vector<PDFContextMenuItem> displayModeContextMenuItems() const;
     Vector<PDFContextMenuItem> scaleContextMenuItems() const;
     Vector<PDFContextMenuItem> navigationContextMenuItemsForPageAtIndex(PDFDocumentLayout::PageIndex) const;
+    WebCore::ContextMenuAction contextMenuActionFromTag(ContextMenuItemTag) const;
     ContextMenuItemTag toContextMenuItemTag(int tagValue) const;
     void performContextMenuAction(ContextMenuItemTag, const WebCore::IntPoint& contextMenuEventRootViewPoint);
 
@@ -399,7 +408,9 @@ private:
     void repaintOnSelectionChange(ActiveStateChangeReason, PDFSelection *previousSelection = nil);
     void showOrHideSelectionLayerAsNecessary();
 
+    String fullDocumentString() const override;
     String selectionString() const override;
+    std::pair<String, String> stringsBeforeAndAfterSelection(int characterCount) const override;
     bool existingSelectionContainsPoint(const WebCore::FloatPoint&) const override;
     WebCore::FloatRect rectForSelectionInRootView(PDFSelection *) const override;
 
@@ -445,12 +456,8 @@ private:
     void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect&, OptionSet<WebCore::GraphicsLayerPaintBehavior>) override;
     float pageScaleFactor() const override;
 
-    enum class PaintingBehavior : bool { All, PageContentsOnly };
-    void paintPDFContent(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, const std::optional<PDFLayoutRow>& = { }, PaintingBehavior = PaintingBehavior::All, AsyncPDFRenderer* = nullptr);
-#if ENABLE(UNIFIED_PDF_SELECTION_LAYER)
+    void paintPDFContent(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, const std::optional<PDFLayoutRow>& = { }, AsyncPDFRenderer* = nullptr);
     void paintPDFSelection(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, std::optional<PDFLayoutRow> = { });
-#endif
-    bool canPaintSelectionIntoOwnedLayer() const;
 
     void willChangeVisibleRow();
     void didChangeVisibleRow();
@@ -459,7 +466,6 @@ private:
     void updateLayerHierarchy();
 
     void incrementalLoadingRepaintTimerFired();
-    void repaintForIncrementalLoad();
 
     void didChangeScrollOffset() override;
     void didChangeIsInWindow() override;
@@ -522,7 +528,7 @@ private:
     std::optional<PDFDocumentLayout::PageIndex> pageIndexWithHoveredAnnotation() const;
     void paintHoveredAnnotationOnPage(PDFDocumentLayout::PageIndex, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect);
 
-    void followLinkAnnotation(PDFAnnotation *);
+    void followLinkAnnotation(PDFAnnotation *, std::optional<WebCore::PlatformMouseEvent>&& = std::nullopt);
 
     void startTrackingAnnotation(RetainPtr<PDFAnnotation>&&, WebEventType, WebMouseEventButton);
     void updateTrackedAnnotation(PDFAnnotation *annotationUnderMouse);
@@ -534,8 +540,10 @@ private:
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(GraphicsLayerClient&, WebCore::GraphicsLayer::Type);
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(const String& name, WebCore::GraphicsLayer::Type);
 
+    void setNeedsRepaintForIncrementalLoad();
     void setNeedsRepaintForAnnotation(PDFAnnotation *, RepaintRequirements);
-    void setNeedsRepaintInDocumentRect(RepaintRequirements, const WebCore::FloatRect&, std::optional<PDFLayoutRow>);
+
+    void sizeToFitContentsIfNeeded();
 
     // "Up" is inside-out.
     template <typename T>
@@ -553,6 +561,7 @@ private:
 
     RetainPtr<PDFAnnotation> annotationForRootViewPoint(const WebCore::IntPoint&) const;
 
+    PDFElementTypes pdfElementTypesForPagePoint(const WebCore::IntPoint&, PDFPage *) const;
     PDFElementTypes pdfElementTypesForPluginPoint(const WebCore::IntPoint&) const;
 
     bool isTaggedPDF() const;
@@ -572,6 +581,33 @@ private:
     void setPresentationController(RefPtr<PDFPresentationController>&&);
 
     WebCore::FloatRect pageBoundsInContentsSpace(PDFDocumentLayout::PageIndex) const;
+
+    using PageAndPoint = std::pair<RetainPtr<PDFPage>, WebCore::FloatPoint>;
+    PageAndPoint rootViewToPage(WebCore::FloatPoint) const;
+    WebCore::FloatRect pageToRootView(WebCore::FloatRect rectInPage, PDFPage *) const;
+    WebCore::FloatRect pageToRootView(WebCore::FloatRect rectInPage, std::optional<PDFDocumentLayout::PageIndex>) const;
+
+#if PLATFORM(IOS_FAMILY)
+    void setSelectionRange(WebCore::FloatPoint pointInRootView, WebCore::TextGranularity) final;
+    void clearSelection() final;
+    std::pair<URL, WebCore::FloatRect> linkURLAndBoundsAtPoint(WebCore::FloatPoint pointInRootView) const final;
+    std::optional<WebCore::FloatRect> highlightRectForTapAtPoint(WebCore::FloatPoint pointInRootView) const final;
+    void handleSyntheticClick(WebCore::PlatformMouseEvent&&) final;
+    SelectionWasFlipped moveSelectionEndpoint(WebCore::FloatPoint pointInRootView, SelectionEndpoint) final;
+    SelectionEndpoint extendInitialSelection(WebCore::FloatPoint pointInRootView, WebCore::TextGranularity) final;
+    bool platformPopulateEditorStateIfNeeded(EditorState&) const final;
+    CursorContext cursorContext(WebCore::FloatPoint pointInRootView) const final;
+    DocumentEditingContext documentEditingContext(DocumentEditingContextRequest&&) const final;
+
+#if HAVE(PDFDOCUMENT_SELECTION_WITH_GRANULARITY)
+    PDFSelection *selectionAtPoint(WebCore::FloatPoint pointInPage, PDFPage *, WebCore::TextGranularity) const;
+    PDFSelection *selectionBetweenPoints(WebCore::FloatPoint fromPoint, PDFPage *fromPage, WebCore::FloatPoint toPoint, PDFPage *toPage) const;
+#endif
+
+    static PageAndPoint selectionCaretPointInPage(PDFSelection *, SelectionEndpoint);
+    PageAndPoint selectionCaretPointInPage(SelectionEndpoint) const;
+    void resetInitialSelection();
+#endif // PLATFORM(IOS_FAMILY)
 
     RefPtr<PDFPresentationController> m_presentationController;
 
@@ -630,6 +666,11 @@ private:
 
 #if ENABLE(UNIFIED_PDF_DATA_DETECTION)
     std::unique_ptr<PDFDataDetectorOverlayController> m_dataDetectorOverlayController;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    RetainPtr<PDFSelection> m_initialSelection;
+    PageAndPoint m_initialSelectionStart;
 #endif
 
     RefPtr<WebCore::ShadowRoot> m_shadowRoot;

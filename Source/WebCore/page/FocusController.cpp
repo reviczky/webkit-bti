@@ -73,7 +73,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(FocusController);
 
 using namespace HTMLNames;
 
-static HTMLFormControlElement* invokerForOpenPopover(const Node* candidatePopover)
+static HTMLElement* invokerForOpenPopover(const Node* candidatePopover)
 {
     RefPtr popover = dynamicDowncast<HTMLElement>(candidatePopover);
     if (popover && popover->isPopoverShowing())
@@ -496,8 +496,8 @@ LocalFrame* FocusController::focusedOrMainFrame() const
 {
     if (auto* frame = focusedLocalFrame())
         return frame;
-    if (auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame()))
-        return localMainFrame;
+    if (RefPtr localMainFrame = m_page->localMainFrame())
+        return localMainFrame.get();
     ASSERT(m_page->settings().siteIsolationEnabled());
     return nullptr;
 }
@@ -552,7 +552,7 @@ bool FocusController::setInitialFocus(FocusDirection direction, KeyboardEvent* p
     // of handleFocusedUIElementChanged, because this will send the notification even if the element is the same.
     RefPtr focusedOrMainFrame = this->focusedOrMainFrame();
     if (CheckedPtr cache = focusedOrMainFrame ? focusedOrMainFrame->document()->existingAXObjectCache() : nullptr)
-        cache->postNotification(focusedOrMainFrame->document(), AXObjectCache::AXFocusedUIElementChanged);
+        cache->postNotification(focusedOrMainFrame->document(), AXNotification::FocusedUIElementChanged);
 
     return didAdvanceFocus;
 }
@@ -623,10 +623,10 @@ bool FocusController::advanceFocusInDocumentOrder(FocusDirection direction, Keyb
         }
 
         // Chrome doesn't want focus, so we should wrap focus.
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
-        if (!localMainFrame)
+        RefPtr localTopDocument = m_page->localTopDocument();
+        if (!localTopDocument)
             return false;
-        element = findFocusableElementAcrossFocusScope(direction, FocusNavigationScope::scopeOf(*localMainFrame->protectedDocument()), nullptr, event);
+        element = findFocusableElementAcrossFocusScope(direction, FocusNavigationScope::scopeOf(*localTopDocument), nullptr, event);
 
         if (!element)
             return false;
@@ -1031,7 +1031,7 @@ void FocusController::setActive(bool active)
 
 void FocusController::setActiveInternal(bool active)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    RefPtr localMainFrame = m_page->localMainFrame();
     if (!localMainFrame)
         return;
     if (RefPtr view = localMainFrame->view()) {

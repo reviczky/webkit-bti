@@ -33,7 +33,6 @@
 #include "RemoteImageDecoderAVFManagerMessages.h"
 #include "RemoteImageDecoderAVFProxyMessages.h"
 #include "SharedBufferReference.h"
-#include "WebCoreArgumentCoders.h"
 #include <CoreGraphics/CGImage.h>
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/ImageDecoderAVFObjC.h>
@@ -50,6 +49,16 @@ RemoteImageDecoderAVFProxy::RemoteImageDecoderAVFProxy(GPUConnectionToWebProcess
 {
 }
 
+void RemoteImageDecoderAVFProxy::ref() const
+{
+    m_connectionToWebProcess.get()->ref();
+}
+
+void RemoteImageDecoderAVFProxy::deref() const
+{
+    m_connectionToWebProcess.get()->deref();
+}
+
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteImageDecoderAVFProxy);
 
 void RemoteImageDecoderAVFProxy::createDecoder(const IPC::SharedBufferReference& data, const String& mimeType, CompletionHandler<void(std::optional<ImageDecoderIdentifier>&&)>&& completionHandler)
@@ -63,9 +72,9 @@ void RemoteImageDecoderAVFProxy::createDecoder(const IPC::SharedBufferReference&
     auto identifier = ImageDecoderIdentifier::generate();
     m_imageDecoders.add(identifier, imageDecoder.copyRef());
 
-    imageDecoder->setEncodedDataStatusChangeCallback([proxy = WeakPtr<MessageReceiver> { *this },  identifier](auto) mutable {
-        if (proxy)
-            static_cast<RemoteImageDecoderAVFProxy*>(proxy.get())->encodedDataStatusChanged(identifier);
+    imageDecoder->setEncodedDataStatusChangeCallback([proxy = WeakPtr { *this },  identifier](auto) mutable {
+        if (RefPtr protectedProxy = proxy.get())
+            protectedProxy->encodedDataStatusChanged(identifier);
     });
 
     imageDecoderIdentifier = identifier;
@@ -83,7 +92,7 @@ void RemoteImageDecoderAVFProxy::deleteDecoder(ImageDecoderIdentifier identifier
     if (!connection)
         return;
     if (allowsExitUnderMemoryPressure())
-        connection->gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
+        connection->protectedGPUProcess()->tryExitIfUnusedAndUnderMemoryPressure();
 }
 
 void RemoteImageDecoderAVFProxy::encodedDataStatusChanged(ImageDecoderIdentifier identifier)
@@ -169,6 +178,14 @@ void RemoteImageDecoderAVFProxy::clearFrameBufferCache(ImageDecoderIdentifier id
 bool RemoteImageDecoderAVFProxy::allowsExitUnderMemoryPressure() const
 {
     return m_imageDecoders.isEmpty();
+}
+
+std::optional<SharedPreferencesForWebProcess> RemoteImageDecoderAVFProxy::sharedPreferencesForWebProcess() const
+{
+    if (RefPtr connectionToWebProcess = m_connectionToWebProcess.get())
+        return connectionToWebProcess->sharedPreferencesForWebProcess();
+
+    return std::nullopt;
 }
 
 }

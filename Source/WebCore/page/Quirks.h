@@ -45,6 +45,8 @@ class LocalFrame;
 class Node;
 class PlatformMouseEvent;
 class RegistrableDomain;
+class ResourceRequest;
+class RenderStyle;
 class SecurityOriginData;
 class WeakPtrImplWithEventTargetData;
 
@@ -105,6 +107,8 @@ public:
     WEBCORE_EXPORT static bool needsIPhoneUserAgent(const URL&);
     WEBCORE_EXPORT static bool needsDesktopUserAgent(const URL&);
 
+    WEBCORE_EXPORT static bool needsPartitionedCookies(const ResourceRequest&);
+
     WEBCORE_EXPORT static std::optional<Vector<HashSet<String>>> defaultVisibilityAdjustmentSelectors(const URL&);
 
     bool needsGMailOverflowScrollQuirk() const;
@@ -113,6 +117,7 @@ public:
     bool needsFullscreenDisplayNoneQuirk() const;
     bool needsFullscreenObjectFitQuirk() const;
     bool needsWeChatScrollingQuirk() const;
+    bool needsZomatoEmailLoginLabelQuirk() const;
     bool needsGoogleMapsScrollingQuirk() const;
 
     bool needsPrimeVideoUserSelectNoneQuirk() const;
@@ -132,6 +137,7 @@ public:
 #if ENABLE(MEDIA_STREAM)
     bool shouldEnableLegacyGetUserMediaQuirk() const;
     bool shouldDisableImageCaptureQuirk() const;
+    bool shouldEnableSpeakerSelectionPermissionsPolicyQuirk() const;
 #endif
 
     bool needsCanPlayAfterSeekedQuirk() const;
@@ -201,7 +207,6 @@ public:
 
     bool needsResettingTransitionCancelsRunningTransitionQuirk() const;
 
-    bool shouldStarBePermissionsPolicyDefaultValue() const;
     bool shouldDisableDataURLPaddingValidation() const;
 
     bool needsDisableDOMPasteAccessQuirk() const;
@@ -225,17 +230,18 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     WEBCORE_EXPORT bool shouldIgnoreContentObservationForClick(const Node&) const;
-    WEBCORE_EXPORT bool shouldSynthesizeTouchEventsAfterNonSyntheticClick(const Node&) const;
+    WEBCORE_EXPORT bool shouldSynthesizeTouchEventsAfterNonSyntheticClick(const Element&) const;
+    WEBCORE_EXPORT bool needsPointerTouchCompatibility(const Element&) const;
+    bool shouldTreatAddingMouseOutEventListenerAsContentChange() const;
 #endif
 
     bool needsMozillaFileTypeForDataTransfer() const;
 
     bool needsBingGestureEventQuirk(EventTarget*) const;
 
-#if PLATFORM(IOS)
-    bool hideForbesVolumeSlider() const;
-    bool hideIGNVolumeSlider() const;
-#endif
+    bool shouldAvoidStartingSelectionOnMouseDown(const Node&) const;
+
+    bool needsFacebookStoriesCreationFormQuirk(const Element&, const RenderStyle&) const;
 
 private:
     bool needsQuirks() const;
@@ -243,22 +249,21 @@ private:
     bool domainStartsWith(const String&) const;
     bool isEmbedDomain(const String&) const;
     bool isYoutubeEmbedDomain() const;
-    bool isYahooMail() const;
 
-    bool isAmazon() const;
-    bool isESPN() const;
-    bool isGoogleMaps() const;
-    bool isNetflix() const;
-    bool isSoundCloud() const;
-    bool isVimeo() const;
-    bool isYouTube() const;
-    bool isZoom() const;
+    void determineRelevantQuirks();
+
+    static bool domainNeedsAvoidResizingWhenInputViewBoundsChangeQuirk(const URL&, QuirksData&);
+    static bool domainNeedsScrollbarWidthThinDisabledQuirk(const URL&, QuirksData&);
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    static bool domainShouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk(const URL&, QuirksData&);
+#endif
 
     RefPtr<Document> protectedDocument() const;
 
     URL topDocumentURL() const;
 
     WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
+    mutable WeakPtr<const Element, WeakPtrImplWithEventTargetData> m_facebookStoriesCreationFormContainer;
 
     mutable QuirksData m_quirksData;
 

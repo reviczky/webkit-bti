@@ -96,7 +96,7 @@ void AnimationTimelinesController::updateAnimationsAndSendEvents(ReducedResoluti
     std::optional<FramesPerSecond> defaultTimelineFrameRate;
     // This will hold the frame rate used for this timeline until now.
     std::optional<FramesPerSecond> previousTimelineFrameRate;
-    if (RefPtr page = m_document.page()) {
+    if (RefPtr page = m_document->page()) {
         defaultTimelineFrameRate = page->preferredRenderingUpdateFramesPerSecond({ Page::PreferredRenderingUpdateOption::IncludeThrottlingReasons });
         previousTimelineFrameRate = page->preferredRenderingUpdateFramesPerSecond({
             Page::PreferredRenderingUpdateOption::IncludeThrottlingReasons,
@@ -179,7 +179,7 @@ void AnimationTimelinesController::updateAnimationsAndSendEvents(ReducedResoluti
 
     // Ensure the timeline updates at the maximum frame rate we've encountered for our animations.
     if (previousMaximumAnimationFrameRate != maximumAnimationFrameRate) {
-        if (RefPtr page = m_document.page()) {
+        if (RefPtr page = m_document->page()) {
             if (previousTimelineFrameRate != maximumAnimationFrameRate)
                 page->timelineControllerMaximumAnimationFrameRateDidChange(*this);
         }
@@ -195,7 +195,7 @@ void AnimationTimelinesController::updateAnimationsAndSendEvents(ReducedResoluti
     }
 
     // 3. Perform a microtask checkpoint.
-    Ref { m_document }->eventLoop().performMicrotaskCheckpoint();
+    protectedDocument()->eventLoop().performMicrotaskCheckpoint();
 
     // 4. Let events to dispatch be a copy of doc's pending animation event queue.
     // 5. Clear doc's pending animation event queue.
@@ -274,12 +274,12 @@ void AnimationTimelinesController::resumeAnimations()
 
 ReducedResolutionSeconds AnimationTimelinesController::liveCurrentTime() const
 {
-    return m_document.domWindow()->nowTimestamp();
+    return m_document->domWindow()->nowTimestamp();
 }
 
 std::optional<Seconds> AnimationTimelinesController::currentTime()
 {
-    if (!m_document.domWindow())
+    if (!m_document->domWindow())
         return std::nullopt;
 
     if (!m_cachedCurrentTime)
@@ -297,11 +297,11 @@ void AnimationTimelinesController::cacheCurrentTime(ReducedResolutionSeconds new
     m_waitingOnVMIdle = true;
     if (!m_currentTimeClearingTaskCancellationGroup.hasPendingTask()) {
         CancellableTask task(m_currentTimeClearingTaskCancellationGroup, std::bind(&AnimationTimelinesController::maybeClearCachedCurrentTime, this));
-        m_document.eventLoop().queueTask(TaskSource::InternalAsyncTask, WTFMove(task));
+        m_document->eventLoop().queueTask(TaskSource::InternalAsyncTask, WTFMove(task));
     }
     // We extent the associated Document's lifecycle until the VM became idle since the AnimationTimelinesController
     // is owned by the Document.
-    m_document.vm().whenIdle([this, protectedDocument = Ref { m_document }]() {
+    m_document->vm().whenIdle([this, protectedDocument = protectedDocument()]() {
         m_waitingOnVMIdle = false;
         maybeClearCachedCurrentTime();
     });
@@ -317,21 +317,21 @@ void AnimationTimelinesController::maybeClearCachedCurrentTime()
         m_cachedCurrentTime = std::nullopt;
 }
 
-static Element* originatingElement(const Ref<ScrollTimeline>& timeline)
+static const Element* originatingElement(const Ref<ScrollTimeline>& timeline)
 {
     if (RefPtr viewTimeline = dynamicDowncast<ViewTimeline>(timeline))
         return viewTimeline->subject();
     return timeline->source();
 }
 
-static Element* originatingElementIncludingTimelineScope(const Ref<ScrollTimeline>& timeline)
+static const Element* originatingElementIncludingTimelineScope(const Ref<ScrollTimeline>& timeline)
 {
     if (WeakPtr element = timeline->timelineScopeDeclaredElement())
         return element.get();
     return originatingElement(timeline);
 }
 
-static Element* originatingElementExcludingTimelineScope(const Ref<ScrollTimeline>& timeline)
+static const Element* originatingElementExcludingTimelineScope(const Ref<ScrollTimeline>& timeline)
 {
     return timeline->timelineScopeDeclaredElement() ? nullptr : originatingElement(timeline);
 }
@@ -577,7 +577,7 @@ bool AnimationTimelinesController::isPendingTimelineAttachment(const WebAnimatio
 
 void AnimationTimelinesController::unregisterNamedTimelinesAssociatedWithElement(const Element& element)
 {
-    HashSet<AtomString> namesToClear;
+    UncheckedKeyHashSet<AtomString> namesToClear;
 
     for (auto& entry : m_nameToTimelineMap) {
         auto& timelines = entry.value;
@@ -596,7 +596,7 @@ void AnimationTimelinesController::unregisterNamedTimelinesAssociatedWithElement
 AcceleratedEffectStackUpdater& AnimationTimelinesController::acceleratedEffectStackUpdater()
 {
     if (!m_acceleratedEffectStackUpdater)
-        m_acceleratedEffectStackUpdater = makeUnique<AcceleratedEffectStackUpdater>(m_document);
+        m_acceleratedEffectStackUpdater = makeUnique<AcceleratedEffectStackUpdater>(m_document.get());
     return *m_acceleratedEffectStackUpdater;
 }
 #endif

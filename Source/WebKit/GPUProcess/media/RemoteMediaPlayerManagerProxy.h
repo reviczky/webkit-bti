@@ -58,6 +58,7 @@ namespace WebKit {
 class RemoteMediaPlayerProxy;
 struct RemoteMediaPlayerConfiguration;
 struct RemoteMediaPlayerProxyConfiguration;
+struct SharedPreferencesForWebProcess;
 class RemoteMediaSourceProxy;
 class VideoReceiverEndpointMessage;
 
@@ -72,6 +73,9 @@ public:
     }
 
     ~RemoteMediaPlayerManagerProxy();
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     RefPtr<GPUConnectionToWebProcess> gpuConnectionToWebProcess() { return m_gpuConnectionToWebProcess.get(); }
     void clear();
@@ -100,6 +104,7 @@ public:
     void invalidateMediaSource(RemoteMediaSourceIdentifier);
 #endif
 
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 private:
     explicit RemoteMediaPlayerManagerProxy(GPUConnectionToWebProcess&);
 

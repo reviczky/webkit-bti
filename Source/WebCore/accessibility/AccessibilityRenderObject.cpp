@@ -44,6 +44,7 @@
 #include "EditorClient.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "FloatRect.h"
+#include "FocusOptions.h"
 #include "FrameLoader.h"
 #include "FrameSelection.h"
 #include "HTMLAreaElement.h"
@@ -128,7 +129,7 @@ namespace WebCore {
 using namespace HTMLNames;
 
 AccessibilityRenderObject::AccessibilityRenderObject(AXID axID, RenderObject& renderer)
-    : AccessibilityNodeObject(axID, renderer.node())
+    : AccessibilityNodeObject(axID, LIKELY(!renderer.isRenderView()) ? renderer.node() : &renderer.document())
     , m_renderer(renderer)
 {
 #if ASSERT_ENABLED
@@ -443,7 +444,7 @@ AccessibilityObject* AccessibilityRenderObject::nextSibling() const
 
 static RenderBoxModelObject* nextContinuation(RenderObject& renderer)
 {
-    if (!renderer.isReplacedOrInlineBlock()) {
+    if (!renderer.isReplacedOrAtomicInline()) {
         if (auto* renderInline = dynamicDowncast<RenderInline>(renderer))
             return renderInline->continuation();
     }
@@ -746,13 +747,6 @@ bool AccessibilityRenderObject::shouldGetTextFromNode(const TextUnderElementMode
     return false;
 }
 
-Node* AccessibilityRenderObject::node() const
-{
-    if (m_renderer)
-        return LIKELY(!m_renderer->isRenderView()) ? m_renderer->node() : &m_renderer->document();
-    return AccessibilityNodeObject::node();
-}
-
 String AccessibilityRenderObject::stringValue() const
 {
     if (!m_renderer)
@@ -791,9 +785,9 @@ String AccessibilityRenderObject::stringValue() const
 
     if (auto* renderListMarker = dynamicDowncast<RenderListMarker>(m_renderer.get())) {
 #if USE(ATSPI)
-        return renderListMarker->textWithSuffix().toString();
+        return renderListMarker->textWithSuffix();
 #else
-        return renderListMarker->textWithoutSuffix().toString();
+        return renderListMarker->textWithoutSuffix();
 #endif
     }
 
@@ -1017,11 +1011,11 @@ void AccessibilityRenderObject::labelText(Vector<AccessibilityText>& textOrder) 
     AccessibilityNodeObject::labelText(textOrder);
 }
 
-AXCoreObject* AccessibilityRenderObject::titleUIElement() const
+AccessibilityObject* AccessibilityRenderObject::titleUIElement() const
 {
     if (m_renderer && isFieldset())
         return axObjectCache()->getOrCreate(dynamicDowncast<RenderBlock>(*m_renderer)->findFieldsetLegend(RenderBlock::FieldsetIncludeFloatingOrOutOfFlow));
-    return AccessibilityNodeObject::titleUIElement();
+    return downcast<AccessibilityObject>(AccessibilityNodeObject::titleUIElement());
 }
     
 bool AccessibilityRenderObject::isAllowedChildOfTree() const
@@ -1122,17 +1116,8 @@ bool AccessibilityRenderObject::computeIsIgnored() const
     if (!m_renderer)
         return true;
 
-    if (m_renderer->isBR()) {
-#if ENABLE(AX_THREAD_TEXT_APIS)
-        // We need to preserve BRs within editable contexts (e.g. inside contenteditable) for serving
-        // text APIs off the main-thread because this allows them to be part of the AX tree, which is
-        // traversed to compute text markers.
-        auto* node = this->node();
-        return !node;
-#else
+    if (m_renderer->isBR())
         return true;
-#endif
-    }
 
     if (WeakPtr renderText = dynamicDowncast<RenderText>(m_renderer.get())) {
         // Text elements with no rendered text, or only whitespace should not be part of the AX tree.
@@ -1142,18 +1127,8 @@ bool AccessibilityRenderObject::computeIsIgnored() const
             return true;
         }
 
-        if (renderText->text().containsOnly<isASCIIWhitespace>()) {
-#if ENABLE(AX_THREAD_TEXT_APIS)
-            // Preserve whitespace-only text within editable contexts because ignoring it would cause
-            // accessibility's representation of text to be different than what is actually rendered.
-            // FIXME: This actually isn't enough — we likely need _all_ whitespace RenderTexts (within an editable or not) to compute StringForTextMarkerRange correctly.
-            // e.g. This is necessary for ax-thread-text-apis/display-contents-end-text-marker.html.
-            auto* node = this->node();
-            return !node || !node->hasEditableStyle();
-#else
+        if (renderText->text().containsOnly<isASCIIWhitespace>())
             return true;
-#endif
-        }
 
         if (renderText->parent()->isFirstLetter())
             return true;
@@ -1314,7 +1289,7 @@ bool AccessibilityRenderObject::computeIsIgnored() const
     }
 
     if (m_renderer->isRenderListMarker()) {
-        AXCoreObject* parent = parentObjectUnignored();
+        RefPtr parent = parentObjectUnignored();
         return parent && !parent->isListItem();
     }
 
@@ -1415,9 +1390,6 @@ CharacterRange AccessibilityRenderObject::selectedTextRange() const
 {
     ASSERT(isTextControl());
 
-    if (shouldReturnEmptySelectedText())
-        return { };
-
     // Use the text control native range if it's a native object.
     if (isNativeTextControl()) {
         auto& textControl = uncheckedDowncast<RenderTextControl>(*m_renderer).textFormControlElement();
@@ -1433,18 +1405,6 @@ AXTextRuns AccessibilityRenderObject::textRuns()
     if (auto* renderLineBreak = dynamicDowncast<RenderLineBreak>(renderer())) {
         auto box = InlineIterator::boxFor(*renderLineBreak);
         return { renderLineBreak->containingBlock(), { AXTextRun(box->lineIndex(), makeString('\n').isolatedCopy()) } };
-    }
-
-    if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(node())) {
-        // The text within input elements is not actually part of the accessibility tree, meaning we need to do a bit of extra work to expose that text here.
-        for (const auto& node : composedTreeDescendants(*inputElement)) {
-            if (!node.isTextNode())
-                continue;
-            auto* renderer = node.renderer();
-            auto* containingBlock = renderer ? renderer->containingBlock() : nullptr;
-            return containingBlock ? AXTextRuns(containingBlock, { AXTextRun(0, inputElement->value().isolatedCopy()) }) : AXTextRuns();
-        }
-        return { };
     }
 
     if (is<HTMLImageElement>(node()) || is<HTMLMediaElement>(node())) {
@@ -1564,6 +1524,8 @@ void AccessibilityRenderObject::setSelectedTextRange(CharacterRange&& range)
 
     if (isNativeTextControl()) {
         auto& textControl = uncheckedDowncast<RenderTextControl>(*m_renderer).textFormControlElement();
+        FocusOptions focusOptions { .preventScroll = true };
+        textControl.focus(focusOptions);
         textControl.setSelectionRange(range.location, range.location + range.length);
     } else if (m_renderer) {
         ASSERT(node());
@@ -1820,6 +1782,7 @@ void AccessibilityRenderObject::setSelectedVisiblePositionRange(const VisiblePos
         }
 
         setTextSelectionIntent(axObjectCache(), start == end ? AXTextStateChangeTypeSelectionMove : AXTextStateChangeTypeSelectionExtend);
+        textControl->focus();
         textControl->setSelectionRange(start, end);
     } else if (m_renderer) {
         // Make selection and tell the document to use it. If it's zero length, then move to that position.
@@ -1918,16 +1881,16 @@ CharacterRange AccessibilityRenderObject::doAXRangeForLine(unsigned lineNumber) 
     // Get the end of the line based on the starting position.
     auto lineEnd = endOfLine(lineStart);
 
-    int index1 = indexForVisiblePosition(lineStart);
-    int index2 = indexForVisiblePosition(lineEnd);
+    int lineStartIndex = indexForVisiblePosition(lineStart);
+    int lineEndIndex = indexForVisiblePosition(lineEnd);
 
     if (isHardLineBreak(lineEnd))
-        ++index2;
+        ++lineEndIndex;
 
-    if (index1 < 0 || index2 < 0 || index2 <= index1)
+    if (lineStartIndex < 0 || lineEndIndex < 0 || lineEndIndex <= lineStartIndex)
         return { };
 
-    return { static_cast<unsigned>(index1), static_cast<unsigned>(index2 - index1) };
+    return { static_cast<unsigned>(lineStartIndex), static_cast<unsigned>(lineEndIndex - lineStartIndex) };
 }
 
 // The composed character range in the text associated with this accessibility object that
@@ -2016,8 +1979,12 @@ AccessibilityObject* AccessibilityRenderObject::accessibilityHitTest(const IntPo
     if (!m_renderer || !m_renderer->hasLayer())
         return nullptr;
 
+    // Adjust point for the remoteFrameOffset
+    IntPoint adjustedPoint = point;
+    adjustedPoint.moveBy(-remoteFrameOffset());
+
     constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::AccessibilityHitTest };
-    HitTestResult hitTestResult { point };
+    HitTestResult hitTestResult { adjustedPoint };
 
     dynamicDowncast<RenderLayerModelObject>(*m_renderer)->layer()->hitTest(hitType, hitTestResult);
     RefPtr node = hitTestResult.innerNode();
@@ -2146,7 +2113,7 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
         return AccessibilityRole::ImageMap;
     if (m_renderer->isImage()) {
         if (is<HTMLInputElement>(node))
-            return hasPopup() ? AccessibilityRole::PopUpButton : AccessibilityRole::Button;
+            return selfOrAncestorLinkHasPopup() ? AccessibilityRole::PopUpButton : AccessibilityRole::Button;
 
         if (auto* svgRoot = remoteSVGRootElement(Create)) {
             if (svgRoot->hasAccessibleContent())
@@ -2286,7 +2253,7 @@ void AccessibilityRenderObject::addImageMapChildren()
         areaObject.setHTMLMapElement(map.get());
         areaObject.setParent(this);
         if (!areaObject.isIgnored())
-            addChild(&areaObject);
+            addChild(areaObject);
         else
             axObjectCache()->remove(areaObject.objectID());
     }
@@ -2305,7 +2272,7 @@ void AccessibilityRenderObject::addTextFieldChildren()
     auto& axSpinButton = uncheckedDowncast<AccessibilitySpinButton>(*axObjectCache()->create(AccessibilityRole::SpinButton));
     axSpinButton.setSpinButtonElement(spinButtonElement);
     axSpinButton.setParent(this);
-    addChild(&axSpinButton);
+    addChild(axSpinButton);
 }
     
 bool AccessibilityRenderObject::isSVGImage() const
@@ -2369,7 +2336,7 @@ void AccessibilityRenderObject::addRemoteSVGChildren()
     // In order to connect the AX hierarchy from the SVG root element from the loaded resource
     // the parent must be set, because there's no other way to get back to who created the image.
     root->setParent(this);
-    addChild(root.get());
+    addChild(*root);
 }
 
 void AccessibilityRenderObject::addAttachmentChildren()
@@ -2441,7 +2408,7 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
     for (Node* child = node->firstChild(); child; child = child->nextSibling()) {
         if (child->renderer()) {
             // Find out where the last render sibling is located within m_children.
-            AXCoreObject* childObject = cache->get(child->renderer());
+            RefPtr<AXCoreObject> childObject = cache->get(child->renderer());
             if (childObject && childObject->isIgnored()) {
                 const auto& children = childObject->unignoredChildren();
                 if (children.size())
@@ -2565,7 +2532,7 @@ void AccessibilityRenderObject::addChildren()
         if (owners.size() && !owners.contains(Ref { *this }))
             return;
 
-        addChild(&object);
+        addChild(object);
     };
 
 #if !USE(ATSPI)
@@ -2675,7 +2642,7 @@ bool AccessibilityRenderObject::hasPlainText() const
         && style.textDecorationsInEffect().isEmpty();
 }
 
-bool AccessibilityRenderObject::hasSameFont(const AXCoreObject& object) const
+bool AccessibilityRenderObject::hasSameFont(AXCoreObject& object)
 {
     auto* renderer = object.renderer();
     if (!m_renderer || !renderer)
@@ -2700,7 +2667,7 @@ ApplePayButtonType AccessibilityRenderObject::applePayButtonType() const
 }
 #endif
 
-bool AccessibilityRenderObject::hasSameFontColor(const AXCoreObject& object) const
+bool AccessibilityRenderObject::hasSameFontColor(AXCoreObject& object)
 {
     auto* renderer = object.renderer();
     if (!m_renderer || !renderer)
@@ -2709,7 +2676,7 @@ bool AccessibilityRenderObject::hasSameFontColor(const AXCoreObject& object) con
     return m_renderer->style().visitedDependentColor(CSSPropertyColor) == renderer->style().visitedDependentColor(CSSPropertyColor);
 }
 
-bool AccessibilityRenderObject::hasSameStyle(const AXCoreObject& object) const
+bool AccessibilityRenderObject::hasSameStyle(AXCoreObject& object)
 {
     auto* renderer = object.renderer();
     if (!m_renderer || !renderer)

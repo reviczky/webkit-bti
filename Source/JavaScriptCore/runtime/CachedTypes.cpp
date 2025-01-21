@@ -49,6 +49,7 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/UUID.h>
 #include <wtf/text/AtomStringImpl.h>
+#include <wtf/text/ParsingUtilities.h>
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
@@ -166,12 +167,9 @@ public:
         size_t size = m_baseOffset + m_currentPage->size();
         auto buffer = MallocSpan<uint8_t, VMMalloc>::malloc(size);
         auto bufferSpan = buffer.mutableSpan();
-        unsigned offset = 0;
-        for (const auto& page : m_pages) {
-            memcpySpan(bufferSpan.subspan(offset), page.span());
-            offset += page.size();
-        }
-        RELEASE_ASSERT(offset == size);
+        for (const auto& page : m_pages)
+            memcpySpan(consumeSpan(bufferSpan, page.size()), page.span());
+        RELEASE_ASSERT(bufferSpan.empty());
         return CachedBytecode::create(WTFMove(buffer), WTFMove(m_leafExecutables));
     }
 
@@ -957,9 +955,9 @@ private:
 };
 
 template<typename T, typename HashArg = DefaultHash<T>>
-class CachedHashSet : public CachedObject<HashSet<SourceType<T>, HashArg>> {
+class CachedHashSet : public CachedObject<UncheckedKeyHashSet<SourceType<T>, HashArg>> {
 public:
-    void encode(Encoder& encoder, const HashSet<SourceType<T>, HashArg>& set)
+    void encode(Encoder& encoder, const UncheckedKeyHashSet<SourceType<T>, HashArg>& set)
     {
         SourceType<decltype(m_entries)> entriesVector(set.size());
         unsigned i = 0;
@@ -968,7 +966,7 @@ public:
         m_entries.encode(encoder, entriesVector);
     }
 
-    void decode(Decoder& decoder, HashSet<SourceType<T>, HashArg>& set) const
+    void decode(Decoder& decoder, UncheckedKeyHashSet<SourceType<T>, HashArg>& set) const
     {
         SourceType<decltype(m_entries)> entriesVector;
         m_entries.decode(decoder, entriesVector);

@@ -49,49 +49,6 @@ namespace WebCore::Style {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(AnchorPositionedState);
 
-static bool isSizingProperty(CSSPropertyID propertyID)
-{
-    switch (propertyID) {
-    case CSSPropertyWidth:
-    case CSSPropertyMinWidth:
-    case CSSPropertyMaxWidth:
-
-    case CSSPropertyHeight:
-    case CSSPropertyMinHeight:
-    case CSSPropertyMaxHeight:
-
-    case CSSPropertyBlockSize:
-    case CSSPropertyMinBlockSize:
-    case CSSPropertyMaxBlockSize:
-
-    case CSSPropertyInlineSize:
-    case CSSPropertyMinInlineSize:
-    case CSSPropertyMaxInlineSize:
-        return true;
-    default:
-        return false;
-    }
-}
-
-static bool isMarginProperty(CSSPropertyID propertyID)
-{
-    switch (propertyID) {
-    case CSSPropertyMarginLeft:
-    case CSSPropertyMarginRight:
-    case CSSPropertyMarginTop:
-    case CSSPropertyMarginBottom:
-
-    case CSSPropertyMarginBlockStart:
-    case CSSPropertyMarginBlockEnd:
-    case CSSPropertyMarginInlineStart:
-    case CSSPropertyMarginInlineEnd:
-        return true;
-
-    default:
-        return false;
-    }
-}
-
 static BoxAxis mapInsetPropertyToPhysicalAxis(CSSPropertyID id, const WritingMode writingMode)
 {
     switch (id) {
@@ -273,7 +230,7 @@ static LayoutSize scrollOffsetFromAncestorContainer(const RenderElement& descend
 
 // This computes the top left location, physical width, and physical height of the specified
 // anchor element. The location is computed relative to the specified containing block.
-static LayoutRect computeAnchorRectRelativeToContainingBlock(CheckedRef<const RenderBoxModelObject> anchorBox, const RenderBlock& containingBlock)
+LayoutRect AnchorPositionEvaluator::computeAnchorRectRelativeToContainingBlock(CheckedRef<const RenderBoxModelObject> anchorBox, const RenderBlock& containingBlock)
 {
     // Fragmented flows are a little tricky to deal with. One example of a fragmented
     // flow is a block anchor element that is "fragmented" or split across multiple columns
@@ -326,7 +283,7 @@ static LayoutUnit computeInsetValue(CSSPropertyID insetPropertyID, CheckedRef<co
 
     auto insetPropertySide = mapInsetPropertyToPhysicalSide(insetPropertyID, anchorPositionedRenderer->writingMode());
     auto anchorSideID = std::holds_alternative<CSSValueID>(anchorSide) ? std::get<CSSValueID>(anchorSide) : CSSValueInvalid;
-    auto anchorRect = computeAnchorRectRelativeToContainingBlock(anchorBox, *containingBlock);
+    auto anchorRect = AnchorPositionEvaluator::computeAnchorRectRelativeToContainingBlock(anchorBox, *containingBlock);
 
     // Explicitly deal with the center/percentage value here.
     // "Refers to a position a corresponding percentage between the start and end sides, with
@@ -613,7 +570,7 @@ std::optional<double> AnchorPositionEvaluator::evaluateSize(const BuilderState& 
 
     auto isValidAnchorSize = [&] {
         // It’s being used in a sizing property, an inset property, or a margin property...
-        if (!isSizingProperty(propertyID) && !CSSProperty::isInsetProperty(propertyID) && !isMarginProperty(propertyID))
+        if (!CSSProperty::isSizingProperty(propertyID) && !CSSProperty::isInsetProperty(propertyID) && !CSSProperty::isMarginProperty(propertyID))
             return false;
 
         // ...on an absolutely-positioned element.
@@ -755,7 +712,7 @@ static AnchorsForAnchorName collectAnchorsForAnchorName(const Document& document
     return anchorsForAnchorName;
 }
 
-AnchorElements AnchorPositionEvaluator::findAnchorsForAnchorPositionedElement(const Element& anchorPositionedElement, const HashSet<AtomString>& anchorNames, const AnchorsForAnchorName& anchorsForAnchorName)
+AnchorElements AnchorPositionEvaluator::findAnchorsForAnchorPositionedElement(const Element& anchorPositionedElement, const UncheckedKeyHashSet<AtomString>& anchorNames, const AnchorsForAnchorName& anchorsForAnchorName)
 {
     AnchorElements anchorElements;
 

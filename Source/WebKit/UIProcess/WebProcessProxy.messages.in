@@ -20,10 +20,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+[
+    ExceptionForEnabledBy,
+    DispatchedFrom=WebContent,
+    DispatchedTo=UI
+]
 messages -> WebProcessProxy WantsDispatchMessage {
-    UpdateBackForwardItem(Ref<WebKit::FrameState> mainFrameState)
-    DidDestroyFrame(WebCore::FrameIdentifier frameID, WebKit::WebPageProxyIdentifier pageID) 
-
     DidDestroyUserGestureToken(WebCore::PageIdentifier pageID, WebCore::UserGestureTokenIdentifier userGestureTokenID)
 
     ShouldTerminate() -> (bool shouldTerminate) Synchronous
@@ -92,6 +94,7 @@ messages -> WebProcessProxy WantsDispatchMessage {
     [EnabledBy=AppBadgeEnabled] SetClientBadge(WebKit::WebPageProxyIdentifier pageIdentifier, WebCore::SecurityOriginData origin, std::optional<uint64_t> badge)
 
     WrapCryptoKey(Vector<uint8_t> key) -> (std::optional<Vector<uint8_t>> wrappedKey) Synchronous
+    SerializeAndWrapCryptoKey(struct WebCore::CryptoKeyData key) -> (std::optional<Vector<uint8_t>> wrappedKey) Synchronous
     UnwrapCryptoKey(struct WebCore::WrappedCryptoKey wrappedKey) -> (std::optional<Vector<uint8_t>> key) Synchronous
 
 #if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)

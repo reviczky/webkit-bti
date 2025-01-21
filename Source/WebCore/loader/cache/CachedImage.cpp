@@ -109,7 +109,7 @@ CachedImage::~CachedImage()
 void CachedImage::load(CachedResourceLoader& loader)
 {
     m_skippingRevalidationDocument = loader.document();
-    m_layerBasedSVGEngineEnabled = loader.document() ? loader.document()->settings().layerBasedSVGEngineEnabled() : false;
+    m_settings = loader.document() ? &loader.document()->settings() : nullptr;
 
     if (loader.shouldPerformImageLoad(url()))
         CachedResource::load(loader);
@@ -372,7 +372,7 @@ void CachedImage::notifyObservers(const IntRect* changeRect)
 
 void CachedImage::checkShouldPaintBrokenImage()
 {
-    if (!m_loader || m_loader->reachedTerminalState())
+    if (!m_loader || m_loader->reachedTerminalState() || !m_loader->frameLoader())
         return;
 
     m_shouldPaintBrokenImage = m_loader->frameLoader()->client().shouldPaintBrokenImage(url());

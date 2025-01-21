@@ -25,6 +25,7 @@
 #include "AppHighlight.h"
 #include "BarcodeDetectorInterface.h"
 #include "ChromeClient.h"
+#include "ColorChooser.h"
 #include "ContactInfo.h"
 #include "ContactsRequestData.h"
 #include "Document.h"
@@ -33,6 +34,7 @@
 #include "FaceDetectorInterface.h"
 #include "FileList.h"
 #include "FloatRect.h"
+#include "FrameLoader.h"
 #include "FrameTree.h"
 #include "Geolocation.h"
 #include "HTMLFormElement.h"
@@ -62,10 +64,6 @@
 #include <wtf/SetForScope.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
-
-#if ENABLE(INPUT_TYPE_COLOR)
-#include "ColorChooser.h"
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
 #include "DataListSuggestionPicker.h"
@@ -121,6 +119,11 @@ void Chrome::scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, con
 IntPoint Chrome::screenToRootView(const IntPoint& point) const
 {
     return m_client->screenToRootView(point);
+}
+
+IntPoint Chrome::rootViewToScreen(const IntPoint& point) const
+{
+    return m_client->rootViewToScreen(point);
 }
 
 IntRect Chrome::rootViewToScreen(const IntRect& rect) const
@@ -238,11 +241,11 @@ void Chrome::runModal()
     // JavaScript that runs within the nested event loop must not be run in the context of the
     // script that called showModalDialog. Null out entryScope to break the connection.
 
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
-    if (!localMainFrame)
+    RefPtr localTopDocument = m_page->localTopDocument();
+    if (!localTopDocument)
         return;
 
-    SetForScope entryScopeNullifier { localMainFrame->document()->vm().entryScope, nullptr };
+    SetForScope entryScopeNullifier { localTopDocument->vm().entryScope, nullptr };
 
     TimerBase::fireTimersInNestedEventLoop();
     m_client->runModal();
@@ -352,7 +355,7 @@ bool Chrome::runJavaScriptPrompt(LocalFrame& frame, const String& prompt, const 
 
 void Chrome::mouseDidMoveOverElement(const HitTestResult& result, OptionSet<PlatformEventModifier> modifiers)
 {
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame())) {
+    if (RefPtr localMainFrame = m_page->localMainFrame()) {
         if (result.innerNode() && result.innerNode()->document().isDNSPrefetchEnabled())
             localMainFrame->protectedLoader()->client().prefetchDNS(result.absoluteLinkURL().host().toString());
     }
@@ -443,8 +446,6 @@ void Chrome::disableSuddenTermination()
     m_client->disableSuddenTermination();
 }
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
 RefPtr<ColorChooser> Chrome::createColorChooser(ColorChooserClient& client, const Color& initialColor)
 {
 #if PLATFORM(IOS_FAMILY)
@@ -456,8 +457,6 @@ RefPtr<ColorChooser> Chrome::createColorChooser(ColorChooserClient& client, cons
     return m_client->createColorChooser(client, initialColor);
 #endif
 }
-
-#endif
 
 #if ENABLE(DATALIST_ELEMENT)
 
@@ -549,9 +548,9 @@ void Chrome::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
     m_client->setCursorHiddenUntilMouseMoves(hiddenUntilMouseMoves);
 }
 
-RefPtr<ImageBuffer> Chrome::createImageBuffer(const FloatSize& size, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, ImageBufferPixelFormat pixelFormat, OptionSet<ImageBufferOptions> options) const
+RefPtr<ImageBuffer> Chrome::createImageBuffer(const FloatSize& size, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, ImageBufferPixelFormat pixelFormat) const
 {
-    return m_client->createImageBuffer(size, purpose, resolutionScale, colorSpace, pixelFormat, options);
+    return m_client->createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat);
 }
 
 RefPtr<ImageBuffer> Chrome::sinkIntoImageBuffer(std::unique_ptr<SerializedImageBuffer> imageBuffer)

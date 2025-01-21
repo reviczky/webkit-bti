@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2017 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008-2024 Apple Inc. All Rights Reserved.
  * Copyright (C) 2012 Google Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,6 @@
 #include <wtf/NativePromise.h>
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/OptionSet.h>
-#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -92,6 +91,7 @@ enum class LoadedFromOpaqueSource : bool;
 enum class NoiseInjectionPolicy : uint8_t;
 enum class ScriptTelemetryCategory : uint8_t;
 enum class TaskSource : uint8_t;
+struct CryptoKeyData;
 
 #if ENABLE(NOTIFICATIONS)
 class NotificationClient;
@@ -184,7 +184,8 @@ public:
 
     JSC::ScriptExecutionStatus jscScriptExecutionStatus() const;
 
-    URL currentSourceURL() const;
+    enum class CallStackPosition : bool { BottomMost, TopMost };
+    URL currentSourceURL(CallStackPosition = CallStackPosition::BottomMost) const;
 
     // Called from the constructor and destructors of ActiveDOMObject.
     void didCreateActiveDOMObject(ActiveDOMObject&);
@@ -217,7 +218,7 @@ public:
     WEBCORE_EXPORT bool requiresScriptExecutionTelemetry(ScriptTelemetryCategory);
 
     class Task {
-        WTF_MAKE_TZONE_ALLOCATED_INLINE(Task);
+        WTF_MAKE_TZONE_ALLOCATED(Task);
     public:
         enum CleanupTaskTag { CleanupTask };
 
@@ -290,6 +291,7 @@ public:
     // used for things that utilize the same structure clone algorithm, for example, message passing between
     // worker and document.
     virtual std::optional<Vector<uint8_t>> wrapCryptoKey(const Vector<uint8_t>& key) = 0;
+    virtual std::optional<Vector<uint8_t>> serializeAndWrapCryptoKey(CryptoKeyData&&) = 0;
     virtual std::optional<Vector<uint8_t>> unwrapCryptoKey(const Vector<uint8_t>& wrappedKey) = 0;
 
     int timerNestingLevel() const { return m_timerNestingLevel; }
@@ -326,6 +328,7 @@ public:
     WEBCORE_EXPORT static bool postTaskTo(ScriptExecutionContextIdentifier, Task&&);
     WEBCORE_EXPORT static bool postTaskForModeToWorkerOrWorklet(ScriptExecutionContextIdentifier, Task&&, const String&);
     WEBCORE_EXPORT static bool ensureOnContextThread(ScriptExecutionContextIdentifier, Task&&);
+    WEBCORE_EXPORT static bool isContextThread(ScriptExecutionContextIdentifier);
 
     ScriptExecutionContextIdentifier identifier() const { return m_identifier; }
 
@@ -428,9 +431,9 @@ private:
     void checkConsistency() const;
     WEBCORE_EXPORT GuaranteedSerialFunctionDispatcher& nativePromiseDispatcher();
 
-    HashSet<MessagePort*> m_messagePorts;
-    HashSet<ContextDestructionObserver*> m_destructionObservers;
-    HashSet<ActiveDOMObject*> m_activeDOMObjects;
+    UncheckedKeyHashSet<MessagePort*> m_messagePorts;
+    UncheckedKeyHashSet<ContextDestructionObserver*> m_destructionObservers;
+    UncheckedKeyHashSet<ActiveDOMObject*> m_activeDOMObjects;
 
     UncheckedKeyHashMap<int, RefPtr<DOMTimer>> m_timeouts;
 

@@ -4,7 +4,7 @@
  *           (C) 1998 Waldo Bastian (bastian@kde.org)
  *           (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2003, 2004, 2005, 2006, 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -28,8 +28,10 @@
 
 #include "BorderPainter.h"
 #include "Document.h"
-#include "HitTestResult.h"
+#include "HTMLFieldSetElement.h"
+#include "HTMLFormControlElement.h"
 #include "HTMLNames.h"
+#include "HitTestResult.h"
 #include "PaintInfo.h"
 #include "RenderBoxInlines.h"
 #include "RenderBoxModelObjectInlines.h"
@@ -48,8 +50,6 @@
 #include <wtf/HashSet.h>
 #include <wtf/StackStats.h>
 #include <wtf/TZoneMallocInlines.h>
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace WebCore {
 
@@ -294,9 +294,9 @@ LayoutUnit RenderTableSection::calcRowLogicalHeight()
                 // For row spanning cells, |r| is the last row in the span.
                 unsigned cellStartRow = cell->rowIndex();
 
-                if (cell->overridingLogicalHeight()) {
+                if (cell->overridingBorderBoxLogicalHeight()) {
                     cell->clearIntrinsicPadding();
-                    cell->clearOverridingContentSize();
+                    cell->clearOverridingSize();
                     cell->setChildNeedsLayout(MarkOnlyThis);
                     cell->layoutIfNeeded();
                 }
@@ -475,7 +475,9 @@ static bool shouldFlexCellChild(const RenderTableCell& cell, const RenderBox& ce
         return false;
     if (cellDescendant.scrollsOverflowY())
         return true;
-    return cellDescendant.shouldTreatChildAsReplacedInTableCells();
+    if (cellDescendant.isReplacedOrAtomicInline())
+        return true;
+    return is<HTMLFormControlElement>(cellDescendant.element()) && !is<HTMLFieldSetElement>(cellDescendant.element());
 }
 
 void RenderTableSection::relayoutCellIfFlexed(RenderTableCell& cell, int rowIndex, int rowHeight)
@@ -545,7 +547,7 @@ void RenderTableSection::layoutRows()
     unsigned totalRows = m_grid.size();
 
     // Set the width of our section now.  The rows will also be this width.
-    setLogicalWidth(table()->contentLogicalWidth());
+    setLogicalWidth(table()->contentBoxLogicalWidth());
     m_forceSlowPaintPathWithOverflowingCell = false;
 
     LayoutUnit vspacing = table()->vBorderSpacing();
@@ -905,8 +907,8 @@ std::optional<LayoutUnit> RenderTableSection::baselineFromCellContentEdges(ItemP
         const CellStruct& cs = row.at(i);
         const RenderTableCell* cell = cs.primaryCell();
         // Only cells with content have a baseline
-        if (cell && cell->contentLogicalHeight()) {
-            LayoutUnit candidate = cell->logicalTop() + cell->borderAndPaddingBefore() + cell->contentLogicalHeight();
+        if (cell && cell->contentBoxLogicalHeight()) {
+            LayoutUnit candidate = cell->logicalTop() + cell->borderAndPaddingBefore() + cell->contentBoxLogicalHeight();
             result = std::max(result.value_or(candidate), candidate);
         }
     }
@@ -1055,7 +1057,7 @@ CellSpan RenderTableSection::spannedRows(const LayoutRect& flippedRect, ShouldIn
     if (m_rowPos[nextRow] >= flippedRect.maxY())
         endRow = nextRow;
     else {
-        endRow = std::upper_bound(m_rowPos.begin() + static_cast<int32_t>(nextRow), m_rowPos.end(), flippedRect.maxY()) - m_rowPos.begin();
+        endRow = std::upper_bound(m_rowPos.subspan(static_cast<int32_t>(nextRow)).data(), m_rowPos.end(), flippedRect.maxY()) - m_rowPos.begin();
         if (endRow == m_rowPos.size())
             endRow = m_rowPos.size() - 1;
     }
@@ -1086,7 +1088,7 @@ CellSpan RenderTableSection::spannedColumns(const LayoutRect& flippedRect, Shoul
     if (columnPos[nextColumn] >= flippedRect.maxX())
         endColumn = nextColumn;
     else {
-        endColumn = std::upper_bound(columnPos.begin() + static_cast<int32_t>(nextColumn), columnPos.end(), flippedRect.maxX()) - columnPos.begin();
+        endColumn = std::upper_bound(columnPos.subspan(static_cast<int32_t>(nextColumn)).data(), columnPos.end(), flippedRect.maxX()) - columnPos.begin();
         if (endColumn == columnPos.size())
             endColumn = columnPos.size() - 1;
     }
@@ -1287,7 +1289,7 @@ void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& pa
             // To make sure we properly repaint the section, we repaint all the overflowing cells that we collected.
             auto cells = copyToVector(m_overflowingCells);
 
-            HashSet<CheckedPtr<RenderTableCell>> spanningCells;
+            UncheckedKeyHashSet<CheckedPtr<RenderTableCell>> spanningCells;
 
             for (unsigned r = dirtiedRows.start; r < dirtiedRows.end; r++) {
                 RenderTableRow* row = m_grid[r].rowRenderer;
@@ -1473,7 +1475,7 @@ bool RenderTableSection::nodeAtPoint(const HitTestRequest& request, HitTestResul
     // Just forward to our children always.
     LayoutPoint adjustedLocation = accumulatedOffset + location();
 
-    if (hasNonVisibleOverflow() && !locationInContainer.intersects(overflowClipRect(adjustedLocation, nullptr)))
+    if (hasNonVisibleOverflow() && !locationInContainer.intersects(overflowClipRect(adjustedLocation)))
         return false;
 
     if (hasOverflowingCell()) {
@@ -1590,5 +1592,3 @@ void RenderTableSection::setLogicalPositionForCell(RenderTableCell* cell, unsign
 }
 
 } // namespace WebCore
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

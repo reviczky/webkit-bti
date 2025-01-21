@@ -46,8 +46,6 @@
 #include "TimelineRange.h"
 #include <wtf/text/MakeString.h>
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
 namespace WebCore {
 
 constexpr unsigned maxShorthandLength = 18; // FIXME: Generate this from CSSProperties.json.
@@ -140,7 +138,7 @@ private:
     String serializeSingleAnimationRange(const CSSValue&, SingleTimelineRange::Type, CSSValueID = CSSValueInvalid) const;
 
     StylePropertyShorthand m_shorthand;
-    RefPtr<CSSValue> m_longhandValues[maxShorthandLength];
+    std::array<RefPtr<CSSValue>, maxShorthandLength> m_longhandValues;
     String m_result;
     bool m_commonSerializationChecksSuppliedResult { false };
 };
@@ -155,7 +153,9 @@ inline ShorthandSerializer::ShorthandSerializer(const PropertiesType& properties
 inline CSSPropertyID ShorthandSerializer::longhandProperty(unsigned index) const
 {
     ASSERT(index < length());
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     return m_shorthand.properties()[index];
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 inline CSSValue& ShorthandSerializer::longhandValue(unsigned index) const
@@ -338,6 +338,7 @@ String ShorthandSerializer::serialize()
     case CSSPropertyScrollPaddingBlock:
     case CSSPropertyScrollPaddingInline:
         return serializePair();
+    case CSSPropertyBlockStep:
     case CSSPropertyBorderBlockEnd:
     case CSSPropertyBorderBlockStart:
     case CSSPropertyBorderBottom:
@@ -520,8 +521,10 @@ public:
     void set(unsigned index, const CSSValue* value, bool skipSerializing = false)
     {
         ASSERT(index < m_shorthand.length());
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
         m_skipSerializing[index] = skipSerializing
             || !value || isInitialValueForLonghand(m_shorthand.properties()[index], *value);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
         m_values[index] = value;
     }
 
@@ -531,11 +534,13 @@ public:
         return m_skipSerializing[index];
     }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     std::optional<CSSValueID> valueID(unsigned index) const
     {
         ASSERT(index < m_shorthand.length());
         return longhandValueID(m_shorthand.properties()[index], m_values[index].get());
     }
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     CSSValueID valueIDIncludingCustomIdent(unsigned index) const
     {
@@ -566,6 +571,7 @@ public:
         return value && value->isPair();
     }
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     void serialize(StringBuilder& builder) const
     {
         // If all are skipped, then serialize the first.
@@ -587,11 +593,12 @@ public:
             separator = " "_s;
         }
     }
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 private:
     const StylePropertyShorthand& m_shorthand;
-    bool m_skipSerializing[maxShorthandLength] { };
-    RefPtr<const CSSValue> m_values[maxShorthandLength];
+    std::array<bool, maxShorthandLength> m_skipSerializing = { };
+    std::array<RefPtr<const CSSValue>, maxShorthandLength> m_values;
 };
 
 String ShorthandSerializer::serializeCoordinatingListPropertyGroup() const
@@ -672,11 +679,15 @@ String ShorthandSerializer::serializeLayered() const
                     if (!layerValues.skip(j - 1) && !layerValues.skip(j))
                         layerValues.skip(j) = true;
                 } else if (!layerValues.skip(j - 1) || !layerValues.skip(j)) {
-                    // If the two are different, both need to be serialized, except in the special case of no-clip.
-                    if (layerValues.valueID(j) != CSSValueNoClip) {
-                        layerValues.skip(j - 1) = false;
-                        layerValues.skip(j) = false;
+                    // If the two are different, both need to be serialized, unless clip is invalid as origin
+                    if (layerValues.valueID(j) == CSSValueNoClip)
+                        continue;
+                    if (layerValues.valueID(j) == CSSValueBorderArea) {
+                        layerValues.skip(j - 1) = layerValues.valueID(j - 1) == CSSValueBorderBox;
+                        continue;
                     }
+                    layerValues.skip(j - 1) = false;
+                    layerValues.skip(j) = false;
                 }
             }
 
@@ -853,8 +864,8 @@ String ShorthandSerializer::serializeBorderImage() const
 String ShorthandSerializer::serializeBorderRadius() const
 {
     ASSERT(length() == 4);
-    RefPtr<const CSSValue> horizontalRadii[4];
-    RefPtr<const CSSValue> verticalRadii[4];
+    std::array<RefPtr<const CSSValue>, 4> horizontalRadii;
+    std::array<RefPtr<const CSSValue>, 4> verticalRadii;
     for (unsigned i = 0; i < 4; ++i) {
         auto& value = longhandValue(i);
         horizontalRadii[i] = &value.first();
@@ -870,7 +881,7 @@ String ShorthandSerializer::serializeBorderRadius() const
     }
 
     StringBuilder result;
-    auto serializeRadii = [&](const auto (&r)[4]) {
+    auto serializeRadii = [&](const std::array<RefPtr<const CSSValue>, 4>& r) {
         if (!r[3]->equals(*r[1]))
             result.append(r[0]->cssText(), ' ', r[1]->cssText(), ' ', r[2]->cssText(), ' ', r[3]->cssText());
         else if (!r[2]->equals(*r[0]) || (m_shorthand.id() == CSSPropertyWebkitBorderRadius && !serializeBoth && !r[1]->equals(*r[0])))
@@ -914,7 +925,7 @@ String ShorthandSerializer::serializeColumnBreak() const
     }
 }
 
-static std::optional<CSSValueID> fontStretchKeyword(double value)
+static std::optional<CSSValueID> fontWidthKeyword(double value)
 {
     // If the numeric value does not fit in the fixed point FontSelectionValue, don't convert it to a keyword even if it rounds to a keyword value.
     float valueAsFloat = value;
@@ -922,7 +933,7 @@ static std::optional<CSSValueID> fontStretchKeyword(double value)
     float valueAsFloatAfterRoundTrip = valueAsFontSelectionValue;
     if (value != valueAsFloatAfterRoundTrip)
         return std::nullopt;
-    return fontStretchKeyword(valueAsFontSelectionValue);
+    return fontWidthKeyword(valueAsFontSelectionValue);
 }
 
 String ShorthandSerializer::serializeFont() const
@@ -947,7 +958,7 @@ String ShorthandSerializer::serializeFont() const
     auto styleIndex = longhandIndex(0, CSSPropertyFontStyle);
     auto capsIndex = longhandIndex(1, CSSPropertyFontVariantCaps);
     auto weightIndex = longhandIndex(2, CSSPropertyFontWeight);
-    auto stretchIndex = longhandIndex(3, CSSPropertyFontStretch);
+    auto widthIndex = longhandIndex(3, CSSPropertyFontWidth);
     auto sizeIndex = longhandIndex(4, CSSPropertyFontSize);
     auto lineHeightIndex = longhandIndex(5, CSSPropertyLineHeight);
     auto familyIndex = longhandIndex(6, CSSPropertyFontFamily);
@@ -963,23 +974,23 @@ String ShorthandSerializer::serializeFont() const
     if (capsKeyword != CSSValueNormal && capsKeyword != CSSValueSmallCaps)
         return String();
 
-    // Font stretch values can only be serialized in the font shorthand as keywords, since percentages are also valid font sizes.
-    // If a font stretch percentage can be expressed as a keyword, then do that.
-    auto stretchKeyword = longhandValueID(stretchIndex);
-    if (stretchKeyword == CSSValueInvalid) {
-        auto& stretchValue = downcast<CSSPrimitiveValue>(longhandValue(stretchIndex));
-        if (stretchValue.isCalculated() || !stretchValue.isPercentage())
+    // Font width values can only be serialized in the font shorthand as keywords, since percentages are also valid font sizes.
+    // If a font width percentage can be expressed as a keyword, then do that.
+    auto widthKeyword = longhandValueID(widthIndex);
+    if (widthKeyword == CSSValueInvalid) {
+        auto& widthValue = downcast<CSSPrimitiveValue>(longhandValue(widthIndex));
+        if (widthValue.isCalculated() || !widthValue.isPercentage())
             return String();
-        auto keyword = fontStretchKeyword(stretchValue.resolveAsPercentageNoConversionDataRequired());
+        auto keyword = fontWidthKeyword(widthValue.resolveAsPercentageNoConversionDataRequired());
         if (!keyword)
             return String();
-        stretchKeyword = *keyword;
+        widthKeyword = *keyword;
     }
 
     bool includeStyle = !isLonghandInitialValue(styleIndex);
     bool includeCaps = capsKeyword != CSSValueNormal;
     bool includeWeight = !isLonghandInitialValue(weightIndex);
-    bool includeStretch = stretchKeyword != CSSValueNormal;
+    bool includeWidth = widthKeyword != CSSValueNormal;
     bool includeLineHeight = !isLonghandInitialValue(lineHeightIndex);
 
     auto style = includeStyle ? serializeLonghandValue(styleIndex) : String();
@@ -987,16 +998,16 @@ String ShorthandSerializer::serializeFont() const
     auto caps = includeCaps ? nameLiteral(capsKeyword) : ""_s;
     auto weightSeparator = includeWeight && (includeStyle || includeCaps) ? " "_s : ""_s;
     auto weight = includeWeight ? serializeLonghandValue(weightIndex) : String();
-    auto stretchSeparator = includeStretch && (includeStyle || includeCaps || includeWeight) ? " "_s : ""_s;
-    auto stretch = includeStretch ? nameLiteral(stretchKeyword) : ""_s;
-    auto sizeSeparator = includeStyle || includeCaps || includeWeight || includeStretch ? " "_s : ""_s;
+    auto widthSeparator = includeWidth && (includeStyle || includeCaps || includeWeight) ? " "_s : ""_s;
+    auto width = includeWidth ? nameLiteral(widthKeyword) : ""_s;
+    auto sizeSeparator = includeStyle || includeCaps || includeWeight || includeWidth ? " "_s : ""_s;
     auto lineHeightSeparator = includeLineHeight ? " / "_s : ""_s;
     auto lineHeight = includeLineHeight ? serializeLonghandValue(lineHeightIndex) : String();
 
     return makeString(style,
         capsSeparator, caps,
         weightSeparator, weight,
-        stretchSeparator, stretch,
+        widthSeparator, width,
         sizeSeparator, serializeLonghandValue(sizeIndex),
         lineHeightSeparator, lineHeight,
         ' ', serializeLonghandValue(familyIndex));
@@ -1413,5 +1424,3 @@ String serializeShorthandValue(const ComputedStyleExtractor& extractor, CSSPrope
 }
 
 }
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

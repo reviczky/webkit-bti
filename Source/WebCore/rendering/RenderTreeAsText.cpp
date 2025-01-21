@@ -302,7 +302,7 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
         if (borderTop || borderRight || borderBottom || borderLeft) {
             ts << " [border:";
 
-            auto printBorder = [&ts, &o] (const LayoutUnit& width, const BorderStyle& style, const StyleColor& color) {
+            auto printBorder = [&ts, &o] (const LayoutUnit& width, const BorderStyle& style, const Style::Color& color) {
                 if (!width)
                     ts << " none";
                 else {
@@ -356,7 +356,7 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
         ts << " [r=" << cell->rowIndex() << " c=" << cell->col() << " rs=" << cell->rowSpan() << " cs=" << cell->colSpan() << "]";
 
     if (auto* listMarker = dynamicDowncast<RenderListMarker>(o)) {
-        String text = listMarker->textWithoutSuffix().toString();
+        auto text = listMarker->textWithoutSuffix();
         if (!text.isEmpty()) {
             if (text.length() != 1)
                 text = quoteAndEscapeNonPrintables(text);
@@ -897,7 +897,7 @@ String markerTextForListItem(Element* element)
     auto* renderer = dynamicDowncast<RenderListItem>(element->renderer());
     if (!renderer)
         return String();
-    return renderer->markerTextWithoutSuffix().toString();
+    return renderer->markerTextWithoutSuffix();
 }
 
 } // namespace WebCore

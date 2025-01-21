@@ -72,6 +72,7 @@
 #include <objidl.h>
 #include <mlang.h>
 struct IDWriteFactory;
+struct IDWriteFontCollection;
 #endif
 
 #if USE(FREETYPE)
@@ -253,14 +254,14 @@ private:
 #endif
 
 #if PLATFORM(MAC)
-    HashSet<AtomString> m_knownFamilies;
+    UncheckedKeyHashSet<AtomString> m_knownFamilies;
 #endif
 
 #if PLATFORM(COCOA)
     FontDatabase m_databaseAllowingUserInstalledFonts { AllowUserInstalledFonts::Yes };
     FontDatabase m_databaseDisallowingUserInstalledFonts { AllowUserInstalledFonts::No };
 
-    using FallbackFontSet = HashSet<RetainPtr<CTFontRef>, WTF::RetainPtrObjectHash<CTFontRef>, WTF::RetainPtrObjectHashTraits<CTFontRef>>;
+    using FallbackFontSet = UncheckedKeyHashSet<RetainPtr<CTFontRef>, WTF::RetainPtrObjectHash<CTFontRef>, WTF::RetainPtrObjectHashTraits<CTFontRef>>;
     FallbackFontSet m_fallbackFonts;
 
     ListHashSet<String> m_seenFamiliesForPrewarming;
@@ -283,7 +284,11 @@ private:
 #endif
 
 #if PLATFORM(WIN) && USE(SKIA)
-    COMPtr<IDWriteFactory> m_DWFactory;
+    struct CreateDWriteFactoryResult {
+        COMPtr<IDWriteFactory> factory;
+        COMPtr<IDWriteFontCollection> fontCollection;
+    };
+    static CreateDWriteFactoryResult createDWriteFactory();
 #endif
 
     friend class Font;

@@ -36,6 +36,7 @@
 #include "CSSValueList.h"
 #include "CSSValuePool.h"
 #include "CachedResourceLoader.h"
+#include "CaretRectComputation.h"
 #include "ChangeListTypeCommand.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
@@ -135,6 +136,7 @@
 #include <wtf/SetForScope.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
+#include <wtf/text/ParsingUtilities.h>
 #include <wtf/unicode/CharacterNames.h>
 
 #if PLATFORM(MAC)
@@ -537,7 +539,7 @@ bool Editor::canCopy() const
     if (imageElementFromImageDocument(document()))
         return true;
     const VisibleSelection& selection = document().selection().selection();
-    return selection.isRange() && (!selection.isInPasswordField() || selection.isInAutoFilledAndViewableField());
+    return (selection.isRange() || !isEditablePosition(selection.start())) && (!selection.isInPasswordField() || selection.isInAutoFilledAndViewableField());
 }
 
 bool Editor::canDelete() const
@@ -805,7 +807,7 @@ bool Editor::tryDHTMLCut()
 bool Editor::shouldInsertText(const String& text, const std::optional<SimpleRange>& range, EditorInsertAction action) const
 {
     // FIXME(273431): shouldSuppressTextInputFromEditing does not work with site isolation.
-    RefPtr localFrame = dynamicDowncast<LocalFrame>(document().frame()->mainFrame());
+    RefPtr localFrame = document().localMainFrame();
     if (localFrame && localFrame->loader().shouldSuppressTextInputFromEditing() && action == EditorInsertAction::Typed)
         return false;
 
@@ -817,7 +819,7 @@ void Editor::respondToChangedContents(const VisibleSelection& endingSelection)
     if (AXObjectCache::accessibilityEnabled()) {
         auto node = endingSelection.start().protectedDeprecatedNode();
         if (AXObjectCache* cache = document().existingAXObjectCache())
-            cache->postNotification(node.get(), AXObjectCache::AXValueChanged, PostTarget::ObservableParent);
+            cache->postNotification(node.get(), AXNotification::ValueChanged, PostTarget::ObservableParent);
     }
 
     updateMarkersForWordsAffectedByEditing(true);
@@ -985,7 +987,15 @@ RefPtr<Element> Editor::findEventTargetFrom(const VisibleSelection& selection) c
 
 RefPtr<Element> Editor::findEventTargetFromSelection() const
 {
-    return findEventTargetFrom(document().selection().selection());
+    // https://www.w3.org/TR/clipboard-apis/#fire-a-clipboard-event says:
+    // If the context is editable, then
+    // Set target to be the element that contains the start of the visible selection or cursor in document order, or the body element if there is no visible selection or cursor.
+    const VisibleSelection& selection = document().selection().selection();
+    if (selection.isRange() || isEditablePosition(selection.start()))
+        return findEventTargetFrom(selection);
+    // Else, if the context is not editable, then
+    // Set target to the focused node, or the body element if no node has focus.
+    return document().activeElement();
 }
 
 void Editor::applyStyle(StyleProperties* style, EditAction editingAction)
@@ -1601,7 +1611,7 @@ void Editor::performCutOrCopy(EditorActionSpecifier action)
             writeSelectionToPasteboard(*Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(document->pageID())));
 #else
             // FIXME: Delete after <http://webkit.org/b/177618> lands.
-            Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(document->pageID()))->writeSelection(*selection, canSmartCopyOrDelete(), *document->frame(), IncludeImageAltTextForDataTransfer);
+            Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(document->pageID()))->writeSelection(selection, canSmartCopyOrDelete(), *document->frame(), IncludeImageAltTextForDataTransfer);
 #endif
         }
     }
@@ -3269,7 +3279,7 @@ void Editor::markAndReplaceFor(const SpellCheckRequest& request, const Vector<Te
 
                 if (AXObjectCache* cache = document->existingAXObjectCache()) {
                     if (RefPtr root = document->selection().selection().rootEditableElement())
-                        cache->postNotification(root.get(), AXObjectCache::AXAutocorrectionOccured);
+                        cache->postNotification(root.get(), AXNotification::AutocorrectionOccured);
                 }
 
                 // Skip all other results for the replaced text.
@@ -4119,7 +4129,7 @@ static Vector<SimpleRange> scanForTelephoneNumbers(const SimpleRange& range)
         auto scannerPosition = span.data() - characters.span().data();
         ASSERT(scannerPosition + relativeEndPosition <= text.length());
         result.append(resolveCharacterRange(range, CharacterRange(scannerPosition + relativeStartPosition, relativeEndPosition - relativeStartPosition)));
-        span = span.subspan(relativeEndPosition);
+        skip(span, relativeEndPosition);
     }
     return result;
 }
@@ -4505,7 +4515,7 @@ FontAttributes Editor::fontAttributesAtSelectionStart()
         attributes.foregroundColor = foregroundColor;
 
     if (auto* shadowData = style->textShadow())
-        attributes.fontShadow = { style->colorWithColorFilter(shadowData->color()), { shadowData->x().value(), shadowData->y().value() }, shadowData->radius().value() };
+        attributes.fontShadow = { style->colorWithColorFilter(shadowData->color()), { shadowData->x().value, shadowData->y().value }, shadowData->radius().value };
 
     switch (style->verticalAlign()) {
     case VerticalAlign::Baseline:

@@ -162,6 +162,7 @@
 #include "JSPromise.h"
 #include "JSPromiseConstructor.h"
 #include "JSPromisePrototype.h"
+#include "JSRawJSONObject.h"
 #include "JSRegExpStringIteratorInlines.h"
 #include "JSRemoteFunctionInlines.h"
 #include "JSSetInlines.h"
@@ -348,7 +349,7 @@ static JSValue createProxyProperty(VM& vm, JSObject* object)
 static JSValue createJSONProperty(VM& vm, JSObject* object)
 {
     JSGlobalObject* global = jsCast<JSGlobalObject*>(object);
-    return JSONObject::create(vm, JSONObject::createStructure(vm, global, global->objectPrototype()));
+    return JSONObject::create(vm, global, JSONObject::createStructure(vm, global, global->objectPrototype()));
 }
 
 static JSValue createMathProperty(VM& vm, JSObject* object)
@@ -630,6 +631,7 @@ const GlobalObjectMethodTable* JSGlobalObject::baseGlobalObjectMethodTable()
         &deriveShadowRealmGlobalObject,
         &codeForEval,
         &canCompileStrings,
+        &trustedScriptStructure,
     };
     return &table;
 };
@@ -1024,6 +1026,10 @@ void JSGlobalObject::init(VM& vm)
         [] (const Initializer<Structure>& init) {
             init.set(JSCallbackObject<JSNonFinalObject>::createStructure(init.vm, init.owner, init.owner->m_objectPrototype.get()));
         });
+    m_rawJSONObjectStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            init.set(JSRawJSONObject::createStructure(init.vm, init.owner, jsNull()));
+        });
 
 #if JSC_OBJC_API_ENABLED
     m_objcCallbackFunctionStructure.initLater(
@@ -1075,6 +1081,8 @@ void JSGlobalObject::init(VM& vm)
     m_regExpMatchesArrayStructure.set(vm, this, createRegExpMatchesArrayStructure(vm, this));
     m_regExpMatchesArrayWithIndicesStructure.set(vm, this, createRegExpMatchesArrayWithIndicesStructure(vm, this));
     m_regExpMatchesIndicesArrayStructure.set(vm, this, createRegExpMatchesIndicesArrayStructure(vm, this));
+
+    m_trustedScriptStructure.setMayBeNull(vm, this, globalObjectMethodTable()->trustedScriptStructure(this));
 
     m_moduleRecordStructure.initLater(
         [] (const Initializer<Structure>& init) {
@@ -1491,10 +1499,6 @@ capitalName ## Constructor* lowerName ## Constructor = featureFlag ? capitalName
             init.set(JSModuleLoader::create(init.owner, init.vm, JSModuleLoader::createStructure(init.vm, init.owner, jsNull())));
             catchScope.releaseAssertNoException();
         });
-    m_importMapStatusPromise.initLater(
-        [](const Initializer<JSInternalPromise>& init) {
-            init.set(JSInternalPromise::create(init.vm, init.owner->internalPromiseStructure()));
-        });
     if (Options::exposeInternalModuleLoader())
         putDirectWithoutTransition(vm, vm.propertyNames->Loader, moduleLoader(), static_cast<unsigned>(PropertyAttribute::DontEnum));
 
@@ -1543,10 +1547,6 @@ capitalName ## Constructor* lowerName ## Constructor = featureFlag ? capitalName
         catchScope.assertNoException();
         RELEASE_ASSERT(!!jsDynamicCast<JSFunction*>(hasOwnPropertyFunction));
         m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::hasOwnPropertyFunction)].set(vm, this, jsCast<JSFunction*>(hasOwnPropertyFunction));
-    }
-    {
-        JSFunction* arraySort = jsCast<JSFunction*>(arrayPrototype()->getDirect(vm, vm.propertyNames->sort));
-        m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::arraySort)].set(vm, this, jsCast<JSFunction*>(arraySort));
     }
 
 #define INIT_PRIVATE_GLOBAL(funcName, code) \
@@ -1710,9 +1710,6 @@ capitalName ## Constructor* lowerName ## Constructor = featureFlag ? capitalName
         });
     m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::hostPromiseRejectionTracker)].initLater([] (const Initializer<JSCell>& init) {
             init.set(JSFunction::create(init.vm, jsCast<JSGlobalObject*>(init.owner), 2, "hostPromiseRejectionTracker"_s, globalFuncHostPromiseRejectionTracker, ImplementationVisibility::Private));
-        });
-    m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::importMapStatus)].initLater([] (const Initializer<JSCell>& init) {
-            init.set(JSFunction::create(init.vm, jsCast<JSGlobalObject*>(init.owner), 0, "importMapStatus"_s, globalFuncImportMapStatus, ImplementationVisibility::Private));
         });
     m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::importInRealm)].initLater([] (const Initializer<JSCell>& init) {
             init.set(JSFunction::create(init.vm, jsCast<JSGlobalObject*>(init.owner), 0, "importInRealm"_s, importInRealm, ImplementationVisibility::Private));
@@ -2137,21 +2134,21 @@ public:
     IterationStatus operator()(HeapCell*, HeapCell::Kind) const;
 
     void addDependency(JSGlobalObject* key, JSGlobalObject* dependent);
-    HashSet<JSGlobalObject*>* dependentsFor(JSGlobalObject* key);
+    UncheckedKeyHashSet<JSGlobalObject*>* dependentsFor(JSGlobalObject* key);
 
 private:
     void visit(JSObject*);
 
-    UncheckedKeyHashMap<JSGlobalObject*, HashSet<JSGlobalObject*>> m_dependencies;
+    UncheckedKeyHashMap<JSGlobalObject*, UncheckedKeyHashSet<JSGlobalObject*>> m_dependencies;
 };
 
 inline void GlobalObjectDependencyFinder::addDependency(JSGlobalObject* key, JSGlobalObject* dependent)
 {
-    auto keyResult = m_dependencies.add(key, HashSet<JSGlobalObject*>());
+    auto keyResult = m_dependencies.add(key, UncheckedKeyHashSet<JSGlobalObject*>());
     keyResult.iterator->value.add(dependent);
 }
 
-inline HashSet<JSGlobalObject*>* GlobalObjectDependencyFinder::dependentsFor(JSGlobalObject* key)
+inline UncheckedKeyHashSet<JSGlobalObject*>* GlobalObjectDependencyFinder::dependentsFor(JSGlobalObject* key)
 {
     auto iterator = m_dependencies.find(key);
     if (iterator == m_dependencies.end())
@@ -2197,7 +2194,7 @@ template<BadTimeFinderMode mode>
 class ObjectsWithBrokenIndexingFinder : public MarkedBlock::VoidFunctor {
 public:
     ObjectsWithBrokenIndexingFinder(Vector<JSObject*>&, JSGlobalObject*);
-    ObjectsWithBrokenIndexingFinder(Vector<JSObject*>&, HashSet<JSGlobalObject*>&);
+    ObjectsWithBrokenIndexingFinder(Vector<JSObject*>&, UncheckedKeyHashSet<JSGlobalObject*>&);
 
     bool needsMultiGlobalsScan() const { return m_needsMultiGlobalsScan; }
     IterationStatus operator()(HeapCell*, HeapCell::Kind) const;
@@ -2207,7 +2204,7 @@ private:
 
     Vector<JSObject*>& m_foundObjects;
     JSGlobalObject* const m_globalObject { nullptr }; // Only used for SingleBadTimeGlobal mode.
-    HashSet<JSGlobalObject*>* m_globalObjects { nullptr }; // Only used for BadTimeGlobalGraph mode;
+    UncheckedKeyHashSet<JSGlobalObject*>* m_globalObjects { nullptr }; // Only used for BadTimeGlobalGraph mode;
     bool m_needsMultiGlobalsScan { false };
 };
 
@@ -2219,7 +2216,7 @@ ObjectsWithBrokenIndexingFinder<BadTimeFinderMode::SingleGlobal>::ObjectsWithBro
 }
 
 template<>
-ObjectsWithBrokenIndexingFinder<BadTimeFinderMode::MultipleGlobals>::ObjectsWithBrokenIndexingFinder(Vector<JSObject*>& foundObjects, HashSet<JSGlobalObject*>& globalObjects)
+ObjectsWithBrokenIndexingFinder<BadTimeFinderMode::MultipleGlobals>::ObjectsWithBrokenIndexingFinder(Vector<JSObject*>& foundObjects, UncheckedKeyHashSet<JSGlobalObject*>& globalObjects)
     : m_foundObjects(foundObjects)
     , m_globalObjects(&globalObjects)
 {
@@ -2492,7 +2489,7 @@ void JSGlobalObject::haveABadTime(VM& vm)
             vm.heap.objectSpace().forEachLiveCell(iterationScope, dependencies);
         }
 
-        HashSet<JSGlobalObject*> globalsHavingABadTime;
+        UncheckedKeyHashSet<JSGlobalObject*> globalsHavingABadTime;
         Deque<JSGlobalObject*> globals;
 
         globals.append(this);
@@ -2501,7 +2498,7 @@ void JSGlobalObject::haveABadTime(VM& vm)
             global->fireWatchpointAndMakeAllArrayStructuresSlowPut(vm); // Step 1 above.
             auto result = globalsHavingABadTime.add(global);
             if (result.isNewEntry) {
-                if (HashSet<JSGlobalObject*>* dependents = dependencies.dependentsFor(global)) {
+                if (UncheckedKeyHashSet<JSGlobalObject*>* dependents = dependencies.dependentsFor(global)) {
                     for (JSGlobalObject* dependentGlobal : *dependents)
                         globals.append(dependentGlobal);
                 }
@@ -2654,6 +2651,7 @@ void JSGlobalObject::visitChildrenImpl(JSCell* cell, Visitor& visitor)
     thisObject->m_callbackConstructorStructure.visit(visitor);
     thisObject->m_callbackFunctionStructure.visit(visitor);
     thisObject->m_callbackObjectStructure.visit(visitor);
+    thisObject->m_rawJSONObjectStructure.visit(visitor);
 #if JSC_OBJC_API_ENABLED
     thisObject->m_objcCallbackFunctionStructure.visit(visitor);
     thisObject->m_objcWrapperObjectStructure.visit(visitor);
@@ -2674,6 +2672,7 @@ void JSGlobalObject::visitChildrenImpl(JSCell* cell, Visitor& visitor)
     visitFunctionStructures(thisObject->m_builtinFunctions);
     visitFunctionStructures(thisObject->m_ordinaryFunctions);
     visitor.append(thisObject->m_boundFunctionStructure);
+    visitor.append(thisObject->m_trustedScriptStructure);
 
     thisObject->m_customGetterFunctionStructure.visit(visitor);
     thisObject->m_customSetterFunctionStructure.visit(visitor);
@@ -2707,7 +2706,6 @@ void JSGlobalObject::visitChildrenImpl(JSCell* cell, Visitor& visitor)
     thisObject->m_callableProxyObjectStructure.visit(visitor);
     thisObject->m_proxyRevokeStructure.visit(visitor);
     thisObject->m_sharedArrayBufferStructure.visit(visitor);
-    thisObject->m_importMapStatusPromise.visit(visitor);
 
     for (auto& property : thisObject->m_linkTimeConstants)
         property.visit(visitor);
@@ -3324,29 +3322,6 @@ void JSGlobalObject::setDebugger(Debugger* debugger)
 bool JSGlobalObject::hasInteractiveDebugger() const 
 { 
     return m_debugger && m_debugger->isInteractivelyDebugging();
-}
-
-bool JSGlobalObject::isAcquiringImportMaps() const
-{
-    return m_importMap->isAcquiringImportMaps();
-}
-
-void JSGlobalObject::setAcquiringImportMaps()
-{
-    m_importMap->setAcquiringImportMaps();
-}
-
-void JSGlobalObject::setPendingImportMaps()
-{
-    m_importMapStatusPromise.get(this);
-}
-
-void JSGlobalObject::clearPendingImportMaps()
-{
-    if (!m_importMapStatusPromise.isInitialized())
-        return;
-    auto* promise = m_importMapStatusPromise.get(this);
-    promise->resolve(this, jsUndefined());
 }
 
 #if ENABLE(DFG_JIT)

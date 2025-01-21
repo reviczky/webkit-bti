@@ -83,9 +83,9 @@ struct EditorState {
     bool isContentEditable { false };
     bool isContentRichlyEditable { false };
     bool isInPasswordField { false };
-    bool isInPlugin { false };
     bool hasComposition { false };
     bool triggeredByAccessibilitySelectionChange { false };
+    bool isInPlugin { false };
 #if PLATFORM(MAC)
     bool canEnableAutomaticSpellingCorrection { true };
 #endif
@@ -159,7 +159,9 @@ struct EditorState {
         WebCore::IntRect markedTextCaretRectAtEnd;
         std::optional<WebCore::PlatformLayerIdentifier> enclosingLayerID;
         std::optional<WebCore::ScrollingNodeID> enclosingScrollingNodeID;
-        WebCore::ScrollPosition enclosingScrollPosition;
+        std::optional<WebCore::ScrollingNodeID> scrollingNodeIDAtStart;
+        std::optional<WebCore::ScrollingNodeID> scrollingNodeIDAtEnd;
+        WebCore::ScrollOffset enclosingScrollOffset;
 #endif // PLATFORM(IOS_FAMILY)
     };
 

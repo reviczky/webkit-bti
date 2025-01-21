@@ -123,29 +123,42 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
         return jsUndefined();
 
     JSValue program = callFrame->argument(0);
-    JSString* programString = nullptr;
-    if (LIKELY(program.isString()))
-        programString = asString(program);
-    else if (Options::useTrustedTypes()) {
-        auto code = globalObject->globalObjectMethodTable()->codeForEval(globalObject, program);
-        if (!code.isNull())
-            programString = jsString(vm, code);
+    String programSource;
+    bool isTrusted = false;
+    if (LIKELY(program.isString())) {
+        programSource = program.toWTFString(globalObject);
+        RETURN_IF_EXCEPTION(scope, JSValue());
+    } else if (Options::useTrustedTypes() && program.isObject()) {
+        auto* structure = globalObject->trustedScriptStructure();
+        if (structure == asObject(program)->structure()) {
+            programSource = program.toWTFString(globalObject);
+            RETURN_IF_EXCEPTION(scope, { });
+            isTrusted = true;
+        } else {
+            auto code = globalObject->globalObjectMethodTable()->codeForEval(globalObject, program);
+            RETURN_IF_EXCEPTION(scope, { });
+            if (!code.isNull()) {
+                programSource = code;
+                isTrusted = true;
+            }
+        }
     }
 
-    if (!programString)
+    if (programSource.isNull())
         return program;
 
-    auto programSource = programString->value(globalObject);
-    RETURN_IF_EXCEPTION(scope, JSValue());
-
-    if (Options::useTrustedTypes() && globalObject->requiresTrustedTypes() && !globalObject->globalObjectMethodTable()->canCompileStrings(globalObject, CompilationType::DirectEval, programSource, program)) {
-        throwException(globalObject, scope, createEvalError(globalObject, "Refused to evaluate a string as JavaScript because this document requires a 'Trusted Type' assignment."_s));
-        return { };
+    if (Options::useTrustedTypes() && globalObject->requiresTrustedTypes() && !isTrusted) {
+        bool canCompileStrings = globalObject->globalObjectMethodTable()->canCompileStrings(globalObject, CompilationType::DirectEval, programSource, *vm.emptyList);
+        RETURN_IF_EXCEPTION(scope, { });
+        if (!canCompileStrings) {
+            throwException(globalObject, scope, createEvalError(globalObject, "Refused to evaluate a string as JavaScript because this document requires a 'Trusted Type' assignment."_s));
+            return { };
+        }
     }
 
     TopCallFrameSetter topCallFrame(vm, callFrame);
     if (!globalObject->evalEnabled()) {
-        globalObject->globalObjectMethodTable()->reportViolationForUnsafeEval(globalObject, programString);
+        globalObject->globalObjectMethodTable()->reportViolationForUnsafeEval(globalObject, programSource);
         throwException(globalObject, scope, createEvalError(globalObject, globalObject->evalDisabledErrorMessage()));
         return { };
     }
@@ -172,13 +185,13 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
     DirectEvalExecutable* eval = callerBaselineCodeBlock->directEvalCodeCache().tryGet(programSource, bytecodeIndex);
     if (!eval) {
         if (!(lexicallyScopedFeatures & StrictModeLexicallyScopedFeature)) {
-            if (programSource->is8Bit()) {
-                LiteralParser preparser(globalObject, programSource->span8(), SloppyJSON, callerBaselineCodeBlock);
+            if (programSource.is8Bit()) {
+                LiteralParser<LChar, JSONReviverMode::Disabled> preparser(globalObject, programSource.span8(), SloppyJSON, callerBaselineCodeBlock);
                 if (JSValue parsedObject = preparser.tryLiteralParse())
                     RELEASE_AND_RETURN(scope, parsedObject);
 
             } else {
-                LiteralParser preparser(globalObject, programSource->span16(), SloppyJSON, callerBaselineCodeBlock);
+                LiteralParser<UChar, JSONReviverMode::Disabled> preparser(globalObject, programSource.span16(), SloppyJSON, callerBaselineCodeBlock);
                 if (JSValue parsedObject = preparser.tryLiteralParse())
                     RELEASE_AND_RETURN(scope, parsedObject);
 
@@ -669,10 +682,11 @@ CatchInfo::CatchInfo(const Wasm::HandlerInfo* handler, const Wasm::Callee* calle
 
 class UnwindFunctor {
 public:
-    UnwindFunctor(VM& vm, CallFrame*& callFrame, bool isTermination, JSValue thrownValue, CodeBlock*& codeBlock, CatchInfo& handler, JSRemoteFunction*& seenRemoteFunction)
+    UnwindFunctor(VM& vm, CallFrame*& callFrame, Exception* exception, JSValue thrownValue, CodeBlock*& codeBlock, CatchInfo& handler, JSRemoteFunction*& seenRemoteFunction)
         : m_vm(vm)
         , m_callFrame(callFrame)
-        , m_isTermination(isTermination)
+        , m_exception(exception)
+        , m_isTermination(vm.isTerminationException(exception))
         , m_codeBlock(codeBlock)
         , m_handler(handler)
         , m_seenRemoteFunction(seenRemoteFunction)
@@ -715,12 +729,22 @@ public:
 #if ENABLE(WEBASSEMBLY)
                 if (m_catchableFromWasm) {
                     auto* wasmCallee = static_cast<Wasm::Callee*>(nativeCallee);
+                    if (wasmCallee->compilationMode() == Wasm::CompilationMode::WasmToJSMode) {
+                        // https://webassembly.github.io/exception-handling/js-api/#create-a-host-function
+                        if (!m_wasmTag)
+                            m_wasmTag = &Wasm::Tag::jsExceptionTag();
+                    }
+
                     if (wasmCallee->hasExceptionHandlers()) {
                         JSWebAssemblyInstance* instance = m_callFrame->wasmInstance();
                         unsigned exceptionHandlerIndex = m_callFrame->callSiteIndex().bits();
-                        m_handler = { wasmCallee->handlerForIndex(*instance, exceptionHandlerIndex, m_wasmTag), wasmCallee };
-                        if (m_handler.m_valid)
+                        auto* wasmHandler = wasmCallee->handlerForIndex(*instance, exceptionHandlerIndex, m_wasmTag.get());
+                        m_handler = { wasmHandler, wasmCallee };
+                        if (m_handler.m_valid) {
+                            if (m_wasmTag == &Wasm::Tag::jsExceptionTag())
+                                m_exception->wrapValueForJSTag(instance->globalObject());
                             return IterationStatus::Done;
+                        }
                     }
                 }
 #endif
@@ -738,7 +762,8 @@ public:
             m_seenRemoteFunction = jsCast<JSRemoteFunction*>(m_callFrame->jsCallee());
         }
 
-        notifyDebuggerOfUnwinding(m_vm, m_callFrame);
+        JSGlobalObject* globalObject = m_callFrame->lexicalGlobalObject(m_vm);
+        notifyDebuggerOfUnwinding(globalObject, m_vm, m_callFrame);
 
         copyCalleeSavesToEntryFrameCalleeSavesBuffer(visitor);
 
@@ -800,9 +825,8 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
-    ALWAYS_INLINE static void notifyDebuggerOfUnwinding(VM& vm, CallFrame* callFrame)
+    ALWAYS_INLINE static void notifyDebuggerOfUnwinding(JSGlobalObject* globalObject, VM& vm, CallFrame* callFrame)
     {
-        JSGlobalObject* globalObject = callFrame->lexicalGlobalObject(vm);
         Debugger* debugger = globalObject->debugger();
         if (LIKELY(!debugger))
             return;
@@ -821,11 +845,12 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     VM& m_vm;
     CallFrame*& m_callFrame;
+    Exception* m_exception;
     bool m_isTermination;
     CodeBlock*& m_codeBlock;
     CatchInfo& m_handler;
 #if ENABLE(WEBASSEMBLY)
-    const Wasm::Tag* m_wasmTag { nullptr };
+    mutable RefPtr<const Wasm::Tag> m_wasmTag;
     bool m_catchableFromWasm { false };
 #endif
 
@@ -903,7 +928,7 @@ NEVER_INLINE CatchInfo Interpreter::unwind(VM& vm, CallFrame*& callFrame, Except
     // Calculate an exception handler vPC, unwinding call frames as necessary.
     CatchInfo catchInfo;
     JSRemoteFunction* seenRemoteFunction = nullptr;
-    UnwindFunctor functor(vm, callFrame, vm.isTerminationException(exception), exceptionValue, codeBlock, catchInfo, seenRemoteFunction);
+    UnwindFunctor functor(vm, callFrame, exception, exceptionValue, codeBlock, catchInfo, seenRemoteFunction);
     StackVisitor::visit<StackVisitor::TerminateIfTopEntryFrameIsEmpty>(callFrame, vm, functor);
 
     if (seenRemoteFunction) {
@@ -993,10 +1018,10 @@ JSValue Interpreter::executeProgram(const SourceCode& source, JSGlobalObject*, J
     if (programSource.isNull())
         return jsUndefined();
     if (programSource.is8Bit()) {
-        LiteralParser literalParser(globalObject, programSource.span8(), JSONP);
+        LiteralParser<LChar, JSONReviverMode::Disabled> literalParser(globalObject, programSource.span8(), JSONP);
         parseResult = literalParser.tryJSONPParse(JSONPData, globalObject->globalObjectMethodTable()->supportsRichSourceInfo(globalObject));
     } else {
-        LiteralParser literalParser(globalObject, programSource.span16(), JSONP);
+        LiteralParser<UChar, JSONReviverMode::Disabled> literalParser(globalObject, programSource.span16(), JSONP);
         parseResult = literalParser.tryJSONPParse(JSONPData, globalObject->globalObjectMethodTable()->supportsRichSourceInfo(globalObject));
     }
 

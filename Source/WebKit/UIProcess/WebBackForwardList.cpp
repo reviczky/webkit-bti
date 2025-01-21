@@ -63,21 +63,17 @@ WebBackForwardList::~WebBackForwardList()
     ASSERT((!m_page && !provisionalOrCurrentIndex()) || !m_page->hasRunningProcess());
 }
 
-WebBackForwardListItem* WebBackForwardList::itemForID(const BackForwardItemIdentifier& identifier)
+WebBackForwardListItem* WebBackForwardList::itemForID(BackForwardItemIdentifier identifier)
 {
     if (!m_page)
         return nullptr;
 
-    RefPtr frameItem = WebBackForwardListFrameItem::itemForID(identifier);
-    if (!frameItem)
-        return nullptr;
-
-    auto* item = frameItem->backForwardListItem();
+    RefPtr item = WebBackForwardListItem::itemForID(identifier);
     if (!item)
         return nullptr;
 
     ASSERT(item->pageID() == m_page->identifier());
-    return item;
+    return item.get();
 }
 
 void WebBackForwardList::pageClosed()
@@ -119,6 +115,21 @@ void WebBackForwardList::addItem(Ref<WebBackForwardListItem>&& newItem)
             didRemoveItem(m_entries.last());
             removedItems.append(WTFMove(m_entries.last()));
             m_entries.removeLast();
+        }
+
+        while (m_entries.size()) {
+            Ref lastEntry = m_entries.last();
+            if (!lastEntry->isRemoteFrameNavigation() || lastEntry->navigatedFrameItem().sharesAncestor(newItem->navigatedFrameItem()))
+                break;
+            didRemoveItem(lastEntry);
+            removedItems.append(WTFMove(lastEntry));
+            m_entries.removeLast();
+
+            if (m_entries.isEmpty()) {
+                m_currentIndex = std::nullopt;
+                m_provisionalIndex = std::nullopt;
+            } else
+                setProvisionalOrCurrentIndex(*provisionalOrCurrentIndex() - 1);
         }
 
         // Toss the first item if the list is getting too big, as long as we're not using it
@@ -210,7 +221,7 @@ void WebBackForwardList::goToItemInternal(WebBackForwardListItem& item, std::opt
 
     // If the target item wasn't even in the list, there's nothing else to do.
     if (targetIndex == notFound) {
-        LOG(BackForward, "(Back/Forward) WebBackForwardList %p could not go to item %s (%s) because it was not found", this, item.itemID().toString().utf8().data(), item.url().utf8().data());
+        LOG(BackForward, "(Back/Forward) WebBackForwardList %p could not go to item %s (%s) because it was not found", this, item.identifier().toString().utf8().data(), item.url().utf8().data());
         return;
     }
 
@@ -246,7 +257,7 @@ void WebBackForwardList::goToItemInternal(WebBackForwardListItem& item, std::opt
 
     indexToUpdate = targetIndex;
 
-    LOG(BackForward, "(Back/Forward) WebBackForwardList %p going to item %s, is now at index %zu", this, item.itemID().toString().utf8().data(), targetIndex);
+    LOG(BackForward, "(Back/Forward) WebBackForwardList %p going to item %s, is now at index %zu", this, item.identifier().toString().utf8().data(), targetIndex);
     page->didChangeBackForwardList(nullptr, WTFMove(removedItems));
 }
 
@@ -260,6 +271,22 @@ void WebBackForwardList::clearProvisionalItem(WebBackForwardListFrameItem& frame
         return;
 
     m_provisionalIndex = std::nullopt;
+}
+
+void WebBackForwardList::commitProvisionalItem(WebBackForwardListFrameItem& frameItem)
+{
+    if (!m_provisionalIndex)
+        return;
+
+    if (m_entries[*m_provisionalIndex].ptr() != frameItem.backForwardListItem())
+        return;
+
+    if (*m_provisionalIndex >= m_entries.size()) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    m_currentIndex = std::exchange(m_provisionalIndex, std::nullopt);
 }
 
 WebBackForwardListItem* WebBackForwardList::currentItem() const
@@ -460,7 +487,7 @@ BackForwardListState WebBackForwardList::backForwardListState(WTF::Function<bool
             continue;
         }
 
-        backForwardListState.items.append(entry->rootFrameState());
+        backForwardListState.items.append(entry->navigatedFrameState());
     }
 
     if (backForwardListState.items.isEmpty())
@@ -471,11 +498,12 @@ BackForwardListState WebBackForwardList::backForwardListState(WTF::Function<bool
     return backForwardListState;
 }
 
-static inline void setBackForwardItemIdentifiers(FrameState& frameState)
+static inline void setBackForwardItemIdentifiers(FrameState& frameState, BackForwardItemIdentifier itemID)
 {
-    frameState.identifier = BackForwardItemIdentifier::generate();
+    frameState.itemID = itemID;
+    frameState.frameItemID = BackForwardFrameItemIdentifier::generate();
     for (auto& child : frameState.children)
-        setBackForwardItemIdentifiers(child);
+        setBackForwardItemIdentifiers(child, itemID);
 }
 
 void WebBackForwardList::restoreFromState(BackForwardListState backForwardListState)
@@ -483,11 +511,15 @@ void WebBackForwardList::restoreFromState(BackForwardListState backForwardListSt
     if (!m_page)
         return;
 
+    m_provisionalIndex = std::nullopt;
+
     // FIXME: Enable restoring resourceDirectoryURL.
     m_entries = WTF::map(WTFMove(backForwardListState.items), [this](auto&& state) {
         Ref stateCopy = state->copy();
-        setBackForwardItemIdentifiers(stateCopy);
-        return WebBackForwardListItem::create(WTFMove(stateCopy), m_page->identifier());
+        setBackForwardItemIdentifiers(stateCopy, BackForwardItemIdentifier::generate());
+        m_currentIndex = m_entries.isEmpty() ? std::nullopt : std::optional(m_entries.size() - 1);
+        auto navigatedFrameID = stateCopy->frameID;
+        return WebBackForwardListItem::create(completeFrameStateForNavigation(WTFMove(stateCopy)), m_page->identifier(), navigatedFrameID);
     });
     m_currentIndex = backForwardListState.currentIndex ? std::optional<size_t>(*backForwardListState.currentIndex) : std::nullopt;
 
@@ -513,7 +545,7 @@ void WebBackForwardList::didRemoveItem(WebBackForwardListItem& backForwardListIt
 {
     backForwardListItem.wasRemovedFromBackForwardList();
 
-    protectedPage()->backForwardRemovedItem(backForwardListItem.itemID());
+    protectedPage()->backForwardRemovedItem(backForwardListItem.identifier());
 
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     backForwardListItem.setSnapshot(nullptr);
@@ -600,6 +632,35 @@ void WebBackForwardList::setProvisionalOrCurrentIndex(size_t index)
         return;
     }
     m_currentIndex = index;
+}
+
+static inline void setBackForwardItemIdentifier(FrameState& frameState, BackForwardItemIdentifier itemID)
+{
+    frameState.itemID = itemID;
+    for (auto& child : frameState.children)
+        setBackForwardItemIdentifier(child, itemID);
+}
+
+Ref<FrameState> WebBackForwardList::completeFrameStateForNavigation(Ref<FrameState>&& navigatedFrameState)
+{
+    RefPtr currentItem = this->currentItem();
+    if (!currentItem)
+        return navigatedFrameState;
+
+    auto navigatedFrameID = navigatedFrameState->frameID;
+    if (!navigatedFrameID)
+        return navigatedFrameState;
+
+    if (currentItem->mainFrameItem().frameID() == navigatedFrameID)
+        return navigatedFrameState;
+
+    if (!currentItem->mainFrameItem().childItemForFrameID(*navigatedFrameID))
+        return navigatedFrameState;
+
+    Ref frameState = currentItem->mainFrameState();
+    setBackForwardItemIdentifier(frameState, *navigatedFrameState->itemID);
+    frameState->replaceChildFrameState(WTFMove(navigatedFrameState));
+    return frameState;
 }
 
 #if !LOG_DISABLED

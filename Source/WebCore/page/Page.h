@@ -58,7 +58,9 @@
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/OptionSet.h>
+#include <wtf/ProcessID.h>
 #include <wtf/Ref.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/RobinHoodHashSet.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/URLHash.h>
@@ -88,7 +90,7 @@ namespace WTF {
 class SchedulePair;
 class TextStream;
 struct SchedulePairHash;
-using SchedulePairHashSet = HashSet<RefPtr<SchedulePair>, SchedulePairHash>;
+using SchedulePairHashSet = UncheckedKeyHashSet<RefPtr<SchedulePair>, SchedulePairHash>;
 }
 
 namespace WebCore {
@@ -117,6 +119,7 @@ class DOMRectList;
 class DatabaseProvider;
 class DeviceOrientationUpdateProvider;
 class DiagnosticLoggingClient;
+class DocumentSyncData;
 class CredentialRequestCoordinator;
 class DragCaretController;
 class DragController;
@@ -210,6 +213,7 @@ struct AXTreeData;
 struct ApplePayAMSUIRequest;
 struct AttributedString;
 struct CharacterRange;
+struct NavigationAPIMethodTracker;
 struct ProcessSyncData;
 struct SimpleRange;
 struct TextRecognitionResult;
@@ -223,6 +227,7 @@ enum class AdvancedPrivacyProtections : uint16_t;
 enum class CanWrap : bool;
 enum class DidWrap : bool;
 enum class DisabledAdaptations : uint8_t;
+enum class DocumentClass : uint16_t;
 enum class EventTrackingRegionsEventType : uint8_t;
 enum class FilterRenderingMode : uint8_t;
 enum class RouteSharingPolicy : uint8_t;
@@ -327,7 +332,7 @@ constexpr auto allRenderingUpdateSteps = updateRenderingSteps | OptionSet<Render
 };
 
 
-class Page : public RefCounted<Page>, public Supplementable<Page>, public CanMakeWeakPtr<Page> {
+class Page : public RefCountedAndCanMakeWeakPtr<Page>, public Supplementable<Page> {
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(Page, WEBCORE_EXPORT);
     WTF_MAKE_NONCOPYABLE(Page);
     friend class SettingsBase;
@@ -347,6 +352,7 @@ public:
     std::optional<PageIdentifier> identifier() const { return m_identifier; }
 
     WEBCORE_EXPORT uint64_t renderTreeSize() const;
+    WEBCORE_EXPORT void destroyRenderTrees();
 
     WEBCORE_EXPORT void setNeedsRecalcStyleInAllFrames();
 
@@ -370,14 +376,37 @@ public:
 
     EditorClient& editorClient() { return m_editorClient.get(); }
 
+    WEBCORE_EXPORT RefPtr<LocalFrame> localMainFrame();
+    WEBCORE_EXPORT RefPtr<const LocalFrame> localMainFrame() const;
+    WEBCORE_EXPORT RefPtr<Document> localTopDocument();
+    WEBCORE_EXPORT RefPtr<Document> localTopDocument() const;
+
     Frame& mainFrame() { return m_mainFrame.get(); }
     const Frame& mainFrame() const { return m_mainFrame.get(); }
     WEBCORE_EXPORT Ref<Frame> protectedMainFrame() const;
     WEBCORE_EXPORT void setMainFrame(Ref<Frame>&&);
-    const URL& mainFrameURL() const { return m_mainFrameURL; }
+    WEBCORE_EXPORT const URL& mainFrameURL() const;
     SecurityOrigin& mainFrameOrigin() const;
-    WEBCORE_EXPORT void setMainFrameURL(const URL&);
+
+    WEBCORE_EXPORT void setMainFrameURLAndOrigin(const URL&, RefPtr<SecurityOrigin>&&);
+#if ENABLE(DOM_AUDIO_SESSION)
+    void setAudioSessionType(DOMAudioSessionType);
+    DOMAudioSessionType audioSessionType() const;
+#endif
+    void setUserDidInteractWithPage(bool);
+    bool userDidInteractWithPage() const;
+    void setAutofocusProcessed();
+    bool autofocusProcessed() const;
+    bool topDocumentHasDocumentClass(DocumentClass) const;
+    void setTopDocumentHasFullscreenElement(bool);
+    WEBCORE_EXPORT bool topDocumentHasFullscreenElement();
+
+    bool hasInjectedUserScript();
+    WEBCORE_EXPORT void setHasInjectedUserScript();
+
     WEBCORE_EXPORT void updateProcessSyncData(const ProcessSyncData&);
+    WEBCORE_EXPORT void updateTopDocumentSyncData(Ref<DocumentSyncData>&&);
+
     WEBCORE_EXPORT void setMainFrameURLFragment(String&&);
     String mainFrameURLFragment() const { return m_mainFrameURLFragment; }
 
@@ -387,7 +416,11 @@ public:
     bool openedByDOMWithOpener() const { return m_openedByDOMWithOpener; }
     void setOpenedByDOMWithOpener(bool value) { m_openedByDOMWithOpener = value; }
 
+    const RegistrableDomain& openedByScriptDomain() const { return m_openedByScriptDomain; }
+    void setOpenedByScriptDomain(RegistrableDomain&& domain) { m_openedByScriptDomain = WTFMove(domain); }
+
     WEBCORE_EXPORT void goToItem(LocalFrame& rootFrame, HistoryItem&, FrameLoadType, ShouldTreatAsContinuingLoad);
+    void goToItemForNavigationAPI(LocalFrame& rootFrame, HistoryItem&, FrameLoadType, LocalFrame& triggeringFrame, NavigationAPIMethodTracker*);
 
     WEBCORE_EXPORT void setGroupName(const String&);
     WEBCORE_EXPORT const String& groupName() const;
@@ -607,8 +640,7 @@ public:
     void setEnclosedInScrollableAncestorView(bool f) { m_enclosedInScrollableAncestorView = f; }
 #endif
 
-    bool useSystemAppearance() const { return m_useSystemAppearance; }
-    WEBCORE_EXPORT void setUseSystemAppearance(bool);
+    WEBCORE_EXPORT void useSystemAppearanceChanged();
 
     WEBCORE_EXPORT bool useDarkAppearance() const;
     bool useElevatedUserInterfaceLevel() const { return m_useElevatedUserInterfaceLevel; }
@@ -1040,8 +1072,10 @@ public:
 
     bool isLowPowerModeEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::LowPowerMode); }
     bool isThermalMitigationEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::ThermalMitigation); }
+    bool isAggressiveThermalMitigationEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::AggressiveThermalMitigation); }
     bool canUpdateThrottlingReason(ThrottlingReason reason) const { return !m_throttlingReasonsOverridenForTesting.contains(reason); }
     WEBCORE_EXPORT void setLowPowerModeEnabledOverrideForTesting(std::optional<bool>);
+    WEBCORE_EXPORT void setAggressiveThermalMitigationEnabledForTesting(std::optional<bool>);
     WEBCORE_EXPORT void setOutsideViewportThrottlingEnabledForTesting(bool);
 
     OptionSet<ThrottlingReason> throttlingReasons() const { return m_throttlingReasons; }
@@ -1098,7 +1132,7 @@ public:
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
-    URL applyLinkDecorationFiltering(const URL&, LinkDecorationFilteringTrigger) const;
+    WEBCORE_EXPORT URL applyLinkDecorationFiltering(const URL&, LinkDecorationFilteringTrigger) const;
     String applyLinkDecorationFiltering(const String&, LinkDecorationFilteringTrigger) const;
     URL allowedQueryParametersForAdvancedPrivacyProtections(const URL&) const;
 
@@ -1149,12 +1183,13 @@ public:
     void willBeginScrolling();
     void didFinishScrolling();
 
-    const HashSet<WeakRef<LocalFrame>>& rootFrames() const { return m_rootFrames; }
+    const UncheckedKeyHashSet<WeakRef<LocalFrame>>& rootFrames() const { return m_rootFrames; }
     WEBCORE_EXPORT void addRootFrame(LocalFrame&);
     WEBCORE_EXPORT void removeRootFrame(LocalFrame&);
 
     void opportunisticallyRunIdleCallbacks(MonotonicTime deadline);
-    void performOpportunisticallyScheduledTasks(MonotonicTime deadline);
+    WEBCORE_EXPORT void performOpportunisticallyScheduledTasks(MonotonicTime deadline);
+    void deleteRemovedNodes();
     String ensureMediaKeysStorageDirectoryForOrigin(const SecurityOriginData&);
     WEBCORE_EXPORT void setMediaKeysStorageDirectory(const String&);
 
@@ -1248,6 +1283,13 @@ public:
 
     WEBCORE_EXPORT bool isAlwaysOnLoggingAllowed() const;
 
+    ProcessID presentingApplicationPID() const;
+
+#if HAVE(AUDIT_TOKEN)
+    const std::optional<audit_token_t>& presentingApplicationAuditToken() const;
+    WEBCORE_EXPORT void setPresentingApplicationAuditToken(std::optional<audit_token_t>);
+#endif
+
 private:
     explicit Page(PageConfiguration&&);
 
@@ -1317,6 +1359,8 @@ private:
     void computeSampledPageTopColorIfNecessary();
     void clearSampledPageTopColor();
 
+    bool hasLocalMainFrame();
+
     std::optional<PageIdentifier> m_identifier;
     UniqueRef<Chrome> m_chrome;
     UniqueRef<DragCaretController> m_dragCaretController;
@@ -1342,11 +1386,9 @@ private:
     UniqueRef<ProcessSyncClient> m_processSyncClient;
 
     UniqueRef<BackForwardController> m_backForwardController;
-    HashSet<WeakRef<LocalFrame>> m_rootFrames;
+    UncheckedKeyHashSet<WeakRef<LocalFrame>> m_rootFrames;
     UniqueRef<EditorClient> m_editorClient;
     Ref<Frame> m_mainFrame;
-    URL m_mainFrameURL;
-    RefPtr<SecurityOrigin> m_mainFrameOrigin;
     String m_mainFrameURLFragment;
 
     RefPtr<PluginData> m_pluginData;
@@ -1398,8 +1440,7 @@ private:
     bool m_enclosedInScrollableAncestorView { false };
     bool m_canShowWhileLocked { false };
 #endif
-    
-    bool m_useSystemAppearance { false };
+
     bool m_useElevatedUserInterfaceLevel { false };
     bool m_useDarkAppearance { false };
     std::optional<bool> m_useDarkAppearanceOverride;
@@ -1495,7 +1536,7 @@ private:
     WeakPtr<ServiceWorkerGlobalScope, WeakPtrImplWithEventTargetData> m_serviceWorkerGlobalScope;
 
 #if ENABLE(RESOURCE_USAGE)
-    std::unique_ptr<ResourceUsageOverlay> m_resourceUsageOverlay;
+    RefPtr<ResourceUsageOverlay> m_resourceUsageOverlay;
 #endif
 
     PAL::SessionID m_sessionID;
@@ -1670,7 +1711,7 @@ private:
     UniqueRef<WritingToolsController> m_writingToolsController;
 #endif
 
-    HashSet<std::pair<URL, ScriptTelemetryCategory>> m_reportedScriptsWithTelemetry;
+    UncheckedKeyHashSet<std::pair<URL, ScriptTelemetryCategory>> m_reportedScriptsWithTelemetry;
 
     bool m_hasActiveNowPlayingSession { false };
     Timer m_activeNowPlayingSessionUpdateTimer;
@@ -1679,6 +1720,14 @@ private:
 
     bool m_shouldDeferResizeEvents { false };
     bool m_shouldDeferScrollEvents { false };
+
+    Ref<DocumentSyncData> m_topDocumentSyncData;
+
+    RegistrableDomain m_openedByScriptDomain;
+
+#if HAVE(AUDIT_TOKEN)
+    std::optional<audit_token_t> m_presentingApplicationAuditToken;
+#endif
 }; // class Page
 
 inline Page* Frame::page() const

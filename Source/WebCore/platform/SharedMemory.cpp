@@ -28,6 +28,7 @@
 
 #include "SharedBuffer.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/ParsingUtilities.h>
 
 namespace WebCore {
 
@@ -37,7 +38,9 @@ bool isMemoryAttributionDisabled()
         const char* value = getenv("WEBKIT_DISABLE_MEMORY_ATTRIBUTION");
         if (!value)
             return false;
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
         return !strcmp(value, "1");
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     }();
     return result;
 }
@@ -60,8 +63,7 @@ RefPtr<SharedMemory> SharedMemory::copyBuffer(const FragmentedSharedBuffer& buff
 
     auto destination = sharedMemory->mutableSpan();
     buffer.forEachSegment([&] (std::span<const uint8_t> segment) mutable {
-        memcpySpan(destination, segment);
-        destination = destination.subspan(segment.size());
+        memcpySpan(consumeSpan(destination, segment.size()), segment);
     });
 
     return sharedMemory;

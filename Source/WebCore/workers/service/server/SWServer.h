@@ -47,6 +47,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/ObjectIdentifier.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/RobinHoodHashMap.h>
 #include <wtf/RunLoop.h>
 #include <wtf/TZoneMalloc.h>
@@ -83,7 +84,7 @@ struct ServiceWorkerContextData;
 struct ServiceWorkerRegistrationData;
 struct WorkerFetchResult;
 
-class SWServer : public RefCounted<SWServer>, public CanMakeWeakPtr<SWServer> {
+class SWServer : public RefCountedAndCanMakeWeakPtr<SWServer> {
     WTF_MAKE_TZONE_ALLOCATED_EXPORT(SWServer, WEBCORE_EXPORT);
 public:
     class Connection : public CanMakeWeakPtr<Connection>, public RefCounted<Connection> {
@@ -128,6 +129,8 @@ public:
 
         SWServer* server() { return m_server.get(); }
         const SWServer* server() const { return m_server.get(); }
+
+        virtual bool isWebSWServerConnection() const { return false; }
 
     protected:
         WEBCORE_EXPORT Connection(SWServer&, Identifier);
@@ -238,7 +241,6 @@ public:
     WEBCORE_EXPORT void addContextConnection(SWServerToContextConnection&);
     WEBCORE_EXPORT void removeContextConnection(SWServerToContextConnection&);
     WEBCORE_EXPORT void terminateIdleServiceWorkers(SWServerToContextConnection&);
-    WEBCORE_EXPORT bool areServiceWorkersIdle(const SWServerToContextConnection&);
 
     WEBCORE_EXPORT SWServerToContextConnection* contextConnectionForRegistrableDomain(const RegistrableDomain&);
     WEBCORE_EXPORT void createContextConnection(const Site&, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier);

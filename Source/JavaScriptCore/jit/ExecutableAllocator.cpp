@@ -48,8 +48,10 @@
 #include <wtf/WorkQueue.h>
 
 #if ENABLE(LIBPAS_JIT_HEAP)
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include <bmalloc/jit_heap.h>
 #include <bmalloc/jit_heap_config.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #else
 #include <wtf/MetaAllocator.h>
 #endif
@@ -95,8 +97,6 @@ WTF_WEAK_LINK_FORCE_IMPORT(be_memory_inline_jit_restrict_with_witness_supported)
 namespace JSC {
 
 using namespace WTF;
-
-WTF_MAKE_TZONE_ALLOCATED_IMPL(ExecutableAllocator);
 
 #if OS(DARWIN) && CPU(ARM64)
 // We already rely on page size being CeilingOnPageSize elsewhere (e.g. MarkedBlock).
@@ -357,8 +357,10 @@ static ALWAYS_INLINE void initializeSeparatedWXHeaps(void* stubBase, size_t stub
     result = vm_protect(mach_task_self(), static_cast<vm_address_t>(writableAddr), jitSize, true, VM_PROT_READ | VM_PROT_WRITE);
     RELEASE_ASSERT(!result);
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Zero out writableAddr to avoid leaking the address of the writable mapping.
     memset_s(&writableAddr, sizeof(writableAddr), 0, sizeof(writableAddr));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #if ENABLE(SEPARATED_WX_HEAP)
     g_jscConfig.jitWriteSeparateHeaps = reinterpret_cast<JITWriteSeparateHeapsFunction>(writeThunk.code().taggedPtr());
@@ -466,7 +468,9 @@ static ALWAYS_INLINE JITReservation initializeJITPageReservation()
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 class FixedVMPoolExecutableAllocator final {
-    WTF_MAKE_TZONE_ALLOCATED(FixedVMPoolExecutableAllocator);
+    // This does not need to be TZONE_ALLOCATED because it's only used as a singleton
+    // and is only allocated once long before any scripts are executed.
+    WTF_MAKE_FAST_ALLOCATED(FixedVMPoolExecutableAllocator);
 
 #if ENABLE(JUMP_ISLANDS)
     class Islands;
@@ -1136,9 +1140,8 @@ private:
 #endif
 };
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL(FixedVMPoolExecutableAllocator);
 #if ENABLE(JUMP_ISLANDS)
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(FixedVMPoolExecutableAllocator, Islands);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FixedVMPoolExecutableAllocator::Islands);
 #endif // ENABLE(JUMP_ISLANDS)
 
 // Keep this pointer in a mutable global variable to help Leaks find it.

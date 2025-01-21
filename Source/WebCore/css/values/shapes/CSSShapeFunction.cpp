@@ -224,17 +224,17 @@ void Serialize<ArcCommand>::operator()(StringBuilder& builder, const ArcCommand&
     else
         serializationForCSS(builder, value.size);
 
-    if (!std::holds_alternative<Ccw>(value.arcSweep)) {
+    if (!std::holds_alternative<CSS::Keyword::Ccw>(value.arcSweep)) {
         builder.append(' ');
         serializationForCSS(builder, value.arcSweep);
     }
 
-    if (!std::holds_alternative<Small>(value.arcSize)) {
+    if (!std::holds_alternative<CSS::Keyword::Small>(value.arcSize)) {
         builder.append(' ');
         serializationForCSS(builder, value.arcSize);
     }
 
-    if (value.rotation != Angle<> { AngleRaw<> { CSSUnitType::CSS_DEG, 0 } }) {
+    if (value.rotation != 0_css_deg) {
         builder.append(' ', nameLiteralForSerialization(CSSValueRotate), ' ');
         serializationForCSS(builder, value.rotation);
     }
@@ -244,7 +244,7 @@ void Serialize<Shape>::operator()(StringBuilder& builder, const Shape& value)
 {
     // shape() = shape( <'fill-rule'>? from <coordinate-pair>, <shape-command>#)
 
-    if (value.fillRule && !std::holds_alternative<Nonzero>(*value.fillRule)) {
+    if (value.fillRule && !std::holds_alternative<Keyword::Nonzero>(*value.fillRule)) {
         serializationForCSS(builder, *value.fillRule);
         builder.append(' ');
     }

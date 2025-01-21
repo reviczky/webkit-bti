@@ -31,17 +31,10 @@ namespace CSS {
 
 // MARK: - CSSValue Visitation
 
-template<RawNumeric RawType> struct CSSValueChildrenVisitor<RawType> {
+template<NumericRaw RawType> struct CSSValueChildrenVisitor<RawType> {
     IterationStatus operator()(const Function<IterationStatus(CSSValue&)>&, const RawType&)
     {
         return IterationStatus::Continue;
-    }
-};
-
-template<RawNumeric RawType> struct CSSValueChildrenVisitor<PrimitiveNumeric<RawType>> {
-    IterationStatus operator()(const Function<IterationStatus(CSSValue&)>& func, const PrimitiveNumeric<RawType>& value)
-    {
-        return WTF::switchOn(value, [&](const auto& value) { return visitCSSValueChildren(func, value); });
     }
 };
 

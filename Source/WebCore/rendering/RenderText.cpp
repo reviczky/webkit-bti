@@ -55,6 +55,7 @@
 #include "SVGElementTypeHelpers.h"
 #include "SVGInlineTextBox.h"
 #include "Settings.h"
+#include "SurrogatePairAwareTextIterator.h"
 #include "Text.h"
 #include "TextResourceDecoder.h"
 #include "TextTransform.h"
@@ -163,22 +164,83 @@ static constexpr UChar convertNoBreakSpaceToSpace(UChar character)
     return character == noBreakSpace ? ' ' : character;
 }
 
-String capitalize(const String& string, UChar previousCharacter)
+static inline size_t capitalizeCharacter(String textContent, unsigned startCharacterOffset, StringBuilder& output)
 {
-    // FIXME: Change this to use u_strToTitle instead of u_totitle and to consider locale.
+    if (startCharacterOffset >= textContent.length()) {
+        ASSERT_NOT_REACHED();
+        return 0;
+    }
 
-    unsigned length = string.length();
+    auto capitalize = [&](const UChar* contentToCapitalize, size_t length) -> size_t {
+        if (length == 1) {
+            if ((*contentToCapitalize >= 'A' && *contentToCapitalize <= 'Z') || *contentToCapitalize == ' ')
+                return 0;
+            if (*contentToCapitalize <= 'z') {
+                char32_t lastCharacter = u_totitle(*contentToCapitalize);
+                output.append(lastCharacter);
+                return 1;
+            }
+        }
+
+        UChar capitalizedCharacter;
+        UErrorCode status = U_ZERO_ERROR;
+        auto realLength = u_strToTitle(&capitalizedCharacter, 1, contentToCapitalize, length, nullptr, "", &status);
+        if (U_SUCCESS(status) && realLength == 1) {
+            output.append(capitalizedCharacter);
+            return realLength;
+        }
+
+        // Decomposed ligatures may need more space.
+        std::span<UChar> capitalizedStringData;
+        auto capitalizedString = String::createUninitialized(realLength, capitalizedStringData);
+        status = U_ZERO_ERROR;
+        u_strToTitle(capitalizedStringData.data(), capitalizedStringData.size(), contentToCapitalize, length, nullptr, "", &status);
+        if (U_SUCCESS(status)) {
+            output.append(capitalizedString);
+            return length;
+        }
+        return 0;
+    };
+
+    if (textContent.is8Bit()) {
+        auto characterToCapitalize = textContent[startCharacterOffset];
+        return capitalize(&characterToCapitalize, 1);
+    }
+
+    auto content = textContent.span16().subspan(startCharacterOffset);
+    auto contentIterator = SurrogatePairAwareTextIterator { content, startCharacterOffset, textContent.length() };
+    unsigned capitalizedContentLength = 0;
+    char32_t currentCharacter = 0;
+    contentIterator.consume(currentCharacter, capitalizedContentLength);
+    if (startCharacterOffset + capitalizedContentLength > textContent.length()) {
+        ASSERT_NOT_REACHED();
+        return 0;
+    }
+    return capitalize(content.data(), capitalizedContentLength);
+}
+
+String capitalize(const String& string)
+{
+    Vector<UChar> previousCharacter(1, ' ');
+    return capitalize(string, previousCharacter);
+}
+
+String capitalize(const String& string, Vector<UChar> previousCharacter)
+{
+    int32_t length = string.length();
+    int32_t previousCharacterLength = previousCharacter.size();
     auto& stringImpl = *string.impl();
 
     static_assert(String::MaxLength < std::numeric_limits<unsigned>::max(), "Must be able to add one without overflowing unsigned");
 
     // Replace NO BREAK SPACE with a normal spaces since ICU does not treat it as a word separator.
-    Vector<UChar> stringWithPrevious(length + 1);
-    stringWithPrevious[0] = convertNoBreakSpaceToSpace(previousCharacter);
-    for (unsigned i = 1; i < length + 1; i++)
-        stringWithPrevious[i] = convertNoBreakSpaceToSpace(stringImpl[i - 1]);
+    Vector<UChar> stringWithPrevious(previousCharacterLength + length);
+    for (int32_t i = 0; i < previousCharacterLength; ++i)
+        stringWithPrevious[i] = convertNoBreakSpaceToSpace(previousCharacter[i]);
+    for (int32_t i = previousCharacterLength; i < length + previousCharacterLength; ++i)
+        stringWithPrevious[i] = convertNoBreakSpaceToSpace(stringImpl[i - previousCharacterLength]);
 
-    auto* breakIterator = WTF::wordBreakIterator(stringWithPrevious.span().first(length + 1));
+    auto* breakIterator = WTF::wordBreakIterator(stringWithPrevious.span());
     if (!breakIterator)
         return string;
 
@@ -186,24 +248,28 @@ String capitalize(const String& string, UChar previousCharacter)
     result.reserveCapacity(length);
 
     int32_t startOfWord = ubrk_first(breakIterator);
-    int32_t endOfWord;
-    for (endOfWord = ubrk_next(breakIterator); endOfWord != UBRK_DONE; startOfWord = endOfWord, endOfWord = ubrk_next(breakIterator)) {
-        // Do not append the first character, since it's the previous character, not from this string.
-        if (startOfWord) {
-            char32_t lastCharacter = u_totitle(stringImpl[startOfWord - 1]);
-            result.append(lastCharacter);
+    for (int32_t endOfWord = ubrk_next(breakIterator); endOfWord != UBRK_DONE; startOfWord = endOfWord, endOfWord = ubrk_next(breakIterator)) {
+        // Do not try to titlecase the previous content.
+        if (startOfWord >= previousCharacterLength) {
+            auto capitalizedContentLength = capitalizeCharacter(string, startOfWord - previousCharacterLength, result);
+            for (int32_t i = startOfWord + capitalizedContentLength; i < endOfWord; ++i)
+                result.append(stringImpl[i - previousCharacterLength]);
+        } else {
+            // This is previous and continous non-titlecased current content. Only append current content.
+            for (int32_t i = startOfWord; i < endOfWord; ++i) {
+                if (i < previousCharacterLength)
+                    continue;
+                result.append(stringImpl[i - previousCharacterLength]);
+            }
         }
-        for (int i = startOfWord + 1; i < endOfWord; i++)
-            result.append(stringImpl[i - 1]);
     }
-
     return result == string ? string : result.toString();
 }
 
 static LayoutRect selectionRectForTextBox(const InlineIterator::TextBox& textBox, unsigned rangeStart, unsigned rangeEnd)
 {
-    if (auto* svgInlineTextBox = dynamicDowncast<SVGInlineTextBox>(textBox.legacyInlineBox()))
-        return svgInlineTextBox->localSelectionRect(rangeStart, rangeEnd);
+    if (auto* svgTextBox = dynamicDowncast<InlineIterator::SVGTextBox>(textBox))
+        return svgTextBox->localSelectionRect(rangeStart, rangeEnd);
 
     bool isCaretCase = rangeStart == rangeEnd;
 
@@ -365,7 +431,7 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     const RenderStyle& newStyle = style();
     if (!oldStyle)
         initiateFontLoadingByAccessingGlyphDataAndComputeCanUseSimplifiedTextMeasuring(m_text);
-    if (oldStyle && oldStyle->fontCascade() != newStyle.fontCascade())
+    if (oldStyle && !oldStyle->fontCascadeEqual(newStyle))
         m_canUseSimplifiedTextMeasuring = { };
 
     bool needsResetText = false;
@@ -386,6 +452,11 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     auto needsLayoutBoxStyleUpdate = layoutBox() && (diff >= StyleDifference::Repaint || (&style() != &firstLineStyle()));
     if (needsLayoutBoxStyleUpdate)
         LayoutIntegration::LineLayout::updateStyle(*this);
+
+    if (CheckedPtr cache = document().existingAXObjectCache())
+        cache->onStyleChange(*this, diff, oldStyle, newStyle);
+
+    setHorizontalWritingMode(newStyle.writingMode().isHorizontal());
 }
 
 void RenderText::removeAndDestroyLegacyTextBoxes()
@@ -444,7 +515,7 @@ Vector<IntRect> RenderText::absoluteRectsForRange(unsigned start, unsigned end, 
 // Full annotations are added in this class.
 void RenderText::collectSelectionGeometries(Vector<SelectionGeometry>& rects, unsigned start, unsigned end)
 {
-    for (auto textBox = InlineIterator::firstTextBoxFor(*this); textBox; textBox = textBox.traverseNextTextBox()) {
+    for (auto textBox = InlineIterator::lineLeftmostTextBoxFor(*this); textBox; textBox = textBox.traverseNextTextBox()) {
         LayoutRect rect;
         if (start <= textBox->start() && textBox->end() <= end)
             rect = selectionRectForTextBox(*textBox, start, end);
@@ -478,15 +549,15 @@ void RenderText::collectSelectionGeometries(Vector<SelectionGeometry>& rects, un
         extentsRect = localToAbsoluteQuad(FloatRect(extentsRect)).enclosingBoundingBox();
         if (!textBox->isHorizontal())
             extentsRect = extentsRect.transposedRect();
-        bool isFirstOnLine = !textBox->previousOnLine();
-        bool isLastOnLine = !textBox->nextOnLine();
+        bool isFirstOnLine = !textBox->nextLineLeftwardOnLine();
+        bool isLastOnLine = !textBox->nextLineRightwardOnLine();
 
         bool containsStart = textBox->start() <= start && textBox->end() >= start;
         bool containsEnd = textBox->start() <= end && textBox->end() >= end;
 
         bool isFixed = false;
         auto absoluteQuad = localToAbsoluteQuad(FloatRect(rect), UseTransforms, &isFixed);
-        bool boxIsHorizontal = !is<SVGInlineTextBox>(textBox->legacyInlineBox()) ? textBox->isHorizontal() : !writingMode().isVertical();
+        bool boxIsHorizontal = !is<InlineIterator::SVGTextBoxIterator>(textBox) ? textBox->isHorizontal() : !writingMode().isVertical();
 
         rects.append(SelectionGeometry(absoluteQuad, HTMLElement::selectionRenderingBehavior(textNode()), textBox->direction(), extentsRect.x(), extentsRect.maxX(), extentsRect.maxY(), 0, textBox->isLineBreak(), isFirstOnLine, isLastOnLine, containsStart, containsEnd, boxIsHorizontal, isFixed, view().pageNumberForBlockProgressionOffset(absoluteQuad.enclosingBoundingBox().x())));
     }
@@ -574,7 +645,7 @@ static Vector<LayoutRect> characterRects(const InlineIterator::TextBox& run, uns
     if (clampedStart >= clampedEnd)
         return { };
 
-    if (auto* svgTextBox = dynamicDowncast<SVGInlineTextBox>(run.legacyInlineBox())) {
+    if (auto* svgTextBox = dynamicDowncast<InlineIterator::SVGTextBox>(run)) {
         return Vector<LayoutRect>(clampedEnd - clampedStart, [&, clampedStart = clampedStart](size_t i) {
             size_t index = clampedStart + i;
             return svgTextBox->localSelectionRect(index, index + 1);
@@ -681,7 +752,7 @@ static bool lineDirectionPointFitsInBox(int pointLineDirection, const InlineIter
     // the affinity must be downstream so the position doesn't jump back to the previous line
     // except when box is the first box in the line
     if (pointLineDirection <= textRun->logicalLeftIgnoringInlineDirection()) {
-        shouldAffinityBeDownstream = !textRun->previousOnLine() ? UpstreamIfPositionIsNotAtStart : AlwaysDownstream;
+        shouldAffinityBeDownstream = !textRun->nextLineLeftwardOnLine() ? UpstreamIfPositionIsNotAtStart : AlwaysDownstream;
         return true;
     }
 
@@ -696,10 +767,10 @@ static bool lineDirectionPointFitsInBox(int pointLineDirection, const InlineIter
 
     // box is first on line
     // and the x coordinate is to the left of the first text box left edge
-    if (!textRun->previousOnLineIgnoringLineBreak() && pointLineDirection < textRun->logicalLeftIgnoringInlineDirection())
+    if (!textRun->nextLineLeftwardOnLineIgnoringLineBreak() && pointLineDirection < textRun->logicalLeftIgnoringInlineDirection())
         return true;
 
-    if (!textRun->nextOnLineIgnoringLineBreak()) {
+    if (!textRun->nextLineRightwardOnLineIgnoringLineBreak()) {
         // box is last on line
         // and the x coordinate is to the right of the last text box right edge
         // generate VisiblePosition, use Affinity::Upstream affinity if possible
@@ -736,7 +807,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
     if (positionIsAtStartOfBox == run->isLeftToRightDirection()) {
         // offset is on the left edge
 
-        auto previousRun = run->previousOnLineIgnoringLineBreak();
+        auto previousRun = run->nextLineLeftwardOnLineIgnoringLineBreak();
         if ((previousRun && previousRun->bidiLevel() == run->bidiLevel())
             || run->renderer().containingBlock()->writingMode().bidiDirection() == run->direction()) // FIXME: left on 12CBA
             return createVisiblePositionForBox(run, run->leftmostCaretOffset(), shouldAffinityBeDownstream);
@@ -744,7 +815,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
         if (previousRun && previousRun->bidiLevel() > run->bidiLevel()) {
             // e.g. left of B in aDC12BAb
             auto leftmostRun = previousRun;
-            for (; previousRun; previousRun.traversePreviousOnLineIgnoringLineBreak()) {
+            for (; previousRun; previousRun.traverseLineLeftwardOnLineIgnoringLineBreak()) {
                 if (previousRun->bidiLevel() <= run->bidiLevel())
                     break;
                 leftmostRun = previousRun;
@@ -755,7 +826,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
         if (!previousRun || previousRun->bidiLevel() < run->bidiLevel()) {
             // e.g. left of D in aDC12BAb
             InlineIterator::BoxIterator rightmostRun = run;
-            for (auto nextRun = run->nextOnLineIgnoringLineBreak(); nextRun; nextRun.traverseNextOnLineIgnoringLineBreak()) {
+            for (auto nextRun = run->nextLineRightwardOnLineIgnoringLineBreak(); nextRun; nextRun.traverseLineRightwardOnLineIgnoringLineBreak()) {
                 if (nextRun->bidiLevel() < run->bidiLevel())
                     break;
                 rightmostRun = nextRun;
@@ -767,7 +838,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
         return createVisiblePositionForBox(run, run->rightmostCaretOffset(), shouldAffinityBeDownstream);
     }
 
-    auto nextRun = run->nextOnLineIgnoringLineBreak();
+    auto nextRun = run->nextLineRightwardOnLineIgnoringLineBreak();
     if ((nextRun && nextRun->bidiLevel() == run->bidiLevel())
         || run->renderer().containingBlock()->writingMode().bidiDirection() == run->direction())
         return createVisiblePositionForBox(run, run->rightmostCaretOffset(), shouldAffinityBeDownstream);
@@ -776,7 +847,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
     if (nextRun && nextRun->bidiLevel() > run->bidiLevel()) {
         // e.g. right of C in aDC12BAb
         auto rightmostRun = nextRun;
-        for (; nextRun; nextRun.traverseNextOnLineIgnoringLineBreak()) {
+        for (; nextRun; nextRun.traverseLineRightwardOnLineIgnoringLineBreak()) {
             if (nextRun->bidiLevel() <= run->bidiLevel())
                 break;
             rightmostRun = nextRun;
@@ -788,7 +859,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
     if (!nextRun || nextRun->bidiLevel() < run->bidiLevel()) {
         // e.g. right of A in aDC12BAb
         InlineIterator::BoxIterator leftmostRun = run;
-        for (auto previousRun = run->previousOnLineIgnoringLineBreak(); previousRun; previousRun.traversePreviousOnLineIgnoringLineBreak()) {
+        for (auto previousRun = run->nextLineLeftwardOnLineIgnoringLineBreak(); previousRun; previousRun.traverseLineLeftwardOnLineIgnoringLineBreak()) {
             if (previousRun->bidiLevel() < run->bidiLevel())
                 break;
             leftmostRun = previousRun;
@@ -804,7 +875,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
 
 VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, HitTestSource, const RenderFragmentContainer*)
 {
-    auto firstRun = InlineIterator::firstTextBoxFor(*this);
+    auto firstRun = InlineIterator::lineLeftmostTextBoxFor(*this);
 
     if (!firstRun || !text().length())
         return createVisiblePosition(0, Affinity::Downstream);
@@ -815,7 +886,7 @@ VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, HitTestSo
 
     InlineIterator::TextBoxIterator lastRun;
     for (auto run = firstRun; run; run.traverseNextTextBox()) {
-        if (run->isLineBreak() && !run->previousOnLine() && run->nextOnLine() && !run->nextOnLine()->isLineBreak())
+        if (run->isLineBreak() && !run->nextLineLeftwardOnLine() && run->nextLineRightwardOnLine() && !run->nextLineRightwardOnLine()->isLineBreak())
             run.traverseNextTextBox();
 
         auto lineBox = run->lineBox();
@@ -1445,7 +1516,7 @@ Vector<std::pair<unsigned, unsigned>> RenderText::contentRangesBetweenOffsetsFor
 
 IntPoint RenderText::firstRunLocation() const
 {
-    auto first = InlineIterator::firstTextBoxFor(*this);
+    auto first = InlineIterator::lineLeftmostTextBoxFor(*this);
     if (!first)
         return { };
     return IntPoint(first->visualRectIgnoringBlockDirection().location());
@@ -1469,7 +1540,7 @@ static inline bool isInlineFlowOrEmptyText(const RenderObject& renderer)
     return textRenderer && textRenderer->text().isEmpty();
 }
 
-UChar RenderText::previousCharacter() const
+Vector<UChar> RenderText::previousCharacter() const
 {
     const RenderObject* previousText = this;
     while ((previousText = previousText->previousInPreOrder())) {
@@ -1479,10 +1550,32 @@ UChar RenderText::previousCharacter() const
             break;
     }
     auto* renderText = dynamicDowncast<RenderText>(previousText);
+    Vector<UChar> previous;
     if (!renderText)
-        return ' ';
-    auto& previousString = renderText->text();
-    return previousString[previousString.length() - 1];
+        previous.append(' ');
+    else {
+        auto& previousString = renderText->text();
+        if (previousString.is8Bit())
+            previous.append(previousString[previousString.length() - 1]);
+        else {
+            auto previousCharacterLength = [&] {
+                auto contentIterator = SurrogatePairAwareTextIterator { previousString.span16(), 0, previousString.length() };
+                unsigned characterLength = 0;
+                char32_t currentCharacter = 0;
+                while (contentIterator.consume(currentCharacter, characterLength))
+                    contentIterator.advance(characterLength);
+                return characterLength;
+            }();
+
+            if (previousCharacterLength > previousString.length()) {
+                ASSERT_NOT_REACHED();
+                return previous;
+            }
+            for (size_t i = previousString.length() - previousCharacterLength; i < previousString.length(); ++i)
+                previous.append(previousString[i]);
+        }
+    }
+    return previous;
 }
 
 static String convertToFullSizeKana(const String& string)
@@ -1573,7 +1666,13 @@ static String convertToFullSizeKana(const String& string)
     return result.toString();
 }
 
-String applyTextTransform(const RenderStyle& style, const String& text, UChar previousCharacter)
+String applyTextTransform(const RenderStyle& style, const String& text)
+{
+    Vector<UChar> previousCharacter(1, ' ');
+    return applyTextTransform(style, text, previousCharacter);
+}
+
+String applyTextTransform(const RenderStyle& style, const String& text, Vector<UChar> previousCharacter)
 {
     auto transform = style.textTransform();
 
@@ -1843,7 +1942,7 @@ float RenderText::width(unsigned from, unsigned length, const FontCascade& fontC
 
 IntRect RenderText::linesBoundingBox() const
 {
-    auto firstTextBox = InlineIterator::firstTextBoxFor(*this);
+    auto firstTextBox = InlineIterator::lineLeftmostTextBoxFor(*this);
     if (!firstTextBox)
         return { };
 
@@ -1936,7 +2035,7 @@ LayoutRect RenderText::selectionRectForRepaint(const RenderLayerModelObject* rep
 
 int RenderText::caretMinOffset() const
 {
-    auto first = InlineIterator::firstTextBoxFor(*this);
+    auto first = InlineIterator::lineLeftmostTextBoxFor(*this);
     if (!first)
         return 0;
 
@@ -1949,7 +2048,7 @@ int RenderText::caretMinOffset() const
 
 int RenderText::caretMaxOffset() const
 {
-    auto first = InlineIterator::firstTextBoxFor(*this);
+    auto first = InlineIterator::lineLeftmostTextBoxFor(*this);
     if (!first)
         return text().length();
 

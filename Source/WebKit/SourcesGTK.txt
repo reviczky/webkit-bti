@@ -74,8 +74,6 @@ Shared/API/glib/WebKitURIRequest.cpp @no-unify
 Shared/API/glib/WebKitURIResponse.cpp @no-unify
 Shared/API/glib/WebKitUserMessage.cpp @no-unify
 
-Shared/freetype/WebCoreArgumentCodersFreeType.cpp
-
 Shared/glib/ArgumentCodersGLib.cpp
 Shared/glib/InputMethodState.cpp
 Shared/glib/ProcessExecutablePathGLib.cpp
@@ -178,6 +176,7 @@ UIProcess/API/glib/WebKitUserContentManager.cpp @no-unify
 UIProcess/API/glib/WebKitUserMediaPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitVersion.cpp @no-unify
 UIProcess/API/glib/WebKitWebContext.cpp @no-unify
+UIProcess/API/glib/WebKitWebExtensionMatchPattern.cpp @no-unify
 UIProcess/API/glib/WebKitWebResource.cpp @no-unify
 UIProcess/API/glib/WebKitWebResourceLoadManager.cpp @no-unify
 UIProcess/API/glib/WebKitWebView.cpp @no-unify
@@ -328,6 +327,7 @@ WebProcess/WebPage/ViewGestureGeometryCollector.cpp
 
 WebProcess/WebPage/CoordinatedGraphics/CompositingRunLoop.cpp
 WebProcess/WebPage/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
+WebProcess/WebPage/CoordinatedGraphics/CoordinatedSceneState.cpp
 WebProcess/WebPage/CoordinatedGraphics/DrawingAreaCoordinatedGraphics.cpp
 WebProcess/WebPage/CoordinatedGraphics/LayerTreeHost.cpp
 WebProcess/WebPage/CoordinatedGraphics/ThreadedCompositor.cpp

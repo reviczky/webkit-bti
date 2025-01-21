@@ -61,6 +61,7 @@
 #include "HTMLFormControlElement.h"
 #include "HTMLFormElement.h"
 #include "HTMLFrameElementBase.h"
+#include "HTMLIFrameElement.h"
 #include "HTMLNames.h"
 #include "HTMLTableCellElement.h"
 #include "HTMLTableRowElement.h"
@@ -74,6 +75,7 @@
 #include "LocalDOMWindow.h"
 #include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
+#include "LocalizedStrings.h"
 #include "Logging.h"
 #include "Navigator.h"
 #include "NodeList.h"
@@ -89,6 +91,7 @@
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
+#include "ResourceMonitor.h"
 #include "SVGDocument.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElementTypeHelpers.h"
@@ -119,6 +122,10 @@
 
 #if ENABLE(DATA_DETECTION)
 #include "DataDetectionResultsStorage.h"
+#endif
+
+#if ENABLE(CONTENT_EXTENSIONS) && USE(APPLE_INTERNAL_SDK) && __has_include(<WebKitAdditions/LocalFrameAdditions.h>)
+#include <WebKitAdditions/LocalFrameAdditions.h>
 #endif
 
 #define FRAME_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - Frame::" fmt, this, ##__VA_ARGS__)
@@ -171,7 +178,7 @@ LocalFrame::LocalFrame(Page& page, ClientCreator&& clientCreator, FrameIdentifie
     ProcessWarming::initializeNames();
     StaticCSSValuePool::init();
 
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()); localMainFrame && parent)
+    if (RefPtr localMainFrame = this->localMainFrame(); localMainFrame && parent)
         localMainFrame->selfOnlyRef();
 
 #ifndef NDEBUG
@@ -233,11 +240,21 @@ LocalFrame::~LocalFrame()
     while (auto* destructionObserver = m_destructionObservers.takeAny())
         destructionObserver->frameDestroyed();
 
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = this->localMainFrame();
     if (!isMainFrame() && localMainFrame)
         localMainFrame->selfOnlyDeref();
 
     detachFromPage();
+}
+
+RefPtr<const LocalFrame> LocalFrame::localMainFrame() const
+{
+    return dynamicDowncast<const LocalFrame>(mainFrame());
+}
+
+RefPtr<LocalFrame> LocalFrame::localMainFrame()
+{
+    return dynamicDowncast<LocalFrame>(mainFrame());
 }
 
 void LocalFrame::addDestructionObserver(FrameDestructionObserver& observer)
@@ -740,12 +757,15 @@ void LocalFrame::injectUserScriptImmediately(DOMWrapperWorld& world, const UserS
     RefPtr document = this->document();
     if (!document)
         return;
+    RefPtr page = document->protectedPage();
+    if (!page)
+        return;
     if (script.injectedFrames() == UserContentInjectedFrames::InjectInTopFrameOnly && !isMainFrame())
         return;
     if (!UserContentURLPattern::matchesPatterns(document->url(), script.allowlist(), script.blocklist()))
         return;
 
-    document->setAsRunningUserScripts();
+    page->setHasInjectedUserScript();
     loader->client().willInjectUserScript(world);
     checkedScript()->evaluateInWorldIgnoringException(ScriptSourceCode(script.source(), JSC::SourceTaintedOrigin::Untainted, URL(script.url())), world);
 }
@@ -1239,12 +1259,15 @@ CheckedRef<const EventHandler> LocalFrame::checkedEventHandler() const
     return m_eventHandler.get();
 }
 
-void LocalFrame::documentURLDidChange(const URL& url)
+void LocalFrame::documentURLOrOriginDidChange()
 {
-    if (RefPtr page = this->page(); page && isMainFrame()) {
-        page->setMainFrameURL(url);
-        page->processSyncClient().broadcastMainFrameURLChangeToOtherProcesses(url);
-    }
+    if (!isMainFrame())
+        return;
+
+    RefPtr page = this->protectedPage();
+    RefPtr document = this->protectedDocument();
+    if (page && document)
+        page->setMainFrameURLAndOrigin(document->url(), document->protectedSecurityOrigin());
 }
 
 #if ENABLE(DATA_DETECTION)
@@ -1380,6 +1403,38 @@ void LocalFrame::setScrollingMode(ScrollbarMode scrollingMode)
     if (RefPtr view = this->view())
         view->setCanHaveScrollbars(m_scrollingMode != ScrollbarMode::AlwaysOff);
 }
+
+#if ENABLE(CONTENT_EXTENSIONS)
+
+static String generateResourceMonitorErrorHTML()
+{
+#if PLATFORM(COCOA) && HAVE(CUSTOM_IFRAME_UNLOADING_HTML)
+    return generateResourceMonitorErrorHTMLForCocoa();
+#else
+    return WEB_UI_STRING("This frame is hidden for using too many system resources.", "Description HTML for frame unloaded by ResourceMonitor");
+#endif
+}
+
+void LocalFrame::showResourceMonitoringError()
+{
+    RefPtr iframeElement = dynamicDowncast<HTMLIFrameElement>(ownerElement());
+    if (!iframeElement)
+        return;
+
+    for (RefPtr<Frame> frame = this; frame; frame = frame->tree().traverseNext()) {
+        if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame)) {
+            if (RefPtr window = localFrame->window())
+                window->removeAllEventListeners();
+        }
+    }
+
+    iframeElement->setSrcdoc(generateResourceMonitorErrorHTML());
+
+    if (RefPtr document = this->document())
+        document->addConsoleMessage(MessageSource::ContentBlocker, MessageLevel::Error, "Frame was unloaded because its network usage exceeded the limit."_s);
+}
+
+#endif
 
 } // namespace WebCore
 

@@ -36,6 +36,8 @@ namespace WebKit {
 class DrawingAreaProxy;
 class PlayStationWebView;
 
+enum class ColorControlSupportsAlpha : bool;
+
 class PageClientImpl final : public PageClient
 #if ENABLE(FULLSCREEN_API)
     , public WebFullScreenManagerProxyClient
@@ -54,7 +56,7 @@ public:
 
 private:
     // Create a new drawing area proxy for the given page.
-    std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) override;
+    Ref<DrawingAreaProxy> createDrawingAreaProxy(WebProcessProxy&) override;
 
     // Tell the view to invalidate the given region. The region is in view coordinates.
     void setViewNeedsDisplay(const WebCore::Region&) override;
@@ -104,6 +106,7 @@ private:
     WebCore::FloatRect convertToDeviceSpace(const WebCore::FloatRect&) override;
     WebCore::FloatRect convertToUserSpace(const WebCore::FloatRect&) override;
     WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) override;
+    WebCore::IntPoint rootViewToScreen(const WebCore::IntPoint&) override;
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) override;
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) override;
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) override;
@@ -114,6 +117,8 @@ private:
 #endif
 
     RefPtr<WebPopupMenuProxy> createPopupMenuProxy(WebPageProxy&) override;
+
+    RefPtr<WebColorPicker> createColorPicker(WebPageProxy&, const WebCore::Color& intialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) override;
 
     void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     void exitAcceleratedCompositingMode() override;
@@ -129,7 +134,7 @@ private:
 
     void closeFullScreenManager() override;
     bool isFullScreen() override;
-    void enterFullScreen() override;
+    void enterFullScreen(CompletionHandler<void(bool)>&&) override;
     void exitFullScreen() override;
     void beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;
     void beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame) override;

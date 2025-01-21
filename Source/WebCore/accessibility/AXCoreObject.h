@@ -59,7 +59,9 @@ typedef WebAccessibilityObjectWrapper AccessibilityObjectWrapper;
 typedef struct _NSRange NSRange;
 typedef const struct __AXTextMarker* AXTextMarkerRef;
 typedef const struct __AXTextMarkerRange* AXTextMarkerRangeRef;
+typedef const struct __CTFont* CTFontRef;
 OBJC_CLASS NSAttributedString;
+OBJC_CLASS NSMutableAttributedString;
 #elif USE(ATSPI)
 
 namespace WebCore {
@@ -726,10 +728,57 @@ struct AccessibilityIsIgnoredFromParentData {
     bool isNull() const { return !parent; }
 };
 
+struct LineDecorationStyle {
+    bool hasUnderline { false };
+    Color underlineColor;
+    bool hasLinethrough { false };
+    Color linethroughColor;
+
+    LineDecorationStyle() = default;
+    explicit LineDecorationStyle(RenderObject& renderer);
+    explicit LineDecorationStyle(bool hasUnderline, Color underlineColor, bool hasLinethrough, Color linethroughColor)
+        : hasUnderline(hasUnderline)
+        , underlineColor(underlineColor)
+        , hasLinethrough(hasLinethrough)
+        , linethroughColor(linethroughColor)
+    { }
+    bool operator==(const LineDecorationStyle&) const = default;
+
+    String debugDescription() const;
+};
+
+struct AttributedStringStyle {
+#if PLATFORM(COCOA)
+    RetainPtr<CTFontRef> font { nil };
+#endif
+    Color textColor;
+    Color backgroundColor;
+    bool isSubscript { false };
+    bool isSuperscript { false };
+    bool hasTextShadow { false };
+    LineDecorationStyle lineStyle;
+
+    bool operator==(const AttributedStringStyle&) const = default;
+
+    bool hasUnderline() const { return lineStyle.hasUnderline; }
+    Color underlineColor() const { return lineStyle.underlineColor; }
+    bool hasLinethrough() const { return lineStyle.hasLinethrough; }
+    Color linethroughColor() const { return lineStyle.linethroughColor; }
+};
+
 enum class AXDebugStringOption {
     Ignored,
+    IsRemoteFrame,
     RelativeFrame,
     RemoteFrameOffset
+};
+
+enum class TextEmissionBehavior : uint8_t {
+    None,
+    Space,
+    Tab,
+    Newline,
+    DoubleNewline
 };
 
 class AXCoreObject : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<AXCoreObject> {
@@ -787,6 +836,7 @@ public:
     // reader announces "link", it doesn't need to announce "clickable" or "pressable" — that
     // is implicit in the concept of a link.
     bool isImplicitlyInteractive() const;
+    bool isReplacedElement() const;
 
     // Table support.
     virtual bool isTable() const = 0;
@@ -828,9 +878,9 @@ public:
     virtual int axRowIndex() const = 0;
 
     // Table column support.
-    virtual bool isTableColumn() const = 0;
+    bool isTableColumn() const { return roleValue() == AccessibilityRole::Column; }
     virtual unsigned columnIndex() const = 0;
-    virtual AXCoreObject* columnHeader() = 0;
+    AXCoreObject* columnHeader();
 
     // Table row support.
     virtual bool isTableRow() const = 0;
@@ -874,8 +924,6 @@ public:
 
     bool isButton() const;
     bool isMeter() const { return roleValue() == AccessibilityRole::Meter; }
-
-    virtual UncheckedKeyHashMap<String, AXEditingStyleValueVariant> resolvedEditingStyles() const = 0;
 
     bool isListItem() const { return roleValue() == AccessibilityRole::ListItem; }
     bool isCheckboxOrRadio() const { return isCheckbox() || isRadioButton(); }
@@ -926,9 +974,9 @@ public:
     virtual std::optional<SimpleRange> misspellingRange(const SimpleRange& start, AccessibilitySearchDirection) const = 0;
     virtual std::optional<SimpleRange> visibleCharacterRange() const = 0;
     virtual bool hasPlainText() const = 0;
-    virtual bool hasSameFont(const AXCoreObject&) const = 0;
-    virtual bool hasSameFontColor(const AXCoreObject&) const = 0;
-    virtual bool hasSameStyle(const AXCoreObject&) const = 0;
+    virtual bool hasSameFont(AXCoreObject&) = 0;
+    virtual bool hasSameFontColor(AXCoreObject&) = 0;
+    virtual bool hasSameStyle(AXCoreObject&) = 0;
     bool isStaticText() const { return roleValue() == AccessibilityRole::StaticText; }
     virtual bool hasUnderline() const = 0;
     virtual bool hasHighlighting() const = 0;
@@ -971,6 +1019,7 @@ public:
     virtual String extendedDescription() const = 0;
 
     bool supportsActiveDescendant() const;
+    bool isActiveDescendantOfFocusedContainer() const;
     virtual bool supportsARIAOwns() const = 0;
 
     // Retrieval of related objects.
@@ -998,6 +1047,7 @@ public:
     virtual AccessibilityChildrenVector radioButtonGroup() const = 0;
 
     bool hasPopup() const;
+    bool selfOrAncestorLinkHasPopup() const;
     virtual String popupValue() const = 0;
     virtual bool supportsHasPopup() const = 0;
     virtual bool pressedIsPresent() const = 0;
@@ -1005,6 +1055,7 @@ public:
     virtual bool supportsExpanded() const = 0;
     virtual bool supportsChecked() const = 0;
     virtual AccessibilitySortDirection sortDirection() const = 0;
+    AccessibilitySortDirection sortDirectionIncludingAncestors() const;
     virtual bool supportsRangeValue() const = 0;
     virtual String identifierAttribute() const = 0;
     virtual String linkRelValue() const = 0;
@@ -1042,6 +1093,7 @@ public:
 
     virtual AccessibilityChildrenVector findMatchingObjects(AccessibilitySearchCriteria&&) = 0;
     virtual bool isDescendantOfRole(AccessibilityRole) const = 0;
+    AXCoreObject* selfOrFirstTextDescendant();
 
     virtual bool hasDocumentRoleAncestor() const = 0;
     virtual bool hasWebApplicationAncestor() const = 0;
@@ -1073,7 +1125,8 @@ public:
     virtual std::optional<String> textContent() const = 0;
 #if ENABLE(AX_THREAD_TEXT_APIS)
     virtual bool hasTextRuns() = 0;
-    virtual bool shouldEmitNewlinesBeforeAndAfterNode() const = 0;
+    virtual TextEmissionBehavior emitTextAfterBehavior() const = 0;
+    bool emitsNewlineAfter() const;
 #endif
 
     // Methods for determining accessibility text.
@@ -1084,7 +1137,14 @@ public:
 #if PLATFORM(COCOA)
     enum class SpellCheck : bool { No, Yes };
     virtual RetainPtr<NSAttributedString> attributedStringForTextMarkerRange(AXTextMarkerRange&&, SpellCheck) const = 0;
+    virtual AttributedStringStyle stylesForAttributedString() const = 0;
+    virtual RetainPtr<CTFontRef> font() const = 0;
 #endif
+
+#if PLATFORM(MAC)
+    RetainPtr<NSMutableAttributedString> createAttributedString(StringView text, SpellCheck) const;
+#endif
+
     virtual const String placeholderValue() const = 0;
 
     // Abbreviations
@@ -1094,7 +1154,7 @@ public:
     // Only if isColorWell()
     virtual SRGBA<uint8_t> colorValue() const = 0;
 
-    virtual AccessibilityRole roleValue() const = 0;
+    AccessibilityRole roleValue() const { return m_role; }
     // Non-localized string associated with the object role.
     virtual String rolePlatformString() const = 0;
     // Localized string that describes the object's role.
@@ -1130,13 +1190,11 @@ public:
 #if PLATFORM(MAC)
     virtual FloatRect primaryScreenRect() const = 0;
 #endif
-    virtual FloatRect unobscuredContentRect() const = 0;
     virtual IntSize size() const = 0;
     virtual IntPoint clickPoint() = 0;
     virtual Path elementPath() const = 0;
     virtual bool supportsPath() const = 0;
 
-    bool shouldReturnEmptySelectedText() const { return isSecureField(); }
     virtual CharacterRange selectedTextRange() const = 0;
     virtual int insertionPointLineNumber() const = 0;
 
@@ -1214,14 +1272,21 @@ public:
     virtual void updateChildrenIfNecessary() = 0;
     AXCoreObject* nextInPreOrder(bool updateChildrenIfNeeded, AXCoreObject& stayWithin);
     AXCoreObject* nextSiblingIncludingIgnored(bool updateChildrenIfNeeded) const;
-    // In some contexts, we may have already computed the unignored parent for `this`, so take that as an optional
-    // parameter. If nullptr, we will compute it inside the function.
     AXCoreObject* nextUnignoredSibling(bool updateChildrenIfNeeded, AXCoreObject* unignoredParent = nullptr) const;
-    AXCoreObject* nextUnignoredSiblingOrParent() const;
+    AXCoreObject* nextSiblingIncludingIgnoredOrParent() const;
+
+    AXCoreObject* previousInPreOrder(bool updateChildrenIfNeeded, AXCoreObject& stayWithin);
+    AXCoreObject* previousSiblingIncludingIgnored(bool updateChildrenIfNeeded);
+    AXCoreObject* deepestLastChildIncludingIgnored(bool updateChildrenIfNeeded);
+
     virtual void detachFromParent() = 0;
     virtual bool isDetachedFromParent() = 0;
 
-    virtual std::optional<AccessibilityChildrenVector> selectedChildren() = 0;
+    AccessibilityChildrenVector listboxSelectedChildren();
+    AccessibilityChildrenVector selectedRows();
+    AccessibilityChildrenVector selectedListItems();
+    bool canHaveSelectedChildren() const;
+    AccessibilityChildrenVector selectedChildren();
     virtual void setSelectedChildren(const AccessibilityChildrenVector&) = 0;
     virtual AccessibilityChildrenVector visibleChildren() = 0;
     AccessibilityChildrenVector tabChildren();
@@ -1246,7 +1311,7 @@ public:
     virtual AXTextMarkerRange textMarkerRangeForNSRange(const NSRange&) const = 0;
 #endif
 #if PLATFORM(MAC)
-    virtual AXTextMarkerRange selectedTextMarkerRange() = 0;
+    virtual AXTextMarkerRange selectedTextMarkerRange() const = 0;
 #endif
 
     virtual String stringForRange(const SimpleRange&) const = 0;
@@ -1281,7 +1346,7 @@ public:
 
     // Used by an ARIA tree to get all its rows.
     // FIXME: this should be folded into rows().
-    virtual AccessibilityChildrenVector ariaTreeRows() = 0;
+    AccessibilityChildrenVector ariaTreeRows();
     // Used by an ARIA tree item to get only its content, and not its child tree items and groups.
     AccessibilityChildrenVector ariaTreeItemContent();
 
@@ -1289,7 +1354,6 @@ public:
     static bool liveRegionStatusIsEnabled(const AtomString&);
     bool supportsLiveRegion(bool excludeIfOff = true) const;
     virtual AXCoreObject* liveRegionAncestor(bool excludeIfOff = true) const = 0;
-    bool isInsideLiveRegion(bool excludeIfOff = true) const;
     virtual const String liveRegionStatus() const = 0;
     virtual const String liveRegionRelevant() const = 0;
     virtual bool liveRegionAtomic() const = 0;
@@ -1385,13 +1449,15 @@ public:
     virtual bool hasClickHandler() const = 0;
     virtual AXCoreObject* clickableSelfOrAncestor(ClickHandlerFilter = ClickHandlerFilter::ExcludeBody) const = 0;
     virtual AXCoreObject* focusableAncestor() = 0;
-    virtual AXCoreObject* editableAncestor() = 0;
+    virtual AXCoreObject* editableAncestor() const = 0;
     virtual AXCoreObject* highestEditableAncestor() = 0;
     virtual AXCoreObject* exposedTableAncestor(bool includeSelf = false) const = 0;
 
     virtual AccessibilityChildrenVector documentLinks() = 0;
 
+    virtual bool hasAttachmentTag() const = 0;
     virtual bool hasBodyTag() const = 0;
+    virtual bool hasMarkTag() const = 0;
     virtual String innerHTML() const = 0;
     virtual String outerHTML() const = 0;
 
@@ -1399,11 +1465,14 @@ public:
     virtual Vector<RetainPtr<id>> modelElementChildren() = 0;
 #endif
 
+    String infoStringForTesting() const;
+
 protected:
     AXCoreObject() = delete;
     explicit AXCoreObject(AXID axID)
         : m_id(axID)
     { }
+    AccessibilityRole m_role { AccessibilityRole::Unknown };
 
 private:
     virtual String dbgInternal(bool, OptionSet<AXDebugStringOption>) const = 0;
@@ -1411,6 +1480,8 @@ private:
     // Detaches this object from the objects it references and it is referenced by.
     virtual void detachRemoteParts(AccessibilityDetachmentType) = 0;
     virtual void detachPlatformWrapper(AccessibilityDetachmentType) = 0;
+
+    void ariaTreeRows(AXCoreObject::AccessibilityChildrenVector& rows, AXCoreObject::AccessibilityChildrenVector& ancestors);
 
     AXID m_id;
 #if PLATFORM(COCOA)
@@ -1430,6 +1501,13 @@ inline Vector<AXID> axIDs(const AXCoreObject::AccessibilityChildrenVector& objec
         return object->objectID();
     });
 }
+
+#if PLATFORM(MAC)
+void attributedStringSetExpandedText(NSMutableAttributedString *, const AXCoreObject&, const NSRange&);
+void attributedStringSetBlockquoteLevel(NSMutableAttributedString *, const AXCoreObject&, const NSRange&);
+void attributedStringSetNeedsSpellCheck(NSMutableAttributedString *, const AXCoreObject&);
+void attributedStringSetElement(NSMutableAttributedString *, NSString *attribute, const AXCoreObject&, const NSRange&);
+#endif // PLATFORM(MAC)
 
 #if PLATFORM(COCOA)
 inline bool AXCoreObject::shouldComputeDescriptionAttributeValue() const
@@ -1460,11 +1538,6 @@ inline SpinButtonType AXCoreObject::spinButtonType()
 {
     ASSERT_WITH_MESSAGE(isSpinButton(), "spinButtonType() should only be called on spinbuttons.");
     return incrementButton() || decrementButton() ? SpinButtonType::Composite : SpinButtonType::Standalone;
-}
-
-inline bool AXCoreObject::isInsideLiveRegion(bool excludeIfOff) const
-{
-    return liveRegionAncestor(excludeIfOff);
 }
 
 inline bool AXCoreObject::canSetTextRangeAttributes() const
@@ -1499,6 +1572,14 @@ inline Vector<AXID> AXCoreObject::childrenIDs(bool updateChildrenIfNeeded)
 {
     return axIDs(children(updateChildrenIfNeeded));
 }
+
+#if ENABLE(AX_THREAD_TEXT_APIS)
+inline bool AXCoreObject::emitsNewlineAfter() const
+{
+    auto behavior = emitTextAfterBehavior();
+    return behavior == TextEmissionBehavior::Newline || behavior == TextEmissionBehavior::DoubleNewline;
+}
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
 
 namespace Accessibility {
 
@@ -1566,7 +1647,7 @@ T* clickableSelfOrAncestor(const T& startObject, const F& shouldStop)
 }
 
 template<typename T>
-T* editableAncestor(T& startObject)
+T* editableAncestor(const T& startObject)
 {
     return findAncestor<T>(startObject, false, [] (const auto& ancestor) {
         return ancestor.isTextControl();
@@ -1620,6 +1701,19 @@ T* exposedTableAncestor(const T& object, bool includeSelf = false)
     return findAncestor<T>(object, includeSelf, [] (const T& object) {
         return object.isTable() && object.isExposable();
     });
+}
+
+template<typename T, typename F>
+AXCoreObject* findUnignoredDescendant(T& object, bool includeSelf, const F& matches)
+{
+    if (includeSelf && matches(object) && !object.isIgnored())
+        return &object;
+
+    for (Ref child : object.childrenIncludingIgnored()) {
+        if (auto* descendant = findUnignoredDescendant(child.get(), /* includeSelf */ true, matches))
+            return descendant;
+    }
+    return nullptr;
 }
 
 template<typename T, typename F>

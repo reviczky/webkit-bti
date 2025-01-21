@@ -85,7 +85,6 @@ HTMLImageElement::HTMLImageElement(const QualifiedName& tagName, Document& docum
     , FormAssociatedElement(form)
     , ActiveDOMObject(document)
     , m_imageLoader(makeUniqueWithoutRefCountedCheck<HTMLImageLoader>(*this))
-    , m_compositeOperator(CompositeOperator::SourceOver)
     , m_imageDevicePixelRatio(1.0f)
 {
     ASSERT(hasTagName(imgTag));
@@ -397,13 +396,6 @@ void HTMLImageElement::attributeChanged(const QualifiedName& name, const AtomStr
         if (isInTreeScope() && !m_parsedUsemap.isNull())
             treeScope().addImageElementByUsemap(m_parsedUsemap, *this);
         break;
-    case AttributeNames::compositeAttr: {
-        // FIXME: images don't support blend modes in their compositing attribute.
-        BlendMode blendOp = BlendMode::Normal;
-        if (!parseCompositeAndBlendOperator(newValue, m_compositeOperator, blendOp))
-            m_compositeOperator = CompositeOperator::SourceOver;
-        break;
-    }
     case AttributeNames::loadingAttr:
         // No action needed for eager to lazy transition.
         if (!hasLazyLoadableAttributeValue(newValue))
@@ -1071,11 +1063,12 @@ void HTMLImageElement::invalidateAttributeMapping()
     invalidateStyle();
 }
 
-Ref<Element> HTMLImageElement::cloneElementWithoutAttributesAndChildren(Document& targetDocument)
+Ref<Element> HTMLImageElement::cloneElementWithoutAttributesAndChildren(TreeScope& treeScope)
 {
-    auto clone = create(targetDocument);
+    Ref document = treeScope.documentScope();
+    auto clone = create(document);
 #if ENABLE(ATTACHMENT_ELEMENT)
-    cloneAttachmentAssociatedElementWithoutAttributesAndChildren(clone, targetDocument);
+    cloneAttachmentAssociatedElementWithoutAttributesAndChildren(clone, document);
 #endif
     return clone;
 }
@@ -1087,14 +1080,12 @@ void HTMLImageElement::setFetchPriorityForBindings(const AtomString& value)
 
 String HTMLImageElement::fetchPriorityForBindings() const
 {
-    return convertEnumerationToString(fetchPriorityHint());
+    return convertEnumerationToString(fetchPriority());
 }
 
-RequestPriority HTMLImageElement::fetchPriorityHint() const
+RequestPriority HTMLImageElement::fetchPriority() const
 {
-    if (document().settings().fetchPriorityEnabled())
-        return parseEnumerationFromString<RequestPriority>(attributeWithoutSynchronization(fetchpriorityAttr)).value_or(RequestPriority::Auto);
-    return RequestPriority::Auto;
+    return parseEnumerationFromString<RequestPriority>(attributeWithoutSynchronization(fetchpriorityAttr)).value_or(RequestPriority::Auto);
 }
 
 bool HTMLImageElement::originClean(const SecurityOrigin& origin) const

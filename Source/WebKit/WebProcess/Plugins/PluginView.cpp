@@ -28,10 +28,10 @@
 
 #if ENABLE(PDF_PLUGIN)
 
+#include "DocumentEditingContext.h"
 #include "FrameInfoData.h"
 #include "PDFPlugin.h"
 #include "UnifiedPDFPlugin.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
 #include "WebKeyboardEvent.h"
 #include "WebLoaderStrategy.h"
@@ -45,6 +45,7 @@
 #include <WebCore/CookieJar.h>
 #include <WebCore/Credential.h>
 #include <WebCore/CredentialStorage.h>
+#include <WebCore/DocumentInlines.h>
 #include <WebCore/DocumentLoader.h>
 #include <WebCore/EventHandler.h>
 #include <WebCore/EventNames.h>
@@ -241,6 +242,7 @@ PluginView::PluginView(HTMLPlugInElement& element, const URL& mainResourceURL, c
 {
     protectedPlugin()->startLoading();
     m_webPage->addPluginView(*this);
+    updateDocumentForPluginSizingBehavior();
 }
 
 PluginView::~PluginView()
@@ -672,12 +674,28 @@ void PluginView::scrollToRevealTextMatch(const WebFoundTextRange::PDFData& match
     return protectedPlugin()->scrollToRevealTextMatch(match);
 }
 
+String PluginView::fullDocumentString() const
+{
+    if (!m_isInitialized)
+        return { };
+
+    return protectedPlugin()->fullDocumentString();
+}
+
 String PluginView::selectionString() const
 {
     if (!m_isInitialized)
         return String();
 
     return protectedPlugin()->selectionString();
+}
+
+std::pair<String, String> PluginView::stringsBeforeAndAfterSelection(int characterCount) const
+{
+    if (!m_isInitialized)
+        return { };
+
+    return protectedPlugin()->stringsBeforeAndAfterSelection(characterCount);
 }
 
 void PluginView::handleEvent(Event& event)
@@ -1111,11 +1129,80 @@ void PluginView::openWithPreview(CompletionHandler<void(const String&, FrameInfo
 }
 
 #if PLATFORM(IOS_FAMILY)
+
 void PluginView::pluginDidInstallPDFDocument(double initialScale)
 {
     protectedWebPage()->pluginDidInstallPDFDocument(initialScale);
 }
-#endif
+
+void PluginView::setSelectionRange(FloatPoint pointInRootView, TextGranularity granularity)
+{
+    protectedPlugin()->setSelectionRange(pointInRootView, granularity);
+}
+
+SelectionWasFlipped PluginView::moveSelectionEndpoint(FloatPoint pointInRootView, SelectionEndpoint endpoint)
+{
+    return protectedPlugin()->moveSelectionEndpoint(pointInRootView, endpoint);
+}
+
+SelectionEndpoint PluginView::extendInitialSelection(FloatPoint pointInRootView, TextGranularity granularity)
+{
+    return protectedPlugin()->extendInitialSelection(pointInRootView, granularity);
+}
+
+DocumentEditingContext PluginView::documentEditingContext(DocumentEditingContextRequest&& request) const
+{
+    return protectedPlugin()->documentEditingContext(WTFMove(request));
+}
+
+void PluginView::clearSelection()
+{
+    protectedPlugin()->clearSelection();
+}
+
+std::pair<URL, FloatRect> PluginView::linkURLAndBoundsAtPoint(FloatPoint pointInRootView) const
+{
+    return protectedPlugin()->linkURLAndBoundsAtPoint(pointInRootView);
+}
+
+std::optional<FloatRect> PluginView::highlightRectForTapAtPoint(FloatPoint pointInRootView) const
+{
+    return protectedPlugin()->highlightRectForTapAtPoint(pointInRootView);
+}
+
+void PluginView::handleSyntheticClick(PlatformMouseEvent&& event)
+{
+    protectedPlugin()->handleSyntheticClick(WTFMove(event));
+}
+
+CursorContext PluginView::cursorContext(FloatPoint pointInRootView) const
+{
+    return protectedPlugin()->cursorContext(pointInRootView);
+}
+
+#endif // PLATFORM(IOS_FAMILY)
+
+bool PluginView::populateEditorStateIfNeeded(EditorState& state) const
+{
+    return protectedPlugin()->populateEditorStateIfNeeded(state);
+}
+
+bool PluginView::shouldRespectPageScaleAdjustments() const
+{
+    if (!m_isInitialized)
+        return false;
+
+    return protectedPlugin()->shouldRespectPageScaleAdjustments();
+}
+
+void PluginView::updateDocumentForPluginSizingBehavior()
+{
+    if (!protectedPlugin()->shouldSizeToFitContent())
+        return;
+    // The styles in PluginDocumentParser are constructed to respond to this class.
+    if (RefPtr documentElement = protectedPluginElement()->protectedDocument()->protectedDocumentElement())
+        documentElement->setAttributeWithoutSynchronization(HTMLNames::classAttr, "plugin-fits-content"_s);
+}
 
 } // namespace WebKit
 

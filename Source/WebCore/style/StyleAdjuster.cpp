@@ -42,6 +42,7 @@
 #include "HTMLDialogElement.h"
 #include "HTMLDivElement.h"
 #include "HTMLInputElement.h"
+#include "HTMLLabelElement.h"
 #include "HTMLMarqueeElement.h"
 #include "HTMLNames.h"
 #include "HTMLSlotElement.h"
@@ -548,6 +549,9 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             || style.boxReflect()
             || style.hasFilter()
             || style.hasBackdropFilter()
+#if HAVE(CORE_MATERIAL)
+            || style.hasAppleVisualEffect()
+#endif
             || style.hasBlendMode()
             || style.hasIsolation()
             || style.position() == PositionType::Sticky
@@ -598,7 +602,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
     else
         style.setTextDecorationsInEffect(style.textDecorationLine());
 
-    bool overflowIsClipOrVisible = isOverflowClipOrVisible(style.overflowX()) && isOverflowClipOrVisible(style.overflowX());
+    bool overflowIsClipOrVisible = isOverflowClipOrVisible(style.overflowY()) && isOverflowClipOrVisible(style.overflowX());
 
     if (!overflowIsClipOrVisible && (style.display() == DisplayType::Table || style.display() == DisplayType::InlineTable)) {
         // Tables only support overflow:hidden and overflow:visible and ignore anything else,
@@ -692,6 +696,9 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
             || style.hasIsolation()
             || style.hasMask()
             || style.hasBackdropFilter()
+#if HAVE(CORE_MATERIAL)
+            || style.hasAppleVisualEffect()
+#endif
             || style.hasBlendMode()
             || !style.viewTransitionName().isNone();
         if (RefPtr element = m_element) {
@@ -968,18 +975,15 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
             style.setUserSelect(UserSelect::None);
     }
 
-#if PLATFORM(IOS)
-    if (m_document->quirks().hideForbesVolumeSlider()) {
-        static MainThreadNeverDestroyed<const AtomString> localName("cnx-volume-slider"_s);
-        if (m_element->hasLocalName(localName))
-            style.setEffectiveDisplay(DisplayType::None);
+#if PLATFORM(MAC)
+    if (m_document->quirks().needsZomatoEmailLoginLabelQuirk()) {
+        static MainThreadNeverDestroyed<const AtomString> class1("eNjKGZ"_s);
+        if (is<HTMLLabelElement>(*m_element)
+            && m_element->hasClassName(class1)
+            && style.backgroundColor() == Color { WebCore::Color::white })
+            style.setBackgroundColor({ WebCore::Color::transparentBlack });
     }
-    if (m_document->quirks().hideIGNVolumeSlider()) {
-        static MainThreadNeverDestroyed<const AtomString> className("volume-slider"_s);
-        if (is<HTMLDivElement>(*m_element) && m_element->hasClassName(className))
-            style.setEffectiveDisplay(DisplayType::None);
-    }
-#endif // PLATFORM(IOS)
+#endif
 
 #if PLATFORM(IOS_FAMILY)
     if (m_document->quirks().needsGoogleMapsScrollingQuirk()) {
@@ -987,7 +991,9 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
         if (is<HTMLBodyElement>(*m_element) && m_element->hasClassName(className))
             style.setUsedTouchActions({ TouchAction::Auto });
     }
-#endif
+    if (m_document->quirks().needsFacebookStoriesCreationFormQuirk(*m_element, style))
+        style.setEffectiveDisplay(DisplayType::Flex);
+#endif // PLATFORM(IOS_FAMILY)
 
 #if ENABLE(VIDEO)
     if (m_document->quirks().needsFullscreenDisplayNoneQuirk()) {
@@ -1155,14 +1161,13 @@ auto Adjuster::adjustmentForTextAutosizing(const RenderStyle& style, const Eleme
     return adjustmentForTextAutosizing;
 }
 
-bool Adjuster::adjustForTextAutosizing(RenderStyle& style, const Element& element, AdjustmentForTextAutosizing adjustment)
+bool Adjuster::adjustForTextAutosizing(RenderStyle& style, AdjustmentForTextAutosizing adjustment)
 {
     AutosizeStatus::updateStatus(style);
     if (auto newFontSize = adjustment.newFontSize) {
         auto fontDescription = style.fontDescription();
         fontDescription.setComputedSize(*newFontSize);
         style.setFontDescription(WTFMove(fontDescription));
-        style.fontCascade().update(&element.document().fontSelector());
     }
     if (auto newLineHeight = adjustment.newLineHeight)
         style.setLineHeight({ *newLineHeight, LengthType::Fixed });
@@ -1173,7 +1178,7 @@ bool Adjuster::adjustForTextAutosizing(RenderStyle& style, const Element& elemen
 
 bool Adjuster::adjustForTextAutosizing(RenderStyle& style, const Element& element)
 {
-    return adjustForTextAutosizing(style, element, adjustmentForTextAutosizing(style, element));
+    return adjustForTextAutosizing(style, adjustmentForTextAutosizing(style, element));
 }
 #endif
 

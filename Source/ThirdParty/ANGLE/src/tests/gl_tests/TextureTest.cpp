@@ -6560,6 +6560,38 @@ TEST_P(Texture2DTestES3, DrawWithLevelsOutsideRangeWithInconsistentDimensions)
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::cyan);
 }
 
+// Depth/Stencil textures cannot be 3D.
+TEST_P(Texture3DTestES3, DepthStencil3DDisallowed)
+{
+    const std::array<std::tuple<GLenum, GLenum, GLenum>, 6> testConfigs = {
+        std::make_tuple(GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT),
+        std::make_tuple(GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT),
+        std::make_tuple(GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT),
+        std::make_tuple(GL_DEPTH32F_STENCIL8, GL_DEPTH_STENCIL, GL_FLOAT_32_UNSIGNED_INT_24_8_REV),
+        std::make_tuple(GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8),
+        std::make_tuple(GL_STENCIL_INDEX8, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE)};
+
+    for (auto testConfig : testConfigs)
+    {
+        const GLenum internalformat = std::get<0>(testConfig);
+        const GLenum format         = std::get<1>(testConfig);
+        const GLenum type           = std::get<2>(testConfig);
+
+        if (internalformat == GL_STENCIL_INDEX8 && !IsGLExtensionEnabled("GL_OES_texture_stencil8"))
+        {
+            continue;
+        }
+
+        GLTexture depthTexture;
+        glBindTexture(GL_TEXTURE_3D, depthTexture);
+        glTexImage3D(GL_TEXTURE_3D, 0, internalformat, 16, 16, 16, 0, format, type, nullptr);
+        EXPECT_GL_ERROR(GL_INVALID_OPERATION);
+
+        glTexStorage3D(GL_TEXTURE_3D, 2, internalformat, 16, 16, 16);
+        EXPECT_GL_ERROR(GL_INVALID_OPERATION);
+    }
+}
+
 // Test that drawing works correctly when levels outside the BASE_LEVEL/MAX_LEVEL range do not
 // have images defined.
 TEST_P(Texture3DTestES3, DrawWithLevelsOutsideRangeUndefined)
@@ -11610,6 +11642,33 @@ TEST_P(TextureCubeTestES3, IncompatibleLayerABThenCompatibleLayerABSingleLevel)
     }
 }
 
+// Test that the maximum texture layer can allocate enough memory.
+TEST_P(TextureCubeTestES32, MaxArrayTextureLayersVerify)
+{
+    GLint maxTextureLayers = 0;
+    GLTexture texture;
+
+    glBindTexture(GL_TEXTURE_2D_ARRAY, texture);
+    ASSERT_GL_NO_ERROR();
+
+    glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &maxTextureLayers);
+    ASSERT_GL_NO_ERROR();
+
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, 256, 256, maxTextureLayers, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, nullptr);
+    ASSERT_GL_NO_ERROR();
+
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, 256, 256, maxTextureLayers + 1, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, nullptr);
+    EXPECT_GL_ERROR(GL_INVALID_VALUE);
+
+    glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGBA8, 256, 256, maxTextureLayers);
+    ASSERT_GL_NO_ERROR();
+
+    glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGBA8, 256, 256, maxTextureLayers + 1);
+    EXPECT_GL_ERROR(GL_INVALID_VALUE);
+}
+
 // Tests defining a cube map array texture using glTexImage3D().
 TEST_P(TextureCubeTestES32, ValidateCubeMapArrayTexImage)
 {
@@ -14384,7 +14443,13 @@ TEST_P(TextureBufferTestES31, TestErrorWhenNotEnabled)
 class CopyImageTestES31 : public ANGLETest<>
 {
   protected:
-    CopyImageTestES31() {}
+    CopyImageTestES31()
+    {
+        setConfigRedBits(8);
+        setConfigGreenBits(8);
+        setConfigBlueBits(8);
+        setConfigAlphaBits(8);
+    }
 };
 
 // Test that copies between RGB formats doesn't affect the emulated alpha channel, if any.
@@ -14814,6 +14879,63 @@ TEST_P(CopyImageTestES31, Texture3DSelfCopyImageSubData)
     glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, tex, 1, 1);
     EXPECT_PIXEL_RECT_EQ(0, 0, kWidth >> 1, kHeight >> 1, GLColor::blue);
     ASSERT_GL_NO_ERROR();
+}
+
+// Verify that copying between multisample renderbuffer work
+TEST_P(CopyImageTestES31, MultisampleRenderbufferCopyImageSubData)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_copy_image"));
+
+    constexpr uint32_t kWidth  = 16;
+    constexpr uint32_t kHeight = 16;
+
+    ANGLE_GL_PROGRAM(drawRed, essl1_shaders::vs::Simple(), essl1_shaders::fs::Red());
+
+    GLint maxSample = 0;
+    glGetInternalformativ(GL_RENDERBUFFER, GL_RGBA8, GL_SAMPLES, 1, &maxSample);
+    ASSERT_GL_NO_ERROR();
+
+    GLFramebuffer fboRenderbuffer;
+    GLRenderbuffer srcRenderbuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, fboRenderbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, srcRenderbuffer);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, maxSample, GL_RGBA8, kWidth, kHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                              srcRenderbuffer);
+    ASSERT_GL_NO_ERROR();
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    EXPECT_GL_FRAMEBUFFER_COMPLETE(GL_FRAMEBUFFER);
+
+    /* Draw red into the source renderbuffer */
+    glViewport(0, 0, kWidth, kHeight);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    drawQuad(drawRed, essl1_shaders::PositionAttrib(), 0.5f);
+    ASSERT_GL_NO_ERROR();
+
+    /* Copy source renderbuffer to destination renderbuffer*/
+    GLRenderbuffer dstRenderbuffer;
+    glBindRenderbuffer(GL_RENDERBUFFER, dstRenderbuffer);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, maxSample, GL_RGBA8, kWidth, kHeight);
+    glCopyImageSubDataEXT(srcRenderbuffer, GL_RENDERBUFFER, 0, 0, 0, 0, dstRenderbuffer,
+                          GL_RENDERBUFFER, 0, 0, 0, 0, kWidth, kHeight, 1);
+    ASSERT_GL_NO_ERROR();
+
+    /* Resolve the dstRenderbuffer */
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fboRenderbuffer);
+    glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                              dstRenderbuffer);
+    ASSERT_GL_NO_ERROR();
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    EXPECT_GL_FRAMEBUFFER_COMPLETE(GL_FRAMEBUFFER);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glBlitFramebuffer(0, 0, kWidth, kHeight, 0, 0, kWidth, kHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    ASSERT_GL_NO_ERROR();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    EXPECT_PIXEL_RECT_EQ(0, 0, kWidth, kHeight, GLColor::red);
 }
 
 class TextureChangeStorageUploadTest : public ANGLETest<>

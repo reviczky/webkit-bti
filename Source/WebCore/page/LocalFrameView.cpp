@@ -251,7 +251,7 @@ void LocalFrameView::reset()
     m_isOverlapped = false;
     m_contentIsOpaque = false;
     m_updateEmbeddedObjectsTimer.stop();
-    m_wasScrolledByUser = false;
+    m_lastUserScrollType = std::nullopt;
     m_delayedScrollEventTimer.stop();
     m_shouldScrollToFocusedElement = false;
     m_delayedScrollToFocusedElementTimer.stop();
@@ -663,7 +663,7 @@ void LocalFrameView::applyPaginationToViewport()
         if (!columnGapLength.isNormal()) {
             auto* renderBox = dynamicDowncast<RenderBox>(documentOrBodyRenderer);
             if (auto* containerForPaginationGap = renderBox ? renderBox : documentOrBodyRenderer->containingBlock())
-                pagination.gap = valueForLength(columnGapLength.length(), containerForPaginationGap->availableLogicalWidth()).toUnsigned();
+                pagination.gap = valueForLength(columnGapLength.length(), containerForPaginationGap->contentBoxLogicalWidth()).toUnsigned();
         }
     }
     setPagination(pagination);
@@ -746,38 +746,6 @@ void LocalFrameView::styleAndRenderTreeDidChange()
         return;
 
     checkAndDispatchDidReachVisuallyNonEmptyState();
-}
-
-bool LocalFrameView::updateCompositingLayersAfterStyleChange()
-{
-    // If we expect to update compositing after an incipient layout, don't do so here.
-    auto* renderView = this->renderView();
-    if (!renderView)
-        return false;
-    if (needsLayout() || layoutContext().isInLayout())
-        return false;
-    renderView->layer()->updateLayerPositionsAfterStyleChange();
-    return renderView->compositor().didRecalcStyleWithNoPendingLayout();
-}
-
-void LocalFrameView::updateCompositingLayersAfterLayout()
-{
-    RenderView* renderView = this->renderView();
-    if (!renderView)
-        return;
-
-    renderView->compositor().updateCompositingLayers(CompositingUpdateType::AfterLayout);
-    m_updateCompositingLayersIsPending = false;
-}
-
-bool LocalFrameView::updateCompositingLayersAfterLayoutIfNeeded()
-{
-    if (m_updateCompositingLayersIsPending) {
-        updateCompositingLayersAfterLayout();
-        return true;
-    }
-
-    return false;
 }
 
 void LocalFrameView::invalidateScrollbarsForAllScrollableAreas()
@@ -1271,45 +1239,17 @@ void LocalFrameView::willDoLayout(SingleThreadWeakPtr<RenderElement> layoutRoot)
     forceLayoutParentViewIfNeeded();
 }
 
-bool LocalFrameView::hasPendingUpdateLayerPositions() const
-{
-    return !!m_pendingUpdateLayerPositions;
-}
-
-void LocalFrameView::flushUpdateLayerPositions()
-{
-    if (!m_pendingUpdateLayerPositions)
-        return;
-
-    UpdateLayerPositions updateLayerPositions = *std::exchange(m_pendingUpdateLayerPositions, std::nullopt);
-
-    if (CheckedPtr view = renderView()) {
-        view->layer()->updateLayerPositionsAfterLayout(updateLayerPositions.layoutIdentifier, updateLayerPositions.needsFullRepaint, updateLayerPositions.didRunSimplifiedLayout ? RenderLayer::CanUseSimplifiedRepaintPass::Yes : RenderLayer::CanUseSimplifiedRepaintPass::No);
-        m_renderLayerPositionUpdateCount++;
-    }
-}
-
-void LocalFrameView::didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bool didRunSimplifiedLayout, bool canDeferUpdateLayerPositions)
+void LocalFrameView::didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bool canDeferUpdateLayerPositions)
 {
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-    m_layoutUpdateCount++;
 
-    UpdateLayerPositions updateLayerPositions { layoutContext().layoutIdentifier(), layoutContext().needsFullRepaint(), didRunSimplifiedLayout };
-    if (m_pendingUpdateLayerPositions)
-        m_pendingUpdateLayerPositions->merge(updateLayerPositions);
-    else
-        m_pendingUpdateLayerPositions = updateLayerPositions;
-
-    if (!canDeferUpdateLayerPositions)
-        flushUpdateLayerPositions();
-
-    m_updateCompositingLayersIsPending = true;
+    layoutContext().didLayout(canDeferUpdateLayerPositions);
 
     Ref document = *m_frame->document();
 
 #if PLATFORM(COCOA) || PLATFORM(WIN) || PLATFORM(GTK)
     if (CheckedPtr cache = document->existingAXObjectCache())
-        cache->postNotification(layoutRoot.get(), AXObjectCache::AXLayoutComplete);
+        cache->postNotification(layoutRoot.get(), AXNotification::LayoutComplete);
 #else
     UNUSED_PARAM(layoutRoot);
 #endif
@@ -2564,7 +2504,7 @@ void LocalFrameView::textFragmentIndicatorTimerFired()
         return;
     
     if (textIndicator) {
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
+        RefPtr localMainFrame = page->localMainFrame();
         if (!localMainFrame)
             return;
 
@@ -2645,7 +2585,7 @@ void LocalFrameView::scrollRectToVisibleInChildView(const LayoutRect& absoluteRe
     // If scrollbars aren't explicitly forbidden, permit scrolling.
     if (m_frame->scrollingMode() == ScrollbarMode::AlwaysOff) {
         // If scrollbars are forbidden, user initiated scrolls should obviously be ignored.
-        if (wasScrolledByUser())
+        if (m_lastUserScrollType == UserScrollType::Explicit)
             return;
         // Forbid autoscrolls when scrollbars are off, but permits other programmatic scrolls, like navigation to an anchor.
         if (m_frame->eventHandler().autoscrollInProgress())
@@ -2922,7 +2862,7 @@ void LocalFrameView::updateLayerPositionsAfterScrolling()
     if (!layoutContext().isLayoutNested() && hasViewportConstrainedObjects()) {
         if (auto* renderView = this->renderView()) {
             updateWidgetPositions();
-            flushUpdateLayerPositions();
+            layoutContext().flushUpdateLayerPositions();
             renderView->layer()->updateLayerPositionsAfterDocumentScroll();
         }
     }
@@ -2930,7 +2870,7 @@ void LocalFrameView::updateLayerPositionsAfterScrolling()
 
 void LocalFrameView::updateLayerPositionsAfterOverflowScroll(RenderLayer& layer)
 {
-    flushUpdateLayerPositions();
+    layoutContext().flushUpdateLayerPositions();
     layer.updateLayerPositionsAfterOverflowScroll();
     scheduleUpdateWidgetPositions();
 }
@@ -3264,7 +3204,7 @@ static bool shouldEnableSpeculativeTilingDuringLoading(const LocalFrameView& vie
 void LocalFrameView::enableSpeculativeTilingIfNeeded()
 {
     ASSERT(!m_speculativeTilingEnabled);
-    if (m_wasScrolledByUser) {
+    if (wasScrolledByUser()) {
         m_speculativeTilingEnabled = true;
         return;
     }
@@ -3299,7 +3239,7 @@ void LocalFrameView::show()
         // Turn off speculative tiling for a brief moment after a LocalFrameView appears on screen.
         // Note that adjustTiledBackingCoverage() kicks the (500ms) timer to re-enable it.
         m_speculativeTilingEnabled = false;
-        m_wasScrolledByUser = false;
+        m_lastUserScrollType = std::nullopt;
         adjustTiledBackingCoverage();
     }
 }
@@ -3430,15 +3370,12 @@ void LocalFrameView::updateBaseBackgroundColorIfNecessary()
 void LocalFrameView::updateBackgroundRecursively(const std::optional<Color>& backgroundColor)
 {
     auto intrinsicBaseBackgroundColor = [](LocalFrameView& view) -> Color {
-#if HAVE(OS_DARK_MODE_SUPPORT)
 #if PLATFORM(COCOA)
         static const auto cssValueControlBackground = CSSValueAppleSystemControlBackground;
 #else
         static const auto cssValueControlBackground = CSSValueWindow;
 #endif
         return RenderTheme::singleton().systemColor(cssValueControlBackground, view.styleColorOptions());
-#endif
-        return Color::white;
     };
 
     for (Frame* frame = m_frame.ptr(); frame; frame = frame->tree().traverseNext(m_frame.ptr())) {
@@ -4010,15 +3947,19 @@ void LocalFrameView::performSizeToContentAutoSize()
 
     auto document = m_frame->protectedDocument();
     auto& renderView = *document->renderView();
+    auto* documentRenderer = downcast<RenderElement>(renderView.firstChild());
+    if (!documentRenderer) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
     auto layoutWithAdjustedStyleIfNeeded = [&] {
         document->updateStyleIfNeeded();
-        if (auto* documentRenderer = downcast<RenderElement>(renderView.firstChild())) {
-            auto& style = documentRenderer->mutableStyle();
-            if (style.logicalHeight().isPercent()) {
-                // Percent height values on the document renderer when we don't really have a proper viewport size can
-                // result incorrect rendering in certain layout contexts (e.g flex).
-                style.setLogicalHeight({ });
-            }
+        auto& style = documentRenderer->mutableStyle();
+        if (style.logicalHeight().isPercent()) {
+            // Percent height values on the document renderer when we don't really have a proper viewport size can
+            // result incorrect rendering in certain layout contexts (e.g flex).
+            style.setLogicalHeight({ });
         }
         document->updateLayout();
     };
@@ -4034,7 +3975,7 @@ void LocalFrameView::performSizeToContentAutoSize()
     for (int i = 0; i < 2; i++) {
         layoutWithAdjustedStyleIfNeeded();
         // Update various sizes including contentsSize, scrollHeight, etc.
-        auto newSize = IntSize { renderView.minPreferredLogicalWidth(), renderView.documentRect().height() };
+        auto newSize = IntSize { documentRenderer->minPreferredLogicalWidth(), renderView.documentRect().height() };
 
         // Check to see if a scrollbar is needed for a given dimension and
         // if so, increase the other dimension to account for the scrollbar.
@@ -4633,25 +4574,25 @@ void LocalFrameView::traverseForPaintInvalidation(NullGraphicsContext::PaintInva
 
 bool LocalFrameView::wasScrolledByUser() const
 {
-    return m_wasScrolledByUser;
+    return m_lastUserScrollType.has_value();
 }
 
-void LocalFrameView::setWasScrolledByUser(bool wasScrolledByUser)
+void LocalFrameView::setLastUserScrollType(std::optional<UserScrollType> userScrollType)
 {
-    LOG(Scrolling, "LocalFrameView::setWasScrolledByUser at %d", wasScrolledByUser);
+    LOG(Scrolling, "LocalFrameView::setLastUserScrollType at %d", userScrollType ? enumToUnderlyingType(*userScrollType) : -1);
 
     cancelScheduledScrolls();
     if (currentScrollType() == ScrollType::Programmatic)
         return;
 
     RefPtr document = m_frame->document();
-    if (wasScrolledByUser && document)
+    if (userScrollType && document)
         document->setGotoAnchorNeededAfterStylesheetsLoad(false);
 
     m_maintainScrollPositionAnchor = nullptr;
-    if (m_wasScrolledByUser == wasScrolledByUser)
+    if (m_lastUserScrollType == userScrollType)
         return;
-    m_wasScrolledByUser = wasScrolledByUser;
+    m_lastUserScrollType = userScrollType;
     adjustTiledBackingCoverage();
 }
 
@@ -5353,22 +5294,22 @@ String LocalFrameView::trackedRepaintRectsAsText() const
 
 void LocalFrameView::startTrackingLayoutUpdates()
 {
-    m_layoutUpdateCount = 0;
+    layoutContext().startTrackingLayoutUpdates();
 }
 
 unsigned LocalFrameView::layoutUpdateCount()
 {
-    return m_layoutUpdateCount;
+    return layoutContext().layoutUpdateCount();
 }
 
 void LocalFrameView::startTrackingRenderLayerPositionUpdates()
 {
-    m_renderLayerPositionUpdateCount = 0;
+    layoutContext().startTrackingRenderLayerPositionUpdates();
 }
 
 unsigned LocalFrameView::renderLayerPositionUpdateCount()
 {
-    return m_renderLayerPositionUpdateCount;
+    return layoutContext().renderLayerPositionUpdateCount();
 }
 
 void LocalFrameView::addScrollableAreaForAnimatedScroll(ScrollableArea* scrollableArea)
@@ -5691,7 +5632,7 @@ void LocalFrameView::firePaintRelatedMilestonesIfNeeded()
 
     m_milestonesPendingPaint = { };
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
+    RefPtr localMainFrame = page->localMainFrame();
     if (milestonesAchieved && localMainFrame)
         localMainFrame->loader().didReachLayoutMilestone(milestonesAchieved);
 }
@@ -5765,7 +5706,7 @@ void LocalFrameView::willRemoveWidgetFromRenderTree(Widget& widget)
     m_widgetsInRenderTree.remove(widget);
 }
 
-static Vector<Ref<Widget>> collectAndProtectWidgets(const HashSet<SingleThreadWeakRef<Widget>>& set)
+static Vector<Ref<Widget>> collectAndProtectWidgets(const UncheckedKeyHashSet<SingleThreadWeakRef<Widget>>& set)
 {
     return WTF::map(set, [](auto& widget) -> Ref<Widget> {
         return widget.get();

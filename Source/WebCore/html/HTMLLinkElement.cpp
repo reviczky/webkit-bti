@@ -43,6 +43,7 @@
 #include "FrameLoader.h"
 #include "FrameTree.h"
 #include "HTMLAnchorElement.h"
+#include "HTMLDocumentParser.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "IdTargetObserver.h"
@@ -71,7 +72,6 @@
 #include <wtf/Ref.h>
 #include <wtf/Scope.h>
 #include <wtf/StdLibExtras.h>
-#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
@@ -88,16 +88,18 @@ static LinkEventSender& linkLoadEventSender()
 }
 
 class ExpectIdTargetObserver final : public IdTargetObserver {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(ExpectIdTargetObserver);
+    WTF_MAKE_TZONE_ALLOCATED(ExpectIdTargetObserver);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ExpectIdTargetObserver);
 public:
     ExpectIdTargetObserver(const AtomString& id, HTMLLinkElement&);
 
-    void idTargetChanged() override;
+    void idTargetChanged(Element&) override;
 
 private:
     WeakPtr<HTMLLinkElement, WeakPtrImplWithEventTargetData> m_element;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ExpectIdTargetObserver);
 
 ExpectIdTargetObserver::ExpectIdTargetObserver(const AtomString& id, HTMLLinkElement& element)
     : IdTargetObserver(element.treeScope().idTargetObserverRegistry(), id)
@@ -105,10 +107,10 @@ ExpectIdTargetObserver::ExpectIdTargetObserver(const AtomString& id, HTMLLinkEle
 {
 }
 
-void ExpectIdTargetObserver::idTargetChanged()
+void ExpectIdTargetObserver::idTargetChanged(Element& element)
 {
     if (m_element)
-        m_element->processInternalResourceLink();
+        m_element->processInternalResourceLink(&element);
 }
 
 inline HTMLLinkElement::HTMLLinkElement(const QualifiedName& tagName, Document& document, bool createdByParser)
@@ -314,7 +316,7 @@ void HTMLLinkElement::process()
         attributeWithoutSynchronization(imagesizesAttr),
         nonce(),
         referrerPolicy(),
-        fetchPriorityHint(),
+        fetchPriority(),
     };
 
     m_linkLoader.loadLink(params, document);
@@ -375,7 +377,7 @@ void HTMLLinkElement::process()
             options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
         options.integrity = m_integrityMetadataForPendingSheetRequest;
         options.referrerPolicy = params.referrerPolicy;
-        options.fetchPriorityHint = fetchPriorityHint();
+        options.fetchPriority = fetchPriority();
 
         auto request = createPotentialAccessControlRequest(m_url, WTFMove(options), document, crossOrigin());
         request.setPriority(WTFMove(priority));
@@ -425,7 +427,7 @@ void HTMLLinkElement::clearSheet()
 }
 
 // https://html.spec.whatwg.org/multipage/links.html#process-internal-resource-link
-void HTMLLinkElement::processInternalResourceLink(HTMLAnchorElement* anchor)
+void HTMLLinkElement::processInternalResourceLink(Element* element)
 {
     if (document().wasRemovedLastRefCalled())
         return;
@@ -440,15 +442,32 @@ void HTMLLinkElement::processInternalResourceLink(HTMLAnchorElement* anchor)
     }
 
     RefPtr<Element> indicatedElement;
-    // If the change originated from an anchor, then we can just check if that's
+    // If the change originated from a specific element, then we can just check if that's
     // the right one instead doing a tree search using the name
-    if (anchor) {
-        if (anchor->name() == m_url.fragmentIdentifier())
-            indicatedElement = anchor;
-    } else
-        indicatedElement = document().findAnchor(m_url.fragmentIdentifier());
+    if (element) {
+        auto elementMatchesLinkId = [&](StringView id) {
+            if (element->getIdAttribute() == id)
+                return true;
+            RefPtr anchorElement = dynamicDowncast<HTMLAnchorElement>(element);
+            if (anchorElement && document().isMatchingAnchor(*anchorElement, m_url.fragmentIdentifier()))
+                return true;
+            return false;
+        };
 
-    // FIXME: Bug 279167 - Don't match if indicatedElement "is on a stack of open elements of an HTML parser whose associated Document is doc"
+        if (element->isConnected() && (elementMatchesLinkId(m_url.fragmentIdentifier()) || elementMatchesLinkId(PAL::decodeURLEscapeSequences(m_url.fragmentIdentifier()))))
+            indicatedElement = element;
+    } else {
+        indicatedElement = document().findAnchor(m_url.fragmentIdentifier());
+        if (!indicatedElement)
+            indicatedElement = document().findAnchor(PAL::decodeURLEscapeSequences(m_url.fragmentIdentifier()));
+    }
+
+    // Don't match if indicatedElement "is on a stack of open elements of an HTML parser whose associated Document is doc"
+    if (RefPtr parser = document().htmlDocumentParser(); parser && indicatedElement) {
+        if (parser->isOnStackOfOpenElements(*indicatedElement))
+            indicatedElement = nullptr;
+    }
+
     if (document().readyState() == Document::ReadyState::Loading && isConnected() && mediaAttributeMatches() && !indicatedElement) {
         potentiallyBlockRendering();
         if (!m_expectIdTargetObserver)
@@ -824,14 +843,12 @@ void HTMLLinkElement::setFetchPriorityForBindings(const AtomString& value)
 
 String HTMLLinkElement::fetchPriorityForBindings() const
 {
-    return convertEnumerationToString(fetchPriorityHint());
+    return convertEnumerationToString(fetchPriority());
 }
 
-RequestPriority HTMLLinkElement::fetchPriorityHint() const
+RequestPriority HTMLLinkElement::fetchPriority() const
 {
-    if (document().settings().fetchPriorityEnabled())
-        return parseEnumerationFromString<RequestPriority>(attributeWithoutSynchronization(fetchpriorityAttr)).value_or(RequestPriority::Auto);
-    return RequestPriority::Auto;
+    return parseEnumerationFromString<RequestPriority>(attributeWithoutSynchronization(fetchpriorityAttr)).value_or(RequestPriority::Auto);
 }
 
 } // namespace WebCore

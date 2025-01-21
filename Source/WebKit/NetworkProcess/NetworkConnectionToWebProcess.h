@@ -86,6 +86,7 @@ enum class AdvancedPrivacyProtections : uint16_t;
 enum class ApplyTrackingPrevention : bool;
 enum class StorageAccessScope : bool;
 enum class IsLoggedIn : uint8_t;
+enum class ShouldPartitionCookie : bool;
 struct ClientOrigin;
 struct Cookie;
 struct CookieStoreGetOptions;
@@ -146,7 +147,7 @@ public:
 
     using RegistrableDomain = WebCore::RegistrableDomain;
 
-    static Ref<NetworkConnectionToWebProcess> create(NetworkProcess&, WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters&&, IPC::Connection::Identifier);
+    static Ref<NetworkConnectionToWebProcess> create(NetworkProcess&, WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters&&, IPC::Connection::Identifier&&);
     virtual ~NetworkConnectionToWebProcess();
 
     using IPC::Connection::Client::checkedPtrCount;
@@ -154,8 +155,12 @@ public:
     using IPC::Connection::Client::incrementCheckedPtrCount;
     using IPC::Connection::Client::decrementCheckedPtrCount;
 
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
-    void updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess) { m_sharedPreferencesForWebProcess = WTFMove(sharedPreferencesForWebProcess); }
+    SharedPreferencesForWebProcess sharedPreferencesForWebProcessValue() const { return m_sharedPreferencesForWebProcess; }
+    void updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&&);
 
     PAL::SessionID sessionID() const { return m_sessionID; }
     NetworkSession* networkSession();
@@ -264,7 +269,7 @@ public:
     bool isAlwaysOnLoggingAllowed() const;
 
 private:
-    NetworkConnectionToWebProcess(NetworkProcess&, WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters&&, IPC::Connection::Identifier);
+    NetworkConnectionToWebProcess(NetworkProcess&, WebCore::ProcessIdentifier, PAL::SessionID, NetworkProcessConnectionParameters&&, IPC::Connection::Identifier&&);
 
     void didFinishPreconnection(WebCore::ResourceLoaderIdentifier preconnectionIdentifier, const WebCore::ResourceError&);
     WebCore::NetworkStorageSession* storageSession();
@@ -300,7 +305,7 @@ private:
     void setCookiesFromDOM(const URL& firstParty, const WebCore::SameSiteInfo&, const URL&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::ApplyTrackingPrevention, const String& cookieString, WebCore::ShouldRelaxThirdPartyCookieBlocking);
     void cookieRequestHeaderFieldValue(const URL& firstParty, const WebCore::SameSiteInfo&, const URL&, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, WebCore::IncludeSecureCookies, WebCore::ApplyTrackingPrevention, WebCore::ShouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(String cookieString, bool secureCookiesAccessed)>&&);
     void getRawCookies(const URL& firstParty, const WebCore::SameSiteInfo&, const URL&, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, WebCore::ApplyTrackingPrevention, WebCore::ShouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(Vector<WebCore::Cookie>&&)>&&);
-    void setRawCookie(const WebCore::Cookie&);
+    void setRawCookie(const URL& firstParty, const WebCore::Cookie&, WebCore::ShouldPartitionCookie);
     void deleteCookie(const URL&, const String& cookieName, CompletionHandler<void()>&&);
     void cookiesEnabledSync(const URL& firstParty, const URL&, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, WebCore::ShouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(bool enabled)>&&);
     void cookiesEnabled(const URL& firstParty, const URL&, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, WebCore::ShouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(bool enabled)>&&);
@@ -334,6 +339,7 @@ private:
     void establishSWContextConnection(WebPageProxyIdentifier, WebCore::Site&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, CompletionHandler<void()>&&);
     void closeSWContextConnection();
     void unregisterSWConnection();
+    void pingPongForServiceWorkers(CompletionHandler<void(bool)>&& callback) { callback(true); }
 
     void establishSharedWorkerContextConnection(WebPageProxyIdentifier, WebCore::Site&&, CompletionHandler<void()>&&);
     void closeSharedWorkerContextConnection();
@@ -360,6 +366,7 @@ private:
 
 #if USE(LIBWEBRTC)
     NetworkRTCProvider& rtcProvider();
+    Ref<NetworkRTCProvider> protectedRTCProvider() { return rtcProvider(); }
 #endif
 #if ENABLE(WEB_RTC)
     void registerToRTCDataChannelProxy();
@@ -367,6 +374,9 @@ private:
 #endif
         
     bool allowTestOnlyIPC() const { return m_sharedPreferencesForWebProcess.allowTestOnlyIPC; }
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    bool builtInNotificationsEnabled() const { return m_sharedPreferencesForWebProcess.builtInNotificationsEnabled; }
+#endif
 
     void clearPageSpecificData(WebCore::PageIdentifier);
 
@@ -391,7 +401,7 @@ private:
     void domCookiesForHost(const URL& host, CompletionHandler<void(const Vector<WebCore::Cookie>&)>&&);
 
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
-    void subscribeToCookieChangeNotifications(const String& host);
+    void subscribeToCookieChangeNotifications(const URL&, const URL& firstParty, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::ShouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(bool)>&&);
     void unsubscribeFromCookieChangeNotifications(const String& host);
 
     // WebCore::CookieChangeObserver.
@@ -409,7 +419,7 @@ private:
     void navigatorGetPushPermissionState(URL&& scopeURL, CompletionHandler<void(Expected<uint8_t, WebCore::ExceptionData>&&)>&&);
 #endif
 
-    void initializeWebTransportSession(URL&&, CompletionHandler<void(std::optional<WebTransportSessionIdentifier>)>&&);
+    void initializeWebTransportSession(URL&&, WebPageProxyIdentifier&&, WebCore::ClientOrigin&&, CompletionHandler<void(std::optional<WebTransportSessionIdentifier>)>&&);
     void destroyWebTransportSession(WebTransportSessionIdentifier);
 
     struct ResourceNetworkActivityTracker {
@@ -517,7 +527,7 @@ private:
     SharedPreferencesForWebProcess m_sharedPreferencesForWebProcess;
     HashSet<String> m_allowedFilePaths;
 #if ENABLE(IPC_TESTING_API)
-    IPCTester m_ipcTester;
+    const Ref<IPCTester> m_ipcTester;
 #endif
 
     HashMap<WebTransportSessionIdentifier, Ref<NetworkTransportSession>> m_networkTransportSessions;

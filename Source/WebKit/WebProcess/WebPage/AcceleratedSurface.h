@@ -41,31 +41,29 @@ class Region;
 
 namespace WebKit {
 
+class ThreadedCompositor;
 class WebPage;
 
 class AcceleratedSurface {
     WTF_MAKE_NONCOPYABLE(AcceleratedSurface);
     WTF_MAKE_TZONE_ALLOCATED(AcceleratedSurface);
 public:
-    static std::unique_ptr<AcceleratedSurface> create(WebPage&, Function<void()>&& frameCompleteHandler);
+    static std::unique_ptr<AcceleratedSurface> create(ThreadedCompositor&, WebPage&, Function<void()>&& frameCompleteHandler);
     virtual ~AcceleratedSurface() = default;
 
     virtual uint64_t window() const { ASSERT_NOT_REACHED(); return 0; }
     virtual uint64_t surfaceID() const { ASSERT_NOT_REACHED(); return 0; }
-    virtual bool hostResize(const WebCore::IntSize&);
-    virtual void clientResize(const WebCore::IntSize&) { };
+    virtual bool resize(const WebCore::IntSize&);
     virtual bool shouldPaintMirrored() const { return false; }
 
     virtual void didCreateGLContext() { }
     virtual void willDestroyGLContext() { }
     virtual void finalize() { }
     virtual void willRenderFrame() { }
-#if ENABLE(WPE_PLATFORM) || PLATFORM(GTK)
-    virtual void didRenderFrame(WebCore::Region&&) { }
-
-    virtual const WebCore::Damage& addDamage(const WebCore::Damage&) { return WebCore::Damage::invalid(); };
-#else
     virtual void didRenderFrame() { }
+
+#if ENABLE(DAMAGE_TRACKING)
+    virtual const WebCore::Damage& addDamage(const WebCore::Damage&) { return WebCore::Damage::invalid(); };
 #endif
 
     virtual void didCreateCompositingRunLoop(WTF::RunLoop&) { }
@@ -78,7 +76,6 @@ public:
     virtual void visibilityDidChange(bool) { }
     virtual bool backgroundColorDidChange();
 
-    const WebCore::IntSize& size() const { return m_size; }
     void clearIfNeeded();
 
 protected:

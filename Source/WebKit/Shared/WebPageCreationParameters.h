@@ -33,7 +33,6 @@
 #include "UserContentControllerParameters.h"
 #include "ViewWindowCoordinates.h"
 #include "VisitedLinkTableIdentifier.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebPageGroupData.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebPreferencesStore.h"
@@ -83,6 +82,10 @@
 
 #if PLATFORM(VISION) && ENABLE(GAMEPAD)
 #include <WebCore/ShouldRequireExplicitConsentForGamepadAccess.h>
+#endif
+
+#if HAVE(AUDIT_TOKEN)
+#include "CoreIPCAuditToken.h"
 #endif
 
 namespace WebCore {
@@ -182,7 +185,6 @@ struct WebPageCreationParameters {
 
 #if PLATFORM(MAC)
     std::optional<WebCore::DestinationColorSpace> colorSpace { };
-    bool useSystemAppearance { false };
     bool useFormSemanticContext { false };
     int headerBannerHeight { 0 };
     int footerBannerHeight { 0 };
@@ -344,6 +346,10 @@ struct WebPageCreationParameters {
 
 #if PLATFORM(VISION) && ENABLE(GAMEPAD)
     WebCore::ShouldRequireExplicitConsentForGamepadAccess gamepadAccessRequiresExplicitConsent { WebCore::ShouldRequireExplicitConsentForGamepadAccess::No };
+#endif
+
+#if HAVE(AUDIT_TOKEN)
+    std::optional<CoreIPCAuditToken> presentingApplicationAuditToken;
 #endif
 };
 
