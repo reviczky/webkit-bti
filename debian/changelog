@@ -4,6 +4,8 @@ webkit2gtk (2.47.3-1) UNRELEASED; urgency=medium
   * Refresh disable-nvidia-dmabuf.patch.
   * debian/copyright:
     - Update copyright information of all files.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2025 10:44:44 +0100
 

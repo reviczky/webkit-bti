@@ -2082,6 +2082,25 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_editor_get_type@Base 2.10.0
  (gtk3-only)webkit_web_extension_get_page@Base 2.5.3
  (gtk3-only)webkit_web_extension_get_type@Base 2.5.3
+ webkit_web_extension_match_pattern_error_get_type@Base 2.47.3
+ webkit_web_extension_match_pattern_error_quark@Base 2.47.3
+ webkit_web_extension_match_pattern_get_host@Base 2.47.3
+ webkit_web_extension_match_pattern_get_matches_all_hosts@Base 2.47.3
+ webkit_web_extension_match_pattern_get_matches_all_urls@Base 2.47.3
+ webkit_web_extension_match_pattern_get_path@Base 2.47.3
+ webkit_web_extension_match_pattern_get_scheme@Base 2.47.3
+ webkit_web_extension_match_pattern_get_string@Base 2.47.3
+ webkit_web_extension_match_pattern_get_type@Base 2.47.3
+ webkit_web_extension_match_pattern_matches_pattern@Base 2.47.3
+ webkit_web_extension_match_pattern_matches_url@Base 2.47.3
+ webkit_web_extension_match_pattern_new_all_hosts_and_schemes@Base 2.47.3
+ webkit_web_extension_match_pattern_new_all_urls@Base 2.47.3
+ webkit_web_extension_match_pattern_new_with_scheme@Base 2.47.3
+ webkit_web_extension_match_pattern_new_with_string@Base 2.47.3
+ webkit_web_extension_match_pattern_options_get_type@Base 2.47.3
+ webkit_web_extension_match_pattern_ref@Base 2.47.3
+ webkit_web_extension_match_pattern_register_custom_URL_scheme@Base 2.47.3
+ webkit_web_extension_match_pattern_unref@Base 2.47.3
  webkit_web_extension_mode_get_type@Base 2.37.1
  (gtk3-only)webkit_web_extension_send_message_to_context@Base 2.27.2
  (gtk3-only)webkit_web_extension_send_message_to_context_finish@Base 2.27.2
