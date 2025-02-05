@@ -3,6 +3,9 @@ webkit2gtk (2.47.4-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/copyright:
     - Update copyright information of all files.
+  * debian/rules:
+    - Stop using -DWTF_CPU_ARM64_CORTEXA53=OFF, this was fixed upstream a
+      long time ago (WebKit bug #197192).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 05 Feb 2025 11:43:16 +0100
 
