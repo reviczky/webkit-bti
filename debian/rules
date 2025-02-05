@@ -71,11 +71,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),loong64))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SKIA=OFF
 endif
 
-# See https://bugs.webkit.org/show_bug.cgi?id=197192
-ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
-	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
-endif
-
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
