@@ -3387,7 +3387,7 @@ private:
         if (span.size() < sizeof(value))
             return false;
 
-        value = consumeAndCastTo<const T>(span);
+        value = consumeAndReinterpretCastTo<const T>(span);
         return true;
     }
 #else
@@ -4819,8 +4819,11 @@ private:
 
     JSValue readTerminal()
     {
-        if (!isSafeToRecurse())
+        if (!isSafeToRecurse()) {
+            SERIALIZE_TRACE("FAIL deserialize");
+            fail();
             return JSValue();
+        }
         auto originalData = m_data;
         SerializationTag tag = readTag();
         if (!isTypeExposedToGlobalObject(*m_globalObject, tag)) {
@@ -5130,13 +5133,7 @@ private:
             }
 
             auto& vm = m_lexicalGlobalObject->vm();
-            auto scope = DECLARE_THROW_SCOPE(vm);
-            JSWebAssemblyMemory* result = JSC::JSWebAssemblyMemory::tryCreate(m_lexicalGlobalObject, vm, m_globalObject->webAssemblyMemoryStructure());
-            // Since we are cloning a JSWebAssemblyMemory, it's impossible for that
-            // module to not have been a valid module. Therefore, tryCreate should
-            // not throw.
-            scope.releaseAssertNoException();
-
+            JSWebAssemblyMemory* result = JSC::JSWebAssemblyMemory::create(vm, m_globalObject->webAssemblyMemoryStructure());
             RefPtr<Wasm::Memory> memory;
             auto handler = [&vm, result] (Wasm::Memory::GrowSuccess, PageCount oldPageCount, PageCount newPageCount) { result->growSuccessCallback(vm, oldPageCount, newPageCount); };
             if (RefPtr<SharedArrayBufferContents> contents = m_wasmMemoryHandles->at(index)) {
@@ -6410,10 +6407,14 @@ Vector<String> SerializedScriptValue::blobURLs() const
     });
 }
 
-void SerializedScriptValue::writeBlobsToDiskForIndexedDB(CompletionHandler<void(IDBValue&&)>&& completionHandler)
+void SerializedScriptValue::writeBlobsToDiskForIndexedDB(bool isEphemeral, CompletionHandler<void(IDBValue&&)>&& completionHandler)
 {
     ASSERT(isMainThread());
     ASSERT(hasBlobURLs());
+
+    // FIXME: Blobs are not supported in private browsing yet (webkit.org/b/156347).
+    if (isEphemeral)
+        return completionHandler({ });
 
     blobRegistry().writeBlobsToTemporaryFilesForIndexedDB(blobURLs(), [completionHandler = WTFMove(completionHandler), this, protectedThis = Ref { *this }] (auto&& blobFilePaths) mutable {
         ASSERT(isMainThread());
@@ -6431,14 +6432,14 @@ void SerializedScriptValue::writeBlobsToDiskForIndexedDB(CompletionHandler<void(
     });
 }
 
-IDBValue SerializedScriptValue::writeBlobsToDiskForIndexedDBSynchronously()
+IDBValue SerializedScriptValue::writeBlobsToDiskForIndexedDBSynchronously(bool isEphemeral)
 {
     ASSERT(!isMainThread());
 
     BinarySemaphore semaphore;
     IDBValue value;
-    callOnMainThread([this, &semaphore, &value] {
-        writeBlobsToDiskForIndexedDB([&semaphore, &value](IDBValue&& result) {
+    callOnMainThread([this, &semaphore, &value, isEphemeral] {
+        writeBlobsToDiskForIndexedDB(isEphemeral, [&semaphore, &value](IDBValue&& result) {
             ASSERT(isMainThread());
             value.setAsIsolatedCopy(result);
 

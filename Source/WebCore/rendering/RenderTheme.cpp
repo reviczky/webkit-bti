@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2005-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2014 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -23,9 +23,11 @@
 
 #include "BorderShape.h"
 #include "ButtonPart.h"
+#include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
 #include "ColorBlending.h"
 #include "ColorLuminance.h"
+#include "ColorSerialization.h"
 #include "ColorWellPart.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
@@ -39,9 +41,11 @@
 #include "GraphicsTypes.h"
 #include "HTMLAttachmentElement.h"
 #include "HTMLButtonElement.h"
+#include "HTMLDataListElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
+#include "HTMLOptionElement.h"
 #include "HTMLProgressElement.h"
 #include "HTMLSelectElement.h"
 #include "HTMLTextAreaElement.h"
@@ -82,11 +86,6 @@
 
 #if ENABLE(SERVICE_CONTROLS)
 #include "ImageControlsMac.h"
-#endif
-
-#if ENABLE(DATALIST_ELEMENT)
-#include "HTMLDataListElement.h"
-#include "HTMLOptionElement.h"
 #endif
 
 namespace WebCore {
@@ -225,7 +224,7 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
         case StyleAppearance::MenulistButton:
             appearance = widgetMayDevolve ? StyleAppearance::MenulistButton : StyleAppearance::None;
             break;
-#if PLATFORM(IOS_FAMILY) && ENABLE(DATALIST_ELEMENT)
+#if PLATFORM(IOS_FAMILY)
         case StyleAppearance::ListButton:
 #endif
         default:
@@ -308,10 +307,8 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
     case StyleAppearance::ApplePayButton:
         return adjustApplePayButtonStyle(style, element);
 #endif
-#if ENABLE(DATALIST_ELEMENT)
     case StyleAppearance::ListButton:
         return adjustListButtonStyle(style, element);
-#endif
     default:
         break;
     }
@@ -395,10 +392,8 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
     if (element->isInUserAgentShadowTree()) {
         auto& part = element->userAgentPart();
 
-#if ENABLE(DATALIST_ELEMENT)
         if (part == UserAgentParts::webkitListButton())
             return StyleAppearance::ListButton;
-#endif
 
         if (part == UserAgentParts::webkitSearchCancelButton())
             return StyleAppearance::SearchFieldCancelButton;
@@ -506,7 +501,6 @@ static void updateSliderTrackPartForRenderer(SliderTrackPart& sliderTrackPart, c
         thumbPosition = (input.valueAsNumber() - minimum) / (maximum - minimum);
 
     Vector<double> tickRatios;
-#if ENABLE(DATALIST_ELEMENT)
     if (auto dataList = input.dataList()) {
 
         for (auto& optionElement : dataList->suggestions()) {
@@ -517,7 +511,6 @@ static void updateSliderTrackPartForRenderer(SliderTrackPart& sliderTrackPart, c
             tickRatios.append(tickRatio);
         }
     }
-#endif
 
     sliderTrackPart.setThumbSize(thumbSize);
     sliderTrackPart.setTrackBounds(trackBounds);
@@ -610,10 +603,8 @@ RefPtr<ControlPart> RenderTheme::createControlPart(const RenderObject& renderer)
     case StyleAppearance::InnerSpinButton:
         return InnerSpinButtonPart::create();
 
-#if ENABLE(DATALIST_ELEMENT)
     case StyleAppearance::ListButton:
         break;
-#endif
 
     case StyleAppearance::SearchFieldDecoration:
         break;
@@ -715,13 +706,11 @@ OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRenderer
         states.add(ControlStyle::State::LargeControls);
     if (isReadOnlyControl(renderer))
         states.add(ControlStyle::State::ReadOnly);
-#if ENABLE(DATALIST_ELEMENT)
     if (hasListButton(renderer)) {
         states.add(ControlStyle::State::ListButton);
         if (hasListButtonPressed(renderer))
             states.add(ControlStyle::State::ListButtonPressed);
     }
-#endif
     if (!renderer.writingMode().isHorizontal())
         states.add(ControlStyle::State::VerticalWritingMode);
     return states;
@@ -865,10 +854,8 @@ bool RenderTheme::paint(const RenderBox& box, const PaintInfo& paintInfo, const 
     case StyleAppearance::ImageControlsButton:
         return paintImageControlsButton(box, paintInfo, integralSnappedRect);
 #endif
-#if ENABLE(DATALIST_ELEMENT)
     case StyleAppearance::ListButton:
         return paintListButton(box, paintInfo, devicePixelSnappedRect);
-#endif
 #if ENABLE(ATTACHMENT_ELEMENT)
     case StyleAppearance::Attachment:
     case StyleAppearance::BorderlessAttachment:
@@ -1234,7 +1221,6 @@ bool RenderTheme::isDefault(const RenderObject& o) const
     return o.style().usedAppearance() == StyleAppearance::DefaultButton;
 }
 
-#if ENABLE(DATALIST_ELEMENT)
 bool RenderTheme::hasListButton(const RenderObject& renderer) const
 {
     RefPtr input = dynamicDowncast<HTMLInputElement>(renderer.generatingNode());
@@ -1246,7 +1232,6 @@ bool RenderTheme::hasListButtonPressed(const RenderObject& renderer) const
     RefPtr input = dynamicDowncast<HTMLInputElement>(renderer.generatingNode());
     return input && input->dataListButtonElement() && input->dataListButtonElement()->active();
 }
-#endif
 
 // FIXME: iOS does not use this so arguably this should be better abstracted. Or maybe we should
 // investigate if we can bring the various ports closer together.
@@ -1385,18 +1370,6 @@ String RenderTheme::attachmentStyleSheet() const
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
 
-String RenderTheme::colorInputStyleSheet() const
-{
-    return "input[type=\"color\"] { appearance: auto; inline-size: 44px; block-size: 23px; box-sizing: border-box; outline: none; } "_s;
-}
-
-#if ENABLE(DATALIST_ELEMENT)
-
-String RenderTheme::dataListStyleSheet() const
-{
-    return "datalist { display: none; }"_s;
-}
-
 void RenderTheme::paintSliderTicks(const RenderObject& renderer, const PaintInfo& paintInfo, const FloatRect& rect)
 {
     RefPtr input = dynamicDowncast<HTMLInputElement>(renderer.node());
@@ -1471,11 +1444,16 @@ void RenderTheme::paintSliderTicks(const RenderObject& renderer, const PaintInfo
     }
 }
 
-#endif // ENABLE(DATALIST_ELEMENT)
-
 bool RenderTheme::shouldHaveSpinButton(const HTMLInputElement& inputElement) const
 {
     return inputElement.isSteppable() && !inputElement.isRangeControl();
+}
+
+void RenderTheme::setColorWellSwatchBackground(HTMLElement& swatch, Color color)
+{
+    if (!color.isOpaque())
+        color = blendSourceOver(Color::white, color);
+    swatch.setInlineStyleProperty(CSSPropertyBackgroundColor, serializationForHTML(color));
 }
 
 void RenderTheme::adjustSliderThumbStyle(RenderStyle& style, const Element* element) const

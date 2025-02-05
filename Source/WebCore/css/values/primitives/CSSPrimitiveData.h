@@ -273,7 +273,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
         , index { other.index }
     {
         if (isCalc())
-            payload.calc->ref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcRef(payload.calc);
     }
 
     PrimitiveData(PrimitiveData&& other)
@@ -286,9 +286,9 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     PrimitiveData& operator=(const PrimitiveData& other)
     {
         if (isCalc())
-            payload.calc->deref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcDeref(payload.calc);
         if (other.isCalc())
-            other.payload.calc->ref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcRef(other.payload.calc);
 
         index = other.index;
         payload = other.payload;
@@ -299,7 +299,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     PrimitiveData& operator=(PrimitiveData&& other)
     {
         if (isCalc())
-            payload.calc->deref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcDeref(payload.calc);
 
         index = other.index;
         payload = other.payload;
@@ -318,7 +318,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
         , index { other.index }
     {
         if (other.isCalc())
-            other.payload.calc->ref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcRef(other.payload.calc);
     }
 
     template<SubsumesChildPrimitiveData<PrimitiveData> T>
@@ -333,9 +333,9 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     PrimitiveData& operator=(const T& other)
     {
         if (isCalc())
-            payload.calc->deref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcDeref(payload.calc);
         if (other.isCalc())
-            other.payload.calc->ref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcRef(other.payload.calc);
 
         index = other.index;
         payload = other.payload;
@@ -347,7 +347,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     PrimitiveData& operator=(T&& other)
     {
         if (isCalc())
-            payload.calc->deref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcDeref(payload.calc);
 
         index = other.index;
         payload = other.payload;
@@ -360,7 +360,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     ~PrimitiveData()
     {
         if (isCalc())
-            payload.calc->deref();
+            SUPPRESS_UNCOUNTED_ARG unevaluatedCalcDeref(payload.calc);
     }
 
     bool operator==(const PrimitiveData& other) const
@@ -369,7 +369,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
             return false;
 
         if (isCalc())
-            return protectedCalc()->equals(other.protectedCalc());
+            return asCalc() == other.asCalc();
         return payload.number == other.payload.number;
     }
 
@@ -391,7 +391,7 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
     {
         if (!isCalc())
             return false;
-        return protectedCalc()->equals(calc.protectedCalc());
+        return asCalc() == calc;
     }
 
     template<typename T>
@@ -425,26 +425,6 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
         return payload.number == literal.value;
     }
 
-    // MARK: Accessors
-
-    Ref<CSSCalcValue> protectedCalc() const
-    {
-        ASSERT(isCalc());
-        return Ref(*payload.calc);
-    }
-
-    Raw asRaw() const
-    {
-        ASSERT(isRaw());
-        return Raw { index.unit(), payload.number };
-    }
-
-    Calc asCalc() const
-    {
-        ASSERT(isCalc());
-        return Calc { protectedCalc() };
-    }
-
     // MARK: Conditional Accessors
 
     std::optional<Raw> raw() const
@@ -461,11 +441,35 @@ template<Numeric N, PrimitiveKeyword... Ks> struct PrimitiveData {
         return std::nullopt;
     }
 
+    // MARK: Accessors
+
+    Raw asRaw() const
+    {
+        ASSERT(isRaw());
+        return Raw { index.unit(), payload.number };
+    }
+
+    Calc asCalc() const
+    {
+        ASSERT(isCalc());
+        return Calc { *payload.calc };
+    }
+
     constexpr bool isRaw() const { return index.isRaw(); }
     constexpr bool isCalc() const { return index.isCalc(); }
     constexpr bool isKeyword(ValidKeywordForList<Keywords> auto keyword) const { return index.isKeyword(keyword); }
     constexpr bool isEmpty() const { return index.isEmpty(); }
     constexpr bool isMovedFrom() const { return index.isMovedFrom(); }
+
+    template<typename T> bool holdsAlternative() const
+    {
+        if constexpr (std::same_as<T, Calc>)
+            return index.isCalc();
+        else if constexpr (std::same_as<T, Raw>)
+            return index.isRaw();
+        else if constexpr (ValidKeywordForList<T, Keywords>)
+            return index.isKeyword(T { });
+    }
 
     template<typename F> decltype(auto) visit(F&& f) const
     {

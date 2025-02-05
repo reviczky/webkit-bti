@@ -223,7 +223,7 @@ RefPtr<CSSValue> consumeFontStyle(CSSParserTokenRange& range, const CSSParserCon
 #if ENABLE(VARIATION_FONTS)
     if (*keyword == CSSValueOblique && !range.atEnd()) {
         if (auto angle = consumeFontStyleAngleUnresolved(range, context))
-            return CSSFontStyleWithAngleValue::create(resolveToCSSPrimitiveValue(WTFMove(*angle)));
+            return CSSFontStyleWithAngleValue::create(WTFMove(*angle));
     }
 #endif
 
@@ -884,10 +884,10 @@ RefPtr<CSSValueList> consumeFontFaceSrc(CSSParserTokenRange& range, const CSSPar
         return nullptr;
     };
     while (!range.atEnd()) {
-        auto begin = range.begin();
+        auto begin = range;
         while (!range.atEnd() && range.peek().type() != CSSParserTokenType::CommaToken)
             range.consumeComponentValue();
-        auto subrange = range.makeSubRange(begin, &range.peek());
+        auto subrange = begin.rangeUntil(range);
         if (RefPtr parsedValue = consumeSrcListComponent(subrange))
             values.append(parsedValue.releaseNonNull());
         if (!range.atEnd())

@@ -84,6 +84,9 @@ messages -> WebPageProxy {
 #if PLATFORM(MAC)
     ThemeColorChanged(WebCore::Color themeColor)
 #endif
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    [EnabledBy=WebPageSpatialBackdropEnabled] SpatialBackdropSourceChanged(std::optional<WebCore::SpatialBackdropSource> spatialBackdropSource)
+#endif
     PageExtendedBackgroundColorDidChange(WebCore::Color backgroundColor)
     SampledPageTopColorChanged(WebCore::Color sampledPageTopColor)
     SetCanShortCircuitHorizontalWheelEvents(bool canShortCircuitHorizontalWheelEvents)
@@ -95,16 +98,12 @@ messages -> WebPageProxy {
     [EnabledBy=InputTypeColorEnabled] SetColorPickerColor(WebCore::Color color);
     [EnabledBy=InputTypeColorEnabled] EndColorPicker();
 
-#if ENABLE(DATALIST_ELEMENT)
     [EnabledBy=DataListElementEnabled] ShowDataListSuggestions(struct WebCore::DataListSuggestionInformation suggestionInformation);
     [EnabledBy=DataListElementEnabled] HandleKeydownInDataList(String key);
     [EnabledBy=DataListElementEnabled] EndDataListSuggestions();
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-    ShowDateTimePicker(struct WebCore::DateTimeChooserParameters params);
-    EndDateTimePicker();
-#endif
+    [EnabledBy=InputTypeDateEnabled || InputTypeDateTimeLocalEnabled || InputTypeMonthEnabled || InputTypeTimeEnabled || InputTypeWeekEnabled] ShowDateTimePicker(struct WebCore::DateTimeChooserParameters params);
+    [EnabledBy=InputTypeDateEnabled || InputTypeDateTimeLocalEnabled || InputTypeMonthEnabled || InputTypeTimeEnabled || InputTypeWeekEnabled] EndDateTimePicker();
 
     # Policy messages
     DecidePolicyForResponse(struct WebKit::FrameInfoData frameInfo, std::optional<WebCore::NavigationIdentifier> navigationID, WebCore::ResourceResponse response, WebCore::ResourceRequest request, bool canShowMIMEType, String downloadAttribute, bool isShowingInitialAboutBlank, enum:uint8_t WebCore::CrossOriginOpenerPolicyValue activeDocumentCOOPValue) -> (struct WebKit::PolicyDecision PolicyDecision)
@@ -209,6 +208,7 @@ messages -> WebPageProxy {
     # BackForward messages
     BackForwardAddItem(Ref<WebKit::FrameState> navigatedFrameState)
     BackForwardSetChildItem(WebCore::BackForwardFrameItemIdentifier frameItemID, Ref<WebKit::FrameState> frameState)
+    BackForwardClearChildren(WebCore::BackForwardItemIdentifier itemID, WebCore::BackForwardFrameItemIdentifier frameItemID)
     BackForwardUpdateItem(Ref<WebKit::FrameState> frameState)
     BackForwardGoToItem(WebCore::BackForwardItemIdentifier itemID) -> (struct WebKit::WebBackForwardListCounts counts) Synchronous
     BackForwardItemAtIndex(int32_t itemIndex, WebCore::FrameIdentifier frameID) -> (RefPtr<WebKit::FrameState> frameState) Synchronous
@@ -491,7 +491,7 @@ messages -> WebPageProxy {
 #endif
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    SetMockVideoPresentationModeEnabled(bool enabled)
+    [EnabledBy=VideoPresentationManagerEnabled || VideoPresentationModeAPIEnabled] SetMockVideoPresentationModeEnabled(bool enabled)
 #endif
 
 #if ENABLE(POINTER_LOCK)

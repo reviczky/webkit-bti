@@ -9,7 +9,6 @@ NetworkProcess/Downloads/DownloadManager.cpp
 NetworkProcess/Downloads/PendingDownload.cpp
 NetworkProcess/Downloads/cocoa/DownloadCocoa.mm
 NetworkProcess/Downloads/cocoa/WKDownloadProgress.mm
-NetworkProcess/NetworkCORSPreflightChecker.cpp
 NetworkProcess/NetworkDataTask.cpp
 NetworkProcess/NetworkDataTaskBlob.cpp
 NetworkProcess/NetworkLoad.cpp
@@ -31,15 +30,12 @@ NetworkProcess/cache/NetworkCacheSpeculativeLoadManager.cpp
 NetworkProcess/cache/NetworkCacheStorage.cpp
 NetworkProcess/cocoa/NetworkDataTaskCocoa.mm
 NetworkProcess/cocoa/NetworkSessionCocoa.mm
-NetworkProcess/cocoa/NetworkTaskCocoa.mm
 NetworkProcess/mac/SecItemShim.cpp
 NetworkProcess/storage/BackgroundFetchStoreImpl.cpp
 NetworkProcess/storage/BackgroundFetchStoreManager.cpp
-NetworkProcess/storage/CacheStorageCache.cpp
 NetworkProcess/storage/CacheStorageDiskStore.cpp
 NetworkProcess/storage/IDBStorageRegistry.cpp
 NetworkProcess/storage/OriginStorageManager.cpp
-NetworkProcess/storage/SQLiteStorageArea.cpp
 NetworkProcess/webrtc/NetworkRTCUDPSocketCocoa.mm
 Platform/IPC/ArgumentCoders.h
 Platform/IPC/SharedBufferReference.cpp
@@ -97,7 +93,6 @@ Shared/WebMemorySampler.cpp
 Shared/graphics/ImageBufferSet.cpp
 UIProcess/API/APIAttachment.cpp
 UIProcess/API/APIContentRuleListStore.cpp
-UIProcess/API/APIDataTask.cpp
 UIProcess/API/APIDownloadClient.h
 UIProcess/API/APIHTTPCookieStore.cpp
 UIProcess/API/APIInspectorExtension.cpp
@@ -205,12 +200,10 @@ UIProcess/API/Cocoa/_WKWebsiteDataStoreConfiguration.mm
 UIProcess/API/mac/WKWebViewMac.mm
 UIProcess/API/mac/WKWebViewTestingMac.mm
 UIProcess/BackgroundProcessResponsivenessTimer.cpp
-UIProcess/BrowsingContextGroup.cpp
 UIProcess/Cocoa/AutomationClient.mm
 UIProcess/Cocoa/GroupActivities/GroupActivitiesCoordinator.mm
 UIProcess/Cocoa/LegacyDownloadClient.mm
 UIProcess/Cocoa/ModelElementControllerCocoa.mm
-UIProcess/Cocoa/NavigationState.mm
 UIProcess/Cocoa/PreferenceObserver.mm
 UIProcess/Cocoa/SOAuthorization/NavigationSOAuthorizationSession.mm
 UIProcess/Cocoa/SOAuthorization/PopUpSOAuthorizationSession.mm
@@ -239,11 +232,8 @@ UIProcess/Launcher/cocoa/ProcessLauncherCocoa.mm
 UIProcess/MediaKeySystemPermissionRequestManagerProxy.cpp
 UIProcess/Notifications/WebNotificationManagerProxy.cpp
 UIProcess/PDF/WKPDFHUDView.mm
-UIProcess/ProcessAssertion.cpp
 UIProcess/ProcessThrottler.cpp
 UIProcess/ProvisionalFrameProxy.cpp
-UIProcess/ProvisionalPageProxy.cpp
-UIProcess/RemoteLayerTree/RemoteLayerTreeHost.mm
 UIProcess/RemoteLayerTree/RemoteLayerTreeNode.mm
 UIProcess/RemoteLayerTree/RemoteScrollingCoordinatorProxy.cpp
 UIProcess/RemoteLayerTree/mac/RemoteLayerTreeEventDispatcher.cpp
@@ -293,7 +283,6 @@ UIProcess/WebsiteData/WebsiteDataStore.cpp
 UIProcess/WebsiteData/WebsiteDataStoreClient.h
 UIProcess/mac/CorrectionPanel.mm
 UIProcess/mac/DisplayCaptureSessionManager.mm
-UIProcess/mac/PageClientImplMac.mm
 UIProcess/mac/ServicesController.mm
 UIProcess/mac/UserMediaPermissionRequestProxyMac.mm
 UIProcess/mac/WKFullScreenWindowController.mm
@@ -331,8 +320,6 @@ WebProcess/FullScreen/WebFullScreenManager.cpp
 WebProcess/GPU/graphics/ImageBufferShareableBitmapBackend.cpp
 WebProcess/GPU/graphics/RemoteNativeImageBackendProxy.cpp
 WebProcess/GPU/graphics/RemoteResourceCacheProxy.cpp
-WebProcess/GPU/graphics/cocoa/ImageBufferShareableMappedIOSurfaceBackend.cpp
-WebProcess/GPU/graphics/cocoa/ImageBufferShareableMappedIOSurfaceBitmapBackend.cpp
 WebProcess/GPU/media/AudioTrackPrivateRemote.cpp
 WebProcess/GPU/media/MediaPlayerPrivateRemote.cpp
 WebProcess/GPU/media/MediaSourcePrivateRemote.cpp
@@ -415,7 +402,6 @@ WebProcess/Network/webrtc/LibWebRTCProvider.cpp
 WebProcess/Network/webrtc/LibWebRTCSocketFactory.cpp
 WebProcess/Network/webrtc/RTCDataChannelRemoteManager.cpp
 WebProcess/Network/webrtc/WebRTCMonitor.cpp
-WebProcess/Plugins/PDF/PDFIncrementalLoader.mm
 WebProcess/Plugins/PDF/PDFPlugin.mm
 WebProcess/Plugins/PDF/PDFPluginAnnotation.mm
 WebProcess/Plugins/PDF/PDFPluginBase.mm

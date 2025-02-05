@@ -1404,7 +1404,7 @@ AXTextRuns AccessibilityRenderObject::textRuns()
 {
     if (auto* renderLineBreak = dynamicDowncast<RenderLineBreak>(renderer())) {
         auto box = InlineIterator::boxFor(*renderLineBreak);
-        return { renderLineBreak->containingBlock(), { AXTextRun(box->lineIndex(), makeString('\n').isolatedCopy()) } };
+        return { renderLineBreak->containingBlock(), { AXTextRun(box ? box->lineIndex() : 0, makeString('\n').isolatedCopy()) } };
     }
 
     if (is<HTMLImageElement>(node()) || is<HTMLMediaElement>(node())) {
@@ -1447,7 +1447,7 @@ AXTextRuns AccessibilityRenderObject::textRuns()
         }
     };
 
-    auto textBox = InlineIterator::firstTextBoxFor(*renderText);
+    auto textBox = InlineIterator::lineLeftmostTextBoxFor(*renderText);
     size_t currentLineIndex = textBox ? textBox->lineIndex() : 0;
     for (; textBox; textBox.traverseNextTextBox()) {
         size_t newLineIndex = textBox->lineIndex();
@@ -1464,6 +1464,18 @@ AXTextRuns AccessibilityRenderObject::textRuns()
     if (!lineString.isEmpty())
         runs.append({ currentLineIndex, lineString.toString().isolatedCopy() });
     return { renderText->containingBlock(), WTFMove(runs) };
+}
+
+AXTextRunLineID AccessibilityRenderObject::listMarkerLineID() const
+{
+    ASSERT(roleValue() == AccessibilityRole::ListMarker);
+    return { renderer() ? renderer()->containingBlock() : nullptr, 0 };
+}
+
+String AccessibilityRenderObject::listMarkerText() const
+{
+    CheckedPtr marker = dynamicDowncast<RenderListMarker>(renderer());
+    return marker ? marker->textWithSuffix() : String();
 }
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 

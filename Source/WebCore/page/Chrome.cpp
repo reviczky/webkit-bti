@@ -28,6 +28,8 @@
 #include "ColorChooser.h"
 #include "ContactInfo.h"
 #include "ContactsRequestData.h"
+#include "DataListSuggestionPicker.h"
+#include "DateTimeChooser.h"
 #include "Document.h"
 #include "DocumentInlines.h"
 #include "DocumentType.h"
@@ -64,14 +66,6 @@
 #include <wtf/SetForScope.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
-
-#if ENABLE(DATALIST_ELEMENT)
-#include "DataListSuggestionPicker.h"
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-#include "DateTimeChooser.h"
-#endif
 
 namespace WebCore {
 
@@ -458,17 +452,11 @@ RefPtr<ColorChooser> Chrome::createColorChooser(ColorChooserClient& client, cons
 #endif
 }
 
-#if ENABLE(DATALIST_ELEMENT)
-
 RefPtr<DataListSuggestionPicker> Chrome::createDataListSuggestionPicker(DataListSuggestionsClient& client)
 {
     notifyPopupOpeningObservers();
     return m_client->createDataListSuggestionPicker(client);
 }
-
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
 
 RefPtr<DateTimeChooser> Chrome::createDateTimeChooser(DateTimeChooserClient& client)
 {
@@ -480,8 +468,6 @@ RefPtr<DateTimeChooser> Chrome::createDateTimeChooser(DateTimeChooserClient& cli
     return m_client->createDateTimeChooser(client);
 #endif
 }
-
-#endif
 
 void Chrome::runOpenPanel(LocalFrame& frame, FileChooser& fileChooser)
 {

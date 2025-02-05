@@ -89,6 +89,7 @@
 #include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
+#include "OverflowEvent.h"
 #include "OverlapTestRequestClient.h"
 #include "Page.h"
 #include "PlatformMouseEvent.h"
@@ -873,9 +874,9 @@ void RenderLayer::collectLayers(std::unique_ptr<Vector<RenderLayer*>>& positiveZ
         return;
 
     bool isStacking = isStackingContext();
-    // Overflow layers are just painted by their enclosing layers, so they don't get put in zorder lists.
-    bool layerOrDescendantsAreVisible = (m_hasVisibleContent || m_alwaysIncludedInZOrderLists) || ((m_hasVisibleDescendant || m_hasAlwaysIncludedInZOrderListsDescendants) && isStacking);
+    bool layerOrDescendantsAreVisible = m_hasVisibleContent || m_alwaysIncludedInZOrderLists || m_hasVisibleDescendant || m_hasAlwaysIncludedInZOrderListsDescendants;
     layerOrDescendantsAreVisible |= page().hasEverSetVisibilityAdjustment();
+    // Normal flow layers are just painted by their enclosing layers, so they don't get put in zorder lists.
     if (!isNormalFlowOnly()) {
         if (layerOrDescendantsAreVisible) {
             auto& layerList = (zIndex() >= 0) ? positiveZOrderList : negativeZOrderList;
@@ -3928,7 +3929,7 @@ void RenderLayer::collectFragments(LayerFragments& fragments, const RenderLayer*
     
     // Calculate clip rects relative to the enclosingPaginationLayer. The purpose of this call is to determine our bounds clipped to intermediate
     // layers between us and the pagination context. It's important to minimize the number of fragments we need to create and this helps with that.
-    ClipRectsContext paginationClipRectsContext(paginationLayer, clipRectsType, clipRectOptions);
+    ClipRectsContext paginationClipRectsContext(paginationLayer, TemporaryClipRects, clipRectOptions);
     LayoutRect layerBoundsInFragmentedFlow;
     ClipRect backgroundRectInFragmentedFlow;
     ClipRect foregroundRectInFragmentedFlow;
@@ -5946,13 +5947,13 @@ void RenderLayer::styleChanged(StyleDifference diff, const RenderStyle* oldStyle
         m_scrollableArea->updateAllScrollbarRelatedStyle();
 
     updateDescendantDependentFlags();
-    updateTransform();
     updateBlendMode();
     updateFiltersAfterStyleChange(diff, oldStyle);
     clearClipRects();
 
     compositor().layerStyleChanged(diff, *this, oldStyle);
 
+    updateTransform();
     updateFilterPaintingStrategy();
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(TOUCH_EVENTS)
@@ -6406,9 +6407,7 @@ void showLayerTree(const WebCore::RenderLayer* layer)
         WebCore::RenderAsTextFlag::DontUpdateLayout,
         WebCore::RenderAsTextFlag::ShowLayoutState,
     });
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    fprintf(stderr, "\n%s\n", output.utf8().data());
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+    SAFE_FPRINTF(stderr, "\n%s\n", output.utf8());
 }
 
 void showLayerTree(const WebCore::RenderObject* renderer)

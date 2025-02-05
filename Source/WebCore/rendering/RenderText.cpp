@@ -50,6 +50,7 @@
 #include "RenderInline.h"
 #include "RenderLayer.h"
 #include "RenderTextInlines.h"
+#include "RenderSVGInlineText.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
 #include "SVGElementTypeHelpers.h"
@@ -300,7 +301,7 @@ static LayoutRect selectionRectForTextBox(const InlineIterator::TextBox& textBox
     if (clampedStart || clampedEnd != textRun.length())
         textBox.fontCascade().adjustSelectionRectForText(textBox.renderer().canUseSimplifiedTextMeasuring().value_or(false), textRun, selectionRect, clampedStart, clampedEnd);
 
-    return snappedSelectionRect(selectionRect, textBox.logicalRightIgnoringInlineDirection(), lineSelectionRect.y(), lineSelectionRect.height(), textBox.isHorizontal());
+    return snappedSelectionRect(selectionRect, textBox.logicalRightIgnoringInlineDirection(), textBox.writingMode());
 }
 
 static unsigned offsetForPositionInRun(const InlineIterator::TextBox& textBox, float x)
@@ -320,7 +321,7 @@ inline RenderText::RenderText(Type type, Node& node, const String& text)
     , m_containsOnlyASCII(text.impl()->containsOnlyASCII())
 {
     ASSERT(!m_text.isNull());
-    m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
+    computeFontCodePath();
     ASSERT(isRenderText());
 }
 
@@ -655,7 +656,7 @@ static Vector<LayoutRect> characterRects(const InlineIterator::TextBox& run, uns
     auto lineSelectionRect = LineSelection::logicalRect(*run.lineBox());
     auto selectionRect = LayoutRect { run.logicalLeftIgnoringInlineDirection(), lineSelectionRect.y(), run.logicalWidth(), lineSelectionRect.height() };
     return run.fontCascade().characterSelectionRectsForText(run.textRun(), selectionRect, clampedStart, clampedEnd).map([&](auto& characterRect) {
-        return snappedSelectionRect(characterRect, run.logicalRightIgnoringInlineDirection(), lineSelectionRect.y(), lineSelectionRect.height(), run.isHorizontal());
+        return snappedSelectionRect(characterRect, run.logicalRightIgnoringInlineDirection(), run.writingMode());
     });
 }
 
@@ -1740,7 +1741,7 @@ void RenderText::setRenderedText(const String& newText)
     }
 
     m_containsOnlyASCII = text().containsOnlyASCII();
-    m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
+    computeFontCodePath();
     m_canUseSimplifiedTextMeasuring = { };
     m_hasPositionDependentContentWidth = { };
     m_hasStrongDirectionalityContent = { };
@@ -1836,16 +1837,17 @@ void RenderText::setText(const String& newContent, bool force)
         invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
 }
 
-void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned, bool force)
+void RenderText::setTextWithOffset(const String& newText, unsigned offset)
 {
-    if (!force && text() == newText)
+    if (text() == newText)
         return;
 
     int delta = newText.length() - text().length();
-
-    m_linesDirty = m_legacyLineBoxes.dirtyForTextChange(*this);
-
-    setTextInternal(newText, force || m_linesDirty);
+    if (CheckedPtr svgText = dynamicDowncast<RenderSVGInlineText>(*this)) {
+        m_legacyLineBoxes.dirtyForTextChange(*svgText);
+        setRenderedText(newText);
+    }
+    setTextInternal(newText, false);
     invalidateLineLayoutPathOnContentChangeIfNeeded(*this, offset, delta);
 }
 
@@ -1860,15 +1862,6 @@ String RenderText::textWithoutConvertingBackslashToYenSymbol() const
     return applyTextTransform(style(), originalText(), previousCharacter());
 }
 
-void RenderText::dirtyLegacyLineBoxes(bool fullLayout)
-{
-    if (fullLayout)
-        deleteLegacyLineBoxes();
-    else if (!m_linesDirty)
-        m_legacyLineBoxes.dirtyAll();
-    m_linesDirty = false;
-}
-
 void RenderText::deleteLegacyLineBoxes()
 {
     m_legacyLineBoxes.deleteAll();
@@ -1877,11 +1870,6 @@ void RenderText::deleteLegacyLineBoxes()
 std::unique_ptr<LegacyInlineTextBox> RenderText::createTextBox()
 {
     return makeUnique<LegacyInlineTextBox>(*this);
-}
-
-bool RenderText::usesLegacyLineLayoutPath() const
-{
-    return !LayoutIntegration::LineLayout::containing(*this);
 }
 
 float RenderText::width(unsigned from, unsigned len, float xPos, bool firstLine, SingleThreadWeakHashSet<const Font>* fallbackFonts, GlyphOverflow* glyphOverflow) const
@@ -1953,25 +1941,14 @@ IntRect RenderText::linesBoundingBox() const
     return enclosingIntRect(boundingBox);
 }
 
-LayoutRect RenderText::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext context) const
+auto RenderText::localRectsForRepaint(RepaintOutlineBounds) const -> RepaintRects
 {
-    RenderObject* rendererToRepaint = containingBlock();
+    LayoutRect overflowRect = linesBoundingBox();
+    // FIXME: layoutDelta needs to be applied in parts before/after transforms and
+    // repaint containers. https://bugs.webkit.org/show_bug.cgi?id=23308
+    overflowRect.move(view().frameView().layoutContext().layoutDelta());
 
-    // Do not cross self-painting layer boundaries.
-    RenderObject& enclosingLayerRenderer = enclosingLayer()->renderer();
-    if (&enclosingLayerRenderer != rendererToRepaint && !rendererToRepaint->isDescendantOf(&enclosingLayerRenderer))
-        rendererToRepaint = &enclosingLayerRenderer;
-
-    // The renderer we chose to repaint may be an ancestor of repaintContainer, but we need to do a repaintContainer-relative repaint.
-    if (repaintContainer && repaintContainer != rendererToRepaint && !rendererToRepaint->isDescendantOf(repaintContainer))
-        return repaintContainer->clippedOverflowRect(repaintContainer, context);
-
-    return rendererToRepaint->clippedOverflowRect(repaintContainer, context);
-}
-
-auto RenderText::rectsForRepaintingAfterLayout(const RenderLayerModelObject* repaintContainer, RepaintOutlineBounds) const -> RepaintRects
-{
-    return { clippedOverflowRect(repaintContainer, visibleRectContextForRepaint()) };
+    return RepaintRects { overflowRect };
 }
 
 LayoutRect RenderText::collectSelectionGeometriesForLineBoxes(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent, Vector<FloatQuad>* quads)
@@ -2139,11 +2116,13 @@ int RenderText::nextOffset(int current) const
     return iterator.following(current).value_or(current + 1);
 }
 
-bool RenderText::computeCanUseSimpleFontCodePath() const
+void RenderText::computeFontCodePath()
 {
-    if (m_containsOnlyASCII || text().is8Bit())
-        return true;
-    return FontCascade::characterRangeCodePath(text().span16()) == FontCascade::CodePath::Simple;
+    if (m_containsOnlyASCII || text().is8Bit()) {
+        m_fontCodePath = static_cast<unsigned>(FontCascade::CodePath::Simple);
+        return;
+    }
+    m_fontCodePath = static_cast<unsigned>(FontCascade::characterRangeCodePath(text().span16()));
 }
 
 void RenderText::momentarilyRevealLastTypedCharacter(unsigned offsetAfterLastTypedCharacter)

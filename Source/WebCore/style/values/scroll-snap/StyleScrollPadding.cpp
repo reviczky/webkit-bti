@@ -25,75 +25,95 @@
 #include "config.h"
 #include "StyleScrollPadding.h"
 
-#include "CSSPrimitiveNumericTypes+CSSValueConversions.h"
-#include "CSSScrollPaddingEdgeValue.h"
+#include "ComputedStyleExtractor.h"
 #include "LayoutRect.h"
+#include "StyleBuilderConverter.h"
 #include "StyleBuilderState.h"
-#include "StylePrimitiveNumericOrKeyword+Conversions.h"
-#include "StylePrimitiveNumericTypes+Conversions.h"
-#include "StylePrimitiveNumericTypes+Evaluation.h"
 
 namespace WebCore {
 namespace Style {
 
-ScrollPaddingEdge scrollPaddingEdgeFromCSSValue(const CSSValue& value, const BuilderState& state)
+LayoutUnit ScrollPaddingEdge::evaluate(LayoutUnit referenceLength) const
 {
-    if (RefPtr edge = dynamicDowncast<CSSScrollPaddingEdgeValue>(value))
-        return toStyle(edge->edge(), state);
+    switch (m_value.type()) {
+    case LengthType::Fixed:
+        return LayoutUnit(m_value.value());
 
+    case LengthType::Percent:
+        return LayoutUnit(static_cast<float>(referenceLength * m_value.percent() / 100.0f));
+
+    case LengthType::Calculated:
+        return LayoutUnit(m_value.nonNanCalculatedValue(referenceLength));
+
+    case LengthType::Auto:
+            return 0_lu;
+
+    case LengthType::FillAvailable:
+    case LengthType::Normal:
+    case LengthType::Content:
+    case LengthType::Relative:
+    case LengthType::Intrinsic:
+    case LengthType::MinIntrinsic:
+    case LengthType::MinContent:
+    case LengthType::MaxContent:
+    case LengthType::FitContent:
+    case LengthType::Undefined:
+        break;
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+    return 0_lu;
+}
+
+float ScrollPaddingEdge::evaluate(float referenceLength) const
+{
+    switch (m_value.type()) {
+    case LengthType::Fixed:
+        return m_value.value();
+
+    case LengthType::Percent:
+        return referenceLength * m_value.percent() / 100.0f;
+
+    case LengthType::Calculated:
+        return m_value.nonNanCalculatedValue(referenceLength);
+
+    case LengthType::Auto:
+            return 0;
+
+    case LengthType::FillAvailable:
+    case LengthType::Normal:
+    case LengthType::Content:
+    case LengthType::Relative:
+    case LengthType::Intrinsic:
+    case LengthType::MinIntrinsic:
+    case LengthType::MinContent:
+    case LengthType::MaxContent:
+    case LengthType::FitContent:
+    case LengthType::Undefined:
+        break;
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+    return 0;
+}
+
+Ref<CSSValue> ScrollPaddingEdge::toCSS(const RenderStyle& style) const
+{
+    return ComputedStyleExtractor::zoomAdjustedPixelValueForLength(m_value, style);
+}
+
+ScrollPaddingEdge scrollPaddingEdgeFromCSSValue(const CSSValue& value, BuilderState& state)
+{
     if (value.valueID() == CSSValueAuto)
         return ScrollPaddingEdge { CSS::Keyword::Auto { } };
-    return ScrollPaddingEdge {
-        toStyle(
-            CSS::convertFromCSSValue<CSS::LengthPercentage<CSS::Nonnegative>>(value),
-            state
-        )
-    };
-}
-
-double evaluate(const ScrollPaddingEdge& edge, double referenceLength)
-{
-    return WTF::switchOn(edge.value,
-        [&](const CSS::Keyword::Auto&) -> double {
-            return 0;
-        },
-        [&](const auto& length) -> double {
-            return evaluate(length, referenceLength);
-        }
-    );
-}
-
-float evaluate(const ScrollPaddingEdge& edge, float referenceLength)
-{
-    return WTF::switchOn(edge.value,
-        [&](const CSS::Keyword::Auto&) -> float {
-            return 0;
-        },
-        [&](const auto& length) -> float {
-            return evaluate(length, referenceLength);
-        }
-    );
-}
-
-LayoutUnit evaluate(const ScrollPaddingEdge& edge, LayoutUnit referenceLength)
-{
-    return WTF::switchOn(edge.value,
-        [&](const CSS::Keyword::Auto&) -> LayoutUnit {
-            return LayoutUnit(0);
-        },
-        [&](const auto& length) -> LayoutUnit {
-            return evaluate(length, referenceLength);
-        }
-    );
+    return ScrollPaddingEdge { BuilderConverter::convertLength(state, value) };
 }
 
 LayoutBoxExtent extentForRect(const ScrollPadding& padding, const LayoutRect& rect)
 {
     return LayoutBoxExtent {
-        evaluate(padding.top(), rect.height()),
-        evaluate(padding.right(), rect.width()),
-        evaluate(padding.bottom(), rect.height()),
-        evaluate(padding.left(), rect.width())
+        Style::evaluate(padding.top(), rect.height()),
+        Style::evaluate(padding.right(), rect.width()),
+        Style::evaluate(padding.bottom(), rect.height()),
+        Style::evaluate(padding.left(), rect.width()),
     };
 }
 

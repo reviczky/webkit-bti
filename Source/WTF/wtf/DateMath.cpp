@@ -81,6 +81,7 @@
 #include <wtf/ASCIICType.h>
 #include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/ThreadSpecific.h>
 #include <wtf/text/ParsingUtilities.h>
 #include <wtf/text/StringBuilder.h>
@@ -409,18 +410,13 @@ static int findMonth(std::span<const LChar> monthStr)
     if (monthStr.size() < 3)
         return -1;
 
-    std::array<char, 4> needle;
+    std::array<LChar, 3> needle;
     for (unsigned i = 0; i < 3; ++i)
-        needle[i] = static_cast<char>(toASCIILower(monthStr[i]));
-    needle[3] = '\0';
-    const char* haystack = "janfebmaraprmayjunjulaugsepoctnovdec";
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    const char* str = strstr(haystack, needle.data());
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
-    if (str) {
-        int position = static_cast<int>(str - haystack);
-        if (position % 3 == 0)
-            return position / 3;
+        needle[i] = toASCIILower(monthStr[i]);
+    constexpr auto haystack = "janfebmaraprmayjunjulaugsepoctnovdec"_span;
+    if (size_t index = find(haystack, std::span { needle }); index != notFound) {
+        if (!(index % 3))
+            return index / 3;
     }
     return -1;
 }
@@ -858,13 +854,13 @@ double parseDate(std::span<const LChar> dateString, bool& isLocalTime)
 
             skipSpacesAndComments(dateString);
 
-            if (skipLettersExactlyIgnoringASCIICase(dateString, "am"_span)) {
+            if (skipLettersExactlyIgnoringASCIICase(dateString, "am"_span8)) {
                 if (hour > 12)
                     return std::numeric_limits<double>::quiet_NaN();
                 if (hour == 12)
                     hour = 0;
                 skipSpacesAndComments(dateString);
-            } else if (skipLettersExactlyIgnoringASCIICase(dateString, "pm"_span)) {
+            } else if (skipLettersExactlyIgnoringASCIICase(dateString, "pm"_span8)) {
                 if (hour > 12)
                     return std::numeric_limits<double>::quiet_NaN();
                 if (hour != 12)
@@ -886,7 +882,7 @@ double parseDate(std::span<const LChar> dateString, bool& isLocalTime)
     // Don't fail if the time zone is missing. 
     // Some websites omit the time zone (4275206).
     if (!dateString.empty()) {
-        if (skipLettersExactlyIgnoringASCIICase(dateString, "gmt"_span) || skipLettersExactlyIgnoringASCIICase(dateString, "utc"_span))
+        if (skipLettersExactlyIgnoringASCIICase(dateString, "gmt"_span8) || skipLettersExactlyIgnoringASCIICase(dateString, "utc"_span8))
             isLocalTime = false;
 
         if (!dateString.empty() && (dateString.front() == '+' || dateString.front() == '-')) {
@@ -915,7 +911,7 @@ double parseDate(std::span<const LChar> dateString, bool& isLocalTime)
             for (auto& knownZone : knownZones) {
                 // Since the passed-in length is used for both strings, the following checks that
                 // dateString has the time zone name as a prefix, not that it is equal.
-                auto tzName = span8(knownZone.tzName);
+                auto tzName = unsafeSpan8(knownZone.tzName);
                 if (skipLettersExactlyIgnoringASCIICase(dateString, tzName)) {
                     offset = knownZone.tzOffset;
                     isLocalTime = false;

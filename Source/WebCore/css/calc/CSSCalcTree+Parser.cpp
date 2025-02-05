@@ -234,7 +234,7 @@ template<typename Op> static std::optional<TypedChild> consumeExactlyOneArgument
 template<typename Op> static std::optional<TypedChild> consumeOneOrMoreArguments(CSSParserTokenRange& tokens, int depth, ParserState& state)
 {
     std::optional<Type> mergedType;
-    Children children;
+    Vector<Child> children;
 
     bool requireComma = false;
     unsigned argumentCount = 0;
@@ -475,8 +475,8 @@ static std::optional<TypedChild> consumeClamp(CSSParserTokenRange& tokens, int d
     }
 
     auto computeType = [&] -> std::optional<Type> {
-        bool minIsNone = std::holds_alternative<CSS::Keyword::None>(min->child);
-        bool maxIsNone = std::holds_alternative<CSS::Keyword::None>(max->child);
+        bool minIsNone = WTF::holdsAlternative<CSS::Keyword::None>(min->child);
+        bool maxIsNone = WTF::holdsAlternative<CSS::Keyword::None>(max->child);
 
         if (minIsNone && maxIsNone)
             return val->type;
@@ -1108,7 +1108,7 @@ static std::optional<TypedChild> consumeValueWithoutSimplifyingCalc(CSSParserTok
 
     if (isFunction && isLeafValue) {
         // Wrap in Sum to keep top level calc() function in serialization.
-        Children children;
+        Vector<Child> children;
         children.append(WTFMove(typedValue->child));
 
         return TypedChild { makeChild(Sum { WTFMove(children) }, typedValue->type), typedValue->type };
@@ -1130,10 +1130,10 @@ static std::optional<TypedChild> consumeAnchor(CSSParserTokenRange& tokens, int 
     auto anchorElement = CSSPropertyParserHelpers::consumeDashedIdentRaw(tokens);
 
     // <anchor-side> = inside | outside | top | left | right | bottom | start | end | self-start | self-end | <percentage> | center
-    auto anchorSide = [&]() -> std::optional<Anchor::Side> {
+    auto anchorSide = [&]() -> std::optional<AnchorSide> {
         auto sideIdent = CSSPropertyParserHelpers::consumeIdentRaw<CSSValueInside, CSSValueOutside, CSSValueTop, CSSValueLeft, CSSValueRight, CSSValueBottom, CSSValueStart, CSSValueEnd, CSSValueSelfStart, CSSValueSelfEnd, CSSValueCenter>(tokens);
         if (sideIdent)
-            return sideIdent;
+            return AnchorSide { *sideIdent };
 
         auto percentageOptions = ParserOptions {
             .category = Calculation::Category::Percentage,
@@ -1155,7 +1155,7 @@ static std::optional<TypedChild> consumeAnchor(CSSParserTokenRange& tokens, int 
         if (!category || category != Calculation::Category::Percentage)
             return { };
 
-        return WTFMove(percentage->child);
+        return AnchorSide { WTFMove(percentage->child) };
     }();
 
     if (!anchorSide)
@@ -1459,12 +1459,14 @@ std::optional<TypedChild> parseCalcSum(CSSParserTokenRange& tokens, int depth, P
     if (checkDepth(depth) != ParseStatus::Ok)
         return std::nullopt;
 
+    auto originalTokens = tokens.span();
+
     auto firstValue = parseCalcProduct(tokens, depth, state);
     if (!firstValue)
         return std::nullopt;
 
     auto sumType = firstValue->type;
-    Children children;
+    Vector<Child> children;
 
     while (!tokens.atEnd()) {
         auto& token = tokens.peek();
@@ -1472,10 +1474,9 @@ std::optional<TypedChild> parseCalcSum(CSSParserTokenRange& tokens, int depth, P
         if (operatorCharacter != static_cast<char>(Calculation::Operator::Sum) && operatorCharacter != static_cast<char>(Calculation::Operator::Negate))
             break;
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-        if (!CSSTokenizer::isWhitespace((&tokens.peek() - 1)->type()))
+        auto previousToken = originalTokens[tokens.begin() - originalTokens.data() - 1];
+        if (!CSSTokenizer::isWhitespace(previousToken.type()))
             return std::nullopt; // calc(1px+ 2px) is invalid
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
         tokens.consume();
         if (!CSSTokenizer::isWhitespace(tokens.peek().type()))
@@ -1540,7 +1541,7 @@ std::optional<TypedChild> parseCalcProduct(CSSParserTokenRange& tokens, int dept
         return std::nullopt;
 
     auto productType = firstValue->type;
-    Children children;
+    Vector<Child> children;
 
     while (!tokens.atEnd()) {
         auto& token = tokens.peek();

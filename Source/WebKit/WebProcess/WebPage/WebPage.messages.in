@@ -170,15 +170,11 @@ messages -> WebPage WantsAsyncDispatchMessage {
     DidEndColorPicker()
     DidChooseColor(WebCore::Color color)
 
-#if ENABLE(DATALIST_ELEMENT)
     DidSelectDataListOption(String selectedOption);
     DidCloseSuggestions();
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     DidChooseDate(String date);
     DidEndDateTimePicker();
-#endif
 
     ScrollBy(enum:uint8_t WebCore::ScrollDirection scrollDirection, enum:uint8_t WebCore::ScrollGranularity scrollGranularity)
     CenterSelectionInVisibleArea()
@@ -190,7 +186,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
     LoadURLInFrame(URL url, String referrer, WebCore::FrameIdentifier frameID)
     LoadDataInFrame(std::span<const uint8_t> data, String MIMEType, String encodingName, URL baseURL, WebCore::FrameIdentifier frameID)
     LoadRequest(struct WebKit::LoadParameters loadParameters)
-    CreateProvisionalFrame(struct WebKit::ProvisionalFrameCreationParameters creationParameters, WebCore::FrameIdentifier frameID)
+    CreateProvisionalFrame(struct WebKit::ProvisionalFrameCreationParameters creationParameters)
     DestroyProvisionalFrame(WebCore::FrameIdentifier frameID);
     LoadDidCommitInAnotherProcess(WebCore::FrameIdentifier frameID, std::optional<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier)
     LoadRequestWaitingForProcessLaunch(struct WebKit::LoadParameters loadParameters, URL resourceDirectoryURL, WebKit::WebPageProxyIdentifier pageID, bool checkAssumedReadAccessToResourceURL)
@@ -809,7 +805,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
 
     DidEndWritingToolsSession(struct WebCore::WritingTools::Session session, bool accepted)
 
-    CompositionSessionDidReceiveTextWithReplacementRange(struct WebCore::WritingTools::Session session, struct WebCore::AttributedString attributedText, struct WebCore::CharacterRange range, struct WebCore::WritingTools::Context context, bool finished);
+    CompositionSessionDidReceiveTextWithReplacementRange(struct WebCore::WritingTools::Session session, struct WebCore::AttributedString attributedText, struct WebCore::CharacterRange range, struct WebCore::WritingTools::Context context, bool finished) -> ();
 
     WritingToolsSessionDidReceiveAction(struct WebCore::WritingTools::Session session, enum:uint8_t WebCore::WritingTools::Action action);
 
@@ -868,6 +864,6 @@ messages -> WebPage WantsAsyncDispatchMessage {
     UpdateOpener(WebCore::FrameIdentifier frameID, WebCore::FrameIdentifier newOpener)
 
 #if HAVE(AUDIT_TOKEN)
-    SetPresentingApplicationAuditToken(struct WebKit::CoreIPCAuditToken auditToken)
+    SetPresentingApplicationAuditTokenAndBundleIdentifier(struct WebKit::CoreIPCAuditToken auditToken, String bundleIdentifier)
 #endif
 }

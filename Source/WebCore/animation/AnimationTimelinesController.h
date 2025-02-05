@@ -80,8 +80,8 @@ public:
     WEBCORE_EXPORT void resumeAnimations();
     bool animationsAreSuspended() const { return m_isSuspended; }
 
-    void registerNamedScrollTimeline(const AtomString&, const Element&, ScrollAxis);
-    void registerNamedViewTimeline(const AtomString&, const Element&, ScrollAxis, ViewTimelineInsets&&);
+    void registerNamedScrollTimeline(const AtomString&, Element&, ScrollAxis);
+    void registerNamedViewTimeline(const AtomString&, Element&, ScrollAxis, ViewTimelineInsets&&);
     void unregisterNamedTimeline(const AtomString&, const Element&);
     void setTimelineForName(const AtomString&, const Element&, WebAnimation&);
     void updateNamedTimelineMapForTimelineScope(const TimelineScope&, const Element&);
@@ -103,6 +103,7 @@ private:
     Vector<WeakPtr<Element, WeakPtrImplWithEventTargetData>> relatedTimelineScopeElements(const AtomString&);
     void attachPendingOperations();
     bool isPendingTimelineAttachment(const WebAnimation&) const;
+    void updateCSSAnimationsAssociatedWithNamedTimeline(const AtomString&);
 
     Ref<Document> protectedDocument() const { return m_document.get(); }
 

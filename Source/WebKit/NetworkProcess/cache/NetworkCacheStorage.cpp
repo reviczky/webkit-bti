@@ -1136,7 +1136,7 @@ void Storage::traverseWithinRootPath(const String& rootPath, const String& type,
 
     auto traverseOperation = TraverseOperation::create(WTFMove(traverseHandler));
     ioQueue().dispatch([this, protectedThis = Ref { *this }, traverseOperation = WTFMove(traverseOperation), flags, rootPath = crossThreadCopy(rootPath), type = crossThreadCopy(type)]() mutable {
-        traverseRecordsFiles(rootPath, type, [this, expectedType = type, flags, traverseOperation](const String& fileName, const String& hashString, const String& type, bool isBlob, const String& recordDirectoryPath) {
+        traverseRecordsFiles(rootPath, type, [this, protectedThis, expectedType = type, flags, traverseOperation](const String& fileName, const String& hashString, const String& type, bool isBlob, const String& recordDirectoryPath) {
             ASSERT(type == expectedType || expectedType.isEmpty());
             if (isBlob)
                 return;
@@ -1152,7 +1152,7 @@ void Storage::traverseWithinRootPath(const String& rootPath, const String& type,
 
             traverseOperation->waitAndIncrementActivityCount();
             auto channel = IOChannel::open(WTFMove(recordPath), IOChannel::Type::Read);
-            channel->read(0, std::numeric_limits<size_t>::max(), WorkQueue::main(), [this, traverseOperation, worth, bodyShareCount](auto fileData, int) {
+            channel->read(0, std::numeric_limits<size_t>::max(), WorkQueue::main(), [this, protectedThis, traverseOperation, worth, bodyShareCount](auto fileData, int) {
                 RecordMetaData metaData;
                 Data headerData;
                 if (decodeRecordHeader(fileData, metaData, headerData, m_salt)) {
@@ -1344,9 +1344,7 @@ void Storage::deleteOldVersions()
                 return;
             if (!subdirName.startsWith(versionDirectoryPrefix))
                 return;
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-            auto directoryVersion = parseInteger<unsigned>(StringView { subdirName }.substring(strlen(versionDirectoryPrefix)));
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+            auto directoryVersion = parseInteger<unsigned>(StringView { subdirName }.substring(versionDirectoryPrefix.length()));
             if (!directoryVersion || *directoryVersion >= version)
                 return;
             auto oldVersionPath = FileSystem::pathByAppendingComponent(cachePath, subdirName);

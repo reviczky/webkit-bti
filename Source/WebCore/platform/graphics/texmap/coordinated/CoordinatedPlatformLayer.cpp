@@ -32,11 +32,12 @@
 #include "CoordinatedBackingStoreProxy.h"
 #include "CoordinatedImageBackingStore.h"
 #include "CoordinatedPlatformLayerBuffer.h"
+#include "CoordinatedPlatformLayerBufferHolePunch.h"
+#include "CoordinatedPlatformLayerBufferVideo.h"
 #include "CoordinatedTileBuffer.h"
 #include "GraphicsContext.h"
 #include "GraphicsLayerCoordinated.h"
 #include "TextureMapperLayer.h"
-#include "TextureMapperPlatformLayerProxy.h"
 #include <wtf/MainThread.h>
 
 #if USE(CAIRO)
@@ -111,15 +112,30 @@ TextureMapperLayer* CoordinatedPlatformLayer::target() const
     return m_target.get();
 }
 
+static bool shouldReleaseBuffer(CoordinatedPlatformLayerBuffer* buffer)
+{
+    if (!buffer)
+        return false;
+
+#if ENABLE(VIDEO)
+    // Do not release hole punch buffers early. See https://bugs.webkit.org/show_bug.cgi?id=267322.
+    if (is<CoordinatedPlatformLayerBufferHolePunch>(*buffer))
+        return false;
+#endif
+
+    return true;
+}
+
 void CoordinatedPlatformLayer::invalidateTarget()
 {
     ASSERT(!isMainThread());
-    if (m_committedContentsBuffer) {
-        m_committedContentsBuffer->invalidate();
-        m_committedContentsBuffer = nullptr;
+    {
+        Locker locker { m_lock };
+        m_backingStore = nullptr;
+        m_imageBackingStore.committed = nullptr;
+        if (shouldReleaseBuffer(m_contentsBuffer.committed.get()))
+            m_contentsBuffer.committed = nullptr;
     }
-    m_backingStore = nullptr;
-    m_committedImageBackingStore = nullptr;
     m_target = nullptr;
 }
 
@@ -454,38 +470,47 @@ void CoordinatedPlatformLayer::setContentsScale(float contentsScale)
     notifyCompositionRequired();
 }
 
-void CoordinatedPlatformLayer::setContentsBuffer(TextureMapperPlatformLayerProxy* contentsBuffer)
+void CoordinatedPlatformLayer::setContentsBuffer(std::unique_ptr<CoordinatedPlatformLayerBuffer>&& buffer, RequireComposition requireComposition)
 {
     ASSERT(m_lock.isHeld());
-    if (m_contentsBuffer == contentsBuffer)
+    if (!buffer && !m_contentsBuffer.pending && !m_contentsBuffer.committed)
         return;
 
-    m_contentsBuffer = contentsBuffer;
+    m_contentsBuffer.pending = WTFMove(buffer);
     m_pendingChanges.add(Change::ContentsBuffer);
-    notifyCompositionRequired();
+    if (requireComposition == RequireComposition::Yes)
+        notifyCompositionRequired();
 }
 
-void CoordinatedPlatformLayer::setContentsBufferNeedsDisplay()
+#if ENABLE(VIDEO) && USE(GSTREAMER)
+void CoordinatedPlatformLayer::replaceCurrentContentsBufferWithCopy()
 {
-    ASSERT(m_lock.isHeld());
-    if (!m_contentsBuffer)
+    Locker locker { m_lock };
+    if (!m_contentsBuffer.committed)
         return;
 
-    m_contentsBuffer->swapBuffersIfNeeded();
-    notifyCompositionRequired();
+    m_contentsBuffer.pending = nullptr;
+    if (is<CoordinatedPlatformLayerBufferVideo>(*m_contentsBuffer.committed))
+        m_contentsBuffer.pending = downcast<CoordinatedPlatformLayerBufferVideo>(*m_contentsBuffer.committed).copyBuffer();
+    m_contentsBuffer.committed = WTFMove(m_contentsBuffer.pending);
+    ensureTarget().setContentsLayer(m_contentsBuffer.committed.get());
 }
+#endif
 
-void CoordinatedPlatformLayer::setContentsImage(RefPtr<NativeImage>&& image)
+void CoordinatedPlatformLayer::setContentsImage(NativeImage* image)
 {
     ASSERT(m_lock.isHeld());
     if (image) {
-        if (m_imageBackingStore && m_imageBackingStore->isSameNativeImage(*image))
+        if (m_imageBackingStore.current && m_imageBackingStore.current->isSameNativeImage(*image))
             return;
 
         ASSERT(m_client);
-        m_imageBackingStore = m_client->imageBackingStore(image.releaseNonNull());
-    } else
-        m_imageBackingStore = nullptr;
+        m_imageBackingStore.current = m_client->imageBackingStore(Ref { *image });
+    } else {
+        if (!m_imageBackingStore.current)
+            return;
+        m_imageBackingStore.current = nullptr;
+    }
     m_pendingChanges.add(Change::ContentsImage);
     notifyCompositionRequired();
 }
@@ -715,28 +740,29 @@ void CoordinatedPlatformLayer::updateContents(bool affectedByTransformAnimation)
         if (!m_backingStoreProxy) {
             m_backingStoreProxy = CoordinatedBackingStoreProxy::create(m_contentsScale);
             m_needsTilesUpdate = true;
+            m_pendingChanges.add(Change::BackingStore);
         }
 
         if (affectedByTransformAnimation) {
-            if (!m_animatedBackingStoreClient)
+            if (!m_animatedBackingStoreClient) {
                 m_animatedBackingStoreClient = CoordinatedAnimatedBackingStoreClient::create(*m_owner);
+                m_pendingChanges.add(Change::BackingStore);
+            }
         } else if (m_animatedBackingStoreClient) {
             m_animatedBackingStoreClient->invalidate();
             m_animatedBackingStoreClient = nullptr;
+            m_pendingChanges.add(Change::BackingStore);
         }
     } else {
-        m_backingStoreProxy = nullptr;
+        if (m_backingStoreProxy) {
+            m_backingStoreProxy = nullptr;
+            m_pendingChanges.add(Change::BackingStore);
+        }
         if (m_animatedBackingStoreClient) {
             m_animatedBackingStoreClient->invalidate();
             m_animatedBackingStoreClient = nullptr;
+            m_pendingChanges.add(Change::BackingStore);
         }
-    }
-
-    if (m_imageBackingStore) {
-        bool wasVisible = m_imageBackingStoreVisible;
-        m_imageBackingStoreVisible = m_transformedVisibleRect.intersects(IntRect(m_contentsRect));
-        if (wasVisible != m_imageBackingStoreVisible)
-            m_pendingChanges.add(Change::ContentsImage);
     }
 
     if (m_backdrop) {
@@ -753,7 +779,9 @@ void CoordinatedPlatformLayer::purgeBackingStores()
         m_animatedBackingStoreClient->invalidate();
         m_animatedBackingStoreClient = nullptr;
     }
-    m_imageBackingStore = nullptr;
+    m_imageBackingStore.current = nullptr;
+    if (shouldReleaseBuffer(m_contentsBuffer.pending.get()))
+        m_contentsBuffer.pending = nullptr;
 }
 
 bool CoordinatedPlatformLayer::isCompositionRequiredOrOngoing() const
@@ -765,6 +793,11 @@ void CoordinatedPlatformLayer::requestComposition()
 {
     if (m_client)
         m_client->requestComposition();
+}
+
+RunLoop* CoordinatedPlatformLayer::compositingRunLoop() const
+{
+    return m_client ? m_client->compositingRunLoop() : nullptr;
 }
 
 Ref<CoordinatedTileBuffer> CoordinatedPlatformLayer::paint(const IntRect& dirtyRect)
@@ -795,7 +828,7 @@ void CoordinatedPlatformLayer::flushCompositingState(TextureMapper& textureMappe
 {
     ASSERT(!isMainThread());
     Locker locker { m_lock };
-    if (m_pendingChanges.isEmpty() && !m_backingStoreProxy && !m_contentsBuffer)
+    if (m_pendingChanges.isEmpty() && !m_backingStoreProxy)
         return;
 
     auto& layer = ensureTarget();
@@ -829,6 +862,21 @@ void CoordinatedPlatformLayer::flushCompositingState(TextureMapper& textureMappe
     if (m_pendingChanges.contains(Change::Opacity))
         layer.setOpacity(m_opacity);
 
+    if (m_pendingChanges.contains(Change::BackingStore)) {
+        if (m_backingStoreProxy) {
+            if (!m_backingStore)
+                m_backingStore = CoordinatedBackingStore::create();
+            layer.setBackingStore(m_backingStore.get());
+
+            if (m_animatedBackingStoreClient)
+                layer.setAnimatedBackingStoreClient(m_animatedBackingStoreClient.get());
+        } else {
+            layer.setBackingStore(nullptr);
+            layer.setAnimatedBackingStoreClient(nullptr);
+            m_backingStore = nullptr;
+        }
+    }
+
     if (m_pendingChanges.contains(Change::ContentsVisible))
         layer.setContentsVisible(m_contentsVisible);
 
@@ -849,30 +897,18 @@ void CoordinatedPlatformLayer::flushCompositingState(TextureMapper& textureMappe
     if (m_pendingChanges.contains(Change::ContentsClippingRect))
         layer.setContentsClippingRect(m_contentsClippingRect);
 
-    if (m_pendingChanges.contains(Change::ContentsBuffer)) {
-        if (m_committedContentsBuffer && m_committedContentsBuffer != m_contentsBuffer)
-            m_committedContentsBuffer->invalidate();
-
-        m_committedContentsBuffer = m_contentsBuffer;
-        if (m_committedContentsBuffer)
-            m_committedContentsBuffer->activateOnCompositingThread(*this);
-    }
+    if (m_pendingChanges.contains(Change::ContentsBuffer))
+        m_contentsBuffer.committed = WTFMove(m_contentsBuffer.pending);
 
     if (m_pendingChanges.contains(Change::ContentsImage))
-        m_committedImageBackingStore = m_imageBackingStore;
+        m_imageBackingStore.committed = m_imageBackingStore.current;
 
     if (m_pendingChanges.contains(Change::ContentsColor))
         layer.setSolidColor(m_contentsColor);
 
 #if ENABLE(DAMAGE_TRACKING)
-    if (m_pendingChanges.contains(Change::Damage)) {
-        if (m_committedContentsBuffer || (m_imageBackingStore && m_imageBackingStoreVisible)) {
-            // Layers with content layer should have no explicit damage other than inferred one (e.g. due to transform changes).
-            // FIXME: Remove special handling of content layers.
-            layer.setDamage({ });
-        } else
-            layer.setDamage(m_damage);
-    }
+    if (m_pendingChanges.contains(Change::Damage))
+        layer.setDamage(m_damage);
 #endif
 
     if (m_pendingChanges.contains(Change::Filters))
@@ -909,13 +945,6 @@ void CoordinatedPlatformLayer::flushCompositingState(TextureMapper& textureMappe
     }
 
     if (m_backingStoreProxy) {
-        if (!m_backingStore)
-            m_backingStore = CoordinatedBackingStore::create();
-        layer.setBackingStore(m_backingStore.get());
-
-        if (m_animatedBackingStoreClient)
-            layer.setAnimatedBackingStoreClient(m_animatedBackingStoreClient.get());
-
         auto update = m_backingStoreProxy->takePendingUpdate();
         m_backingStore->resize(layer.size(), update.scale());
 
@@ -927,16 +956,12 @@ void CoordinatedPlatformLayer::flushCompositingState(TextureMapper& textureMappe
             m_backingStore->updateTile(tileUpdate.tileID, tileUpdate.dirtyRect, tileUpdate.tileRect, tileUpdate.buffer.copyRef(), { });
 
         m_backingStore->processPendingUpdates(textureMapper);
-    } else {
-        layer.setBackingStore(nullptr);
-        layer.setAnimatedBackingStoreClient(nullptr);
-        m_backingStore = nullptr;
     }
 
-    if (m_committedContentsBuffer)
-        m_committedContentsBuffer->swapBuffer();
-    else if (m_committedImageBackingStore && m_imageBackingStoreVisible)
-        layer.setContentsLayer(m_committedImageBackingStore->buffer());
+    if (m_contentsBuffer.committed)
+        layer.setContentsLayer(m_contentsBuffer.committed.get());
+    else if (m_imageBackingStore.committed)
+        layer.setContentsLayer(m_imageBackingStore.committed->buffer());
     else
         layer.setContentsLayer(nullptr);
 

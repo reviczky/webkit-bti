@@ -239,6 +239,18 @@ constexpr void dumpOpType(PrintStream& out, OpType op)
 
 MAKE_PRINT_ADAPTOR(OpTypeDump, OpType, dumpOpType);
 
+inline bool isCompareOpType(OpType op)
+{
+    switch (op) {
+#define CREATE_CASE(name, ...) case name: return true;
+    FOR_EACH_WASM_COMPARE_UNARY_OP(CREATE_CASE)
+    FOR_EACH_WASM_COMPARE_BINARY_OP(CREATE_CASE)
+#undef CREATE_CASE
+    default:
+        return false;
+    }
+}
+
 constexpr Type simdScalarType(SIMDLane lane)
 {
     switch (lane) {
@@ -266,7 +278,7 @@ using ProjectionIndex = uint32_t;
 using DisplayCount = uint32_t;
 using SupertypeCount = uint32_t;
 
-inline Width Type::width() const
+ALWAYS_INLINE Width Type::width() const
 {
     switch (kind) {
 #define CREATE_CASE(name, id, b3type, inc, wasmName, width, ...) case TypeKind::name: return widthForBytes(width / 8);
@@ -321,6 +333,7 @@ constexpr size_t typeKindSizeInBytes(TypeKind kind)
     case TypeKind::Rec:
     case TypeKind::Eqref:
     case TypeKind::Anyref:
+    case TypeKind::Nullexn:
     case TypeKind::Nullref:
     case TypeKind::Nullfuncref:
     case TypeKind::Nullexternref:
@@ -345,8 +358,12 @@ public:
     Type returnType(FunctionArgCount i) const { ASSERT(i < returnCount()); return const_cast<FunctionSignature*>(this)->getReturnType(i); }
     bool returnsVoid() const { return !returnCount(); }
     Type argumentType(FunctionArgCount i) const { return const_cast<FunctionSignature*>(this)->getArgumentType(i); }
+    bool argumentsOrResultsIncludeI64() const { return m_argumentsOrResultsIncludeI64; }
+    void setArgumentsOrResultsIncludeI64(bool value) { m_argumentsOrResultsIncludeI64 = value; }
     bool argumentsOrResultsIncludeV128() const { return m_argumentsOrResultsIncludeV128; }
     void setArgumentsOrResultsIncludeV128(bool value) { m_argumentsOrResultsIncludeV128 = value; }
+    bool argumentsOrResultsIncludeExnref() const { return m_argumentsOrResultsIncludeExnref; }
+    void setArgumentsOrResultsIncludeExnref(bool value) { m_argumentsOrResultsIncludeExnref = value; }
 
     size_t numVectors() const
     {
@@ -413,8 +430,10 @@ private:
     mutable Lock m_jitCodeLock;
     // FIXME: Support caching wasmToJSEntrypoints too.
 #endif
-    bool m_hasRecursiveReference { false };
-    bool m_argumentsOrResultsIncludeV128 { false };
+    bool m_hasRecursiveReference : 1 { false };
+    bool m_argumentsOrResultsIncludeI64 : 1 { false };
+    bool m_argumentsOrResultsIncludeV128 : 1 { false };
+    bool m_argumentsOrResultsIncludeExnref : 1 { false };
 };
 
 // FIXME auto-generate this. https://bugs.webkit.org/show_bug.cgi?id=165231
@@ -823,7 +842,14 @@ public:
     unsigned hash() const;
 
     Ref<const TypeDefinition> replacePlaceholders(TypeIndex) const;
-    const TypeDefinition& unroll() const;
+    ALWAYS_INLINE const TypeDefinition& unroll() const
+    {
+        if (UNLIKELY(is<Projection>()))
+            return unrollSlow();
+        ASSERT(refCount() > 1); // TypeInformation registry + owner(s).
+        return *this;
+    }
+
     const TypeDefinition& expand() const;
     bool hasRecursiveReference() const;
     bool isFinalType() const;
@@ -841,6 +867,8 @@ public:
 private:
     // Returns the TypeIndex of a potentially unowned (other than TypeInformation::m_typeSet) TypeDefinition.
     TypeIndex unownedIndex() const { return std::bit_cast<TypeIndex>(this); }
+
+    const TypeDefinition& unrollSlow() const;
 
     friend class TypeInformation;
     friend struct FunctionParameterTypes;

@@ -35,6 +35,7 @@
 #include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/PageIdentifier.h>
 #include <WebCore/ShareableBitmap.h>
+#include <WebCore/SnapshotIdentifier.h>
 #include <memory>
 #include <pal/SessionID.h>
 #include <wtf/TZoneMalloc.h>
@@ -167,6 +168,10 @@ public:
 
 #if HAVE(AUDIT_TOKEN)
     void setPresentingApplicationAuditToken(WebCore::ProcessIdentifier, WebCore::PageIdentifier, std::optional<CoreIPCAuditToken>);
+#endif
+
+#if PLATFORM(VISION) && ENABLE(MODEL_PROCESS)
+    void requestSharedSimulationConnection(audit_token_t, CompletionHandler<void(std::optional<IPC::SharedFileHandle>)>&&);
 #endif
 
 private:

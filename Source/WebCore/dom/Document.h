@@ -48,6 +48,7 @@
 #include "RenderPtr.h"
 #include "ReportingClient.h"
 #include "ScriptExecutionContext.h"
+#include "SpatialBackdropSource.h"
 #include "StringWithDirection.h"
 #include "Supplementable.h"
 #include "TextIndicator.h"
@@ -467,11 +468,16 @@ public:
 
     ALWAYS_INLINE void decrementReferencingNodeCount(unsigned count = 1)
     {
+        ASSERT_WITH_SECURITY_IMPLICATION(m_referencingNodeCount >= count);
+
         m_referencingNodeCount -= count;
         if (!m_referencingNodeCount && !refCount()) {
-            if (deletionHasBegun())
-                return;
-            setStateFlag(StateFlag::HasStartedDeletion);
+            // Restore the the final overlooking ref that deref() maintains.
+            m_refCountAndParentBit = s_refCountIncrement;
+
+#if ASSERT_ENABLED
+            setStateFlag(StateFlag::DeletionHasBegun);
+#endif
             delete this;
         }
     }
@@ -708,6 +714,9 @@ public:
 
     WEBCORE_EXPORT bool useElevatedUserInterfaceLevel() const;
     WEBCORE_EXPORT bool useDarkAppearance(const RenderStyle*) const;
+#if ENABLE(DARK_MODE_CSS)
+    OptionSet<ColorScheme> resolvedColorScheme(const RenderStyle*) const;
+#endif
 
     OptionSet<StyleColorOptions> styleColorOptions(const RenderStyle*) const;
     CompositeOperator compositeOperatorForBackgroundColor(const Color&, const RenderObject&) const;
@@ -909,6 +918,10 @@ public:
 
     const Color& themeColor();
 
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    const std::optional<SpatialBackdropSource>& spatialBackdropSource() const { return m_cachedSpatialBackdropSource; }
+#endif
+
     void setTextColor(const Color& color) { m_textColor = color; }
     const Color& textColor() const { return m_textColor; }
 
@@ -1041,15 +1054,16 @@ public:
         DOMNodeRemovedFromDocument = 1 << 3,
         DOMNodeInsertedIntoDocument = 1 << 4,
         DOMCharacterDataModified = 1 << 5,
-        Scroll = 1 << 6,
-        ForceWillBegin = 1 << 7,
-        ForceChanged = 1 << 8,
-        ForceDown = 1 << 8,
-        ForceUp = 1 << 10,
-        FocusIn = 1 << 11,
-        FocusOut = 1 << 12,
-        CSSTransition = 1 << 13,
-        CSSAnimation = 1 << 14,
+        OverflowChanged = 1 << 6,
+        Scroll = 1 << 7,
+        ForceWillBegin = 1 << 8,
+        ForceChanged = 1 << 9,
+        ForceDown = 1 << 10,
+        ForceUp = 1 << 11,
+        FocusIn = 1 << 12,
+        FocusOut = 1 << 13,
+        CSSTransition = 1 << 14,
+        CSSAnimation = 1 << 15,
     };
 
     bool hasListenerType(ListenerType listenerType) const { return m_listenerTypes.contains(listenerType); }
@@ -1097,6 +1111,10 @@ public:
     void processReferrerPolicy(const String& policy, ReferrerPolicySource);
 
     void metaElementThemeColorChanged(HTMLMetaElement&);
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    void spatialBackdropLinkElementChanged();
+#endif
 
 #if ENABLE(DARK_MODE_CSS)
     void processColorScheme(const String& colorScheme);
@@ -1381,6 +1399,7 @@ public:
 
     void queueTaskToDispatchEvent(TaskSource, Ref<Event>&&);
     void queueTaskToDispatchEventOnWindow(TaskSource, Ref<Event>&&);
+    void enqueueOverflowEvent(Ref<Event>&&);
     void dispatchPageshowEvent(PageshowEventPersistence);
     void dispatchPagehideEvent(PageshowEventPersistence);
     void dispatchPageswapEvent(bool canTriggerCrossDocumentViewTransition, RefPtr<NavigationActivation>&&);
@@ -1973,6 +1992,9 @@ public:
     ResourceMonitor& resourceMonitor();
     Ref<ResourceMonitor> protectedResourceMonitor();
     ResourceMonitor* parentResourceMonitorIfExists();
+
+    bool shouldSkipResourceMonitorThrottling() const { return m_shouldSkipResourceMonitorThrottling; }
+    void setShouldSkipResourceMonitorThrottling(bool flag) { m_shouldSkipResourceMonitorThrottling = flag; }
 #endif
 
     Ref<Calculation::RandomKeyMap> randomKeyMap() const;
@@ -2055,6 +2077,11 @@ private:
 
     WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData> determineActiveThemeColorMetaElement();
     void themeColorChanged();
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    std::optional<SpatialBackdropSource> determineActiveSpatialBackdropSource() const;
+    void spatialBackdropSourceChanged();
+#endif
 
     void invalidateAccessKeyCacheSlowCase();
     void buildAccessKeyCache();
@@ -2216,6 +2243,10 @@ private:
     std::optional<Vector<WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData>>> m_metaThemeColorElements;
     WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData> m_activeThemeColorMetaElement;
     Color m_applicationManifestThemeColor;
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    std::optional<SpatialBackdropSource> m_cachedSpatialBackdropSource;
+#endif
 
     Color m_textColor { Color::black };
     Color m_linkColor;
@@ -2687,6 +2718,7 @@ private:
 
 #if ENABLE(CONTENT_EXTENSIONS)
     RefPtr<ResourceMonitor> m_resourceMonitor;
+    bool m_shouldSkipResourceMonitorThrottling { false };
 #endif
 
     mutable RefPtr<Calculation::RandomKeyMap> m_randomKeyMap;

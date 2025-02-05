@@ -34,6 +34,7 @@
 #include "CachedImage.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "CloseWatcherManager.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ComposedTreeIterator.h"
 #include "CursorList.h"
@@ -799,7 +800,7 @@ bool EventHandler::handleMousePressEventSingleClick(const MouseEventWithHitTestR
             else
                 newSelection = VisibleSelection(start, pos);
         } else {
-            if (newSelection.isDirectional()) {
+            if (newSelection.directionality() == Directionality::Strong) {
                 RefPtr baseNode = newSelection.isBaseFirst() ? newSelection.base().computeNodeAfterPosition() : newSelection.base().computeNodeBeforePosition();
                 if (!baseNode)
                     baseNode = newSelection.base().containerNode();
@@ -1441,6 +1442,8 @@ bool EventHandler::scrollRecursively(ScrollDirection direction, ScrollGranularit
     if (!parent)
         return false;
     RefPtr localParent = dynamicDowncast<LocalFrame>(parent.get());
+    if (!localParent)
+        return false;
     return localParent->checkedEventHandler()->scrollRecursively(direction, granularity, frame->protectedOwnerElement().get());
 }
 
@@ -1718,10 +1721,10 @@ std::optional<Cursor> EventHandler::selectCursor(const HitTestResult& result, bo
             && !m_mouseDownMayStartDrag
 #endif
             && frame->selection().isCaretOrRange()
-            && !m_capturingMouseEventsElement)
+            && !m_capturingMouseEventsElement && renderer && renderer->style().usedUserSelect() != UserSelect::None)
                 return iBeam;
 
-        if ((editable || (renderer && renderer->isRenderText() && node->canStartSelection())) && !inResizer && !result.scrollbar())
+        if ((editable || (renderer && renderer->isRenderText() && node->canStartSelection() && renderer->style().usedUserSelect() != UserSelect::None)) && !inResizer && !result.scrollbar())
             return iBeam;
         return pointerCursor();
     }
@@ -1896,7 +1899,7 @@ HandleUserInputEventResult EventHandler::handleMousePressEvent(const PlatformMou
         return true;
 #endif
 
-    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, frame->protectedDocument().get(), userGestureTypeForPlatformEvent(platformMouseEvent));
+    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, frame->protectedDocument().get(), userGestureTypeForPlatformEvent(platformMouseEvent), UserGestureIndicator::ProcessInteractionStyle::Immediate, platformMouseEvent.authorizationToken());
 
     // FIXME (bug 68185): this call should be made at another abstraction layer
     frame->protectedLoader()->resetMultipleFormSubmissionProtection();
@@ -4185,6 +4188,8 @@ void EventHandler::defaultKeyboardEventHandler(KeyboardEvent& event)
             return;
 
         if (event.key() == "Escape"_s) {
+            if (frame->settings().closeWatcherEnabled())
+                frame->document()->domWindow()->closeWatcherManager().escapeKeyHandler(event);
             if (RefPtr activeModalDialog = frame->document()->activeModalDialog())
                 activeModalDialog->queueCancelTask();
             if (RefPtr topmostAutoPopover = frame->document()->topmostAutoPopover())
@@ -5065,8 +5070,7 @@ HandleUserInputEventResult EventHandler::handleTouchEvent(const PlatformTouchEve
     std::array<Touches, PlatformTouchPoint::TouchStateEnd> changedTouches;
 
     const Vector<PlatformTouchPoint>& points = event.touchPoints();
-
-    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, frame->protectedDocument().get(), userGestureTypeForPlatformEvent(event));
+    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, frame->protectedDocument().get(), userGestureTypeForPlatformEvent(event), UserGestureIndicator::ProcessInteractionStyle::Immediate, event.authorizationToken());
 
     bool freshTouchEvents = true;
     bool allTouchReleased = true;
@@ -5334,7 +5338,7 @@ HandleUserInputEventResult EventHandler::passMouseReleaseEventToSubframe(MouseEv
 
 bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent& event, Widget& widget, OptionSet<WheelEventProcessingSteps> processingSteps)
 {
-    auto* frameView = dynamicDowncast<LocalFrameView>(widget);
+    RefPtr frameView = dynamicDowncast<LocalFrameView>(widget);
     if (!frameView)
         return false;
 

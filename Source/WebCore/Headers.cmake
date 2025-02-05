@@ -1132,6 +1132,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/NodeList.h
     dom/NodeRenderStyle.h
     dom/NodeTraversal.h
+    dom/OverflowEvent.h
     dom/ParserContentPolicy.h
     dom/PointerEvent.h
     dom/PointerEventTypeNames.h
@@ -1141,6 +1142,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/Position.h
     dom/ProcessingInstruction.h
     dom/ProgressEvent.h
+    dom/PseudoElement.h
     dom/QualifiedName.h
     dom/RadioButtonGroups.h
     dom/Range.h
@@ -1164,6 +1166,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/SimulatedClickOptions.h
     dom/SlotAssignmentMode.h
     dom/SpaceSplitString.h
+    dom/SpatialBackdropSource.h
     dom/StartViewTransitionOptions.h
     dom/StaticRange.h
     dom/StyledElement.h
@@ -1988,6 +1991,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/calc/CalculationOperator.h
     platform/calc/CalculationRandomKey.h
     platform/calc/CalculationRandomKeyMap.h
+    platform/calc/CalculationRange.h
     platform/calc/CalculationTree.h
     platform/calc/CalculationValue.h
 
@@ -2057,6 +2061,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/FloatQuad.h
     platform/graphics/FloatRect.h
     platform/graphics/FloatRoundedRect.h
+    platform/graphics/FloatSegment.h
     platform/graphics/FloatSize.h
     platform/graphics/Font.h
     platform/graphics/FontBaseline.h

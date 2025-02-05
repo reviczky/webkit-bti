@@ -143,6 +143,8 @@
 #define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, connection(), completion)
 
 #define WEBPROCESSPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [PID=%i] WebProcessProxy::" fmt, static_cast<const void*>(this), processID(), ##__VA_ARGS__)
+#define WEBPROCESSPROXY_RELEASE_LOG_WITH_THIS(channel, thisPtr, fmt, ...) RELEASE_LOG(channel, "%p - [PID=%i] WebProcessProxy::" fmt, static_cast<const void*>(WTF::getPtr(thisPtr)), thisPtr->processID(), ##__VA_ARGS__)
+
 #define WEBPROCESSPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [PID=%i] WebProcessProxy::" fmt, static_cast<const void*>(this), processID(), ##__VA_ARGS__)
 
 namespace WebKit {
@@ -2177,6 +2179,13 @@ void WebProcessProxy::activePagesDomainsForTesting(CompletionHandler<void(Vector
     sendWithAsyncReply(Messages::WebProcess::GetActivePagesOriginsForTesting(), WTFMove(completionHandler));
 }
 
+#if ENABLE(NOTIFY_BLOCKING)
+void WebProcessProxy::getNotifyStateForTesting(const String& name, CompletionHandler<void(std::optional<uint64_t>)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::WebProcess::GetNotifyStateForTesting(name), WTFMove(completionHandler));
+}
+#endif
+
 void WebProcessProxy::didStartProvisionalLoadForMainFrame(const URL& url)
 {
     RELEASE_ASSERT(!isInProcessCache());
@@ -2553,13 +2562,12 @@ void WebProcessProxy::establishRemoteWorkerContext(RemoteWorkerType workerType, 
     WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishRemoteWorkerContext: Started (workerType=%" PUBLIC_LOG_STRING ")", workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared");
     markProcessAsRecentlyUsed();
     auto& remoteWorkerInformation = workerType == RemoteWorkerType::ServiceWorker ? m_serviceWorkerInformation : m_sharedWorkerInformation;
-    sendWithAsyncReply(Messages::WebProcess::EstablishRemoteWorkerContextConnectionToNetworkProcess { workerType, processPool().defaultPageGroup().pageGroupID(), remoteWorkerInformation->remoteWorkerPageProxyID, remoteWorkerInformation->remoteWorkerPageID, store, site, serviceWorkerPageIdentifier, remoteWorkerInformation->initializationData }, [this, weakThis = WeakPtr { *this }, workerType, completionHandler = WTFMove(completionHandler)]() mutable {
+    sendWithAsyncReply(Messages::WebProcess::EstablishRemoteWorkerContextConnectionToNetworkProcess { workerType, processPool().defaultPageGroup().pageGroupID(), remoteWorkerInformation->remoteWorkerPageProxyID, remoteWorkerInformation->remoteWorkerPageID, store, site, serviceWorkerPageIdentifier, remoteWorkerInformation->initializationData }, [weakThis = WeakPtr { *this }, workerType, completionHandler = WTFMove(completionHandler)]() mutable {
 #if RELEASE_LOG_DISABLED
-        UNUSED_PARAM(this);
         UNUSED_PARAM(workerType);
 #endif
-        if (weakThis)
-            WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishRemoteWorkerContext: Finished (workerType=%" PUBLIC_LOG_STRING ")", workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared");
+        if (RefPtr protectedThis = weakThis.get())
+            WEBPROCESSPROXY_RELEASE_LOG_WITH_THIS(Loading, protectedThis, "establishRemoteWorkerContext: Finished (workerType=%" PUBLIC_LOG_STRING ")", workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared");
         completionHandler();
     }, 0);
 }
@@ -3018,10 +3026,10 @@ void WebProcessProxy::registerServiceWorkerClients(CompletionHandler<void()>&& c
 HashMap<WebCore::PageIdentifier, CoreIPCAuditToken> WebProcessProxy::presentingApplicationAuditTokens() const
 {
     HashMap<WebCore::PageIdentifier, CoreIPCAuditToken> presentingApplicationAuditTokens;
-    WTF::forEach(pages(), [&] (auto& page) {
+    for (auto& page : pages()) {
         if (page->presentingApplicationAuditToken())
             presentingApplicationAuditTokens.add(page->webPageIDInMainFrameProcess(), page->presentingApplicationAuditToken().value());
-    });
+    }
     return presentingApplicationAuditTokens;
 }
 #endif
@@ -3083,17 +3091,24 @@ void WebProcessProxy::requestResourceMonitorRuleLists()
         m_resourceMonitorRuleListRequestedBySomePage = true;
 
         if (RefPtr ruleList = processPool->cachedResourceMonitorRuleList())
-            setResourceMonitorRuleListsIfRequired(ruleList.get());
+            setResourceMonitorRuleListsIfRequired(WTFMove(ruleList));
     }
 }
 
-void WebProcessProxy::setResourceMonitorRuleListsIfRequired(WebCompiledContentRuleList* ruleList)
+void WebProcessProxy::setResourceMonitorRuleListsIfRequired(RefPtr<WebCompiledContentRuleList> ruleList)
 {
-    if (!m_resourceMonitorRuleListRequestedBySomePage || m_resourceMonitorRuleList == ruleList)
+    if (!m_resourceMonitorRuleListRequestedBySomePage || m_resourceMonitorRuleList == ruleList.get())
         return;
 
-    m_resourceMonitorRuleList = ruleList;
-    send(Messages::WebProcess::SetResourceMonitorContentRuleList(ruleList->data()), 0);
+    m_resourceMonitorRuleList = ruleList.get();
+    if (ruleList)
+        send(Messages::WebProcess::SetResourceMonitorContentRuleList(ruleList->data()), 0);
+}
+
+void WebProcessProxy::setResourceMonitorRuleLists(RefPtr<WebCompiledContentRuleList> ruleList, CompletionHandler<void()>&& completionHandler)
+{
+    m_resourceMonitorRuleList = ruleList.get();
+    sendWithAsyncReply(Messages::WebProcess::SetResourceMonitorContentRuleListAsync(ruleList->data()), WTFMove(completionHandler));
 }
 #endif
 

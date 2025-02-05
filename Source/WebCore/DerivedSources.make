@@ -384,7 +384,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/identity/DigitalCredentialRequestOptions.idl \
     $(WebCore)/Modules/identity/OpenID4VPRequest.idl \
     $(WebCore)/Modules/identity/IdentityCredentialProtocol.idl \
-    $(WebCore)/Modules/identity/Navigator+Identity.idl \
     $(WebCore)/Modules/indexeddb/IDBCursor.idl \
     $(WebCore)/Modules/indexeddb/IDBCursorDirection.idl \
     $(WebCore)/Modules/indexeddb/IDBCursorWithValue.idl \
@@ -1184,6 +1183,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/NodeList.idl \
     $(WebCore)/dom/NonDocumentTypeChildNode.idl \
     $(WebCore)/dom/NonElementParentNode.idl \
+    $(WebCore)/dom/OverflowEvent.idl \
     $(WebCore)/dom/Observable.idl \
     $(WebCore)/dom/ObservableInspector.idl \
     $(WebCore)/dom/ObservableInspectorAbortCallback.idl \
@@ -1346,7 +1346,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/ImageData.idl \
     $(WebCore)/html/ImageDataSettings.idl \
     $(WebCore)/html/ImageDataStorageFormat.idl \
-    $(WebCore)/html/InvokerElement.idl \
     $(WebCore)/html/MediaController.idl \
     $(WebCore)/html/MediaEncryptedEvent.idl \
     $(WebCore)/html/MediaError.idl \
@@ -1473,6 +1472,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/canvas/WebGLUniformLocation.idl \
     $(WebCore)/html/canvas/WebGLVertexArrayObject.idl \
     $(WebCore)/html/canvas/WebGLVertexArrayObjectOES.idl \
+    $(WebCore)/html/closewatcher/CloseWatcher.idl \
     $(WebCore)/html/track/AudioTrack.idl \
     $(WebCore)/html/track/AudioTrackConfiguration.idl \
     $(WebCore)/html/track/AudioTrackList.idl \
@@ -2110,7 +2110,6 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/html.css \
     $(WebCore)/css/htmlSwitchControl.css \
     $(WebCore)/css/mathml.css \
-    $(WebCore)/css/mediaControls.css \
     $(WebCore)/css/popover.css \
     $(WebCore)/css/quirks.css \
     $(WebCore)/css/svg.css \

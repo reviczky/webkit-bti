@@ -25,6 +25,7 @@
 #pragma once
 
 #include "CSSPosition.h"
+#include "FloatPoint.h"
 #include "StylePrimitiveNumericTypes.h"
 
 namespace WebCore {
@@ -61,7 +62,7 @@ struct Position  {
     }
 
     Position(FloatPoint point)
-        : value { LengthPercentage<> { Length<> { point.x() } }, LengthPercentage<> { Length<> { point.y() } } }
+        : value { LengthPercentage<>::Dimension { point.x() }, LengthPercentage<>::Dimension { point.y() } }
     {
     }
 
@@ -92,9 +93,7 @@ template<> struct ToStyle<CSS::Position> { auto operator()(const CSS::Position&,
 
 // MARK: - Evaluation
 
-FloatPoint evaluate(const Position&, FloatSize referenceBox);
-float evaluate(const TwoComponentPositionHorizontal&, float referenceWidth);
-float evaluate(const TwoComponentPositionVertical&, float referenceHeight);
+template<> struct Evaluation<Position> { auto operator()(const Position&, FloatSize) -> FloatPoint; };
 
 } // namespace Style
 } // namespace WebCore

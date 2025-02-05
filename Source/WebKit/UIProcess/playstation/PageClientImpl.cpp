@@ -226,11 +226,6 @@ bool PageClientImpl::usesOffscreenRendering() const
 }
 #endif
 
-RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy&, const WebCore::Color&, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&)
-{
-    return nullptr;
-}
-
 void PageClientImpl::enterAcceleratedCompositingMode(const LayerTreeContext& context)
 {
     notImplemented();
@@ -250,6 +245,10 @@ void PageClientImpl::updateAcceleratedCompositingMode(const LayerTreeContext&)
 WebFullScreenManagerProxyClient& PageClientImpl::fullScreenManagerProxyClient()
 {
     return *(WebFullScreenManagerProxyClient*)this;
+}
+
+void PageClientImpl::setFullScreenClientForTesting(std::unique_ptr<WebFullScreenManagerProxyClient>&&)
+{
 }
 
 void PageClientImpl::closeFullScreenManager()

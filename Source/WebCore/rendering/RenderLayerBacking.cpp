@@ -825,7 +825,9 @@ bool RenderLayerBacking::updateBackdropRoot()
 
     // If the RenderView is opaque, then that will occlude any pixels behind it and we don't need
     // to isolate it as a backdrop root.
-    if (m_owningLayer.isRenderViewLayer() && !compositor().viewHasTransparentBackground())
+    //
+    // Always allow for the main frame so that clients can intentionally allow backdrop blending outside of the webview by setting it to transparent.
+    if (m_owningLayer.isRenderViewLayer() && (m_isMainFrameRenderViewLayer || !compositor().viewHasTransparentBackground()))
         willBeBackdropRoot = false;
 
     if (m_graphicsLayer->isBackdropRoot() == willBeBackdropRoot)
@@ -1721,18 +1723,6 @@ void RenderLayerBacking::updateScrollOffset(ScrollOffset scrollOffset)
     ASSERT(m_scrolledContentsLayer->position().isZero());
 }
 
-static bool layerRendererStyleHas3DTransformOperation(RenderLayer& layer)
-{
-    auto* renderer = &layer.renderer();
-    if (layer.isReflection())
-        renderer = downcast<RenderLayerModelObject>(renderer->parent());
-    const RenderStyle& style = renderer->style();
-    return style.transform().has3DOperation()
-        || (style.translate() && style.translate()->is3DOperation())
-        || (style.scale() && style.scale()->is3DOperation())
-        || (style.rotate() && style.rotate()->is3DOperation());
-}
-
 void RenderLayerBacking::updateAfterDescendants()
 {
     // FIXME: this potentially duplicates work we did in updateConfiguration().
@@ -1752,10 +1742,6 @@ void RenderLayerBacking::updateAfterDescendants()
         ASSERT(!m_backgroundLayer);
         m_graphicsLayer->setContentsOpaque(!m_hasSubpixelRounding && m_owningLayer.backgroundIsKnownToBeOpaqueInRect(compositedBounds()));
     }
-
-    if (layerRendererStyleHas3DTransformOperation(m_owningLayer)
-        || m_owningLayer.hasCompositedScrollableOverflow())
-        m_graphicsLayer->markDamageRectsUnreliable();
 
     m_graphicsLayer->setContentsVisible(m_owningLayer.hasVisibleContent() || hasVisibleNonCompositedDescendants());
     if (m_scrollContainerLayer) {
@@ -4069,7 +4055,7 @@ bool RenderLayerBacking::shouldDumpPropertyForLayer(const GraphicsLayer* layer, 
     return true;
 }
 
-#if HAVE(HDR_SUPPORT)
+#if ENABLE(HDR_FOR_IMAGES)
 bool RenderLayerBacking::hdrForImagesEnabled() const
 {
     return renderer().settings().hdrForImagesEnabled();

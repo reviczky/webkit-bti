@@ -294,6 +294,11 @@ void Styleable::willChangeRenderer() const
     }
 }
 
+OptionSet<AnimationImpact> Styleable::applyKeyframeEffects(RenderStyle& targetStyle, UncheckedKeyHashSet<AnimatableCSSProperty>& affectedProperties, const RenderStyle* previousLastStyleChangeEventStyle, const Style::ResolutionContext& resolutionContext) const
+{
+    return element.ensureKeyframeEffectStack(pseudoElementIdentifier).applyKeyframeEffects(targetStyle, affectedProperties, previousLastStyleChangeEventStyle, resolutionContext);
+}
+
 void Styleable::cancelStyleOriginatedAnimations() const
 {
     cancelStyleOriginatedAnimations({ });
@@ -911,7 +916,7 @@ void Styleable::updateCSSViewTimelines(const RenderStyle* currentStyle, const Re
     };
 
     auto updateNamedViewTimelines = [&]() {
-        if (currentStyle && currentStyle->viewTimelineNames() == afterChangeStyle.viewTimelineNames())
+        if ((currentStyle && currentStyle->viewTimelineNames() == afterChangeStyle.viewTimelineNames()) && (currentStyle && currentStyle->viewTimelineAxes() == afterChangeStyle.viewTimelineAxes()) && (currentStyle && currentStyle->viewTimelineInsets() == afterChangeStyle.viewTimelineInsets()))
             return;
 
         CheckedRef timelinesController = element.protectedDocument()->ensureTimelinesController();

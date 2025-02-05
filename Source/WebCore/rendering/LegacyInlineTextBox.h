@@ -99,8 +99,6 @@ public:
 
 private:
     void deleteLine() final;
-    void extractLine() final;
-    void attachLine() final;
     
 public:
     RenderObject::HighlightState selectionState() const final;
@@ -144,7 +142,7 @@ inline void LegacyInlineTextBox::removeFromGlyphDisplayListCache()
     }
 }
 
-LayoutRect snappedSelectionRect(const LayoutRect&, float logicalRight, float selectionTop, float selectionHeight, bool isHorizontal);
+LayoutRect snappedSelectionRect(const LayoutRect&, float logicalRight, WritingMode);
 
 } // namespace WebCore
 

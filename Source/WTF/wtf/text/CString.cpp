@@ -54,7 +54,7 @@ CString::CString(const char* string)
     if (!string)
         return;
 
-    init(WTF::span(string));
+    init(unsafeSpan(string));
 }
 
 CString::CString(std::span<const char> string)
@@ -131,17 +131,6 @@ bool operator==(const CString& a, const CString& b)
     if (a.length() != b.length())
         return false;
     return equal(a.span().data(), b.span());
-}
-
-bool operator==(const CString& a, const char* b)
-{
-    if (a.isNull() != !b)
-        return false;
-    if (!b)
-        return true;
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    return !strcmp(a.data(), b);
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 unsigned CString::hash() const

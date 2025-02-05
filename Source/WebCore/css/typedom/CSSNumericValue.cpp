@@ -34,6 +34,7 @@
 #include "CSSCalcSymbolTable.h"
 #include "CSSCalcTree+Parser.h"
 #include "CSSCalcTree+Simplification.h"
+#include "CSSCalcTree.h"
 #include "CSSMathClamp.h"
 #include "CSSMathInvert.h"
 #include "CSSMathMax.h"
@@ -52,6 +53,7 @@
 #include "ExceptionOr.h"
 #include <wtf/Algorithms.h>
 #include <wtf/FixedVector.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -403,7 +405,7 @@ ExceptionOr<Ref<CSSMathSum>> CSSNumericValue::toSum(FixedVector<String>&& units)
 
     if (parsedUnits.isEmpty()) {
         std::sort(values.begin(), values.end(), [](auto& a, auto& b) {
-            return strcmp(downcast<CSSUnitValue>(a)->unitSerialization().characters(), downcast<CSSUnitValue>(b)->unitSerialization().characters()) < 0;
+            return compareSpans(downcast<CSSUnitValue>(a)->unitSerialization().span(), downcast<CSSUnitValue>(b)->unitSerialization().span()) < 0;
         });
         return CSSMathSum::create(WTFMove(values));
     }
@@ -436,14 +438,14 @@ ExceptionOr<Ref<CSSNumericValue>> CSSNumericValue::parse(Document& document, Str
     range.consumeWhitespace();
     if (range.atEnd())
         return Exception { ExceptionCode::SyntaxError, "Failed to parse CSS text"_s };
-    const CSSParserToken* componentValueStart = &range.peek();
+    auto componentValueStart = range;
     range.consumeComponentValue();
-    const CSSParserToken* componentValueEnd = &range.peek();
+    auto componentValueEnd = range;
     range.consumeWhitespace();
     if (!range.atEnd())
         return Exception { ExceptionCode::SyntaxError, "Failed to parse CSS text"_s };
 
-    auto componentValueRange = range.makeSubRange(componentValueStart, componentValueEnd);
+    auto componentValueRange = componentValueStart.rangeUntil(componentValueEnd);
     // https://drafts.css-houdini.org/css-typed-om/#reify-a-numeric-value
     switch (componentValueRange.peek().type()) {
     case CSSParserTokenType::DimensionToken:

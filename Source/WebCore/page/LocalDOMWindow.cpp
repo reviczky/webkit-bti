@@ -35,6 +35,7 @@
 #include "CSSSelectorParser.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "CloseWatcherManager.h"
 #include "ComposedTreeIterator.h"
 #include "ContentExtensionActions.h"
 #include "ContentExtensionRule.h"
@@ -1591,6 +1592,8 @@ void LocalDOMWindow::notifyActivated(MonotonicTime activationTime)
     setLastActivationTimestamp(activationTime);
     if (!frame())
         return;
+    if (frame()->settings().closeWatcherEnabled())
+        closeWatcherManager().notifyAboutUserActivation();
 
     for (RefPtr ancestor = frame() ? frame()->tree().parent() : nullptr; ancestor; ancestor = ancestor->tree().parent()) {
         RefPtr localAncestor = dynamicDowncast<LocalFrame>(ancestor.get());
@@ -2391,7 +2394,7 @@ void LocalDOMWindow::dispatchEvent(Event& event, EventTarget* target)
         protectedFrame = frame();
         hasListenersForEvent = hasEventListeners(event.type());
         if (hasListenersForEvent)
-            InspectorInstrumentation::willDispatchEventOnWindow(protectedFrame.get(), event, *this);
+            InspectorInstrumentation::willDispatchEventOnWindow(protectedFrame.get(), event);
     }
 
     // FIXME: We should use EventDispatcher everywhere.
@@ -2812,6 +2815,13 @@ CookieStore& LocalDOMWindow::cookieStore()
     if (!m_cookieStore)
         m_cookieStore = CookieStore::create(protectedDocument().get());
     return *m_cookieStore;
+}
+
+CloseWatcherManager& LocalDOMWindow::closeWatcherManager()
+{
+    if (!m_closeWatcherManager)
+        m_closeWatcherManager = adoptRef(*new CloseWatcherManager());
+    return *m_closeWatcherManager;
 }
 
 #if ENABLE(DECLARATIVE_WEB_PUSH)

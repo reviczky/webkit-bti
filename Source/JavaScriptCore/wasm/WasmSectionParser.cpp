@@ -740,6 +740,7 @@ auto SectionParser::parseInitExpr(uint8_t& opcode, bool& isExtendedConstantExpre
 
         WASM_PARSER_FAIL_IF(index >= m_info->globals.size(), "get_global's index "_s, index, " exceeds the number of globals "_s, m_info->globals.size());
         WASM_PARSER_FAIL_IF(m_info->globals[index].mutability != Mutability::Immutable, "get_global import kind index "_s, index, " is mutable "_s);
+        WASM_PARSER_FAIL_IF(m_info->globals[index].initializationType != GlobalInformation::InitializationType::IsImport, "get_global import kind index ", index, " is non-import");
 
         resultType = m_info->globals[index].type;
         bitsOrImportNumber = index;
@@ -1362,17 +1363,17 @@ auto SectionParser::parseCustom() -> PartialResult
         section.payload[byteNumber] = byte;
     }
 
-    if (WTF::Unicode::equal("name"_span, section.name.span())) {
+    if (WTF::Unicode::equal("name"_span8, section.name.span())) {
         NameSectionParser nameSectionParser(section.payload, m_info);
         auto nameSection = nameSectionParser.parse();
         if (nameSection)
             m_info->nameSection = WTFMove(*nameSection);
         else
             dataLogLnIf(Options::dumpWasmWarnings(), "Could not parse name section: ", nameSection.error());
-    } else if (WTF::Unicode::equal("metadata.code.branch_hint"_span, section.name.span())) {
+    } else if (WTF::Unicode::equal("metadata.code.branch_hint"_span8, section.name.span())) {
         BranchHintsSectionParser branchHintsSectionParser(section.payload, m_info);
         branchHintsSectionParser.parse();
-    } else if (WTF::Unicode::equal("sourceMappingURL"_span, section.name.span())) {
+    } else if (WTF::Unicode::equal("sourceMappingURL"_span8, section.name.span())) {
         SourceMappingURLSectionParser sourceMappingURLSectionParser(section.payload, m_info);
         sourceMappingURLSectionParser.parse();
     }

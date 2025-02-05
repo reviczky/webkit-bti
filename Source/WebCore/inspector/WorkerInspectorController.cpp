@@ -54,6 +54,7 @@
 #include <JavaScriptCore/InspectorFrontendChannel.h>
 #include <JavaScriptCore/InspectorFrontendDispatchers.h>
 #include <JavaScriptCore/InspectorFrontendRouter.h>
+#include <JavaScriptCore/InspectorScriptProfilerAgent.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -143,7 +144,7 @@ void WorkerInspectorController::updateServiceWorkerPageFrontendCount()
     if (!is<ServiceWorkerGlobalScope>(m_globalScope))
         return;
 
-    auto serviceWorkerPage = downcast<ServiceWorkerGlobalScope>(m_globalScope).serviceWorkerPage();
+    auto serviceWorkerPage = downcast<ServiceWorkerGlobalScope>(m_globalScope.get()).serviceWorkerPage();
     if (!serviceWorkerPage)
         return;
 
@@ -216,6 +217,10 @@ void WorkerInspectorController::createLazyAgents()
     m_agents.append(makeUnique<WorkerCanvasAgent>(workerContext));
     m_agents.append(makeUnique<WorkerWorkerAgent>(workerContext));
 
+    auto scriptProfilerAgentPtr = makeUnique<InspectorScriptProfilerAgent>(workerContext);
+    m_instrumentingAgents->setPersistentScriptProfilerAgent(scriptProfilerAgentPtr.get());
+    m_agents.append(WTFMove(scriptProfilerAgentPtr));
+
     if (auto& commandLineAPIHost = m_injectedScriptManager->commandLineAPIHost())
         commandLineAPIHost->init(m_instrumentingAgents.copyRef());
 }
@@ -243,7 +248,7 @@ JSC::Debugger* WorkerInspectorController::debugger()
 
 VM& WorkerInspectorController::vm()
 {
-    return m_globalScope.vm();
+    return m_globalScope->vm();
 }
 
 } // namespace WebCore

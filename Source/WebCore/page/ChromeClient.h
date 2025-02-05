@@ -288,7 +288,10 @@ public:
     virtual void themeColorChanged() const { }
     virtual void pageExtendedBackgroundColorDidChange() const { }
     virtual void sampledPageTopColorChanged() const { }
-    
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    virtual void spatialBackdropSourceChanged() const { }
+#endif
+
 #if ENABLE(APP_HIGHLIGHTS)
     virtual WebCore::HighlightVisibility appHighlightsVisiblility() const { return HighlightVisibility::Hidden; };
 #endif
@@ -358,14 +361,10 @@ public:
 
     virtual RefPtr<ColorChooser> createColorChooser(ColorChooserClient&, const Color&) = 0;
 
-#if ENABLE(DATALIST_ELEMENT)
     virtual RefPtr<DataListSuggestionPicker> createDataListSuggestionPicker(DataListSuggestionsClient&) = 0;
     virtual bool canShowDataListSuggestionLabels() const = 0;
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     virtual RefPtr<DateTimeChooser> createDateTimeChooser(DateTimeChooserClient&) = 0;
-#endif
 
     virtual void setTextIndicator(const TextIndicatorData&) const = 0;
 

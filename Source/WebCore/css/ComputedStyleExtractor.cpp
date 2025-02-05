@@ -45,7 +45,6 @@
 #include "CSSGridLineNamesValue.h"
 #include "CSSGridTemplateAreasValue.h"
 #include "CSSPathValue.h"
-#include "CSSPrimitiveNumericTypes+CSSValueCreation.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSProperty.h"
 #include "CSSPropertyAnimation.h"
@@ -54,8 +53,6 @@
 #include "CSSRectValue.h"
 #include "CSSReflectValue.h"
 #include "CSSRegisteredCustomProperty.h"
-#include "CSSScrollMarginEdgeValue.h"
-#include "CSSScrollPaddingEdgeValue.h"
 #include "CSSScrollValue.h"
 #include "CSSTextShadowPropertyValue.h"
 #include "CSSTransformListValue.h"
@@ -94,7 +91,6 @@
 #include "StyleEasingFunction.h"
 #include "StyleFilterProperty.h"
 #include "StylePathData.h"
-#include "StylePrimitiveNumericOrKeyword+Conversions.h"
 #include "StylePrimitiveNumericTypes+Conversions.h"
 #include "StylePropertyShorthand.h"
 #include "StylePropertyShorthandFunctions.h"
@@ -2565,7 +2561,7 @@ static Ref<CSSValue> fontStyle(std::optional<FontSelectionValue> italic, FontSty
     if (auto keyword = fontStyleKeyword(italic, axis))
         return CSSPrimitiveValue::create(keyword.value());
     float angle = *italic;
-    return CSSFontStyleWithAngleValue::create(CSSPrimitiveValue::create(angle, CSSUnitType::CSS_DEG));
+    return CSSFontStyleWithAngleValue::create(CSSFontStyleWithAngleValue::ObliqueAngle { CSS::AngleUnit::Deg, angle });
 }
 
 static Ref<CSSValue> fontStyle(const RenderStyle& style)
@@ -3565,8 +3561,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             return CSSPrimitiveValue::create(CSSValueCollapse);
         return CSSPrimitiveValue::create(CSSValueSeparate);
     case CSSPropertyBorderSpacing:
-        return CSSValueList::createSpaceSeparated(zoomAdjustedPixelValue(style.horizontalBorderSpacing(), style),
-            zoomAdjustedPixelValue(style.verticalBorderSpacing(), style));
+        return CSSValuePair::create(zoomAdjustedPixelValue(style.horizontalBorderSpacing(), style), zoomAdjustedPixelValue(style.verticalBorderSpacing(), style));
     case CSSPropertyWebkitBorderHorizontalSpacing:
         return zoomAdjustedPixelValue(style.horizontalBorderSpacing(), style);
     case CSSPropertyWebkitBorderVerticalSpacing:
@@ -4716,13 +4711,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyScrollMargin:
         return getCSSPropertyValuesFor4SidesShorthand(scrollMarginShorthand());
     case CSSPropertyScrollMarginBottom:
-        return CSS::createCSSValue(Style::toCSS(style.scrollMarginBottom(), style));
+        return style.scrollMarginBottom().toCSS(style);
     case CSSPropertyScrollMarginTop:
-        return CSS::createCSSValue(Style::toCSS(style.scrollMarginTop(), style));
+        return style.scrollMarginTop().toCSS(style);
     case CSSPropertyScrollMarginRight:
-        return CSS::createCSSValue(Style::toCSS(style.scrollMarginRight(), style));
+        return style.scrollMarginRight().toCSS(style);
     case CSSPropertyScrollMarginLeft:
-        return CSS::createCSSValue(Style::toCSS(style.scrollMarginLeft(), style));
+        return style.scrollMarginLeft().toCSS(style);
     case CSSPropertyScrollMarginBlock:
         return getCSSPropertyValuesFor2SidesShorthand(scrollMarginBlockShorthand());
     case CSSPropertyScrollMarginInline:
@@ -4730,13 +4725,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyScrollPadding:
         return getCSSPropertyValuesFor4SidesShorthand(scrollPaddingShorthand());
     case CSSPropertyScrollPaddingBottom:
-        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingBottom(), style));
+        return style.scrollPaddingBottom().toCSS(style);
     case CSSPropertyScrollPaddingTop:
-        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingTop(), style));
+        return style.scrollPaddingTop().toCSS(style);
     case CSSPropertyScrollPaddingRight:
-        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingRight(), style));
+        return style.scrollPaddingRight().toCSS(style);
     case CSSPropertyScrollPaddingLeft:
-        return CSS::createCSSValue(Style::toCSS(style.scrollPaddingLeft(), style));
+        return style.scrollPaddingLeft().toCSS(style);
     case CSSPropertyScrollPaddingBlock:
         return getCSSPropertyValuesFor2SidesShorthand(scrollPaddingBlockShorthand());
     case CSSPropertyScrollPaddingInline:
@@ -4790,7 +4785,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
 
 #if ENABLE(DARK_MODE_CSS)
     case CSSPropertyColorScheme:
-        return CSS::createCSSValue(Style::toCSS(style.colorScheme(), style));
+        return CSSColorSchemeValue::create(Style::toCSS(style.colorScheme(), style));
 #endif
 
     // Length properties for SVG.
@@ -5051,11 +5046,10 @@ Ref<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForShorthandProper
 
 RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesFor2SidesShorthand(const StylePropertyShorthand& shorthand) const
 {
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Assume the properties are in the usual order start, end.
-    auto startValue = propertyValue(shorthand.properties()[0], UpdateLayout::No);
-    auto endValue = propertyValue(shorthand.properties()[1], UpdateLayout::No);
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+    auto longhands = shorthand.properties();
+    auto startValue = propertyValue(longhands[0], UpdateLayout::No);
+    auto endValue = propertyValue(longhands[1], UpdateLayout::No);
 
     // All 2 properties must be specified.
     if (!startValue || !endValue)
@@ -5068,13 +5062,12 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesFor4SidesShorthand(const StylePropertyShorthand& shorthand) const
 {
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     // Assume the properties are in the usual order top, right, bottom, left.
-    auto topValue = propertyValue(shorthand.properties()[0], UpdateLayout::No);
-    auto rightValue = propertyValue(shorthand.properties()[1], UpdateLayout::No);
-    auto bottomValue = propertyValue(shorthand.properties()[2], UpdateLayout::No);
-    auto leftValue = propertyValue(shorthand.properties()[3], UpdateLayout::No);
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+    auto longhands = shorthand.properties();
+    auto topValue = propertyValue(longhands[0], UpdateLayout::No);
+    auto rightValue = propertyValue(longhands[1], UpdateLayout::No);
+    auto bottomValue = propertyValue(longhands[2], UpdateLayout::No);
+    auto leftValue = propertyValue(longhands[3], UpdateLayout::No);
 
     // All 4 properties must be specified.
     if (!topValue || !rightValue || !bottomValue || !leftValue)
@@ -5186,18 +5179,18 @@ Ref<CSSValue> ComputedStyleExtractor::getFillLayerPropertyShorthandValue(CSSProp
 
 Ref<CSSValue> ComputedStyleExtractor::getBackgroundShorthandValue() const
 {
-    static const CSSPropertyID propertiesBeforeSlashSeparator[] = { CSSPropertyBackgroundImage, CSSPropertyBackgroundRepeat, CSSPropertyBackgroundAttachment, CSSPropertyBackgroundPosition };
-    static const CSSPropertyID propertiesAfterSlashSeparator[] = { CSSPropertyBackgroundSize, CSSPropertyBackgroundOrigin, CSSPropertyBackgroundClip };
+    static constexpr std::array propertiesBeforeSlashSeparator { CSSPropertyBackgroundImage, CSSPropertyBackgroundRepeat, CSSPropertyBackgroundAttachment, CSSPropertyBackgroundPosition };
+    static constexpr std::array propertiesAfterSlashSeparator { CSSPropertyBackgroundSize, CSSPropertyBackgroundOrigin, CSSPropertyBackgroundClip };
 
-    return getFillLayerPropertyShorthandValue(CSSPropertyBackground, StylePropertyShorthand(CSSPropertyBackground, propertiesBeforeSlashSeparator), StylePropertyShorthand(CSSPropertyBackground, propertiesAfterSlashSeparator), CSSPropertyBackgroundColor);
+    return getFillLayerPropertyShorthandValue(CSSPropertyBackground, StylePropertyShorthand(CSSPropertyBackground, std::span { propertiesBeforeSlashSeparator }), StylePropertyShorthand(CSSPropertyBackground, std::span { propertiesAfterSlashSeparator }), CSSPropertyBackgroundColor);
 }
 
 Ref<CSSValue> ComputedStyleExtractor::getMaskShorthandValue() const
 {
-    static const CSSPropertyID propertiesBeforeSlashSeparator[2] = { CSSPropertyMaskImage, CSSPropertyMaskPosition };
-    static const CSSPropertyID propertiesAfterSlashSeparator[6] = { CSSPropertyMaskSize, CSSPropertyMaskRepeat, CSSPropertyMaskOrigin, CSSPropertyMaskClip, CSSPropertyMaskComposite, CSSPropertyMaskMode };
+    static constexpr std::array propertiesBeforeSlashSeparator { CSSPropertyMaskImage, CSSPropertyMaskPosition };
+    static constexpr std::array propertiesAfterSlashSeparator { CSSPropertyMaskSize, CSSPropertyMaskRepeat, CSSPropertyMaskOrigin, CSSPropertyMaskClip, CSSPropertyMaskComposite, CSSPropertyMaskMode };
 
-    return getFillLayerPropertyShorthandValue(CSSPropertyMask, StylePropertyShorthand(CSSPropertyMask, propertiesBeforeSlashSeparator), StylePropertyShorthand(CSSPropertyMask, propertiesAfterSlashSeparator), CSSPropertyInvalid);
+    return getFillLayerPropertyShorthandValue(CSSPropertyMask, StylePropertyShorthand(CSSPropertyMask, std::span { propertiesBeforeSlashSeparator }), StylePropertyShorthand(CSSPropertyMask, std::span { propertiesAfterSlashSeparator }), CSSPropertyInvalid);
 }
 
 } // namespace WebCore

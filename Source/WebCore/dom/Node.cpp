@@ -314,12 +314,11 @@ void Node::dumpStatistics()
         }
     }
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     printf("Number of Nodes: %d\n\n", liveNodeSet().computeSize());
     printf("Number of Nodes with RareData: %zu\n", nodesWithRareData);
     printf("  Mixed use: %zu\n", mixedRareDataUseCount);
     for (auto it : rareDataSingleUseTypeCounts)
-        printf("  %s: %zu\n", stringForRareDataUseType(static_cast<NodeRareData::UseType>(it.key)).characters(), it.value);
+        SAFE_PRINTF("  %s: %zu\n", stringForRareDataUseType(static_cast<NodeRareData::UseType>(it.key)), it.value);
     printf("\n");
 
 
@@ -337,7 +336,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
     printf("Element tag name distibution:\n");
     for (auto& stringSizePair : perTagCount)
-        printf("  Number of <%s> tags: %zu\n", stringSizePair.key.utf8().data(), stringSizePair.value);
+        SAFE_PRINTF("  Number of <%s> tags: %zu\n", stringSizePair.key.utf8(), stringSizePair.value);
 
     printf("Attributes:\n");
     printf("  Number of Attributes (non-Node and Node): %zu [%zu]\n", attributes, sizeof(Attribute));
@@ -345,7 +344,6 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     printf("  Number of Elements with attribute storage: %zu [%zu]\n", elementsWithAttributeStorage, sizeof(ElementData));
     printf("  Number of Elements with RareData: %zu\n", elementsWithRareData);
     printf("  Number of Elements with NamedNodeMap: %zu [%zu]\n", elementsWithNamedNodeMap, sizeof(NamedNodeMap));
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // DUMP_NODE_STATISTICS
 }
@@ -415,8 +413,8 @@ Node::Node(Document& document, NodeType type, OptionSet<TypeFlag> flags)
     // Allow code to ref the Document while it is being constructed to make our life easier.
     if (isDocumentNode())
         relaxAdoptionRequirement();
-
-    document.incrementReferencingNodeCount();
+    else
+        document.incrementReferencingNodeCount();
 
 #if !defined(NDEBUG) || DUMP_NODE_STATISTICS
     trackForDebugging();
@@ -449,18 +447,12 @@ Node::~Node()
         // Not refing document because it may be in the middle of destruction.
         auto& document = this->document(); // Store document before clearing out m_treeScope.
 
-        // FIXME: We also cleanup nodes in the AXObjectCache via Node::willBeDeletedFrom(Document&), and we should really
-        // only have to do this cleanup in one spot. However, only cleaning up in Node::willBeDeletedFrom(Document&) causes
-        // WeakRef crashes, as willBeDeletedFrom seems to miss some Nodes, thus "poisoning" AXObjectCache::m_nodeObjectMapping
-        // with a nullified WeakRef, causing any subsequent operation (e.g. a lookup) to crash.
-        if (CheckedPtr cache = document.existingAXObjectCache())
-            cache->remove(*this);
-
         // The call to decrementReferencingNodeCount() below may destroy the document so we need to clear our
         // m_treeScope CheckedPtr beforehand.
         m_treeScope = nullptr;
 
-        document.decrementReferencingNodeCount(); // This may destroy the document.
+        if (!isDocumentNode())
+            document.decrementReferencingNodeCount(); // This may destroy the document.
     }
 
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY) && (ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS))
@@ -471,12 +463,11 @@ Node::~Node()
     }
 #endif
 
-// refCount() is 1 during Node destruction (see Node::deref()) but can be 0 during Document destruction (see Document::removedLastRef()).
-#if CHECK_REF_COUNTED_LIFECYCLE
-    if (refCount() > 1)
+#if ASSERT_ENABLED
+    if (m_refCountAndParentBit != s_refCountIncrement)
         WTF::RefCountedBase::printRefDuringDestructionLogAndCrash(this);
 #endif
-    RELEASE_ASSERT(refCount() <= 1);
+    RELEASE_ASSERT(m_refCountAndParentBit == s_refCountIncrement);
 }
 
 void Node::willBeDeletedFrom(Document& document)
@@ -753,7 +744,7 @@ ExceptionOr<void> Node::remove()
     return parent->removeChild(*this);
 }
 
-void Node::normalize()
+ExceptionOr<void> Node::normalize()
 {
     // Go through the subtree beneath us, normalizing all nodes. This means that
     // any two adjacent text nodes are merged and any empty text nodes are removed.
@@ -799,6 +790,11 @@ void Node::normalize()
             // Both non-empty text nodes. Merge them.
             unsigned offset = text->length();
 
+            if (nextText->length() > StringImpl::MaxLength - offset) {
+                return Exception { ExceptionCode::InvalidModificationError,
+                    "Normalized Node String representation exceeds implementation maximum length."_s };
+            }
+
             // Update start/end for any affected Ranges before appendData since modifying contents might trigger mutation events that modify ordering.
             document->textNodesMerged(nextText, offset);
 
@@ -810,6 +806,8 @@ void Node::normalize()
 
         node = NodeTraversal::nextPostOrder(*node);
     }
+
+    return { };
 }
 
 Ref<Node> Node::cloneNode(bool deep)
@@ -2003,7 +2001,6 @@ static void appendAttributeDesc(const Node* node, StringBuilder& stringBuilder, 
     stringBuilder.append(attr);
 }
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 void Node::showNode(ASCIILiteral prefix) const
 {
     if (prefix.isNull())
@@ -2011,22 +2008,19 @@ void Node::showNode(ASCIILiteral prefix) const
     if (isTextNode()) {
         String value = makeStringByReplacingAll(nodeValue(), '\\', "\\\\"_s);
         value = makeStringByReplacingAll(value, '\n', "\\n"_s);
-        fprintf(stderr, "%s%s\t%p \"%s\"\n", prefix.characters(), nodeName().utf8().data(), this, value.utf8().data());
+        SAFE_FPRINTF(stderr, "%s%s\t%p \"%s\"\n", prefix, nodeName().utf8(), this, value.utf8());
     } else {
         StringBuilder attrs;
         appendAttributeDesc(this, attrs, classAttr, " CLASS="_s);
         appendAttributeDesc(this, attrs, styleAttr, " STYLE="_s);
-        fprintf(stderr, "%s%s\t%p (renderer %p) %s%s%s\n", prefix.characters(), nodeName().utf8().data(), this, renderer(), attrs.toString().utf8().data(), needsStyleRecalc() ? " (needs style recalc)" : "", childNeedsStyleRecalc() ? " (child needs style recalc)" : "");
+        SAFE_FPRINTF(stderr, "%s%s\t%p (renderer %p) %s%s%s\n", prefix, nodeName().utf8(), this, renderer(), attrs.toString().utf8(), needsStyleRecalc() ? " (needs style recalc)"_s : ""_s, childNeedsStyleRecalc() ? " (child needs style recalc)"_s : ""_s);
     }
 }
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 void Node::showTreeForThis() const
 {
-    showTreeAndMark(this, "*");
+    showTreeAndMark(this, "*"_s);
 }
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 void Node::showNodePathForThis() const
 {
@@ -2048,7 +2042,7 @@ void Node::showNodePathForThis() const
 
         switch (node->nodeType()) {
         case ELEMENT_NODE: {
-            fprintf(stderr, "/%s", node->nodeName().utf8().data());
+            SAFE_FPRINTF(stderr, "/%s", node->nodeName().utf8());
 
             const Element& element = uncheckedDowncast<Element>(*node);
             const AtomString& idattr = element.getIdAttribute();
@@ -2059,18 +2053,18 @@ void Node::showNodePathForThis() const
                     if (previous->nodeName() == node->nodeName())
                         ++count;
                 if (hasIdAttr)
-                    fprintf(stderr, "[@id=\"%s\" and position()=%d]", idattr.string().utf8().data(), count);
+                    SAFE_FPRINTF(stderr, "[@id=\"%s\" and position()=%d]", idattr.string().utf8(), count);
                 else
                     fprintf(stderr, "[%d]", count);
             } else if (hasIdAttr)
-                fprintf(stderr, "[@id=\"%s\"]", idattr.string().utf8().data());
+                SAFE_FPRINTF(stderr, "[@id=\"%s\"]", idattr.string().utf8());
             break;
         }
         case TEXT_NODE:
             fprintf(stderr, "/text()");
             break;
         case ATTRIBUTE_NODE:
-            fprintf(stderr, "/@%s", node->nodeName().utf8().data());
+            SAFE_FPRINTF(stderr, "/@%s", node->nodeName().utf8());
             break;
         default:
             break;
@@ -2079,19 +2073,19 @@ void Node::showNodePathForThis() const
     fprintf(stderr, "\n");
 }
 
-static void traverseTreeAndMark(const String& baseIndent, const Node* rootNode, const Node* markedNode1, const char* markedLabel1, const Node* markedNode2, const char* markedLabel2)
+static void traverseTreeAndMark(const String& baseIndent, const Node* rootNode, const Node* markedNode1, ASCIILiteral markedLabel1, const Node* markedNode2, ASCIILiteral markedLabel2)
 {
     for (const Node* node = rootNode; node; node = NodeTraversal::next(*node)) {
         if (node == markedNode1)
-            fprintf(stderr, "%s", markedLabel1);
+            SAFE_FPRINTF(stderr, "%s", markedLabel1);
         if (node == markedNode2)
-            fprintf(stderr, "%s", markedLabel2);
+            SAFE_FPRINTF(stderr, "%s", markedLabel2);
 
         StringBuilder indent;
         indent.append(baseIndent);
         for (const Node* tmpNode = node; tmpNode && tmpNode != rootNode; tmpNode = tmpNode->parentOrShadowHostNode())
             indent.append('\t');
-        fprintf(stderr, "%s", indent.toString().utf8().data());
+        SAFE_FPRINTF(stderr, "%s", indent.toString().utf8());
         node->showNode();
         indent.append('\t');
         if (!node->isShadowRoot()) {
@@ -2101,9 +2095,7 @@ static void traverseTreeAndMark(const String& baseIndent, const Node* rootNode, 
     }
 }
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
-
-void Node::showTreeAndMark(const Node* markedNode1, const char* markedLabel1, const Node* markedNode2, const char* markedLabel2) const
+void Node::showTreeAndMark(const Node* markedNode1, ASCIILiteral markedLabel1, const Node* markedNode2, ASCIILiteral markedLabel2) const
 {
     const Node* node = this;
     while (node->parentOrShadowHostNode() && !node->hasTagName(bodyTag))
@@ -2124,11 +2116,9 @@ static ContainerNode* parentOrShadowHostOrFrameOwner(const Node* node)
 
 static void showSubTreeAcrossFrame(const Node* node, const Node* markedNode, const String& indent)
 {
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     if (node == markedNode)
         fputs("*", stderr);
-    fputs(indent.utf8().data(), stderr);
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+    SAFE_FPRINTF(stderr, "%s\n", indent.utf8());
     node->showNode();
     if (!node->isShadowRoot()) {
         if (auto* frameOwner = dynamicDowncast<HTMLFrameOwnerElement>(node))
@@ -2884,7 +2874,7 @@ bool Node::willRespondToMouseClickEventsWithEditability(Editability editability)
 // delete a Node at each deref call site.
 void Node::removedLastRef()
 {
-    ASSERT(m_refCountAndParentBit == s_refCountIncrement);
+    RELEASE_ASSERT(m_refCountAndParentBit == s_refCountIncrement);
 
     // An explicit check for Document here is better than a virtual function since it is
     // faster for non-Document nodes, and because the call to removedLastRef that is inlined
@@ -2894,13 +2884,21 @@ void Node::removedLastRef()
         return;
     }
 
-    // Now it is time to detach the SVGElement from all its properties. These properties
-    // may outlive the SVGElement. The only difference after the detach is no commit will
-    // be carried out unless these properties are attached to another owner.
+    // This paragraph runs before Node destruction as a workaround for the fact
+    // that detachAllProperties() can transitively call virtual functions on our
+    // derived SVG class.
+
+    // Properties may outlive an SVGElement, but no commit will be carried out
+    // unless a property has attached to a new owner.
+
+    // FIXME: Make the registry automatically weak, or manually clear it in
+    // subclass destructors, so we can remove this workaround.
     if (auto* svgElement = dynamicDowncast<SVGElement>(*this))
         svgElement->detachAllProperties();
 
-    setStateFlag(StateFlag::HasStartedDeletion);
+#if ASSERT_ENABLED
+    setStateFlag(StateFlag::DeletionHasBegun);
+#endif
     delete this;
 }
 

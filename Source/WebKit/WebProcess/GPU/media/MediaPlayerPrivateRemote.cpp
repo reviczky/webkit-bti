@@ -47,7 +47,6 @@
 #include <WebCore/MediaPlayer.h>
 #include <WebCore/MediaStrategy.h>
 #include <WebCore/NotImplemented.h>
-#include <WebCore/PlatformLayer.h>
 #include <WebCore/PlatformScreen.h>
 #include <WebCore/PlatformStrategies.h>
 #include <WebCore/PlatformTimeRanges.h>
@@ -62,15 +61,6 @@
 #include <wtf/StringPrintStream.h>
 #include <wtf/URL.h>
 #include <wtf/text/CString.h>
-
-#if PLATFORM(GTK) || PLATFORM(WPE)
-#include <WebCore/TextureMapperPlatformLayerProxy.h>
-#elif USE(COORDINATED_GRAPHICS)
-#include <WebCore/TextureMapperPlatformLayerProxyProvider.h>
-#elif USE(TEXTURE_MAPPER)
-#include <WebCore/TextureMapperPlatformLayer.h>
-#include <WebCore/TextureMapperPlatformLayerProxy.h>
-#endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
 #include "RemoteCDMInstance.h"
@@ -248,7 +238,7 @@ void MediaPlayerPrivateRemote::prepareForPlayback(bool privateMode, MediaPlayer:
     connection().send(Messages::RemoteMediaPlayerProxy::PrepareForPlayback(privateMode, preload, preservesPitch, pitchCorrectionAlgorithm, prepareToPlay, prepareToRender, presentationSize, scale, preferredDynamicRangeMode), m_id);
 }
 
-void MediaPlayerPrivateRemote::load(const URL& url, const ContentType& contentType, const String& keySystem)
+void MediaPlayerPrivateRemote::load(const URL& url, const LoadOptions& options)
 {
     std::optional<SandboxExtension::Handle> sandboxExtensionHandle;
     if (url.protocolIsFile()) {
@@ -283,7 +273,7 @@ void MediaPlayerPrivateRemote::load(const URL& url, const ContentType& contentTy
         sandboxExtensionHandle = WTFMove(handle);
     }
 
-    connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::Load(url, WTFMove(sandboxExtensionHandle), contentType, keySystem, m_player.get()->requiresRemotePlayback()), [weakThis = ThreadSafeWeakPtr { *this }, this](auto&& configuration) {
+    connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::Load(url, WTFMove(sandboxExtensionHandle), options), [weakThis = ThreadSafeWeakPtr { *this }, this](auto&& configuration) {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
@@ -328,6 +318,11 @@ void MediaPlayerPrivateRemote::setPreservesPitch(bool preservesPitch)
 void MediaPlayerPrivateRemote::setPitchCorrectionAlgorithm(WebCore::MediaPlayer::PitchCorrectionAlgorithm algorithm)
 {
     connection().send(Messages::RemoteMediaPlayerProxy::SetPitchCorrectionAlgorithm(algorithm), m_id);
+}
+
+void MediaPlayerPrivateRemote::setVolumeLocked(bool volumeLocked)
+{
+    connection().send(Messages::RemoteMediaPlayerProxy::SetVolumeLocked(volumeLocked), m_id);
 }
 
 void MediaPlayerPrivateRemote::setVolumeDouble(double volume)
@@ -1019,7 +1014,7 @@ void MediaPlayerPrivateRemote::remoteVideoTrackConfigurationChanged(TrackID trac
 }
 
 #if ENABLE(MEDIA_SOURCE)
-void MediaPlayerPrivateRemote::load(const URL& url, const ContentType& contentType, MediaSourcePrivateClient& client)
+void MediaPlayerPrivateRemote::load(const URL& url, const LoadOptions& options, MediaSourcePrivateClient& client)
 {
     if (m_remoteEngineIdentifier == MediaPlayerEnums::MediaEngineIdentifier::AVFoundationMSE
         || (platformStrategies()->mediaStrategy().mockMediaSourceEnabled() && m_remoteEngineIdentifier == MediaPlayerEnums::MediaEngineIdentifier::MockMSE)) {
@@ -1032,7 +1027,7 @@ void MediaPlayerPrivateRemote::load(const URL& url, const ContentType& contentTy
             }
             return RemoteMediaSourceIdentifier::generate();
         }();
-        connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::LoadMediaSource(url, contentType, identifier), [weakThis = ThreadSafeWeakPtr { *this }, this](RemoteMediaPlayerConfiguration&& configuration) {
+        connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::LoadMediaSource(url, options, identifier), [weakThis = ThreadSafeWeakPtr { *this }, this](RemoteMediaPlayerConfiguration&& configuration) {
             RefPtr protectedThis = weakThis.get();
             if (!protectedThis)
                 return;

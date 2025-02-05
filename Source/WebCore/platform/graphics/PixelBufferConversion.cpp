@@ -62,9 +62,13 @@ static inline vImage_CGImageFormat makeVImageCGImageFormat(const PixelBufferForm
                 return std::make_tuple(8u, 32u, static_cast<CGBitmapInfo>(kCGBitmapByteOrder32Little) | static_cast<CGBitmapInfo>(kCGImageAlphaFirst));
 
         case PixelFormat::BGRX8:
+#if ENABLE(PIXEL_FORMAT_RGB10)
         case PixelFormat::RGB10:
+#endif
+#if ENABLE(PIXEL_FORMAT_RGB10A8)
         case PixelFormat::RGB10A8:
-#if HAVE(HDR_SUPPORT)
+#endif
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
         case PixelFormat::RGBA16F:
 #endif
             break;
@@ -148,21 +152,18 @@ static void convertImagePixelsAccelerated(const ConstPixelBufferConversionView& 
 
 #elif USE(SKIA)
 
-static void convertImagePixelsSkia(const ConstPixelBufferConversionView& source, const PixelBufferConversionView& destination, const IntSize& destinationSize)
+static bool convertImagePixelsSkia(const ConstPixelBufferConversionView& source, const PixelBufferConversionView& destination, const IntSize& destinationSize)
 {
-    auto toSkiaColorType = [](const PixelFormat& pixelFormat) {
+    auto toSkiaColorType = [](const PixelFormat& pixelFormat) -> std::optional<SkColorType> {
         switch (pixelFormat) {
         case PixelFormat::RGBA8:
             return SkColorType::kRGBA_8888_SkColorType;
         case PixelFormat::BGRA8:
             return SkColorType::kBGRA_8888_SkColorType;
-        case PixelFormat::BGRX8:
-        case PixelFormat::RGB10:
-        case PixelFormat::RGB10A8:
+        default:
             break;
         }
-        ASSERT_NOT_REACHED();
-        return SkColorType::kUnknown_SkColorType;
+        return std::nullopt;
     };
     auto toSkiaAlphaType = [](const AlphaPremultiplication& alphaFormat) {
         switch (alphaFormat) {
@@ -174,24 +175,31 @@ static void convertImagePixelsSkia(const ConstPixelBufferConversionView& source,
         ASSERT_NOT_REACHED();
         return SkAlphaType::kUnknown_SkAlphaType;
     };
+    auto sourceSkiaColorType = toSkiaColorType(source.format.pixelFormat);
+    if (!sourceSkiaColorType)
+        return false;
     SkImageInfo sourceImageInfo = SkImageInfo::Make(
         destinationSize.width(),
         destinationSize.height(),
-        toSkiaColorType(source.format.pixelFormat),
+        *sourceSkiaColorType,
         toSkiaAlphaType(source.format.alphaFormat),
         source.format.colorSpace.platformColorSpace()
     );
+    auto destinationSkiaColorType = toSkiaColorType(destination.format.pixelFormat);
+    if (!destinationSkiaColorType)
+        return false;
     // Utilize SkPixmap which is a raw bytes wrapper capable of performing conversions.
     SkPixmap sourcePixmap(sourceImageInfo, source.rows.data(), source.bytesPerRow);
     SkImageInfo destinationImageInfo = SkImageInfo::Make(
         destinationSize.width(),
         destinationSize.height(),
-        toSkiaColorType(destination.format.pixelFormat),
+        *destinationSkiaColorType,
         toSkiaAlphaType(destination.format.alphaFormat),
         destination.format.colorSpace.platformColorSpace()
     );
     // Read pixels from source to destination and convert pixels if necessary.
     sourcePixmap.readPixels(destinationImageInfo, destination.rows.data(), destination.bytesPerRow);
+    return true;
 }
 
 #endif
@@ -281,15 +289,32 @@ static void convertSinglePixelUnpremultipliedToUnpremultiplied(std::span<const u
 template<void (*convertFunctor)(std::span<const uint8_t, 4>, std::span<uint8_t, 4>)>
 static void convertImagePixelsUnaccelerated(const ConstPixelBufferConversionView& source, const PixelBufferConversionView& destination, const IntSize& destinationSize)
 {
-    auto sourceRows = source.rows;
-    auto destinationRows = destination.rows;
-
     size_t bytesPerRow = destinationSize.width() * 4;
-    for (int y = 0; y < destinationSize.height(); ++y, skip(sourceRows, source.bytesPerRow), skip(destinationRows, destination.bytesPerRow)) {
+    for (int y = 0; y < destinationSize.height(); ++y) {
+        auto sourceRow = source.rows.subspan(source.bytesPerRow * y);
+        auto destinationRow = destination.rows.subspan(destination.bytesPerRow * y);
         for (size_t x = 0; x < bytesPerRow; x += 4)
-            convertFunctor(sourceRows.subspan(x).subspan<0, 4>(), destinationRows.subspan(x).subspan<0, 4>());
+            convertFunctor(sourceRow.subspan(x).subspan<0, 4>(), destinationRow.subspan(x).subspan<0, 4>());
     }
 }
+
+#if !(USE(ACCELERATE) && USE(CG))
+static void copyImagePixels(const ConstPixelBufferConversionView& source, const PixelBufferConversionView& destination, const IntSize& destinationSize)
+{
+    size_t bytesPerRow = destinationSize.width() * 4;
+
+    if (bytesPerRow == source.bytesPerRow && bytesPerRow == destination.bytesPerRow) {
+        memcpySpan(destination.rows, source.rows.first(bytesPerRow * destinationSize.height()));
+        return;
+    }
+
+    for (int y = 0; y < destinationSize.height(); ++y) {
+        auto sourceRow = source.rows.subspan(source.bytesPerRow * y);
+        auto destinationRow = destination.rows.subspan(destination.bytesPerRow * y);
+        memcpySpan(destinationRow, sourceRow.first(bytesPerRow));
+    }
+}
+#endif
 
 void convertImagePixels(const ConstPixelBufferConversionView& source, const PixelBufferConversionView& destination, const IntSize& destinationSize)
 {
@@ -306,20 +331,18 @@ void convertImagePixels(const ConstPixelBufferConversionView& source, const Pixe
             convertImagePixelsUnaccelerated<convertSinglePixelUnpremultipliedToUnpremultiplied<PixelFormatConversion::None>>(source, destination, destinationSize);
     } else
         convertImagePixelsAccelerated(source, destination, destinationSize);
-#elif USE(SKIA)
-    if (source.format.alphaFormat == destination.format.alphaFormat && source.format.pixelFormat == destination.format.pixelFormat && source.format.colorSpace == destination.format.colorSpace)
-        memcpySpan(destination.rows, source.rows.first(source.bytesPerRow * destinationSize.height()));
-    else
-        convertImagePixelsSkia(source, destination, destinationSize);
 #else
+    if (source.format.alphaFormat == destination.format.alphaFormat && source.format.pixelFormat == destination.format.pixelFormat && source.format.colorSpace == destination.format.colorSpace) {
+        copyImagePixels(source, destination, destinationSize);
+        return;
+    }
+#if USE(SKIA)
+    if (convertImagePixelsSkia(source, destination, destinationSize))
+        return;
+#endif
     // FIXME: We don't currently support converting pixel data between different color spaces in the non-accelerated path.
     // This could be added using conversion functions from ColorConversion.h.
     ASSERT(source.format.colorSpace == destination.format.colorSpace);
-
-    if (source.format.alphaFormat == destination.format.alphaFormat && source.format.pixelFormat == destination.format.pixelFormat) {
-        memcpySpan(destination.rows, source.rows.first(source.bytesPerRow * destinationSize.height()));
-        return;
-    }
 
     // FIXME: In Linux platform the following paths could be optimized with ORC.
 

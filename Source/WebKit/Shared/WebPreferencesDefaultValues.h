@@ -58,7 +58,9 @@
 #define Webgpu_webxr_feature_status Unstable
 #endif
 
-#if defined(ENABLE_UNIFIED_PDF_AS_PREVIEW) && ENABLE_UNIFIED_PDF_AS_PREVIEW
+#if defined(ENABLE_UNIFIED_PDF_BY_DEFAULT) && ENABLE_UNIFIED_PDF_BY_DEFAULT
+#define Unifiedpdf_feature_status Mature
+#elif defined(ENABLE_UNIFIED_PDF_AS_PREVIEW) && ENABLE_UNIFIED_PDF_AS_PREVIEW
 #define Unifiedpdf_feature_status Preview
 #else
 #define Unifiedpdf_feature_status Internal
@@ -140,6 +142,7 @@ bool defaultGamepadVibrationActuatorEnabled();
 #if PLATFORM(IOS_FAMILY)
 bool defaultAutomaticLiveResizeEnabled();
 bool defaultVisuallyContiguousBidiTextSelectionEnabled();
+bool defaultBidiContentAwarePasteEnabled();
 #endif
 
 bool defaultRunningBoardThrottlingEnabled();
@@ -166,5 +169,7 @@ bool defaultBuiltInNotificationsEnabled();
 #endif
 
 bool defaultRequiresPageVisibilityForVideoToBeNowPlaying();
+
+bool defaultCookieStoreAPIEnabled();
 
 } // namespace WebKit

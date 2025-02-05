@@ -25,22 +25,80 @@
 #include "config.h"
 #include "StyleScrollMargin.h"
 
-#include "CSSPrimitiveNumericTypes+CSSValueConversions.h"
-#include "CSSScrollMarginEdgeValue.h"
+#include "ComputedStyleExtractor.h"
 #include "LayoutRect.h"
+#include "StyleBuilderConverter.h"
 #include "StyleBuilderState.h"
-#include "StylePrimitiveNumericTypes+Conversions.h"
-#include "StylePrimitiveNumericTypes+Evaluation.h"
 
 namespace WebCore {
 namespace Style {
 
-ScrollMarginEdge scrollMarginEdgeFromCSSValue(const CSSValue& value, const BuilderState& state)
+LayoutUnit ScrollMarginEdge::evaluate(LayoutUnit referenceLength) const
 {
-    if (RefPtr edge = dynamicDowncast<CSSScrollMarginEdgeValue>(value))
-        return toStyle(edge->edge(), state);
+    switch (m_value.type()) {
+    case LengthType::Fixed:
+        return LayoutUnit(m_value.value());
 
-    return ScrollMarginEdge { toStyle(CSS::convertFromCSSValue<CSS::Length<>>(value), state) };
+    case LengthType::Percent:
+        return LayoutUnit(static_cast<float>(referenceLength * m_value.percent() / 100.0f));
+
+    case LengthType::Calculated:
+        return LayoutUnit(m_value.nonNanCalculatedValue(referenceLength));
+
+    case LengthType::FillAvailable:
+    case LengthType::Auto:
+    case LengthType::Normal:
+    case LengthType::Content:
+    case LengthType::Relative:
+    case LengthType::Intrinsic:
+    case LengthType::MinIntrinsic:
+    case LengthType::MinContent:
+    case LengthType::MaxContent:
+    case LengthType::FitContent:
+    case LengthType::Undefined:
+        break;
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+    return 0_lu;
+}
+
+float ScrollMarginEdge::evaluate(float referenceLength) const
+{
+    switch (m_value.type()) {
+    case LengthType::Fixed:
+        return m_value.value();
+
+    case LengthType::Percent:
+        return referenceLength * m_value.percent() / 100.0f;
+
+    case LengthType::Calculated:
+        return m_value.nonNanCalculatedValue(referenceLength);
+
+    case LengthType::FillAvailable:
+    case LengthType::Auto:
+    case LengthType::Normal:
+    case LengthType::Content:
+    case LengthType::Relative:
+    case LengthType::Intrinsic:
+    case LengthType::MinIntrinsic:
+    case LengthType::MinContent:
+    case LengthType::MaxContent:
+    case LengthType::FitContent:
+    case LengthType::Undefined:
+        break;
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+    return 0.0f;
+}
+
+Ref<CSSValue> ScrollMarginEdge::toCSS(const RenderStyle& style) const
+{
+    return ComputedStyleExtractor::zoomAdjustedPixelValueForLength(m_value, style);
+}
+
+ScrollMarginEdge scrollMarginEdgeFromCSSValue(const CSSValue& value, BuilderState& state)
+{
+    return ScrollMarginEdge { BuilderConverter::convertLength(state, value) };
 }
 
 LayoutBoxExtent extentForRect(const ScrollMargin& margin, const LayoutRect& rect)
@@ -49,7 +107,7 @@ LayoutBoxExtent extentForRect(const ScrollMargin& margin, const LayoutRect& rect
         Style::evaluate(margin.top(), rect.height()),
         Style::evaluate(margin.right(), rect.width()),
         Style::evaluate(margin.bottom(), rect.height()),
-        Style::evaluate(margin.left(), rect.width())
+        Style::evaluate(margin.left(), rect.width()),
     };
 }
 

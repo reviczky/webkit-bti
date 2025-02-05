@@ -848,8 +848,6 @@ RefPtr<ColorChooser> WebChromeClient::createColorChooser(ColorChooserClient& cli
     return WebColorChooser::create(protectedPage().ptr(), &client, initialColor);
 }
 
-#if ENABLE(DATALIST_ELEMENT)
-
 RefPtr<DataListSuggestionPicker> WebChromeClient::createDataListSuggestionPicker(DataListSuggestionsClient& client)
 {
     return WebDataListSuggestionPicker::create(protectedPage(), client);
@@ -864,16 +862,10 @@ bool WebChromeClient::canShowDataListSuggestionLabels() const
 #endif
 }
 
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-
 RefPtr<DateTimeChooser> WebChromeClient::createDateTimeChooser(DateTimeChooserClient& client)
 {
     return WebDateTimeChooser::create(protectedPage(), client);
 }
-
-#endif
 
 void WebChromeClient::runOpenPanel(LocalFrame& frame, FileChooser& fileChooser)
 {
@@ -1432,6 +1424,13 @@ void WebChromeClient::sampledPageTopColorChanged() const
 {
     protectedPage()->sampledPageTopColorChanged();
 }
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+void WebChromeClient::spatialBackdropSourceChanged() const
+{
+    protectedPage()->spatialBackdropSourceChanged();
+}
+#endif
 
 #if ENABLE(APP_HIGHLIGHTS)
 WebCore::HighlightVisibility WebChromeClient::appHighlightsVisiblility() const

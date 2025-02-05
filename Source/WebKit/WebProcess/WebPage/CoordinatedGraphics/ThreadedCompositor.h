@@ -26,13 +26,13 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS)
-
 #include "CompositingRunLoop.h"
-#include "CoordinatedGraphicsScene.h"
 #include <WebCore/Damage.h>
 #include <WebCore/DisplayUpdate.h>
 #include <WebCore/GLContext.h>
 #include <WebCore/IntSize.h>
+#include <WebCore/TextureMapperDamageVisualizer.h>
+#include <WebCore/TextureMapperFPSCounter.h>
 #include <atomic>
 #include <wtf/Atomics.h>
 #include <wtf/CheckedPtr.h>
@@ -44,12 +44,17 @@
 #include "ThreadedDisplayRefreshMonitor.h"
 #endif
 
-namespace WebKit {
+namespace WebCore {
+class TextureMapper;
+class TransformationMatrix;
+}
 
+namespace WebKit {
 class AcceleratedSurface;
+class CoordinatedSceneState;
 class LayerTreeHost;
 
-class ThreadedCompositor : public CoordinatedGraphicsSceneClient, public ThreadSafeRefCounted<ThreadedCompositor>, public CanMakeThreadSafeCheckedPtr<ThreadedCompositor> {
+class ThreadedCompositor : public ThreadSafeRefCounted<ThreadedCompositor>, public CanMakeThreadSafeCheckedPtr<ThreadedCompositor> {
     WTF_MAKE_TZONE_ALLOCATED(ThreadedCompositor);
     WTF_MAKE_NONCOPYABLE(ThreadedCompositor);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ThreadedCompositor);
@@ -75,8 +80,8 @@ public:
 #endif
 
     uint32_t requestComposition();
-
-    void updateScene();
+    void scheduleUpdate();
+    RunLoop* runLoop();
 
     void invalidate();
 
@@ -100,13 +105,9 @@ private:
     ThreadedCompositor(LayerTreeHost&, ThreadedDisplayRefreshMonitor::Client&, WebCore::PlatformDisplayID);
 #endif
 
-    // CoordinatedGraphicsSceneClient
-    void updateViewport() override;
-#if ENABLE(DAMAGE_TRACKING)
-    const WebCore::Damage& addSurfaceDamage(const WebCore::Damage&) override;
-#endif
-
+    void updateSceneState();
     void renderLayerTree();
+    void paintToCurrentGLContext(const WebCore::TransformationMatrix&, const WebCore::IntSize&);
     void frameComplete();
 
 #if HAVE(DISPLAY_LINK)
@@ -118,7 +119,7 @@ private:
 
     CheckedPtr<LayerTreeHost> m_layerTreeHost;
     std::unique_ptr<AcceleratedSurface> m_surface;
-    RefPtr<CoordinatedGraphicsScene> m_scene;
+    RefPtr<CoordinatedSceneState> m_sceneState;
     std::unique_ptr<WebCore::GLContext> m_context;
 
     bool m_flipY { false };
@@ -136,6 +137,14 @@ private:
         bool clientRendersNextFrame { false };
 #endif
     } m_attributes;
+
+    std::unique_ptr<WebCore::TextureMapper> m_textureMapper;
+    WebCore::TextureMapperFPSCounter m_fpsCounter;
+
+#if ENABLE(DAMAGE_TRACKING)
+    WebCore::Damage::Propagation m_damagePropagation { WebCore::Damage::Propagation::None };
+    std::unique_ptr<WebCore::TextureMapperDamageVisualizer> m_damageVisualizer;
+#endif
 
 #if HAVE(DISPLAY_LINK)
     std::atomic<uint32_t> m_compositionResponseID { 0 };

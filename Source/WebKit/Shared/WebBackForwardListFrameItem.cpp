@@ -88,6 +88,11 @@ WebBackForwardListFrameItem* WebBackForwardListFrameItem::childItemForFrameID(Fr
     return nullptr;
 }
 
+RefPtr<WebBackForwardListFrameItem> WebBackForwardListFrameItem::protectedChildItemForFrameID(FrameIdentifier frameID)
+{
+    return childItemForFrameID(frameID);
+}
+
 WebBackForwardListItem* WebBackForwardListFrameItem::backForwardListItem() const
 {
     return m_backForwardListItem.get();
@@ -141,12 +146,8 @@ void WebBackForwardListFrameItem::setWasRestoredFromSession()
 
 void WebBackForwardListFrameItem::setFrameState(Ref<FrameState>&& frameState)
 {
-    m_children.clear();
     m_frameState = WTFMove(frameState);
-
-    ASSERT(m_backForwardListItem);
-    for (auto& childFrameState : std::exchange(m_frameState->children, { }))
-        m_children.append(WebBackForwardListFrameItem::create(*protectedBackForwardListItem(), this, WTFMove(childFrameState)));
+    m_frameState->children.clear();
 }
 
 Ref<FrameState> WebBackForwardListFrameItem::copyFrameStateWithChildren()

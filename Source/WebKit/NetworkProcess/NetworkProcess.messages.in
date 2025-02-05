@@ -20,7 +20,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-[ExceptionForEnabledBy]
+[
+    DispatchedFrom=UI,
+    DispatchedTo=Networking,
+    ExceptionForEnabledBy
+]
 messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
     InitializeNetworkProcess(struct WebKit::NetworkProcessCreationParameters processCreationParameters) -> ()
 
@@ -266,4 +270,6 @@ messages -> NetworkProcess : AuxiliaryProcess WantsAsyncDispatchMessage {
 
     FetchSessionStorage(PAL::SessionID sessionID, WebKit::WebPageProxyIdentifier pageID) -> (HashMap<WebCore::ClientOrigin, HashMap<String, String>> sessionStorageMap)
     RestoreSessionStorage(PAL::SessionID sessionID, WebKit::WebPageProxyIdentifier pageID, HashMap<WebCore::ClientOrigin, HashMap<String, String>> localStorageMap) -> (bool succeeded)
+
+    SetShouldRelaxThirdPartyCookieBlockingForPage(WebKit::WebPageProxyIdentifier pageID)
 }

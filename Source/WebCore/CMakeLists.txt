@@ -108,7 +108,6 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/css/values/images"
     "${WEBCORE_DIR}/css/values/motion"
     "${WEBCORE_DIR}/css/values/primitives"
-    "${WEBCORE_DIR}/css/values/scroll-snap"
     "${WEBCORE_DIR}/css/values/shapes"
     "${WEBCORE_DIR}/css/values/text-decoration"
     "${WEBCORE_DIR}/cssjit"
@@ -120,6 +119,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/history"
     "${WEBCORE_DIR}/html"
     "${WEBCORE_DIR}/html/canvas"
+    "${WEBCORE_DIR}/html/closewatcher"
     "${WEBCORE_DIR}/html/forms"
     "${WEBCORE_DIR}/html/parser"
     "${WEBCORE_DIR}/html/shadow"
@@ -279,6 +279,7 @@ set(WebCore_IDL_INCLUDES
     css/typedom/transform
 
     html/canvas
+    html/closewatcher
     html/shadow
     html/track
 
@@ -402,7 +403,6 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/identity/DigitalCredentialRequest.idl
     Modules/identity/DigitalCredentialRequestOptions.idl
     Modules/identity/IdentityCredentialProtocol.idl
-    Modules/identity/Navigator+Identity.idl
     Modules/identity/OpenID4VPRequest.idl
 
     Modules/indexeddb/IDBCursor.idl
@@ -1178,6 +1178,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/Observable.idl
     dom/ObservableInspector.idl
     dom/ObservableInspectorAbortCallback.idl
+    dom/OverflowEvent.idl
     dom/PageRevealEvent.idl
     dom/PageSwapEvent.idl
     dom/PageTransitionEvent.idl
@@ -1342,7 +1343,6 @@ set(WebCore_NON_SVG_IDL_FILES
     html/ImageData.idl
     html/ImageDataSettings.idl
     html/ImageDataStorageFormat.idl
-    html/InvokerElement.idl
     html/MediaController.idl
     html/MediaEncryptedEvent.idl
     html/MediaError.idl
@@ -1393,6 +1393,8 @@ set(WebCore_NON_SVG_IDL_FILES
     html/canvas/PaintRenderingContext2D.idl
     html/canvas/Path2D.idl
     html/canvas/PredefinedColorSpace.idl
+
+    html/closewatcher/CloseWatcher.idl
 
     html/track/AudioTrack.idl
     html/track/AudioTrackConfiguration.idl

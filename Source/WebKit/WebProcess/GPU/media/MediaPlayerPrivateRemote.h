@@ -39,6 +39,7 @@
 #include "TextTrackPrivateRemote.h"
 #include "VideoTrackPrivateRemote.h"
 #include <WebCore/MediaPlayerPrivate.h>
+#include <WebCore/PlatformLayer.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/VideoFrameMetadata.h>
 #include <wtf/Lock.h>
@@ -250,11 +251,11 @@ private:
     const uint64_t m_logIdentifier;
 #endif
 
-    void load(const URL&, const WebCore::ContentType&, const String&) final;
+    void load(const URL&, const LoadOptions&) final;
     void prepareForPlayback(bool privateMode, WebCore::MediaPlayer::Preload, bool preservesPitch, bool prepareToPlay, bool prepareToRender) final;
 
 #if ENABLE(MEDIA_SOURCE)
-    void load(const URL&, const WebCore::ContentType&, WebCore::MediaSourcePrivateClient&) final;
+    void load(const URL&, const LoadOptions&, WebCore::MediaSourcePrivateClient&) final;
 #endif
 #if ENABLE(MEDIA_STREAM)
     void load(WebCore::MediaStreamPrivate&) final;
@@ -268,6 +269,7 @@ private:
     long platformErrorCode() const final { return m_platformErrorCode; }
 
     double rate() const final { return m_rate; }
+    void setVolumeLocked(bool) final;
     void setVolumeDouble(double) final;
     void setMuted(bool) final;
     void setPrivateBrowsingMode(bool) final;
@@ -487,8 +489,8 @@ private:
     ThreadSafeWeakPtr<WebCore::MediaPlayer> m_player;
 #if PLATFORM(COCOA)
     mutable UniqueRef<WebCore::VideoLayerManager> m_videoLayerManager;
-#endif
     mutable PlatformLayerContainer m_videoLayer;
+#endif
 
     ThreadSafeWeakPtr<RemoteMediaPlayerManager> m_manager; // Cannot be null.
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_remoteEngineIdentifier;
