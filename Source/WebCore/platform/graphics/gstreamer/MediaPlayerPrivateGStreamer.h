@@ -76,8 +76,8 @@ class GraphicsContextGL;
 class IntSize;
 class IntRect;
 
-#if USE(TEXTURE_MAPPER)
-class TextureMapperPlatformLayerProxy;
+#if USE(COORDINATED_GRAPHICS)
+class CoordinatedPlatformLayerBufferProxy;
 #endif
 
 #if ENABLE(WEB_AUDIO)
@@ -121,7 +121,7 @@ public:
     bool hasAudio() const final { return m_hasAudio; }
     void load(const String &url) override;
 #if ENABLE(MEDIA_SOURCE)
-    void load(const URL&, const ContentType&, MediaSourcePrivateClient&) override;
+    void load(const URL&, const LoadOptions&, MediaSourcePrivateClient&) override;
 #endif
 #if ENABLE(MEDIA_STREAM)
     void load(MediaStreamPrivate&) override;
@@ -171,10 +171,11 @@ public:
     void acceleratedRenderingStateChanged() final;
     bool performTaskAtTime(Function<void()>&&, const MediaTime&) override;
     void isLoopingChanged() final;
+    void audioOutputDeviceChanged() final;
 
     GstElement* pipeline() const { return m_pipeline.get(); }
 
-#if USE(TEXTURE_MAPPER)
+#if USE(COORDINATED_GRAPHICS)
     PlatformLayer* platformLayer() const override;
     bool supportsAcceleratedRendering() const override { return true; }
 #endif
@@ -285,7 +286,7 @@ protected:
 
     GstElement* createVideoSinkGL();
 
-#if USE(TEXTURE_MAPPER)
+#if USE(COORDINATED_GRAPHICS)
     void pushTextureToCompositor(bool isDuplicateSample);
 #endif
 
@@ -527,8 +528,6 @@ private:
     void configureMediaStreamAudioTracks();
     void invalidateCachedPositionOnNextIteration() const;
 
-    void textureMapperPlatformLayerProxyWasInvalidated();
-
     Atomic<bool> m_isPlayerShuttingDown;
     GRefPtr<GstElement> m_textSink;
     GUniquePtr<GstStructure> m_mediaLocations;
@@ -548,8 +547,8 @@ private:
     Lock m_drawLock;
     RunLoop::Timer m_drawTimer WTF_GUARDED_BY_LOCK(m_drawLock);
     RunLoop::Timer m_pausedTimerHandler;
-#if USE(TEXTURE_MAPPER)
-    RefPtr<TextureMapperPlatformLayerProxy> m_platformLayer;
+#if USE(COORDINATED_GRAPHICS)
+    RefPtr<CoordinatedPlatformLayerBufferProxy> m_contentsBufferProxy;
 #endif
 
     // These attributes can ONLY be changed from updateBufferingStatus() in order to keep the
@@ -627,6 +626,7 @@ private:
 
     bool m_didTryToRecoverPlayingState { false };
 
+    // The state the pipeline should be set back to after the player becomes visible in the viewport again.
     GstState m_invisiblePlayerState { GST_STATE_VOID_PENDING };
 
     // Specific to MediaStream playback.

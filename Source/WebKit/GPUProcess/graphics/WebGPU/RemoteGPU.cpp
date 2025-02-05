@@ -91,8 +91,8 @@ void RemoteGPU::stopListeningForIPC()
 {
     assertIsMainRunLoop();
     Ref workQueue = m_workQueue;
-    workQueue->dispatch([this]() {
-        workQueueUninitialize();
+    workQueue->dispatch([protectedThis = Ref { *this }]() {
+        protectedThis->workQueueUninitialize();
     });
     workQueue->stopAndWaitForCompletion();
 }
@@ -195,6 +195,8 @@ void RemoteGPU::requestAdapter(const WebGPU::RequestAdapterOptions& options, Web
             limits->maxComputeWorkgroupSizeY(),
             limits->maxComputeWorkgroupSizeZ(),
             limits->maxComputeWorkgroupsPerDimension(),
+            limits->maxStorageBuffersInFragmentStage(),
+            limits->maxStorageTexturesInFragmentStage(),
         }, adapter->isFallbackAdapter() } });
     });
 }

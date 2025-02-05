@@ -37,14 +37,11 @@
 #include "DOMWrapperWorld.h"
 #include "GraphicsContext.h"
 #include "InspectorAnimationAgent.h"
-#include "InspectorApplicationCacheAgent.h"
 #include "InspectorCPUProfilerAgent.h"
 #include "InspectorCSSAgent.h"
 #include "InspectorClient.h"
 #include "InspectorDOMAgent.h"
 #include "InspectorDOMStorageAgent.h"
-#include "InspectorDatabaseAgent.h"
-#include "InspectorDatabaseResource.h"
 #include "InspectorFrontendClient.h"
 #include "InspectorIndexedDBAgent.h"
 #include "InspectorInstrumentation.h"
@@ -178,11 +175,9 @@ void InspectorController::createLazyAgents()
     m_agents.append(makeUnique<InspectorCSSAgent>(pageContext));
     ensureDOMAgent();
     m_agents.append(makeUnique<PageDOMDebuggerAgent>(pageContext, debuggerAgentPtr));
-    m_agents.append(makeUnique<InspectorApplicationCacheAgent>(pageContext));
     m_agents.append(makeUnique<InspectorLayerTreeAgent>(pageContext));
     m_agents.append(makeUnique<PageWorkerAgent>(pageContext));
     m_agents.append(makeUnique<InspectorDOMStorageAgent>(pageContext));
-    m_agents.append(makeUnique<InspectorDatabaseAgent>(pageContext));
     m_agents.append(makeUnique<InspectorIndexedDBAgent>(pageContext));
 
     auto scriptProfilerAgentPtr = makeUnique<InspectorScriptProfilerAgent>(pageContext);

@@ -897,6 +897,14 @@ struct WebCore::ShareData {
 
 enum class WebCore::ShareDataOriginator : bool
 
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+struct WebCore::SpatialBackdropSource {
+    URL m_sourceURL;
+    URL m_modelURL;
+    std::optional<URL> m_environmentMapURL;
+};
+#endif
+
 using WebCore::TargetedElementIdentifiers = std::pair<WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier>;
 using WebCore::TargetedElementSelectors = Vector<HashSet<String>>;
 
@@ -1814,10 +1822,10 @@ enum class WebCore::RenderingPurpose : uint8_t {
 
 enum class WebCore::ContentsFormat : uint8_t {
     RGBA8,
-#if HAVE(IOSURFACE_RGB10)
+#if ENABLE(PIXEL_FORMAT_RGB10)
     RGBA10,
 #endif
-#if HAVE(HDR_SUPPORT)
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
     RGBA16F,
 #endif
 };
@@ -2415,7 +2423,6 @@ class WebCore::ContentType {
     bool typeWasInferredFromExtension();
 }
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
 struct WebCore::DateTimeChooserParameters {
     AtomString type;
     WebCore::IntRect anchorRectInRootView;
@@ -2434,7 +2441,6 @@ struct WebCore::DateTimeChooserParameters {
     bool hasSecondField;
     bool hasMillisecondField;
 }
-#endif
 
 header: <WebCore/ScreenProperties.h>
 [CustomHeader] struct WebCore::ScreenData {
@@ -2523,7 +2529,6 @@ class WebCore::SelectionGeometry {
 };
 #endif
 
-#if ENABLE(DATALIST_ELEMENT)
 header: <WebCore/DataListSuggestionInformation.h>
 [CustomHeader] enum class WebCore::DataListSuggestionActivationType : uint8_t {
     ControlClicked,
@@ -2543,7 +2548,6 @@ struct WebCore::DataListSuggestionInformation {
     Vector<WebCore::DataListSuggestion> suggestions;
     WebCore::IntRect elementRect;
 };
-#endif
 
 struct WebCore::ClientOrigin {
     [Validator='!topOrigin->isNull()'] WebCore::SecurityOriginData topOrigin;
@@ -2559,9 +2563,13 @@ enum class WebCore::PixelFormat : uint8_t {
     RGBA8,
     BGRX8,
     BGRA8,
+#if ENABLE(PIXEL_FORMAT_RGB10)
     RGB10,
+#endif
+#if ENABLE(PIXEL_FORMAT_RGB10A8)
     RGB10A8,
-#if HAVE(HDR_SUPPORT)
+#endif
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
     RGBA16F,
 #endif
 };
@@ -2569,9 +2577,13 @@ enum class WebCore::PixelFormat : uint8_t {
 enum class WebCore::ImageBufferPixelFormat : uint8_t {
     BGRX8,
     BGRA8,
+#if ENABLE(PIXEL_FORMAT_RGB10)
     RGB10,
+#endif
+#if ENABLE(PIXEL_FORMAT_RGB10A8)
     RGB10A8,
-#if HAVE(HDR_SUPPORT)
+#endif
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
     RGBA16F,
 #endif
 };
@@ -3062,9 +3074,21 @@ header: <WebCore/StylePrimitiveNumericTypes.h>
     double value;
 };
 
-[CustomHeader, Nested] struct WebCore::Style::Length<WebCore::CSS::Nonnegative> {
+using WebCore::Style::PercentageNonnegativeFloat = WebCore::Style::Percentage<WebCore::CSS::Nonnegative, float>;
+[CustomHeader, Nested] struct WebCore::Style::PercentageNonnegativeFloat {
     float value;
 };
+
+using WebCore::Style::PercentageAllFloat = WebCore::Style::Percentage<WebCore::CSS::All, float>;
+[CustomHeader, Nested] struct WebCore::Style::PercentageAllFloat {
+    float value;
+};
+
+using WebCore::Style::LengthNonnegative = WebCore::Style::Length<WebCore::CSS::Nonnegative>;
+[CustomHeader, Nested] struct WebCore::Style::LengthNonnegative {
+    float value;
+};
+using WebCore::Style::LengthAll = WebCore::Style::Length<WebCore::CSS::All>;
 [CustomHeader, Nested] struct WebCore::Style::Length<WebCore::CSS::All> {
     float value;
 };
@@ -3077,10 +3101,10 @@ header: <WebCore/StylePrimitiveNumericTypes.h>
 };
 
 [CustomHeader, Nested] struct WebCore::Style::LengthPercentage<WebCore::CSS::All> {
-    std::variant<WebCore::Style::Length<WebCore::CSS::All>, WebCore::Style::Percentage<WebCore::CSS::All>> ipcData()
+    std::variant<WebCore::Style::LengthAll, WebCore::Style::PercentageAllFloat> ipcData()
 };
 [CustomHeader, Nested] struct WebCore::Style::LengthPercentage<WebCore::CSS::Nonnegative> {
-    std::variant<WebCore::Style::Length<WebCore::CSS::Nonnegative>, WebCore::Style::Percentage<WebCore::CSS::Nonnegative>> ipcData();
+    std::variant<WebCore::Style::LengthNonnegative, WebCore::Style::PercentageNonnegativeFloat> ipcData();
 };
 
 using WebCore::Style::LengthPercentageNonnegative = WebCore::Style::LengthPercentage<WebCore::CSS::Nonnegative>;
@@ -3569,6 +3593,7 @@ enum class WebCore::WasPrivateRelayed : bool;
     bool isRedirected;
     WebCore::UsedLegacyTLS usedLegacyTLS;
     WebCore::WasPrivateRelayed wasPrivateRelayed;
+    String proxyName;
     bool isRangeRequested;
     std::optional<WebCore::CertificateInfo> certificateInfo;
 };
@@ -3720,9 +3745,7 @@ enum class WebCore::StyleAppearance : uint8_t {
     ImageControlsButton,
 #endif
     InnerSpinButton,
-#if ENABLE(DATALIST_ELEMENT)
     ListButton,
-#endif
     SearchFieldDecoration,
     SearchFieldResultsDecoration,
     SearchFieldResultsButton,
@@ -4628,6 +4651,7 @@ header: <WebCore/MediaPlayer.h>
     bool isMediaSource;
     bool isMediaStream;
     bool requiresRemotePlayback;
+    bool supportsLimitedMatroska;
     Vector<WebCore::ContentType> contentTypesRequiringHardwareSupport;
     std::optional<Vector<String>> allowedMediaContainerTypes;
     std::optional<Vector<String>> allowedMediaCodecTypes;
@@ -4641,6 +4665,13 @@ header: <WebCore/MediaPlayer.h>
     MediaTime time;
     MediaTime negativeThreshold;
     MediaTime positiveThreshold;
+};
+
+header: <WebCore/MediaPlayer.h>
+[CustomHeader] struct WebCore::MediaPlayerLoadOptions {
+    WebCore::ContentType contentType;
+    bool requiresRemotePlayback;
+    bool supportsLimitedMatroska;
 };
 
 #endif
@@ -5213,6 +5244,11 @@ header: <WebCore/ImageTypes.h>
     WebCore::Headroom headroom();
 };
 
+[AdditionalEncoder=StreamConnectionEncoder] struct WebCore::FloatSegment {
+    float begin;
+    float end;
+};
+
 struct WebCore::CanvasActivityRecord {
     HashSet<String> textWritten;
     bool wasDataRead;
@@ -5694,7 +5730,12 @@ struct WebCore::CaptureDeviceWithCapabilities {
     WebCore::RealtimeMediaSourceCapabilities capabilities;
 };
 
-[Nested] enum class WebCore::RealtimeMediaSourceCapabilities::EchoCancellation : bool
+[Nested] enum class WebCore::RealtimeMediaSourceCapabilities::EchoCancellation : uint8_t {
+    Off,
+    On,
+    OnOrOff
+}
+
 [Nested] enum class WebCore::RealtimeMediaSourceCapabilities::BackgroundBlur : uint8_t {
     Off,
     On,
@@ -6388,6 +6429,7 @@ enum class WebCore::IdentityCredentialProtocol : uint8_t {
 header: <WebCore/MockMediaDevice.h>
 [CustomHeader] struct WebCore::MockMicrophoneProperties {
     int defaultSampleRate;
+    std::optional<bool> echoCancellation;
 };
 
 header: <WebCore/MockMediaDevice.h>
@@ -7555,6 +7597,7 @@ class WebCore::FilterOperations {
 
 header: <WebCore/WheelEventTestMonitor.h>
 [OptionSet] enum class WebCore::WheelEventTestMonitorDeferReason : uint16_t {
+    None,
     HandlingWheelEvent,
     HandlingWheelEventOnMainThread,
     PostMainThreadWheelEventHandling,
@@ -8897,3 +8940,8 @@ header: <WebCore/DocumentClasses.h>
 #endif
     PDF
 };
+
+#if ENABLE(MODEL_PROCESS)
+header: <WebCore/StageModeOperations.h>
+enum class WebCore::StageModeOperation : bool;
+#endif

@@ -31,6 +31,7 @@
 #include "CSSValuePool.h"
 #include "CachedScript.h"
 #include "CommonVM.h"
+#include "ContentSecurityPolicy.h"
 #include "CrossOriginOpenerPolicy.h"
 #include "DOMTimer.h"
 #include "DatabaseContext.h"
@@ -781,6 +782,27 @@ bool ScriptExecutionContext::ensureOnContextThread(ScriptExecutionContextIdentif
     }
 
     task.performTask(*context);
+    return true;
+}
+
+bool ScriptExecutionContext::ensureOnContextThreadForCrossThreadTask(ScriptExecutionContextIdentifier identifier, CrossThreadTask&& crossThreadTask)
+{
+    {
+        Locker locker { allScriptExecutionContextsMapLock };
+        auto context = allScriptExecutionContextsMap().get(identifier);
+
+        if (!context)
+            return false;
+
+        if (!context->isContextThread()) {
+            context->postTask([crossThreadTask = WTFMove(crossThreadTask)](ScriptExecutionContext&) mutable {
+                crossThreadTask.performTask();
+            });
+            return true;
+        }
+    }
+
+    crossThreadTask.performTask();
     return true;
 }
 

@@ -137,7 +137,6 @@ struct WebProcessCreationParameters {
     String uiProcessBundleIdentifier;
     int latencyQOS { 0 };
     int throughputQOS { 0 };
-    String presentingApplicationBundleIdentifier;
 #endif
 
     ProcessID presentingApplicationPID { 0 };
@@ -279,6 +278,10 @@ struct WebProcessCreationParameters {
 
     Seconds memoryFootprintPollIntervalForTesting;
     Vector<size_t> memoryFootprintNotificationThresholds;
+
+#if ENABLE(NOTIFY_BLOCKING)
+    Vector<std::pair<String, uint64_t>> notifyState;
+#endif
 };
 
 } // namespace WebKit

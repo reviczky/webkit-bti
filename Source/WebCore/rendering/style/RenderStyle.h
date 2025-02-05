@@ -298,6 +298,7 @@ struct ScrollMarginEdge;
 struct ScrollPadding;
 struct ScrollPaddingEdge;
 
+enum class Change : uint8_t;
 enum class PositionTryOrder : uint8_t;
 }
 
@@ -635,11 +636,10 @@ public:
     WEBCORE_EXPORT float computedLineHeight() const;
     float computeLineHeight(const Length&) const;
 
-    WhiteSpace whiteSpace() const;
     inline bool autoWrap() const;
-    static constexpr bool preserveNewline(WhiteSpace);
+    static constexpr bool preserveNewline(WhiteSpaceCollapse);
     inline bool preserveNewline() const;
-    static constexpr bool collapseWhiteSpace(WhiteSpace);
+    static constexpr bool collapseWhiteSpace(WhiteSpaceCollapse);
     inline bool collapseWhiteSpace() const;
     inline bool isCollapsibleWhiteSpace(UChar) const;
     inline bool breakOnlyAfterWhiteSpace() const;
@@ -776,6 +776,7 @@ public:
     inline bool containsLayoutOrPaint() const;
     inline ContainerType containerType() const;
     inline const Vector<Style::ScopedName>& containerNames() const;
+    inline bool containerTypeAndNamesEqual(const RenderStyle&) const;
 
     inline ContentVisibility contentVisibility() const;
 
@@ -917,6 +918,7 @@ public:
     inline unsigned short columnRuleWidth() const;
     inline bool columnRuleIsTransparent() const;
     inline ColumnSpan columnSpan() const;
+    inline bool columnSpanEqual(const RenderStyle&) const;
 
     inline const TransformOperations& transform() const;
     inline bool hasTransform() const;
@@ -1078,11 +1080,13 @@ public:
     const Style::ScrollPaddingEdge& scrollPaddingBottom() const;
     const Style::ScrollPaddingEdge& scrollPaddingLeft() const;
     const Style::ScrollPaddingEdge& scrollPaddingRight() const;
+    inline bool scrollPaddingEqual(const RenderStyle&) const;
 
     bool hasSnapPosition() const;
     ScrollSnapType scrollSnapType() const;
     const ScrollSnapAlign& scrollSnapAlign() const;
     ScrollSnapStop scrollSnapStop() const;
+    bool scrollSnapDataEquivalent(const RenderStyle&) const;
 
     Color usedScrollbarThumbColor() const;
     Color usedScrollbarTrackColor() const;
@@ -1799,7 +1803,7 @@ public:
     inline bool hasContent() const;
     inline const ContentData* contentData() const;
     void setContent(std::unique_ptr<ContentData>, bool add);
-    inline bool contentDataEquivalent(const RenderStyle*) const;
+    inline bool contentDataEquivalent(const RenderStyle&) const;
     void clearContent();
     inline void setHasContentNone(bool);
     void setContent(const String&, bool add = false);
@@ -1828,6 +1832,7 @@ public:
     const AtomString& hyphenString() const;
 
     bool inheritedEqual(const RenderStyle&) const;
+    bool nonInheritedEqual(const RenderStyle&) const;
     bool fastPathInheritedEqual(const RenderStyle&) const;
     bool nonFastPathInheritedEqual(const RenderStyle&) const;
 

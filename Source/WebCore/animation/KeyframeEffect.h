@@ -26,6 +26,7 @@
 #pragma once
 
 #include "AcceleratedEffect.h"
+#include "Animation.h"
 #include "AnimationEffect.h"
 #include "AnimationEffectPhase.h"
 #include "BlendingKeyframes.h"
@@ -246,6 +247,7 @@ private:
     void computeHasReferenceFilter();
     void computeHasSizeDependentTransform();
     void analyzeAcceleratedProperties();
+    void updateIsAssociatedWithProgressBasedTimeline();
 
     void abilityToBeAcceleratedDidChange();
     void updateAcceleratedAnimationIfNecessary();

@@ -141,9 +141,9 @@
 #endif
 
 #if OS(WINDOWS)
-#include <crtdbg.h>
 #include <mmsystem.h>
 #include <windows.h>
+#include <wtf/win/WTFCRTDebug.h>
 #endif
 
 #if OS(DARWIN) && CPU(ARM_THUMB2)
@@ -2605,8 +2605,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentReceiveBroadcast, (JSGlobalObject* g
         }
 #if ENABLE(WEBASSEMBLY)
         if (std::holds_alternative<RefPtr<SharedArrayBufferContents>>(content)) {
-            JSWebAssemblyMemory* jsMemory = JSC::JSWebAssemblyMemory::tryCreate(globalObject, vm, globalObject->webAssemblyMemoryStructure());
-            scope.releaseAssertNoException();
+            JSWebAssemblyMemory* jsMemory = JSC::JSWebAssemblyMemory::create(vm, globalObject->webAssemblyMemoryStructure());
             auto handler = [&vm, jsMemory](Wasm::Memory::GrowSuccess, PageCount oldPageCount, PageCount newPageCount) { jsMemory->growSuccessCallback(vm, oldPageCount, newPageCount); };
             RefPtr<Wasm::Memory> memory;
             if (auto shared = std::get<RefPtr<SharedArrayBufferContents>>(WTFMove(content)))
@@ -3529,14 +3528,7 @@ int main(int argc, char** argv)
     _setmode(_fileno(stdout), _O_BINARY);
     _setmode(_fileno(stderr), _O_BINARY);
 
-#if defined(_DEBUG)
-    _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-#endif
+    WTF::disableCRTDebugAssertDialog();
 
     timeBeginPeriod(1);
 #endif
@@ -3951,7 +3943,7 @@ static NO_RETURN void printUsageStatement(bool help = false)
     fprintf(stderr, "  --options                  Dumps all JSC VM options and exits\n");
     fprintf(stderr, "  --dumpOptions              Dumps all non-default JSC VM options before continuing\n");
     fprintf(stderr, "  --<jsc VM option>=<value>  Sets the specified JSC VM option\n");
-#if PLATFORM(COCOA)
+#if USE(LIBPAS)
     fprintf(stderr, "  --crash-vm=<value>         Crash VM on startup due to PGM failure. Options PGMOOBLowerGuardPage, PGMOOBUpperGuardPage, or PGMUAF (For Testing Purposes).\n");
 #endif
     fprintf(stderr, "  --destroy-vm               Destroy VM before exiting\n");
@@ -3973,12 +3965,12 @@ static bool isMJSFile(char *filename)
     return false;
 }
 
-#if PLATFORM(COCOA)
+#if USE(LIBPAS)
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 static NEVER_INLINE void crashPGMUAF()
 {
-    WTF::forceEnablePGM();
+    WTF::forceEnablePGM(1);
     size_t allocSize = getpagesize() * 10000;
     char* result = static_cast<char*>(fastMalloc(allocSize));
     fastFree(result);
@@ -3987,7 +3979,7 @@ static NEVER_INLINE void crashPGMUAF()
 
 static NEVER_INLINE void crashPGMUpperGuardPage()
 {
-    WTF::forceEnablePGM();
+    WTF::forceEnablePGM(1);
     size_t allocSize = getpagesize() * 10000;
     char* result = static_cast<char*>(fastMalloc(allocSize));
     result = result + allocSize;
@@ -3996,7 +3988,7 @@ static NEVER_INLINE void crashPGMUpperGuardPage()
 
 static NEVER_INLINE void crashPGMLowerGuardPage()
 {
-    WTF::forceEnablePGM();
+    WTF::forceEnablePGM(1);
     size_t allocSize = getpagesize() * 10000;
     char* result = static_cast<char*>(fastMalloc(allocSize));
     result = result - 1;
@@ -4013,7 +4005,7 @@ void CommandLine::parseArguments(int argc, char** argv)
     Options::AllowUnfinalizedAccessScope scope;
     Options::initialize();
     Options::useSharedArrayBuffer() = true;
-    
+
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(APPLETV) && !PLATFORM(WATCHOS)
     Options::crashIfCantAllocateJITMemory() = true;
 #endif
@@ -4133,7 +4125,7 @@ void CommandLine::parseArguments(int argc, char** argv)
             m_dumpSamplingProfilerData = true;
             continue;
         }
-#if PLATFORM(COCOA)
+#if USE(LIBPAS)
         if (!strcmp(arg, "--crash-vm=PGMOOBLowerGuardPage"))
             crashPGMLowerGuardPage();
         if (!strcmp(arg, "--crash-vm=PGMOOBUpperGuardPage"))

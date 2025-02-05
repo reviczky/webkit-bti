@@ -34,13 +34,14 @@
 #if USE(COORDINATED_GRAPHICS)
 #include "CoordinatedImageBackingStore.h"
 #include "CoordinatedPlatformLayer.h"
+#include "CoordinatedPlatformLayerBuffer.h"
+#include "CoordinatedPlatformLayerBufferProxy.h"
 #include "FloatQuad.h"
-#include "GraphicsLayerAsyncContentsDisplayDelegateTextureMapper.h"
+#include "GraphicsLayerAsyncContentsDisplayDelegateCoordinated.h"
 #include "GraphicsLayerContentsDisplayDelegate.h"
 #include "GraphicsLayerFactory.h"
 #include "Image.h"
 #include "NativeImage.h"
-#include "TextureMapperPlatformLayerProxy.h"
 #include <wtf/Locker.h>
 
 namespace WebCore {
@@ -63,6 +64,8 @@ GraphicsLayerCoordinated::GraphicsLayerCoordinated(Type layerType, GraphicsLayer
 
 GraphicsLayerCoordinated::~GraphicsLayerCoordinated()
 {
+    if (m_contentsBufferProxy)
+        m_contentsBufferProxy->setTargetLayer(nullptr);
     m_platformLayer->setOwner(nullptr);
     if (m_parent)
         downcast<GraphicsLayerCoordinated>(*m_parent).noteLayerPropertyChanged(Change::Children, ScheduleFlush::Yes);
@@ -110,17 +113,6 @@ void GraphicsLayerCoordinated::setNeedsDisplayInRect(const FloatRect& initialRec
 
     addRepaintRect(rect);
 }
-
-#if ENABLE(DAMAGE_TRACKING)
-void GraphicsLayerCoordinated::markDamageRectsUnreliable()
-{
-    if (m_damagedRectsAreUnreliable)
-        return;
-
-    m_damagedRectsAreUnreliable = true;
-    noteLayerPropertyChanged(Change::DirtyRegion, ScheduleFlush::No);
-}
-#endif
 
 void GraphicsLayerCoordinated::setPosition(const FloatPoint& position)
 {
@@ -333,34 +325,54 @@ void GraphicsLayerCoordinated::setContentsClippingRect(const FloatRoundedRect& c
 
 void GraphicsLayerCoordinated::setContentsNeedsDisplay()
 {
-    if (m_contentsLayer)
+    if (m_contentsDisplayDelegate)
         noteLayerPropertyChanged(Change::ContentsBufferNeedsDisplay, ScheduleFlush::Yes);
 }
 
 void GraphicsLayerCoordinated::setContentsToPlatformLayer(PlatformLayer* contentsLayer, ContentsLayerPurpose)
 {
-    if (m_contentsLayer == contentsLayer)
+    if (m_contentsBufferProxy == contentsLayer)
         return;
 
-    m_contentsLayer = contentsLayer;
+    if (m_contentsBufferProxy)
+        m_contentsBufferProxy->setTargetLayer(nullptr);
+
+    m_contentsBufferProxy = contentsLayer;
+
     OptionSet<Change> change = { Change::ContentsBuffer };
-    if (m_contentsLayer)
+    if (m_contentsBufferProxy) {
+        m_contentsBufferProxy->setTargetLayer(m_platformLayer.ptr());
+        m_contentsDisplayDelegate = nullptr;
         change.add(Change::ContentsBufferNeedsDisplay);
+    }
     noteLayerPropertyChanged(change, ScheduleFlush::Yes);
 }
 
-void GraphicsLayerCoordinated::setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&& delegate, ContentsLayerPurpose purpose)
+void GraphicsLayerCoordinated::setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&& delegate, ContentsLayerPurpose)
 {
-    setContentsToPlatformLayer(delegate ? delegate->platformLayer() : nullptr, purpose);
+    if (m_contentsDisplayDelegate == delegate)
+        return;
+
+    m_contentsDisplayDelegate = WTFMove(delegate);
+
+    OptionSet<Change> change = { Change::ContentsBuffer };
+    if (m_contentsDisplayDelegate) {
+        if (m_contentsBufferProxy) {
+            m_contentsBufferProxy->setTargetLayer(nullptr);
+            m_contentsBufferProxy = nullptr;
+        }
+        change.add(Change::ContentsBufferNeedsDisplay);
+    }
+    noteLayerPropertyChanged(change, ScheduleFlush::Yes);
 }
 
 RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> GraphicsLayerCoordinated::createAsyncContentsDisplayDelegate(GraphicsLayerAsyncContentsDisplayDelegate* existing)
 {
     if (existing) {
-        static_cast<GraphicsLayerAsyncContentsDisplayDelegateTextureMapper*>(existing)->updateGraphicsLayer(*this);
+        static_cast<GraphicsLayerAsyncContentsDisplayDelegateCoordinated*>(existing)->updateGraphicsLayer(*this);
         return existing;
     }
-    return GraphicsLayerAsyncContentsDisplayDelegateTextureMapper::create(*this);
+    return GraphicsLayerAsyncContentsDisplayDelegateCoordinated::create(*this);
 }
 
 void GraphicsLayerCoordinated::setContentsToImage(Image* image)
@@ -370,12 +382,15 @@ void GraphicsLayerCoordinated::setContentsToImage(Image* image)
         if (!nativeImage)
             return;
 
-        if (m_pendingContentsImage && CoordinatedImageBackingStore::uniqueIDForNativeImage(*m_pendingContentsImage) == CoordinatedImageBackingStore::uniqueIDForNativeImage(*nativeImage))
+        if (m_contentsImage && m_contentsImage->uniqueID() == nativeImage->uniqueID())
             return;
 
-        m_pendingContentsImage = WTFMove(nativeImage);
-    } else
-        m_pendingContentsImage = nullptr;
+        m_contentsImage = WTFMove(nativeImage);
+    } else {
+        if (!m_contentsImage)
+            return;
+        m_contentsImage = nullptr;
+    }
     noteLayerPropertyChanged(Change::ContentsImage, ScheduleFlush::Yes);
 }
 
@@ -391,7 +406,7 @@ void GraphicsLayerCoordinated::setContentsToSolidColor(const Color& color)
 bool GraphicsLayerCoordinated::usesContentsLayer() const
 {
     // FIXME: convert CoordinatedImageBackingStore into a contents layer?
-    return m_contentsLayer || m_pendingContentsImage || m_platformLayer->hasImageBackingStore();
+    return m_contentsBufferProxy || m_contentsDisplayDelegate || m_contentsImage;
 }
 
 bool GraphicsLayerCoordinated::setChildren(Vector<Ref<GraphicsLayer>>&& children)
@@ -453,6 +468,39 @@ void GraphicsLayerCoordinated::setEventRegion(EventRegion&& eventRegion)
 void GraphicsLayerCoordinated::deviceOrPageScaleFactorChanged()
 {
     noteLayerPropertyChanged(Change::ContentsScale, ScheduleFlush::Yes);
+}
+
+void GraphicsLayerCoordinated::updateRootRelativeScale()
+{
+    // For CSS animations we could figure out the max scale level during the animation and only figure out the max content scale once.
+    // For JS driven animation, we need to be more clever to keep the peformance as before. Ideas:
+    // - only update scale factor when the change is 'significant' (to be defined, (orig - new)/orig > delta?)
+    // - never update the scale factor when it gets smaller (unless we're under memory pressure) (or only periodically)
+    // - ...
+    // --> For now we disable this logic altogether, but allow to turn it on selectively (for LBSE)
+    if (!m_shouldUpdateRootRelativeScaleFactor)
+        return;
+
+    auto computeMaxScaleFromTransform = [](const TransformationMatrix& transform) -> float {
+        if (transform.isIdentityOrTranslation())
+            return 1;
+        TransformationMatrix::Decomposed2Type decomposeData;
+        if (!transform.decompose2(decomposeData))
+            return 1;
+        return std::max(std::abs(decomposeData.scaleX), std::abs(decomposeData.scaleY));
+    };
+
+    float rootRelativeScaleFactor = hasNonIdentityTransform() ? computeMaxScaleFromTransform(transform()) : 1;
+    if (m_parent) {
+        if (m_parent->hasNonIdentityChildrenTransform())
+            rootRelativeScaleFactor *= computeMaxScaleFromTransform(m_parent->childrenTransform());
+        rootRelativeScaleFactor *= downcast<GraphicsLayerCoordinated>(*m_parent).rootRelativeScaleFactor();
+    }
+
+    if (rootRelativeScaleFactor != m_rootRelativeScaleFactor) {
+        m_rootRelativeScaleFactor = rootRelativeScaleFactor;
+        noteLayerPropertyChanged(Change::ContentsScale, ScheduleFlush::Yes);
+    }
 }
 
 bool GraphicsLayerCoordinated::setFilters(const FilterOperations& filters)
@@ -850,9 +898,7 @@ void GraphicsLayerCoordinated::updateDamage()
         return;
 
     Damage damage;
-    if (m_damagedRectsAreUnreliable)
-        damage.invalidate();
-    else if (m_dirtyRegion.fullRepaint)
+    if (m_dirtyRegion.fullRepaint)
         damage.add(FloatRect({ }, m_size));
     else {
         for (const auto& rect : m_dirtyRegion.rects)
@@ -960,11 +1006,19 @@ void GraphicsLayerCoordinated::commitLayerChanges(CommitState& commitState, floa
 {
     Locker locker { m_platformLayer->lock() };
 
-    if (m_pendingChanges.contains(Change::ContentsBuffer))
-        m_platformLayer->setContentsBuffer(m_contentsLayer.get());
+    if (m_pendingChanges.contains(Change::ContentsBuffer)) {
+        if (!m_contentsDisplayDelegate && !m_contentsBufferProxy)
+            m_platformLayer->setContentsBuffer(nullptr);
+    }
 
-    if (m_pendingChanges.contains(Change::ContentsBufferNeedsDisplay))
-        m_platformLayer->setContentsBufferNeedsDisplay();
+    bool contentsBufferNeedsDisplay = false;
+    if (m_pendingChanges.contains(Change::ContentsBufferNeedsDisplay)) {
+        if (m_contentsDisplayDelegate) {
+            if (!m_contentsDisplayDelegate->display(m_platformLayer.get()))
+                contentsBufferNeedsDisplay = true;
+        } else if (m_contentsBufferProxy)
+            m_contentsBufferProxy->consumePendingBufferIfNeeded();
+    }
 
     if (m_pendingChanges.containsAny(Change::Geometry))
         updateGeometry(pageScaleFactor, positionRelativeToBase);
@@ -1023,11 +1077,13 @@ void GraphicsLayerCoordinated::commitLayerChanges(CommitState& commitState, floa
     if (m_pendingChanges.contains(Change::ContentsClippingRect))
         m_platformLayer->setContentsClippingRect(m_contentsClippingRect);
 
+    updateRootRelativeScale(); // Needs to happen before Change::ContentsScale.
+
     if (m_pendingChanges.contains(Change::ContentsScale))
-        m_platformLayer->setContentsScale(pageScaleFactor * deviceScaleFactor());
+        m_platformLayer->setContentsScale(pageScaleFactor * deviceScaleFactor() * m_rootRelativeScaleFactor);
 
     if (m_pendingChanges.contains(Change::ContentsImage))
-        m_platformLayer->setContentsImage(WTFMove(m_pendingContentsImage));
+        m_platformLayer->setContentsImage(m_contentsImage.get());
 
     if (m_pendingChanges.contains(Change::ContentsColor))
         m_platformLayer->setContentsColor(m_contentsColor);
@@ -1068,6 +1124,9 @@ void GraphicsLayerCoordinated::commitLayerChanges(CommitState& commitState, floa
     m_platformLayer->updateContents(affectedByTransformAnimation);
 
     m_pendingChanges = { };
+
+    if (contentsBufferNeedsDisplay)
+        m_pendingChanges.add(Change::ContentsBufferNeedsDisplay);
 }
 
 bool GraphicsLayerCoordinated::needsCommit(CommitState& commitState) const

@@ -139,8 +139,6 @@ OBJC_CLASS WKAccessibilityWebPageObject;
 
 #define ENABLE_VIEWPORT_RESIZING PLATFORM(IOS_FAMILY)
 
-struct WKBundlePageFullScreenClientBase;
-
 namespace WTF {
 enum class Critical : bool;
 }
@@ -356,7 +354,6 @@ class FrameState;
 class GPUProcessConnection;
 class GamepadData;
 class GeolocationPermissionRequestManager;
-class InjectedBundlePageFullScreenClient;
 class InjectedBundleScriptWorld;
 class LayerHostingContext;
 class MediaDeviceSandboxExtensions;
@@ -688,17 +685,13 @@ public:
     void didChooseColor(const WebCore::Color&);
     void didEndColorPicker();
 
-#if ENABLE(DATALIST_ELEMENT)
     void setActiveDataListSuggestionPicker(WebDataListSuggestionPicker&);
     void didSelectDataListOption(const String&);
     void didCloseSuggestions();
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     void setActiveDateTimeChooser(WebDateTimeChooser&);
     void didChooseDate(const String&);
     void didEndDateTimePicker();
-#endif
 
     WebOpenPanelResultListener* activeOpenPanelResultListener() const { return m_activeOpenPanelResultListener.get(); }
     void setActiveOpenPanelResultListener(Ref<WebOpenPanelResultListener>&&);
@@ -715,9 +708,6 @@ public:
     void setInjectedBundlePageLoaderClient(std::unique_ptr<API::InjectedBundle::PageLoaderClient>&&);
     void setInjectedBundleResourceLoadClient(std::unique_ptr<API::InjectedBundle::ResourceLoadClient>&&);
     void setInjectedBundleUIClient(std::unique_ptr<API::InjectedBundle::PageUIClient>&&);
-#if ENABLE(FULLSCREEN_API)
-    void initializeInjectedBundleFullScreenClient(WKBundlePageFullScreenClientBase*);
-#endif
 
 #if ENABLE(CONTEXT_MENUS)
     API::InjectedBundle::PageContextMenuClient& injectedBundleContextMenuClient() { return *m_contextMenuClient; }
@@ -727,9 +717,6 @@ public:
     API::InjectedBundle::PageLoaderClient& injectedBundleLoaderClient() { return *m_loaderClient; }
     API::InjectedBundle::ResourceLoadClient& injectedBundleResourceLoadClient() { return *m_resourceLoadClient; }
     API::InjectedBundle::PageUIClient& injectedBundleUIClient() { return *m_uiClient; }
-#if ENABLE(FULLSCREEN_API)
-    InjectedBundlePageFullScreenClient& injectedBundleFullScreenClient();
-#endif
 
     bool findStringFromInjectedBundle(const String&, OptionSet<FindOptions>);
     void replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly);
@@ -1346,6 +1333,11 @@ public:
     void setDeviceScaleFactor(float);
     float deviceScaleFactor() const;
 
+#if USE(GRAPHICS_LAYER_TEXTURE_MAPPER) || USE(GRAPHICS_LAYER_WC)
+    void setIntrinsicDeviceScaleFactor(float f) { m_intrinsicDeviceScaleFactor = f; }
+    float intrinsicDeviceScaleFactor() const { return m_intrinsicDeviceScaleFactor; }
+#endif
+
     void updateRenderingWithForcedRepaintWithoutCallback();
 
     void unmarkAllMisspellings();
@@ -1568,6 +1560,10 @@ public:
 
     void sampledPageTopColorChanged() { m_pendingSampledPageTopColorChange = true; }
     void flushPendingSampledPageTopColorChange();
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    void spatialBackdropSourceChanged();
+#endif
 
     void flushPendingEditorStateUpdate();
 
@@ -1942,7 +1938,7 @@ public:
     bool isClosed() const { return m_isClosed; }
 
 #if HAVE(AUDIT_TOKEN)
-    void setPresentingApplicationAuditToken(CoreIPCAuditToken&&);
+    void setPresentingApplicationAuditTokenAndBundleIdentifier(CoreIPCAuditToken&&, String&& bundleIdentifier);
 #endif
 
     void didProgrammaticallyClearTextFormControl(const WebCore::HTMLTextFormControlElement&);
@@ -2068,7 +2064,7 @@ private:
     // Actions
     void tryClose(CompletionHandler<void(bool)>&&);
     void platformDidReceiveLoadParameters(const LoadParameters&);
-    void createProvisionalFrame(ProvisionalFrameCreationParameters&&, WebCore::FrameIdentifier);
+    void createProvisionalFrame(ProvisionalFrameCreationParameters&&);
     void destroyProvisionalFrame(WebCore::FrameIdentifier);
     void loadDidCommitInAnotherProcess(WebCore::FrameIdentifier, std::optional<WebCore::LayerHostingContextIdentifier>);
     [[noreturn]] void loadRequestWaitingForProcessLaunch(LoadParameters&&, URL&&, WebPageProxyIdentifier, bool);
@@ -2441,7 +2437,7 @@ private:
 
     void didEndWritingToolsSession(const WebCore::WritingTools::Session&, bool accepted);
 
-    void compositionSessionDidReceiveTextWithReplacementRange(const WebCore::WritingTools::Session&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebCore::WritingTools::Context&, bool finished);
+    void compositionSessionDidReceiveTextWithReplacementRange(const WebCore::WritingTools::Session&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebCore::WritingTools::Context&, bool finished, CompletionHandler<void()>&&);
 
     void writingToolsSessionDidReceiveAction(const WebCore::WritingTools::Session&, WebCore::WritingTools::Action);
 
@@ -2589,6 +2585,7 @@ private:
 #endif
 
 #if USE(GRAPHICS_LAYER_TEXTURE_MAPPER) || USE(GRAPHICS_LAYER_WC)
+    float m_intrinsicDeviceScaleFactor { 1 };
     uint64_t m_nativeWindowHandle { 0 };
 #endif
 
@@ -2643,13 +2640,9 @@ private:
 
     WeakPtr<WebColorChooser> m_activeColorChooser;
 
-#if ENABLE(DATALIST_ELEMENT)
     WeakPtr<WebDataListSuggestionPicker> m_activeDataListSuggestionPicker;
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     WeakPtr<WebDateTimeChooser> m_activeDateTimeChooser;
-#endif
 
     RefPtr<WebOpenPanelResultListener> m_activeOpenPanelResultListener;
     RefPtr<NotificationPermissionRequestManager> m_notificationPermissionRequestManager;
@@ -2797,8 +2790,15 @@ private:
     bool m_completingSyntheticClick { false };
     bool m_hasHandledSyntheticClick { false };
 
-    enum SelectionAnchor { Start, End };
-    SelectionAnchor m_selectionAnchor { Start };
+    enum class SelectionAnchor : bool { Start, End };
+    SelectionAnchor m_selectionAnchor { SelectionAnchor::Start };
+
+    enum class BidiSelectionFlippingState : uint8_t {
+        NotFlipping,
+        FlippingToStart,
+        FlippingToEnd
+    };
+    BidiSelectionFlippingState m_bidiSelectionFlippingState { BidiSelectionFlippingState::NotFlipping };
 
     RefPtr<WebCore::Node> m_potentialTapNode;
     WebCore::FloatPoint m_potentialTapLocation;

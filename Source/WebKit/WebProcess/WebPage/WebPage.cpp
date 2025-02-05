@@ -112,6 +112,7 @@
 #include "WebFrameMetrics.h"
 #include "WebFullScreenManager.h"
 #include "WebFullScreenManagerMessages.h"
+#include "WebFullScreenManagerProxyMessages.h"
 #include "WebGamepadProvider.h"
 #include "WebGeolocationClient.h"
 #include "WebHistoryItemClient.h"
@@ -245,6 +246,7 @@
 #include <WebCore/LocalFrame.h>
 #include <WebCore/LocalFrameView.h>
 #include <WebCore/LocalizedStrings.h>
+#include <WebCore/LoginStatus.h>
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/MediaDocument.h>
 #include <WebCore/MouseEvent.h>
@@ -871,6 +873,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     pageConfiguration.presentingApplicationAuditToken = parameters.presentingApplicationAuditToken ? std::optional(parameters.presentingApplicationAuditToken->auditToken()) : std::nullopt;
 #endif
 
+#if PLATFORM(COCOA)
+    pageConfiguration.presentingApplicationBundleIdentifier = WTFMove(parameters.presentingApplicationBundleIdentifier);
+#endif
+
     m_page = Page::create(WTFMove(pageConfiguration));
 
     updateAfterDrawingAreaCreation(parameters);
@@ -891,6 +897,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     // We need to set the device scale factor before creating the drawing area
     // to ensure it's created with the right size.
     m_page->setDeviceScaleFactor(parameters.deviceScaleFactor);
+
+#if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
+    setIntrinsicDeviceScaleFactor(parameters.intrinsicDeviceScaleFactor);
+#endif
 
 #if USE(SKIA)
     FontRenderOptions::singleton().setUseSubpixelPositioning(parameters.deviceScaleFactor >= 2.);
@@ -927,6 +937,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
             if (auto* remoteMainFrameClient = m_mainFrame->remoteFrameClient())
                 remoteMainFrameClient->applyWebsitePolicies(WTFMove(*remotePageParameters->websitePoliciesData));
         }
+    }
+    if (auto&& provisionalFrameCreationParameters = parameters.provisionalFrameCreationParameters) {
+        ASSERT(m_page->settings().siteIsolationEnabled());
+        createProvisionalFrame(WTFMove(*provisionalFrameCreationParameters));
     }
 
     drawingArea->updatePreferences(parameters.store);
@@ -1358,6 +1372,11 @@ void WebPage::reinitializeWebPage(WebPageCreationParameters&& parameters)
 
     setUseColorAppearance(parameters.useDarkAppearance, parameters.useElevatedUserInterfaceLevel);
 
+    if (auto&& provisionalFrameCreationParameters = parameters.provisionalFrameCreationParameters) {
+        ASSERT(m_page->settings().siteIsolationEnabled());
+        createProvisionalFrame(WTFMove(*provisionalFrameCreationParameters));
+    }
+
     platformReinitialize();
 }
 
@@ -1520,18 +1539,6 @@ void WebPage::setInjectedBundleUIClient(std::unique_ptr<API::InjectedBundle::Pag
 
     m_uiClient = WTFMove(uiClient);
 }
-
-#if ENABLE(FULLSCREEN_API)
-void WebPage::initializeInjectedBundleFullScreenClient(WKBundlePageFullScreenClientBase* client)
-{
-    m_internals->fullScreenClient.initialize(client);
-}
-
-InjectedBundlePageFullScreenClient& WebPage::injectedBundleFullScreenClient()
-{
-    return m_internals->fullScreenClient;
-}
-#endif
 
 bool WebPage::hasPendingEditorStateUpdate() const
 {
@@ -1942,9 +1949,6 @@ void WebPage::close()
     m_loaderClient = makeUnique<API::InjectedBundle::PageLoaderClient>();
     m_resourceLoadClient = makeUnique<API::InjectedBundle::ResourceLoadClient>();
     m_uiClient = makeUnique<API::InjectedBundle::PageUIClient>();
-#if ENABLE(FULLSCREEN_API)
-    m_internals->fullScreenClient.initialize(0);
-#endif
 
     m_printContext = nullptr;
     if (RefPtr localFrame = m_mainFrame->coreLocalFrame())
@@ -2069,9 +2073,9 @@ void WebPage::platformDidReceiveLoadParameters(const LoadParameters& loadParamet
 }
 #endif
 
-void WebPage::createProvisionalFrame(ProvisionalFrameCreationParameters&& parameters, WebCore::FrameIdentifier frameID)
+void WebPage::createProvisionalFrame(ProvisionalFrameCreationParameters&& parameters)
 {
-    RefPtr frame = WebProcess::singleton().webFrame(frameID);
+    RefPtr frame = WebProcess::singleton().webFrame(parameters.frameID);
     if (!frame)
         return;
     ASSERT(frame->page() == this);
@@ -5354,7 +5358,7 @@ void WebPage::closeFullScreen()
 {
     removeReasonsToDisallowLayoutViewportHeightExpansion(DisallowLayoutViewportHeightExpansionReason::ElementFullScreen);
 
-    injectedBundleFullScreenClient().closeFullScreen(this);
+    send(Messages::WebFullScreenManagerProxy::Close());
 }
 
 void WebPage::prepareToEnterElementFullScreen()
@@ -5655,8 +5659,6 @@ void WebPage::didChooseColor(const WebCore::Color& color)
         activeColorChooser->didChooseColor(color);
 }
 
-#if ENABLE(DATALIST_ELEMENT)
-
 void WebPage::setActiveDataListSuggestionPicker(WebDataListSuggestionPicker& dataListSuggestionPicker)
 {
     m_activeDataListSuggestionPicker = dataListSuggestionPicker;
@@ -5674,10 +5676,6 @@ void WebPage::didCloseSuggestions()
         picker->didCloseSuggestions();
 }
 
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-
 void WebPage::setActiveDateTimeChooser(WebDateTimeChooser& dateTimeChooser)
 {
     m_activeDateTimeChooser = dateTimeChooser;
@@ -5694,8 +5692,6 @@ void WebPage::didEndDateTimePicker()
     if (auto chooser = std::exchange(m_activeDateTimeChooser, nullptr))
         chooser->didEndChooser();
 }
-
-#endif
 
 void WebPage::setActiveOpenPanelResultListener(Ref<WebOpenPanelResultListener>&& openPanelResultListener)
 {
@@ -7843,6 +7839,7 @@ void WebPage::didCommitLoad(WebFrame* frame)
     m_shouldRevealCurrentSelectionAfterInsertion = true;
     m_internals->lastLayerTreeTransactionIdAndPageScaleBeforeScalingPage = std::nullopt;
     m_lastSelectedReplacementRange = { };
+    m_bidiSelectionFlippingState = BidiSelectionFlippingState::NotFlipping;
 
     invokePendingSyntheticClickCallback(SyntheticClickResult::PageInvalid);
 
@@ -7937,6 +7934,10 @@ void WebPage::didFinishLoad(WebFrame& frame)
 
 #if ENABLE(VIEWPORT_RESIZING)
     shrinkToFitContent(ZoomToInitialScale::Yes);
+#endif
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    spatialBackdropSourceChanged();
 #endif
 }
 
@@ -8108,6 +8109,14 @@ void WebPage::flushPendingSampledPageTopColorChange()
 
     send(Messages::WebPageProxy::SampledPageTopColorChanged(m_page->sampledPageTopColor()));
 }
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+void WebPage::spatialBackdropSourceChanged()
+{
+    if (m_page->settings().webPageSpatialBackdropEnabled())
+        send(Messages::WebPageProxy::SpatialBackdropSourceChanged(m_page->spatialBackdropSource()));
+}
+#endif
 
 void WebPage::flushPendingEditorStateUpdate()
 {
@@ -8578,7 +8587,7 @@ void WebPage::setLoginStatus(RegistrableDomain&& domain, IsLoggedIn loggedInStat
     RefPtr page = corePage();
     if (!page)
         return completionHandler();
-    auto lastAuthentication = page->lastAuthentication();
+    auto lastAuthentication = page->lastAuthentication() ? std::optional(*page->lastAuthentication()) : std::nullopt;
     WebProcess::singleton().ensureNetworkProcessConnection().protectedConnection()->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::SetLoginStatus(WTFMove(domain), loggedInStatus, lastAuthentication), WTFMove(completionHandler));
 }
 
@@ -9573,7 +9582,7 @@ void WebPage::setInteractionRegionsEnabled(bool enable)
 
 bool WebPage::handlesPageScaleGesture()
 {
-#if !ENABLE(LEGACY_PDFKIT_PLUGIN)
+#if !ENABLE(PDF_PLUGIN)
     return false;
 #else
     return mainFramePlugIn();
@@ -10302,10 +10311,14 @@ void WebPage::callAfterPendingSyntheticClick(CompletionHandler<void(SyntheticCli
 #endif
 
 #if HAVE(AUDIT_TOKEN)
-void WebPage::setPresentingApplicationAuditToken(CoreIPCAuditToken&& presentingApplicationAuditToken)
+void WebPage::setPresentingApplicationAuditTokenAndBundleIdentifier(CoreIPCAuditToken&& auditToken, String&& bundleIdentifier)
 {
-    if (RefPtr page = protectedCorePage())
-        page->setPresentingApplicationAuditToken(presentingApplicationAuditToken.auditToken());
+    RefPtr page = protectedCorePage();
+    if (!page)
+        return;
+
+    page->setPresentingApplicationAuditToken(auditToken.auditToken());
+    page->setPresentingApplicationBundleIdentifier(WTFMove(bundleIdentifier));
 }
 #endif
 

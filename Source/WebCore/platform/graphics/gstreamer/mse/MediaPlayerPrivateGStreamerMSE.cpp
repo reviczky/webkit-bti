@@ -144,7 +144,7 @@ void MediaPlayerPrivateGStreamerMSE::load(const String&)
         player->networkStateChanged();
 }
 
-void MediaPlayerPrivateGStreamerMSE::load(const URL& url, const ContentType&, MediaSourcePrivateClient& mediaSource)
+void MediaPlayerPrivateGStreamerMSE::load(const URL& url, const LoadOptions&, MediaSourcePrivateClient& mediaSource)
 {
     auto mseBlobURI = makeString("mediasource"_s, url.string().isEmpty() ? "blob://"_s : url.string());
     GST_DEBUG("Loading %s", mseBlobURI.ascii().data());
@@ -507,6 +507,7 @@ void MediaPlayerPrivateGStreamerMSE::setEosWithNoBuffers(bool eosWithNoBuffers)
         // error in lower versions.
         if (!webkitGstCheckVersion(1, 24, 0))
             m_ignoreErrors = true;
+        GST_DEBUG_OBJECT(pipeline(), "EOS with no buffers, setting pipeline to READY state.");
         changePipelineState(GST_STATE_READY);
         if (!webkitGstCheckVersion(1, 24, 0))
             m_ignoreErrors = false;

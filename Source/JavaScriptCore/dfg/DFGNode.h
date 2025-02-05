@@ -82,9 +82,9 @@ class Snippet;
 
 namespace DFG {
 
+class BasicBlock;
 class Graph;
 class PromotedLocationDescriptor;
-struct BasicBlock;
 
 struct StorageAccessData {
     PropertyOffset offset;
@@ -894,6 +894,13 @@ public:
     {
         setOp(SetRegExpObjectLastIndex);
         m_opInfo = false;
+    }
+
+    void convertToPurifyNaN(Node* input)
+    {
+        setOpAndDefaultFlags(PurifyNaN);
+        children.reset();
+        children.setChild1(Edge(input, DoubleRepUse));
     }
 
     JSValue asJSValue()

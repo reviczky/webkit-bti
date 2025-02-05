@@ -889,7 +889,7 @@ void NetworkResourceLoader::didReceiveInformationalResponse(ResourceResponse&& r
 
 void NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedResponse, PrivateRelayed privateRelayed, ResponseCompletionHandler&& completionHandler)
 {
-    LOADER_RELEASE_LOG("didReceiveResponse: (httpStatusCode=%d, MIMEType=%" PUBLIC_LOG_STRING ", expectedContentLength=%" PRId64 ", hasCachedEntryForValidation=%d, hasNetworkLoadChecker=%d)", receivedResponse.httpStatusCode(), receivedResponse.mimeType().utf8().data(), receivedResponse.expectedContentLength(), !!m_cacheEntryForValidation, !!m_networkLoadChecker);
+    LOADER_RELEASE_LOG("didReceiveResponse: (httpStatusCode=%d, MIMEType=%" PUBLIC_LOG_STRING ", expectedContentLength=%lld, hasCachedEntryForValidation=%d, hasNetworkLoadChecker=%d)", receivedResponse.httpStatusCode(), receivedResponse.mimeType().utf8().data(), receivedResponse.expectedContentLength(), !!m_cacheEntryForValidation, !!m_networkLoadChecker);
 
 #if ENABLE(CONTENT_FILTERING)
     if (m_contentFilter && !m_contentFilter->continueAfterResponseReceived(receivedResponse))
@@ -1619,13 +1619,6 @@ void NetworkResourceLoader::didReceiveMainResourceResponse(const WebCore::Resour
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
     if (CheckedPtr speculativeLoadManager = m_cache ? m_cache->speculativeLoadManager() : nullptr)
         speculativeLoadManager->registerMainResourceLoadResponse(globalFrameID(), originalRequest(), response);
-#endif
-#if ENABLE(WEB_ARCHIVE)
-    if (equalIgnoringASCIICase(response.mimeType(), "application/x-webarchive"_s)
-        && LegacySchemeRegistry::shouldTreatURLSchemeAsLocal(response.url().protocol())) {
-        Ref connection = connectionToWebProcess();
-        connection->protectedNetworkProcess()->webProcessWillLoadWebArchive(connection->webProcessIdentifier());
-    }
 #endif
 }
 

@@ -726,7 +726,6 @@ protected:
 
     bool mediaControlsDependOnPageScaleFactor() const { return m_mediaControlsDependOnPageScaleFactor; }
     void setMediaControlsDependOnPageScaleFactor(bool);
-    void updateMediaControlsAfterPresentationModeChange();
 
     void scheduleEvent(const AtomString&);
     template<typename T> void scheduleEventOn(T& target, Ref<Event>&&);
@@ -773,7 +772,6 @@ private:
     void createMediaPlayer();
 
     bool supportsFocus() const override;
-    bool isMouseFocusable() const override;
     bool rendererIsNeeded(const RenderStyle&) override;
     bool childShouldCreateRenderer(const Node&) const override;
     InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
@@ -882,7 +880,7 @@ private:
     FloatSize mediaPlayerVideoLayerSize() const final { return videoLayerSize(); }
     void mediaPlayerVideoLayerSizeDidChange(const FloatSize& size) final { m_videoLayerSize = size; }
 
-    std::optional<MediaPlayerClientIdentifier> mediaPlayerClientIdentifier() const final { return identifier(); }
+    MediaPlayerClientIdentifier mediaPlayerClientIdentifier() const final { return identifier(); }
 
     void pendingActionTimerFired();
     void progressEventTimerFired();
@@ -908,7 +906,7 @@ private:
 
     void selectMediaResource();
     void queueLoadMediaResourceTask();
-    void loadResource(const URL&, const ContentType&, const String& keySystem);
+    void loadResource(const URL&, const ContentType&);
     void scheduleNextSourceChild();
     void loadNextSourceChild();
     void userCancelledLoad();
@@ -919,7 +917,7 @@ private:
     void waitForSourceChange();
     void prepareToPlay();
 
-    URL selectNextSourceChild(ContentType*, String* keySystem, InvalidURLAction);
+    URL selectNextSourceChild(ContentType*, InvalidURLAction);
 
     bool ignoreTrackDisplayUpdateRequests() const;
     void beginIgnoringTrackDisplayUpdateRequests();
@@ -1126,6 +1124,8 @@ private:
     void setMutedInternal(bool muted, ForceMuteChange);
     bool implicitlyMuted() const { return m_implicitlyMuted.value_or(false); }
 
+    bool limitedMatroskaSupportEnabled() const;
+
     Timer m_progressEventTimer;
     Timer m_playbackProgressTimer;
     Timer m_scanTimer;
@@ -1145,9 +1145,7 @@ private:
     TaskCancellationGroup m_updateShouldAutoplayTaskCancellationGroup;
     RefPtr<TimeRanges> m_playedTimeRanges;
     TaskCancellationGroup m_asyncEventsCancellationGroup;
-#if PLATFORM(IOS_FAMILY)
     TaskCancellationGroup m_volumeRevertTaskCancellationGroup;
-#endif
 
     PlayPromiseVector m_pendingPlayPromises;
 

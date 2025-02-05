@@ -61,8 +61,8 @@ struct JumpTableEntry;
 
 #define WRITE_TO_METADATA(dst, src, type) \
     do { \
-        type tmp = src; \
-        memcpy(dst, &tmp, sizeof(type)); \
+        type tmp = (src); \
+        memcpy((dst), &tmp, sizeof(type)); \
     } while (false)
 
 class FunctionIPIntMetadataGenerator {
@@ -80,6 +80,7 @@ public:
     }
 
     FunctionCodeIndex functionIndex() const { return m_functionIndex; }
+    bool hasTailCallSuccessors() const { return m_hasTailCallSuccessors; }
     const BitVector& tailCallSuccessors() const { return m_tailCallSuccessors; }
     bool tailCallClobbersInstance() const { return m_tailCallClobbersInstance ; }
     void setTailCall(uint32_t, bool);
@@ -110,9 +111,10 @@ private:
     void addLEB128ConstantInt32AndLength(uint32_t value, size_t length);
     void addLEB128ConstantAndLengthForType(Type, uint64_t value, size_t length);
     void addLEB128V128Constant(v128_t value, size_t length);
-    void addReturnData(const FunctionSignature&);
+    void addReturnData(const FunctionSignature&, const CallInformation&);
 
     FunctionCodeIndex m_functionIndex;
+    bool m_hasTailCallSuccessors { false };
     bool m_tailCallClobbersInstance { false };
     FixedBitVector m_callees;
     BitVector m_tailCallSuccessors;

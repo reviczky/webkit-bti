@@ -781,6 +781,9 @@ private:
         case BooleanToNumber:
             compileBooleanToNumber();
             break;
+        case DFG::PurifyNaN:
+            compilePurifyNaN();
+            break;
         case ExtractOSREntryLocal:
             compileExtractOSREntryLocal();
             break;
@@ -2117,11 +2120,6 @@ private:
         setInt32(integerValue);
     }
 
-    LValue purifyNaN(LValue value)
-    {
-        return m_out.select(m_out.doubleEqual(value, value), value, m_out.constDouble(PNaN));
-    }
-
     LValue boxDoubleAsDouble(LValue value)
     {
         ASSERT(isARM64());
@@ -2217,7 +2215,7 @@ private:
             LValue value = lowDouble(m_node->child1());
 
             if (abstractValue(m_node->child1()).couldBeType(SpecDoubleImpureNaN))
-                value = purifyNaN(value);
+                value = m_out.purifyNaN(value);
 
             setJSValue(boxDouble(value));
             return;
@@ -2336,6 +2334,14 @@ private:
             RELEASE_ASSERT_NOT_REACHED();
             return;
         }
+    }
+
+    void compilePurifyNaN()
+    {
+        LValue value = lowDouble(m_node->child1());
+        if (abstractValue(m_node->child1()).couldBeType(SpecDoubleImpureNaN))
+            value = m_out.purifyNaN(value);
+        setDouble(value);
     }
 
     void compileExtractOSREntryLocal()
@@ -5690,11 +5696,10 @@ IGNORE_CLANG_WARNINGS_END
             LBasicBlock fastPath = m_out.newBlock();
             LBasicBlock slowPath = m_out.newBlock();
 
-            structure = loadStructure(object);
             m_out.branch(
                 m_out.testIsZero32(
-                    m_out.load16ZeroExt32(structure, m_heaps.Structure_outOfLineTypeFlags),
-                    m_out.constInt32(OverridesGetPrototypeOutOfLine)),
+                    m_out.load8ZeroExt32(object, m_heaps.JSCell_typeInfoFlags),
+                    m_out.constInt32(OverridesGetPrototype)),
                 usually(fastPath), rarely(slowPath));
 
             m_out.appendTo(slowPath, fastPath);
@@ -5702,6 +5707,7 @@ IGNORE_CLANG_WARNINGS_END
             m_out.jump(continuation);
 
             m_out.appendTo(fastPath, loadPolyProto);
+            structure = loadStructure(object);
             break;
         }
         default: {
@@ -5718,11 +5724,10 @@ IGNORE_CLANG_WARNINGS_END
             m_out.branch(isObject(object, valueType), usually(isObjectPath), rarely(slowPath));
 
             m_out.appendTo(isObjectPath, slowPath);
-            structure = loadStructure(object);
             m_out.branch(
                 m_out.testIsZero32(
-                    m_out.load16ZeroExt32(structure, m_heaps.Structure_outOfLineTypeFlags),
-                    m_out.constInt32(OverridesGetPrototypeOutOfLine)),
+                    m_out.load8ZeroExt32(object, m_heaps.JSCell_typeInfoFlags),
+                    m_out.constInt32(OverridesGetPrototype)),
                 usually(fastPath), rarely(slowPath));
 
             m_out.appendTo(slowPath, fastPath);
@@ -5730,6 +5735,7 @@ IGNORE_CLANG_WARNINGS_END
             m_out.jump(continuation);
 
             m_out.appendTo(fastPath, loadPolyProto);
+            structure = loadStructure(object);
             break;
         }
         }
@@ -6402,7 +6408,7 @@ IGNORE_CLANG_WARNINGS_END
                         };
                         result = speculateOrAdjust(unboxedResult);
                     } else
-                        result = boxDouble(purifyNaN(unboxedResult));
+                        result = boxDouble(m_out.purifyNaN(unboxedResult));
                     ValueFromBlock fastResult = m_out.anchor(result);
                     m_out.jump(continuation);
 
@@ -7662,12 +7668,110 @@ IGNORE_CLANG_WARNINGS_END
             return;
         }
 
-        case StringUse:
+        case StringUse: {
             ASSERT(m_node->arrayMode().type() == Array::Contiguous);
-            // We have to keep base alive since that keeps storage alive.
+
+            LValue searchElement = lowCell(searchElementEdge);
+            speculateString(searchElementEdge, searchElement);
+
+            LBasicBlock checkSearchElement8Bit = m_out.newBlock();
+            LBasicBlock loopHeader = m_out.newBlock();
+            LBasicBlock fastCheckElementString = m_out.newBlock();
+            LBasicBlock fastPath = m_out.newBlock();
+            LBasicBlock slowCheckElementRope = m_out.newBlock();
+            LBasicBlock slowCheckElement8Bit = m_out.newBlock();
+            LBasicBlock compareStringLengths = m_out.newBlock();
+            LBasicBlock checkNonEmpty = m_out.newBlock();
+            LBasicBlock loadBytes = m_out.newBlock();
+            LBasicBlock compareBytesLoop = m_out.newBlock();
+            LBasicBlock checkCompareBytesLoopEnd = m_out.newBlock();
+            LBasicBlock loopNext = m_out.newBlock();
+            LBasicBlock notFound = m_out.newBlock();
+            LBasicBlock continuation = m_out.newBlock();
+            LBasicBlock slowCase = m_out.newBlock();
+
+            startIndex = m_out.zeroExtPtr(startIndex);
+            length = m_out.zeroExtPtr(length);
+
+            ValueFromBlock initialStartIndex = m_out.anchor(startIndex);
+
+            m_out.branch(isRopeString(searchElement, searchElementEdge), rarely(slowCase), usually(checkSearchElement8Bit));
+
+            LBasicBlock lastNext = m_out.appendTo(checkSearchElement8Bit, loopHeader);
+            LValue searchElementImpl = m_out.loadPtr(searchElement, m_heaps.JSString_value);
+            m_out.branch(m_out.testIsZero32(m_out.load32(searchElementImpl, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIs8Bit())), unsure(slowCase), unsure(loopHeader));
+
+            m_out.appendTo(loopHeader, fastCheckElementString);
+            LValue index = m_out.phi(pointerType(), initialStartIndex);
+            m_out.branch(m_out.notEqual(index, length), unsure(fastCheckElementString), unsure(notFound));
+
+            m_out.appendTo(fastCheckElementString, fastPath);
+            LValue element = m_out.load64(m_out.baseIndex(m_heaps.indexedContiguousProperties, storage, index));
+            m_out.branch(isString(element), unsure(fastPath), unsure(loopNext));
+
+            m_out.appendTo(fastPath, slowCheckElementRope);
+            ValueFromBlock foundResult = m_out.anchor(index);
+            m_out.branch(m_out.equal(element, searchElement), unsure(continuation), unsure(slowCheckElementRope));
+
+            m_out.appendTo(slowCheckElementRope, slowCheckElement8Bit);
+            m_out.branch(isRopeString(element), rarely(slowCase), usually(slowCheckElement8Bit));
+
+            m_out.appendTo(slowCheckElement8Bit, compareStringLengths);
+            LValue elementImpl = m_out.loadPtr(element, m_heaps.JSString_value);
+            m_out.branch(m_out.testIsZero32(m_out.load32(elementImpl, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIs8Bit())), unsure(slowCase), unsure(compareStringLengths));
+
+            m_out.appendTo(compareStringLengths, loopNext);
+            LValue elementLength = m_out.load32(elementImpl, m_heaps.StringImpl_length);
+            m_out.branch(
+                m_out.notEqual(elementLength, m_out.load32(searchElementImpl, m_heaps.StringImpl_length)),
+                unsure(loopNext), unsure(checkNonEmpty));
+
+            m_out.appendTo(checkNonEmpty, loadBytes);
+            m_out.branch(m_out.isZero32(elementLength), unsure(continuation), unsure(loadBytes));
+
+            m_out.appendTo(loadBytes, compareBytesLoop);
+            LValue elementData = m_out.loadPtr(elementImpl, m_heaps.StringImpl_data);
+            LValue searchElementData = m_out.loadPtr(searchElementImpl, m_heaps.StringImpl_data);
+
+            ValueFromBlock compareBytesLoopIndexAtStart = m_out.anchor(elementLength);
+
+            m_out.jump(compareBytesLoop);
+
+            m_out.appendTo(compareBytesLoop, checkCompareBytesLoopEnd);
+
+            LValue compareBytesLoopIndexAtLoopTop = m_out.phi(Int32, compareBytesLoopIndexAtStart);
+            LValue compareBytesLoopIndexInLoop = m_out.sub(compareBytesLoopIndexAtLoopTop, m_out.int32One);
+
+            LValue elementByte = m_out.load8ZeroExt32(
+                m_out.baseIndex(m_heaps.characters8, elementData, m_out.zeroExtPtr(compareBytesLoopIndexInLoop)));
+            LValue searchElementByte = m_out.load8ZeroExt32(
+                m_out.baseIndex(m_heaps.characters8, searchElementData, m_out.zeroExtPtr(compareBytesLoopIndexInLoop)));
+
+            m_out.branch(m_out.notEqual(elementByte, searchElementByte), unsure(loopNext), unsure(checkCompareBytesLoopEnd));
+
+            m_out.appendTo(checkCompareBytesLoopEnd, loopNext);
+            m_out.addIncomingToPhi(compareBytesLoopIndexAtLoopTop, m_out.anchor(compareBytesLoopIndexInLoop));
+            m_out.branch(m_out.notZero32(compareBytesLoopIndexInLoop), unsure(compareBytesLoop), unsure(continuation));
+
+            m_out.appendTo(loopNext,  notFound);
+            LValue nextIndex = m_out.add(index, m_out.intPtrOne);
+            m_out.addIncomingToPhi(index, m_out.anchor(nextIndex));
+            m_out.jump(loopHeader);
+
+            m_out.appendTo(notFound, continuation);
+            ValueFromBlock notFoundResult = m_out.anchor(m_out.constIntPtr(-1));
+            m_out.jump(continuation);
+
+            m_out.appendTo(slowCase, continuation);
+            ValueFromBlock slowCaseResult = m_out.anchor(vmCall(Int64, operationArrayIndexOfString, weakPointer(globalObject), storage, searchElement, startIndex));
+            m_out.jump(continuation);
+
+            m_out.appendTo(continuation, lastNext);
+            // We have to keep base alive since that keeps content of storage alive.
             ensureStillAliveHere(base);
-            setInt32(m_out.castToInt32(vmCall(Int64, operationArrayIndexOfString, weakPointer(globalObject), storage, lowString(searchElementEdge), startIndex)));
+            setInt32(m_out.castToInt32(m_out.phi(Int64, notFoundResult, foundResult, slowCaseResult)));
             return;
+        }
 
         case OtherUse:
         case ObjectUse:
@@ -10545,7 +10649,7 @@ IGNORE_CLANG_WARNINGS_END
         if (m_node->child3().useKind() == DoubleRepUse) {
             LValue value = lowDouble(m_node->child3());
             if (abstractValue(m_node->child3()).couldBeType(SpecDoubleImpureNaN))
-                value = purifyNaN(value);
+                value = m_out.purifyNaN(value);
             storeDoubleProperty(boxDoubleAsDouble(value), storage, data.identifierNumber, data.offset);
             return;
         }
@@ -10561,7 +10665,7 @@ IGNORE_CLANG_WARNINGS_END
         if (m_node->child2().useKind() == DoubleRepUse) {
             value = lowDouble(m_node->child2());
             if (abstractValue(m_node->child2()).couldBeType(SpecDoubleImpureNaN))
-                value = purifyNaN(value);
+                value = m_out.purifyNaN(value);
             value = boxDoubleAsDouble(value);
         } else
             value = lowJSValue(m_node->child2());
@@ -10796,7 +10900,7 @@ IGNORE_CLANG_WARNINGS_END
         if (m_node->child2().useKind() == DoubleRepUse) {
             LValue value = lowDouble(m_node->child2());
             if (abstractValue(m_node->child2()).couldBeType(SpecDoubleImpureNaN))
-                value = purifyNaN(value);
+                value = m_out.purifyNaN(value);
             m_out.storeDouble(boxDoubleAsDouble(value), m_out.absolute(m_node->variablePointer()));
             return;
         }
@@ -10900,7 +11004,7 @@ IGNORE_CLANG_WARNINGS_END
         if (m_node->child2().useKind() == DoubleRepUse) {
             LValue value = lowDouble(m_node->child2());
             if (abstractValue(m_node->child2()).couldBeType(SpecDoubleImpureNaN))
-                value = purifyNaN(value);
+                value = m_out.purifyNaN(value);
             m_out.storeDouble(boxDoubleAsDouble(value), lowCell(m_node->child1()), m_heaps.JSLexicalEnvironment_variables[m_node->scopeOffset().offset()]);
             return;
         }
@@ -12888,11 +12992,11 @@ IGNORE_CLANG_WARNINGS_END
                 break;
             }
             case Wasm::TypeKind::F32: {
-                setJSValue(boxDouble(purifyNaN(m_out.floatToDouble(patchpoint))));
+                setJSValue(boxDouble(m_out.purifyNaN(m_out.floatToDouble(patchpoint))));
                 break;
             }
             case Wasm::TypeKind::F64: {
-                setJSValue(boxDouble(purifyNaN(patchpoint)));
+                setJSValue(boxDouble(m_out.purifyNaN(patchpoint)));
                 break;
             }
             case Wasm::TypeKind::V128:
@@ -15322,17 +15426,17 @@ IGNORE_CLANG_WARNINGS_END
 
         LBasicBlock lastNext = m_out.appendTo(initLoop, fastLoadPath);
         LValue object = m_out.phi(Int64, initialObject);
-        LValue structure = loadStructure(object);
         m_out.branch(
             m_out.testIsZero32(
-                m_out.load16ZeroExt32(structure, m_heaps.Structure_outOfLineTypeFlags),
-                m_out.constInt32(OverridesGetPrototypeOutOfLine)),
+                m_out.load8ZeroExt32(object, m_heaps.JSCell_typeInfoFlags),
+                m_out.constInt32(OverridesGetPrototype)),
             usually(fastLoadPath), rarely(slowPath));
 
         m_out.appendTo(fastLoadPath, loadPolyProto);
+        LValue structure = loadStructure(object);
         LValue prototypeBits = m_out.load64(structure, m_heaps.Structure_prototype);
         ValueFromBlock monoProto = m_out.anchor(prototypeBits);
-        m_out.branch(m_out.isZero64(prototypeBits), unsure(loadPolyProto), unsure(checkPrototype));
+        m_out.branch(m_out.isZero64(prototypeBits), rarely(loadPolyProto), usually(checkPrototype));
 
         m_out.appendTo(loadPolyProto, checkPrototype);
         ValueFromBlock polyProto = m_out.anchor(
@@ -15919,7 +16023,7 @@ IGNORE_CLANG_WARNINGS_END
                     genericResult = strictInt52ToJSValue(m_out.zeroExt(genericResult, Int64));
             }
         } else if (genericResult->type() == Double)
-            genericResult = boxDouble(purifyNaN(genericResult));
+            genericResult = boxDouble(m_out.purifyNaN(genericResult));
 
         results.append(m_out.anchor(genericResult));
         m_out.jump(continuation);

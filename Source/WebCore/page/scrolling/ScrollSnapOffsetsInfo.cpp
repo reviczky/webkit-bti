@@ -35,7 +35,6 @@
 #include "RenderStyleInlines.h"
 #include "RenderView.h"
 #include "ScrollableArea.h"
-#include "StylePrimitiveNumericTypes+Evaluation.h"
 #include "StyleScrollSnapPoints.h"
 
 namespace WebCore {

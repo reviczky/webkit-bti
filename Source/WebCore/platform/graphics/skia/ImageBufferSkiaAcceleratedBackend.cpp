@@ -47,9 +47,8 @@ WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include "BitmapTexture.h"
 #include "CoordinatedPlatformLayerBufferNativeImage.h"
 #include "CoordinatedPlatformLayerBufferRGB.h"
-#include "GraphicsLayerContentsDisplayDelegateTextureMapper.h"
+#include "GraphicsLayerContentsDisplayDelegateCoordinated.h"
 #include "TextureMapperFlags.h"
-#include "TextureMapperPlatformLayerProxy.h"
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/gpu/ganesh/gl/GrGLBackendSurface.h>
 #include <skia/gpu/ganesh/gl/GrGLDirectContext.h>
@@ -101,25 +100,24 @@ ImageBufferSkiaAcceleratedBackend::ImageBufferSkiaAcceleratedBackend(const Param
 
 #if USE(COORDINATED_GRAPHICS)
     // Use a content layer for canvas.
-    if (parameters.purpose == RenderingPurpose::Canvas) {
-        auto proxy = TextureMapperPlatformLayerProxy::create(TextureMapperPlatformLayerProxy::ContentType::Canvas);
-        proxy->setSwapBuffersFunction([this](TextureMapperPlatformLayerProxy& proxy) {
-            auto image = createNativeImageReference();
-            if (!image)
-                return;
-
-            proxy.pushNextBuffer(CoordinatedPlatformLayerBufferNativeImage::create(image.releaseNonNull(), GLFence::create()));
-        });
-        m_layerContentsDisplayDelegate = GraphicsLayerContentsDisplayDelegateTextureMapper::create(WTFMove(proxy));
-    }
+    if (parameters.purpose == RenderingPurpose::Canvas)
+        m_layerContentsDisplayDelegate = GraphicsLayerContentsDisplayDelegateCoordinated::create();
 #endif
 }
 
-ImageBufferSkiaAcceleratedBackend::~ImageBufferSkiaAcceleratedBackend()
+ImageBufferSkiaAcceleratedBackend::~ImageBufferSkiaAcceleratedBackend() = default;
+
+void ImageBufferSkiaAcceleratedBackend::prepareForDisplay()
 {
 #if USE(COORDINATED_GRAPHICS)
-    if (m_layerContentsDisplayDelegate)
-        static_cast<GraphicsLayerContentsDisplayDelegateTextureMapper*>(m_layerContentsDisplayDelegate.get())->proxy().setSwapBuffersFunction(nullptr);
+    if (!m_layerContentsDisplayDelegate)
+        return;
+
+    auto image = createNativeImageReference();
+    if (!image)
+        return;
+
+    m_layerContentsDisplayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferNativeImage::create(image.releaseNonNull(), GLFence::create()));
 #endif
 }
 

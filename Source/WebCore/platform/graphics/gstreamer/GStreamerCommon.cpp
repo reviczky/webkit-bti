@@ -34,6 +34,7 @@
 #include "IntSize.h"
 #include "PlatformDisplay.h"
 #include "SharedBuffer.h"
+#include "VideoSinkGStreamer.h"
 #include "WebKitAudioSinkGStreamer.h"
 #include <gst/audio/audio-info.h>
 #include <gst/gst.h>
@@ -308,7 +309,7 @@ bool doCapsHaveType(const GstCaps* caps, const char* type)
         GST_WARNING("Failed to get MediaType");
         return false;
     }
-    return mediaType.startsWith(span(type));
+    return mediaType.startsWith(unsafeSpan(type));
 }
 
 bool areEncryptedCaps(const GstCaps* caps)
@@ -451,6 +452,7 @@ void registerWebKitGStreamerElements()
 #if ENABLE(VIDEO)
         gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
         gst_element_register(0, "webkitglvideosink", GST_RANK_NONE, WEBKIT_TYPE_GL_VIDEO_SINK);
+        gst_element_register(0, "webkitvideosink", GST_RANK_NONE, WEBKIT_TYPE_VIDEO_SINK);
 #endif
         // We don't want autoaudiosink to autoplug our sink.
         gst_element_register(0, "webkitaudiosink", GST_RANK_NONE, WEBKIT_TYPE_AUDIO_SINK);
@@ -551,14 +553,14 @@ void registerActivePipeline(const GRefPtr<GstElement>& pipeline)
 {
     GUniquePtr<gchar> name(gst_object_get_name(GST_OBJECT_CAST(pipeline.get())));
     Locker locker { s_activePipelinesMapLock };
-    activePipelinesMap().add(span(name.get()), GRefPtr<GstElement>(pipeline));
+    activePipelinesMap().add(unsafeSpan(name.get()), GRefPtr<GstElement>(pipeline));
 }
 
 void unregisterPipeline(const GRefPtr<GstElement>& pipeline)
 {
     GUniquePtr<gchar> name(gst_object_get_name(GST_OBJECT_CAST(pipeline.get())));
     Locker locker { s_activePipelinesMapLock };
-    activePipelinesMap().remove(span(name.get()));
+    activePipelinesMap().remove(unsafeSpan(name.get()));
 }
 
 void WebCoreLogObserver::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Vector<JSONLogValue>&& values)
@@ -879,7 +881,7 @@ void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMess
         switch (GST_MESSAGE_TYPE(message)) {
         case GST_MESSAGE_ERROR: {
             GST_ERROR_OBJECT(pipeline.get(), "Got message: %" GST_PTR_FORMAT, message);
-            auto dotFileName = makeString(span(GST_OBJECT_NAME(pipeline.get())), "_error"_s);
+            auto dotFileName = makeString(unsafeSpan(GST_OBJECT_NAME(pipeline.get())), "_error"_s);
             GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
             break;
         }
@@ -895,7 +897,7 @@ void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMess
             GST_INFO_OBJECT(pipeline.get(), "State changed (old: %s, new: %s, pending: %s)", gst_element_state_get_name(oldState),
                 gst_element_state_get_name(newState), gst_element_state_get_name(pending));
 
-            auto dotFileName = makeString(span(GST_OBJECT_NAME(pipeline.get())), '_', span(gst_element_state_get_name(oldState)), '_', span(gst_element_state_get_name(newState)));
+            auto dotFileName = makeString(unsafeSpan(GST_OBJECT_NAME(pipeline.get())), '_', unsafeSpan(gst_element_state_get_name(oldState)), '_', unsafeSpan(gst_element_state_get_name(newState)));
             GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
             break;
         }
@@ -1163,7 +1165,8 @@ StringView gstStructureGetString(const GstStructure* structure, StringView key)
         return { };
     }
 
-    return StringView::fromLatin1(gst_structure_get_string(structure, static_cast<const char*>(key.rawCharacters())));
+    auto utf8String = key.utf8();
+    return StringView::fromLatin1(gst_structure_get_string(structure, utf8String.data()));
 }
 
 StringView gstStructureGetName(const GstStructure* structure)
@@ -1272,7 +1275,7 @@ static std::optional<RefPtr<JSON::Value>> gstStructureValueToJSON(const GValue* 
     }
 
     if (valueType == G_TYPE_STRING)
-        return JSON::Value::create(makeString(span(g_value_get_string(value))))->asValue();
+        return JSON::Value::create(makeString(unsafeSpan(g_value_get_string(value))))->asValue();
 
 #if USE(GSTREAMER_WEBRTC)
     if (valueType == GST_TYPE_WEBRTC_STATS_TYPE) {
@@ -1591,6 +1594,10 @@ void configureAudioDecoderForHarnessing(const GRefPtr<GstElement>& element)
 {
     if (gstObjectHasProperty(element.get(), "max-errors"))
         g_object_set(element.get(), "max-errors", 0, nullptr);
+
+    // rawaudioparse-specific:
+    if (gstObjectHasProperty(element.get(), "use-sink-caps"))
+        g_object_set(element.get(), "use-sink-caps", TRUE, nullptr);
 }
 
 void configureVideoDecoderForHarnessing(const GRefPtr<GstElement>& element)

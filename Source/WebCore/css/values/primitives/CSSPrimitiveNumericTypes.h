@@ -33,28 +33,31 @@ namespace WebCore {
 namespace CSS {
 
 // NOTE: This is spelled with an explicit "Or" to distinguish it from types like AnglePercentage/LengthPercentage that have behavior distinctions beyond just being a union of the two types (specifically, calc() has specific behaviors for those types).
-template<Range nR = All, Range pR = nR> struct NumberOrPercentage {
-    NumberOrPercentage(std::variant<Number<nR>, Percentage<pR>> value)
+template<Range nR = All, Range pR = nR, typename V = double> struct NumberOrPercentage {
+    using Number = CSS::Number<nR, V>;
+    using Percentage = CSS::Percentage<pR, V>;
+
+    NumberOrPercentage(std::variant<Number, Percentage>&& value)
     {
         WTF::switchOn(WTFMove(value), [this](auto&& alternative) { this->value = WTFMove(alternative); });
     }
 
-    NumberOrPercentage(NumberRaw<nR> value)
-        : value { Number<nR> { WTFMove(value) } }
+    NumberOrPercentage(typename Number::Raw value)
+        : value { Number { WTFMove(value) } }
     {
     }
 
-    NumberOrPercentage(Number<nR> value)
+    NumberOrPercentage(Number value)
         : value { WTFMove(value) }
     {
     }
 
-    NumberOrPercentage(PercentageRaw<pR> value)
-        : value { Percentage<pR> { WTFMove(value) } }
+    NumberOrPercentage(typename Percentage::Raw value)
+        : value { Percentage { WTFMove(value) } }
     {
     }
 
-    NumberOrPercentage(Percentage<pR> value)
+    NumberOrPercentage(Percentage value)
         : value { WTFMove(value) }
     {
     }
@@ -64,16 +67,16 @@ template<Range nR = All, Range pR = nR> struct NumberOrPercentage {
     template<typename... F> decltype(auto) switchOn(F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
-        using ResultType = decltype(visitor(std::declval<Number<nR>>()));
+        using ResultType = decltype(visitor(std::declval<Number>()));
 
         return WTF::switchOn(value,
             [](PrimitiveDataEmptyToken) -> ResultType {
                 RELEASE_ASSERT_NOT_REACHED();
             },
-            [&](const Number<nR>& number) -> ResultType {
+            [&](const Number& number) -> ResultType {
                 return visitor(number);
             },
-            [&](const Percentage<pR>& percentage) -> ResultType {
+            [&](const Percentage& percentage) -> ResultType {
                 return visitor(percentage);
             }
         );
@@ -92,31 +95,34 @@ private:
 
     bool isEmpty() const { return std::holds_alternative<PrimitiveDataEmptyToken>(value); }
 
-    std::variant<PrimitiveDataEmptyToken, Number<nR>, Percentage<pR>> value;
+    std::variant<PrimitiveDataEmptyToken, Number, Percentage> value;
 };
 
-template<Range nR = All, Range pR = nR> struct NumberOrPercentageResolvedToNumber {
-    NumberOrPercentageResolvedToNumber(std::variant<Number<nR>, Percentage<pR>> value)
+template<Range nR = All, Range pR = nR, typename V = double> struct NumberOrPercentageResolvedToNumber {
+    using Number = CSS::Number<nR, V>;
+    using Percentage = CSS::Percentage<pR, V>;
+
+    NumberOrPercentageResolvedToNumber(std::variant<Number, Percentage>&& value)
     {
         WTF::switchOn(WTFMove(value), [this](auto&& alternative) { this->value = WTFMove(alternative); });
     }
 
-    NumberOrPercentageResolvedToNumber(NumberRaw<nR> value)
-        : value { Number<nR> { WTFMove(value) } }
+    NumberOrPercentageResolvedToNumber(typename Number::Raw value)
+        : value { Number { WTFMove(value) } }
     {
     }
 
-    NumberOrPercentageResolvedToNumber(Number<nR> value)
+    NumberOrPercentageResolvedToNumber(Number value)
         : value { WTFMove(value) }
     {
     }
 
-    NumberOrPercentageResolvedToNumber(PercentageRaw<pR> value)
-        : value { Percentage<pR> { WTFMove(value) } }
+    NumberOrPercentageResolvedToNumber(typename Percentage::Raw value)
+        : value { Percentage { WTFMove(value) } }
     {
     }
 
-    NumberOrPercentageResolvedToNumber(Percentage<pR> value)
+    NumberOrPercentageResolvedToNumber(Percentage value)
         : value { WTFMove(value) }
     {
     }
@@ -126,16 +132,16 @@ template<Range nR = All, Range pR = nR> struct NumberOrPercentageResolvedToNumbe
     template<typename... F> decltype(auto) switchOn(F&&... f) const
     {
         auto visitor = WTF::makeVisitor(std::forward<F>(f)...);
-        using ResultType = decltype(visitor(std::declval<Number<nR>>()));
+        using ResultType = decltype(visitor(std::declval<Number>()));
 
         return WTF::switchOn(value,
             [](PrimitiveDataEmptyToken) -> ResultType {
                 RELEASE_ASSERT_NOT_REACHED();
             },
-            [&](const Number<nR>& number) -> ResultType {
+            [&](const Number& number) -> ResultType {
                 return visitor(number);
             },
-            [&](const Percentage<pR>& percentage) -> ResultType {
+            [&](const Percentage& percentage) -> ResultType {
                 return visitor(percentage);
             }
         );
@@ -154,12 +160,11 @@ private:
 
     bool isEmpty() const { return std::holds_alternative<PrimitiveDataEmptyToken>(value); }
 
-    std::variant<PrimitiveDataEmptyToken, Number<nR>, Percentage<pR>> value;
+    std::variant<PrimitiveDataEmptyToken, Number, Percentage> value;
 };
 
 } // namespace CSS
 } // namespace WebCore
 
-
-template<auto nR, auto pR> inline constexpr auto WebCore::TreatAsVariantLike<WebCore::CSS::NumberOrPercentage<nR, pR>> = true;
-template<auto nR, auto pR> inline constexpr auto WebCore::TreatAsVariantLike<WebCore::CSS::NumberOrPercentageResolvedToNumber<nR, pR>> = true;
+template<auto nR, auto pR, typename V> inline constexpr auto WebCore::TreatAsVariantLike<WebCore::CSS::NumberOrPercentage<nR, pR, V>> = true;
+template<auto nR, auto pR, typename V> inline constexpr auto WebCore::TreatAsVariantLike<WebCore::CSS::NumberOrPercentageResolvedToNumber<nR, pR, V>> = true;

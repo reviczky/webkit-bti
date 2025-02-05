@@ -151,6 +151,35 @@ ComplexTextController::ComplexTextController(const FontCascade& font, const Text
     finishConstruction();
 }
 
+ComplexTextController::ComplexTextController(const TextRun& run, const FontCascade& fontCascade)
+    : m_font(fontCascade)
+    , m_run(run)
+    , m_end(run.length())
+{
+}
+
+std::pair<float, float> ComplexTextController::enclosingGlyphBoundsForTextRun(const FontCascade& fontCascade, const TextRun& textRun)
+{
+    auto textController = ComplexTextController { textRun, fontCascade };
+    textController.collectComplexTextRuns();
+
+    auto enclosingAscent = std::optional<float> { };
+    auto enclosingDescent = std::optional<float> { };
+
+    for (size_t runIndex = 0; runIndex < textController.m_complexTextRuns.size(); ++runIndex) {
+        auto& complexTextRun = *textController.m_complexTextRuns[runIndex];
+        auto& font = complexTextRun.font();
+        auto glyphs = complexTextRun.glyphs();
+
+        for (size_t glyphIndex = 0; glyphIndex < complexTextRun.glyphCount(); ++glyphIndex) {
+            auto bounds = font.boundsForGlyph(glyphs[glyphIndex]);
+            enclosingAscent = std::min(enclosingAscent.value_or(bounds.y()), bounds.y());
+            enclosingDescent = std::max(enclosingDescent.value_or(bounds.maxY()), bounds.maxY());
+        }
+    }
+    return { enclosingAscent.value_or(0.f), enclosingDescent.value_or(0.f) };
+}
+
 void ComplexTextController::finishConstruction()
 {
     adjustGlyphsAndAdvances();
@@ -694,6 +723,10 @@ void ComplexTextController::adjustGlyphsAndAdvances()
                 // Like simple text path in WidthIterator::applyCSSVisibilityRules,
                 // make tabCharacter glyph invisible after advancing.
                 glyph = deletedGlyph;
+            } else if (character == zeroWidthNonJoiner) {
+                // zeroWidthNonJoiner is rendered as deletedGlyph for compatibility with other engines: https://bugs.webkit.org/show_bug.cgi?id=285959
+                advance.setWidth(0);
+                glyph = deletedGlyph;
             } else if (FontCascade::treatAsZeroWidthSpace(character) && !treatAsSpace) {
                 advance.setWidth(0);
                 glyph = font.spaceGlyph();
@@ -724,7 +757,8 @@ void ComplexTextController::adjustGlyphsAndAdvances()
 
                 unsigned characterIndexInRun = characterIndex + complexTextRun.stringLocation();
                 bool isFirstCharacter = !(characterIndex + complexTextRun.stringLocation());
-                bool isLastCharacter = characterIndexInRun + 1 == m_run.length() || (U16_IS_LEAD(character) && characterIndexInRun + 2 == m_run.length() && U16_IS_TRAIL(charactersSpan[characterIndex + 1]));
+                bool isLastCharacter = characterIndexInRun + 1 == m_run.length()
+                    || (U16_IS_LEAD(character) && characterIndexInRun + 2 == m_run.length() && characterIndex + 2 == charactersSpan.size() && U16_IS_TRAIL(charactersSpan[characterIndex + 1]));
 
                 bool forceLeftExpansion = false; // On the left, regardless of m_run.ltr()
                 bool forceRightExpansion = false; // On the right, regardless of m_run.ltr()

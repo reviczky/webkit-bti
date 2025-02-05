@@ -45,8 +45,6 @@ UIProcess/Gamepad/UIGamepadProvider.cpp
 UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
 UIProcess/Notifications/WebNotificationManagerProxy.cpp
 UIProcess/ProcessThrottler.cpp
-UIProcess/ProvisionalPageProxy.cpp
-UIProcess/RemoteLayerTree/RemoteLayerTreeHost.mm
 UIProcess/RemoteLayerTree/RemoteScrollingCoordinatorProxy.cpp
 UIProcess/RemoteLayerTree/mac/RemoteScrollingCoordinatorProxyMac.mm
 UIProcess/RemoteLayerTree/mac/RemoteScrollingTreeMac.mm
@@ -62,7 +60,6 @@ UIProcess/WebProcessCache.cpp
 UIProcess/WebsiteData/Cocoa/WebsiteDataStoreCocoa.mm
 UIProcess/WebsiteData/WebsiteDataStore.cpp
 UIProcess/mac/DisplayCaptureSessionManager.mm
-UIProcess/mac/PageClientImplMac.mm
 UIProcess/mac/WKImmediateActionController.mm
 UIProcess/mac/WebContextMenuProxyMac.mm
 UIProcess/mac/WebViewImpl.mm
@@ -101,7 +98,6 @@ WebProcess/Network/webrtc/LibWebRTCNetworkManager.cpp
 WebProcess/Network/webrtc/LibWebRTCProvider.cpp
 WebProcess/Network/webrtc/WebMDNSRegister.cpp
 WebProcess/Notifications/WebNotificationManager.cpp
-WebProcess/Plugins/PDF/PDFIncrementalLoader.mm
 WebProcess/Plugins/PDF/PDFPluginBase.mm
 WebProcess/Plugins/PDF/PDFPluginTextAnnotation.mm
 WebProcess/Plugins/PDF/UnifiedPDF/UnifiedPDFPlugin.mm

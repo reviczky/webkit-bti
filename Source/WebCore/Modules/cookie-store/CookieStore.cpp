@@ -40,6 +40,7 @@
 #include "JSCookieListItem.h"
 #include "JSDOMPromiseDeferred.h"
 #include "Page.h"
+#include "PublicSuffixStore.h"
 #include "ScriptExecutionContext.h"
 #include "ScriptExecutionContextIdentifier.h"
 #include "SecurityOrigin.h"
@@ -48,6 +49,7 @@
 #include "WorkerGlobalScope.h"
 #include "WorkerLoaderProxy.h"
 #include "WorkerThread.h"
+#include <cmath>
 #include <optional>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Function.h>
@@ -270,7 +272,7 @@ void CookieStore::get(CookieStoreGetOptions&& options, Ref<DeferredPromise>&& pr
     auto url = context->cookieURL();
     if (!options.url.isNull()) {
         auto parsed = context->completeURL(options.url);
-        if (context->isDocument() && parsed != url) {
+        if (context->isDocument() && !equalIgnoringFragmentIdentifier(parsed, url)) {
             promise->reject(Exception { ExceptionCode::TypeError, "URL must match the document URL"_s });
             return;
         }
@@ -333,7 +335,7 @@ void CookieStore::getAll(CookieStoreGetOptions&& options, Ref<DeferredPromise>&&
     auto url = context->cookieURL();
     if (!options.url.isNull()) {
         auto parsed = context->completeURL(options.url);
-        if (context->isDocument() && parsed != url) {
+        if (context->isDocument() && !equalIgnoringFragmentIdentifier(parsed, url)) {
             promise->reject(Exception { ExceptionCode::TypeError, "URL must match the document URL"_s });
             return;
         }
@@ -398,6 +400,8 @@ void CookieStore::set(CookieInit&& options, Ref<DeferredPromise>&& promise)
     auto domain = origin->domain();
 
     Cookie cookie;
+    cookie.created = WallTime::now().secondsSinceEpoch().milliseconds();
+
     cookie.name = WTFMove(options.name);
     cookie.value = WTFMove(options.value);
 
@@ -423,7 +427,17 @@ void CookieStore::set(CookieInit&& options, Ref<DeferredPromise>&& promise)
         }
     }
 
-    cookie.created = WallTime::now().secondsSinceEpoch().milliseconds();
+    if (cookie.name.startsWithIgnoringASCIICase("__Host-"_s)) {
+        if (!options.domain.isNull()) {
+            promise->reject(Exception { ExceptionCode::TypeError, "If the cookie name begins with \"__Host-\", the domain must not be specified."_s });
+            return;
+        }
+
+        if (!options.path.isNull() && options.path != "/"_s)  {
+            promise->reject(Exception { ExceptionCode::TypeError, "If the cookie name begins with \"__Host-\", the path must either not be specified or be \"/\"."_s });
+            return;
+        }
+    }
 
     cookie.domain = options.domain.isNull() ? domain : options.domain;
     if (!cookie.domain.isNull()) {
@@ -440,6 +454,11 @@ void CookieStore::set(CookieInit&& options, Ref<DeferredPromise>&& promise)
         // FIXME: <rdar://85515842> Obtain the encoded length without allocating and encoding.
         if (cookie.domain.utf8().length() > maximumAttributeValueSize) {
             promise->reject(Exception { ExceptionCode::TypeError, makeString("The size of the domain must not be greater than "_s, maximumAttributeValueSize, " bytes"_s) });
+            return;
+        }
+
+        if (PublicSuffixStore::singleton().isPublicSuffix(cookie.domain)) {
+            promise->reject(Exception { ExceptionCode::TypeError, "The domain must not be a public suffix"_s });
             return;
         }
 
@@ -467,8 +486,21 @@ void CookieStore::set(CookieInit&& options, Ref<DeferredPromise>&& promise)
         }
     }
 
-    if (options.expires)
-        cookie.expires = *options.expires;
+    if (options.expires) {
+        // When this cookie is converted to an NSHTTPCookie, the creation and expiration
+        // times will first be converted to seconds and then CFNetwork will floor these times.
+        // If the creation and expiration differ by less than 1 second, flooring them may
+        // reduce the difference to 0 seconds. This can cause the onchange event to wrongly
+        // fire as a deletion instead of a change. In such cases, account for this flooring by
+        // adding 1 second to the expiration.
+
+        auto expires = *options.expires;
+        bool equalAfterConversion = floor(expires / 1000.0) == floor(cookie.created / 1000.0);
+        if (equalAfterConversion && (expires > cookie.created))
+            expires += 1000.0;
+
+        cookie.expires = expires;
+    }
 
     switch (options.sameSite) {
     case CookieSameSite::Strict:

@@ -28,6 +28,7 @@
 #include "DrawingAreaInfo.h"
 #include "FrameTreeCreationParameters.h"
 #include "LayerTreeContext.h"
+#include "ProvisionalFrameCreationParameters.h"
 #include "SandboxExtension.h"
 #include "SessionState.h"
 #include "UserContentControllerParameters.h"
@@ -145,6 +146,9 @@ struct WebPageCreationParameters {
     bool canRunModal { false };
 
     float deviceScaleFactor { 0 };
+#if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
+    float intrinsicDeviceScaleFactor { 0 };
+#endif
     float viewScaleFactor { 0 };
 
     double textZoomFactor { 1 };
@@ -323,6 +327,7 @@ struct WebPageCreationParameters {
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
 
     std::optional<RemotePageParameters> remotePageParameters { };
+    std::optional<ProvisionalFrameCreationParameters> provisionalFrameCreationParameters { };
     WebCore::FrameIdentifier mainFrameIdentifier;
     String openedMainFrameName;
     std::optional<WebCore::FrameIdentifier> mainFrameOpenerIdentifier { };
@@ -350,6 +355,10 @@ struct WebPageCreationParameters {
 
 #if HAVE(AUDIT_TOKEN)
     std::optional<CoreIPCAuditToken> presentingApplicationAuditToken;
+#endif
+
+#if PLATFORM(COCOA)
+    String presentingApplicationBundleIdentifier;
 #endif
 };
 

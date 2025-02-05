@@ -224,6 +224,12 @@ void HistoryItem::setTarget(const AtomString& target)
     notifyChanged();
 }
 
+void HistoryItem::setFrameID(std::optional<FrameIdentifier> frameID)
+{
+    m_frameID = frameID;
+    notifyChanged();
+}
+
 const IntPoint& HistoryItem::scrollPosition() const
 {
     return m_scrollPosition;
@@ -354,7 +360,7 @@ const Vector<Ref<HistoryItem>>& HistoryItem::children() const
 void HistoryItem::clearChildren()
 {
     m_children.clear();
-    notifyChanged();
+    m_client->clearChildren(*this);
 }
 
 // We do same-document navigation if going to a different item and if either of the following is true:
@@ -450,14 +456,11 @@ int HistoryItem::showTree() const
 
 int HistoryItem::showTreeWithIndent(unsigned indentLevel) const
 {
-    Vector<char> prefix;
+    StringBuilder prefix;
     for (unsigned i = 0; i < indentLevel; ++i)
-        prefix.append("  "_span);
-    prefix.append('\0');
+        prefix.append("  "_s);
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    fprintf(stderr, "%s+-%s (%p)\n", prefix.data(), m_urlString.utf8().data(), this);
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+    SAFE_FPRINTF(stderr, "%s+-%s (%p)\n", prefix.toString().utf8(), m_urlString.utf8(), this);
     
     int totalSubItems = 0;
     for (unsigned i = 0; i < m_children.size(); ++i)

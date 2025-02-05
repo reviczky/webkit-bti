@@ -533,9 +533,10 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
             m_indent, "{\n"_s);
         {
             IndentationScope scope(m_indent);
-            m_stringBuilder.append(m_indent, "auto min = numeric_limits<T>::min();\n"_s,
-                m_indent, "auto max = numeric_limits<T>::max();\n"_s,
-                m_indent, "return T(clamp(value, S(min), S(max)));\n"_s);
+            m_stringBuilder.append(m_indent, "if constexpr (is_same_v<make_scalar_t<S>, half>)\n"_s);
+            m_stringBuilder.append(m_indent, "return T(select(clamp(value, max(S(numeric_limits<T>::min()), numeric_limits<S>::lowest()), numeric_limits<S>::max()), S(0), isnan(value)));\n"_s);
+            m_stringBuilder.append(m_indent, "else\n"_s);
+            m_stringBuilder.append(m_indent, "return T(select(clamp(value, S(numeric_limits<T>::min()), S(numeric_limits<T>::max() - ((128 << (!is_signed_v<T>)) - 1))), S(0), isnan(value)));\n"_s);
         }
         m_stringBuilder.append(m_indent, "}\n\n"_s);
     }
@@ -2044,7 +2045,7 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
         };
         static constexpr SortedArrayMap mappedNames { directMappings };
         if (call.isConstructor()) {
-            if (satisfies(type, Constraints::Integer) && call.arguments().size() == 1 && satisfies(call.arguments()[0].inferredType(), Constraints::Float) && !satisfies(call.arguments()[0].inferredType(), Constraints::AbstractInt)) {
+            if (call.isFloatToIntConversion()) {
                 m_stringBuilder.append("__wgslFtoi<"_s);
                 visit(type);
                 m_stringBuilder.append(">"_s);
@@ -2439,7 +2440,7 @@ void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
 
 void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
 {
-    m_stringBuilder.append("for ("_s);
+    m_stringBuilder.append("{ volatile bool __wgslEnsureForwardProgress = true; if (__wgslEnsureForwardProgress) for ("_s);
     if (auto* initializer = statement.maybeInitializer())
         visit(*initializer);
     m_stringBuilder.append(';');
@@ -2452,14 +2453,15 @@ void FunctionDefinitionWriter::visit(AST::ForStatement& statement)
         m_stringBuilder.append(' ');
         visit(*update);
     }
-    m_stringBuilder.append(") { volatile bool __wgslEnsureForwardProgress = true; "_s);
+    m_stringBuilder.append(") { __wgslEnsureForwardProgress = true; "_s);
     visit(statement.body());
+    m_stringBuilder.append('}');
     m_stringBuilder.append('}');
 }
 
 void FunctionDefinitionWriter::visit(AST::LoopStatement& statement)
 {
-    m_stringBuilder.append("while (true) { volatile bool __wgslEnsureForwardProgress = true; \n"_s);
+    m_stringBuilder.append("{ volatile bool __wgslEnsureForwardProgress = true; if (__wgslEnsureForwardProgress) while (true) { __wgslEnsureForwardProgress = true; \n"_s);
     {
         if (statement.containsSwitch())
             m_stringBuilder.append("bool __continuing = false;\n"_s, m_indent);
@@ -2474,6 +2476,7 @@ void FunctionDefinitionWriter::visit(AST::LoopStatement& statement)
             visit(*continuing);
         }
     }
+    m_stringBuilder.append(m_indent, '}');
     m_stringBuilder.append(m_indent, '}');
 }
 
@@ -2501,10 +2504,11 @@ void FunctionDefinitionWriter::visit(AST::Continuing& continuing)
 
 void FunctionDefinitionWriter::visit(AST::WhileStatement& statement)
 {
-    m_stringBuilder.append("while ("_s);
+    m_stringBuilder.append("{ volatile bool __wgslEnsureForwardProgress = true; if (__wgslEnsureForwardProgress) while ("_s);
     visit(statement.test());
-    m_stringBuilder.append(") { volatile bool __wgslEnsureForwardProgress = true; "_s);
+    m_stringBuilder.append(") { __wgslEnsureForwardProgress = true; "_s);
     visit(statement.body());
+    m_stringBuilder.append('}');
     m_stringBuilder.append('}');
 }
 

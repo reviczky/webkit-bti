@@ -156,7 +156,6 @@ Modules/highlight/Highlight.cpp
 Modules/identity/CredentialRequestCoordinator.cpp
 Modules/identity/DigitalCredential.cpp
 Modules/identity/IdentityCredentialsContainer.cpp
-Modules/identity/NavigatorIdentity.cpp
 Modules/indexeddb/IDBCursor.cpp
 Modules/indexeddb/IDBCursorWithValue.cpp
 Modules/indexeddb/IDBDatabase.cpp
@@ -780,6 +779,7 @@ bindings/js/JSShadowRealmGlobalScopeBase.cpp
 bindings/js/JSWorkerGlobalScopeCustom.cpp
 bindings/js/JSWorkerNavigatorCustom.cpp
 bindings/js/JSWorkletGlobalScopeBase.cpp
+bindings/js/JSWritableStreamCustom.cpp
 bindings/js/JSXMLDocumentCustom.cpp
 bindings/js/JSXMLHttpRequestCustom.cpp
 bindings/js/JSXPathResultCustom.cpp
@@ -938,8 +938,6 @@ css/CSSRegisteredCustomProperty.cpp
 css/CSSRule.cpp
 css/CSSRuleList.cpp
 css/CSSScopeRule.cpp
-css/CSSScrollMarginEdgeValue.cpp
-css/CSSScrollPaddingEdgeValue.cpp
 css/CSSScrollValue.cpp
 css/CSSSegmentedFontFace.cpp
 css/CSSSelector.cpp
@@ -1324,6 +1322,7 @@ dom/NodeList.cpp
 dom/NodeRareData.cpp
 dom/NodeTraversal.cpp
 dom/Observable.cpp
+dom/OverflowEvent.cpp
 dom/PageRevealEvent.cpp
 dom/PageSwapEvent.cpp
 dom/PageTransitionEvent.cpp
@@ -1359,6 +1358,7 @@ dom/SimpleRange.cpp
 dom/SimulatedClick.cpp
 dom/SlotAssignment.cpp
 dom/SpaceSplitString.cpp
+dom/SpatialBackdropSource.cpp
 dom/StaticNodeList.cpp
 dom/StaticRange.cpp
 dom/StringCallback.cpp
@@ -1764,6 +1764,8 @@ html/canvas/WebGLUtilities.cpp
 html/canvas/WebGLVertexArrayObject.cpp
 html/canvas/WebGLVertexArrayObjectBase.cpp
 html/canvas/WebGLVertexArrayObjectOES.cpp
+html/closewatcher/CloseWatcher.cpp
+html/closewatcher/CloseWatcherManager.cpp
 html/forms/FileIconLoader.cpp
 html/parser/CSSPreloadScanner.cpp
 html/parser/HTMLConstructionSite.cpp
@@ -1836,7 +1838,6 @@ inspector/InspectorAuditResourcesObject.cpp
 inspector/InspectorCanvas.cpp
 inspector/InspectorCanvasCallTracer.cpp
 inspector/InspectorController.cpp
-inspector/InspectorDatabaseResource.cpp
 inspector/InspectorFrontendAPIDispatcher.cpp
 inspector/InspectorFrontendClientLocal.cpp
 inspector/InspectorFrontendHost.cpp
@@ -1859,14 +1860,12 @@ inspector/WebInjectedScriptManager.cpp
 inspector/WorkerInspectorController.cpp
 inspector/WorkerDebugger.cpp
 inspector/agents/InspectorAnimationAgent.cpp
-inspector/agents/InspectorApplicationCacheAgent.cpp
 inspector/agents/InspectorCPUProfilerAgent.cpp
 inspector/agents/InspectorCSSAgent.cpp
 inspector/agents/InspectorCanvasAgent.cpp
 inspector/agents/InspectorDOMAgent.cpp
 inspector/agents/InspectorDOMDebuggerAgent.cpp
 inspector/agents/InspectorDOMStorageAgent.cpp
-inspector/agents/InspectorDatabaseAgent.cpp
 inspector/agents/InspectorIndexedDBAgent.cpp
 inspector/agents/InspectorLayerTreeAgent.cpp
 inspector/agents/InspectorMemoryAgent.cpp
@@ -2363,7 +2362,6 @@ platform/VideoEncoder.cpp
 platform/VideoDecoder.cpp
 platform/VideoFrame.cpp
 platform/VideoPixelFormat.cpp
-platform/WebCoreCrossThreadCopier.cpp
 platform/WebCorePersistentCoders.cpp
 platform/Widget.cpp
 platform/animation/AcceleratedEffect.cpp
@@ -2464,6 +2462,7 @@ platform/graphics/FloatPolygon.cpp
 platform/graphics/FloatQuad.cpp
 platform/graphics/FloatRect.cpp
 platform/graphics/FloatRoundedRect.cpp
+platform/graphics/FloatSegment.cpp
 platform/graphics/FloatSize.cpp
 platform/graphics/Font.cpp
 platform/graphics/FontCache.cpp
@@ -2756,6 +2755,7 @@ platform/text/TextBoundaries.cpp
 platform/text/TextFlags.cpp
 platform/text/TextSpacing.cpp
 platform/text/UnicodeBidi.cpp
+platform/text/UnicodeHelpers.cpp
 platform/video-codecs/BitReader.cpp
 platform/xr/openxr/OpenXRInput.cpp
 platform/xr/openxr/OpenXRInputSource.cpp
@@ -3168,6 +3168,7 @@ style/values/images/StyleGradient.cpp
 style/values/primitives/StyleLengthResolution.cpp
 style/values/primitives/StylePosition.cpp
 style/values/primitives/StylePrimitiveNumericTypes+Conversions.cpp
+style/values/primitives/StyleUnevaluatedCalculation.cpp
 style/values/scroll-snap/StyleScrollMargin.cpp
 style/values/scroll-snap/StyleScrollPadding.cpp
 style/values/shapes/StyleBasicShape.cpp
@@ -3635,6 +3636,7 @@ JSClipboard.cpp
 JSClipboardEvent.cpp
 JSClipboardItem.cpp
 JSCloseEvent.cpp
+JSCloseWatcher.cpp
 JSColorGamut.cpp
 JSCommandEvent.cpp
 JSCommandLineAPIHost.cpp
@@ -4273,6 +4275,7 @@ JSOscillatorType.cpp
 JSOverSampleType.cpp
 JSOverconstrainedError.cpp
 JSOverconstrainedErrorEvent.cpp
+JSOverflowEvent.cpp
 JSPageRevealEvent.cpp
 JSPageSwapEvent.cpp
 JSPageTransitionEvent.cpp

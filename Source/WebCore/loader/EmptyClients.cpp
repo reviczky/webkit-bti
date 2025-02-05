@@ -41,6 +41,7 @@
 #include "DOMPasteAccess.h"
 #include "DataListSuggestionPicker.h"
 #include "DatabaseProvider.h"
+#include "DateTimeChooser.h"
 #include "DiagnosticLoggingClient.h"
 #include "DisplayRefreshMonitor.h"
 #include "DisplayRefreshMonitorFactory.h"
@@ -99,10 +100,6 @@
 
 #if USE(QUICK_LOOK)
 #include "LegacyPreviewLoaderClient.h"
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-#include "DateTimeChooser.h"
 #endif
 
 namespace WebCore {
@@ -232,10 +229,10 @@ class EmptyDatabaseProvider final : public DatabaseProvider {
         ~EmptyIDBConnectionToServerDeletegate() { }
     };
 
-    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(PAL::SessionID) final
+    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(PAL::SessionID sessionID) final
     {
         static NeverDestroyed<EmptyIDBConnectionToServerDeletegate> emptyDelegate;
-        static auto& emptyConnection = IDBClient::IDBConnectionToServer::create(emptyDelegate.get()).leakRef();
+        static auto& emptyConnection = IDBClient::IDBConnectionToServer::create(emptyDelegate.get(), sessionID).leakRef();
         return emptyConnection;
     }
 };
@@ -577,23 +574,15 @@ RefPtr<ColorChooser> EmptyChromeClient::createColorChooser(ColorChooserClient&, 
     return nullptr;
 }
 
-#if ENABLE(DATALIST_ELEMENT)
-
 RefPtr<DataListSuggestionPicker> EmptyChromeClient::createDataListSuggestionPicker(DataListSuggestionsClient&)
 {
     return nullptr;
 }
 
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-
 RefPtr<DateTimeChooser> EmptyChromeClient::createDateTimeChooser(DateTimeChooserClient&)
 {
     return nullptr;
 }
-
-#endif
 
 void EmptyChromeClient::setTextIndicator(const TextIndicatorData&) const
 {
@@ -1170,6 +1159,7 @@ public:
     static Ref<EmptyHistoryItemClient> create() { return adoptRef(*new EmptyHistoryItemClient); }
 private:
     void historyItemChanged(const HistoryItem&) { }
+    void clearChildren(const HistoryItem&) const { }
 };
 
 PageConfiguration pageConfigurationWithEmptyClients(std::optional<PageIdentifier> identifier, PAL::SessionID sessionID)

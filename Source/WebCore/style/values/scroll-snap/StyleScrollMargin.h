@@ -24,19 +24,17 @@
 
 #pragma once
 
-#include "StylePrimitiveNumericTypes.h"
+#include "CSSPrimitiveNumericUnits.h"
+#include "Length.h"
+#include "StyleValueTypes.h"
 
 namespace WebCore {
 
 class CSSValue;
 class LayoutRect;
 class LayoutUnit;
+class RenderStyle;
 using LayoutBoxExtent = RectEdges<LayoutUnit>;
-
-namespace CSS {
-struct ScrollMarginEdge;
-struct ScrollMargin;
-}
 
 namespace Style {
 
@@ -44,25 +42,69 @@ class BuilderState;
 
 // <'scroll-margin-*'> = <length>
 // https://drafts.csswg.org/css-scroll-snap-1/#margin-longhands-physical
-DEFINE_TYPE_WRAPPER(ScrollMarginEdge, Length<>);
+struct ScrollMarginEdge {
+    ScrollMarginEdge(WebCore::Length&& value)
+        : m_value { WTFMove(value) }
+    {
+        RELEASE_ASSERT(m_value.isSpecified());
+    }
+
+    ScrollMarginEdge(CSS::ValueLiteral<CSS::LengthUnit::Px> pixels)
+        : m_value { pixels.value, WebCore::LengthType::Fixed }
+    {
+    }
+
+    ScrollMarginEdge(CSS::ValueLiteral<CSS::PercentageUnit::Percentage> percentage)
+        : m_value { percentage.value, WebCore::LengthType::Percent }
+    {
+    }
+
+    LayoutUnit evaluate(LayoutUnit referenceLength) const;
+    float evaluate(float referenceLength) const;
+
+    Ref<CSSValue> toCSS(const RenderStyle&) const;
+
+    bool isZero() const { return m_value.isZero(); }
+
+    bool operator==(const ScrollMarginEdge&) const = default;
+
+private:
+    WebCore::Length m_value;
+};
 
 // <'scroll-margin'> = <length>{1,4}
 // https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin
-DEFINE_TYPE_EXTENDER(ScrollMargin, SpaceSeparatedRectEdges<ScrollMarginEdge>);
+struct ScrollMargin : SpaceSeparatedRectEdges<ScrollMarginEdge> {
+    using Wrapped = SpaceSeparatedRectEdges<ScrollMarginEdge>;
+    using Wrapped::Wrapped;
+    using Wrapped::operator=;
 
-DEFINE_TYPE_MAPPING(CSS::ScrollMarginEdge, ScrollMarginEdge)
-DEFINE_TYPE_MAPPING(CSS::ScrollMargin, ScrollMargin)
+    template<size_t I> friend const auto& get(const ScrollMargin& self)
+    {
+        return get<I>(static_cast<const Wrapped&>(self));
+    }
+
+    bool operator==(const ScrollMargin&) const = default;
+};
 
 // MARK: - Conversion
 
-ScrollMarginEdge scrollMarginEdgeFromCSSValue(const CSSValue&, const BuilderState&);
+ScrollMarginEdge scrollMarginEdgeFromCSSValue(const CSSValue&, BuilderState&);
 
 // MARK: - Evaluation
+
+template<> struct Evaluation<ScrollMarginEdge> {
+    template<typename T> auto operator()(const ScrollMarginEdge& edge, T referenceLength) -> T
+    {
+        return edge.evaluate(referenceLength);
+    }
+};
+
+// MARK: - Extent
 
 LayoutBoxExtent extentForRect(const ScrollMargin&, const LayoutRect&);
 
 } // namespace Style
 } // namespace WebCore
 
-DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_WRAPPER(WebCore::Style::ScrollMarginEdge)
-DEFINE_TUPLE_LIKE_CONFORMANCE_FOR_TYPE_EXTENDER(WebCore::Style::ScrollMargin)
+DEFINE_TUPLE_LIKE_CONFORMANCE(WebCore::Style::ScrollMargin, 4)

@@ -495,11 +495,11 @@ private:
     void revealPDFDestination(PDFDestination *);
     void revealPointInPage(WebCore::FloatPoint pointInPDFPageSpace, PDFDocumentLayout::PageIndex);
     void revealRectInPage(const WebCore::FloatRect& rectInPDFPageSpace, PDFDocumentLayout::PageIndex);
-    void revealPage(PDFDocumentLayout::PageIndex);
+    bool revealPage(PDFDocumentLayout::PageIndex);
     void revealFragmentIfNeeded();
 
     // Only use this if some other function has ensured that the correct page is visible.
-    void scrollToPointInContentsSpace(WebCore::FloatPoint);
+    bool scrollToPointInContentsSpace(WebCore::FloatPoint);
 
     OptionSet<WebCore::TiledBackingScrollability> computeScrollability() const;
 
@@ -604,7 +604,7 @@ private:
     PDFSelection *selectionBetweenPoints(WebCore::FloatPoint fromPoint, PDFPage *fromPage, WebCore::FloatPoint toPoint, PDFPage *toPage) const;
 #endif
 
-    static PageAndPoint selectionCaretPointInPage(PDFSelection *, SelectionEndpoint);
+    PageAndPoint selectionCaretPointInPage(PDFSelection *, SelectionEndpoint) const;
     PageAndPoint selectionCaretPointInPage(SelectionEndpoint) const;
     void resetInitialSelection();
 #endif // PLATFORM(IOS_FAMILY)

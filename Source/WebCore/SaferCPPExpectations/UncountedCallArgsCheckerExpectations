@@ -437,7 +437,6 @@ css/CSSCounterValue.cpp
 css/CSSCounterValue.h
 css/CSSCrossfadeValue.cpp
 css/CSSCursorImageValue.cpp
-css/CSSCustomPropertyValue.cpp
 css/CSSFilterImageValue.cpp
 css/CSSFontFace.cpp
 css/CSSFontFaceRule.cpp
@@ -448,7 +447,6 @@ css/CSSFontPaletteValuesOverrideColorsValue.cpp
 css/CSSFontSelector.cpp
 css/CSSFontStyleRangeValue.cpp
 css/CSSFontStyleRangeValue.h
-css/CSSFontStyleWithAngleValue.cpp
 css/CSSFontValue.cpp
 css/CSSFontVariationValue.cpp
 css/CSSGridIntegerRepeatValue.cpp
@@ -893,14 +891,12 @@ inspector/WorkerDebugger.cpp
 inspector/WorkerInspectorController.cpp
 inspector/WorkerToPageFrontendChannel.h
 inspector/agents/InspectorAnimationAgent.cpp
-inspector/agents/InspectorApplicationCacheAgent.cpp
 inspector/agents/InspectorCPUProfilerAgent.cpp
 inspector/agents/InspectorCSSAgent.cpp
 inspector/agents/InspectorCanvasAgent.cpp
 inspector/agents/InspectorDOMAgent.cpp
 inspector/agents/InspectorDOMDebuggerAgent.cpp
 inspector/agents/InspectorDOMStorageAgent.cpp
-inspector/agents/InspectorDatabaseAgent.cpp
 inspector/agents/InspectorIndexedDBAgent.cpp
 inspector/agents/InspectorLayerTreeAgent.cpp
 inspector/agents/InspectorMemoryAgent.cpp
@@ -1007,7 +1003,6 @@ page/NavigationTransition.cpp
 page/Navigator.cpp
 page/NavigatorLoginStatus.cpp
 page/OpportunisticTaskScheduler.cpp
-page/Page.cpp
 page/PageConsoleClient.cpp
 page/PageOverlay.cpp
 page/PageOverlayController.cpp
@@ -1142,7 +1137,6 @@ platform/graphics/avfoundation/objc/CDMInstanceFairPlayStreamingAVFObjC.mm
 platform/graphics/avfoundation/objc/CDMSessionAVContentKeySession.mm
 platform/graphics/avfoundation/objc/ImageDecoderAVFObjC.mm
 platform/graphics/avfoundation/objc/LocalSampleBufferDisplayLayer.mm
-platform/graphics/avfoundation/objc/MediaPlayerPrivateAVFoundationObjC.mm
 platform/graphics/avfoundation/objc/MediaPlayerPrivateMediaSourceAVFObjC.mm
 platform/graphics/avfoundation/objc/MediaPlayerPrivateMediaStreamAVFObjC.mm
 platform/graphics/avfoundation/objc/MediaSourcePrivateAVFObjC.mm
@@ -1257,9 +1251,7 @@ platform/network/BlobResourceHandle.cpp
 platform/network/DataURLDecoder.cpp
 platform/network/FormData.cpp
 platform/network/NetworkLoadMetrics.cpp
-platform/network/ResourceRequestBase.cpp
 platform/network/SynchronousLoaderClient.cpp
-platform/network/cocoa/WebCoreNSURLSession.mm
 platform/network/mac/AuthenticationMac.mm
 platform/network/mac/ResourceHandleMac.mm
 platform/network/mac/WebCoreResourceHandleAsOperationQueueDelegate.mm

@@ -500,8 +500,6 @@ public:
 
     virtual void setContentsNeedsDisplay() { };
 
-    virtual void markDamageRectsUnreliable() { };
-
     // The tile phase is relative to the GraphicsLayer bounds.
     virtual void setContentsTilePhase(const FloatSize& p) { m_contentsTilePhase = p; }
     FloatSize contentsTilePhase() const { return m_contentsTilePhase; }
@@ -615,7 +613,7 @@ public:
     virtual void setShowRepaintCounter(bool show) { m_showRepaintCounter = show; }
     bool isShowingRepaintCounter() const { return m_showRepaintCounter; }
 
-#if HAVE(HDR_SUPPORT)
+#if ENABLE(HDR_FOR_IMAGES)
     virtual void setHDRForImagesEnabled(bool b) { m_hdrForImagesEnabled = b; }
     bool hdrForImagesEnabled() const { return m_hdrForImagesEnabled; }
 #endif
@@ -848,7 +846,7 @@ protected:
     bool m_isDescendentOfSeparatedPortal : 1;
 #endif
 #endif
-#if HAVE(HDR_SUPPORT)
+#if ENABLE(HDR_FOR_IMAGES)
     bool m_hdrForImagesEnabled : 1;
 #endif
 

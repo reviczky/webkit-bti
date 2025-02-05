@@ -142,14 +142,10 @@ class EmptyChromeClient : public ChromeClient {
 
     RefPtr<ColorChooser> createColorChooser(ColorChooserClient&, const Color&) final;
 
-#if ENABLE(DATALIST_ELEMENT)
     RefPtr<DataListSuggestionPicker> createDataListSuggestionPicker(DataListSuggestionsClient&) final;
     bool canShowDataListSuggestionLabels() const final { return false; }
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     RefPtr<DateTimeChooser> createDateTimeChooser(DateTimeChooserClient&) final;
-#endif
 
     void setTextIndicator(const TextIndicatorData&) const final;
 

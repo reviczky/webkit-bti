@@ -766,7 +766,15 @@ bool RenderLayerCompositor::shouldDumpPropertyForLayer(const GraphicsLayer* laye
     return true;
 }
 
-#if HAVE(HDR_SUPPORT)
+bool RenderLayerCompositor::backdropRootIsOpaque(const GraphicsLayer* layer) const
+{
+    if (layer != rootGraphicsLayer())
+        return false;
+
+    return !viewHasTransparentBackground();
+}
+
+#if ENABLE(HDR_FOR_IMAGES)
 bool RenderLayerCompositor::hdrForImagesEnabled() const
 {
     return m_renderView.settings().hdrForImagesEnabled();
@@ -2434,7 +2442,7 @@ bool RenderLayerCompositor::updateBacking(RenderLayer& layer, RequiresCompositin
     // If a fixed position layer gained/lost a backing or the reason not compositing it changed,
     // the scrolling coordinator needs to recalculate whether it can do fast scrolling.
     if (layer.renderer().isFixedPositioned()) {
-        if (layer.viewportConstrainedNotCompositedReason() != queryData.nonCompositedForPositionReason) {
+        if (layer.viewportConstrainedNotCompositedReason() != queryData.nonCompositedForPositionReason  && !queryData.reevaluateAfterLayout) {
             layer.setViewportConstrainedNotCompositedReason(queryData.nonCompositedForPositionReason);
             layerChanged = true;
         }

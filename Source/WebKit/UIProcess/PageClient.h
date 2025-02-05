@@ -30,7 +30,6 @@
 #include "PDFPluginIdentifier.h"
 #include "PasteboardAccessIntent.h"
 #include "SameDocumentNavigationType.h"
-#include "WebDateTimePicker.h"
 #include "WebPopupMenuProxy.h"
 #include "WindowKind.h"
 #include <WebCore/ActivityState.h>
@@ -187,6 +186,8 @@ class ViewSnapshot;
 class WebBackForwardListItem;
 class WebColorPicker;
 class WebContextMenuProxy;
+class WebDataListSuggestionsDropdown;
+class WebDateTimePicker;
 class WebEditCommandProxy;
 class WebFrameProxy;
 class WebOpenPanelResultListenerProxy;
@@ -205,14 +206,6 @@ struct WebHitTestResultData;
 
 #if ENABLE(TOUCH_EVENTS)
 class NativeWebTouchEvent;
-#endif
-
-#if ENABLE(DATALIST_ELEMENT)
-class WebDataListSuggestionsDropdown;
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
-class WebDateTimePicker;
 #endif
 
 #if ENABLE(FULLSCREEN_API)
@@ -446,13 +439,9 @@ public:
 
     virtual RefPtr<WebColorPicker> createColorPicker(WebPageProxy&, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&) = 0;
 
-#if ENABLE(DATALIST_ELEMENT)
     virtual RefPtr<WebDataListSuggestionsDropdown> createDataListSuggestionsDropdown(WebPageProxy&) = 0;
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     virtual RefPtr<WebDateTimePicker> createDateTimePicker(WebPageProxy&) = 0;
-#endif
 
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     virtual Ref<WebCore::ValidationBubble> createValidationBubble(const String& message, const WebCore::ValidationBubble::Settings&) = 0;
@@ -605,6 +594,7 @@ public:
     // Auxiliary Client Creation
 #if ENABLE(FULLSCREEN_API)
     virtual WebFullScreenManagerProxyClient& fullScreenManagerProxyClient() = 0;
+    virtual void setFullScreenClientForTesting(std::unique_ptr<WebFullScreenManagerProxyClient>&&) = 0;
 #endif
 
     // Custom representations.
@@ -627,6 +617,10 @@ public:
 
     virtual void themeColorWillChange() { }
     virtual void themeColorDidChange() { }
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    virtual void spatialBackdropSourceWillChange() { }
+    virtual void spatialBackdropSourceDidChange() { }
+#endif
     virtual void underPageBackgroundColorWillChange() { }
     virtual void underPageBackgroundColorDidChange() { }
     virtual void sampledPageTopColorWillChange() { }

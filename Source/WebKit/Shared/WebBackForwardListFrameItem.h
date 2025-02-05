@@ -61,11 +61,13 @@ public:
     WebBackForwardListFrameItem& mainFrame();
     Ref<WebBackForwardListFrameItem> protectedMainFrame();
     WebBackForwardListFrameItem* childItemForFrameID(WebCore::FrameIdentifier);
+    RefPtr<WebBackForwardListFrameItem> protectedChildItemForFrameID(WebCore::FrameIdentifier);
 
     WebBackForwardListItem* backForwardListItem() const;
     RefPtr<WebBackForwardListItem> protectedBackForwardListItem() const;
 
     void setChild(Ref<FrameState>&&);
+    void clearChildren() { m_children.clear(); }
 
     void setWasRestoredFromSession();
 

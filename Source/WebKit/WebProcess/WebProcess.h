@@ -401,10 +401,13 @@ public:
 #if ENABLE(NOTIFY_BLOCKING)
     void postNotification(const String& message, std::optional<uint64_t> state);
     void postObserverNotification(const String& message);
+    void getNotifyStateForTesting(const String&, CompletionHandler<void(std::optional<uint64_t>)>&&);
+    void setNotifyState(const String&, uint64_t state);
 #endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
     void setResourceMonitorContentRuleList(WebCompiledContentRuleListData&&);
+    void setResourceMonitorContentRuleListAsync(WebCompiledContentRuleListData&&, CompletionHandler<void()>&&);
 #endif
 
     bool areAllPagesThrottleable() const;
@@ -489,10 +492,6 @@ public:
 
 #if PLATFORM(COCOA)
     void registerAdditionalFonts(AdditionalFonts&&);
-#endif
-
-#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
-    bool isOptInCookiePartitioningEnabled() { return m_isOptInCookiePartitioningEnabled; }
 #endif
 
 private:
@@ -901,9 +900,6 @@ private:
 #if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
     bool m_prefersNonBlinkingCursor { false };
 #endif
-#if HAVE(ALLOW_ONLY_PARTITIONED_COOKIES)
-    bool m_isOptInCookiePartitioningEnabled { false };
-#endif
 
     String m_mediaKeysStorageDirectory;
     FileSystem::Salt m_mediaKeysStorageSalt;
@@ -912,6 +908,10 @@ private:
     HashSet<WebCore::RegistrableDomain> m_domainsWithStorageAccessQuirks;
     std::unique_ptr<ScriptTelemetryFilter> m_scriptTelemetryFilter;
     bool m_mediaPlaybackEnabled { false };
+
+#if ENABLE(NOTIFY_BLOCKING)
+    HashMap<String, int> m_notifyTokens;
+#endif
 };
 
 } // namespace WebKit

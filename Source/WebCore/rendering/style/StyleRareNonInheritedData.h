@@ -152,8 +152,8 @@ public:
     // Only meaningful when `hasClip` is true.
     LengthBox clip;
 
-    Style::ScrollMargin scrollMargin { Style::ScrollMarginEdge { 0_css_px } };
-    Style::ScrollPadding scrollPadding { Style::ScrollPaddingEdge { CSS::Keyword::Auto { } } };
+    Style::ScrollMargin scrollMargin { 0_css_px };
+    Style::ScrollPadding scrollPadding { CSS::Keyword::Auto { } };
 
     CounterDirectiveMap counterDirectives;
 

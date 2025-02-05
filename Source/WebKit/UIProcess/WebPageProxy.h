@@ -34,6 +34,7 @@
 #include <WebCore/NowPlayingMetadataObserver.h>
 #include <WebCore/ProcessSyncData.h>
 #include <WebCore/SnapshotIdentifier.h>
+#include <WebCore/SpatialBackdropSource.h>
 #include <pal/HysteresisActivity.h>
 #include <wtf/ApproximateTime.h>
 #include <wtf/CheckedRef.h>
@@ -474,6 +475,9 @@ class WebExtensionController;
 class WebFramePolicyListenerProxy;
 class WebFrameProxy;
 class WebFullScreenManagerProxy;
+#if ENABLE(FULLSCREEN_API)
+class WebFullScreenManagerProxyClient;
+#endif
 class WebInspectorUIProxy;
 class WebKeyboardEvent;
 class WebMouseEvent;
@@ -625,7 +629,6 @@ public:
     static void forMostVisibleWebPageIfAny(PAL::SessionID, const WebCore::SecurityOriginData&, CompletionHandler<void(WebPageProxy*)>&&);
 
     const API::PageConfiguration& configuration() const { return m_configuration.get(); }
-    Ref<API::PageConfiguration> protectedConfiguration() const;
 
     using Identifier = WebPageProxyIdentifier;
 
@@ -742,6 +745,7 @@ public:
 
 #if ENABLE(FULLSCREEN_API)
     WebFullScreenManagerProxy* fullScreenManager();
+    void setFullScreenClientForTesting(std::unique_ptr<WebKit::WebFullScreenManagerProxyClient>&&);
 
     API::FullscreenClient& fullscreenClient() const { return *m_fullscreenClient; }
     void setFullscreenClient(std::unique_ptr<API::FullscreenClient>&&);
@@ -917,6 +921,10 @@ public:
 
     // Corresponds to the web content's `<meta name="theme-color">` or application manifest's `"theme_color"`.
     WebCore::Color themeColor() const;
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    std::optional<WebCore::SpatialBackdropSource> spatialBackdropSource() const;
+#endif
 
     WebCore::Color underlayColor() const;
     void setUnderlayColor(const WebCore::Color&);
@@ -1375,6 +1383,9 @@ public:
 #endif
     
     float deviceScaleFactor() const;
+#if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
+    float intrinsicDeviceScaleFactor() const { return m_intrinsicDeviceScaleFactor; }
+#endif
     void setIntrinsicDeviceScaleFactor(float);
     std::optional<float> customDeviceScaleFactor() const { return m_customDeviceScaleFactor; }
     void setCustomDeviceScaleFactor(float, CompletionHandler<void()>&&);
@@ -2087,15 +2098,11 @@ public:
 
     WebCore::IntRect syncRootViewToScreen(const WebCore::IntRect& viewRect);
 
-#if ENABLE(DATALIST_ELEMENT)
     void didSelectOption(const String&);
     void didCloseSuggestions();
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     void didChooseDate(StringView);
     void didEndDateTimePicker();
-#endif
 
     void updateCurrentModifierState();
 
@@ -2347,6 +2354,9 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS)
+#if PLATFORM(MAC)
+    bool shouldEnableWritingToolsRequestedTool(WebCore::WritingTools::RequestedTool) const;
+#endif
 #if ENABLE(CONTEXT_MENUS)
     bool canHandleContextMenuWritingTools() const;
     void handleContextMenuWritingTools(WebCore::WritingTools::RequestedTool);
@@ -2511,7 +2521,7 @@ public:
 
     void didEndWritingToolsSession(const WebCore::WritingTools::Session&, bool accepted);
 
-    void compositionSessionDidReceiveTextWithReplacementRange(const WebCore::WritingTools::Session&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebCore::WritingTools::Context&, bool finished);
+    void compositionSessionDidReceiveTextWithReplacementRange(const WebCore::WritingTools::Session&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebCore::WritingTools::Context&, bool finished, CompletionHandler<void()>&&);
 
     void writingToolsSessionDidReceiveAction(const WebCore::WritingTools::Session&, WebCore::WritingTools::Action);
 
@@ -2572,7 +2582,7 @@ public:
     template<typename M> IPC::ConnectionSendSyncResult<M> sendSyncToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
     template<typename M> IPC::ConnectionSendSyncResult<M> sendSyncToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&, const IPC::Timeout&);
 
-    void forEachWebContentProcess(Function<void(WebProcessProxy&, WebCore::PageIdentifier)>&&);
+    void forEachWebContentProcess(NOESCAPE Function<void(WebProcessProxy&, WebCore::PageIdentifier)>&&);
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
     void setDefaultSpatialTrackingLabel(const String&);
@@ -2679,7 +2689,7 @@ private:
     void requestPointerLock();
 #endif
 
-    void didCreateSubframe(IPC::Connection&, WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, const String& frameName, WebCore::SandboxFlags, WebCore::ScrollbarMode);
+    void didCreateSubframe(WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, const String& frameName, WebCore::SandboxFlags, WebCore::ScrollbarMode);
 
     void didStartProvisionalLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, std::optional<WebCore::NavigationIdentifier>, URL&&, URL&& unreachableURL, const UserData&, WallTime);
     void didReceiveServerRedirectForProvisionalLoadForFrame(WebCore::FrameIdentifier, std::optional<WebCore::NavigationIdentifier>, WebCore::ResourceRequest&&, const UserData&);
@@ -2794,6 +2804,7 @@ private:
 
 #if ENABLE(MEDIA_STREAM)
     UserMediaPermissionRequestManagerProxy& userMediaPermissionRequestManager();
+    Ref<UserMediaPermissionRequestManagerProxy> protectedUserMediaPermissionRequestManager();
     void requestUserMediaPermissionForFrame(IPC::Connection&, WebCore::UserMediaRequestIdentifier, WebCore::FrameIdentifier, const WebCore::SecurityOriginData& userMediaDocumentOriginIdentifier, const WebCore::SecurityOriginData& topLevelDocumentOriginIdentifier, WebCore::MediaStreamRequest&&);
     void enumerateMediaDevicesForFrame(IPC::Connection&, WebCore::FrameIdentifier, const WebCore::SecurityOriginData& userMediaDocumentOriginData, const WebCore::SecurityOriginData& topLevelDocumentOriginData, CompletionHandler<void(const Vector<WebCore::CaptureDeviceWithCapabilities>&, WebCore::MediaDeviceHashSalts&&)>&&);
     void beginMonitoringCaptureDevices();
@@ -2815,6 +2826,9 @@ private:
     void themeColorChanged(const WebCore::Color&);
     void pageExtendedBackgroundColorDidChange(const WebCore::Color&);
     void sampledPageTopColorChanged(const WebCore::Color&);
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    void spatialBackdropSourceChanged(std::optional<WebCore::SpatialBackdropSource>&&);
+#endif
     WebCore::Color platformUnderPageBackgroundColor() const;
     void setCanShortCircuitHorizontalWheelEvents(bool canShortCircuitHorizontalWheelEvents) { m_canShortCircuitHorizontalWheelEvents = canShortCircuitHorizontalWheelEvents; }
 
@@ -2839,16 +2853,12 @@ private:
 
     void showColorPicker(IPC::Connection&, const WebCore::Color& initialColor, const WebCore::IntRect&, ColorControlSupportsAlpha, Vector<WebCore::Color>&&);
 
-#if ENABLE(DATALIST_ELEMENT)
     void showDataListSuggestions(WebCore::DataListSuggestionInformation&&);
     void handleKeydownInDataList(const String&);
     void endDataListSuggestions();
-#endif
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     void showDateTimePicker(WebCore::DateTimeChooserParameters&&);
     void endDateTimePicker();
-#endif
 
     void closeOverlayedViews();
 
@@ -2866,6 +2876,7 @@ private:
     // Back/Forward list management
     void backForwardAddItem(IPC::Connection&, Ref<FrameState>&&);
     void backForwardSetChildItem(WebCore::BackForwardFrameItemIdentifier, Ref<FrameState>&&);
+    void backForwardClearChildren(WebCore::BackForwardItemIdentifier, WebCore::BackForwardFrameItemIdentifier);
     void backForwardGoToItem(IPC::Connection&, WebCore::BackForwardItemIdentifier, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void backForwardListContainsItem(WebCore::BackForwardItemIdentifier, CompletionHandler<void(bool)>&&);
     void backForwardItemAtIndex(int32_t index, WebCore::FrameIdentifier, CompletionHandler<void(RefPtr<FrameState>&&)>&&);
@@ -3290,12 +3301,16 @@ private:
     void shouldOffloadIFrameForHost(const String& host, CompletionHandler<void(bool)>&&) const;
 #endif
 
+#if PLATFORM(COCOA)
+    String presentingApplicationBundleIdentifier() const;
+#endif
+
     UniqueRef<Internals> m_internals;
     Identifier m_identifier;
     WebCore::PageIdentifier m_webPageID;
 
     WeakPtr<PageClient> m_pageClient;
-    Ref<API::PageConfiguration> m_configuration;
+    const Ref<API::PageConfiguration> m_configuration;
 
     std::unique_ptr<API::LoaderClient> m_loaderClient;
     std::unique_ptr<API::PolicyClient> m_policyClient;
@@ -3530,9 +3545,7 @@ private:
     uint64_t m_handlingPreventableTouchEndCount { 0 };
     EventPreventionState m_touchMovePreventionState { EventPreventionState::None };
 
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
     RefPtr<WebDateTimePicker> m_dateTimePicker;
-#endif
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     RefPtr<WebCore::ValidationBubble> m_validationBubble;
 #endif

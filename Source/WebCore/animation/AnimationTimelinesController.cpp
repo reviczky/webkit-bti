@@ -27,6 +27,7 @@
 #include "AnimationTimelinesController.h"
 
 #include "AnimationEventBase.h"
+#include "CSSAnimation.h"
 #include "CSSTransition.h"
 #include "Document.h"
 #include "DocumentTimeline.h"
@@ -82,10 +83,8 @@ void AnimationTimelinesController::detachFromDocument()
 {
     m_currentTimeClearingTaskCancellationGroup.cancel();
 
-    while (!m_timelines.isEmptyIgnoringNullReferences()) {
-        Ref timeline = *m_timelines.begin();
+    while (RefPtr timeline = m_timelines.takeAny())
         timeline->detachFromDocument();
-    }
 }
 
 void AnimationTimelinesController::updateAnimationsAndSendEvents(ReducedResolutionSeconds timestamp)
@@ -299,9 +298,13 @@ void AnimationTimelinesController::cacheCurrentTime(ReducedResolutionSeconds new
         CancellableTask task(m_currentTimeClearingTaskCancellationGroup, std::bind(&AnimationTimelinesController::maybeClearCachedCurrentTime, this));
         m_document->eventLoop().queueTask(TaskSource::InternalAsyncTask, WTFMove(task));
     }
-    // We extent the associated Document's lifecycle until the VM became idle since the AnimationTimelinesController
-    // is owned by the Document.
-    m_document->vm().whenIdle([this, protectedDocument = protectedDocument()]() {
+
+    // AnimationTimelinesController is owned by Document.
+    m_document->vm().whenIdle([this, weakDocument = WeakPtr<Document, WeakPtrImplWithEventTargetData> { m_document }]() {
+        RefPtr document = weakDocument.get();
+        if (!document)
+            return;
+
         m_waitingOnVMIdle = false;
         maybeClearCachedCurrentTime();
     });
@@ -423,15 +426,19 @@ void AnimationTimelinesController::updateTimelineForTimelineScope(const Ref<Scro
     }
 }
 
-void AnimationTimelinesController::registerNamedScrollTimeline(const AtomString& name, const Element& source, ScrollAxis axis)
+void AnimationTimelinesController::registerNamedScrollTimeline(const AtomString& name, Element& source, ScrollAxis axis)
 {
+    LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::registerNamedScrollTimeline: " << name << " source: " << source);
+
     auto& timelines = timelinesForName(name);
 
     auto existingTimelineIndex = timelines.findIf([&](auto& timeline) {
         return !is<ViewTimeline>(timeline) && timeline->source() == &source;
     });
 
-    if (existingTimelineIndex != notFound) {
+    auto hasExistingTimeline = existingTimelineIndex != notFound;
+
+    if (hasExistingTimeline) {
         Ref existingScrollTimeline = timelines[existingTimelineIndex].get();
         existingScrollTimeline->setAxis(axis);
     } else {
@@ -441,6 +448,32 @@ void AnimationTimelinesController::registerNamedScrollTimeline(const AtomString&
         timelines.append(WTFMove(newScrollTimeline));
     }
     attachPendingOperations();
+
+    if (!hasExistingTimeline)
+        updateCSSAnimationsAssociatedWithNamedTimeline(name);
+}
+
+void AnimationTimelinesController::updateCSSAnimationsAssociatedWithNamedTimeline(const AtomString& name)
+{
+    // First, we need to gather all CSS Animations attached to existing timelines
+    // with the specified name. We do this prior to updating animation-to-timeline
+    // relationship because this could mutate the timeline's animations list.
+    HashSet<Ref<CSSAnimation>> cssAnimationsWithMatchingTimelineName;
+    for (auto& timeline : timelinesForName(name)) {
+        for (auto& animation : timeline->relevantAnimations()) {
+            if (RefPtr cssAnimation = dynamicDowncast<CSSAnimation>(animation.get())) {
+                if (!cssAnimation->owningElement())
+                    continue;
+                if (auto* timelineName = std::get_if<AtomString>(&cssAnimation->backingAnimation().timeline())) {
+                    if (*timelineName == name)
+                        cssAnimationsWithMatchingTimelineName.add(*cssAnimation);
+                }
+            }
+        }
+    }
+
+    for (auto& cssAnimation : cssAnimationsWithMatchingTimelineName)
+        cssAnimation->syncStyleOriginatedTimeline();
 }
 
 void AnimationTimelinesController::attachPendingOperations()
@@ -454,8 +487,10 @@ void AnimationTimelinesController::attachPendingOperations()
     }
 }
 
-void AnimationTimelinesController::registerNamedViewTimeline(const AtomString& name, const Element& subject, ScrollAxis axis, ViewTimelineInsets&& insets)
+void AnimationTimelinesController::registerNamedViewTimeline(const AtomString& name, Element& subject, ScrollAxis axis, ViewTimelineInsets&& insets)
 {
+    LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::registerNamedViewTimeline: " << name << " subject: " << subject);
+
     auto& timelines = timelinesForName(name);
 
     auto existingTimelineIndex = timelines.findIf([&](auto& timeline) {
@@ -464,7 +499,9 @@ void AnimationTimelinesController::registerNamedViewTimeline(const AtomString& n
         return false;
     });
 
-    if (existingTimelineIndex != notFound) {
+    auto hasExistingTimeline = existingTimelineIndex != notFound;
+
+    if (hasExistingTimeline) {
         Ref existingViewTimeline = downcast<ViewTimeline>(timelines[existingTimelineIndex].get());
         existingViewTimeline->setAxis(axis);
         existingViewTimeline->setInsets(WTFMove(insets));
@@ -475,10 +512,15 @@ void AnimationTimelinesController::registerNamedViewTimeline(const AtomString& n
         timelines.append(WTFMove(newViewTimeline));
     }
     attachPendingOperations();
+
+    if (!hasExistingTimeline)
+        updateCSSAnimationsAssociatedWithNamedTimeline(name);
 }
 
 void AnimationTimelinesController::unregisterNamedTimeline(const AtomString& name, const Element& element)
 {
+    LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::unregisterNamedTimeline: " << name << " element: " << element);
+
     auto it = m_nameToTimelineMap.find(name);
     if (it == m_nameToTimelineMap.end())
         return;
@@ -507,6 +549,8 @@ void AnimationTimelinesController::unregisterNamedTimeline(const AtomString& nam
 
 void AnimationTimelinesController::setTimelineForName(const AtomString& name, const Element& element, WebAnimation& animation)
 {
+    LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::setTimelineForName: " << name << " element: " << element);
+
     auto it = m_nameToTimelineMap.find(name);
     if (it == m_nameToTimelineMap.end()) {
         m_pendingAttachOperations.append({ element, name, animation });
@@ -515,6 +559,7 @@ void AnimationTimelinesController::setTimelineForName(const AtomString& name, co
 
     auto& timelines = it->value;
     if (RefPtr timeline = determineTimelineForElement(timelines, element, relatedTimelineScopeElements(name))) {
+        LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::setTimelineForName: " << name << " element: " << element << " attaching to timeline of element: " << *originatingElement(*timeline));
         animation.setTimeline(WTFMove(timeline));
         return;
     }
@@ -577,6 +622,8 @@ bool AnimationTimelinesController::isPendingTimelineAttachment(const WebAnimatio
 
 void AnimationTimelinesController::unregisterNamedTimelinesAssociatedWithElement(const Element& element)
 {
+    LOG_WITH_STREAM(Animations, stream << "AnimationTimelinesController::unregisterNamedTimelinesAssociatedWithElement element: " << element);
+
     UncheckedKeyHashSet<AtomString> namesToClear;
 
     for (auto& entry : m_nameToTimelineMap) {

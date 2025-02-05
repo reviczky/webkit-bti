@@ -510,29 +510,26 @@ Ref<const TypeDefinition> TypeDefinition::replacePlaceholders(TypeIndex projecte
 //  https://github.com/WebAssembly/gc/blob/main/proposals/gc/MVP.md#auxiliary-definitions
 //
 // It unrolls a potentially recursive type to a Subtype or structural type.
-const TypeDefinition& TypeDefinition::unroll() const
+const TypeDefinition& TypeDefinition::unrollSlow() const
 {
-    if (is<Projection>()) {
-        const Projection& projection = *as<Projection>();
-        const TypeDefinition& projectee = TypeInformation::get(projection.recursionGroup());
+    ASSERT(is<Projection>());
+    const Projection& projection = *as<Projection>();
+    const TypeDefinition& projectee = TypeInformation::get(projection.recursionGroup());
 
-        const RecursionGroup& recursionGroup = *projectee.as<RecursionGroup>();
-        const TypeDefinition& underlyingType = TypeInformation::get(recursionGroup.type(projection.index()));
+    const RecursionGroup& recursionGroup = *projectee.as<RecursionGroup>();
+    const TypeDefinition& underlyingType = TypeInformation::get(recursionGroup.type(projection.index()));
 
-        if (underlyingType.hasRecursiveReference()) {
-            if (std::optional<TypeIndex> cachedUnrolling = TypeInformation::tryGetCachedUnrolling(index()))
-                return TypeInformation::get(*cachedUnrolling);
+    if (underlyingType.hasRecursiveReference()) {
+        if (std::optional<TypeIndex> cachedUnrolling = TypeInformation::tryGetCachedUnrolling(index()))
+            return TypeInformation::get(*cachedUnrolling);
 
-            Ref unrolled = underlyingType.replacePlaceholders(projectee.index());
-            TypeInformation::addCachedUnrolling(index(), unrolled);
-            RELEASE_ASSERT(unrolled->refCount() > 2); // TypeInformation registry + Ref + owner (unrolling cache).
-            return unrolled; // TypeInformation unrolling cache now owns, with lifetime tied to 'this'.
-        }
-        RELEASE_ASSERT(underlyingType.refCount() > 1); // TypeInformation registry + owner(s).
-        return underlyingType;
+        Ref unrolled = underlyingType.replacePlaceholders(projectee.index());
+        TypeInformation::addCachedUnrolling(index(), unrolled);
+        RELEASE_ASSERT(unrolled->refCount() > 2); // TypeInformation registry + Ref + owner (unrolling cache).
+        return unrolled; // TypeInformation unrolling cache now owns, with lifetime tied to 'this'.
     }
-    ASSERT(refCount() > 1); // TypeInformation registry + owner(s).
-    return *this;
+    RELEASE_ASSERT(underlyingType.refCount() > 1); // TypeInformation registry + owner(s).
+    return underlyingType;
 }
 
 // This function corresponds to the expand metafunction from the spec:
@@ -685,22 +682,30 @@ struct FunctionParameterTypes {
         RefPtr<TypeDefinition> signature = TypeDefinition::tryCreateFunctionSignature(params.returnTypes.size(), params.argumentTypes.size());
         RELEASE_ASSERT(signature);
         bool hasRecursiveReference = false;
+        bool argumentsOrResultsIncludeI64 = false;
         bool argumentsOrResultsIncludeV128 = false;
+        bool argumentsOrResultsIncludeExnref = false;
 
         for (unsigned i = 0; i < params.returnTypes.size(); ++i) {
             signature->as<FunctionSignature>()->getReturnType(i) = params.returnTypes[i];
             hasRecursiveReference |= isRefWithRecursiveReference(params.returnTypes[i]);
+            argumentsOrResultsIncludeI64 |= params.returnTypes[i].isI64();
             argumentsOrResultsIncludeV128 |= params.returnTypes[i].isV128();
+            argumentsOrResultsIncludeExnref |= isExnref(params.returnTypes[i]);
         }
 
         for (unsigned i = 0; i < params.argumentTypes.size(); ++i) {
             signature->as<FunctionSignature>()->getArgumentType(i) = params.argumentTypes[i];
             hasRecursiveReference |= isRefWithRecursiveReference(params.argumentTypes[i]);
+            argumentsOrResultsIncludeI64 |= params.argumentTypes[i].isI64();
             argumentsOrResultsIncludeV128 |= params.argumentTypes[i].isV128();
+            argumentsOrResultsIncludeExnref |= isExnref(params.argumentTypes[i]);
         }
 
         signature->as<FunctionSignature>()->setHasRecursiveReference(hasRecursiveReference);
+        signature->as<FunctionSignature>()->setArgumentsOrResultsIncludeI64(argumentsOrResultsIncludeI64);
         signature->as<FunctionSignature>()->setArgumentsOrResultsIncludeV128(argumentsOrResultsIncludeV128);
+        signature->as<FunctionSignature>()->setArgumentsOrResultsIncludeExnref(argumentsOrResultsIncludeExnref);
 
         entry.key = WTFMove(signature);
     }
@@ -909,8 +914,12 @@ TypeInformation::TypeInformation()
             RefPtr<TypeDefinition> sig = TypeDefinition::tryCreateFunctionSignature(1, 0); \
             sig->ref();                                                                    \
             sig->as<FunctionSignature>()->getReturnType(0) = Types::type;                  \
+            if (Types::type.isI64())                                                       \
+                sig->as<FunctionSignature>()->setArgumentsOrResultsIncludeI64(true);       \
             if (Types::type.isV128())                                                      \
                 sig->as<FunctionSignature>()->setArgumentsOrResultsIncludeV128(true);      \
+            if (isExnref(Types::type))                                                     \
+                sig->as<FunctionSignature>()->setArgumentsOrResultsIncludeExnref(true);    \
             thunkTypes[linearizeType(TypeKind::type)] = sig->as<FunctionSignature>();      \
             m_typeSet.add(TypeHash { sig.releaseNonNull() });                              \
         }                                                                                  \
@@ -1114,6 +1123,7 @@ bool TypeInformation::castReference(JSValue refValue, bool allowNull, TypeIndex 
             return jsDynamicCast<WebAssemblyFunctionBase*>(refValue);
         case TypeKind::Eqref:
             return (refValue.isInt32() && refValue.asInt32() <= maxI31ref && refValue.asInt32() >= minI31ref) || jsDynamicCast<JSWebAssemblyArray*>(refValue) || jsDynamicCast<JSWebAssemblyStruct*>(refValue);
+        case TypeKind::Nullexn:
         case TypeKind::Nullref:
         case TypeKind::Nullfuncref:
         case TypeKind::Nullexternref:

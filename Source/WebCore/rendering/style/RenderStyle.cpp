@@ -496,6 +496,12 @@ bool RenderStyle::inheritedEqual(const RenderStyle& other) const
         && m_rareInheritedData == other.m_rareInheritedData;
 }
 
+bool RenderStyle::nonInheritedEqual(const RenderStyle& other) const
+{
+    return m_nonInheritedFlags == other.m_nonInheritedFlags
+        && m_nonInheritedData == other.m_nonInheritedData
+        && (m_svgStyle.ptr() == other.m_svgStyle.ptr() || m_svgStyle->nonInheritedEqual(other.m_svgStyle));
+}
 
 bool RenderStyle::fastPathInheritedEqual(const RenderStyle& other) const
 {
@@ -607,7 +613,7 @@ bool RenderStyle::isIdempotentTextAutosizingCandidate(AutosizeStatus status) con
 
     if (fields.contains(AutosizeStatus::Fields::FixedHeight)) {
         if (fields.contains(AutosizeStatus::Fields::FixedWidth)) {
-            if (whiteSpace() == WhiteSpace::NoWrap) {
+            if (whiteSpaceCollapse() == WhiteSpaceCollapse::Collapse && textWrapMode() == TextWrapMode::NoWrap) {
                 if (width().isFixed())
                     return false;
                 if (height().isFixed() && specifiedLineHeight().isFixed()) {
@@ -702,32 +708,60 @@ static bool positionChangeIsMovementOnly(const LengthBox& a, const LengthBox& b,
 
 inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) const
 {
-    if (m_nonInheritedData->miscData.ptr() != other.m_nonInheritedData->miscData.ptr()
-        && !arePointingToEqualData(m_nonInheritedData->miscData->boxShadow, other.m_nonInheritedData->miscData->boxShadow))
+    auto nonInheritedDataChangeAffectsVisualOverflow = [&]() {
+        if (m_nonInheritedData.ptr() == other.m_nonInheritedData.ptr())
+            return false;
+
+        if (m_nonInheritedData->miscData.ptr() != other.m_nonInheritedData->miscData.ptr()
+            && !arePointingToEqualData(m_nonInheritedData->miscData->boxShadow, other.m_nonInheritedData->miscData->boxShadow))
+            return true;
+
+        if (m_nonInheritedData->backgroundData.ptr() != other.m_nonInheritedData->backgroundData.ptr()) {
+            auto hasOutlineInVisualOverflow = this->hasOutlineInVisualOverflow();
+            auto otherHasOutlineInVisualOverflow = other.hasOutlineInVisualOverflow();
+            if (hasOutlineInVisualOverflow != otherHasOutlineInVisualOverflow
+                || (hasOutlineInVisualOverflow && otherHasOutlineInVisualOverflow && outlineSize() != other.outlineSize()))
+                return true;
+        }
+
+        return false;
+    };
+
+    auto textDecorationsDiffer = [&]() {
+        if (m_inheritedFlags.textDecorationLines != other.m_inheritedFlags.textDecorationLines)
+            return true;
+
+        if (m_nonInheritedData.ptr() != other.m_nonInheritedData.ptr() && m_nonInheritedData->rareData.ptr() != other.m_nonInheritedData->rareData.ptr()) {
+            if (m_nonInheritedData->rareData->textDecorationStyle != other.m_nonInheritedData->rareData->textDecorationStyle
+                || m_nonInheritedData->rareData->textDecorationThickness != other.m_nonInheritedData->rareData->textDecorationThickness)
+                return true;
+        }
+
+        if (m_rareInheritedData.ptr() != other.m_rareInheritedData.ptr()) {
+            if (m_rareInheritedData->textUnderlineOffset != other.m_rareInheritedData->textUnderlineOffset
+                || m_rareInheritedData->textUnderlinePosition != other.m_rareInheritedData->textUnderlinePosition)
+                    return true;
+        }
+
+        return false;
+    };
+
+    if (nonInheritedDataChangeAffectsVisualOverflow())
         return true;
 
     if (m_rareInheritedData.ptr() != other.m_rareInheritedData.ptr()
         && !arePointingToEqualData(m_rareInheritedData->textShadow, other.m_rareInheritedData->textShadow))
         return true;
 
-    if (m_inheritedFlags.textDecorationLines != other.m_inheritedFlags.textDecorationLines
-        || m_nonInheritedData->rareData->textDecorationStyle != other.m_nonInheritedData->rareData->textDecorationStyle
-        || m_nonInheritedData->rareData->textDecorationThickness != other.m_nonInheritedData->rareData->textDecorationThickness
-        || m_rareInheritedData->textUnderlineOffset != other.m_rareInheritedData->textUnderlineOffset
-        || m_rareInheritedData->textUnderlinePosition != other.m_rareInheritedData->textUnderlinePosition) {
+    if (textDecorationsDiffer()) {
         // Underlines are always drawn outside of their textbox bounds when text-underline-position: under;
         // is specified. We can take an early out here.
         if (isAlignedForUnder(*this) || isAlignedForUnder(other))
             return true;
+
         if (visualOverflowForDecorations(*this) != visualOverflowForDecorations(other))
             return true;
     }
-
-    auto hasOutlineInVisualOverflow = this->hasOutlineInVisualOverflow();
-    auto otherHasOutlineInVisualOverflow = other.hasOutlineInVisualOverflow();
-    if (hasOutlineInVisualOverflow != otherHasOutlineInVisualOverflow
-        || (hasOutlineInVisualOverflow && otherHasOutlineInVisualOverflow && outlineSize() != other.outlineSize()))
-        return true;
 
     return false;
 }
@@ -2847,30 +2881,6 @@ float RenderStyle::computeLineHeight(const Length& lineHeightLength) const
     return lineHeightLength.value();
 }
 
-// FIXME: Remove this after all old calls to whiteSpace() are replaced with appropriate
-// calls to whiteSpaceCollapse() and textWrapMode().
-WhiteSpace RenderStyle::whiteSpace() const
-{
-    auto whiteSpaceCollapse = static_cast<WhiteSpaceCollapse>(m_inheritedFlags.whiteSpaceCollapse);
-    auto textWrapMode = static_cast<TextWrapMode>(m_inheritedFlags.textWrapMode);
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::BreakSpaces && textWrapMode == TextWrapMode::Wrap)
-        return WhiteSpace::BreakSpaces;
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::Collapse && textWrapMode == TextWrapMode::Wrap)
-        return WhiteSpace::Normal;
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::Collapse && textWrapMode == TextWrapMode::NoWrap)
-        return WhiteSpace::NoWrap;
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::Preserve && textWrapMode == TextWrapMode::NoWrap)
-        return WhiteSpace::Pre;
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::PreserveBreaks && textWrapMode == TextWrapMode::Wrap)
-        return WhiteSpace::PreLine;
-    if (whiteSpaceCollapse == WhiteSpaceCollapse::Preserve && textWrapMode == TextWrapMode::Wrap)
-        return WhiteSpace::PreWrap;
-
-    // Reachable for combinations that can't be represented with the white-space syntax.
-    // Do nothing for now since this is a temporary function.
-    return WhiteSpace::Normal;
-}
-
 void RenderStyle::setLetterSpacing(Length&& spacing)
 {
     if (fontCascade().computedLetterSpacing() == spacing)
@@ -3700,6 +3710,18 @@ const ScrollSnapAlign& RenderStyle::scrollSnapAlign() const
 ScrollSnapStop RenderStyle::scrollSnapStop() const
 {
     return m_nonInheritedData->rareData->scrollSnapStop;
+}
+
+bool RenderStyle::scrollSnapDataEquivalent(const RenderStyle& other) const
+{
+    if (m_nonInheritedData.ptr() == other.m_nonInheritedData.ptr()
+        || m_nonInheritedData->rareData.ptr() == other.m_nonInheritedData->rareData.ptr())
+        return true;
+
+    return m_nonInheritedData->rareData->scrollMargin == other.m_nonInheritedData->rareData->scrollMargin
+        && m_nonInheritedData->rareData->scrollSnapAlign == other.m_nonInheritedData->rareData->scrollSnapAlign
+        && m_nonInheritedData->rareData->scrollSnapStop == other.m_nonInheritedData->rareData->scrollSnapStop
+        && m_nonInheritedData->rareData->scrollSnapAlign == other.m_nonInheritedData->rareData->scrollSnapAlign;
 }
 
 ScrollbarGutter RenderStyle::scrollbarGutter() const

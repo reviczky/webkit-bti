@@ -94,7 +94,6 @@
 #include "Settings.h"
 #include "ShadowRoot.h"
 #include "StylePendingResources.h"
-#include "StylePrimitiveNumericTypes+Evaluation.h"
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "Styleable.h"

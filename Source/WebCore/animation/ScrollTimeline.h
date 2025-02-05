@@ -29,6 +29,7 @@
 #include "Element.h"
 #include "ScrollAxis.h"
 #include "ScrollTimelineOptions.h"
+#include "Styleable.h"
 #include <wtf/Ref.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
@@ -43,8 +44,6 @@ class ScrollableArea;
 
 struct TimelineRange;
 
-enum class Scroller : uint8_t { Nearest, Root, Self };
-
 TextStream& operator<<(TextStream&, Scroller);
 
 class ScrollTimeline : public AnimationTimeline {
@@ -54,7 +53,8 @@ public:
     static Ref<ScrollTimeline> create(Scroller, ScrollAxis);
 
     virtual Element* source() const;
-    void setSource(const Element*);
+    void setSource(Element*);
+    void setSource(const Styleable&);
 
     ScrollAxis axis() const { return m_axis; }
     void setAxis(ScrollAxis axis) { m_axis = axis; }
@@ -73,6 +73,8 @@ public:
     void clearTimelineScopeDeclaredElement() { m_timelineScopeElement = nullptr; }
 
     virtual std::pair<WebAnimationTime, WebAnimationTime> intervalForAttachmentRange(const TimelineRange&) const;
+
+    void removeTimelineFromDocument(Element*);
 
 protected:
     explicit ScrollTimeline(const AtomString&, ScrollAxis);
@@ -108,7 +110,7 @@ private:
 
     void cacheCurrentTime();
 
-    WeakPtr<Element, WeakPtrImplWithEventTargetData> m_source;
+    WeakStyleable m_source;
     ScrollAxis m_axis { ScrollAxis::Block };
     AtomString m_name;
     Scroller m_scroller { Scroller::Self };

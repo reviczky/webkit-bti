@@ -108,6 +108,7 @@
 #include "HTMLAttachmentElement.h"
 #include "HTMLBaseElement.h"
 #include "HTMLBodyElement.h"
+#include "HTMLButtonElement.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLCollectionInlines.h"
 #include "HTMLConstructionSite.h"
@@ -190,6 +191,7 @@
 #include "NotificationController.h"
 #include "OpportunisticTaskScheduler.h"
 #include "OrientationNotifier.h"
+#include "OverflowEvent.h"
 #include "PageConsoleClient.h"
 #include "PageGroup.h"
 #include "PageRevealEvent.h"
@@ -215,6 +217,7 @@
 #include "PseudoClassChangeInvalidation.h"
 #include "PublicSuffixStore.h"
 #include "Quirks.h"
+#include "RTCController.h"
 #include "RTCNetworkManager.h"
 #include "Range.h"
 #include "RealtimeMediaSourceCenter.h"
@@ -831,18 +834,20 @@ Document::~Document()
 
     // End the loading signpost here in case loadEventEnd never fired.
     WTFEndSignpost(this, NavigationAndPaintTiming);
+
+    RELEASE_ASSERT(!m_referencingNodeCount);
 }
 
 void Document::removedLastRef()
 {
+    RELEASE_ASSERT(m_refCountAndParentBit == s_refCountIncrement);
+
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
     ASSERT(!deletionHasBegun());
     m_wasRemovedLastRefCalled = true;
-    if (m_referencingNodeCount) {
-        // If removing a child removes the last node reference, we don't want the scope to be destroyed
-        // until after removeDetachedChildren returns, so we protect ourselves.
-        incrementReferencingNodeCount();
 
+    // FIXME: This condition is usually true, and can probably be unconditional.
+    if (m_referencingNodeCount) {
         RELEASE_ASSERT(!hasLivingRenderTree());
         // We must make sure not to be retaining any of our children through
         // these extra pointers or we will create a reference cycle.
@@ -881,19 +886,26 @@ void Document::removedLastRef()
             markers->detach();
 
         m_cssCanvasElements.clear();
-
-        commonTeardown();
-
-        // Node::removedLastRef doesn't set refCount() to zero because it's not observable.
-        // But we need to remember that our refCount reached zero in subsequent calls to decrementReferencingNodeCount().
-        m_refCountAndParentBit = 0;
-
-        decrementReferencingNodeCount();
-    } else {
-        commonTeardown();
-        setStateFlag(StateFlag::HasStartedDeletion);
-        delete this;
     }
+
+    commonTeardown();
+
+    RELEASE_ASSERT_WITH_MESSAGE(m_refCountAndParentBit == s_refCountIncrement,
+        "Please do not escape new references to the Document from inside removedLastRef(). "
+        "Consider using WeakPtr, or enitrely avoiding new work during teardown.");
+
+    if (m_referencingNodeCount) {
+        // Document can be resurrected if m_referencingNodeCount is not 0. When
+        // that happens, release the final overlooking ref that deref()
+        // maintains, so that refCounting can resume from 0.
+        m_refCountAndParentBit -= s_refCountIncrement;
+        return;
+    }
+
+#if ASSERT_ENABLED
+    setStateFlag(StateFlag::DeletionHasBegun);
+#endif
+    delete this;
 }
 
 void Document::commonTeardown()
@@ -1327,6 +1339,47 @@ const Color& Document::themeColor()
     }
     return m_cachedThemeColor;
 }
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+void Document::spatialBackdropLinkElementChanged()
+{
+    spatialBackdropSourceChanged();
+}
+
+void Document::spatialBackdropSourceChanged()
+{
+    if (!settings().webPageSpatialBackdropEnabled())
+        return;
+
+    auto newSpatialBackdropSource = determineActiveSpatialBackdropSource();
+    if (m_cachedSpatialBackdropSource == newSpatialBackdropSource)
+        return;
+    m_cachedSpatialBackdropSource = WTFMove(newSpatialBackdropSource);
+
+    if (RefPtr page = this->page())
+        page->chrome().client().spatialBackdropSourceChanged();
+}
+
+std::optional<SpatialBackdropSource> Document::determineActiveSpatialBackdropSource() const
+{
+    auto sourceURL = m_url.url();
+    if (!sourceURL.isValid())
+        return std::nullopt;
+
+    for (auto& linkElement : descendantsOfType<HTMLLinkElement>(*this)) {
+        if (!linkElement.isSpatialBackdrop())
+            continue;
+
+        auto modelURL = linkElement.href();
+        if (!modelURL.isValid())
+            return std::nullopt;
+
+        return SpatialBackdropSource { WTFMove(sourceURL), WTFMove(modelURL), linkElement.environmentMap() };
+    }
+
+    return std::nullopt;
+}
+#endif
 
 Color Document::linkColor(const RenderStyle& style) const
 {
@@ -4201,6 +4254,10 @@ void Document::setURL(const URL& url)
     m_documentURI = m_url.url();
     m_adjustedURL = adjustedURL();
     updateBaseURL();
+
+#if ENABLE(WEB_PAGE_SPATIAL_BACKDROP)
+    spatialBackdropSourceChanged();
+#endif
 }
 
 const URL& Document::urlForBindings()
@@ -4814,7 +4871,7 @@ ViewportArguments Document::viewportArguments() const
     RefPtr page = this->page();
     if (!page)
         return m_viewportArguments;
-    return page->overrideViewportArguments().value_or(m_viewportArguments);
+    return page->overrideViewportArguments() ? *page->overrideViewportArguments() : m_viewportArguments;
 }
 
 bool Document::isViewportDocument() const
@@ -6417,6 +6474,17 @@ void Document::queueTaskToDispatchEventOnWindow(TaskSource source, Ref<Event>&& 
     });
 }
 
+void Document::enqueueOverflowEvent(Ref<Event>&& event)
+{
+    // https://developer.mozilla.org/en-US/docs/Web/API/Element/overflow_event
+    // FIXME: This event is totally unspecified.
+    RefPtr target = event->target();
+    RELEASE_ASSERT(target);
+    eventLoop().queueTask(TaskSource::DOMManipulation, [protectedTarget = GCReachableRef<Node>(downcast<Node>(*target)), event = WTFMove(event)] {
+        protectedTarget->dispatchEvent(event);
+    });
+}
+
 ExceptionOr<Ref<Event>> Document::createEvent(const String& type)
 {
     // Please do *not* add new event classes to this function unless they are required
@@ -6481,6 +6549,8 @@ ExceptionOr<Ref<Event>> Document::createEvent(const String& type)
         return Ref<Event> { KeyboardEvent::createForBindings() };
     if (equalLettersIgnoringASCIICase(type, "mutationevent"_s) || equalLettersIgnoringASCIICase(type, "mutationevents"_s))
         return Ref<Event> { MutationEvent::createForBindings() };
+    if (equalLettersIgnoringASCIICase(type, "overflowevent"_s))
+        return Ref<Event> { OverflowEvent::createForBindings() };
     if (equalLettersIgnoringASCIICase(type, "popstateevent"_s))
         return Ref<Event> { PopStateEvent::createForBindings() };
     if (equalLettersIgnoringASCIICase(type, "wheelevent"_s))
@@ -6527,6 +6597,9 @@ void Document::addListenerTypeIfNeeded(const AtomString& eventType)
         break;
     case EventType::DOMCharacterDataModified:
         addListenerType(ListenerType::DOMCharacterDataModified);
+        break;
+    case EventType::overflowchanged:
+        addListenerType(ListenerType::OverflowChanged);
         break;
     case EventType::scroll:
         addListenerType(ListenerType::Scroll);
@@ -9272,11 +9345,18 @@ float Document::deviceScaleFactor() const
     return deviceScaleFactor;
 }
 
+#if ENABLE(DARK_MODE_CSS)
+OptionSet<ColorScheme> Document::resolvedColorScheme(const RenderStyle* style) const
+{
+    bool isNormal = !style || style->colorScheme().isNormal();
+    return isNormal ? m_colorScheme : style->colorScheme().colorScheme();
+}
+#endif
+
 bool Document::useDarkAppearance(const RenderStyle* style) const
 {
 #if ENABLE(DARK_MODE_CSS)
-    bool isNormal = !style || style->colorScheme().isNormal();
-    auto colorScheme = isNormal ? m_colorScheme : style->colorScheme().colorScheme();
+    auto colorScheme = resolvedColorScheme(style);
 
     if (colorScheme.contains(ColorScheme::Dark) && !colorScheme.contains(ColorScheme::Light))
         return true;
@@ -10309,7 +10389,7 @@ void Document::handlePopoverLightDismiss(const PointerEvent& event, Node& target
                         clickedPopover = htmlElement;
 
                     if (!invokerPopover) {
-                        if (RefPtr button = dynamicDowncast<HTMLFormControlElement>(*htmlElement)) {
+                        if (RefPtr button = dynamicDowncast<HTMLButtonElement>(*htmlElement)) {
                             if (RefPtr popover = dynamicDowncast<HTMLElement>(button->commandForElement()); popover && isShowingAutoPopover(*popover))
                                 invokerPopover = WTFMove(popover);
                             else if (RefPtr popover = button->popoverTargetElement(); popover && isShowingAutoPopover(*popover))
@@ -10399,7 +10479,7 @@ RefPtr<HTMLAttachmentElement> Document::attachmentForIdentifier(const String& id
 
 static MessageSource messageSourceForWTFLogChannel(const WTFLogChannel& channel)
 {
-    auto channelName = span(channel.name);
+    auto channelName = unsafeSpan(channel.name);
     if (equalLettersIgnoringASCIICase(channelName, "media"_s))
         return MessageSource::Media;
 
