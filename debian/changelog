@@ -2,6 +2,9 @@ wpewebkit (2.46.6-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Update copyright information of all files.
+  * debian/rules:
+    - Stop using -DWTF_CPU_ARM64_CORTEXA53=OFF, this was fixed upstream a
+      long time ago (WebKit bug #197192).
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 09 Feb 2025 13:35:04 +0100
 
