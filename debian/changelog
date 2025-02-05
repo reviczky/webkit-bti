@@ -1,6 +1,8 @@
 webkit2gtk (2.47.4-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 05 Feb 2025 11:43:16 +0100
 

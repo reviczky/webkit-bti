@@ -9,8 +9,8 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
            2002-2020 Tony Finch <dot@dotat.at>
-           2003-2024 Igalia S.L.
            2003-2025 Apple Inc
+           2003-2025 Igalia S.L.
            2004-2007 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
@@ -120,7 +120,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2016, 2021, 2024 Red Hat Inc
            2016-2018 Akamai Technologies Inc
            2016-2019 Oleksandr Skachkov <gskachkov@gmail.com>
-           2016-2024 Sony Interactive Entertainment
+           2016-2025 Sony Interactive Entertainment
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
@@ -188,7 +188,7 @@ Copyright: 2007-2023 The Khronos Group Inc
 License: Apache-2.0
 
 Files: Source/ThirdParty/libsysprof-capture/*
-Copyright: 2016-2020 Christian Hergert <chergert@redhat.com>
+Copyright: 2016-2025 Christian Hergert <chergert@redhat.com>
            2020 Endless OS Foundation
 License: BSD-2-Clause-Patent
 
@@ -489,8 +489,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/inspector/CommandLineAPIHost.cpp
        Source/WebCore/inspector/CommandLineAPIHost.h
        Source/WebCore/inspector/CommandLineAPIModuleSource.js
-       Source/WebCore/inspector/InspectorDatabaseResource.cpp
-       Source/WebCore/inspector/InspectorDatabaseResource.h
        Source/WebCore/inspector/InspectorFrontendHost.cpp
        Source/WebCore/inspector/InspectorFrontendHost.h
        Source/WebCore/inspector/InspectorNodeFinder.cpp
@@ -503,8 +501,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/inspector/agents/InspectorDOMAgent.h
        Source/WebCore/inspector/agents/InspectorDOMStorageAgent.cpp
        Source/WebCore/inspector/agents/InspectorDOMStorageAgent.h
-       Source/WebCore/inspector/agents/InspectorDatabaseAgent.cpp
-       Source/WebCore/inspector/agents/InspectorDatabaseAgent.h
        Source/WebCore/inspector/agents/InspectorLayerTreeAgent.h
        Source/WebCore/loader/DocumentLoader.cpp
        Source/WebCore/loader/DocumentLoader.h
@@ -1247,8 +1243,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/platform/ScrollableArea.cpp
        Source/WebCore/platform/SharedBufferChunkReader.cpp
        Source/WebCore/platform/SharedBufferChunkReader.h
-       Source/WebCore/platform/WebCoreCrossThreadCopier.cpp
-       Source/WebCore/platform/WebCoreCrossThreadCopier.h
        Source/WebCore/platform/audio/AudioDSPKernel.h
        Source/WebCore/platform/audio/AudioDSPKernelProcessor.cpp
        Source/WebCore/platform/audio/AudioDSPKernelProcessor.h
@@ -1495,15 +1489,7 @@ Copyright: 1984, 1989-1990, 2000-2006 Free Software Foundation Inc
 License: GPL-2+ with Bison exception
 
 Files: Source/ThirdParty/ANGLE/tools/flex-bison/third_party/skeletons/*
-       Source/ThirdParty/libsysprof-capture/mapped-ring-buffer.c
-       Source/ThirdParty/libsysprof-capture/mapped-ring-buffer.h
-       Source/ThirdParty/libsysprof-capture/tests/allocs-by-size.c
-       Source/ThirdParty/libsysprof-capture/tests/cross-thread-frees.c
-       Source/ThirdParty/libsysprof-capture/tests/find-temp-allocs.c
-       Source/ThirdParty/libsysprof-capture/tests/rewrite-pid.c
-       Source/ThirdParty/libsysprof-capture/tests/test-capture-cursor.c
 Copyright: 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation Inc
-           2016, 2019, 2020, 2023 Christian Hergert <chergert@redhat.com>
 License: GPL-3+
 
 Files: Source/ThirdParty/ANGLE/src/compiler/preprocessor/preprocessor_tab_autogen.cpp
@@ -1546,10 +1532,10 @@ Files: Source/WTF/wtf/text/Base64.cpp
 Copyright: 2000-2001 Dawit Alemayehu <adawit@kde.org>
            2002 Dirk Mueller <mueller@kde.org>
            2002 Lars Knoll <knoll@kde.org>
-           2003-2024 Apple Inc
+           2003-2025 Apple Inc
            2006 Alexey Proskuryakov <ap@webkit.org>
            2010 Patrick Gansterer <paroga@paroga.com>
-           2015 Google Inc
+           2015-2017 Google Inc
            2023 Igalia S.L.
 License: LGPL-2
 
@@ -1738,7 +1724,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/TemporalObject.h
        Source/JavaScriptCore/testRegExp.cpp
        Source/JavaScriptCore/yarr/hasher.py
-       Source/ThirdParty/libsysprof-capture/tests/test-capture.c
        Source/WTF/config.h
        Source/WTF/wtf/BitSet.h
        Source/WTF/wtf/DataMutex.h
@@ -2076,6 +2061,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/dom/SimulatedClickOptions.h
        Source/WebCore/dom/SpaceSplitString.cpp
        Source/WebCore/dom/SpaceSplitString.h
+       Source/WebCore/dom/SpatialBackdropSource.cpp
+       Source/WebCore/dom/SpatialBackdropSource.h
        Source/WebCore/dom/StyledElement.cpp
        Source/WebCore/dom/StyledElement.h
        Source/WebCore/dom/TagCollection.cpp
@@ -3840,8 +3827,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/WebProcess/WebCoreSupport/WebUserMediaClient.h
        Source/WebKit/WebProcess/WebCoreSupport/glib/WebEditorClientGLib.cpp
        Source/WebKit/WebProcess/WebCoreSupport/gtk/WebEditorClientGtk.cpp
-       Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
-       Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/CoordinatedGraphicsScene.h
        Source/WebKit/WebProcess/WebPage/WebContextMenu.cpp
        Source/WebKit/WebProcess/WebPage/WebContextMenu.h
        Tools/TestWebKitAPI/Tests/WebKit/EnumerateMediaDevices.cpp
@@ -3986,13 +3971,12 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2015 Yusuke Suzuki<utatane.tea@gmail.com>
            2015-2016 Canon Inc
            2015-2024 Metrological Group B.V
-           2016 Christian Hergert <christian@hergert.me>
            2017 Aidan Holm <aidanholm@gmail.com>
            2017 Endless Mobile Inc
-           2017, 2020-2022 Sony Interactive Entertainment
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 Noam Rosenthal <noam@webkit.org>
            2020 WikiMedia Inc
+           2020-2022 Sony Interactive Entertainment
            2021 Zixing Liu
            2023-2024 Tetsuharu Ohzeki <tetsuharu.ohzeki@gmail.com>
            2024 Alexander M <webkit@sata.lol>
