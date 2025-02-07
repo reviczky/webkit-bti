@@ -1,8 +1,7 @@
 webkit2gtk (2.46.6-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
-  * support-icu-76.1.patch:
-    - Fix FTBFS with icu 76.1 (Closes: #1092311).
+  * New upstream release (Closes: #1092311).
+  * Refresh debian/patches/disable-nvidia-dmabuf.patch
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2025 10:54:44 +0100
 
