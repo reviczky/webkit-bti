@@ -2,6 +2,8 @@ webkit2gtk (2.46.6-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #1092311).
   * Refresh debian/patches/disable-nvidia-dmabuf.patch
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2025 10:54:44 +0100
 
