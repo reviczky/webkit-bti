@@ -5,6 +5,9 @@ wpewebkit (2.46.6-1) UNRELEASED; urgency=medium
   * debian/rules:
     - Stop using -DWTF_CPU_ARM64_CORTEXA53=OFF, this was fixed upstream a
       long time ago (WebKit bug #197192).
+  * debian/upstream/signing-key.asc:
+    - sq complains about multiple concatenated ASCII Armor blocks, so put
+      all keys in the same block.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 09 Feb 2025 13:35:04 +0100
 
