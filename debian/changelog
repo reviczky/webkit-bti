@@ -1,3 +1,9 @@
+webkit2gtk (2.46.6-1~deb11u1) UNRELEASED; urgency=medium
+
+  * Backport to bullseye.
+
+ -- Emilio Pozuelo Monfort <pochu@debian.org>  Mon, 10 Feb 2025 14:12:27 +0100
+
 webkit2gtk (2.46.6-1) unstable; urgency=high
 
   * New upstream release (Closes: #1092311).
