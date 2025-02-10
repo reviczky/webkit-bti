@@ -2481,6 +2481,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerSinksWorkarounds.h
+       Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameConverter.cpp
+       Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameConverter.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameHolder.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoFrameHolder.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerVideoSinkCommon.cpp
@@ -2594,6 +2596,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcom.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkBroadcomBase.h
+       Source/WebCore/platform/gstreamer/GStreamerQuirkOpenMAX.cpp
+       Source/WebCore/platform/gstreamer/GStreamerQuirkOpenMAX.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.cpp
        Source/WebCore/platform/gstreamer/GStreamerQuirkRealtek.h
        Source/WebCore/platform/gstreamer/GStreamerQuirkWesteros.cpp
@@ -3938,7 +3942,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2024 Igalia S.L.
+           2009-2025 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -4102,7 +4106,7 @@ License: MPL-2.0
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2024 Alberto Garcia <berto@igalia.com>
+           2014-2025 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0

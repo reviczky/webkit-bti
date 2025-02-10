@@ -1,3 +1,18 @@
+webkit2gtk (2.46.6-1) unstable; urgency=high
+
+  * New upstream release (Closes: #1092311).
+  * Refresh debian/patches/disable-nvidia-dmabuf.patch
+  * debian/copyright:
+    - Update copyright information of all files.
+  * debian/rules:
+    - Stop using -DWTF_CPU_ARM64_CORTEXA53=OFF, this was fixed upstream a
+      long time ago (WebKit bug #197192).
+  * debian/upstream/signing-key.asc:
+    - sq complains about multiple concatenated ASCII Armor blocks, so put
+      all keys in the same block.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2025 14:40:10 +0100
+
 webkit2gtk (2.46.5-1~deb11u1) bullseye-security; urgency=medium
 
   * Backport to bullseye.
