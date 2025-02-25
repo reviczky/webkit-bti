@@ -1,4 +1,4 @@
-webkit2gtk (2.47.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.47.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * fix-bmalloc-armhf.patch:
@@ -6,7 +6,7 @@ webkit2gtk (2.47.90-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 25 Feb 2025 12:04:35 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 25 Feb 2025 15:56:22 +0100
 
 webkit2gtk (2.47.4-1) experimental; urgency=medium
 
