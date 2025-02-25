@@ -3,6 +3,8 @@ webkit2gtk (2.47.90-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * fix-bmalloc-armhf.patch:
     - Drop this patch, the armhf build works fine now without it.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 25 Feb 2025 12:04:35 +0100
 
