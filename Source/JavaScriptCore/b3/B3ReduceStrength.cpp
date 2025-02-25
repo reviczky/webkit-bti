@@ -812,19 +812,10 @@ private:
             }
 
             switch (m_value->child(0)->opcode()) {
-            case Sub:
-            case Div:
-            case Sqrt:
-            case Floor:
-            case Ceil:
-            case Trunc:
-            case Abs:
-            case Neg:
-            case Mul:
-            case Add:
-            case PurifyNaN:
+            case PurifyNaN: {
                 replaceWithIdentity(m_value->child(0));
                 break;
+            }
             default:
                 break;
             }
@@ -1712,6 +1703,22 @@ private:
             }
             break;
 
+        case FTrunc:
+            // Turn this: FTrunc(constant)
+            // Into this: trunc<value->type()>(constant)
+            if (Value* constant = m_value->child(0)->fTruncConstant(m_proc)) {
+                replaceWithNewValue(constant);
+                break;
+            }
+
+            // Turn this: FTrunc(roundedValue)
+            // Into this: roundedValue
+            if (m_value->child(0)->isRounded()) {
+                replaceWithIdentity(m_value->child(0));
+                break;
+            }
+            break;
+
         case Floor:
             // Turn this: Floor(constant)
             // Into this: floor<value->type()>(constant)
@@ -2139,14 +2146,10 @@ private:
             break;
 
         case DoubleToFloat:
-            // Turn this: DoubleToFloat(FloatToDouble(value))
-            // Into this: value
-            if (!m_value->isSensitiveToNaN()) {
-                if (m_value->child(0)->opcode() == FloatToDouble) {
-                    replaceWithIdentity(m_value->child(0)->child(0));
-                    break;
-                }
-            }
+            // We do not have the following pattern.
+            //     Turn this: DoubleToFloat(FloatToDouble(value))
+            //     Into this: value
+            // because this breaks NaN bit patterns, which is tested via wasm spec tests.
 
             // Turn this: DoubleToFloat(constant)
             // Into this: ConstFloat(constant)

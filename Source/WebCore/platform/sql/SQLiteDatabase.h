@@ -38,10 +38,6 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
 
-#if COMPILER(MSVC)
-#pragma warning(disable: 4800)
-#endif
-
 struct sqlite3;
 
 namespace WebCore {
@@ -77,6 +73,7 @@ public:
     WEBCORE_EXPORT bool executeCommand(ASCIILiteral);
     
     WEBCORE_EXPORT bool tableExists(StringView);
+    WEBCORE_EXPORT bool indexExists(StringView);
     WEBCORE_EXPORT String tableSQL(StringView);
     WEBCORE_EXPORT String indexSQL(StringView);
     WEBCORE_EXPORT void clearAllTables();

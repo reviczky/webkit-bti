@@ -166,6 +166,8 @@ void RenderBox::willBeDestroyed()
             view().unregisterContainerQueryBox(*this);
         if (!style().anchorNames().isEmpty())
             view().unregisterAnchor(*this);
+        if (!style().positionTryFallbacks().isEmpty())
+            view().unregisterPositionTryBox(*this);
     }
 
     RenderBoxModelObject::willBeDestroyed();
@@ -299,6 +301,11 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
         view().registerAnchor(*this);
     else if (oldStyle && !oldStyle->anchorNames().isEmpty())
         view().unregisterAnchor(*this);
+
+    if (!style().positionTryFallbacks().isEmpty() && style().hasOutOfFlowPosition())
+        view().registerPositionTryBox(*this);
+    else if (oldStyle && !oldStyle->positionTryFallbacks().isEmpty() && oldStyle->hasOutOfFlowPosition())
+        view().unregisterPositionTryBox(*this);
 
     RenderBoxModelObject::styleWillChange(diff, newStyle);
 }
@@ -2607,6 +2614,18 @@ static LayoutUnit inlineSizeFromAspectRatio(LayoutUnit borderPaddingInlineSum, L
     return LayoutUnit((blockSize - borderPaddingBlockSum) * aspectRatio) + borderPaddingInlineSum;
 }
 
+static bool shouldMarginInlineEndContributeToScrollableOverflow(auto& renderer)
+{
+    auto isSupportedContent = renderer.isGridItem() || renderer.isFlexItemIncludingDeprecated() || (renderer.isInFlow() && renderer.parent()->isBlockContainer());
+    if (!isSupportedContent)
+        return false;
+
+    auto& parentStyle = renderer.parent()->style();
+    if (parentStyle.overflowX() != Overflow::Visible && parentStyle.overflowX() != Overflow::Clip)
+        return true;
+    return parentStyle.overflowY() != Overflow::Visible && parentStyle.overflowY() != Overflow::Clip;
+}
+
 void RenderBox::computeLogicalWidth(LogicalExtentComputedValues& computedValues) const
 {
     computedValues.m_extent = logicalWidth();
@@ -2699,7 +2718,7 @@ void RenderBox::computeLogicalWidth(LogicalExtentComputedValues& computedValues)
     }
     
     auto shouldIgnoreOverconstrainedMargin = [&] {
-        if (containingBlock.isRenderGrid() || containingBlock.isFlexibleBoxIncludingDeprecated())
+        if (isGridItem() || isFlexItemIncludingDeprecated())
             return true;
         // Is this replaced inline?
         if (isFloating() || isInline())
@@ -2710,6 +2729,9 @@ void RenderBox::computeLogicalWidth(LogicalExtentComputedValues& computedValues)
             return true;
 #endif
         if (hasPerpendicularContainingBlock)
+            return true;
+
+        if (shouldMarginInlineEndContributeToScrollableOverflow(*this))
             return true;
 
         return !containerLogicalWidth || containerLogicalWidth == (computedValues.m_extent + computedValues.m_margins.m_start + computedValues.m_margins.m_end);
@@ -2944,7 +2966,7 @@ bool RenderBox::sizesLogicalWidthToFitContent(SizeType widthType) const
 }
 
 template<typename Function>
-LayoutUnit RenderBox::computeOrTrimInlineMargin(const RenderBlock& containingBlock, MarginTrimType marginSide, const Function& computeInlineMargin) const
+LayoutUnit RenderBox::computeOrTrimInlineMargin(const RenderBlock& containingBlock, MarginTrimType marginSide, NOESCAPE const Function& computeInlineMargin) const
 {
     if (containingBlock.shouldTrimChildMargin(marginSide, *this)) {
         // FIXME(255434): This should be set when the margin is being trimmed
@@ -5347,7 +5369,7 @@ void RenderBox::addLayoutOverflow(const LayoutRect& rect, const LayoutRect& clie
     }
 
     if (!m_overflow)
-        m_overflow = adoptRef(new RenderOverflow(clientBox, borderBoxRect()));
+        m_overflow = makeUnique<RenderOverflow>(clientBox, borderBoxRect());
     
     m_overflow->addLayoutOverflow(overflowRect);
 }
@@ -5359,14 +5381,14 @@ void RenderBox::addVisualOverflow(const LayoutRect& rect)
         return;
         
     if (!m_overflow)
-        m_overflow = adoptRef(new RenderOverflow(flippedClientBoxRect(), borderBox));
+        m_overflow = makeUnique<RenderOverflow>(flippedClientBoxRect(), borderBox);
     
     m_overflow->addVisualOverflow(rect);
 }
 
 void RenderBox::clearOverflow()
 {
-    m_overflow = nullptr;
+    m_overflow = { };
     if (CheckedPtr fragmentedFlow = enclosingFragmentedFlow())
         fragmentedFlow->clearFragmentsOverflow(*this);
 }
@@ -5477,11 +5499,12 @@ LayoutRect RenderBox::layoutOverflowRectForPropagation(const WritingMode parentW
 {
     // Only propagate interior layout overflow if we don't completely clip it.
     auto rect = borderBoxRect();
-    if (isGridItem()) {
-        // As per https://github.com/w3c/csswg-drafts/issues/3653, child's margins should contribute to the scrollable overflow area.
-        // FIXME: Expand it to non-grid cases when applicable.
-        rect.setWidth(rect.width() + std::max(0_lu, marginEnd()));
+    // As per https://drafts.csswg.org/css-overflow-3/#scrollable, both flex and grid items margins' should contribute to the scrollable overflow area.
+    if (shouldMarginInlineEndContributeToScrollableOverflow(*this)) {
+        auto marginEnd = std::max(0_lu, this->marginEnd(parentWritingMode));
+        parentWritingMode.isHorizontal() ? rect.setWidth(rect.width() + marginEnd) : rect.setHeight(rect.height() + marginEnd);
     }
+
     if (!shouldApplyLayoutContainment()) {
         if (hasNonVisibleOverflow()) {
             if (style().overflowX() == Overflow::Clip && style().overflowY() == Overflow::Visible) {
@@ -6071,10 +6094,8 @@ bool RenderBox::hasAutoHeightOrContainingBlockWithAutoHeight(UpdatePercentageHei
     if (updatePercentageDescendants == UpdatePercentageHeightDescendants::Yes && logicalHeightLength.isPercentOrCalculated() && containingBlock)
         containingBlock->addPercentHeightDescendant(const_cast<RenderBox&>(*this));
 
-    if (isFlexItem()) {
-        if (downcast<RenderFlexibleBox>(*parent()).canUseFlexItemForPercentageResolutionByStyle(*this) && overridingBorderBoxLogicalHeight())
-            return false;
-    }
+    if (isFlexItem() && downcast<RenderFlexibleBox>(*parent()).canUseFlexItemForPercentageResolution(*this))
+        return false;
 
     if (isGridItem()) {
         if (auto containingBlockContentLogicalHeight = gridAreaContentLogicalHeight())
@@ -6091,6 +6112,11 @@ bool RenderBox::hasAutoHeightOrContainingBlockWithAutoHeight(UpdatePercentageHei
         return false;
 
     return !containingBlock->hasDefiniteLogicalHeight();
+}
+
+bool RenderBox::overflowChangesMayAffectLayout() const
+{
+    return !canUseOverlayScrollbars() && (style().overflowY() == Overflow::Auto || style().overflowX() == Overflow::Auto);
 }
 
 } // namespace WebCore

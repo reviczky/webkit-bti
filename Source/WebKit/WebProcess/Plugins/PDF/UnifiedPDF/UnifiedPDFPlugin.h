@@ -36,6 +36,7 @@
 #include <WebCore/GraphicsLayerClient.h>
 #include <WebCore/Page.h>
 #include <WebCore/Timer.h>
+#include <WebCore/ViewportConfiguration.h>
 #include <wtf/OptionSet.h>
 #include <wtf/TZoneMalloc.h>
 
@@ -215,9 +216,9 @@ public:
     double minScaleFactor() const final;
     double maxScaleFactor() const final;
 
-    bool shouldRespectPageScaleAdjustments() const final;
-
     bool shouldSizeToFitContent() const final;
+
+    static WebCore::ViewportConfiguration::Parameters viewportParameters();
 
 private:
     explicit UnifiedPDFPlugin(WebCore::HTMLPlugInElement&);
@@ -436,6 +437,8 @@ private:
 
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
 
+    WebCore::FloatRect absoluteBoundingRectForSmartMagnificationAtPoint(WebCore::FloatPoint) const final;
+
     enum class FirstPageOnly : bool { No, Yes };
     PDFPageCoverage pageCoverageForSelection(PDFSelection *, FirstPageOnly = FirstPageOnly::No) const;
 
@@ -455,6 +458,7 @@ private:
     void notifyFlushRequired(const WebCore::GraphicsLayer*) override;
     void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect&, OptionSet<WebCore::GraphicsLayerPaintBehavior>) override;
     float pageScaleFactor() const override;
+    bool layerNeedsPlatformContext(const WebCore::GraphicsLayer*) const override;
 
     void paintPDFContent(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, const std::optional<PDFLayoutRow>& = { }, AsyncPDFRenderer* = nullptr);
     void paintPDFSelection(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, std::optional<PDFLayoutRow> = { });
@@ -499,6 +503,7 @@ private:
     void revealFragmentIfNeeded();
 
     // Only use this if some other function has ensured that the correct page is visible.
+    // `false` can mean a failure or an inconclusive scroll request, though no caller cares about this distinction yet.
     bool scrollToPointInContentsSpace(WebCore::FloatPoint);
 
     OptionSet<WebCore::TiledBackingScrollability> computeScrollability() const;
@@ -609,6 +614,8 @@ private:
     void resetInitialSelection();
 #endif // PLATFORM(IOS_FAMILY)
 
+    bool shouldUseInProcessBackingStore() const;
+
     RefPtr<PDFPresentationController> m_presentationController;
 
     PDFDocumentLayout m_documentLayout;
@@ -677,7 +684,11 @@ private:
 
     // FIXME: We should rationalize these with the values in ViewGestureController.
     // For now, we'll leave them differing as they do in PDFPlugin.
+#if PLATFORM(IOS_FAMILY)
+    static constexpr double minimumZoomScale = 1;
+#else
     static constexpr double minimumZoomScale = 0.2;
+#endif
     static constexpr double maximumZoomScale = 6.0;
 };
 
@@ -701,8 +712,10 @@ T UnifiedPDFPlugin::convertDown(CoordinateSpace sourceSpace, CoordinateSpace des
         if (destinationSpace == CoordinateSpace::ScrolledContents)
             return mappedValue;
 
-        mappedValue.scale(1 / m_scaleFactor);
-        mappedValue.move(-centeringOffset());
+        if (!shouldSizeToFitContent()) {
+            mappedValue.scale(1 / m_scaleFactor);
+            mappedValue.move(-centeringOffset());
+        }
         FALLTHROUGH;
 
     case CoordinateSpace::Contents:
@@ -765,7 +778,8 @@ T UnifiedPDFPlugin::convertUp(CoordinateSpace sourceSpace, CoordinateSpace desti
         if (destinationSpace == CoordinateSpace::ScrolledContents)
             return mappedValue;
 
-        mappedValue.moveBy(-WebCore::FloatPoint { m_scrollOffset });
+        if (!shouldSizeToFitContent())
+            mappedValue.moveBy(-WebCore::FloatPoint { m_scrollOffset });
         FALLTHROUGH;
 
     case CoordinateSpace::Plugin:

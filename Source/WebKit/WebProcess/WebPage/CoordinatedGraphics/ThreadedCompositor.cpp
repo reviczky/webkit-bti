@@ -98,6 +98,11 @@ ThreadedCompositor::ThreadedCompositor(LayerTreeHost& layerTreeHost, ThreadedDis
 {
     ASSERT(RunLoop::isMain());
 
+    const auto& webPage = m_layerTreeHost->webPage();
+    m_attributes.viewportSize = webPage.size();
+    m_attributes.deviceScaleFactor = webPage.deviceScaleFactor();
+    m_attributes.viewportSize.scale(m_attributes.deviceScaleFactor);
+
     m_surface->didCreateCompositingRunLoop(m_compositingRunLoop->runLoop());
 
 #if HAVE(DISPLAY_LINK)
@@ -173,6 +178,7 @@ void ThreadedCompositor::invalidate()
     m_layerTreeHost = nullptr;
     m_surface->willDestroyCompositingRunLoop();
     m_compositingRunLoop = nullptr;
+    m_surface = nullptr;
 }
 
 void ThreadedCompositor::suspend()
@@ -216,6 +222,15 @@ void ThreadedCompositor::preferredBufferFormatsDidChange()
     m_surface->preferredBufferFormatsDidChange();
 }
 #endif
+
+void ThreadedCompositor::setSize(const IntSize& size, float deviceScaleFactor)
+{
+    ASSERT(RunLoop::isMain());
+    Locker locker { m_attributes.lock };
+    m_attributes.viewportSize = size;
+    m_attributes.deviceScaleFactor = deviceScaleFactor;
+    m_attributes.viewportSize.scale(m_attributes.deviceScaleFactor);
+}
 
 #if ENABLE(DAMAGE_TRACKING)
 void ThreadedCompositor::setDamagePropagation(Damage::Propagation damagePropagation)
@@ -313,12 +328,10 @@ void ThreadedCompositor::renderLayerTree()
     // Retrieve the scene attributes in a thread-safe manner.
     IntSize viewportSize;
     float deviceScaleFactor;
-    uint32_t compositionRequestID;
     {
         Locker locker { m_attributes.lock };
         viewportSize = m_attributes.viewportSize;
         deviceScaleFactor = m_attributes.deviceScaleFactor;
-        compositionRequestID = m_attributes.compositionRequestID;
 
 #if !HAVE(DISPLAY_LINK)
         // Client has to be notified upon finishing this scene update.
@@ -339,7 +352,7 @@ void ThreadedCompositor::renderLayerTree()
     bool needsGLViewportResize = m_surface->resize(viewportSize);
 
     m_surface->willRenderFrame();
-    RunLoop::main().dispatch([this, protectedThis = Ref { *this }] {
+    RunLoop::protectedMain()->dispatch([this, protectedThis = Ref { *this }] {
         if (m_layerTreeHost)
             m_layerTreeHost->willRenderFrame();
     });
@@ -353,6 +366,7 @@ void ThreadedCompositor::renderLayerTree()
     paintToCurrentGLContext(viewportTransform, viewportSize);
     WTFEndSignpost(this, PaintToGLContext);
 
+    uint32_t compositionRequestID = m_compositionRequestID.load();
 #if HAVE(DISPLAY_LINK)
     m_compositionResponseID = compositionRequestID;
     if (!m_didRenderFrameTimer.isActive())
@@ -367,7 +381,7 @@ void ThreadedCompositor::renderLayerTree()
 
     m_surface->didRenderFrame();
 
-    RunLoop::main().dispatch([this, protectedThis = Ref { *this }] {
+    RunLoop::protectedMain()->dispatch([this, protectedThis = Ref { *this }] {
         if (m_layerTreeHost)
             m_layerTreeHost->didRenderFrame();
     });
@@ -376,15 +390,7 @@ void ThreadedCompositor::renderLayerTree()
 uint32_t ThreadedCompositor::requestComposition()
 {
     ASSERT(RunLoop::isMain());
-    uint32_t compositionRequestID;
-    {
-        Locker locker { m_attributes.lock };
-        auto& webPage = m_layerTreeHost->webPage();
-        m_attributes.viewportSize = webPage.size();
-        m_attributes.deviceScaleFactor = webPage.deviceScaleFactor();
-        m_attributes.viewportSize.scale(m_attributes.deviceScaleFactor);
-        compositionRequestID = ++m_attributes.compositionRequestID;
-    }
+    uint32_t compositionRequestID = ++m_compositionRequestID;
     scheduleUpdate();
     return compositionRequestID;
 }

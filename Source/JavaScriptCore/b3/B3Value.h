@@ -79,7 +79,6 @@ public:
     // instead of value->kind().isBlah().
     bool isChill() const { return kind().isChill(); }
     bool traps() const { return kind().traps(); }
-    bool isSensitiveToNaN() const { return kind().isSensitiveToNaN(); }
 
     Origin origin() const { return m_origin; }
     void setOrigin(Origin origin) { m_origin = origin; }
@@ -240,6 +239,7 @@ public:
     virtual Value* absConstant(Procedure&) const;
     virtual Value* ceilConstant(Procedure&) const;
     virtual Value* floorConstant(Procedure&) const;
+    virtual Value* fTruncConstant(Procedure&) const;
     virtual Value* sqrtConstant(Procedure&) const;
     virtual Value* purifyNaNConstant(Procedure&) const;
 
@@ -424,6 +424,7 @@ protected:
         case Abs:
         case Ceil:
         case Floor:
+        case FTrunc:
         case Sqrt:
         case SExt8:
         case SExt16:
@@ -675,6 +676,7 @@ private:
         case Abs:
         case Ceil:
         case Floor:
+        case FTrunc:
         case Sqrt:
         case SExt8:
         case SExt16:

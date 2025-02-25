@@ -154,7 +154,7 @@ struct WebPageCreationParameters {
     double textZoomFactor { 1 };
     double pageZoomFactor { 1 };
 
-    float topContentInset { 0 };
+    WebCore::FloatBoxExtent obscuredContentInsets { };
     
     float mediaVolume { 0 };
     WebCore::MediaProducerMutedStateFlags muted { };
@@ -309,10 +309,6 @@ struct WebPageCreationParameters {
     WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking { WebCore::ShouldRelaxThirdPartyCookieBlocking::No };
     
     bool httpsUpgradeEnabled { true };
-
-#if PLATFORM(IOS) || PLATFORM(VISION)
-    bool allowsDeprecatedSynchronousXMLHttpRequestDuringUnload { false };
-#endif
     
 #if ENABLE(APP_HIGHLIGHTS)
     WebCore::HighlightVisibility appHighlightsVisible { WebCore::HighlightVisibility::Hidden };

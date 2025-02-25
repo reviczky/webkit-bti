@@ -40,7 +40,7 @@
 #define Webgpu_feature_status Preview
 #endif
 
-#if defined(ENABLE_WEBGPU_BY_DEFAULT) && ENABLE_WEBGPU_BY_DEFAULT && defined(ENABLE_WEBGPU_HDR_BY_DEFAULT) && ENABLE_WEBGPU_HDR_BY_DEFAULT
+#if defined(ENABLE_WEBGPU_BY_DEFAULT) && ENABLE_WEBGPU_BY_DEFAULT && defined(HAVE_SUPPORT_HDR_DISPLAY) && HAVE_SUPPORT_HDR_DISPLAY
 #define Webgpuhdr_feature_status Stable
 #else
 #define Webgpuhdr_feature_status Preview
@@ -78,7 +78,6 @@ namespace WebKit {
 bool defaultPassiveTouchListenersAsDefaultOnDocument();
 bool defaultCSSOMViewScrollingAPIEnabled();
 bool defaultShouldPrintBackgrounds();
-bool defaultAlternateFormControlDesignEnabled();
 bool defaultUseAsyncUIKitInteractions();
 bool defaultWriteRichTextDataWhenCopyingOrDragging();
 #if ENABLE(TEXT_AUTOSIZING)
@@ -94,18 +93,11 @@ bool defaultVideoFullscreenRequiresElementFullscreen();
 bool defaultScrollAnimatorEnabled();
 bool defaultPassiveWheelListenersAsDefaultOnDocument();
 bool defaultWheelEventGesturesBecomeNonBlocking();
-#endif
-
-#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
-bool defaultDisallowSyncXHRDuringPageDismissalEnabled();
-#endif
-
-#if PLATFORM(MAC)
 bool defaultAppleMailPaginationQuirkEnabled();
 #endif
 
-#if !PLATFORM(MACCATALYST) && !PLATFORM(WATCHOS)
-bool allowsDeprecatedSynchronousXMLHttpRequestDuringUnload();
+#if PLATFORM(COCOA)
+bool defaultFixedContainerEdgeSamplingEnabled();
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -171,5 +163,13 @@ bool defaultBuiltInNotificationsEnabled();
 bool defaultRequiresPageVisibilityForVideoToBeNowPlaying();
 
 bool defaultCookieStoreAPIEnabled();
+
+#if ENABLE(CONTENT_INSET_BACKGROUND_FILL)
+bool defaultContentInsetBackgroundFillEnabled();
+#endif
+
+#if ENABLE(CONTENT_EXTENSIONS)
+bool defaultIFrameResourceMonitoringEnabled();
+#endif
 
 } // namespace WebKit

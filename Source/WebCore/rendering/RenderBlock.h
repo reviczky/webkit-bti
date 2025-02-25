@@ -44,6 +44,7 @@ using TrackedRendererListHashSet = SingleThreadWeakListHashSet<RenderBox>;
 
 enum CaretType { CursorCaret, DragCaret };
 enum ContainingBlockState { NewContainingBlock, SameContainingBlock };
+enum class RelayoutChildren : bool { No, Yes };
 
 enum TextRunFlag {
     DefaultTextRunFlags = 0,
@@ -74,7 +75,7 @@ public:
     // FIXME-BLOCKFLOW: Remove virtualizaion when all callers have moved to RenderBlockFlow
     virtual void deleteLines();
 
-    virtual void layoutBlock(bool relayoutChildren, LayoutUnit pageLogicalHeight = 0_lu);
+    virtual void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu);
 
     void insertPositionedObject(RenderBox&);
     static void removePositionedObject(const RenderBox&);
@@ -256,14 +257,16 @@ public:
 
     void updateDescendantTransformsAfterLayout();
 
+    virtual bool canPerformSimplifiedLayout() const;
+
 protected:
     RenderFragmentedFlow* locateEnclosingFragmentedFlow() const override;
     bool establishesIndependentFormattingContextIgnoringDisplayType(const RenderStyle&) const;
 
     void layout() override;
 
-    void layoutPositionedObjects(bool relayoutChildren, bool fixedPositionObjectsOnly = false);
-    virtual void layoutPositionedObject(RenderBox&, bool relayoutChildren, bool fixedPositionObjectsOnly);
+    void layoutPositionedObjects(RelayoutChildren, bool fixedPositionObjectsOnly = false);
+    virtual void layoutPositionedObject(RenderBox&, RelayoutChildren, bool fixedPositionObjectsOnly);
     
     void markFixedPositionObjectForLayoutIfNeeded(RenderBox& child);
 
@@ -297,7 +300,6 @@ protected:
     void styleWillChange(StyleDifference, const RenderStyle& newStyle) override;
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
 
-    virtual bool canPerformSimplifiedLayout() const;
     bool simplifiedLayout();
     virtual void simplifiedNormalFlowLayout();
 
@@ -316,7 +318,7 @@ public:
 
     enum FieldsetFindLegendOption { FieldsetIgnoreFloatingOrOutOfFlow, FieldsetIncludeFloatingOrOutOfFlow };
     RenderBox* findFieldsetLegend(FieldsetFindLegendOption = FieldsetIgnoreFloatingOrOutOfFlow) const;
-    virtual void layoutExcludedChildren(bool /*relayoutChildren*/);
+    virtual void layoutExcludedChildren(RelayoutChildren);
     virtual bool computePreferredWidthsForExcludedChildren(LayoutUnit&, LayoutUnit&) const;
     
     void adjustBorderBoxRectForPainting(LayoutRect&) override;
@@ -344,9 +346,9 @@ protected:
     void estimateFragmentRangeForBoxChild(const RenderBox&) const;
     bool updateFragmentRangeForBoxChild(const RenderBox&) const;
 
-    void updateBlockChildDirtyBitsBeforeLayout(bool relayoutChildren, RenderBox&);
+    void updateBlockChildDirtyBitsBeforeLayout(RelayoutChildren, RenderBox&);
 
-    void preparePaginationBeforeBlockLayout(bool&);
+    void preparePaginationBeforeBlockLayout(RelayoutChildren&);
 
     void computeChildPreferredLogicalWidths(RenderBox&, LayoutUnit& minPreferredLogicalWidth, LayoutUnit& maxPreferredLogicalWidth) const;
 
@@ -454,21 +456,6 @@ private:
 LayoutUnit blockDirectionOffset(RenderBlock& rootBlock, const LayoutSize& offsetFromRootBlock);
 LayoutUnit inlineDirectionOffset(RenderBlock& rootBlock, const LayoutSize& offsetFromRootBlock);
 VisiblePosition positionForPointRespectingEditingBoundaries(RenderBlock&, RenderBox&, const LayoutPoint&, HitTestSource);
-
-inline RenderPtr<RenderBlock> RenderBlock::createAnonymousWithParentRendererAndDisplay(const RenderBox& parent, DisplayType display)
-{
-    return createAnonymousBlockWithStyleAndDisplay(parent.document(), parent.style(), display);
-}
-
-inline RenderPtr<RenderBox> RenderBlock::createAnonymousBoxWithSameTypeAs(const RenderBox& renderer) const
-{
-    return createAnonymousBlockWithStyleAndDisplay(document(), renderer.style(), style().display());
-}
-
-inline RenderPtr<RenderBlock> RenderBlock::createAnonymousBlock(DisplayType display) const
-{
-    return createAnonymousBlockWithStyleAndDisplay(document(), style(), display);
-}
 
 } // namespace WebCore
 

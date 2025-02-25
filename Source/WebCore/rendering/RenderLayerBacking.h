@@ -233,7 +233,9 @@ public:
     float deviceScaleFactor() const override;
     float contentsScaleMultiplierForNewTiles(const GraphicsLayer*) const override;
 
-    bool layerContainsBitmapOnly(const GraphicsLayer*) const override { return isBitmapOnly(); }
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    bool layerAllowsDynamicContentScaling(const GraphicsLayer*) const override;
+#endif
 
     bool paintsOpaquelyAtNonIntegralScales(const GraphicsLayer*) const override;
 
@@ -247,9 +249,6 @@ public:
     bool isTrackingRepaints() const override;
     bool shouldSkipLayerInDump(const GraphicsLayer*, OptionSet<LayerTreeAsTextOptions>) const override;
     bool shouldDumpPropertyForLayer(const GraphicsLayer*, ASCIILiteral propertyName, OptionSet<LayerTreeAsTextOptions>) const override;
-#if ENABLE(HDR_FOR_IMAGES)
-    bool hdrForImagesEnabled() const override;
-#endif
 
     bool shouldAggressivelyRetainTiles(const GraphicsLayer*) const override;
     bool shouldTemporarilyRetainTileCohorts(const GraphicsLayer*) const override;
@@ -380,7 +379,7 @@ private:
     bool isMainFrameRenderViewLayer() const;
     
     bool paintsBoxDecorations() const;
-    bool paintsContent(RenderLayer::PaintedContentRequest&) const;
+    void determinePaintsContent(RenderLayer::PaintedContentRequest&) const;
 
     void updateDrawsContent(PaintedContentsInfo&);
 
@@ -393,6 +392,9 @@ private:
     void updateImageContents(PaintedContentsInfo&);
     bool isUnscaledBitmapOnly() const;
     bool isBitmapOnly() const;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    bool isReplacedElementWithHDR() const;
+#endif
 
     void updateDirectlyCompositedBoxDecorations(PaintedContentsInfo&, bool& didUpdateContentsRect);
     void updateDirectlyCompositedBackgroundColor(PaintedContentsInfo&, bool& didUpdateContentsRect);
@@ -401,7 +403,7 @@ private:
     void resetContentsRect();
     void updateContentsRects();
 
-    bool isPaintDestinationForDescendantLayers(RenderLayer::PaintedContentRequest&) const;
+    void determineNonCompositedLayerDescendantsPaintedContent(RenderLayer::PaintedContentRequest&) const;
     bool hasVisibleNonCompositedDescendants() const;
 
     bool shouldClipCompositedBounds() const;

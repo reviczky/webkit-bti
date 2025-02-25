@@ -36,6 +36,7 @@ public:
     virtual ~RenderTextControl();
 
     WEBCORE_EXPORT HTMLTextFormControlElement& textFormControlElement() const;
+    WEBCORE_EXPORT Ref<HTMLTextFormControlElement> protectedTextFormControlElement() const;
 
 #if PLATFORM(IOS_FAMILY)
     bool canScroll() const;
@@ -63,7 +64,7 @@ protected:
     virtual LayoutUnit computeControlLogicalHeight(LayoutUnit lineHeight, LayoutUnit nonContentHeight) const = 0;
 
     LogicalExtentComputedValues computeLogicalHeight(LayoutUnit logicalHeight, LayoutUnit logicalTop) const override;
-    void layoutExcludedChildren(bool relayoutChildren) override;
+    void layoutExcludedChildren(RelayoutChildren) override;
 
 private:
     void element() const = delete;

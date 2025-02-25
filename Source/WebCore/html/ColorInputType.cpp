@@ -38,7 +38,6 @@
 #include "Color.h"
 #include "ColorSerialization.h"
 #include "ColorTypes.h"
-#include "ElementChildIteratorInlines.h"
 #include "ElementRareData.h"
 #include "Event.h"
 #include "HTMLDataListElement.h"
@@ -201,6 +200,9 @@ Color ColorInputType::valueAsColor() const
     ASSERT(element());
     auto color = parseColorValue(element()->value(), *element());
     ASSERT(!!color);
+    // FIXME: This is a speculative fix for rdar://144872437.
+    if (!color)
+        return Color::black;
     return *color;
 }
 
@@ -221,6 +223,8 @@ void ColorInputType::createShadowSubtree()
     wrapperElement->appendChild(ContainerNode::ChildChange::Source::Parser, colorSwatch);
     wrapperElement->setUserAgentPart(UserAgentParts::webkitColorSwatchWrapper());
     colorSwatch->setUserAgentPart(UserAgentParts::webkitColorSwatch());
+
+    RenderTheme::singleton().createColorWellSwatchSubtree(colorSwatch.get());
 
     updateColorSwatch();
 }
@@ -332,7 +336,7 @@ void ColorInputType::endColorChooser()
 
 void ColorInputType::updateColorSwatch()
 {
-    RefPtr<HTMLElement> colorSwatch = shadowColorSwatch();
+    RefPtr colorSwatch = shadowColorSwatch();
     if (!colorSwatch)
         return;
 
@@ -346,11 +350,8 @@ HTMLElement* ColorInputType::shadowColorSwatch() const
     if (!shadow)
         return nullptr;
 
-    RefPtr wrapper = childrenOfType<HTMLDivElement>(*shadow).first();
-    if (!wrapper)
-        return nullptr;
-
-    return childrenOfType<HTMLDivElement>(*wrapper).first();
+    RefPtr wrapper = shadow->firstChild();
+    return wrapper ? downcast<HTMLElement>(wrapper->firstChild()) : nullptr;
 }
 
 IntRect ColorInputType::elementRectRelativeToRootView() const

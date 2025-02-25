@@ -114,14 +114,16 @@
 #include <WebCore/MockContentFilterSettings.h>
 #endif
 
+#if ENABLE(CONTENT_EXTENSIONS)
+#include <WebCore/ResourceMonitorThrottlerHolder.h>
+#endif
+
 #define CONNECTION_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, this->webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 #define CONNECTION_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, this->webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
 #define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, this->connection(), completion)
 #define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, this->connection(), returnValue)
-
-#define MESSAGE_CHECK_WITH_THIS(assertion, thisPtr) MESSAGE_CHECK_BASE(assertion, thisPtr->connection())
 
 namespace WebKit {
 using namespace WebCore;
@@ -597,7 +599,7 @@ void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadPara
 
 void NetworkConnectionToWebProcess::performSynchronousLoad(NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const ResourceError&, const ResourceResponse, Vector<uint8_t>&&)>&& reply)
 {
-    MESSAGE_CHECK_WITH_THIS(protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, loadParameters.request.firstPartyForCookies()) == NetworkProcess::AllowCookieAccess::Allow, Ref { *this });
+    MESSAGE_CHECK(protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, loadParameters.request.firstPartyForCookies()) == NetworkProcess::AllowCookieAccess::Allow);
     CONNECTION_RELEASE_LOG(Loading, "performSynchronousLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID ? loadParameters.webPageProxyID->toUInt64() : 0, loadParameters.webPageID ? loadParameters.webPageID->toUInt64() : 0, loadParameters.webFrameID ? loadParameters.webFrameID->object().toUInt64() : 0, loadParameters.identifier ? loadParameters.identifier->toUInt64() : 0);
 
     auto identifier = loadParameters.identifier;
@@ -810,7 +812,7 @@ void NetworkConnectionToWebProcess::cookiesForDOM(const URL& firstParty, const S
     completionHandler(WTFMove(result.first), result.second);
 }
 
-void NetworkConnectionToWebProcess::setCookiesFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, FrameIdentifier frameID, PageIdentifier pageID, const String& cookieString, WebPageProxyIdentifier webPageProxyID)
+void NetworkConnectionToWebProcess::setCookiesFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, FrameIdentifier frameID, PageIdentifier pageID, const String& cookieString, RequiresScriptTelemetry requiresScriptTelemetry, WebPageProxyIdentifier webPageProxyID)
 {
     auto allowCookieAccess = protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, firstParty);
     MESSAGE_CHECK(allowCookieAccess != NetworkProcess::AllowCookieAccess::Terminate);
@@ -824,7 +826,7 @@ void NetworkConnectionToWebProcess::setCookiesFromDOM(const URL& firstParty, con
     auto* networkStorageSession = storageSession();
     if (!networkStorageSession)
         return;
-    networkStorageSession->setCookiesFromDOM(firstParty, sameSiteInfo, url, frameID, pageID, ApplyTrackingPrevention::Yes, cookieString, protectedNetworkProcess()->shouldRelaxThirdPartyCookieBlockingForPage(webPageProxyID));
+    networkStorageSession->setCookiesFromDOM(firstParty, sameSiteInfo, url, frameID, pageID, ApplyTrackingPrevention::Yes, requiresScriptTelemetry, cookieString, protectedNetworkProcess()->shouldRelaxThirdPartyCookieBlockingForPage(webPageProxyID));
 #if !RELEASE_LOG_DISABLED
     if (auto* session = networkSession()) {
         if (session->shouldLogCookieInformation())
@@ -949,7 +951,7 @@ void NetworkConnectionToWebProcess::cookiesForDOMAsync(const URL& firstParty, co
     completionHandler(WTFMove(result));
 }
 
-void NetworkConnectionToWebProcess::setCookieFromDOMAsync(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, WebCore::Cookie&& cookie, std::optional<WebPageProxyIdentifier> webPageProxyID, CompletionHandler<void(bool)>&& completionHandler)
+void NetworkConnectionToWebProcess::setCookieFromDOMAsync(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, WebCore::Cookie&& cookie, RequiresScriptTelemetry requiresScriptTelemetry, std::optional<WebPageProxyIdentifier> webPageProxyID, CompletionHandler<void(bool)>&& completionHandler)
 {
     auto allowCookieAccess = protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, firstParty);
     MESSAGE_CHECK_COMPLETION(allowCookieAccess != NetworkProcess::AllowCookieAccess::Terminate, completionHandler(false));
@@ -964,7 +966,7 @@ void NetworkConnectionToWebProcess::setCookieFromDOMAsync(const URL& firstParty,
     if (!networkStorageSession)
         return completionHandler(false);
 
-    auto result = networkStorageSession->setCookieFromDOM(firstParty, sameSiteInfo, url, frameID, pageID, ApplyTrackingPrevention::Yes, cookie, protectedNetworkProcess()->shouldRelaxThirdPartyCookieBlockingForPage(webPageProxyID));
+    auto result = networkStorageSession->setCookieFromDOM(firstParty, sameSiteInfo, url, frameID, pageID, ApplyTrackingPrevention::Yes, requiresScriptTelemetry, cookie, protectedNetworkProcess()->shouldRelaxThirdPartyCookieBlockingForPage(webPageProxyID));
 #if !RELEASE_LOG_DISABLED
     if (auto* session = networkSession()) {
         if (session->shouldLogCookieInformation())
@@ -1181,6 +1183,10 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFilesForIndexedDB(const
 
         if (auto* session = networkSession())
             session->protectedStorageManager()->registerTemporaryBlobFilePaths(Ref { m_connection }, filePaths);
+
+        // Web process might create Blob with these files during index key generation.
+        for (auto& path : filePaths)
+            allowAccessToFile(path);
 
         completionHandler(WTFMove(filePaths));
     });
@@ -1783,6 +1789,17 @@ void NetworkConnectionToWebProcess::updateSharedPreferencesForWebProcess(SharedP
     if (CheckedPtr session = networkSession())
         session->protectedStorageManager()->updateSharedPreferencesForConnection(protectedConnection(), m_sharedPreferencesForWebProcess);
 }
+
+#if ENABLE(CONTENT_EXTENSIONS)
+void NetworkConnectionToWebProcess::shouldOffloadIFrameForHost(const String& host, CompletionHandler<void(bool)>&& completionHandler)
+{
+    CONNECTION_RELEASE_LOG(Loading, "shouldOffloadIFrameForHost: (host=%" SENSITIVE_LOG_STRING ")", host.utf8().data());
+    if (CheckedPtr session = networkSession())
+        session->protectedResourceMonitorThrottler()->tryAccess(host, ContinuousApproximateTime::now(), WTFMove(completionHandler));
+    else
+        completionHandler(false);
+}
+#endif
 
 } // namespace WebKit
 

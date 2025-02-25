@@ -361,7 +361,7 @@ void NetworkProcessProxy::synthesizeAppIsBackground(bool background)
         applicationWillEnterForeground();
 }
 
-Ref<DownloadProxy> NetworkProcessProxy::createDownloadProxy(WebsiteDataStore& dataStore, Ref<API::DownloadClient>&& client, const ResourceRequest& resourceRequest, const FrameInfoData& frameInfo, WebPageProxy* originatingPage)
+Ref<DownloadProxy> NetworkProcessProxy::createDownloadProxy(WebsiteDataStore& dataStore, Ref<API::DownloadClient>&& client, const ResourceRequest& resourceRequest, const std::optional<FrameInfoData>& frameInfo, WebPageProxy* originatingPage)
 {
     if (!m_downloadProxyMap)
         m_downloadProxyMap = makeUniqueWithoutRefCountedCheck<DownloadProxyMap>(*this);
@@ -432,9 +432,9 @@ void NetworkProcessProxy::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<W
     sendWithAsyncReply(Messages::NetworkProcess::FetchWebsiteData(sessionID, dataTypes, fetchOptions), WTFMove(completionHandler));
 }
 
-void NetworkProcessProxy::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, WallTime modifiedSince, CompletionHandler<void()>&& completionHandler)
+void NetworkProcessProxy::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, WallTime modifiedSince, const HashSet<WebCore::ProcessIdentifier>& identifiers, CompletionHandler<void()>&& completionHandler)
 {
-    sendWithAsyncReply(Messages::NetworkProcess::DeleteWebsiteData(sessionID, dataTypes, modifiedSince), WTFMove(completionHandler));
+    sendWithAsyncReply(Messages::NetworkProcess::DeleteWebsiteData(sessionID, dataTypes, modifiedSince, identifiers), WTFMove(completionHandler));
 }
 
 void NetworkProcessProxy::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, const Vector<String>& HSTSCacheHostNames, const Vector<RegistrableDomain>& registrableDomains, CompletionHandler<void()>&& completionHandler)
@@ -1584,7 +1584,7 @@ void NetworkProcessProxy::requestStorageSpace(PAL::SessionID sessionID, const We
                 return;
             }
             auto name = makeString(FileSystem::encodeForFileName(origin.topOrigin.host()), " content"_s);
-            page->requestStorageSpace(page->legacyMainFrameProcess().connection(), page->mainFrame()->frameID(), origin.topOrigin.databaseIdentifier(), name, name, currentQuota, currentSize, currentSize, spaceRequired, [completionHandler = WTFMove(completionHandler)](auto quota) mutable {
+            page->requestStorageSpace(page->mainFrame()->frameID(), origin.topOrigin.databaseIdentifier(), name, name, currentQuota, currentSize, currentSize, spaceRequired, [completionHandler = WTFMove(completionHandler)](auto quota) mutable {
                 completionHandler(quota);
             });
         });
@@ -1800,7 +1800,7 @@ void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, const Web
         permission = PushPermissionState::Prompt;
         auto permissions = dataStore->client().notificationPermissions();
         if (permissions.isEmpty())
-            permissions = WebNotificationManagerProxy::protectedSharedServiceWorkerManager()->notificationPermissions();
+            permissions = WebNotificationManagerProxy::serviceWorkerManagerSingleton().notificationPermissions();
 
         auto origin = SecurityOriginData::fromURL(pushMessage.registrationURL).toString();
         if (auto it = permissions.find(origin); it != permissions.end())
@@ -2019,6 +2019,13 @@ void NetworkProcessProxy::restoreLocalStorage(PAL::SessionID sessionID, HashMap<
 {
     sendWithAsyncReply(Messages::NetworkProcess::RestoreLocalStorage(sessionID, WTFMove(localStorage)), WTFMove(completionHandler));
 }
+
+#if ENABLE(CONTENT_EXTENSIONS)
+void NetworkProcessProxy::resetResourceMonitorThrottlerForTesting(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::ResetResourceMonitorThrottlerForTesting(sessionID), WTFMove(completionHandler));
+}
+#endif
 
 } // namespace WebKit
 

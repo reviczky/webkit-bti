@@ -306,6 +306,17 @@ void Path::addRoundedRect(const RoundedRect& rect)
     addRoundedRect(FloatRoundedRect(rect));
 }
 
+void Path::addContinuousRoundedRect(const FloatRect& rect, const float cornerWidth, const float cornerHeight)
+{
+    if (rect.isEmpty())
+        return;
+
+    if (isEmpty())
+        m_data = PathSegment(PathContinuousRoundedRect { rect, cornerWidth, cornerHeight });
+    else
+        ensureImpl().add(PathContinuousRoundedRect { rect, cornerWidth, cornerHeight });
+}
+
 void Path::closeSubpath()
 {
     if (isEmpty() || isClosed())
@@ -421,6 +432,19 @@ std::optional<PathRoundedRect> Path::singleRoundedRect() const
 
     if (auto impl = asImpl())
         return impl->singleRoundedRect();
+
+    return std::nullopt;
+}
+
+std::optional<PathContinuousRoundedRect> Path::singleContinuousRoundedRect() const
+{
+    if (auto segment = asSingle()) {
+        if (auto data = std::get_if<PathContinuousRoundedRect>(&segment->data()))
+            return *data;
+    }
+
+    if (auto impl = asImpl())
+        return impl->singleContinuousRoundedRect();
 
     return std::nullopt;
 }
@@ -580,7 +604,7 @@ bool Path::contains(const FloatPoint& point, WindRule rule) const
     return const_cast<Path&>(*this).ensurePlatformPathImpl().contains(point, rule);
 }
 
-bool Path::strokeContains(const FloatPoint& point, const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+bool Path::strokeContains(const FloatPoint& point, NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     ASSERT(strokeStyleApplier);
 
@@ -623,7 +647,7 @@ FloatRect Path::boundingRect() const
     return { };
 }
 
-FloatRect Path::strokeBoundingRect(const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+FloatRect Path::strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     return const_cast<Path&>(*this).ensurePlatformPathImpl().strokeBoundingRect(strokeStyleApplier);
 }

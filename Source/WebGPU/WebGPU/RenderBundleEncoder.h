@@ -60,7 +60,7 @@ struct WGPURenderBundleEncoderImpl {
 @property (readonly, nonatomic) float depthBiasSlopeScale;
 @property (readonly, nonatomic) float depthBiasClamp;
 @property (readonly, nonatomic) id<MTLBuffer> fragmentDynamicOffsetsBuffer;
-@property (readonly, nonatomic) const WebGPU::RenderPipeline* pipeline;
+@property (readonly, nonatomic) WeakPtr<WebGPU::RenderPipeline> pipeline;
 
 - (Vector<WebGPU::BindableResources>*)resources;
 - (WebGPU::RenderBundle::MinVertexCountsContainer*)minVertexCountForDrawCommand;
@@ -184,6 +184,7 @@ private:
     using BindGroupDynamicOffsetsContainer = HashMap<uint32_t, Vector<uint32_t>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>;
     std::optional<BindGroupDynamicOffsetsContainer> m_bindGroupDynamicOffsets;
     HashMap<uint32_t, RefPtr<const BindGroup>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_bindGroups;
+    HashSet<RefPtr<const BindGroup>> m_allBindGroups;
     RenderBundle::MinVertexCountsContainer m_minVertexCountForDrawCommand;
     NSMutableArray<RenderBundleICBWithResources*> *m_icbArray;
     id<MTLBuffer> m_dynamicOffsetsVertexBuffer { nil };

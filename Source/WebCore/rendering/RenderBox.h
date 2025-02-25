@@ -550,7 +550,7 @@ public:
     LayoutRect logicalLayoutOverflowRectForPropagation(const WritingMode) const;
     LayoutRect layoutOverflowRectForPropagation(const WritingMode) const;
 
-    bool hasRenderOverflow() const { return m_overflow; }    
+    bool hasRenderOverflow() const { return !!m_overflow; }
     bool hasVisualOverflow() const { return m_overflow && !borderBoxRect().contains(m_overflow->visualOverflowRect()); }
 
     virtual bool needsPreferredWidthsRecalculation() const;
@@ -699,7 +699,9 @@ protected:
     void computePreferredLogicalWidths(const Length& minLogicalWidth, const Length& maxLogicalWidth, LayoutUnit borderAndPaddingLogicalWidth);
     
     bool isAspectRatioDegenerate(double aspectRatio) const { return !aspectRatio || isnan(aspectRatio); }
-    
+
+    bool overflowChangesMayAffectLayout() const final;
+
 private:
     bool replacedMinMaxLogicalHeightComputesAsNone(SizeType) const;
 
@@ -711,7 +713,7 @@ private:
 
     bool fixedElementLaysOutRelativeToFrame(const LocalFrameView&) const;
 
-    template<typename Function> LayoutUnit computeOrTrimInlineMargin(const RenderBlock& containingBlock, MarginTrimType marginSide, const Function& computeInlineMargin) const;
+    template<typename Function> LayoutUnit computeOrTrimInlineMargin(const RenderBlock& containingBlock, MarginTrimType marginSide, NOESCAPE const Function& computeInlineMargin) const;
 
     bool isScrollableOrRubberbandableBox() const override;
 
@@ -772,7 +774,7 @@ protected:
     LayoutUnit m_maxPreferredLogicalWidth;
 
     // Our overflow information.
-    RefPtr<RenderOverflow> m_overflow;
+    std::unique_ptr<RenderOverflow> m_overflow;
 
 private:
     // Used to store state between styleWillChange and styleDidChange

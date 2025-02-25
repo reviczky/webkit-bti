@@ -680,7 +680,7 @@ void WebProcessPool::establishRemoteWorkerContextConnectionToNetworkProcess(Remo
     }
 
     // Prioritize the requesting WebProcess for running the service worker.
-    if (!remoteWorkerProcessProxy && !s_useSeparateServiceWorkerProcess && requestingProcess) {
+    if (!remoteWorkerProcessProxy && !s_useSeparateServiceWorkerProcess && requestingProcess && requestingProcess->state() != WebProcessProxy::State::Terminated) {
         if (requestingProcess->websiteDataStore() == websiteDataStore && requestingProcess->site() == site)
             useProcessForRemoteWorkers(*requestingProcess);
     }
@@ -1346,9 +1346,9 @@ bool WebProcessPool::hasPagesUsingWebsiteDataStore(WebsiteDataStore& dataStore) 
     return m_sessionToPageIDsMap.contains(dataStore.sessionID());
 }
 
-Ref<DownloadProxy> WebProcessPool::download(WebsiteDataStore& dataStore, WebPageProxy* initiatingPage, const ResourceRequest& request, const String& suggestedFilename)
+Ref<DownloadProxy> WebProcessPool::download(WebsiteDataStore& dataStore, WebPageProxy* initiatingPage, const ResourceRequest& request, const std::optional<FrameInfoData>& frameInfo, const String& suggestedFilename)
 {
-    Ref downloadProxy = createDownloadProxy(dataStore, request, initiatingPage, { });
+    Ref downloadProxy = createDownloadProxy(dataStore, request, initiatingPage, frameInfo);
     dataStore.download(downloadProxy, suggestedFilename);
     return downloadProxy;
 }
@@ -1569,7 +1569,7 @@ void WebProcessPool::setDefaultRequestTimeoutInterval(double timeoutInterval)
     sendToAllProcesses(Messages::WebProcess::SetDefaultRequestTimeoutInterval(timeoutInterval));
 }
 
-Ref<DownloadProxy> WebProcessPool::createDownloadProxy(WebsiteDataStore& dataStore, const ResourceRequest& request, WebPageProxy* originatingPage, const FrameInfoData& frameInfo)
+Ref<DownloadProxy> WebProcessPool::createDownloadProxy(WebsiteDataStore& dataStore, const ResourceRequest& request, WebPageProxy* originatingPage, const std::optional<FrameInfoData>& frameInfo)
 {
     Ref client = m_legacyDownloadClient ? Ref<API::DownloadClient>(*m_legacyDownloadClient) : adoptRef(*new API::DownloadClient);
     return dataStore.createDownloadProxy(WTFMove(client), request, originatingPage, frameInfo);
@@ -1659,6 +1659,18 @@ void WebProcessPool::terminateAllWebContentProcesses(ProcessTerminationReason re
         process->requestTermination(reason);
 }
 
+void WebProcessPool::terminateServiceWorkersForSession(PAL::SessionID sessionID)
+{
+    Ref protectedThis { *this };
+    Vector<Ref<WebProcessProxy>> serviceWorkerProcesses;
+    remoteWorkerProcesses().forEach([&](auto& process) {
+        if (process.isRunningServiceWorkers() && process.sessionID() == sessionID)
+            serviceWorkerProcesses.append(process);
+    });
+    for (Ref serviceWorkerProcess : serviceWorkerProcesses)
+        serviceWorkerProcess->disableRemoteWorkers(RemoteWorkerType::ServiceWorker);
+}
+
 void WebProcessPool::terminateServiceWorkers()
 {
     Ref protectedThis { *this };
@@ -1727,8 +1739,7 @@ WebProcessProxy* WebProcessPool::webProcessProxyFromConnection(const IPC::Connec
 
 std::optional<SharedPreferencesForWebProcess> WebProcessPool::sharedPreferencesForWebProcess(const IPC::Connection& connection) const
 {
-    // FIXME: Remove SUPPRESS_UNCOUNTED_ARG once https://github.com/llvm/llvm-project/pull/111198 lands.
-    SUPPRESS_UNCOUNTED_ARG return webProcessProxyFromConnection(connection)->sharedPreferencesForWebProcess();
+    return webProcessProxyFromConnection(connection)->sharedPreferencesForWebProcess();
 }
 
 void WebProcessPool::handleMessage(IPC::Connection& connection, const String& messageName, const WebKit::UserData& messageBody)
@@ -2404,7 +2415,7 @@ bool WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion()
     });
 }
 
-void WebProcessPool::forEachProcessForSession(PAL::SessionID sessionID, const Function<void(WebProcessProxy&)>& apply)
+void WebProcessPool::forEachProcessForSession(PAL::SessionID sessionID, NOESCAPE const Function<void(WebProcessProxy&)>& apply)
 {
     for (Ref process : m_processes) {
         if (process->isPrewarmed() || process->sessionID() != sessionID)

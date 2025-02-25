@@ -932,7 +932,7 @@ namespace WTF {
 template<class T, class... Args>
 ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
 {
-    static_assert(std::is_same<typename T::WTFIsFastAllocated, int>::value, "T should use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
+    static_assert(std::is_same<typename T::WTFIsFastMallocAllocated, int>::value, "T should use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
     static_assert(!HasRefPtrMemberFunctions<T>::value, "T should not be RefCounted");
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
@@ -940,7 +940,7 @@ ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
 template<class T, class... Args>
 ALWAYS_INLINE decltype(auto) makeUniqueWithoutRefCountedCheck(Args&&... args)
 {
-    static_assert(std::is_same<typename T::WTFIsFastAllocated, int>::value, "T should use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
+    static_assert(std::is_same<typename T::WTFIsFastMallocAllocated, int>::value, "T should use FastMalloc (WTF_MAKE_FAST_ALLOCATED)");
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
@@ -1268,9 +1268,20 @@ template <class T> inline typename std::enable_if<std::is_pointer<T>::value, T>:
 
 #define SAFE_PRINTF_TYPE(...) WTF_FOR_EACH(WTF::safePrintfType, __VA_ARGS__)
 
-#define SAFE_PRINTF(format, ...) printf(format __VA_OPT__(, SAFE_PRINTF_TYPE(__VA_ARGS__)))
-#define SAFE_FPRINTF(file, format, ...) fprintf(file, format __VA_OPT__(, SAFE_PRINTF_TYPE(__VA_ARGS__)))
-#define SAFE_SPRINTF(destinationSpan, format, ...) snprintf(destinationSpan.data(), destinationSpan.size_bytes(), format, SAFE_PRINTF_TYPE(__VA_ARGS__))
+#define SAFE_PRINTF(format, ...) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN \
+    printf(format __VA_OPT__(, SAFE_PRINTF_TYPE(__VA_ARGS__))) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+
+#define SAFE_FPRINTF(file, format, ...) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN \
+    fprintf(file, format __VA_OPT__(, SAFE_PRINTF_TYPE(__VA_ARGS__))) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+
+#define SAFE_SPRINTF(destinationSpan, format, ...) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN \
+    snprintf(destinationSpan.data(), destinationSpan.size_bytes(), format, SAFE_PRINTF_TYPE(__VA_ARGS__)) \
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 template<typename T> concept ByteType = sizeof(T) == 1 && ((std::is_integral_v<T> && !std::same_as<T, bool>) || std::same_as<T, std::byte>) && !std::is_const_v<T>;
 
@@ -1488,6 +1499,38 @@ ALWAYS_INLINE constexpr void forEachSetBit(std::span<const WordType> bits, size_
             continue;
         iterate(word, i);
     }
+}
+
+template<typename Object, typename Allocator = FastMalloc, typename... Arguments> std::pair<Object*, void*> createWithTrailingBytes(size_t trailingBytesSize, Arguments... arguments)
+{
+    Object* object = static_cast<Object*>(Allocator::malloc(sizeof(Object) + trailingBytesSize));
+    new (NotNull, object) Object(std::forward<Arguments>(arguments)...);
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    return { object, object + 1 };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+}
+
+template<typename Object> std::pair<Object*, void*> fromTrailingBytes(void* trailingBytes)
+{
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    Object* object = static_cast<Object*>(trailingBytes) - 1;
+    return { object, object + 1 };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+}
+
+template<typename Object, typename Allocator = FastMalloc> std::pair<Object*, void*> reallocWithTrailingBytes(Object* object, size_t newTrailingBytesSize)
+{
+    size_t newAllocationSize = sizeof(Object) + newTrailingBytesSize;
+    object = static_cast<Object*>(Allocator::realloc(object, newAllocationSize));
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    return { object, object + 1 };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+}
+
+template<typename Object, typename Allocator = FastMalloc> void destroyWithTrailingBytes(Object* object)
+{
+    object->~Object();
+    Allocator::free(object);
 }
 
 template<typename T, typename U>

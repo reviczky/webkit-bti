@@ -32,6 +32,7 @@
 #include "ContainerNode.h"
 #include "ContextDestructionObserverInlines.h"
 #include "DocumentClasses.h"
+#include "DocumentEnums.h"
 #include "DocumentEventTiming.h"
 #include "DocumentSyncData.h"
 #include "FontSelectorClient.h"
@@ -67,7 +68,6 @@
 #include <wtf/Observer.h>
 #include <wtf/RobinHoodHashMap.h>
 #include <wtf/TZoneMalloc.h>
-#include <wtf/TriState.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashCountedSet.h>
 #include <wtf/WeakHashMap.h>
@@ -242,6 +242,7 @@ class SpaceSplitString;
 class SpeechRecognition;
 class StorageConnection;
 class StringCallback;
+class StyleOriginatedTimelinesController;
 class StyleSheet;
 class StyleSheetContents;
 class StyleSheetList;
@@ -282,7 +283,9 @@ struct BoundaryPoint;
 struct CSSParserContext;
 struct CaretPositionFromPointOptions;
 struct ClientOrigin;
+struct ElementCreationOptions;
 struct FocusOptions;
+struct ImportNodeOptions;
 struct IntersectionObserverData;
 struct OwnerPermissionsPolicyData;
 struct QuerySelectorAllResults;
@@ -359,43 +362,15 @@ class Update;
 
 enum class PageshowEventPersistence : bool { NotPersisted, Persisted };
 
-enum class NodeListInvalidationType : uint8_t {
-    DoNotInvalidateOnAttributeChanges,
-    InvalidateOnClassAttrChange,
-    InvalidateOnIdNameAttrChange,
-    InvalidateOnNameAttrChange,
-    InvalidateOnForTypeAttrChange,
-    InvalidateForFormControls,
-    InvalidateOnHRefAttrChange,
-    InvalidateOnAnyAttrChange,
-};
-constexpr auto numNodeListInvalidationTypes = enumToUnderlyingType(NodeListInvalidationType::InvalidateOnAnyAttrChange) + 1;
-
 enum class EventHandlerRemoval : bool { One, All };
 using EventTargetSet = WeakHashCountedSet<Node, WeakPtrImplWithEventTargetData>;
 
-enum class DocumentCompatibilityMode : uint8_t {
-    NoQuirksMode = 1,
-    QuirksMode = 1 << 1,
-    LimitedQuirksMode = 1 << 2
-};
-
 enum class DimensionsCheck : uint8_t {
-    Width = 1 << 0,
-    Height = 1 << 1
-};
-
-enum class LayoutOptions : uint8_t {
-    RunPostLayoutTasksSynchronously = 1 << 0,
-    IgnorePendingStylesheets = 1 << 1,
-    ContentVisibilityForceLayout = 1 << 2,
-    UpdateCompositingLayers = 1 << 3,
-    DoNotLayoutAncestorDocuments = 1 << 4,
-    // Doesn't call RenderLayer::recursiveUpdateLayerPositionsAfterLayout if
-    // possible. The caller should use a LocalFrameView::AutoPreventLayerAccess
-    // for the scope that layout is expected to be flushed to stop any access to
-    // the stale RenderLayers.
-    CanDeferUpdateLayerPositions = 1 << 5
+    Left = 1 << 0,
+    Top = 1 << 1,
+    Width = 1 << 2,
+    Height = 1 << 3,
+    IgnoreOverflow = 1 << 4,
 };
 
 enum class HttpEquivPolicy : uint8_t {
@@ -533,6 +508,8 @@ public:
     WEBCORE_EXPORT bool hasFocus() const;
     void whenVisible(Function<void()>&&);
 
+    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementForBindings(const AtomString& tagName);
+    ExceptionOr<Ref<Element>> createElementForBindings(const AtomString& tagName, const ElementCreationOptions&);
     WEBCORE_EXPORT Ref<DocumentFragment> createDocumentFragment();
     WEBCORE_EXPORT Ref<Text> createTextNode(String&& data);
     WEBCORE_EXPORT Ref<Comment> createComment(String&& data);
@@ -540,6 +517,10 @@ public:
     WEBCORE_EXPORT ExceptionOr<Ref<ProcessingInstruction>> createProcessingInstruction(String&& target, String&& data);
     WEBCORE_EXPORT ExceptionOr<Ref<Attr>> createAttribute(const AtomString& name);
     WEBCORE_EXPORT ExceptionOr<Ref<Attr>> createAttributeNS(const AtomString& namespaceURI, const AtomString& qualifiedName, bool shouldIgnoreNamespaceChecks = false);
+    WEBCORE_EXPORT ExceptionOr<Ref<Node>> importNode(Node& nodeToImport, std::variant<bool, ImportNodeOptions>&&);
+    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementNS(const AtomString& namespaceURI, const AtomString& qualifiedName);
+
+    WEBCORE_EXPORT Ref<Element> createElement(const QualifiedName&, bool createdByParser, CustomElementRegistry* = nullptr);
 
     static CustomElementNameValidationStatus validateCustomElementName(const AtomString&);
     void setActiveCustomElementRegistry(CustomElementRegistry*);
@@ -652,7 +633,6 @@ public:
 
     bool isSrcdocDocument() const { return m_isSrcdocDocument; }
 
-    void setSawElementsInKnownNamespaces() { m_sawElementsInKnownNamespaces = true; }
     bool sawElementsInKnownNamespaces() const { return m_sawElementsInKnownNamespaces; }
     bool wasRemovedLastRefCalled() const { return m_wasRemovedLastRefCalled; }
 
@@ -789,7 +769,7 @@ public:
     bool hasLivingRenderTree() const { return renderView() && !renderTreeBeingDestroyed(); }
     void updateRenderTree(std::unique_ptr<Style::Update> styleUpdate);
 
-    bool updateLayoutIfDimensionsOutOfDate(Element&, OptionSet<DimensionsCheck> = { DimensionsCheck::Width, DimensionsCheck::Height });
+    bool updateLayoutIfDimensionsOutOfDate(Element&, OptionSet<DimensionsCheck> = { DimensionsCheck::Width, DimensionsCheck::Height }, OptionSet<LayoutOptions> = { });
 
     inline AXObjectCache* existingAXObjectCache() const;
     WEBCORE_EXPORT AXObjectCache* axObjectCache() const;
@@ -865,6 +845,8 @@ public:
     void disableWebAssembly(const String& errorMessage) final;
     void setRequiresTrustedTypes(bool required) final;
 
+    bool requiresTrustedTypes() const { return m_requiresTrustedTypes; }
+
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
     StorageConnection* storageConnection();
     SocketProvider* socketProvider() final;
@@ -877,7 +859,7 @@ public:
     void stopGatheringRTCLogs();
 #endif
 
-    bool canNavigate(Frame* targetFrame, const URL& destinationURL = URL());
+    CanNavigateState canNavigate(Frame* targetFrame, const URL& destinationURL = URL());
 
     bool usesStyleBasedEditability() const;
     void setHasElementUsingStyleBasedEditability();
@@ -1250,7 +1232,7 @@ public:
 
     WEBCORE_EXPORT Document* mainFrameDocument() const;
     RefPtr<Document> protectedMainFrameDocument() const { return mainFrameDocument(); }
-    WEBCORE_EXPORT bool isTopDocument() const;
+    bool isTopDocument() const { return mainFrameDocument() == this; }
 
     WEBCORE_EXPORT RefPtr<Document> localTopDocument() const;
 
@@ -1295,9 +1277,6 @@ public:
     std::optional<RenderingContext> getCSSCanvasContext(const String& type, const String& name, int width, int height);
     HTMLCanvasElement* getCSSCanvasElement(const String& name);
     String nameForCSSCanvasElement(const HTMLCanvasElement&) const;
-
-    bool isDNSPrefetchEnabled() const;
-    void parseDNSPrefetchControlHeader(const String&);
 
     WEBCORE_EXPORT void postTask(Task&&) final; // Executes the task on context's thread asynchronously.
 
@@ -1477,8 +1456,6 @@ public:
 
     EventTarget* errorEventTarget() final;
     void logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, int columnNumber, RefPtr<Inspector::ScriptCallStack>&&) final;
-
-    void initDNSPrefetch();
 
     WEBCORE_EXPORT void didAddWheelEventHandler(Node&);
     WEBCORE_EXPORT void didRemoveWheelEventHandler(Node&, EventHandlerRemoval = EventHandlerRemoval::One);
@@ -1812,9 +1789,11 @@ public:
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
     Vector<RefPtr<WebAnimation>> getAnimations();
-    Vector<RefPtr<WebAnimation>> matchingAnimations(const Function<bool(Element&)>&);
+    Vector<RefPtr<WebAnimation>> matchingAnimations(NOESCAPE const Function<bool(Element&)>&);
     AnimationTimelinesController* timelinesController() const { return m_timelinesController.get(); }
     WEBCORE_EXPORT AnimationTimelinesController& ensureTimelinesController();
+    StyleOriginatedTimelinesController* styleOriginatedTimelinesController() { return m_styleOriginatedTimelinesController.get(); }
+    StyleOriginatedTimelinesController& ensureStyleOriginatedTimelinesController();
     void keyframesRuleDidChange(const String& name);
 
     void addTopLayerElement(Element&);
@@ -1852,7 +1831,7 @@ public:
     void processInternalResourceLinks(Element* = nullptr);
 
 #if ENABLE(VIDEO)
-    WEBCORE_EXPORT void forEachMediaElement(const Function<void(HTMLMediaElement&)>&);
+    WEBCORE_EXPORT void forEachMediaElement(NOESCAPE const Function<void(HTMLMediaElement&)>&);
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -1906,6 +1885,7 @@ public:
 #if ENABLE(APP_HIGHLIGHTS)
     HighlightRegistry* appHighlightRegistryIfExists() { return m_appHighlightRegistry.get(); }
     WEBCORE_EXPORT HighlightRegistry& appHighlightRegistry();
+    WEBCORE_EXPORT Ref<HighlightRegistry> protectedAppHighlightRegistry();
 
     WEBCORE_EXPORT AppHighlightStorage& appHighlightStorage();
     AppHighlightStorage* appHighlightStorageIfExists() const { return m_appHighlightStorage.get(); };
@@ -1925,8 +1905,8 @@ public:
 
     WEBCORE_EXPORT Editor& editor();
     WEBCORE_EXPORT const Editor& editor() const;
-    Ref<Editor> protectedEditor();
-    Ref<const Editor> protectedEditor() const;
+    WEBCORE_EXPORT Ref<Editor> protectedEditor();
+    WEBCORE_EXPORT Ref<const Editor> protectedEditor() const;
     FrameSelection& selection() { return m_selection; }
     const FrameSelection& selection() const { return m_selection; }
     CheckedRef<FrameSelection> checkedSelection();
@@ -2064,7 +2044,7 @@ private:
 
     String nodeName() const final;
     bool childTypeAllowed(NodeType) const final;
-    Ref<Node> cloneNodeInternal(TreeScope&, CloningOperation) final;
+    Ref<Node> cloneNodeInternal(Document&, CloningOperation, CustomElementRegistry*) final;
     void cloneDataFromDocument(const Document&);
 
     Seconds minimumDOMTimerInterval() const final;
@@ -2168,7 +2148,6 @@ private:
     void updateCaptureAccordingToMutedState();
     MediaProducerMediaStateFlags computeCaptureState() const;
 #endif
-    bool isTopDocumentLegacy() const { return mainFrameDocument() == this; }
     void securityOriginDidChange() final;
 
     Ref<DocumentSyncData> syncData() { return m_syncData.get(); }
@@ -2258,7 +2237,6 @@ private:
     StringWithDirection m_rawTitle;
     RefPtr<Element> m_titleElement;
 
-    std::unique_ptr<AXObjectCache> m_axObjectCache;
     const std::unique_ptr<DocumentMarkerController> m_markers;
     
     Timer m_styleRecalcTimer;
@@ -2463,6 +2441,7 @@ private:
 
     RefPtr<DocumentTimeline> m_timeline;
     const std::unique_ptr<AnimationTimelinesController> m_timelinesController;
+    const std::unique_ptr<StyleOriginatedTimelinesController> m_styleOriginatedTimelinesController;
 
     RefPtr<WindowEventLoop> m_eventLoop;
     std::unique_ptr<EventLoopTaskGroup> m_documentTaskGroup;
@@ -2628,8 +2607,6 @@ private:
     bool m_isResolvingAnchorPositionedElements { false };
 
     bool m_gotoAnchorNeededAfterStylesheetsLoad { false };
-    TriState m_isDNSPrefetchEnabled { TriState::Indeterminate };
-    bool m_haveExplicitlyDisabledDNSPrefetch { false };
 
     bool m_isSynthesized { false };
     bool m_isNonRenderedPlaceholder { false };
@@ -2705,6 +2682,8 @@ private:
     bool m_hasBeenRevealed { false };
     bool m_visualUpdatesAllowedChangeRequiresLayoutMilestones { false };
     bool m_visualUpdatesAllowedChangeCompletesPageTransition { false };
+
+    bool m_requiresTrustedTypes { false };
 
     static bool hasEverCreatedAnAXObjectCache;
 

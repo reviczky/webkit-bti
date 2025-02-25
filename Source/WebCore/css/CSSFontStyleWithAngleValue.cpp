@@ -43,11 +43,11 @@ Ref<CSSFontStyleWithAngleValue> CSSFontStyleWithAngleValue::create(ObliqueAngle&
     return adoptRef(*new CSSFontStyleWithAngleValue(WTFMove(obliqueAngle)));
 }
 
-String CSSFontStyleWithAngleValue::customCSSText() const
+String CSSFontStyleWithAngleValue::customCSSText(const CSS::SerializationContext& context) const
 {
     if (m_obliqueAngle.isKnownZero())
         return nameLiteralForSerialization(CSSValueNormal);
-    return makeString(nameLiteralForSerialization(CSSValueOblique), ' ', CSS::serializationForCSS(m_obliqueAngle));
+    return makeString(nameLiteralForSerialization(CSSValueOblique), ' ', CSS::serializationForCSS(context, m_obliqueAngle));
 }
 
 bool CSSFontStyleWithAngleValue::equals(const CSSFontStyleWithAngleValue& other) const
@@ -55,7 +55,7 @@ bool CSSFontStyleWithAngleValue::equals(const CSSFontStyleWithAngleValue& other)
     return m_obliqueAngle == other.m_obliqueAngle;
 }
 
-IterationStatus CSSFontStyleWithAngleValue::customVisitChildren(const Function<IterationStatus(CSSValue&)>& func) const
+IterationStatus CSSFontStyleWithAngleValue::customVisitChildren(NOESCAPE const Function<IterationStatus(CSSValue&)>& func) const
 {
     return CSS::visitCSSValueChildren(func, m_obliqueAngle);
 }

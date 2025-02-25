@@ -178,6 +178,12 @@ enum class PushAndNotificationsEnabledPolicy: uint8_t {
     Yes,
 };
 
+enum class InlineMediaPlaybackPolicy : uint8_t {
+    Default,
+    RequiresPlaysInlineAttribute,
+    DoesNotRequirePlaysInlineAttribute
+};
+
 enum class ContentExtensionDefaultEnablement : bool { Disabled, Enabled };
 using ContentExtensionEnablement = std::pair<ContentExtensionDefaultEnablement, HashSet<String>>;
 
@@ -219,7 +225,7 @@ public:
     WEBCORE_EXPORT virtual void detachFromFrame(LoadWillContinueInAnotherProcess);
 
     WEBCORE_EXPORT FrameLoader* frameLoader() const;
-    RefPtr<FrameLoader> protectedFrameLoader() const;
+    WEBCORE_EXPORT RefPtr<FrameLoader> protectedFrameLoader() const;
     WEBCORE_EXPORT SubresourceLoader* mainResourceLoader() const;
     WEBCORE_EXPORT RefPtr<FragmentedSharedBuffer> mainResourceData() const;
     
@@ -292,7 +298,7 @@ public:
     WEBCORE_EXPORT void frameDestroyed() final;
 
     // Return the ArchiveResource for the URL only when loading an Archive
-    WEBCORE_EXPORT ArchiveResource* archiveResourceForURL(const URL&) const;
+    WEBCORE_EXPORT RefPtr<ArchiveResource> archiveResourceForURL(const URL&) const;
 
     WEBCORE_EXPORT RefPtr<ArchiveResource> mainResource() const;
 
@@ -413,6 +419,9 @@ public:
 
     PushAndNotificationsEnabledPolicy pushAndNotificationsEnabledPolicy() const { return m_pushAndNotificationsEnabledPolicy; }
     void setPushAndNotificationsEnabledPolicy(PushAndNotificationsEnabledPolicy policy) { m_pushAndNotificationsEnabledPolicy = policy; }
+
+    InlineMediaPlaybackPolicy inlineMediaPlaybackPolicy() const { return m_inlineMediaPlaybackPolicy; }
+    void setInlineMediaPlaybackPolicy(InlineMediaPlaybackPolicy policy) { m_inlineMediaPlaybackPolicy = policy; }
 
     void addSubresourceLoader(SubresourceLoader&);
     void removeSubresourceLoader(LoadCompletionType, SubresourceLoader&);
@@ -622,7 +631,7 @@ private:
     bool disallowWebArchive() const;
     bool disallowDataRequest() const;
 
-    Ref<CachedResourceLoader> m_cachedResourceLoader;
+    const Ref<CachedResourceLoader> m_cachedResourceLoader;
 
     CachedResourceHandle<CachedRawResource> m_mainResource;
     ResourceLoaderMap m_subresourceLoaders;
@@ -753,6 +762,7 @@ private:
     HTTPSByDefaultMode m_httpsByDefaultMode { HTTPSByDefaultMode::Disabled };
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
     PushAndNotificationsEnabledPolicy m_pushAndNotificationsEnabledPolicy { PushAndNotificationsEnabledPolicy::UseGlobalPolicy };
+    InlineMediaPlaybackPolicy m_inlineMediaPlaybackPolicy { InlineMediaPlaybackPolicy::Default };
 
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
 

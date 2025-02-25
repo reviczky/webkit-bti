@@ -78,7 +78,6 @@ private:
     void handleMouseDown(const WebCore::LayoutPoint&, MonotonicTime) final;
     void handleMouseMove(const WebCore::LayoutPoint&, MonotonicTime) final;
     void handleMouseUp(const WebCore::LayoutPoint&, MonotonicTime) final;
-    void setBackgroundColor(WebCore::Color) final;
     void setEntityTransform(WebCore::TransformationMatrix) final;
     bool supportsTransform(WebCore::TransformationMatrix) final;
     void enterFullscreen() final;
@@ -106,6 +105,9 @@ private:
     void setEnvironmentMap(Ref<WebCore::SharedBuffer>&& data) final;
     void setHasPortal(bool) final;
     void setStageMode(WebCore::StageModeOperation) final;
+    void beginStageModeTransform(const WebCore::TransformationMatrix&) final;
+    void updateStageModeTransform(const WebCore::TransformationMatrix&) final;
+    void endStageModeInteraction() final;
 
     WebCore::ModelPlayerIdentifier m_id;
     WeakPtr<WebPage> m_page;

@@ -30,6 +30,7 @@
 
 #include "BufferIdentifierSet.h"
 #include "GPUConnectionToWebProcess.h"
+#include "ImageBufferRemoteDisplayListBackend.h"
 #include "ImageBufferRemotePDFDocumentBackend.h"
 #include "ImageBufferShareableBitmapBackend.h"
 #include "Logging.h"
@@ -63,7 +64,7 @@ using namespace WebCore;
 Ref<RemoteRenderingBackendProxy> RemoteRenderingBackendProxy::create(WebPage& webPage)
 {
     Ref instance = adoptRef(*new RemoteRenderingBackendProxy(RunLoop::main()));
-    RELEASE_LOG(RemoteLayerBuffers, "[renderingBackend=%" PRIu64 "] Created rendering backend for pageProxyID=%" PRIu64 ", webPageID=%" PRIu64, instance->renderingBackendIdentifier().toUInt64(),  webPage.webPageProxyIdentifier().toUInt64(), webPage.identifier().toUInt64());
+    RELEASE_LOG_FORWARDABLE(RemoteLayerBuffers, REMOTE_RENDERING_BACKEND_PROXY_CREATED_RENDERING_BACKEND, instance->renderingBackendIdentifier().toUInt64(),  webPage.webPageProxyIdentifier().toUInt64(), webPage.identifier().toUInt64());
     return instance;
 }
 
@@ -252,6 +253,7 @@ RefPtr<ImageBuffer> RemoteRenderingBackendProxy::createImageBuffer(const FloatSi
         break;
 
     case RenderingMode::DisplayList:
+        imageBuffer = RemoteImageBufferProxy::create<ImageBufferRemoteDisplayListBackend>(size, resolutionScale, colorSpace, pixelFormat, purpose, *this);
         break;
     }
 

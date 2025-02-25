@@ -323,7 +323,7 @@ void PluginView::manualLoadDidFail()
     protectedPlugin()->streamDidFail();
 }
 
-void PluginView::topContentInsetDidChange()
+void PluginView::obscuredContentInsetsDidChange()
 {
     viewGeometryDidChange();
 }
@@ -360,6 +360,8 @@ double PluginView::pageScaleFactor() const
 
 void PluginView::pluginScaleFactorDidChange()
 {
+    if (!protectedPlugin()->handlesPageScaleFactor())
+        return;
     auto scaleFactor = pageScaleFactor();
     RefPtr webPage = m_webPage.get();
     webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
@@ -426,7 +428,7 @@ void PluginView::initializePlugin()
         if (RefPtr frameView = frame->view())
             frameView->setNeedsLayoutAfterViewConfigurationChange();
         if (frame->isMainFrame() && plugin->isFullFramePlugin())
-            WebFrame::fromCoreFrame(*frame)->protectedPage()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(true, plugin->minScaleFactor(), plugin->maxScaleFactor()));
+            WebFrame::fromCoreFrame(*frame)->protectedPage()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(plugin->handlesPageScaleFactor(), plugin->minScaleFactor(), plugin->maxScaleFactor()));
     }
 }
 
@@ -880,17 +882,27 @@ void PluginView::viewGeometryDidChange()
         return;
 
     ASSERT(frame());
-    float pageScaleFactor = frame()->page() ? frame()->page()->pageScaleFactor() : 1;
-
-    IntPoint scaledFrameRectLocation(frameRect().location().x() * pageScaleFactor, frameRect().location().y() * pageScaleFactor);
-    IntPoint scaledLocationInRootViewCoordinates(protectedParent()->contentsToRootView(scaledFrameRectLocation));
 
     // FIXME: We still don't get the right coordinates for transformed plugins.
-    AffineTransform transform;
-    transform.translate(scaledLocationInRootViewCoordinates.x(), scaledLocationInRootViewCoordinates.y());
-    transform.scale(pageScaleFactor);
+    auto pluginToRootViewTransform = [this, protectedThis = Ref { *this }] {
+        AffineTransform transform;
 
-    protectedPlugin()->geometryDidChange(size(), transform);
+        RefPtr plugin = protectedPlugin();
+        RefPtr frame = this->frame();
+        if (frame->isMainFrame() && plugin->isFullFramePlugin() && !plugin->handlesPageScaleFactor())
+            return transform;
+
+        float pageScaleFactor = frame->page() ? frame->page()->pageScaleFactor() : 1;
+        IntPoint scaledFrameRectLocation { frameRect().location().scaled(pageScaleFactor) };
+        IntPoint scaledLocationInRootViewCoordinates { protectedParent()->contentsToRootView(scaledFrameRectLocation) };
+
+        transform.translate(scaledLocationInRootViewCoordinates);
+        transform.scale(pageScaleFactor);
+
+        return transform;
+    }();
+
+    protectedPlugin()->geometryDidChange(size(), pluginToRootViewTransform);
 }
 
 void PluginView::viewVisibilityDidChange()
@@ -1128,11 +1140,6 @@ void PluginView::openWithPreview(CompletionHandler<void(const String&, FrameInfo
 
 #if PLATFORM(IOS_FAMILY)
 
-void PluginView::pluginDidInstallPDFDocument(double initialScale)
-{
-    protectedWebPage()->pluginDidInstallPDFDocument(initialScale);
-}
-
 void PluginView::setSelectionRange(FloatPoint pointInRootView, TextGranularity granularity)
 {
     protectedPlugin()->setSelectionRange(pointInRootView, granularity);
@@ -1185,12 +1192,12 @@ bool PluginView::populateEditorStateIfNeeded(EditorState& state) const
     return protectedPlugin()->populateEditorStateIfNeeded(state);
 }
 
-bool PluginView::shouldRespectPageScaleAdjustments() const
+WebCore::FloatRect PluginView::absoluteBoundingRectForSmartMagnificationAtPoint(WebCore::FloatPoint point) const
 {
     if (!m_isInitialized)
-        return false;
+        return { };
 
-    return protectedPlugin()->shouldRespectPageScaleAdjustments();
+    return protectedPlugin()->absoluteBoundingRectForSmartMagnificationAtPoint(point);
 }
 
 void PluginView::updateDocumentForPluginSizingBehavior()
@@ -1200,6 +1207,14 @@ void PluginView::updateDocumentForPluginSizingBehavior()
     // The styles in PluginDocumentParser are constructed to respond to this class.
     if (RefPtr documentElement = protectedPluginElement()->protectedDocument()->protectedDocumentElement())
         documentElement->setAttributeWithoutSynchronization(HTMLNames::classAttr, "plugin-fits-content"_s);
+}
+
+bool PluginView::pluginHandlesPageScaleFactor() const
+{
+    if (!m_isInitialized)
+        return false;
+
+    return protectedPlugin()->handlesPageScaleFactor();
 }
 
 } // namespace WebKit

@@ -136,6 +136,11 @@ void NetworkStorageSession::setCookieStorage(GRefPtr<SoupCookieJar>&& jar)
     soup_cookie_jar_set_accept_policy(jar.get(), soup_cookie_jar_get_accept_policy(m_cookieStorage.get()));
     m_cookieStorage = WTFMove(jar);
     g_signal_connect_swapped(m_cookieStorage.get(), "changed", G_CALLBACK(cookiesDidChange), this);
+
+    for (auto& [host, observers] : m_cookieChangeObservers) {
+        for (auto& observer : observers)
+            observer.allCookiesDeleted();
+    }
 }
 
 void NetworkStorageSession::setCookieObserverHandler(Function<void ()>&& handler)
@@ -379,7 +384,7 @@ static inline bool httpOnlyCookieExists(const GSList* cookies, const gchar* name
     return false;
 }
 
-void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameSiteInfo&, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, const String& value, ShouldRelaxThirdPartyCookieBlocking relaxThirdPartyCookieBlocking) const
+void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameSiteInfo&, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, RequiresScriptTelemetry requiresScriptTelemetry, const String& value, ShouldRelaxThirdPartyCookieBlocking relaxThirdPartyCookieBlocking) const
 {
     if (applyTrackingPrevention == ApplyTrackingPrevention::Yes && shouldBlockCookies(firstParty, url, frameID, pageID, relaxThirdPartyCookieBlocking))
         return;
@@ -392,7 +397,7 @@ void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameS
     if (!firstPartyURI)
         return;
 
-    auto cappedLifetime = clientSideCookieCap(RegistrableDomain { firstParty }, pageID);
+    auto cappedLifetime = clientSideCookieCap(RegistrableDomain { firstParty }, requiresScriptTelemetry, pageID);
 
     // Get existing cookies for this origin.
     SoupCookieJar* jar = cookieStorage();
@@ -435,7 +440,7 @@ void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameS
     soup_cookies_free(existingCookies);
 }
 
-bool NetworkStorageSession::setCookieFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, const Cookie& cookie, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) const
+bool NetworkStorageSession::setCookieFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, RequiresScriptTelemetry, const Cookie& cookie, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) const
 {
     if (applyTrackingPrevention == ApplyTrackingPrevention::Yes && shouldBlockCookies(firstParty, url, frameID, pageID, shouldRelaxThirdPartyCookieBlocking))
         return false;
@@ -561,6 +566,12 @@ void NetworkStorageSession::deleteAllCookies(CompletionHandler<void()>&& complet
         auto* cookie = static_cast<SoupCookie*>(item->data);
         soup_cookie_jar_delete_cookie(cookieJar, cookie);
     }
+
+    for (auto& [host, observers] : m_cookieChangeObservers) {
+        for (auto& observer : observers)
+            observer.allCookiesDeleted();
+    }
+
     completionHandler();
 }
 
@@ -749,14 +760,14 @@ bool NetworkStorageSession::getRawCookies(const URL& firstParty, const SameSiteI
 
 Vector<Cookie> NetworkStorageSession::domCookiesForHost(const URL& url)
 {
-    auto host = url.host().utf8().data();
+    auto host = url.host().utf8();
 
     CookieList soupCookies(soup_cookie_jar_all_cookies(cookieStorage()));
 
     Vector<Cookie> cookies;
     for (GSList* iter = soupCookies.get(); iter; iter = g_slist_next(iter)) {
         auto* soupCookie = static_cast<SoupCookie*>(iter->data);
-        if (soup_cookie_domain_matches(soupCookie, host)) {
+        if (soup_cookie_domain_matches(soupCookie, host.data())) {
             // soup_cookie_jar_all_cookies() always returns a reversed list.
             cookies.insert(0, Cookie(soupCookie));
         }

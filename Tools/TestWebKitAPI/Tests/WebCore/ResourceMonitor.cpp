@@ -28,111 +28,195 @@
 #if ENABLE(CONTENT_EXTENSIONS)
 
 #include "Utilities.h"
-#include <WebCore/ResourceMonitorThrottler.h>
+#include <WebCore/ResourceMonitorThrottlerHolder.h>
+#include <wtf/FileSystem.h>
+#include <wtf/MainThread.h>
 
 namespace TestWebKitAPI {
 
 using namespace WebCore;
 
-class ResouceMonitorTest : public testing::Test {
+class ResourceMonitorTest : public testing::Test {
 public:
     void SetUp() override
     {
-        m_reference = ApproximateTime::now();
+        WTF::initializeMainThread();
+        m_reference = ContinuousApproximateTime::now();
     }
 
 protected:
-    ApproximateTime m_reference;
+    ContinuousApproximateTime m_reference;
+    RefPtr<ResourceMonitorThrottlerHolder> m_throttler;
+    String m_temporayDatabasePath;
 
-    ApproximateTime now()
+    void prepareThrottler(size_t count, Seconds duration, size_t maxHosts, bool withPersistence = false)
+    {
+        if (withPersistence)
+            m_throttler = ResourceMonitorThrottlerHolder::create(temporaryDatabasePath(), count, duration, maxHosts);
+        else
+            m_throttler = ResourceMonitorThrottlerHolder::create(count, duration, maxHosts);
+    }
+
+    void prepareThrottler(bool withPersistence = false)
+    {
+        if (withPersistence)
+            m_throttler = ResourceMonitorThrottlerHolder::create(temporaryDatabasePath());
+        else
+            m_throttler = ResourceMonitorThrottlerHolder::create();
+    }
+
+    void disposeThrottler()
+    {
+        m_throttler = nullptr;
+    }
+
+    ResourceMonitorThrottlerHolder* throttler()
+    {
+        return m_throttler.get();
+    }
+
+    ContinuousApproximateTime now()
     {
         auto t = m_reference;
         m_reference += 1_ms;
         return t;
     }
 
-    ApproximateTime later(Seconds delta)
+    ContinuousApproximateTime later(Seconds delta)
     {
         m_reference += delta;
         return m_reference;
     }
+
+    bool tryAccess(const String& host, ContinuousApproximateTime time)
+    {
+        bool result;
+        bool completed = false;
+        m_throttler->tryAccess(host, time, [&] (bool wasGranted) {
+            result = wasGranted;
+            completed = true;
+        });
+
+        Util::run(&completed);
+
+        return result;
+    }
+
+    String& temporaryDatabasePath()
+    {
+        if (m_temporayDatabasePath.isEmpty()) {
+            m_temporayDatabasePath = FileSystem::createTemporaryFile("tempDatabaseForResourceMonitorThrottler"_s);
+            FileSystem::deleteFile(m_temporayDatabasePath);
+        }
+        return m_temporayDatabasePath;
+    }
 };
 
-TEST_F(ResouceMonitorTest, ThrottlerBasic)
+TEST_F(ResourceMonitorTest, ThrottlerBasic)
 {
-    ResourceMonitorThrottler throttler { /* size */ 2, /* duration */ 1_s, /* maxHosts */ 1 };
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 1);
 
     auto host = "example.com"_s;
 
     // first access must be okay.
-    EXPECT_TRUE(throttler.tryAccess(host, now()));
+    EXPECT_TRUE(tryAccess(host, now()));
     // second one is alse okay.
-    EXPECT_TRUE(throttler.tryAccess(host, now()));
+    EXPECT_TRUE(tryAccess(host, now()));
     // but third one is not okay because size is 2.
-    EXPECT_FALSE(throttler.tryAccess(host, now()));
+    EXPECT_FALSE(tryAccess(host, now()));
 
     // after duration, it should be okay.
-    EXPECT_TRUE(throttler.tryAccess(host, later(1_s)));
+    EXPECT_TRUE(tryAccess(host, later(1_s)));
 }
 
-TEST_F(ResouceMonitorTest, ThrottlerMaxHosts)
+TEST_F(ResourceMonitorTest, ThrottlerMaxHosts)
 {
-    ResourceMonitorThrottler throttler { /* size */ 2, /* duration */ 1_s, /* maxHosts */ 2 };
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 2);
 
     auto host1 = "h1.example.com"_s;
     auto host2 = "h2.example.com"_s;
     auto host3 = "h3.example.com"_s;
 
     // make host1 inaccessible.
-    EXPECT_TRUE(throttler.tryAccess(host1, now()));
-    EXPECT_TRUE(throttler.tryAccess(host1, now()));
-    EXPECT_FALSE(throttler.tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host1, now()));
+    EXPECT_FALSE(tryAccess(host1, now()));
 
     // host2 is accessible and still host1 is not.
-    EXPECT_TRUE(throttler.tryAccess(host2, now()));
-    EXPECT_FALSE(throttler.tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host2, now()));
+    EXPECT_FALSE(tryAccess(host1, now()));
 
     // host3 is accessible and host1 is now also accessible because of the max host.
-    EXPECT_TRUE(throttler.tryAccess(host3, now()));
-    EXPECT_TRUE(throttler.tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host3, now()));
+    EXPECT_TRUE(tryAccess(host1, now()));
 }
 
-TEST_F(ResouceMonitorTest, ThrottlerLeastRecentAccessedHostWillBeRemoved)
+TEST_F(ResourceMonitorTest, ThrottlerLeastRecentAccessedHostWillBeRemoved)
 {
-    ResourceMonitorThrottler throttler { /* size */ 2, /* duration */ 1_s, /* maxHosts */ 2 };
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 2);
 
     auto host1 = "h1.example.com"_s;
     auto host2 = "h2.example.com"_s;
     auto host3 = "h3.example.com"_s;
 
     // host1 is the oldest access.
-    EXPECT_TRUE(throttler.tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host1, now()));
 
     // make host2 inaccessible
-    EXPECT_TRUE(throttler.tryAccess(host2, now()));
-    EXPECT_TRUE(throttler.tryAccess(host2, now()));
-    EXPECT_FALSE(throttler.tryAccess(host2, now()));
+    EXPECT_TRUE(tryAccess(host2, now()));
+    EXPECT_TRUE(tryAccess(host2, now()));
+    EXPECT_FALSE(tryAccess(host2, now()));
 
     // make host1 inaccessible and this is the most recent access.
-    EXPECT_TRUE(throttler.tryAccess(host1, now()));
-    EXPECT_FALSE(throttler.tryAccess(host1, now()));
+    EXPECT_TRUE(tryAccess(host1, now()));
+    EXPECT_FALSE(tryAccess(host1, now()));
 
     // host3 is accessible. In this access, lest recent host is removed.
-    EXPECT_TRUE(throttler.tryAccess(host3, now()));
+    EXPECT_TRUE(tryAccess(host3, now()));
     // host1 is the oldest, but recent than host2. Still it is blocked.
-    EXPECT_FALSE(throttler.tryAccess(host1, now()));
+    EXPECT_FALSE(tryAccess(host1, now()));
     // host2 is the least recent access and removed in host3 access. So it is accessible.
-    EXPECT_TRUE(throttler.tryAccess(host2, now()));
+    EXPECT_TRUE(tryAccess(host2, now()));
 }
 
-TEST_F(ResouceMonitorTest, ThrottlerEmptyHostname)
+TEST_F(ResourceMonitorTest, ThrottlerEmptyHostname)
 {
-    ResourceMonitorThrottler throttler { /* size */ 2, /* duration */ 1_s, /* maxHosts */ 2 };
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 2);
 
     auto emptyHost = ""_s;
 
     // Accessing with an empty hostname should not crash.
-    EXPECT_FALSE(throttler.tryAccess(emptyHost, now()));
+    EXPECT_FALSE(tryAccess(emptyHost, now()));
+}
+
+TEST_F(ResourceMonitorTest, ThrottlerPersistence)
+{
+    auto host = "example.com"_s;
+
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 2, /* withPersistence */ true);
+
+    // first access must be okay.
+    EXPECT_TRUE(tryAccess(host, now()));
+    // second one is alse okay.
+    EXPECT_TRUE(tryAccess(host, now()));
+    // but third one is not okay because size is 2.
+    EXPECT_FALSE(tryAccess(host, now()));
+
+    disposeThrottler();
+
+    prepareThrottler(/* size */ 2, /* duration */ 1_s, /* maxHosts */ 2, /* withPersistence */ true);
+
+    // recover all history from database so still third one is not okay because size is 2.
+    EXPECT_FALSE(tryAccess(host, now()));
+}
+
+TEST_F(ResourceMonitorTest, ThrottlerCreateAndDelete)
+{
+    // Shouldn't crash with immediate disposal.
+    prepareThrottler(true);
+    disposeThrottler();
+
+    EXPECT_FALSE(throttler());
 }
 
 } // namespace TestWebKitAPI

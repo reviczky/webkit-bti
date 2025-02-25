@@ -140,6 +140,7 @@ Modules/fetch/WindowOrWorkerGlobalScopeFetch.cpp
 Modules/filesystemaccess/FileSystemDirectoryHandle.cpp
 Modules/filesystemaccess/FileSystemFileHandle.cpp
 Modules/filesystemaccess/FileSystemHandle.cpp
+Modules/filesystemaccess/FileSystemStorageConnection.cpp
 Modules/filesystemaccess/FileSystemSyncAccessHandle.cpp
 Modules/filesystemaccess/FileSystemWritableFileStream.cpp
 Modules/filesystemaccess/FileSystemWritableFileStreamSink.cpp
@@ -155,7 +156,7 @@ Modules/highlight/HighlightRegistry.cpp
 Modules/highlight/Highlight.cpp
 Modules/identity/CredentialRequestCoordinator.cpp
 Modules/identity/DigitalCredential.cpp
-Modules/identity/IdentityCredentialsContainer.cpp
+Modules/identity/dummy/DummyCredentialRequestCoordinatorClient.cpp
 Modules/indexeddb/IDBCursor.cpp
 Modules/indexeddb/IDBCursorWithValue.cpp
 Modules/indexeddb/IDBDatabase.cpp
@@ -616,6 +617,7 @@ animation/ScrollAxis.cpp
 animation/ScrollTimeline.cpp
 animation/StyleOriginatedAnimation.cpp
 animation/StyleOriginatedAnimationEvent.cpp
+animation/StyleOriginatedTimelinesController.cpp
 animation/TimelineRange.cpp
 animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
@@ -845,7 +847,6 @@ crypto/algorithms/CryptoAlgorithmRSASSA_PKCS1_v1_5.cpp
 crypto/algorithms/CryptoAlgorithmRSA_OAEP.cpp
 crypto/algorithms/CryptoAlgorithmRSA_PSS.cpp
 crypto/algorithms/CryptoAlgorithmSHA1.cpp
-crypto/algorithms/CryptoAlgorithmSHA224.cpp
 crypto/algorithms/CryptoAlgorithmSHA256.cpp
 crypto/algorithms/CryptoAlgorithmSHA384.cpp
 crypto/algorithms/CryptoAlgorithmSHA512.cpp
@@ -880,6 +881,7 @@ css/CSSCounterValue.cpp
 css/CSSCrossfadeValue.cpp
 css/CSSCursorImageValue.cpp
 css/CSSCustomPropertyValue.cpp
+css/CSSDynamicRangeLimitValue.cpp
 css/CSSEasingFunctionValue.cpp
 css/CSSFilterImageValue.cpp
 css/CSSFilterPropertyValue.cpp
@@ -1026,9 +1028,11 @@ css/parser/CSSParserToken.cpp
 css/parser/CSSParserTokenRange.cpp
 css/parser/CSSPropertyParser.cpp
 css/parser/CSSPropertyParserConsumer+Align.cpp
+css/parser/CSSPropertyParserConsumer+Anchor.cpp
 css/parser/CSSPropertyParserConsumer+Angle.cpp
 css/parser/CSSPropertyParserConsumer+AnglePercentage.cpp
 css/parser/CSSPropertyParserConsumer+Animations.cpp
+css/parser/CSSPropertyParserConsumer+AppleVisualEffect.cpp
 css/parser/CSSPropertyParserConsumer+Attr.cpp
 css/parser/CSSPropertyParserConsumer+Background.cpp
 css/parser/CSSPropertyParserConsumer+Box.cpp
@@ -1147,6 +1151,7 @@ css/typedom/transform/CSSSkewY.cpp
 css/typedom/transform/CSSTransformComponent.cpp
 css/typedom/transform/CSSTransformValue.cpp
 css/typedom/transform/CSSTranslate.cpp
+css/values/CSSSerializationContext.cpp
 css/values/CSSValueAggregates.cpp
 css/values/CSSValueTypes.cpp
 css/values/backgrounds/CSSBorderRadius.cpp
@@ -1159,6 +1164,7 @@ css/values/color/CSSColorMixResolver.cpp
 css/values/color/CSSColorMixSerialization.cpp
 css/values/color/CSSContrastColor.cpp
 css/values/color/CSSContrastColorResolver.cpp
+css/values/color/CSSDynamicRangeLimit.cpp
 css/values/color/CSSHexColor.cpp
 css/values/color/CSSKeywordColor.cpp
 css/values/color/CSSLightDarkColor.cpp
@@ -1884,6 +1890,7 @@ inspector/agents/page/PageDebuggerAgent.cpp
 inspector/agents/page/PageHeapAgent.cpp
 inspector/agents/page/PageNetworkAgent.cpp
 inspector/agents/page/PageRuntimeAgent.cpp
+inspector/agents/page/PageTimelineAgent.cpp
 inspector/agents/page/PageWorkerAgent.cpp
 inspector/agents/worker/ServiceWorkerAgent.cpp
 inspector/agents/worker/WorkerAuditAgent.cpp
@@ -1893,6 +1900,7 @@ inspector/agents/worker/WorkerDOMDebuggerAgent.cpp
 inspector/agents/worker/WorkerDebuggerAgent.cpp
 inspector/agents/worker/WorkerNetworkAgent.cpp
 inspector/agents/worker/WorkerRuntimeAgent.cpp
+inspector/agents/worker/WorkerTimelineAgent.cpp
 inspector/agents/worker/WorkerWorkerAgent.cpp
 layout/formattingContexts/FormattingContext.cpp
 layout/formattingContexts/FormattingGeometry.cpp
@@ -2025,7 +2033,9 @@ loader/ResourceLoadStatistics.cpp
 loader/ResourceLoader.cpp
 loader/ResourceMonitor.cpp
 loader/ResourceMonitorChecker.cpp
+loader/ResourceMonitorPersistence.cpp
 loader/ResourceMonitorThrottler.cpp
+loader/ResourceMonitorThrottlerHolder.cpp
 loader/ResourceTiming.cpp
 loader/ResourceTimingInformation.cpp
 loader/ServerTiming.cpp
@@ -2506,6 +2516,7 @@ platform/graphics/ImageBuffer.cpp
 platform/graphics/ImageBufferAllocator.cpp
 platform/graphics/ImageBufferBackend.cpp
 platform/graphics/ImageBufferContextSwitcher.cpp
+platform/graphics/ImageBufferDisplayListBackend.cpp
 platform/graphics/ImageDecoder.cpp
 platform/graphics/ImageFrame.cpp
 platform/graphics/ImageFrameAnimator.cpp
@@ -2545,6 +2556,7 @@ platform/graphics/PixelBuffer.cpp
 platform/graphics/PixelBufferConversion.cpp
 platform/graphics/PixelBufferFormat.cpp
 platform/graphics/PixelFormat.cpp
+platform/graphics/PlatformDynamicRangeLimit.cpp
 platform/graphics/PlatformTimeRanges.cpp
 platform/graphics/PositionedGlyphs.cpp
 platform/graphics/Region.cpp
@@ -2947,6 +2959,7 @@ rendering/style/ListStyleType.cpp
 rendering/style/NinePieceImage.cpp
 rendering/style/OffsetRotation.cpp
 rendering/style/QuotesData.cpp
+rendering/style/PositionArea.cpp
 rendering/style/RenderStyle.cpp
 rendering/style/RenderStyleConstants.cpp
 rendering/style/SVGRenderStyle.cpp
@@ -3142,6 +3155,8 @@ style/values/color/StyleColorMix.cpp
 style/values/color/StyleColorOptions.cpp
 style/values/color/StyleContrastColor.cpp
 style/values/color/StyleCurrentColor.cpp
+style/values/color/StyleDynamicRangeLimit.cpp
+style/values/color/StyleDynamicRangeLimitMix.cpp
 style/values/color/StyleHexColor.cpp
 style/values/color/StyleKeywordColor.cpp
 style/values/color/StyleLightDarkColor.cpp
@@ -3346,6 +3361,7 @@ workers/WorkerThread.cpp
 workers/service/ExtendableEvent.cpp
 workers/service/ExtendableMessageEvent.cpp
 workers/service/FetchEvent.cpp
+workers/service/InstallEvent.cpp
 workers/service/NavigationPreloadManager.cpp
 workers/service/SWClientConnection.cpp
 workers/service/ServiceWorker.cpp
@@ -3790,6 +3806,7 @@ JSEcdsaParams.cpp
 JSEffectTiming.cpp
 JSElement.cpp
 JSElementCSSInlineStyle.cpp
+JSElementCreationOptions.cpp
 JSElementInternals.cpp
 JSEndingType.cpp
 JSErrorCallback.cpp
@@ -4120,12 +4137,14 @@ JSImageData.cpp
 JSImageDataSettings.cpp
 JSImageDataStorageFormat.cpp
 JSImageSmoothingQuality.cpp
+JSImportNodeOptions.cpp
 JSInputDeviceInfo.cpp
 JSInputEvent.cpp
 JSInspectorAuditAccessibilityObject.cpp
 JSInspectorAuditDOMObject.cpp
 JSInspectorAuditResourcesObject.cpp
 JSInspectorFrontendHost.cpp
+JSInstallEvent.cpp
 JSIntersectionObserver.cpp
 JSIntersectionObserverCallback.cpp
 JSIntersectionObserverEntry.cpp
@@ -4210,6 +4229,7 @@ JSMessageChannel.cpp
 JSMessageEvent.cpp
 JSMessagePort.cpp
 JSMeteringMode.cpp
+JSMobileDocumentRequest.cpp
 JSMouseEvent.cpp
 JSMouseEventInit.cpp
 JSMultiCacheQueryOptions.cpp
@@ -4468,12 +4488,17 @@ JSResizeObserverCallback.cpp
 JSResizeObserverEntry.cpp
 JSResizeObserverOptions.cpp
 JSResizeObserverSize.cpp
+JSRouterCondition.cpp
+JSRouterRule.cpp
+JSRouterSourceDict.cpp
+JSRouterSourceEnum.cpp
 JSRsaHashedImportParams.cpp
 JSRsaHashedKeyGenParams.cpp
 JSRsaKeyGenParams.cpp
 JSRsaOaepParams.cpp
 JSRsaOtherPrimesInfo.cpp
 JSRsaPssParams.cpp
+JSRunningStatus.cpp
 JSSQLError.cpp
 JSSQLResultSet.cpp
 JSSQLResultSetRowList.cpp

@@ -87,14 +87,14 @@ public:
     using ReadyPromise = DOMPromiseProxyWithResolveCallback<IDLInterface<HTMLModelElement>>;
     ReadyPromise& ready() { return m_readyPromise.get(); }
 
-    RefPtr<Model> model() const;
+    WEBCORE_EXPORT RefPtr<Model> model() const;
 
     bool usesPlatformLayer() const;
     PlatformLayer* platformLayer() const;
 
     std::optional<LayerHostingContextIdentifier> layerHostingContextIdentifier() const;
 
-    void applyBackgroundColor(Color);
+    std::optional<PlatformLayerIdentifier> layerID() const;
 
 #if ENABLE(MODEL_PROCESS)
     RefPtr<ModelContext> modelContext() const;
@@ -153,6 +153,10 @@ public:
     void setCurrentTime(double);
     const URL& environmentMap() const;
     void setEnvironmentMap(const URL&);
+    WEBCORE_EXPORT bool supportsStageModeInteraction() const;
+    WEBCORE_EXPORT void beginStageModeTransform(const TransformationMatrix&);
+    WEBCORE_EXPORT void updateStageModeTransform(const TransformationMatrix&);
+    WEBCORE_EXPORT void endStageModeInteraction();
 #endif
 
 #if PLATFORM(COCOA)
@@ -175,7 +179,6 @@ private:
     void deleteModelPlayer();
 
     RefPtr<GraphicsLayer> graphicsLayer() const;
-    std::optional<PlatformLayerIdentifier> layerID() const;
 
     HTMLModelElement& readyPromiseResolve();
 

@@ -40,10 +40,6 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(ModelPlayer);
 
 ModelPlayer::~ModelPlayer() = default;
 
-void ModelPlayer::setBackgroundColor(Color)
-{
-}
-
 void ModelPlayer::setEntityTransform(TransformationMatrix)
 {
 }
@@ -119,9 +115,22 @@ void ModelPlayer::setHasPortal(bool)
 {
 }
 
-void ModelPlayer::setStageMode(WebCore::StageModeOperation)
+void ModelPlayer::setStageMode(StageModeOperation)
 {
 }
+
+void ModelPlayer::beginStageModeTransform(const TransformationMatrix&)
+{
+}
+
+void ModelPlayer::updateStageModeTransform(const TransformationMatrix&)
+{
+}
+
+void ModelPlayer::endStageModeInteraction()
+{
+}
+
 #endif // ENABLE(MODEL_PROCESS)
 
 }

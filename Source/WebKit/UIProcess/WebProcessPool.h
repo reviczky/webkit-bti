@@ -229,7 +229,7 @@ public:
     // null checks in WebPageProxy.
     WebProcessProxy* dummyProcessProxy(PAL::SessionID sessionID) const { return m_dummyProcessProxies.get(sessionID).get(); }
 
-    void forEachProcessForSession(PAL::SessionID, const Function<void(WebProcessProxy&)>&);
+    void forEachProcessForSession(PAL::SessionID, NOESCAPE const Function<void(WebProcessProxy&)>&);
     template<typename T> void sendToAllProcesses(const T& message);
     template<typename T> void sendToAllProcessesForSession(const T& message, PAL::SessionID);
 
@@ -251,7 +251,7 @@ public:
 
     const String& injectedBundlePath() const { return m_configuration->injectedBundlePath(); }
 
-    Ref<DownloadProxy> download(WebsiteDataStore&, WebPageProxy* initiatingPage, const WebCore::ResourceRequest&, const String& suggestedFilename = { });
+    Ref<DownloadProxy> download(WebsiteDataStore&, WebPageProxy* initiatingPage, const WebCore::ResourceRequest&, const std::optional<FrameInfoData>&, const String& suggestedFilename = { });
     Ref<DownloadProxy> resumeDownload(WebsiteDataStore&, WebPageProxy* initiatingPage, const API::Data& resumeData, const String& path, CallDownloadDidStart);
 
     void setInjectedBundleInitializationUserData(RefPtr<API::Object>&& userData) { m_injectedBundleInitializationUserData = WTFMove(userData); }
@@ -319,7 +319,7 @@ public:
     void setEnhancedAccessibility(bool);
     
     // Downloads.
-    Ref<DownloadProxy> createDownloadProxy(WebsiteDataStore&, const WebCore::ResourceRequest&, WebPageProxy* originatingPage, const FrameInfoData&);
+    Ref<DownloadProxy> createDownloadProxy(WebsiteDataStore&, const WebCore::ResourceRequest&, WebPageProxy* originatingPage, const std::optional<FrameInfoData>&);
 
     API::LegacyContextHistoryClient& historyClient() { return *m_historyClient; }
     WebContextClient& client() { return m_client; }
@@ -335,6 +335,7 @@ public:
     void sendNetworkProcessPrepareToSuspendForTesting(CompletionHandler<void()>&&);
     void sendNetworkProcessWillSuspendImminentlyForTesting();
     void sendNetworkProcessDidResume();
+    void terminateServiceWorkersForSession(PAL::SessionID);
     void terminateServiceWorkers();
 
     void setShouldMakeNextWebProcessLaunchFailForTesting(bool value) { m_shouldMakeNextWebProcessLaunchFailForTesting = value; }
@@ -830,6 +831,7 @@ private:
     RetainPtr<NSObject> m_activationObserver;
     RetainPtr<NSObject> m_accessibilityEnabledObserver;
     RetainPtr<NSObject> m_applicationLaunchObserver;
+    RetainPtr<NSObject> m_finishedMobileAssetFontDownloadObserver;
 
     RetainPtr<WKProcessPoolWeakObserver> m_weakObserver;
 #endif

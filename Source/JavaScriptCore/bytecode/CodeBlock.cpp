@@ -158,7 +158,7 @@ CString CodeBlock::hashAsStringIfPossible() const
 {
     if (hasHash() || isSafeToComputeHash())
         return toCString(hash());
-    return "<no-hash>";
+    return "<no-hash>"_s;
 }
 
 void CodeBlock::dumpAssumingJITType(PrintStream& out, JITType jitType) const
@@ -3478,6 +3478,17 @@ CodePtr<JSEntryPtrTag> CodeBlock::addressForCallConcurrently(const ConcurrentJSL
     if (!m_jitCode)
         return nullptr;
     return m_jitCode->addressForCall(arityCheck);
+}
+
+unsigned CodeBlock::bytecodeCost() const
+{
+#if ENABLE(FTL_JIT)
+    if (jitType() == JITType::FTLJIT) {
+        if (auto* jitCode = static_cast<FTL::JITCode*>(m_jitCode.get()))
+            return std::min(static_cast<unsigned>(jitCode->numberOfCompiledDFGNodes() * Options::ratioFTLNodesToBytecodeCost()), m_bytecodeCost);
+    }
+#endif
+    return m_bytecodeCost;
 }
 
 bool CodeBlock::hasInstalledVMTrapsBreakpoints() const

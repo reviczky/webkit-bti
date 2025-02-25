@@ -752,6 +752,7 @@ public:
     RefPtr<Node> protectedNode() const { return node(); }
 
     Node* nonPseudoNode() const { return isPseudoElement() ? nullptr : node(); }
+    RefPtr<Node> protectedNonPseudoNode() const { return nonPseudoNode(); }
 
     // Returns the styled node that caused the generation of this renderer.
     // This is the same as node() except for renderers of :before and :after
@@ -761,9 +762,11 @@ public:
     Document& document() const { return m_node.get().document(); }
     inline Ref<Document> protectedDocument() const; // Defined in RenderObjectInlines.h.
     TreeScope& treeScopeForSVGReferences() const { return m_node.get().treeScopeForSVGReferences(); }
+    Ref<TreeScope> protectedTreeScopeForSVGReferences() const { return treeScopeForSVGReferences(); }
     LocalFrame& frame() const;
     Ref<LocalFrame> protectedFrame() const { return frame(); }
     Page& page() const;
+    Ref<Page> protectedPage() const;
     Settings& settings() const { return page().settings(); }
 
     // Returns the object containing this one. Can be different from parent for positioned elements.
@@ -1351,6 +1354,11 @@ inline Page& RenderObject::page() const
     // so it's safe to assume Frame::page() is non-null as long as there are live RenderObjects.
     ASSERT(frame().page());
     return *frame().page();
+}
+
+inline Ref<Page> RenderObject::protectedPage() const
+{
+    return page();
 }
 
 inline bool RenderObject::renderTreeBeingDestroyed() const

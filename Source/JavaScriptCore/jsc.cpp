@@ -630,6 +630,22 @@ private:
         Base::finishCreation(vm);
         JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 
+        // Set loop counts based on enabled engine tiers.
+        unsigned testLoopCount = 10000;
+        if (!Options::useDFGJIT())
+            testLoopCount = 1000;
+        if (!Options::useBaselineJIT())
+            testLoopCount = 100;
+
+        unsigned wasmTestLoopCount = 10000;
+        if (!Options::useOMGJIT())
+            wasmTestLoopCount = 1000;
+        if (!Options::useBBQJIT())
+            wasmTestLoopCount = 100;
+
+        putDirect(vm, Identifier::fromString(vm, "testLoopCount"_s), jsNumber(testLoopCount), DontEnum);
+        putDirect(vm, Identifier::fromString(vm, "wasmTestLoopCount"_s), jsNumber(wasmTestLoopCount), DontEnum);
+
         addFunction(vm, "atob"_s, functionAtob, 1);
         addFunction(vm, "btoa"_s, functionBtoa, 1);
         addFunction(vm, "disassembleBase64"_s, functionDisassembleBase64, 1);
@@ -2084,7 +2100,7 @@ JSC_DEFINE_HOST_FUNCTION(functionWriteFile, (JSGlobalObject* globalObject, CallF
 
     int size = std::visit(WTF::makeVisitor([&](const String& string) {
         CString utf8 = string.utf8();
-        return FileSystem::writeToFile(handle, utf8.span());
+        return FileSystem::writeToFile(handle, byteCast<uint8_t>(utf8.span()));
     }, [&] (const std::span<const uint8_t>& data) {
         return FileSystem::writeToFile(handle, data);
     }), data);
@@ -2950,7 +2966,7 @@ JSC_DEFINE_HOST_FUNCTION(functionSetTimeout, (JSGlobalObject* globalObject, Call
     // it will cause setTimeout starvation problem (see stress test settimeout-starvation.js).
     JSValue timeout = callFrame->argument(1);
     Seconds delay = timeout.isNumber() ? Seconds::fromMilliseconds(timeout.asNumber()) : Seconds(0);
-    RunLoop::current().dispatchAfter(delay, WTFMove(dispatch));
+    RunLoop::protectedCurrent()->dispatchAfter(delay, WTFMove(dispatch));
 
     return JSValue::encode(jsUndefined());
 }

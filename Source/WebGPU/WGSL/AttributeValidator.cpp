@@ -406,8 +406,13 @@ void AttributeValidator::visit(AST::StructureMember& member)
             continue;
 
         if (auto* sizeAttribute = dynamicDowncast<AST::SizeAttribute>(attribute)) {
-            // FIXME: check that the member type must have creation-fixed footprint.
             m_hasSizeOrAlignmentAttributes = true;
+
+            if (!member.type().inferredType()->hasCreationFixedFootprint()) {
+                error(attribute.span(), "@size can only be applied to members that have a type with a size that is fully determined at shader creation time."_s);
+                continue;
+            }
+
             // https://gpuweb.github.io/cts/standalone/?q=webgpu:shader,validation,parse,attribute:expressions:value=%22override%22;*
             auto& constantValue = sizeAttribute->size().constantValue();
             if (!constantValue) {
@@ -719,7 +724,7 @@ void AttributeValidator::validateStructIO(ShaderStage stage, const Types::Struct
             continue;
         }
 
-        if (auto* structType = std::get_if<Types::Struct>(member.type().inferredType())) {
+        if (auto inferredType = member.type().inferredType(); inferredType && std::holds_alternative<Types::Struct>(*inferredType)) {
             error(span, "nested structures cannot be used for entry point IO"_s);
             continue;
         }

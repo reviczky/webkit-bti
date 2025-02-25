@@ -759,7 +759,7 @@ inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) c
         if (isAlignedForUnder(*this) || isAlignedForUnder(other))
             return true;
 
-        if (visualOverflowForDecorations(*this) != visualOverflowForDecorations(other))
+        if (inkOverflowForDecorations(*this) != inkOverflowForDecorations(other))
             return true;
     }
 
@@ -919,6 +919,9 @@ static bool rareDataChangeRequiresLayout(const StyleRareNonInheritedData& first,
         return true;
 
     if (first.overflowContinue != second.overflowContinue)
+        return true;
+
+    if (first.positionArea != second.positionArea)
         return true;
 
     return false;
@@ -1222,6 +1225,13 @@ bool RenderStyle::changeRequiresLayerRepaint(const RenderStyle& other, OptionSet
             && rareDataChangeRequiresLayerRepaint(*m_nonInheritedData->rareData, *other.m_nonInheritedData->rareData, changedContextSensitiveProperties))
             return true;
     }
+
+#if HAVE(CORE_MATERIAL)
+    if (m_rareInheritedData.ptr() != other.m_rareInheritedData.ptr()
+        && m_rareInheritedData->usedAppleVisualEffectForSubtree != other.m_rareInheritedData->usedAppleVisualEffectForSubtree) {
+        changedContextSensitiveProperties.add(StyleDifferenceContextSensitiveProperty::Filter);
+    }
+#endif
 
     return false;
 }
@@ -1977,8 +1987,12 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyContentVisibility);
         if (first.anchorNames != second.anchorNames)
             changingProperties.m_properties.set(CSSPropertyAnchorName);
+        if (first.anchorScope != second.anchorScope)
+            changingProperties.m_properties.set(CSSPropertyAnchorScope);
         if (first.positionAnchor != second.positionAnchor)
             changingProperties.m_properties.set(CSSPropertyPositionAnchor);
+        if (first.positionArea != second.positionArea)
+            changingProperties.m_properties.set(CSSPropertyPositionArea);
         if (first.positionTryFallbacks != second.positionTryFallbacks)
             changingProperties.m_properties.set(CSSPropertyPositionTryFallbacks);
         if (first.positionTryOrder != second.positionTryOrder)
@@ -2108,6 +2122,8 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         if (first.colorScheme != second.colorScheme)
             changingProperties.m_properties.set(CSSPropertyColorScheme);
 #endif
+        if (first.dynamicRangeLimit != second.dynamicRangeLimit)
+            changingProperties.m_properties.set(CSSPropertyDynamicRangeLimit);
         if (first.textEmphasisFill != second.textEmphasisFill || first.textEmphasisMark != second.textEmphasisMark)
             changingProperties.m_properties.set(CSSPropertyTextEmphasisStyle);
         if (!arePointingToEqualData(first.quotes, second.quotes))
@@ -2655,7 +2671,7 @@ const AtomString& RenderStyle::hyphenString() const
     // FIXME: This should depend on locale.
     static MainThreadNeverDestroyed<const AtomString> hyphenMinusString(span(hyphenMinus));
     static MainThreadNeverDestroyed<const AtomString> hyphenString(span(hyphen));
-    return fontCascade().primaryFont().glyphForCharacter(hyphen) ? hyphenString : hyphenMinusString;
+    return fontCascade().primaryFont()->glyphForCharacter(hyphen) ? hyphenString : hyphenMinusString;
 }
 
 const AtomString& RenderStyle::textEmphasisMarkString() const

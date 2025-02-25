@@ -28,7 +28,6 @@
 
 #include "AXObjectCache.h"
 #include "AnchorPositionEvaluator.h"
-#include "AnimationTimelinesController.h"
 #include "CSSFontSelector.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ComposedTreeIterator.h"
@@ -46,6 +45,7 @@
 #include "NodeRenderStyle.h"
 #include "Page.h"
 #include "PlatformStrategies.h"
+#include "PositionTryFallback.h"
 #include "Quirks.h"
 #include "RenderElement.h"
 #include "RenderStyleSetters.h"
@@ -56,6 +56,7 @@
 #include "StyleAdjuster.h"
 #include "StyleBuilder.h"
 #include "StyleFontSizeFunctions.h"
+#include "StyleOriginatedTimelinesController.h"
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "Text.h"
@@ -75,9 +76,14 @@ TreeResolver::TreeResolver(Document& document, std::unique_ptr<Update> update)
     : m_document(document)
     , m_update(WTFMove(update))
 {
+    // FIXME: Move transient state to TreeResolver similar to QueryContainerState.
+    m_document->styleScope().resetAnchorPositioningStateBeforeStyleResolution();
 }
 
-TreeResolver::~TreeResolver() = default;
+TreeResolver::~TreeResolver()
+{
+    m_document->styleScope().updateAnchorPositioningStateAfterStyleResolution();
+}
 
 TreeResolver::Scope::Scope(Document& document, Update& update)
     : resolver(document.styleScope().resolver())
@@ -144,6 +150,9 @@ ResolvedStyle TreeResolver::styleForStyleable(const Styleable& styleable, Resolu
         return { RenderStyle::clonePtr(*styleable.lastStyleChangeEventStyle()) };
 
     auto& element = styleable.element;
+
+    if (auto optionStyle = tryChoosePositionOption(styleable, existingStyle))
+        return WTFMove(*optionStyle);
 
     if (element.hasCustomStyleResolveCallbacks()) {
         RenderStyle* shadowHostStyle = scope().shadowRoot ? m_update->elementStyle(*scope().shadowRoot->host()) : nullptr;
@@ -274,6 +283,9 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
 
     Styleable styleable { element, { } };
     auto resolvedStyle = styleForStyleable(styleable, resolutionType, resolutionContext, existingStyle);
+
+    generatePositionOptionsIfNeeded(resolvedStyle, styleable, resolutionContext);
+
     auto update = createAnimatedElementUpdate(WTFMove(resolvedStyle), styleable, parent().change, resolutionContext, parent().isInDisplayNoneTree);
 
     if (!affectsRenderedSubtree(element, *update.style)) {
@@ -679,9 +691,9 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
             styleable.updateCSSViewTimelines(oldStyle, *resolvedStyle.style);
         }
 
-        if ((oldStyle && oldStyle->timelineScope().type != TimelineScope::Type::None) || resolvedStyle.style->timelineScope().type != TimelineScope::Type::None) {
-            CheckedRef timelinesController = element.protectedDocument()->ensureTimelinesController();
-            timelinesController->updateNamedTimelineMapForTimelineScope(resolvedStyle.style->timelineScope(), element);
+        if ((oldStyle && oldStyle->timelineScope().type != NameScope::Type::None) || resolvedStyle.style->timelineScope().type != NameScope::Type::None) {
+            CheckedRef styleOriginatedTimelinesController = element.protectedDocument()->ensureStyleOriginatedTimelinesController();
+            styleOriginatedTimelinesController->updateNamedTimelineMapForTimelineScope(resolvedStyle.style->timelineScope(), styleable);
         }
 
         // The order in which CSS Transitions and CSS Animations are updated matters since CSS Transitions define the after-change style
@@ -802,7 +814,7 @@ std::unique_ptr<RenderStyle> TreeResolver::resolveStartingStyle(const ResolvedSt
     // We now resolve the starting style by applying all rules (including @starting-style ones) again.
     // We could compute it along with the primary style and include it in MatchedPropertiesCache but it is not
     // clear this would be benefitial as it is typically only used once.
-    return resolveAgainWithParentStyle(resolvedStyle, styleable, parentStyle, PropertyCascade::startingStyleProperties(), resolutionContext);
+    return resolveAgainInDifferentContext(resolvedStyle, styleable, parentStyle, PropertyCascade::startingStyleProperties(), { }, resolutionContext);
 }
 
 std::unique_ptr<RenderStyle> TreeResolver::resolveAfterChangeStyleForNonAnimated(const ResolvedStyle& resolvedStyle, const Styleable& styleable, const ResolutionContext& resolutionContext) const
@@ -823,10 +835,10 @@ std::unique_ptr<RenderStyle> TreeResolver::resolveAfterChangeStyleForNonAnimated
 
     // "Likewise, define the after-change style as.. and inheriting from the after-change style of the parent."
     auto& parentStyle = parentAfterChangeStyle(styleable, resolutionContext);
-    return resolveAgainWithParentStyle(resolvedStyle, styleable, parentStyle, PropertyCascade::normalProperties(), resolutionContext);
+    return resolveAgainInDifferentContext(resolvedStyle, styleable, parentStyle, PropertyCascade::normalProperties(), { }, resolutionContext);
 }
 
-std::unique_ptr<RenderStyle> TreeResolver::resolveAgainWithParentStyle(const ResolvedStyle& resolvedStyle, const Styleable& styleable, const RenderStyle& parentStyle, OptionSet<PropertyCascade::PropertyType> properties, const ResolutionContext& resolutionContext) const
+std::unique_ptr<RenderStyle> TreeResolver::resolveAgainInDifferentContext(const ResolvedStyle& resolvedStyle, const Styleable& styleable, const RenderStyle& parentStyle, OptionSet<PropertyCascade::PropertyType> properties, const std::optional<PositionTryFallback>& positionTryFallback, const ResolutionContext& resolutionContext) const
 {
     ASSERT(resolvedStyle.matchResult);
 
@@ -840,7 +852,8 @@ std::unique_ptr<RenderStyle> TreeResolver::resolveAgainWithParentStyle(const Res
         m_document.get(),
         parentStyle,
         resolutionContext.documentElementStyle,
-        &styleable.element
+        &styleable.element,
+        positionTryFallback
     };
 
     auto styleBuilder = Builder {
@@ -1170,7 +1183,7 @@ void TreeResolver::resolveComposedTree()
             it.traverseNextSkippingChildren();
             continue;
         }
-        
+
         resetDescendantStyleRelations(element, descendantsToResolve);
 
         auto isInDisplayNoneTree = parent.isInDisplayNoneTree == IsInDisplayNoneTree::Yes || !style || style->display() == DisplayType::None;
@@ -1274,6 +1287,13 @@ std::unique_ptr<Update> TreeResolver::resolve()
         }
     }
 
+    for (auto& elementAndOptions : m_positionOptions) {
+        if (!elementAndOptions.value.chosen) {
+            elementAndOptions.key->invalidateForResumingAnchorPositionedElementResolution();
+            m_hasUnresolvedAnchorPositionedElements = true;
+        }
+    }
+
     if (m_update->roots().isEmpty())
         return { };
 
@@ -1287,14 +1307,99 @@ auto TreeResolver::updateAnchorPositioningState(Element& element, const RenderSt
     if (!style)
         return AnchorPositionedElementAction::None;
 
+    AnchorPositionEvaluator::updateAnchorPositionedStateForLayoutTimePositioned(element, *style);
+
     auto* anchorPositionedState = m_document->styleScope().anchorPositionedStates().get(element);
-    if (!anchorPositionedState || anchorPositionedState->stage >= AnchorPositionResolutionStage::Resolved)
+
+    auto needsInterleavedLayout = anchorPositionedState && anchorPositionedState->stage < AnchorPositionResolutionStage::Resolved;
+    if (!needsInterleavedLayout)
         return AnchorPositionedElementAction::None;
 
     m_hasUnresolvedAnchorPositionedElements = true;
 
     return AnchorPositionedElementAction::SkipDescendants;
 }
+
+void TreeResolver::generatePositionOptionsIfNeeded(const ResolvedStyle& resolvedStyle, const Styleable& styleable, const ResolutionContext& resolutionContext)
+{
+    // https://drafts.csswg.org/css-anchor-position-1/#fallback-apply
+
+    if (!resolvedStyle.style || resolvedStyle.style->positionTryFallbacks().isEmpty())
+        return;
+
+    auto* anchorPositionedState = m_document->styleScope().anchorPositionedStates().get(styleable.element);
+    if (anchorPositionedState && anchorPositionedState->stage < AnchorPositionResolutionStage::Resolved)
+        return;
+
+    m_positionOptions.ensure(styleable.element, [&] {
+        auto options = PositionOptions { .originalStyle = RenderStyle::clonePtr(*resolvedStyle.style) };
+        options.optionStyles.reserveInitialCapacity(resolvedStyle.style->positionTryFallbacks().size());
+        for (auto& fallback : resolvedStyle.style->positionTryFallbacks()) {
+            auto optionStyle = generatePositionOption(fallback, resolvedStyle, styleable, resolutionContext);
+            if (!optionStyle)
+                continue;
+            options.optionStyles.append(WTFMove(optionStyle));
+        }
+        return options;
+    });
+}
+
+std::unique_ptr<RenderStyle> TreeResolver::generatePositionOption(const PositionTryFallback& fallback, const ResolvedStyle& resolvedStyle, const Styleable& styleable, const ResolutionContext& resolutionContext)
+{
+    // https://drafts.csswg.org/css-anchor-position-1/#fallback-apply
+
+    if (!resolvedStyle.matchResult)
+        return { };
+
+    return resolveAgainInDifferentContext(resolvedStyle, styleable, *resolutionContext.parentStyle, PropertyCascade::normalProperties(), fallback, resolutionContext);
+}
+
+std::optional<ResolvedStyle> TreeResolver::tryChoosePositionOption(const Styleable& styleable, const RenderStyle* existingStyle)
+{
+    // https://drafts.csswg.org/css-anchor-position-1/#fallback-apply
+
+    auto optionIt = m_positionOptions.find(styleable.element);
+    if (optionIt == m_positionOptions.end())
+        return { };
+
+    auto& options = optionIt->value;
+
+    if (!existingStyle) {
+        options.chosen = true;
+        return ResolvedStyle { RenderStyle::clonePtr(*options.originalStyle) };
+    }
+
+    auto renderer = dynamicDowncast<RenderBox>(styleable.element.renderer());
+    if (!renderer) {
+        options.chosen = true;
+        return ResolvedStyle { RenderStyle::clonePtr(*options.originalStyle) };
+    }
+
+    if (!AnchorPositionEvaluator::overflowsContainingBlock(*renderer)) {
+        // We don't overflow anymore so this is a good style.
+        options.chosen = true;
+        return ResolvedStyle { RenderStyle::clonePtr(*existingStyle) };
+    }
+
+    if (options.chosen) {
+        // We have already chosen.
+        return ResolvedStyle { RenderStyle::clonePtr(*existingStyle) };
+    }
+
+    if (options.index >= options.optionStyles.size()) {
+        // None of the options worked, return back to the original.
+        options.chosen = true;
+        return ResolvedStyle { RenderStyle::clonePtr(*options.originalStyle) };
+    }
+
+    auto& optionStyle = options.optionStyles[options.index];
+
+    // Next option to try if this doesn't work.
+    ++options.index;
+
+    return ResolvedStyle { RenderStyle::clonePtr(*optionStyle) };
+}
+
 
 static Vector<Function<void ()>>& postResolutionCallbackQueue()
 {

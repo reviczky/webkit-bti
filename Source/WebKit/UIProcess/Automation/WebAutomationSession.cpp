@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2025 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -64,6 +64,10 @@
 #if ENABLE(WEB_AUTHN)
 #include "VirtualAuthenticatorManager.h"
 #include <WebCore/AuthenticatorTransport.h>
+#endif
+
+#if ENABLE(WEBDRIVER_BIDI)
+#include "WebDriverBidiProcessor.h"
 #endif
 
 namespace WebKit {
@@ -142,6 +146,9 @@ WebAutomationSession::WebAutomationSession()
     , m_backendDispatcher(BackendDispatcher::create(m_frontendRouter.copyRef()))
     , m_domainDispatcher(AutomationBackendDispatcher::create(m_backendDispatcher, this))
     , m_domainNotifier(makeUnique<AutomationFrontendDispatcher>(m_frontendRouter))
+#if ENABLE(WEBDRIVER_BIDI)
+    , m_bidiProcessor(makeUnique<WebDriverBidiProcessor>(*this))
+#endif
     , m_loadTimer(RunLoop::main(), this, &WebAutomationSession::loadTimerFired)
 #if ENABLE(REMOTE_INSPECTOR)
     , m_debuggable(Debuggable::create(*this))
@@ -1815,6 +1822,20 @@ Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::generateTestRepor
     return { };
 }
 
+#if ENABLE(WEBDRIVER_BIDI)
+Inspector::Protocol::ErrorStringOr<void> WebAutomationSession::processBidiMessage(const String& message)
+{
+    m_bidiProcessor->processBidiMessage(message);
+
+    return { };
+}
+
+void WebAutomationSession::sendBidiMessage(const String& message)
+{
+    m_domainNotifier->bidiMessageSent(message);
+}
+#endif // ENABLE(WEBDRIVER_BIDI)
+
 bool WebAutomationSession::shouldAllowGetUserMediaForPage(const WebPageProxy&) const
 {
     return m_permissionForGetUserMedia;
@@ -2069,9 +2090,10 @@ void WebAutomationSession::performMouseInteraction(const Inspector::Protocol::Au
             if (error)
                 callback->sendFailure(error.value().toProtocolString());
             else {
+                auto obscuredContentInsets = page->obscuredContentInsets();
                 callback->sendSuccess(Inspector::Protocol::Automation::Point::create()
-                    .setX(floatX)
-                    .setY(floatY - page->topContentInset())
+                    .setX(floatX - obscuredContentInsets.left())
+                    .setY(floatY - obscuredContentInsets.top())
                     .release());
             }
         };
@@ -2572,10 +2594,12 @@ Ref<Inspector::BackendDispatcher> WebAutomationSession::protectedBackendDispatch
     return m_backendDispatcher;
 }
 
+#if ENABLE(REMOTE_INSPECTOR)
 Ref<WebAutomationSession::Debuggable> WebAutomationSession::protectedDebuggable() const
 {
     return m_debuggable;
 }
+#endif
 
 static String logEntryLevelForMessage(const JSC::MessageType& messageType, const MessageLevel& messageLevel)
 {
@@ -2619,10 +2643,14 @@ void WebAutomationSession::logEntryAdded(const JSC::MessageSource& messageSource
     auto level = logEntryLevelForMessage(messageType, messageLevel);
     auto method = logEntryMethodNameForMessage(messageType, messageLevel);
     auto type = logEntryTypeForMessage(messageSource);
+    auto milliseconds =  timestamp.secondsSinceEpoch().milliseconds();
 
     // FIXME Get browsing context handle and source info
     // https://bugs.webkit.org/show_bug.cgi?id=282981
-    m_domainNotifier->logEntryAdded(level, sourceString, messageText, timestamp.secondsSinceEpoch().milliseconds(), type, method);
+    m_domainNotifier->logEntryAdded(level, sourceString, messageText, milliseconds, type, method);
+#if ENABLE(WEBDRIVER_BIDI)
+    m_bidiProcessor->logEntryAdded(level, sourceString, messageText, milliseconds, type, method);
+#endif
 }
 
 #if !PLATFORM(COCOA) && !USE(CAIRO) && !USE(SKIA)

@@ -57,7 +57,6 @@
 #include "ModelPlayerProvider.h"
 #include "MouseEvent.h"
 #include "Page.h"
-#include "PlatformMouseEvent.h"
 #include "RenderBoxInlines.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
@@ -322,7 +321,7 @@ void HTMLModelElement::createModelPlayer()
 
 void HTMLModelElement::deleteModelPlayer()
 {
-    if (m_modelPlayer)
+    if (m_modelPlayer && document().page())
         document().page()->modelPlayerProvider().deleteModelPlayer(*m_modelPlayer);
     m_modelPlayer = nullptr;
 }
@@ -414,14 +413,6 @@ std::optional<PlatformLayerIdentifier> HTMLModelElement::modelContentsLayerID() 
     return graphicsLayer->contentsLayerIDForModel();
 }
 
-// MARK: - Background Color support.
-
-void HTMLModelElement::applyBackgroundColor(Color color)
-{
-    if (m_modelPlayer)
-        m_modelPlayer->setBackgroundColor(color);
-}
-
 #if ENABLE(MODEL_PROCESS)
 RefPtr<ModelContext> HTMLModelElement::modelContext() const
 {
@@ -433,7 +424,7 @@ RefPtr<ModelContext> HTMLModelElement::modelContext() const
     if (!modelContentsLayerHostingContextIdentifier)
         return nullptr;
 
-    return ModelContext::create(*modelLayerIdentifier, *modelContentsLayerHostingContextIdentifier).ptr();
+    return ModelContext::create(*modelLayerIdentifier, *modelContentsLayerHostingContextIdentifier, contentSize(), hasPortal() ? ModelContextDisablePortal::No : ModelContextDisablePortal::Yes, std::nullopt).ptr();
 }
 
 const DOMMatrixReadOnly& HTMLModelElement::entityTransform() const
@@ -489,6 +480,29 @@ void HTMLModelElement::didFinishEnvironmentMapLoading(bool succeeded)
         else
             m_environmentMapReadyPromise->reject(Exception { ExceptionCode::AbortError });
     }
+}
+
+bool HTMLModelElement::supportsStageModeInteraction() const
+{
+    return stageMode() != StageModeOperation::None;
+}
+
+void HTMLModelElement::beginStageModeTransform(const TransformationMatrix& transform)
+{
+    if (m_modelPlayer)
+        m_modelPlayer->beginStageModeTransform(transform);
+}
+
+void HTMLModelElement::updateStageModeTransform(const TransformationMatrix& transform)
+{
+    if (m_modelPlayer)
+        m_modelPlayer->updateStageModeTransform(transform);
+}
+
+void HTMLModelElement::endStageModeInteraction()
+{
+    if (m_modelPlayer)
+        m_modelPlayer->endStageModeInteraction();
 }
 #endif // ENABLE(MODEL_PROCESS)
 
@@ -760,6 +774,9 @@ bool HTMLModelElement::hasPortal() const
 
 void HTMLModelElement::updateHasPortal()
 {
+    if (CheckedPtr renderer = this->renderer())
+        renderer->updateFromElement();
+
     if (RefPtr modelPlayer = m_modelPlayer)
         modelPlayer->setHasPortal(hasPortal());
 }

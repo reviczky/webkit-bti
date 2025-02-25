@@ -61,12 +61,11 @@ class JSWebAssemblyInstance final : public JSNonFinalObject {
 
 public:
     using Base = JSNonFinalObject;
-    static constexpr bool needsDestruction = true;
+    static constexpr DestructionMode needsDestruction = NeedsDestruction;
     static void destroy(JSCell*);
 
-    static constexpr bool usePreciseAllocationsOnly = true;
     template<typename CellType, SubspaceAccess mode>
-    static GCClient::IsoSubspace* subspaceFor(VM& vm)
+    static GCClient::PreciseSubspace* subspaceFor(VM& vm)
     {
         return vm.webAssemblyInstanceSpace<mode>();
     }
@@ -283,6 +282,9 @@ public:
 
     void* softStackLimit() const { return m_softStackLimit; }
 
+    void setFaultPC(void* pc) { m_faultPC = pc; };
+    void* faultPC() const { return m_faultPC; }
+
 private:
     JSWebAssemblyInstance(VM&, Structure*, JSWebAssemblyModule*, WebAssemblyModuleRecord*);
     ~JSWebAssemblyInstance();
@@ -317,6 +319,7 @@ private:
     BitVector m_passiveDataSegments;
     FixedVector<RefPtr<const Wasm::Tag>> m_tags;
     Vector<Ref<Wasm::WasmToJSCallee>> importCallees;
+    void* m_faultPC { nullptr };
 };
 
 } // namespace JSC

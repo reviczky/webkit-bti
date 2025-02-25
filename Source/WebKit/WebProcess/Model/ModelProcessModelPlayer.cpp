@@ -158,11 +158,6 @@ void ModelProcessModelPlayer::enterFullscreen()
 {
 }
 
-void ModelProcessModelPlayer::setBackgroundColor(WebCore::Color color)
-{
-    send(Messages::ModelProcessModelPlayerProxy::SetBackgroundColor(color));
-}
-
 /// This comes from JS side, so we need to tell Model Process about it. Not to be confused with didUpdateEntityTransform().
 void ModelProcessModelPlayer::setEntityTransform(WebCore::TransformationMatrix transform)
 {
@@ -349,6 +344,21 @@ void ModelProcessModelPlayer::setStageMode(WebCore::StageModeOperation stagemode
 
     m_stageModeOperation = stagemodeOp;
     send(Messages::ModelProcessModelPlayerProxy::SetStageMode(m_stageModeOperation));
+}
+
+void ModelProcessModelPlayer::beginStageModeTransform(const WebCore::TransformationMatrix& transform)
+{
+    send(Messages::ModelProcessModelPlayerProxy::BeginStageModeTransform(transform));
+}
+
+void ModelProcessModelPlayer::updateStageModeTransform(const WebCore::TransformationMatrix& transform)
+{
+    send(Messages::ModelProcessModelPlayerProxy::UpdateStageModeTransform(transform));
+}
+
+void ModelProcessModelPlayer::endStageModeInteraction()
+{
+    send(Messages::ModelProcessModelPlayerProxy::EndStageModeInteraction());
 }
 
 }

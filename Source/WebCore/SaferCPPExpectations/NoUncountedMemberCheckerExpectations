@@ -1,7 +1,6 @@
 Modules/WebGPU/GPUPresentationContextDescriptor.h
 Modules/encryptedmedia/MediaKeyStatusMap.h
 Modules/fetch/FetchBodyOwner.h
-Modules/mediasource/SourceBuffer.h
 Modules/mediastream/RTCPeerConnection.h
 Modules/mediastream/libwebrtc/LibWebRTCObservers.h
 Modules/notifications/NotificationResourcesLoader.h
@@ -12,7 +11,6 @@ Modules/webdatabase/DatabaseTask.h
 Modules/webdatabase/SQLTransactionBackend.h
 accessibility/AXCoreObject.h
 accessibility/AXSearchManager.h
-bindings/js/IDBBindingUtilities.cpp
 bindings/js/JSEventTargetCustom.h
 bindings/js/JSLazyEventListener.cpp
 css/CSSFontFaceSource.h
@@ -53,7 +51,6 @@ inspector/InspectorStyleSheet.cpp
 inspector/InspectorStyleSheet.h
 inspector/InspectorWebAgentBase.h
 inspector/agents/worker/WorkerAuditAgent.h
-inspector/agents/worker/WorkerDebuggerAgent.h
 layout/formattingContexts/inline/InlineItemsBuilder.h
 loader/appcache/ApplicationCacheStorage.cpp
 page/FrameSnapshotting.cpp
@@ -73,7 +70,6 @@ platform/graphics/BitmapImageDescriptor.h
 platform/graphics/ComplexTextController.h
 platform/graphics/DrawGlyphsRecorder.h
 platform/graphics/GraphicsLayer.h
-platform/graphics/ImageBuffer.h
 platform/graphics/avfoundation/AudioSourceProviderAVFObjC.mm
 platform/graphics/avfoundation/MediaSelectionGroupAVFObjC.h
 platform/graphics/avfoundation/objc/MediaSourcePrivateAVFObjC.h
@@ -81,17 +77,13 @@ platform/graphics/avfoundation/objc/WebCoreAVFResourceLoader.mm
 platform/graphics/ca/TileController.h
 platform/graphics/controls/PlatformControl.h
 platform/graphics/cv/GraphicsContextGLCVCocoa.h
-platform/graphics/filters/FilterEffectApplier.h
-platform/graphics/filters/software/FEConvolveMatrixSoftwareApplier.h
-platform/graphics/filters/software/FELightingSoftwareApplier.h
-platform/graphics/filters/software/FEMorphologySoftwareApplier.h
-platform/graphics/filters/software/FETurbulenceSoftwareApplier.h
 platform/graphics/mac/controls/ControlMac.h
 platform/mediarecorder/MediaRecorderPrivate.h
 platform/mediastream/AudioMediaStreamTrackRenderer.h
 platform/mediastream/MediaStreamPrivate.h
 platform/mediastream/mac/CoreAudioCaptureSource.h
 platform/mock/ScrollbarsControllerMock.h
+platform/network/mac/WebCoreResourceHandleAsOperationQueueDelegate.h
 plugins/PluginData.h
 rendering/RenderQuote.cpp
 rendering/RenderVTTCue.h
@@ -99,11 +91,9 @@ rendering/TextBoxPainter.h
 rendering/style/StyleGeneratedImage.cpp
 rendering/svg/SVGTextLayoutAttributesBuilder.h
 rendering/updating/RenderTreeUpdater.h
-style/AttributeChangeInvalidation.h
 style/ChildChangeInvalidation.h
 style/ClassChangeInvalidation.cpp
 style/ElementRuleCollector.cpp
-style/IdChangeInvalidation.h
 style/PseudoClassChangeInvalidation.h
 style/RuleSetBuilder.h
 style/StyleRelations.h
@@ -119,7 +109,6 @@ workers/WorkerConsoleClient.h
 workers/WorkerMessagingProxy.h
 workers/WorkerNotificationClient.h
 workers/WorkerOrWorkletGlobalScope.h
-workers/WorkerOrWorkletScriptController.h
 workers/service/NavigationPreloadManager.h
 workers/service/background-fetch/ServiceWorkerRegistrationBackgroundFetchAPI.h
 workers/service/context/ServiceWorkerThreadProxy.h

@@ -5,7 +5,7 @@
  *           (C) 2006 Alexey Proskuryakov (ap@webkit.org)
  * Copyright (C) 2004-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2008, 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
- * Copyright (C) 2008-2015 Google Inc. All rights reserved.
+ * Copyright (C) 2008-2014 Google Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (C) Research In Motion Limited 2010-2011. All rights reserved.
  *
@@ -40,6 +40,7 @@
 #include "CSSParser.h"
 #include "CSSPropertyNames.h"
 #include "CSSPropertyParserConsumer+ColorAdjust.h"
+#include "CSSSerializationContext.h"
 #include "CSSStyleDeclaration.h"
 #include "CSSStyleSheet.h"
 #include "CSSViewTransitionRule.h"
@@ -86,6 +87,7 @@
 #include "Editor.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "ElementChildIteratorInlines.h"
+#include "ElementCreationOptions.h"
 #include "ElementIterator.h"
 #include "ElementRareData.h"
 #include "ElementTraversal.h"
@@ -149,6 +151,7 @@
 #include "ImageBitmapRenderingContext.h"
 #include "ImageLoader.h"
 #include "ImageOverlayController.h"
+#include "ImportNodeOptions.h"
 #include "InspectorInstrumentation.h"
 #include "IntersectionObserver.h"
 #include "JSCustomElementInterface.h"
@@ -278,6 +281,7 @@
 #include "StyleAdjuster.h"
 #include "StyleColorOptions.h"
 #include "StyleColorScheme.h"
+#include "StyleOriginatedTimelinesController.h"
 #include "StyleProperties.h"
 #include "StyleResolveForDocument.h"
 #include "StyleResolver.h"
@@ -409,7 +413,7 @@
 #include "HTMLVideoElement.h"
 #endif
 
-#define DOCUMENT_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] Document::" fmt, this, pageID() ? pageID()->toUInt64() : 0, frameID() ? frameID()->object().toUInt64() : 0, this == &topDocument(), ##__VA_ARGS__)
+#define DOCUMENT_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] Document::" fmt, this, pageID() ? pageID()->toUInt64() : 0, frameID() ? frameID()->object().toUInt64() : 0, this->isTopDocument(), ##__VA_ARGS__)
 #define DOCUMENT_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] Document::" fmt, this, pageID() ? pageID()->toUInt64() : 0, frameID() ? frameID()->object().toUInt64() : 0, this->isTopDocument(), ##__VA_ARGS__)
 
 namespace WebCore {
@@ -710,7 +714,6 @@ void Document::populateDocumentSyncDataForNewlyConstructedDocument(ProcessSyncDa
     // or are populated other ways even on newly constructed documents.
     case ProcessSyncDataType::DocumentSecurityOrigin:
     case ProcessSyncDataType::DocumentURL:
-    case ProcessSyncDataType::HasFullscreenElement:
     case ProcessSyncDataType::HasInjectedUserScript:
     case ProcessSyncDataType::IsAutofocusProcessed:
     case ProcessSyncDataType::UserDidInteractWithPage:
@@ -859,10 +862,6 @@ void Document::removedLastRef()
         m_focusNavigationStartingNode = nullptr;
         m_userActionElements.clear();
         m_asyncNodeDeletionQueue.deleteNodesNow();
-#if ENABLE(FULLSCREEN_API)
-        if (CheckedPtr fullscreenManager = m_fullscreenManager.get())
-            m_fullscreenManager->clear();
-#endif
         m_associatedFormControls.clear();
         m_pendingRenderTreeUpdate = { };
 
@@ -914,7 +913,7 @@ void Document::commonTeardown()
 
 #if ENABLE(FULLSCREEN_API)
     if (CheckedPtr fullscreenManager = m_fullscreenManager.get())
-        fullscreenManager->emptyEventQueue();
+        fullscreenManager->clearPendingEvents();
 #endif
 
     if (CheckedPtr svgExtensions = svgExtensionsIfExists())
@@ -1458,23 +1457,25 @@ void Document::childrenChanged(const ChildChange& change)
 static ALWAYS_INLINE CustomElementNameValidationStatus validateCustomElementNameWithoutCheckingStandardElementNames(const AtomString&);
 static ALWAYS_INLINE bool isStandardElementName(const AtomString& localName);
 
-static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(TreeScope& treeScope, const QualifiedName& name)
+static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(Document& document, CustomElementRegistry* registry, const QualifiedName& name)
 {
     ASSERT(!isStandardElementName(name.localName())); // HTMLTagNames.in lists builtin SVG/MathML elements with "-" in their names explicitly as HTMLUnknownElement.
     if (validateCustomElementNameWithoutCheckingStandardElementNames(name.localName()) != CustomElementNameValidationStatus::Valid)
-        return HTMLUnknownElement::create(name, treeScope.documentScope());
+        return HTMLUnknownElement::create(name, document);
 
-    Ref element = HTMLMaybeFormAssociatedCustomElement::create(name, treeScope.documentScope());
-    RefPtr registry = treeScope.customElementRegistry();
-    if (registry && UNLIKELY(registry->isScoped()))
-        CustomElementRegistry::addToScopedCustomElementRegistryMap(element, *registry);
+    Ref element = HTMLMaybeFormAssociatedCustomElement::create(name, document);
+
+    if (!registry)
+        registry = document.customElementRegistry();
+
     element->setIsCustomElementUpgradeCandidate();
+
     return element;
 }
 
-static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(TreeScope& treeScope, const AtomString& localName)
+static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(Document& document, CustomElementRegistry* registry, const AtomString& localName)
 {
-    return createUpgradeCandidateElement(treeScope, QualifiedName { nullAtom(), localName, xhtmlNamespaceURI });
+    return createUpgradeCandidateElement(document, registry, QualifiedName { nullAtom(), localName, xhtmlNamespaceURI });
 }
 
 static inline bool isValidHTMLElementName(const AtomString& localName)
@@ -1488,36 +1489,58 @@ static inline bool isValidHTMLElementName(const QualifiedName& name)
 }
 
 template<typename NameType>
-static ExceptionOr<Ref<Element>> createHTMLElementWithNameValidation(TreeScope& treeScope, Document& document, const NameType& name)
+static ExceptionOr<Ref<Element>> createHTMLElementWithNameValidation(TreeScope& treeScope, Document& document, const NameType& name, CustomElementRegistry* registry)
 {
-    RefPtr element = HTMLElementFactory::createKnownElement(name, document);
-    if (LIKELY(element))
-        return Ref<Element> { element.releaseNonNull() };
+    auto result = [&]() -> ExceptionOr<Ref<Element>> {
+        RefPtr element = HTMLElementFactory::createKnownElement(name, document);
+        if (LIKELY(element))
+            return Ref<Element> { element.releaseNonNull() };
 
-    if (RefPtr registry = treeScope.customElementRegistry(); UNLIKELY(registry)) {
-        if (RefPtr elementInterface = registry->findInterface(name))
-            return elementInterface->constructElementWithFallback(document, *registry, name);
+        if (!registry)
+            registry = treeScope.customElementRegistry();
+
+        if (UNLIKELY(registry)) {
+            if (RefPtr elementInterface = registry->findInterface(name))
+                return elementInterface->constructElementWithFallback(document, *registry, name);
+        }
+
+        if (UNLIKELY(!isValidHTMLElementName(name)))
+            return Exception { ExceptionCode::InvalidCharacterError };
+
+        return Ref<Element> { createUpgradeCandidateElement(document, registry, name) };
+    }();
+
+    if (UNLIKELY(registry && registry->isScoped())) {
+        if (result.hasException())
+            return result;
+        Ref element = result.releaseReturnValue();
+        CustomElementRegistry::addToScopedCustomElementRegistryMap(element, *registry);
+        return element;
     }
 
-    if (UNLIKELY(!isValidHTMLElementName(name)))
-        return Exception { ExceptionCode::InvalidCharacterError };
+    return result;
 
-    return Ref<Element> { createUpgradeCandidateElement(treeScope, name) };
 }
 
-ExceptionOr<Ref<Element>> TreeScope::createElementForBindings(const AtomString& name)
+ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& name, const ElementCreationOptions& options)
 {
     auto& document = documentScope();
+    RefPtr registry = options.customElements;
     if (document.isHTMLDocument())
-        return createHTMLElementWithNameValidation(*this, document, name.convertToASCIILowercase());
+        return createHTMLElementWithNameValidation(*this, document, name.convertToASCIILowercase(), registry.get());
 
     if (document.isXHTMLDocument())
-        return createHTMLElementWithNameValidation(*this, document, name);
+        return createHTMLElementWithNameValidation(*this, document, name, registry.get());
 
     if (!document.isValidName(name))
         return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '"_s, name, '\'') };
 
     return createElement(QualifiedName(nullAtom(), name, nullAtom()), false);
+}
+
+ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& name)
+{
+    return createElementForBindings(name, { });
 }
 
 Ref<DocumentFragment> Document::createDocumentFragment()
@@ -1566,6 +1589,41 @@ Ref<CSSStyleDeclaration> Document::createCSSStyleDeclaration()
 {
     Ref propertySet = MutableStyleProperties::create();
     return propertySet->ensureCSSStyleDeclaration();
+}
+
+ExceptionOr<Ref<Node>> Document::importNode(Node& nodeToImport, std::variant<bool, ImportNodeOptions>&& argument)
+{
+    bool subtree = false;
+    RefPtr<CustomElementRegistry> registry;
+    if (std::holds_alternative<ImportNodeOptions>(argument)) {
+        auto options = std::get<ImportNodeOptions>(argument);
+        subtree = !options.selfOnly;
+        registry = WTFMove(options.customElements);
+    } else if (std::get<bool>(argument))
+        subtree = true;
+    if (!registry)
+        registry = customElementRegistry();
+    switch (nodeToImport.nodeType()) {
+    case Node::DOCUMENT_FRAGMENT_NODE:
+        if (nodeToImport.isShadowRoot())
+            break;
+        FALLTHROUGH;
+    case Node::ELEMENT_NODE:
+    case Node::TEXT_NODE:
+    case Node::CDATA_SECTION_NODE:
+    case Node::PROCESSING_INSTRUCTION_NODE:
+    case Node::COMMENT_NODE:
+        return nodeToImport.cloneNodeInternal(*this, subtree ? Node::CloningOperation::Everything : Node::CloningOperation::OnlySelf, registry.get());
+
+    case Node::ATTRIBUTE_NODE: {
+        auto& attribute = uncheckedDowncast<Attr>(nodeToImport);
+        return Ref<Node> { Attr::create(documentScope(), attribute.qualifiedName(), attribute.value()) };
+    }
+    case Node::DOCUMENT_NODE: // Can't import a document into another document.
+    case Node::DOCUMENT_TYPE_NODE: // FIXME: Support cloning a DocumentType node per DOM4.
+        break;
+    }
+    return Exception { ExceptionCode::NotSupportedError };
 }
 
 ExceptionOr<Ref<Node>> Document::adoptNode(Node& source)
@@ -1627,44 +1685,47 @@ bool Document::hasValidNamespaceForAttributes(const QualifiedName& qName)
     return hasValidNamespaceForElements(qName);
 }
 
-static Ref<HTMLElement> createFallbackHTMLElement(TreeScope& treeScope, const QualifiedName& name)
+static Ref<HTMLElement> createFallbackHTMLElement(Document& document, RefPtr<CustomElementRegistry>&& registry, const QualifiedName& name)
 {
-    if (RefPtr registry = treeScope.customElementRegistry()) {
+    if (registry) {
         if (RefPtr elementInterface = registry->findInterface(name)) {
-            Ref element = elementInterface->createElement(treeScope.documentScope());
-            if (UNLIKELY(registry->isScoped()))
-                CustomElementRegistry::addToScopedCustomElementRegistryMap(element, *registry);
+            Ref element = elementInterface->createElement(document);
             element->setIsCustomElementUpgradeCandidate();
             element->enqueueToUpgrade(*elementInterface);
             return element;
         }
     }
     // FIXME: Should we also check the equality of prefix between the custom element and name?
-    return createUpgradeCandidateElement(treeScope, name);
+    return createUpgradeCandidateElement(document, registry.get(), name);
 }
 
 // FIXME: This should really be in a possible ElementFactory class.
-Ref<Element> TreeScope::createElement(const QualifiedName& name, bool createdByParser)
+Ref<Element> Document::createElement(const QualifiedName& name, bool createdByParser, CustomElementRegistry* registry)
 {
     RefPtr<Element> element;
-    Ref document = documentScope();
 
     // FIXME: Use registered namespaces and look up in a hash to find the right factory.
     if (name.namespaceURI() == xhtmlNamespaceURI) {
-        element = HTMLElementFactory::createKnownElement(name, document, nullptr, createdByParser);
+        element = HTMLElementFactory::createKnownElement(name, *this, nullptr, createdByParser);
         if (UNLIKELY(!element))
-            element = createFallbackHTMLElement(*this, name);
+            element = createFallbackHTMLElement(*this, registry, name);
     } else if (name.namespaceURI() == SVGNames::svgNamespaceURI)
-        element = SVGElementFactory::createElement(name, document, createdByParser);
+        element = SVGElementFactory::createElement(name, *this, createdByParser);
 #if ENABLE(MATHML)
-    else if (document->settings().mathMLEnabled() && name.namespaceURI() == MathMLNames::mathmlNamespaceURI)
-        element = MathMLElementFactory::createElement(name, document, createdByParser);
+    else if (settings().mathMLEnabled() && name.namespaceURI() == MathMLNames::mathmlNamespaceURI)
+        element = MathMLElementFactory::createElement(name, *this, createdByParser);
 #endif
 
     if (element)
-        document->setSawElementsInKnownNamespaces();
+        m_sawElementsInKnownNamespaces = true;
     else
-        element = Element::create(name, document);
+        element = Element::create(name, *this);
+
+    if (UNLIKELY(registry && registry->isScoped()))
+        CustomElementRegistry::addToScopedCustomElementRegistryMap(*element, *registry);
+
+    if (createdByParser && !registry)
+        element->setUsesNullCustomElementRegistry();
 
     // <image> uses imgTag so we need a special rule.
     ASSERT((name.matches(imageTag) && element->tagQName().matches(imgTag) && element->tagQName().prefix() == name.prefix()) || name == element->tagQName());
@@ -1848,7 +1909,7 @@ void Document::setActiveCustomElementRegistry(CustomElementRegistry* registry)
     m_activeCustomElementRegistry = registry;
 }
 
-ExceptionOr<Ref<Element>> TreeScope::createElementNS(const AtomString& namespaceURI, const AtomString& qualifiedName)
+ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceURI, const AtomString& qualifiedName)
 {
     Ref document = documentScope();
     auto opportunisticallyMatchedBuiltinElement = ([&]() -> RefPtr<Element> {
@@ -1874,9 +1935,9 @@ ExceptionOr<Ref<Element>> TreeScope::createElementNS(const AtomString& namespace
         return Exception { ExceptionCode::NamespaceError };
 
     if (parsedName.namespaceURI() == xhtmlNamespaceURI)
-        return createHTMLElementWithNameValidation(*this, documentScope(), parsedName);
+        return createHTMLElementWithNameValidation(*this, documentScope(), parsedName, nullptr);
 
-    return createElement(parsedName, false);
+    return createElement(parsedName, false, nullptr);
 }
 
 DocumentEventTiming* Document::documentEventTimingFromNavigationTiming()
@@ -2509,7 +2570,7 @@ void Document::unregisterMediaElement(HTMLMediaElement& element)
     m_mediaElements.remove(element);
 }
 
-void Document::forEachMediaElement(const Function<void(HTMLMediaElement&)>& function)
+void Document::forEachMediaElement(NOESCAPE const Function<void(HTMLMediaElement&)>& function)
 {
     ASSERT(!m_mediaElements.hasNullReferences());
     m_mediaElements.forEach([&](auto& element) {
@@ -2684,10 +2745,6 @@ void Document::resolveStyle(ResolveStyleType type)
                 documentElement->invalidateStyleForSubtree();
         }
 
-        // FIXME: Be smarter about invalidation for anchor positioning.
-        // This simply repeats the entire anchor-positioning process.
-        styleScope().clearAnchorPositioningState();
-
         Style::TreeResolver resolver(*this, WTFMove(m_pendingRenderTreeUpdate));
         auto styleUpdate = resolver.resolve();
 
@@ -2699,7 +2756,7 @@ void Document::resolveStyle(ResolveStyleType type)
                 updateRenderTree(WTFMove(styleUpdate));
 
                 if (frameView->layoutContext().needsLayout())
-                    frameView->layoutContext().layout();
+                    frameView->layoutContext().interleavedLayout();
             }
 
             styleUpdate = resolver.resolve();
@@ -2748,6 +2805,9 @@ void Document::resolveStyle(ResolveStyleType type)
 #if ENABLE(DARK_MODE_CSS)
     frameView->updateBaseBackgroundColorIfNecessary();
 #endif
+
+    if (CheckedPtr styleOriginatedTimelinesController = this->styleOriginatedTimelinesController())
+        styleOriginatedTimelinesController->documentDidResolveStyle();
 }
 
 void Document::updateTextRenderer(Text& text, unsigned offsetOfReplacedText, unsigned lengthOfReplacedText)
@@ -2938,13 +2998,13 @@ std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets
     return WTFMove(elementStyle.style);
 }
 
-bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<DimensionsCheck> dimensionsCheck)
+bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<DimensionsCheck> dimensionsCheck, OptionSet<LayoutOptions> layoutOptions)
 {
     ASSERT(isMainThread());
 
     // If the stylesheets haven't loaded, just give up and do a full layout ignoring pending stylesheets.
     if (!haveStylesheetsLoaded()) {
-        updateLayoutIgnorePendingStylesheets();
+        updateLayoutIgnorePendingStylesheets(layoutOptions);
         return true;
     }
 
@@ -2961,7 +3021,7 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
     // Mimic the structure of updateLayout(), but at each step, see if we have been forced into doing a full layout.
     if (RefPtr owner = ownerElement()) {
         if (owner->protectedDocument()->updateLayoutIfDimensionsOutOfDate(*owner)) {
-            updateLayout({ }, &element);
+            updateLayout(layoutOptions, &element);
             return true;
         }
     }
@@ -2970,19 +3030,41 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
 
     updateStyleIfNeeded();
 
+    if (layoutOptions.contains(LayoutOptions::ContentVisibilityForceLayout)) {
+        if (CheckedPtr renderer = element.renderer(); renderer &&  renderer->style().hasSkippedContent()) {
+            if (auto wasSkippedDuringLastLayout = renderer->wasSkippedDuringLastLayoutDueToContentVisibility()) {
+                if (*wasSkippedDuringLastLayout)
+                    renderer->setNeedsLayout();
+            }
+        }
+    }
+
     if (!element.renderer() || !frameView->layoutContext().needsLayout()) {
         // Tree is clean, we don't need to walk the ancestor chain to figure out whether we have a sufficiently clean subtree.
         return false;
     }
 
-    // If the renderer needs layout for any reason, give up.
+    // If the renderer needs layout for any reason other than simplified (updating overflow), give up.
     // Also, turn off this optimization for input elements with shadow content.
-    bool requireFullLayout = element.renderer()->needsLayout() || is<HTMLInputElement>(element);
+    bool requireFullLayout = is<HTMLInputElement>(element);
+    {
+        CheckedPtr renderer = element.renderer();
+        if (renderer->selfNeedsLayout() || renderer->normalChildNeedsLayout() || renderer->posChildNeedsLayout() || renderer->needsPositionedMovementLayout())
+            requireFullLayout = true;
+        if (renderer->needsSimplifiedNormalFlowLayout()) {
+            if (!dimensionsCheck.contains(DimensionsCheck::IgnoreOverflow))
+                requireFullLayout = true;
+            else if (CheckedPtr block = dynamicDowncast<RenderBlock>(*renderer); !dimensionsCheck.contains(DimensionsCheck::IgnoreOverflow) || !block || !block->canPerformSimplifiedLayout())
+                requireFullLayout = true;
+        }
+    }
+
     if (!requireFullLayout) {
         CheckedPtr<RenderBox> previousBox;
         CheckedPtr<RenderBox> currentBox;
 
         CheckedPtr renderer = element.renderer();
+
         bool hasSpecifiedLogicalHeight = renderer->style().logicalMinHeight() == Length(0, LengthType::Fixed) && renderer->style().logicalHeight().isFixed() && renderer->style().logicalMaxHeight().isAuto();
         bool isVertical = !renderer->isHorizontalWritingMode();
         bool checkingLogicalWidth = (dimensionsCheck.contains(DimensionsCheck::Width) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Height) && isVertical);
@@ -3001,6 +3083,11 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
             previousBox = std::exchange(currentBox, WTFMove(currentRendererBox));
 
             if (currentBox->style().containerType() != ContainerType::Normal) {
+                requireFullLayout = true;
+                break;
+            }
+
+            if (dimensionsCheck.containsAny({ DimensionsCheck::Left, DimensionsCheck::Top }) && (currentBox->needsPositionedMovementLayout() || currentBox->normalChildNeedsLayout())) {
                 requireFullLayout = true;
                 break;
             }
@@ -3042,7 +3129,7 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
 
     // Only do a layout if changes have occurred that make it necessary.
     if (requireFullLayout)
-        updateLayout({ }, &element);
+        updateLayout(layoutOptions, &element);
 
     return requireFullLayout;
 }
@@ -3127,7 +3214,6 @@ void Document::createRenderTree()
 {
     ASSERT(!renderView());
     ASSERT(m_backForwardCacheState != InBackForwardCache);
-    ASSERT(!m_axObjectCache || isTopDocument());
 
     if (m_isNonRenderedPlaceholder)
         return;
@@ -3476,14 +3562,16 @@ void Document::clearAXObjectCache()
     ASSERT(isTopDocument());
     // Clear the cache member variable before calling delete because attempts
     // are made to access it during destruction.
-    m_axObjectCache = nullptr;
+    if (RefPtr page = this->page())
+        page->clearAXObjectCache();
 }
 
 AXObjectCache* Document::existingAXObjectCacheSlow() const
 {
     ASSERT(hasEverCreatedAnAXObjectCache);
-    auto* mainFrameDocument = this->mainFrameDocument();
-    return mainFrameDocument ? mainFrameDocument->m_axObjectCache.get() : nullptr;
+    if (RefPtr page = this->page())
+        return page->existingAXObjectCache();
+    return nullptr;
 }
 
 AXObjectCache* Document::axObjectCache() const
@@ -3491,27 +3579,10 @@ AXObjectCache* Document::axObjectCache() const
     if (!AXObjectCache::accessibilityEnabled())
         return nullptr;
 
-    // The only document that actually has a AXObjectCache is the top-level
-    // document.  This is because we need to be able to get from any WebCoreAXObject
-    // to any other WebCoreAXObject on the same page.  Using a single cache allows
-    // lookups across nested webareas (i.e. multiple documents).
-    RefPtr mainFrameDocument = this->mainFrameDocument();
-
-    if (!mainFrameDocument) {
-        LOG_ONCE(SiteIsolation, "Unable to reach the main frame documents AXObjectCache ");
+    RefPtr page = this->page();
+    if (!page)
         return nullptr;
-    }
-
-    // If the document has already been detached, do not make a new axObjectCache.
-    if (!mainFrameDocument->hasLivingRenderTree())
-        return nullptr;
-
-    ASSERT(mainFrameDocument.get() == this || !m_axObjectCache);
-    if (!mainFrameDocument->m_axObjectCache) {
-        mainFrameDocument->m_axObjectCache = makeUnique<AXObjectCache>(*mainFrameDocument);
-        hasEverCreatedAnAXObjectCache = true;
-    }
-    return mainFrameDocument->m_axObjectCache.get();
+    return page->axObjectCache();
 }
 
 void Document::setVisuallyOrdered()
@@ -3560,6 +3631,11 @@ HighlightRegistry& Document::appHighlightRegistry()
             m_appHighlightRegistry->setHighlightVisibility(currentPage->chrome().client().appHighlightsVisiblility());
     }
     return *m_appHighlightRegistry;
+}
+
+Ref<HighlightRegistry> Document::protectedAppHighlightRegistry()
+{
+    return highlightRegistry();
 }
 
 AppHighlightStorage& Document::appHighlightStorage()
@@ -4120,7 +4196,7 @@ ExceptionOr<void> Document::write(Document* entryDocument, FixedVector<std::vari
         ));
     }
 
-    if (isTrusted || !scriptExecutionContext()->settingsValues().trustedTypesEnabled) {
+    if (isTrusted || !settings().trustedTypesEnabled()) {
         text.append(lineFeed);
         return write(entryDocument, WTFMove(text));
     }
@@ -4480,11 +4556,15 @@ void Document::disableWebAssembly(const String& errorMessage)
 
 void Document::setRequiresTrustedTypes(bool required)
 {
+    if (!settings().trustedTypesEnabled())
+        return;
+
     RefPtr frame = this->frame();
     if (!frame)
         return;
 
     frame->checkedScript()->setRequiresTrustedTypes(required);
+    m_requiresTrustedTypes = required;
 }
 
 IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
@@ -4536,27 +4616,27 @@ void Document::stopGatheringRTCLogs()
 }
 #endif
 
-bool Document::canNavigate(Frame* targetFrame, const URL& destinationURL)
+CanNavigateState Document::canNavigate(Frame* targetFrame, const URL& destinationURL)
 {
     if (!m_frame)
-        return false;
+        return CanNavigateState::Unable;
 
     // FIXME: We shouldn't call this function without a target frame, but
     // fast/forms/submit-to-blank-multiple-times.html depends on this function
     // returning true when supplied with a 0 targetFrame.
     if (!targetFrame)
-        return true;
+        return CanNavigateState::Able;
 
     if (!canNavigateInternal(*targetFrame))
-        return false;
+        return CanNavigateState::Unable;
 
     if (isNavigationBlockedByThirdPartyIFrameRedirectBlocking(*targetFrame, destinationURL)) {
         printNavigationErrorMessage(*this, *targetFrame, url(), "The frame attempting navigation of the top-level window is cross-origin or untrusted and the user has never interacted with the frame."_s);
         DOCUMENT_RELEASE_LOG_ERROR(Loading, "Navigation was prevented because it was triggered by a cross-origin or untrusted iframe");
-        return false;
+        return CanNavigateState::Unable;
     }
 
-    return true;
+    return CanNavigateState::Able;
 }
 
 bool Document::canNavigateInternal(Frame& targetFrame)
@@ -4794,10 +4874,6 @@ void Document::processMetaHttpEquiv(const String& equiv, const AtomString& conte
         setContentLanguage(content);
         break;
 
-    case HTTPHeaderName::XDNSPrefetchControl:
-        parseDNSPrefetchControlHeader(content);
-        break;
-
     case HTTPHeaderName::XFrameOptions:
         if (frame) {
             Ref frameLoader = frame->loader();
@@ -4947,7 +5023,7 @@ void Document::themeColorChanged()
 }
 
 #if ENABLE(DARK_MODE_CSS)
-static void processColorSchemeString(StringView colorScheme, const Function<void(StringView key)>& callback)
+static void processColorSchemeString(StringView colorScheme, NOESCAPE const Function<void(StringView key)>& callback)
 {
     unsigned length = colorScheme.length();
     for (unsigned i = 0; i < length; ) {
@@ -5017,7 +5093,7 @@ void Document::metaElementColorSchemeChanged()
     auto colorSchemeString = emptyString();
     for (auto& metaElement : descendantsOfType<HTMLMetaElement>(rootNode())) {
         if (auto colorScheme = parseColorScheme(metaElement)) {
-            colorSchemeString = CSS::serializationForCSS(*colorScheme);
+            colorSchemeString = CSS::serializationForCSS(CSS::defaultSerializationContext(), *colorScheme);
             break;
         }
     }
@@ -5207,7 +5283,7 @@ bool Document::canAcceptChild(const Node& newChild, const Node* refChild, Accept
     return true;
 }
 
-Ref<Node> Document::cloneNodeInternal(TreeScope&, CloningOperation type)
+Ref<Node> Document::cloneNodeInternal(Document&, CloningOperation type, CustomElementRegistry* registry)
 {
     Ref clone = cloneDocumentWithoutChildren();
     clone->cloneDataFromDocument(*this);
@@ -5216,7 +5292,7 @@ Ref<Node> Document::cloneNodeInternal(TreeScope&, CloningOperation type)
     case CloningOperation::SelfWithTemplateContent:
         break;
     case CloningOperation::Everything:
-        cloneChildNodes(clone, clone);
+        cloneChildNodes(clone, registry, clone);
         break;
     }
     return clone;
@@ -5525,7 +5601,7 @@ void Document::visibilityAdjustmentStateDidChange()
 }
 
 #if ENABLE(MEDIA_STREAM) && ENABLE(MEDIA_SESSION)
-static bool hasRealtimeMediaSource(const UncheckedKeyHashSet<Ref<RealtimeMediaSource>>& sources, const Function<bool(const RealtimeMediaSource&)>& filterSource)
+static bool hasRealtimeMediaSource(const UncheckedKeyHashSet<Ref<RealtimeMediaSource>>& sources, NOESCAPE const Function<bool(const RealtimeMediaSource&)>& filterSource)
 {
     for (Ref source : sources) {
         if (!source->isEnded() && filterSource(source.get()))
@@ -7494,6 +7570,12 @@ Document* Document::parentDocument() const
 
 Document* Document::mainFrameDocument() const
 {
+    if (settings().siteIsolationEnabled()) {
+        if (RefPtr localMainFrame = this->localMainFrame())
+            return localMainFrame->document();
+        return nullptr;
+    }
+
     // FIXME: This special-casing avoids incorrectly determined top documents during the process
     // of AXObjectCache teardown or notification posting for cached or being-destroyed documents.
     if (backForwardCacheState() == NotInBackForwardCache && !m_renderTreeBeingDestroyed) {
@@ -7507,17 +7589,6 @@ Document* Document::mainFrameDocument() const
     while (HTMLFrameOwnerElement* element = document->ownerElement())
         document = &element->document();
     return document;
-}
-
-bool Document::isTopDocument() const
-{
-    if (!settings().siteIsolationEnabled())
-        return isTopDocumentLegacy();
-
-    if (RefPtr localMainFrame = this->localMainFrame())
-        return localMainFrame->document() == this;
-
-    return false;
 }
 
 RefPtr<LocalFrame> Document::localMainFrame() const
@@ -8077,42 +8148,6 @@ TextAutoSizing& Document::textAutoSizing()
     return *m_textAutoSizing;
 }
 #endif // ENABLE(TEXT_AUTOSIZING)
-
-void Document::initDNSPrefetch()
-{
-    m_haveExplicitlyDisabledDNSPrefetch = false;
-    m_isDNSPrefetchEnabled = settings().dnsPrefetchingEnabled() && securityOrigin().protocol() == "http"_s ? TriState::True : TriState::False;
-
-    // Inherit DNS prefetch opt-out from parent frame
-    if (RefPtr parent = parentDocument()) {
-        if (!parent->isDNSPrefetchEnabled())
-            m_isDNSPrefetchEnabled = TriState::False;
-    }
-}
-
-bool Document::isDNSPrefetchEnabled() const
-{
-    if (m_isDNSPrefetchEnabled == TriState::Indeterminate)
-        const_cast<Document&>(*this).initDNSPrefetch();
-    return m_isDNSPrefetchEnabled == TriState::True;
-}
-
-void Document::parseDNSPrefetchControlHeader(const String& dnsPrefetchControl)
-{
-    if (!settings().dnsPrefetchingEnabled())
-        return;
-
-    if (m_isDNSPrefetchEnabled == TriState::Indeterminate)
-        initDNSPrefetch();
-
-    if (equalLettersIgnoringASCIICase(dnsPrefetchControl, "on"_s) && !m_haveExplicitlyDisabledDNSPrefetch) {
-        m_isDNSPrefetchEnabled = TriState::True;
-        return;
-    }
-
-    m_isDNSPrefetchEnabled = TriState::False;
-    m_haveExplicitlyDisabledDNSPrefetch = true;
-}
 
 void Document::getParserLocation(String& completedURL, unsigned& line, unsigned& column) const
 {
@@ -9034,8 +9069,8 @@ Element* eventTargetElementForDocument(Document* document)
     if (!document)
         return nullptr;
 #if ENABLE(FULLSCREEN_API) && ENABLE(VIDEO)
-    if (CheckedPtr fullscreenManager = document->fullscreenManagerIfExists(); fullscreenManager && fullscreenManager->isFullscreen() && is<HTMLVideoElement>(fullscreenManager->currentFullscreenElement()))
-        return fullscreenManager->currentFullscreenElement();
+    if (CheckedPtr fullscreenManager = document->fullscreenManagerIfExists(); fullscreenManager && fullscreenManager->isFullscreen() && is<HTMLVideoElement>(fullscreenManager->fullscreenElement()))
+        return fullscreenManager->fullscreenElement();
 #endif
     Element* element = document->focusedElement();
     if (!element) {
@@ -9245,7 +9280,7 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             elementsToSetActive.append(element);
         if (element == commonAncestor)
             sawCommonAncestor = true;
-        if (!sawCommonAncestor || element == m_hoveredElement)
+        if (!sawCommonAncestor)
             elementsToSetHover.append(element);
     }
 
@@ -10194,13 +10229,20 @@ AnimationTimelinesController& Document::ensureTimelinesController()
     return *m_timelinesController.get();
 }
 
+StyleOriginatedTimelinesController& Document::ensureStyleOriginatedTimelinesController()
+{
+    if (!m_styleOriginatedTimelinesController)
+        lazyInitialize(m_styleOriginatedTimelinesController, makeUnique<StyleOriginatedTimelinesController>());
+    return *m_styleOriginatedTimelinesController.get();
+}
+
 void Document::updateAnimationsAndSendEvents()
 {
     RefPtr domWindow = this->domWindow();
     if (!domWindow)
         return;
 
-    if (auto* timelinesController = this->timelinesController())
+    if (CheckedPtr timelinesController = this->timelinesController())
         timelinesController->updateAnimationsAndSendEvents(domWindow->frozenNowTimestamp());
 }
 
@@ -10219,7 +10261,7 @@ Vector<RefPtr<WebAnimation>> Document::getAnimations()
     });
 }
 
-Vector<RefPtr<WebAnimation>> Document::matchingAnimations(const Function<bool(Element&)>& function)
+Vector<RefPtr<WebAnimation>> Document::matchingAnimations(NOESCAPE const Function<bool(Element&)>& function)
 {
     // For the list of animations to be current, we need to account for any pending CSS changes,
     // such as updates to CSS Animations and CSS Transitions. This requires updating layout as
@@ -10783,7 +10825,7 @@ void Document::dispatchSystemPreviewActionEvent(const SystemPreviewInfo& systemP
 HTMLVideoElement* Document::pictureInPictureElement() const
 {
     if (quirks().returnNullPictureInPictureElementDuringFullscreenChange()) {
-        auto* JSDOMWindowBase = toJSDOMWindow(frame(), mainThreadNormalWorld());
+        auto* JSDOMWindowBase = toJSDOMWindow(frame(), mainThreadNormalWorldSingleton());
 
         if (!JSDOMWindowBase)
             return m_pictureInPictureElement.get();
@@ -11309,8 +11351,10 @@ ResourceMonitor& Document::resourceMonitor()
 {
     ASSERT(!frame()->isMainFrame());
 
-    if (!m_resourceMonitor)
+    if (!m_resourceMonitor) {
         m_resourceMonitor = ResourceMonitor::create(*frame());
+        DOCUMENT_RELEASE_LOG(ResourceMonitoring, "ResourceMonitor is created for the document.");
+    }
     return *m_resourceMonitor.get();
 }
 

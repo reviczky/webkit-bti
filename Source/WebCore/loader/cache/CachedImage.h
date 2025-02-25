@@ -97,6 +97,11 @@ public:
     LayoutSize unclampedImageSizeForRenderer(const RenderElement* renderer, float multiplier, SizeType = UsedSize) const;
     void computeIntrinsicDimensions(Length& intrinsicWidth, Length& intrinsicHeight, FloatSize& intrinsicRatio);
 
+    Headroom headroom() const;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    bool isHDR() const { return headroom() > Headroom::None; }
+#endif
+
     bool isManuallyCached() const { return m_isManuallyCached; }
     RevalidationDecision makeRevalidationDecision(CachePolicy) const override;
     void load(CachedResourceLoader&) override;

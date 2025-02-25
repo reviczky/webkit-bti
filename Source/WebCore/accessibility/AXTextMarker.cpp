@@ -52,9 +52,12 @@ static std::optional<AXID> nodeID(AXObjectCache& cache, Node* node)
     return std::nullopt;
 }
 
-TextMarkerData::TextMarkerData(AXObjectCache& cache, const VisiblePosition& visiblePosition, int charStart, int charOffset, bool ignoredParam)
+TextMarkerData::TextMarkerData(AXObjectCache& cache, const VisiblePosition& visiblePosition, int charStart, int charOffset, bool ignoredParam, TextMarkerOrigin originParam)
 {
     ASSERT(isMainThread());
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    RELEASE_ASSERT(!AXObjectCache::shouldCreateAXThreadCompatibleMarkers());
+#endif
 
     zeroBytes(*this);
     treeID = cache.treeID().toUInt64();
@@ -67,17 +70,27 @@ TextMarkerData::TextMarkerData(AXObjectCache& cache, const VisiblePosition& visi
     characterStart = std::max(charStart, 0);
     characterOffset = std::max(charOffset, 0);
     ignored = ignoredParam;
+    origin = originParam;
 }
 
-TextMarkerData::TextMarkerData(AXObjectCache& cache, const CharacterOffset& characterOffsetParam, bool ignoredParam)
+TextMarkerData::TextMarkerData(AXObjectCache& cache, const CharacterOffset& characterOffsetParam, bool ignoredParam, TextMarkerOrigin originParam)
 {
     ASSERT(isMainThread());
 
     zeroBytes(*this);
+
+    auto visiblePosition = cache.visiblePositionFromCharacterOffset(characterOffsetParam);
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    if (AXObjectCache::shouldCreateAXThreadCompatibleMarkers()) {
+        if (std::optional data = cache.textMarkerDataForVisiblePosition(WTFMove(visiblePosition), origin))
+            *this = *data;
+        return;
+    }
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
+
     treeID = cache.treeID().toUInt64();
     auto optionalObjectID = nodeID(cache, characterOffsetParam.node.get());
     objectID = optionalObjectID ? optionalObjectID->toUInt64() : 0;
-    auto visiblePosition = cache.visiblePositionFromCharacterOffset(characterOffsetParam);
     auto position = visiblePosition.deepEquivalent();
     offset = !visiblePosition.isNull() ? std::max(position.deprecatedEditingOffset(), 0) : 0;
     anchorType = Position::PositionIsOffsetInAnchor;
@@ -85,9 +98,10 @@ TextMarkerData::TextMarkerData(AXObjectCache& cache, const CharacterOffset& char
     characterStart = std::max(characterOffsetParam.startIndex, 0);
     characterOffset = std::max(characterOffsetParam.offset, 0);
     ignored = ignoredParam;
+    origin = originParam;
 }
 
-AXTextMarker::AXTextMarker(const VisiblePosition& visiblePosition)
+AXTextMarker::AXTextMarker(const VisiblePosition& visiblePosition, TextMarkerOrigin origin)
 {
     ASSERT(isMainThread());
 
@@ -103,11 +117,11 @@ AXTextMarker::AXTextMarker(const VisiblePosition& visiblePosition)
     if (!cache)
         return;
 
-    if (auto data = cache->textMarkerDataForVisiblePosition(visiblePosition))
+    if (auto data = cache->textMarkerDataForVisiblePosition(visiblePosition, origin))
         m_data = WTFMove(*data);
 }
 
-AXTextMarker::AXTextMarker(const CharacterOffset& characterOffset)
+AXTextMarker::AXTextMarker(const CharacterOffset& characterOffset, TextMarkerOrigin origin)
 {
     ASSERT(isMainThread());
 
@@ -115,7 +129,7 @@ AXTextMarker::AXTextMarker(const CharacterOffset& characterOffset)
         return;
 
     if (auto* cache = characterOffset.node->document().axObjectCache())
-        m_data = cache->textMarkerDataForCharacterOffset(characterOffset);
+        m_data = cache->textMarkerDataForCharacterOffset(characterOffset, origin);
 }
 
 AXTextMarker::operator VisiblePosition() const
@@ -245,24 +259,45 @@ AXTextMarkerRange::AXTextMarkerRange(const std::optional<SimpleRange>& range)
     if (!range)
         return;
 
-    auto* cache = range->start.document().axObjectCache();
-    if (!cache)
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    if (AXObjectCache::shouldCreateAXThreadCompatibleMarkers()) {
+        auto visiblePositionRange = makeVisiblePositionRange(range);
+        m_start = AXTextMarker { visiblePositionRange.start };
+        m_end = AXTextMarker { visiblePositionRange.end };
         return;
+    }
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    m_start = AXTextMarker(cache->startOrEndCharacterOffsetForRange(*range, true));
-    m_end = AXTextMarker(cache->startOrEndCharacterOffsetForRange(*range, false));
+    if (CheckedPtr cache = range->start.document().axObjectCache()) {
+        m_start = AXTextMarker(cache->startOrEndCharacterOffsetForRange(*range, true));
+        m_end = AXTextMarker(cache->startOrEndCharacterOffsetForRange(*range, false));
+    }
 }
 
 AXTextMarkerRange::AXTextMarkerRange(const AXTextMarker& start, const AXTextMarker& end)
 {
-    bool reverse = is_gt(partialOrder(start, end));
+    std::partial_ordering order = partialOrder(start, end);
+    if (order == std::partial_ordering::unordered) {
+        m_start = { };
+        m_end = { };
+        return;
+    }
+
+    bool reverse = is_gt(order);
     m_start = reverse ? end : start;
     m_end = reverse ? start : end;
 }
 
 AXTextMarkerRange::AXTextMarkerRange(AXTextMarker&& start, AXTextMarker&& end)
 {
-    bool reverse = is_gt(partialOrder(start, end));
+    std::partial_ordering order = partialOrder(start, end);
+    if (order == std::partial_ordering::unordered) {
+        m_start = { };
+        m_end = { };
+        return;
+    }
+
+    bool reverse = is_gt(order);
     m_start = reverse ? WTFMove(end) : WTFMove(start);
     m_end = reverse ? WTFMove(start) : WTFMove(end);
 }
@@ -334,6 +369,73 @@ std::optional<AXTextMarkerRange> AXTextMarkerRange::intersectionWith(const AXTex
         } };
     }
 
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    if (AXObjectCache::useAXThreadTextApis()) {
+        if (!*this || !other)
+            return { };
+
+        bool thisRangeComesBeforeOther = true;
+        auto canFindIntersectionPoint = [&] (const auto& firstRange, const auto& secondRange) -> bool {
+            RefPtr current = firstRange.m_end.object();
+            while (current) {
+                if (current->objectID() == secondRange.m_end.objectID())
+                    return true;
+
+                if (current->objectID() == secondRange.m_start.objectID()) {
+                    if (firstRange.m_end.objectID() == secondRange.m_start.objectID()) {
+                        // If these are the same, we still have an intersection.
+                        return true;
+                    }
+                    // Otherwise, we found the start of the other range after exiting out of the origin object,
+                    // meaning the ranges don't intersect, e.g.:
+                    // fo|o b|ar ^baz^
+                    return false;
+                }
+                current = current->nextInPreOrder();
+            }
+            return false;
+        };
+
+        // Start by assuming |other.end| follows |this.end|, and try to find it.
+        // Take this example, where "|" denotes the range of |this|, and "^" denotes |other|.
+        // fo|o ba^r b|az^
+        // Starting from the second |, we would find the ^ after "z". This tells us the intersection is between
+        // the second | and the first ^.
+        thisRangeComesBeforeOther = canFindIntersectionPoint(*this, other);
+
+        if (!thisRangeComesBeforeOther) {
+            // We couldn't find the other range when starting from |this.end|. The ranges may intersect the
+            // opposite way so try to find |this.end| starting from |other.end|.
+            if (!canFindIntersectionPoint(other, *this))
+                return { };
+        }
+
+        AXTextMarker intersectionStart;
+        auto intersectionEnd = thisRangeComesBeforeOther ? m_end : other.m_end;
+        RefPtr current = intersectionEnd.object();
+        // The ranges intersect. Now search backwards to find the intersection point.
+        while (current) {
+            auto axID = current->objectID();
+            if (axID == m_start.objectID()) {
+                intersectionStart = m_start;
+                break;
+            }
+            if (axID == other.m_start.objectID()) {
+                intersectionStart = other.m_start;
+                break;
+            }
+            current = current->previousInPreOrder();
+        }
+
+        if (!current)
+            return { };
+
+        if (!downcast<AXIsolatedObject>(current)->textRuns())
+            intersectionStart = { *current, /* offset */ 0 };
+        return { { WTFMove(intersectionStart), WTFMove(intersectionEnd) } };
+    }
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
+
     return Accessibility::retrieveValueFromMainThread<std::optional<AXTextMarkerRange>>([this, &other] () -> std::optional<AXTextMarkerRange> {
         auto intersection = WebCore::intersection(*this, other);
         if (intersection.isNull())
@@ -384,6 +486,24 @@ bool AXTextMarkerRange::isConfinedTo(std::optional<AXID> objectID) const
 }
 
 #if ENABLE(AX_THREAD_TEXT_APIS)
+AXTextMarker AXTextMarker::convertToDomOffset() const
+{
+    RELEASE_ASSERT(!isMainThread());
+
+    if (!isValid())
+        return { };
+    if (!isInTextRun())
+        return toTextRunMarker().convertToDomOffset();
+
+    auto newData = m_data;
+    newData.offset = runs()->domOffset(offset());
+    newData.characterOffset = m_data.offset;
+    newData.characterStart = 0;
+    newData.affinity = Affinity::Downstream;
+
+    return { newData };
+}
+
 AXTextRunLineID AXTextMarker::lineID() const
 {
     if (!isValid())
@@ -528,8 +648,38 @@ int AXTextMarker::lineNumberForIndex(unsigned index) const
 
 bool AXTextMarker::atLineBoundaryForDirection(AXDirection direction) const
 {
-    auto adjacentMarker = findMarker(direction, CoalesceObjectBreaks::No, IgnoreBRs::Yes);
-    return adjacentMarker.lineID() != lineID();
+    if (!isValid())
+        return false;
+    if (!isInTextRun())
+        return toTextRunMarker().atLineBoundaryForDirection(direction);
+
+    size_t runIndex = runs()->indexForOffset(offset());
+    TEXT_MARKER_ASSERT(runIndex != notFound);
+    RefPtr currentObject = isolatedObject();
+    const auto* currentRuns = currentObject->textRuns();
+    return atLineBoundaryForDirection(direction, currentRuns, runIndex);
+}
+
+bool AXTextMarker::atLineBoundaryForDirection(AXDirection direction, const AXTextRuns* runs, size_t runIndex) const
+{
+    auto* nextObjectWithRuns = findObjectWithRuns(*isolatedObject(), direction);
+    auto* nextRuns = nextObjectWithRuns ? nextObjectWithRuns->textRuns() : nullptr;
+    // If there are more runs in the same containing block with the same line, we are not at a start or end and can exit early.
+    // No need to continue searching when the containing block changes.
+    while (nextRuns && runs->containingBlock == nextRuns->containingBlock) {
+        // If our lineID exists beyond our current object, we can safely say we aren't at a line boundary.
+        if (runs->lineID(runIndex) == nextRuns->lineID(direction == AXDirection::Next ? 0 : nextRuns->size() - 1))
+            return false;
+        nextObjectWithRuns = findObjectWithRuns(*nextObjectWithRuns, direction);
+        nextRuns = nextObjectWithRuns ? nextObjectWithRuns->textRuns() : nullptr;
+    }
+
+    // The current line/containing block ends with the current object and runs. Now, check if we are at
+    // the start/end of the line using the marker's position within its line.
+    unsigned sumToRunIndex = runIndex ? runs->runLengthSumTo(runIndex - 1) : 0;
+    RELEASE_ASSERT(offset() >= sumToRunIndex);
+    unsigned offsetInLine = offset() - sumToRunIndex;
+    return direction == AXDirection::Previous ? !offsetInLine : runs->runLength(runIndex) == offsetInLine;
 }
 
 unsigned AXTextMarker::offsetFromRoot() const
@@ -542,15 +692,30 @@ unsigned AXTextMarker::offsetFromRoot() const
     if (RefPtr root = tree ? tree->rootNode() : nullptr) {
         AXTextMarker rootMarker { root->treeID(), root->objectID(), 0 };
         unsigned offset = 0;
-        auto current = rootMarker.toTextRunMarker();
+        auto current = rootMarker;
         while (current.isValid() && !hasSameObjectAndOffset(current)) {
+            RefPtr currentObject = current.isolatedObject();
             auto previous = current;
-            current = previous.findMarker(AXDirection::Next, CoalesceObjectBreaks::No, IgnoreBRs::No);
+            // If an object has text runs, and we are not at the very last position in those runs, use findMarker to navigate within them.
+            // Otherwise, we want to explore all objects.
+            if (currentObject->hasTextRuns() && current.runs() && current.offset() < current.runs()->totalLength()) {
+                current = previous.findMarker(AXDirection::Next, CoalesceObjectBreaks::No, IgnoreBRs::No);
+                // While searching, we want to explore all positions (hence, we don't coalesce newlines or skip line breaks above)
+                // But, don't increment if the previous and current have the same visual position.
+                if (!previous.equivalentTextPosition(current))
+                    offset++;
+            } else {
+                RefPtr nextObject = currentObject ? currentObject->nextInPreOrder() : nullptr;
+                current = nextObject ? AXTextMarker { *nextObject, 0 } : AXTextMarker();
+                bool nextOrPreviousObjectIsLineBreak = currentObject->roleValue() == AccessibilityRole::LineBreak || (nextObject && nextObject->roleValue() == AccessibilityRole::LineBreak);
 
-            // While searching, we want to explore all positions (hence, we don't coalesce newlines or skip line breaks above)
-            // But, don't increment if the previous and current have the same visual position.
-            if (!previous.equivalentTextPosition(current))
-                offset++;
+                // If we come across an object on a new line, we need to increment the offset, since the previous + current
+                // text marker won't share an equivalent visual text position.
+                // However, if we are moving on or off of a line break, don't compare lineIDs. The line break object has
+                // it's own text runs which will already be considered in the offset count.
+                if (!nextOrPreviousObjectIsLineBreak && previous.lineID() && current.lineID() && previous.lineID() != current.lineID())
+                    offset++;
+            }
         }
         // If this assert fails, it means we couldn't navigate from root to `this`, which should never happen.
         TEXT_MARKER_ASSERT_DOBULE(hasSameObjectAndOffset(current), (*this), current);
@@ -635,6 +800,71 @@ AXTextMarkerRange AXTextMarker::rangeWithSameStyle() const
     return { findMarkerWithDifferentStyle(AXDirection::Previous), findMarkerWithDifferentStyle(AXDirection::Next) };
 }
 
+static FloatRect viewportRelativeFrameFromRuns(Ref<AXIsolatedObject> object, unsigned start, unsigned end)
+{
+    const auto* runs = object->textRuns();
+    auto relativeFrame = object->relativeFrame();
+    if (!start && end == runs->totalLength()) {
+        // If the caller wants the entirety of this object's text, we don't need to to do any estimating,
+        // and can just return the relative frame.
+        return relativeFrame;
+    }
+
+    float estimatedLineHeight = relativeFrame.height() / runs->size();
+    auto runsLocalRect = runs->localRect(start, end, estimatedLineHeight);
+    // The rect we got above is a "local" rect, relative to nothing else. Move it to be
+    // anchored at this object's relative frame.
+    runsLocalRect.move(relativeFrame.x(), relativeFrame.y());
+    return runsLocalRect;
+}
+
+static FloatRect viewportRelativeFrameFromRuns(Ref<AXIsolatedObject> object, unsigned offset)
+{
+    const auto* runs = object->textRuns();
+    // Get the bounds starting from |offset| to the end of the runs.
+    return viewportRelativeFrameFromRuns(object, offset, runs->totalLength());
+}
+
+FloatRect AXTextMarkerRange::viewportRelativeFrame() const
+{
+    RELEASE_ASSERT(!isMainThread());
+
+    auto start = m_start.toTextRunMarker();
+    if (!start.isValid())
+        return { };
+    auto end = m_end.toTextRunMarker();
+    if (!end.isValid())
+        return { };
+
+    if (*start.objectID() == *end.objectID()) {
+        // The range is self-contained.
+        return viewportRelativeFrameFromRuns(*start.isolatedObject(), start.offset(), end.offset());
+    }
+
+    // The range spans multiple objects, so we'll need to traverse objects with text runs
+    // from start to end and accumulate the final bounds.
+    FloatRect result = viewportRelativeFrameFromRuns(*start.isolatedObject(), start.offset());
+
+    RefPtr current = start.isolatedObject();
+    while (current && current->objectID() != *end.objectID()) {
+        result.unite(viewportRelativeFrameFromRuns(*current, /* offset */ 0));
+        current = findObjectWithRuns(*current, AXDirection::Next, /* stopAtID */ *end.objectID());
+    }
+    result.unite(viewportRelativeFrameFromRuns(*end.isolatedObject(), /* start */ 0, /* end */ end.offset()));
+
+    return result;
+}
+
+AXTextMarkerRange AXTextMarkerRange::convertToDomOffsetRange() const
+{
+    RELEASE_ASSERT(!isMainThread());
+
+    return {
+        m_start.convertToDomOffset(),
+        m_end.convertToDomOffset()
+    };
+}
+
 String AXTextMarkerRange::toString() const
 {
     RELEASE_ASSERT(!isMainThread());
@@ -699,6 +929,8 @@ String AXTextMarkerRange::toString() const
 
 const AXTextRuns* AXTextMarker::runs() const
 {
+    ASSERT(!isMainThread());
+
     RefPtr object = isolatedObject();
     return object ? object->textRuns() : nullptr;
 }
@@ -735,30 +967,35 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, CoalesceObjectBreak
     // - ignoreBRs: In most cases, we want to skip <br> tags when not in an editable context. This is not true,
     //   for example, when computing text marker indexes.
 
-    if (!isValid())
-        return { };
-    if (!isInTextRun())
-        return toTextRunMarker().findMarker(direction, coalesceObjectBreaks, ignoreBRs, stopAtID);
-
     RefPtr object = isolatedObject();
+    if (!object) {
+        // Equivalent to checking AXTextMarker::isValid, but "inlined" because this function is super hot.
+        return { };
+    }
+    const auto* runs = object->textRuns();
+    if (!runs || !runs->size()) {
+        // Equivalent to checking AXTextMarker::isInTextRun, but "inlined" because this function is super hot.
+        return toTextRunMarker().findMarker(direction, coalesceObjectBreaks, ignoreBRs, stopAtID);
+    }
 
     // If the BR isn't in an editable ancestor, we shouldn't be including it (in most cases of findMarker).
     bool shouldSkipBR = ignoreBRs == IgnoreBRs::Yes && object && object->roleValue() == AccessibilityRole::LineBreak && !object->editableAncestor();
-    bool isWithinRunBounds = ((direction == AXDirection::Next && offset() < runs()->totalLength()) || (direction == AXDirection::Previous && offset()));
+    bool isWithinRunBounds = ((direction == AXDirection::Next && offset() < runs->totalLength()) || (direction == AXDirection::Previous && offset()));
     if (!shouldSkipBR && isWithinRunBounds) {
-        if (runs()->containsOnlyASCII) {
+        if (runs->containsOnlyASCII) {
             // In the common case where the text-runs only contain ASCII, all we need to do is the move the offset by 1,
             // which is more efficient than turning the runs into a string and creating a CachedTextBreakIterator.
             return AXTextMarker { treeID(), objectID(), direction == AXDirection::Next ? offset() + 1 : offset() - 1 };
         }
 
-        CachedTextBreakIterator iterator(runs()->toString(), { }, TextBreakIterator::CaretMode { }, nullAtom());
+        CachedTextBreakIterator iterator(runs->toString(), { }, TextBreakIterator::CaretMode { }, nullAtom());
         unsigned newOffset = direction == AXDirection::Next ? iterator.following(offset()).value_or(offset() + 1) : iterator.preceding(offset()).value_or(offset() - 1);
         return AXTextMarker { treeID(), objectID(), newOffset };
     }
 
     // offset() pointed to the last character in the given object's runs, so let's traverse to find the next object with runs.
-    if (RefPtr object = findObjectWithRuns(*isolatedObject(), direction, stopAtID)) {
+    object = findObjectWithRuns(*object, direction, stopAtID);
+    if (object) {
         RELEASE_ASSERT(direction == AXDirection::Next ? object->textRuns()->runLength(0) : object->textRuns()->lastRunLength());
 
         // The startingOffset is used to advance one position farther when we are coalescing object breaks and skipping positions.
@@ -768,7 +1005,6 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, CoalesceObjectBreak
 
         return AXTextMarker { *object, direction == AXDirection::Next ? startingOffset : object->textRuns()->lastRunLength() - startingOffset };
     }
-
     return { };
 }
 
@@ -787,8 +1023,8 @@ AXTextMarker AXTextMarker::findLine(AXDirection direction, AXTextUnitBoundary bo
 
     // If, for example, we are asked to find the next line end, and are at the very end of a line already,
     // we need the end position of the next line instead. Determine this by checking the next or previous marker.
-    auto adjacentMarker = findMarker(direction, CoalesceObjectBreaks::No, IgnoreBRs::Yes, stopAtID);
-    if (adjacentMarker.lineID() != lineID()) {
+    if (atLineBoundaryForDirection(direction, currentRuns, runIndex)) {
+        auto adjacentMarker = findMarker(direction, CoalesceObjectBreaks::No, IgnoreBRs::Yes, stopAtID);
         bool findOnNextLine = (direction == AXDirection::Previous && boundary == AXTextUnitBoundary::Start)
             || (direction == AXDirection::Next && boundary == AXTextUnitBoundary::End);
 
@@ -805,18 +1041,26 @@ AXTextMarker AXTextMarker::findLine(AXDirection direction, AXTextUnitBoundary bo
     // We found the start run and associated line, now iterate until we find a line boundary.
     while (currentObject) {
         RELEASE_ASSERT(currentRuns->size());
-        unsigned cumulativeOffset = 0;
-        for (size_t i = 0; i < currentRuns->size(); i++) {
+        unsigned cumulativeOffset = runIndex ? currentRuns->runLengthSumTo(runIndex - 1) : 0;
+        // We should search in the right direction for a change in the line index.
+        for (size_t i = runIndex; direction == AXDirection::Next ? i < currentRuns->size() : i >= 0; direction == AXDirection::Next ? i++ : i--) {
             cumulativeOffset += currentRuns->runLength(i);
             if (currentRuns->lineID(i) != startLineID)
                 return linePosition;
             linePosition = AXTextMarker(*currentObject, computeOffset(cumulativeOffset, currentRuns->runLength(i)), origin);
+
+            if (direction == AXDirection::Previous && !i) {
+                // We want to execute the loop body when i == 0, but break now to avoid underflow.
+                break;
+            }
         }
         currentObject = findObjectWithRuns(*currentObject, direction, stopAtID);
         if (currentObject) {
             if (includeTrailingLineBreak == IncludeTrailingLineBreak::No && currentObject->roleValue() == AccessibilityRole::LineBreak)
                 break;
             currentRuns = currentObject->textRuns();
+            // Reset the runIndex to 0 or the maximum, since we should start iterating from the very beginning/end of the next object's runs, depending on the direction.
+            runIndex = direction == AXDirection::Next ? 0 : currentRuns->size() - 1;
         }
     }
     return linePosition;
@@ -1060,8 +1304,7 @@ AXTextMarkerRange AXTextMarker::lineRange(LineRangeType type, IncludeTrailingLin
     if (type == LineRangeType::Current) {
         auto startMarker = atLineStart() ? *this : previousLineStart();
         auto endMarker = atLineEnd() ? *this : nextLineEnd(includeTrailingLineBreak);
-
-        return { WTFMove(startMarker), WTFMove(endMarker) };
+        return AXTextMarkerRange(startMarker, endMarker);
     } else if (type == LineRangeType::Left) {
         // Move backwards off a line start (because this is a "left-line" request).
         auto startMarker = atLineStart() ? findMarker(AXDirection::Previous) : *this;
@@ -1095,13 +1338,19 @@ AXTextMarkerRange AXTextMarker::wordRange(WordRangeType type) const
         endMarker = nextWordEnd();
         startMarker = endMarker.previousWordStart();
         // Don't return a right word if the word start is more than a position away from current text marker (e.g., there's a space between the word and current marker).
-        if (is_gt(partialOrder(startMarker, *this)))
+        std::partial_ordering order = partialOrder(startMarker, *this);
+        if (order == std::partial_ordering::unordered)
+            return { };
+        if (is_gt(order))
             return { *this, *this };
     } else {
         startMarker = previousWordStart();
         endMarker = startMarker.nextWordEnd();
         // Don't return a left word if the word end is more than a position away from current text marker.
-        if (is_lt(partialOrder(endMarker, *this)))
+        std::partial_ordering order = partialOrder(endMarker, *this);
+        if (order == std::partial_ordering::unordered)
+            return { };
+        if (is_lt(order))
             return { *this, *this };
     }
 
@@ -1178,7 +1427,11 @@ std::partial_ordering AXTextMarker::partialOrderByTraversal(const AXTextMarker& 
     if (current)
         return std::partial_ordering::greater;
 
-    RELEASE_ASSERT_NOT_REACHED();
+    // It is possible to reach here if the live and isolated trees are not synced, and [next/previous]inPreOrder
+    // is unable to traverse between two nodes. This can happen when an element's parent or subtree is removed and
+    // those updates have not been fully applied.
+    // We don't release assert here, since the callers of partialOrder can now handle unordered ordering.
+    ASSERT_NOT_REACHED();
     return std::partial_ordering::unordered;
 }
 

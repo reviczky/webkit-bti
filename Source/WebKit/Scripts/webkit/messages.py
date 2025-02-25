@@ -336,6 +336,7 @@ def serialized_identifiers():
         'WebCore::FetchIdentifier',
         'WebCore::FileSystemHandleIdentifier',
         'WebCore::FileSystemSyncAccessHandleIdentifier',
+        'WebCore::FileSystemWritableFileStreamIdentifier',
         'WebCore::FrameIdentifierID',
         'WebCore::IDBIndexIdentifier',
         'WebCore::IDBObjectStoreIdentifier',
@@ -353,7 +354,7 @@ def serialized_identifiers():
         'WebCore::OpaqueOriginIdentifier',
         'WebCore::PageIdentifier',
         'WebCore::PlatformLayerIdentifierID',
-        'WebCore::PlaybackTargetClientContextIdentifier',
+        'WebCore::PlaybackTargetClientContextID',
         'WebCore::PortIdentifier',
         'WebCore::ProcessIdentifier',
         'WebCore::PushSubscriptionIdentifier',
@@ -430,7 +431,6 @@ def serialized_identifiers():
         'WebKit::StorageNamespaceIdentifier',
         'WebKit::TapIdentifier',
         'WebKit::TextCheckerRequestID',
-        'WebKit::TransactionID',
         'WebKit::UserContentControllerIdentifier',
         'WebKit::UserScriptIdentifier',
         'WebKit::UserStyleSheetIdentifier',
@@ -482,6 +482,7 @@ def types_that_cannot_be_forward_declared():
         'WebCore::GraphicsContextGL::ExternalSyncSource',
         'WebCore::GraphicsContextGLAttributes',
         'WebCore::IntDegrees',
+        'WebCore::IndexIDToIndexKeyMap',
         'WebCore::MediaAccessDenialReason',
         'WebCore::ModalContainerControlType',
         'WebCore::NativeImageReference',
@@ -492,6 +493,7 @@ def types_that_cannot_be_forward_declared():
         'WebCore::PathDataLine',
         'WebCore::PathDataQuadCurve',
         'WebCore::PlatformLayerIdentifier',
+        'WebCore::PlaybackTargetClientContextIdentifier',
         'WebCore::PluginLoadClientPolicy',
         'WebCore::PointerID',
         'WebCore::RTCDataChannelIdentifier',
@@ -963,6 +965,7 @@ def headers_for_type(type):
         'WebCore::ImageDecodingError': ['<WebCore/ImageUtilities.h>'],
         'WebCore::InbandTextTrackPrivateMode': ['<WebCore/InbandTextTrackPrivate.h>'],
         'WebCore::IncludeSecureCookies': ['<WebCore/CookieJar.h>'],
+        'WebCore::IndexIDToIndexKeyMap': ['<WebCore/IndexKey.h>'],
         'WebCore::IndexedDB::ObjectStoreOverwriteMode': ['<WebCore/IndexedDB.h>'],
         'WebCore::InputMode': ['<WebCore/InputMode.h>'],
         'WebCore::InspectorClientDeveloperPreference': ['<WebCore/InspectorClient.h>'],
@@ -1023,6 +1026,7 @@ def headers_for_type(type):
         'WebCore::PlatformEventModifier': ['<WebCore/PlatformEvent.h>'],
         'WebCore::PlatformWheelEventPhase': ['<WebCore/PlatformWheelEvent.h>'],
         'WebCore::PlaybackSessionModelPlaybackState': ['<WebCore/PlaybackSessionModel.h>'],
+        'WebCore::PlaybackTargetClientContextID': ['<WebCore/PlaybackTargetClientContextIdentifier.h>'],
         'WebCore::PluginInfo': ['<WebCore/PluginData.h>'],
         'WebCore::PluginLoadClientPolicy': ['<WebCore/PluginData.h>'],
         'WebCore::PolicyAction': ['<WebCore/FrameLoaderTypes.h>'],
@@ -1032,11 +1036,14 @@ def headers_for_type(type):
         'WebCore::ReasonForDismissingAlternativeText': ['<WebCore/AlternativeTextClient.h>'],
         'WebCore::RecentSearch': ['<WebCore/SearchPopupMenu.h>'],
         'WebCore::RedEyeReduction': ['<WebCore/RedEyeReduction.h>'],
+        'WebCore::ResourceResponseSource': ['<WebCore/ResourceResponseBase.h>'],
         'WebCore::ReloadOption': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::RenderAsTextFlag': ['<WebCore/RenderTreeAsText.h>'],
         'WebCore::RenderingPurpose': ['<WebCore/RenderingMode.h>'],
         'WebCore::RequestStorageAccessResult': ['<WebCore/DocumentStorageAccess.h>'],
+        'WebCore::RequiresScriptTelemetry': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::RouteSharingPolicy': ['<WebCore/AudioSession.h>'],
+        'WebCore::RubberBandingBehavior': ['<WebCore/ScrollTypes.h>'],
         'WebCore::SameSiteStrictEnforcementEnabled': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::ScriptExecutionContextIdentifier': ['<WebCore/ProcessQualified.h>', '<WebCore/ScriptExecutionContextIdentifier.h>', '<wtf/ObjectIdentifier.h>'],
         'WebCore::ScheduleLocationChangeResult': ['<WebCore/NavigationScheduler.h>'],
@@ -1751,15 +1758,9 @@ def generate_js_argument_descriptions(receivers, function_name, arguments_from_m
             result.append('        return Vector<ArgumentDescription> {\n')
             for argument in argument_list:
                 argument_type = argument.type
-                enum_type = None
-                is_optional = False
                 if argument.kind.startswith('enum:'):
-                    enum_type = '"%s"_s' % argument_type
                     argument_type = argument.kind[5:]
-                if argument_type.startswith('std::optional<') and argument_type.endswith('>'):
-                    argument_type = argument_type[14:-1]
-                    is_optional = True
-                result.append('            { "%s"_s, "%s"_s, %s, %s },\n' % (argument.name, argument_type, enum_type or 'ASCIILiteral()', 'true' if is_optional else 'false'))
+                result.append('            { "%s"_s, "%s"_s },\n' % (argument.name, argument_type))
             result.append('        };\n')
         if previous_message_condition:
             result.append('#endif\n')

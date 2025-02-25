@@ -81,6 +81,7 @@
 #include "HitTestRequest.h"
 #include "HitTestResult.h"
 #include "HitTestingTransformState.h"
+#include "ImageDocument.h"
 #include "InspectorInstrumentation.h"
 #include "LegacyRenderSVGForeignObject.h"
 #include "LegacyRenderSVGResourceClipper.h"
@@ -400,6 +401,16 @@ RenderLayer::~RenderLayer()
     // Layer and all its children should be removed from the tree before destruction.
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(renderer().renderTreeBeingDestroyed() || !parent());
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(renderer().renderTreeBeingDestroyed() || !firstChild());
+}
+
+RenderLayer::PaintedContentRequest::PaintedContentRequest(const RenderLayer& owningLayer)
+{
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    if (owningLayer.page().canDrawHDRContent())
+        makePaintedHDRContentUnknown();
+#else
+    UNUSED_PARAM(owningLayer);
+#endif
 }
 
 void RenderLayer::addChild(RenderLayer& child, RenderLayer* beforeChild)
@@ -4465,7 +4476,7 @@ static RefPtr<Element> flattenedParent(Element* element)
         return nullptr;
     RefPtr parent = element->parentElementInComposedTree();
     while (parent) {
-        if (parent->computedStyle()->display() != DisplayType::Contents)
+        if (!parent->isConnected() || parent->computedStyle()->display() != DisplayType::Contents)
             break;
         parent = parent->parentElementInComposedTree();
     }
@@ -5763,15 +5774,42 @@ static bool hasVisibleBoxDecorationsOrBackground(const RenderElement& renderer)
     return renderer.hasVisibleBoxDecorations() || renderer.style().hasOutline();
 }
 
-// Constrain the depth and breadth of the search for performance.
-static const unsigned maxRendererTraversalCount = 200;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+static bool isReplacedElementWithHDR(const RenderElement& renderer)
+{
+    if (CheckedPtr imageRenderer = dynamicDowncast<RenderImage>(renderer)) {
+        if (auto* cachedImage = imageRenderer->cachedImage()) {
+            if (cachedImage->isHDR())
+                return true;
+        }
+        return false;
+    }
+
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
+    if (CheckedPtr canavsRenderer = dynamicDowncast<RenderHTMLCanvas>(renderer)) {
+        if (auto* renderingContext = canavsRenderer->canvasElement().renderingContext()) {
+            if (renderingContext->isHDR())
+                return true;
+        }
+        return false;
+    }
+#endif
+
+    return false;
+}
+#endif
 
 static void determineNonLayerDescendantsPaintedContent(const RenderElement& renderer, unsigned& renderersTraversed, RenderLayer::PaintedContentRequest& request)
 {
+    // Constrain the depth and breadth of the search for performance.
+    static constexpr unsigned maxRendererTraversalCount = 200;
+
     for (const auto& child : childrenOfType<RenderObject>(renderer)) {
         if (++renderersTraversed > maxRendererTraversalCount) {
-            request.makeStatesUndetermined();
-            return;
+            if (!request.isPaintedContentSatisfied())
+                request.makePaintedContentUndetermined();
+            if (request.isSatisfied())
+                return;
         }
 
         if (CheckedPtr renderText = dynamicDowncast<RenderText>(child)) {
@@ -5808,18 +5846,40 @@ static void determineNonLayerDescendantsPaintedContent(const RenderElement& rend
                 return;
         }
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        if (!request.isPaintedHDRContentSatisfied() && isReplacedElementWithHDR(*childElement)) {
+            request.setHasPaintedHDRContent();
+
+            if (request.isSatisfied())
+                return;
+        }
+#endif
+
         determineNonLayerDescendantsPaintedContent(*childElement, renderersTraversed, request);
         if (request.isSatisfied())
             return;
     }
 }
 
-bool RenderLayer::hasNonEmptyChildRenderers(PaintedContentRequest& request) const
+void RenderLayer::determineNonLayerDescendantsPaintedContent(PaintedContentRequest& request) const
 {
     unsigned renderersTraversed = 0;
-    determineNonLayerDescendantsPaintedContent(renderer(), renderersTraversed, request);
-    return request.probablyHasPaintedContent();
+    WebCore::determineNonLayerDescendantsPaintedContent(renderer(), renderersTraversed, request);
 }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+bool RenderLayer::isReplacedElementWithHDR() const
+{
+    if (auto* imageDocument = dynamicDowncast<ImageDocument>(renderer().document())) {
+        if (RefPtr imageElement = imageDocument->imageElement()) {
+            if (auto* cachedImage = imageElement->cachedImage())
+                return cachedImage->isHDR();
+        }
+        return false;
+    }
+    return WebCore::isReplacedElementWithHDR(renderer());
+}
+#endif
 
 bool RenderLayer::hasVisibleBoxDecorationsOrBackground() const
 {
@@ -5868,7 +5928,8 @@ bool RenderLayer::isVisuallyNonEmpty(PaintedContentRequest* request) const
     if (!request)
         request = &localRequest;
 
-    return hasNonEmptyChildRenderers(*request);
+    determineNonLayerDescendantsPaintedContent(*request);
+    return request->probablyHasPaintedContent();
 }
 
 void RenderLayer::styleChanged(StyleDifference diff, const RenderStyle* oldStyle)
@@ -6169,6 +6230,19 @@ bool RenderLayer::isTransparentRespectingParentFrames() const
     return false;
 }
 
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+bool RenderLayer::allowsDynamicContentScaling() const
+{
+    if (is<RenderHTMLCanvas>(renderer()))
+        return false;
+
+    if (isBitmapOnly())
+        return false;
+
+    return true;
+}
+#endif
+
 bool RenderLayer::isBitmapOnly() const
 {
     if (hasVisibleBoxDecorationsOrBackground())
@@ -6215,6 +6289,11 @@ void RenderLayer::markFrontBufferVolatileForTesting()
 RenderLayerScrollableArea* RenderLayer::scrollableArea() const
 {
     return m_scrollableArea.get();
+}
+
+CheckedPtr<RenderLayerScrollableArea> RenderLayer::checkedScrollableArea() const
+{
+    return scrollableArea();
 }
 
 #if ENABLE(ASYNC_SCROLLING) && !LOG_DISABLED

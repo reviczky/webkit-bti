@@ -33,6 +33,7 @@
 #include "GridPositionsResolver.h"
 #include "HitTestRequest.h"
 #include "ImageOrientation.h"
+#include "PositionArea.h"
 #include "RenderStyle.h"
 #include "ScrollTypes.h"
 #include "ScrollbarColor.h"
@@ -81,6 +82,7 @@ constexpr auto RenderStyle::allTransformOperations() -> OptionSet<TransformOpera
 inline const AnimationList* RenderStyle::animations() const { return m_nonInheritedData->miscData->animations.get(); }
 inline AnimationList* RenderStyle::animations() { return m_nonInheritedData->miscData->animations.get(); }
 inline const Vector<Style::ScopedName>& RenderStyle::anchorNames() const { return m_nonInheritedData->rareData->anchorNames; }
+inline const NameScope& RenderStyle::anchorScope() const { return m_nonInheritedData->rareData->anchorScope; }
 inline StyleAppearance RenderStyle::appearance() const { return static_cast<StyleAppearance>(m_nonInheritedData->miscData->appearance); }
 inline const FilterOperations& RenderStyle::appleColorFilter() const { return m_rareInheritedData->appleColorFilter->operations; }
 #if HAVE(CORE_MATERIAL)
@@ -212,6 +214,9 @@ inline const ContentData* RenderStyle::contentData() const { return m_nonInherit
 inline ContentVisibility RenderStyle::contentVisibility() const { return static_cast<ContentVisibility>(m_nonInheritedData->rareData->contentVisibility); }
 inline CursorList* RenderStyle::cursors() const { return m_rareInheritedData->cursorData.get(); }
 inline StyleAppearance RenderStyle::usedAppearance() const { return static_cast<StyleAppearance>(m_nonInheritedData->miscData->usedAppearance); }
+#if HAVE(CORE_MATERIAL)
+inline AppleVisualEffect RenderStyle::usedAppleVisualEffectForSubtree() const { return static_cast<AppleVisualEffect>(m_rareInheritedData->usedAppleVisualEffectForSubtree); }
+#endif
 inline OptionSet<Containment> RenderStyle::usedContain() const { return m_nonInheritedData->rareData->usedContain(); }
 inline bool RenderStyle::effectiveInert() const { return m_rareInheritedData->effectiveInert; }
 inline PointerEvents RenderStyle::usedPointerEvents() const { return effectiveInert() ? PointerEvents::None : pointerEvents(); }
@@ -346,6 +351,7 @@ inline const NamedGridLinesMap& RenderStyle::implicitNamedGridRowLines() const {
 constexpr auto RenderStyle::individualTransformOperations() -> OptionSet<TransformOperationOption> { return { TransformOperationOption::Translate, TransformOperationOption::Rotate, TransformOperationOption::Scale, TransformOperationOption::Offset }; }
 inline const StyleCustomPropertyData& RenderStyle::inheritedCustomProperties() const { return m_rareInheritedData->customProperties.get(); }
 inline Vector<Style::ScopedName> RenderStyle::initialAnchorNames() { return { }; }
+inline NameScope RenderStyle::initialAnchorScope() { return { }; }
 constexpr StyleAppearance RenderStyle::initialAppearance() { return StyleAppearance::None; }
 #if HAVE(CORE_MATERIAL)
 constexpr AppleVisualEffect RenderStyle::initialAppleVisualEffect() { return AppleVisualEffect::None; }
@@ -470,6 +476,7 @@ inline Length RenderStyle::initialPerspectiveOriginY() { return { 50.0f, LengthT
 constexpr PointerEvents RenderStyle::initialPointerEvents() { return PointerEvents::Auto; }
 constexpr PositionType RenderStyle::initialPosition() { return PositionType::Static; }
 inline std::optional<Style::ScopedName> RenderStyle::initialPositionAnchor() { return { }; }
+inline std::optional<PositionArea> RenderStyle::initialPositionArea() { return { }; }
 inline Vector<PositionTryFallback> RenderStyle::initialPositionTryFallbacks() { return { }; }
 constexpr Style::PositionTryOrder RenderStyle::initialPositionTryOrder() { return Style::PositionTryOrder::Normal; }
 constexpr PrintColorAdjust RenderStyle::initialPrintColorAdjust() { return PrintColorAdjust::Economy; }
@@ -539,7 +546,7 @@ inline Vector<ViewTimelineInsets> RenderStyle::initialViewTimelineInsets() { ret
 inline Vector<Style::ScopedName> RenderStyle::initialViewTransitionClasses() { return { }; }
 inline Style::ViewTransitionName RenderStyle::initialViewTransitionName() { return Style::ViewTransitionName::createWithNone(); }
 constexpr Visibility RenderStyle::initialVisibility() { return Visibility::Visible; }
-inline const TimelineScope RenderStyle::initialTimelineScope() { return { }; }
+inline const NameScope RenderStyle::initialTimelineScope() { return { }; }
 constexpr WhiteSpaceCollapse RenderStyle::initialWhiteSpaceCollapse() { return WhiteSpaceCollapse::Collapse; }
 constexpr WordBreak RenderStyle::initialWordBreak() { return WordBreak::Normal; }
 inline Length RenderStyle::initialLetterSpacing() { return zeroLength(); }
@@ -695,6 +702,7 @@ inline LengthPoint RenderStyle::perspectiveOrigin() const { return m_nonInherite
 inline const Length& RenderStyle::perspectiveOriginX() const { return m_nonInheritedData->rareData->perspectiveOriginX; }
 inline const Length& RenderStyle::perspectiveOriginY() const { return m_nonInheritedData->rareData->perspectiveOriginY; }
 inline const std::optional<Style::ScopedName>& RenderStyle::positionAnchor() const { return m_nonInheritedData->rareData->positionAnchor; }
+inline std::optional<PositionArea> RenderStyle::positionArea() const { return m_nonInheritedData->rareData->positionArea; }
 inline Style::PositionTryOrder RenderStyle::positionTryOrder() const { return static_cast<Style::PositionTryOrder>(m_nonInheritedData->rareData->positionTryOrder); }
 inline bool RenderStyle::preserveNewline() const { return preserveNewline(whiteSpaceCollapse()); }
 inline bool RenderStyle::preserves3D() const { return usedTransformStyle3D() == TransformStyle3D::Preserve3D; }
@@ -714,7 +722,7 @@ inline const Vector<Ref<ViewTimeline>>& RenderStyle::viewTimelines() const { ret
 inline const Vector<ScrollAxis>& RenderStyle::viewTimelineAxes() const { return m_nonInheritedData->rareData->viewTimelineAxes; }
 inline const Vector<ViewTimelineInsets>& RenderStyle::viewTimelineInsets() const { return m_nonInheritedData->rareData->viewTimelineInsets; }
 inline const Vector<AtomString>& RenderStyle::viewTimelineNames() const { return m_nonInheritedData->rareData->viewTimelineNames; }
-inline const TimelineScope& RenderStyle::timelineScope() const { return m_nonInheritedData->rareData->timelineScope; }
+inline const NameScope& RenderStyle::timelineScope() const { return m_nonInheritedData->rareData->timelineScope; }
 inline std::optional<ScrollbarColor> RenderStyle::scrollbarColor() const { return m_rareInheritedData->scrollbarColor.asOptional(); }
 inline const Style::Color& RenderStyle::scrollbarThumbColor() const { return m_rareInheritedData->scrollbarColor->thumbColor; }
 inline const Style::Color& RenderStyle::scrollbarTrackColor() const { return m_rareInheritedData->scrollbarColor->trackColor; }
@@ -854,6 +862,9 @@ inline FilterOperations RenderStyle::initialBackdropFilter() { return { }; }
 
 inline bool RenderStyle::hasExplicitlySetDirection() const { return m_nonInheritedData->miscData->hasExplicitlySetDirection; }
 inline bool RenderStyle::hasExplicitlySetWritingMode() const { return m_nonInheritedData->miscData->hasExplicitlySetWritingMode; }
+
+inline const Style::DynamicRangeLimit& RenderStyle::dynamicRangeLimit() const { return m_rareInheritedData->dynamicRangeLimit; }
+inline Style::DynamicRangeLimit RenderStyle::initialDynamicRangeLimit() { return CSS::Keyword::NoLimit { }; }
 
 #if PLATFORM(IOS_FAMILY)
 inline bool RenderStyle::touchCalloutEnabled() const { return m_rareInheritedData->touchCalloutEnabled; }

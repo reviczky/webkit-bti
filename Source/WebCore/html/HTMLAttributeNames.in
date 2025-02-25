@@ -230,6 +230,7 @@ oncanplaythrough
 onchange
 onclick
 onclose
+oncommand
 oncontentvisibilityautostatechange
 oncontextmenu
 oncopy
@@ -391,8 +392,10 @@ scrolling
 select
 selected
 shadowrootclonable
+shadowrootcustomelements
 shadowrootdelegatesfocus
 shadowrootmode
+shadowrootreferencetarget
 shadowrootserializable
 shape
 size

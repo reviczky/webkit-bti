@@ -59,6 +59,7 @@
 namespace WebCore {
 class CertificateInfo;
 class NetworkStorageSession;
+class ResourceMonitorThrottlerHolder;
 class ResourceRequest;
 class ResourceError;
 class SWServer;
@@ -293,6 +294,14 @@ public:
     bool isDeclarativeWebPushEnabled() const { return m_isDeclarativeWebPushEnabled; }
 #endif
 
+#if ENABLE(CONTENT_EXTENSIONS)
+    WebCore::ResourceMonitorThrottlerHolder& resourceMonitorThrottler();
+    Ref<WebCore::ResourceMonitorThrottlerHolder> protectedResourceMonitorThrottler();
+
+    void clearResourceMonitorThrottlerData(CompletionHandler<void()>&&);
+    void resetResourceMonitorThrottlerForTesting();
+#endif
+
 protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
 
@@ -309,9 +318,10 @@ protected:
     Ref<WebCore::BackgroundFetchStore> createBackgroundFetchStore() final;
 
     BackgroundFetchStoreImpl& ensureBackgroundFetchStore();
+    Ref<BackgroundFetchStoreImpl> ensureProtectedBackgroundFetchStore();
 
     PAL::SessionID m_sessionID;
-    Ref<NetworkProcess> m_networkProcess;
+    const Ref<NetworkProcess> m_networkProcess;
     ThreadSafeWeakHashSet<NetworkDataTask> m_dataTaskSet;
     String m_resourceLoadStatisticsDirectory;
     RefPtr<WebResourceLoadStatisticsStore> m_resourceLoadStatistics;
@@ -329,7 +339,7 @@ protected:
     HashMap<String, WebCore::IPAddress> m_firstPartyHostIPAddresses;
     std::optional<WebCore::RegistrableDomain> m_thirdPartyCNAMEDomainForTesting;
     bool m_isStaleWhileRevalidateEnabled { false };
-    Ref<PCM::ManagerInterface> m_privateClickMeasurement;
+    const Ref<PCM::ManagerInterface> m_privateClickMeasurement;
     bool m_privateClickMeasurementDebugModeEnabled { false };
     std::optional<WebCore::PrivateClickMeasurement> m_ephemeralMeasurement;
     bool m_isRunningEphemeralMeasurementTest { false };
@@ -401,6 +411,10 @@ protected:
 #endif
 #if ENABLE(DECLARATIVE_WEB_PUSH)
     bool m_isDeclarativeWebPushEnabled { false };
+#endif
+#if ENABLE(CONTENT_EXTENSIONS)
+    RefPtr<WebCore::ResourceMonitorThrottlerHolder> m_resourceMonitorThrottler;
+    String m_resourceMonitorThrottlerDirectory;
 #endif
 };
 

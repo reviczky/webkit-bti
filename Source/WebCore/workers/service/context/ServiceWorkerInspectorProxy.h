@@ -50,9 +50,9 @@ public:
 
     void serviceWorkerTerminated();
 
-    void connectToWorker(Inspector::FrontendChannel&);
-    void disconnectFromWorker(Inspector::FrontendChannel&);
-    void sendMessageToWorker(String&&);
+    WEBCORE_EXPORT void connectToWorker(Inspector::FrontendChannel&);
+    WEBCORE_EXPORT void disconnectFromWorker(Inspector::FrontendChannel&);
+    WEBCORE_EXPORT void sendMessageToWorker(String&&);
     void sendMessageFromWorkerToFrontend(String&&);
 
 private:

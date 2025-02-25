@@ -54,6 +54,10 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomStringHash.h>
 
+#if USE(COORDINATED_GRAPHICS)
+#include "CoordinatedPlatformLayerBufferVideo.h"
+#endif
+
 typedef struct _GstMpegtsSection GstMpegtsSection;
 
 // Include the <epoxy/gl.h> header before <gst/gl/gl.h>.
@@ -238,6 +242,11 @@ public:
         return m_quirkStates.get(owner);
     }
 
+    void setLiveStream(bool isLiveStream) { m_isLiveStream = isLiveStream; }
+
+    bool requiresVideoSinkCapsNotifications() const;
+    void videoSinkCapsChanged(GstPad*);
+
 protected:
     enum MainThreadNotification {
         VideoChanged = 1 << 0,
@@ -258,6 +267,9 @@ protected:
         ManuallyPaused,
         // Pipeline was playing and rate was set to zero.
         RatePaused,
+        // Pipeline was playing and had to be paused for buffering reasons. This state is
+        // like ManuallyPaused, but not requested by the user.
+        BufferingPaused,
         // Pipeline was paused because of zero rate and it should be playing. This is not a
         // definitive state, just an operational transition from RatePaused to Playing to keep the
         // pipeline state changes contained in updateStates.
@@ -372,7 +384,7 @@ protected:
     bool m_areVolumeAndMuteInitialized { false };
 
     // Reflects whether the pipeline was paused due to the HTMLMediaElement being both muted and invisible in the viewport.
-    bool m_isPausedByViewport { false };
+    bool isPausedByViewport() const { return m_stateToRestoreWhenVisible != GST_STATE_VOID_PENDING; };
 
 #if USE(TEXTURE_MAPPER)
     OptionSet<TextureMapperFlags> m_textureMapperFlags;
@@ -459,6 +471,7 @@ private:
     void fillTimerFired();
     void didEnd();
     void setPlaybackFlags(bool isMediaStream);
+    void recalculateDurationIfNeeded() const; // It's called from other const methods.
 
     GstElement* createVideoSink();
     GstElement* createAudioSink();
@@ -484,7 +497,7 @@ private:
 
     virtual void updateDownloadBufferingFlag();
     void processBufferingStats(GstMessage*);
-    void updateBufferingStatus(GstBufferingMode, double percentage, bool resetHistory = false);
+    void updateBufferingStatus(GstBufferingMode, double percentage, bool resetHistory = false, bool shouldUpdateStates = true);
     void updateMaxTimeLoaded(double percentage);
 
 #if USE(GSTREAMER_MPEGTS)
@@ -513,7 +526,6 @@ private:
     void setPlaybinURL(const URL& urlString);
 
     void updateTracks(const GRefPtr<GstObject>& collectionOwner);
-    void videoSinkCapsChanged(GstPad*);
     void updateVideoSizeAndOrientationFromCaps(const GstCaps*);
     bool hasFirstVideoSampleReachedSink() const;
 
@@ -627,7 +639,7 @@ private:
     bool m_didTryToRecoverPlayingState { false };
 
     // The state the pipeline should be set back to after the player becomes visible in the viewport again.
-    GstState m_invisiblePlayerState { GST_STATE_VOID_PENDING };
+    GstState m_stateToRestoreWhenVisible { GST_STATE_VOID_PENDING };
 
     // Specific to MediaStream playback.
     MediaTime m_startTime;
@@ -637,7 +649,7 @@ private:
     Lock m_codecsLock;
     TrackIDHashMap<String> m_codecs WTF_GUARDED_BY_LOCK(m_codecsLock);
 
-    bool isSeamlessSeekingEnabled() const { return m_seekFlags & (1 << GST_SEEK_FLAG_SEGMENT); }
+    bool isSeamlessSeekingEnabled() const { return m_seekFlags & GST_SEEK_FLAG_SEGMENT; }
 
     Ref<PlatformMediaResourceLoader> m_loader;
 
@@ -645,6 +657,13 @@ private:
     UncheckedKeyHashMap<const GStreamerQuirk*, std::unique_ptr<GStreamerQuirkBase::GStreamerQuirkState>> m_quirkStates;
 
     MediaTime m_estimatedVideoFrameDuration { MediaTime::zeroTime() };
+
+#if USE(COORDINATED_GRAPHICS)
+    void updateVideoInfoFromCaps(GstCaps*);
+
+    std::optional<DMABufFormat> m_dmabufFormat;
+    GstVideoInfo m_videoInfo;
+#endif
 };
 
 } // namespace WebCore

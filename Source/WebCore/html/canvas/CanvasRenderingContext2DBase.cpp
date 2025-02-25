@@ -41,6 +41,7 @@
 #include "CSSPropertyNames.h"
 #include "CSSPropertyParserConsumer+LengthDefinitions.h"
 #include "CSSPropertyParserConsumer+MetaConsumer.h"
+#include "CSSSerializationContext.h"
 #include "CSSStyleImageValue.h"
 #include "CSSTokenizer.h"
 #include "CachedImage.h"
@@ -3022,7 +3023,16 @@ FloatPoint CanvasRenderingContext2DBase::textOffset(float width, TextDirection d
 ImageBufferPixelFormat CanvasRenderingContext2DBase::pixelFormat() const
 {
     // FIXME: Take m_settings.alpha into account here and add PixelFormat::BGRX8.
-    return ImageBufferPixelFormat::BGRA8;
+    switch (m_settings.pixelFormat) {
+    case CanvasRenderingContext2DSettings::PixelFormat::Uint8:
+        return ImageBufferPixelFormat::BGRA8;
+    case CanvasRenderingContext2DSettings::PixelFormat::Float16:
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
+        return ImageBufferPixelFormat::RGBA16F;
+#else
+        return ImageBufferPixelFormat::BGRA8;
+#endif
+    }
 }
 
 DestinationColorSpace CanvasRenderingContext2DBase::colorSpace() const
@@ -3144,7 +3154,7 @@ void CanvasRenderingContext2DBase::setLetterSpacing(const String& letterSpacing)
     auto& fontCascade = fontProxy()->fontCascade();
     double pixels = Style::computeUnzoomedNonCalcLengthDouble(rawLength->value, rawLength->unit, CSSPropertyLetterSpacing, &fontCascade);
 
-    modifiableState().letterSpacing = CSS::serializationForCSS(*rawLength);
+    modifiableState().letterSpacing = CSS::serializationForCSS(CSS::defaultSerializationContext(), *rawLength);
     modifiableState().font.setLetterSpacing(Length(pixels, LengthType::Fixed));
 }
 
@@ -3169,7 +3179,7 @@ void CanvasRenderingContext2DBase::setWordSpacing(const String& wordSpacing)
     auto& fontCascade = fontProxy()->fontCascade();
     double pixels = Style::computeUnzoomedNonCalcLengthDouble(rawLength->value, rawLength->unit, CSSPropertyWordSpacing, &fontCascade);
 
-    modifiableState().wordSpacing = CSS::serializationForCSS(*rawLength);
+    modifiableState().wordSpacing = CSS::serializationForCSS(CSS::defaultSerializationContext(), *rawLength);
     modifiableState().font.setWordSpacing(Length(pixels, LengthType::Fixed));
 }
 

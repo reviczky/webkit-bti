@@ -126,7 +126,7 @@ public:
     virtual void adjustRepaintRect(const RenderBox&, FloatRect&) { }
 
     // A method asking if the theme is able to draw the focus ring.
-    virtual bool supportsFocusRing(const RenderStyle&) const;
+    virtual bool supportsFocusRing(const RenderObject&, const RenderStyle&) const;
 
     // A method asking if the theme's controls actually care about redrawing when hovered.
     virtual bool supportsHover() const { return false; }
@@ -208,6 +208,7 @@ public:
     virtual bool shouldHaveSpinButton(const HTMLInputElement&) const;
     virtual bool shouldHaveCapsLockIndicator(const HTMLInputElement&) const { return false; }
 
+    virtual void createColorWellSwatchSubtree(HTMLElement&) { }
     virtual void setColorWellSwatchBackground(HTMLElement&, Color);
 
     // Functions for <select> elements.
@@ -241,9 +242,9 @@ public:
     virtual Seconds switchAnimationHeldDuration() const { return 0_s; }
     float switchPointerTrackingMagnitudeProportion() const { return 0.4f; }
     virtual bool hasSwitchHapticFeedback(SwitchTrigger) const { return false; }
+    OptionSet<ControlStyle::State> extractControlStyleStatesForRenderer(const RenderObject&) const;
 
 protected:
-    OptionSet<ControlStyle::State> extractControlStyleStatesForRenderer(const RenderObject&) const;
     ControlStyle extractControlStyleForRenderer(const RenderObject&) const;
 
     virtual bool canPaint(const PaintInfo&, const Settings&, StyleAppearance) const { return true; }
@@ -303,9 +304,6 @@ protected:
     virtual void adjustMenuListButtonStyle(RenderStyle&, const Element*) const { }
     virtual void paintMenuListButtonDecorations(const RenderBox&, const PaintInfo&, const FloatRect&) { }
 
-    virtual void paintPushButtonDecorations(const RenderObject&, const PaintInfo&, const IntRect&) { }
-    virtual void paintSquareButtonDecorations(const RenderObject&, const PaintInfo&, const IntRect&) { }
-
     virtual void adjustMeterStyle(RenderStyle&, const Element*) const;
     virtual bool paintMeter(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
 
@@ -337,7 +335,7 @@ protected:
     virtual bool paintSliderThumb(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
 
     virtual void adjustSearchFieldStyle(RenderStyle&, const Element*) const { }
-    virtual bool paintSearchField(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
+    virtual bool paintSearchField(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
     virtual void paintSearchFieldDecorations(const RenderBox&, const PaintInfo&, const IntRect&) { }
 
     virtual void adjustSearchFieldCancelButtonStyle(RenderStyle&, const Element*) const { }

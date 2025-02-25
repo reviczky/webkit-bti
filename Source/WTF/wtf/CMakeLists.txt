@@ -6,6 +6,7 @@ set(WTF_PUBLIC_HEADERS
     AccessibleAddress.h
     AggregateLogger.h
     Algorithms.h
+    AlignedStorage.h
     AnsiColors.h
     ApproximateTime.h
     ArgumentCoder.h
@@ -167,6 +168,7 @@ set(WTF_PUBLIC_HEADERS
     MainThread.h
     MainThreadData.h
     MainThreadDispatcher.h
+    MallocCommon.h
     MallocPtr.h
     MallocSpan.h
     Markable.h
@@ -180,7 +182,6 @@ set(WTF_PUBLIC_HEADERS
     Mmap.h
     MonotonicTime.h
     NakedPtr.h
-    NakedRef.h
     NativePromise.h
     NaturalLoops.h
     NeverDestroyed.h
@@ -543,6 +544,7 @@ set(WTF_SOURCES
     Logging.cpp
     MainThread.cpp
     MainThreadDispatcher.cpp
+    MallocCommon.cpp
     MediaTime.cpp
     MemoryPressureHandler.cpp
     MetaAllocator.cpp

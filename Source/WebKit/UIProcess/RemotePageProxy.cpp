@@ -38,6 +38,7 @@
 #include "RemotePageDrawingAreaProxy.h"
 #include "RemotePageFullscreenManagerProxy.h"
 #include "RemotePageVisitedLinkStoreRegistration.h"
+#include "UserMediaProcessManager.h"
 #include "WebFrameProxy.h"
 #include "WebPageMessages.h"
 #include "WebPageProxy.h"
@@ -45,6 +46,8 @@
 #include "WebProcessActivityState.h"
 #include "WebProcessMessages.h"
 #include "WebProcessProxy.h"
+#include <WebCore/MediaProducer.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/RemoteUserInputEventData.h>
 #include <wtf/TZoneMallocInlines.h>
 
@@ -52,13 +55,13 @@ namespace WebKit {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemotePageProxy);
 
-Ref<RemotePageProxy> RemotePageProxy::create(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer)
+Ref<RemotePageProxy> RemotePageProxy::create(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer, std::optional<WebCore::PageIdentifier> pageIDToTransfer)
 {
-    return adoptRef(*new RemotePageProxy(page, process, site, registrationToTransfer));
+    return adoptRef(*new RemotePageProxy(page, process, site, registrationToTransfer, pageIDToTransfer));
 }
 
-RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer)
-    : m_webPageID(page.webPageIDInMainFrameProcess()) // FIXME: We should generate a new identifier so that it will be more obvious when we get things wrong.
+RemotePageProxy::RemotePageProxy(WebPageProxy& page, WebProcessProxy& process, const WebCore::Site& site, WebPageProxyMessageReceiverRegistration* registrationToTransfer, std::optional<WebCore::PageIdentifier> pageIDToTransfer)
+    : m_webPageID(pageIDToTransfer.value_or(WebCore::PageIdentifier::generate()))
     , m_process(process)
     , m_page(page)
     , m_site(site)
@@ -105,18 +108,6 @@ void RemotePageProxy::injectPageIntoNewProcess()
     );
 }
 
-void RemotePageProxy::removePageFromProcess()
-{
-    if (!m_drawingArea)
-        return;
-    m_drawingArea = nullptr;
-#if ENABLE(FULLSCREEN_API)
-    m_fullscreenManager = nullptr;
-#endif
-    m_visitedLinkStoreRegistration = nullptr;
-    m_process->send(Messages::WebPage::Close(), m_webPageID);
-}
-
 void RemotePageProxy::processDidTerminate(WebProcessProxy& process, ProcessTerminationReason reason)
 {
     if (!m_page)
@@ -130,6 +121,10 @@ void RemotePageProxy::processDidTerminate(WebProcessProxy& process, ProcessTermi
 
 RemotePageProxy::~RemotePageProxy()
 {
+    if (m_page)
+        m_page->isNoLongerAssociatedWithRemotePage(*this);
+    if (m_drawingArea)
+        m_process->send(Messages::WebPage::Close(), m_webPageID);
     m_process->removeRemotePageProxy(*this);
 }
 
@@ -170,6 +165,11 @@ void RemotePageProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
         return;
     }
 
+    if (decoder.messageName() == Messages::WebPageProxy::IsPlayingMediaDidChange::name()) {
+        IPC::handleMessage<Messages::WebPageProxy::IsPlayingMediaDidChange>(connection, decoder, this, &RemotePageProxy::isPlayingMediaDidChange);
+        return;
+    }
+
     if (m_page)
         m_page->didReceiveMessage(connection, decoder);
 }
@@ -188,10 +188,10 @@ void RemotePageProxy::decidePolicyForResponse(FrameInfoData&& frameInfo, std::op
     m_page->decidePolicyForResponseShared(m_process.copyRef(), m_page->webPageIDInMainFrameProcess(), WTFMove(frameInfo), navigationID, response, request, canShowMIMEType, downloadAttribute, isShowingInitialAboutBlank, activeDocumentCOOPValue, WTFMove(completionHandler));
 }
 
-void RemotePageProxy::didCommitLoadForFrame(IPC::Connection& connection, WebCore::FrameIdentifier frameID, FrameInfoData&& frameInfo, WebCore::ResourceRequest&& request, std::optional<WebCore::NavigationIdentifier> navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType frameLoadType, const WebCore::CertificateInfo& certificateInfo, bool usedLegacyTLS, bool privateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent hasInsecureContent, WebCore::MouseEventPolicy mouseEventPolicy, const UserData& userData)
+void RemotePageProxy::didCommitLoadForFrame(IPC::Connection& connection, WebCore::FrameIdentifier frameID, FrameInfoData&& frameInfo, WebCore::ResourceRequest&& request, std::optional<WebCore::NavigationIdentifier> navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType frameLoadType, const WebCore::CertificateInfo& certificateInfo, bool usedLegacyTLS, bool privateRelayed, const String& proxyName, WebCore::ResourceResponseSource source, bool containsPluginDocument, WebCore::HasInsecureContent hasInsecureContent, WebCore::MouseEventPolicy mouseEventPolicy, const UserData& userData)
 {
     m_process->didCommitProvisionalLoad();
-    m_page->didCommitLoadForFrame(connection, frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, containsPluginDocument, hasInsecureContent, mouseEventPolicy, userData); // Will delete |this|.
+    m_page->didCommitLoadForFrame(connection, frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, proxyName, source, containsPluginDocument, hasInsecureContent, mouseEventPolicy, userData); // Will delete |this|.
 }
 
 void RemotePageProxy::decidePolicyForNavigationActionAsync(NavigationActionData&& data, CompletionHandler<void(PolicyDecision&&)>&& completionHandler)
@@ -263,6 +263,27 @@ WebPageProxy* RemotePageProxy::page() const
 WebProcessActivityState& RemotePageProxy::processActivityState()
 {
     return m_processActivityState;
+}
+
+void RemotePageProxy::isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags newState)
+{
+#if ENABLE(MEDIA_STREAM)
+    bool didStopAudioCapture = m_mediaState.containsAny(WebCore::MediaProducer::IsCapturingAudioMask) && !newState.containsAny(WebCore::MediaProducer::IsCapturingAudioMask);
+    bool didStopVideoCapture = m_mediaState.containsAny(WebCore::MediaProducer::IsCapturingVideoMask) && !newState.containsAny(WebCore::MediaProducer::IsCapturingVideoMask);
+#endif
+
+    m_mediaState = newState;
+
+    RefPtr page = m_page.get();
+    if (!page || page->isClosed())
+        return;
+
+    page->updatePlayingMediaDidChange(WebPageProxy::CanDelayNotification::Yes);
+
+#if ENABLE(MEDIA_STREAM)
+    if (didStopAudioCapture || didStopVideoCapture)
+        UserMediaProcessManager::singleton().revokeSandboxExtensionsIfNeeded(protectedProcess().get());
+#endif
 }
 
 }

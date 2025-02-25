@@ -98,7 +98,9 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     // scrollSnapStop
     , pseudoElementNameArgument(nullAtom())
     , anchorNames(RenderStyle::initialAnchorNames())
+    , anchorScope(RenderStyle::initialAnchorScope())
     , positionAnchor(RenderStyle::initialPositionAnchor())
+    , positionArea(RenderStyle::initialPositionArea())
     , positionTryFallbacks(RenderStyle::initialPositionTryFallbacks())
     , blockStepSize(RenderStyle::initialBlockStepSize())
     , blockStepAlign(static_cast<unsigned>(RenderStyle::initialBlockStepAlign()))
@@ -202,7 +204,9 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , scrollSnapStop(o.scrollSnapStop)
     , pseudoElementNameArgument(o.pseudoElementNameArgument)
     , anchorNames(o.anchorNames)
+    , anchorScope(o.anchorScope)
     , positionAnchor(o.positionAnchor)
+    , positionArea(o.positionArea)
     , positionTryFallbacks(o.positionTryFallbacks)
     , blockStepSize(o.blockStepSize)
     , blockStepAlign(o.blockStepAlign)
@@ -311,7 +315,9 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && scrollSnapStop == o.scrollSnapStop
         && pseudoElementNameArgument == o.pseudoElementNameArgument
         && anchorNames == o.anchorNames
+        && anchorScope == o.anchorScope
         && positionAnchor == o.positionAnchor
+        && positionArea == o.positionArea
         && positionTryFallbacks == o.positionTryFallbacks
         && blockStepSize == o.blockStepSize
         && blockStepAlign == o.blockStepAlign
@@ -469,7 +475,9 @@ void StyleRareNonInheritedData::dumpDifferences(TextStream& ts, const StyleRareN
     LOG_IF_DIFFERENT(pseudoElementNameArgument);
 
     LOG_IF_DIFFERENT(anchorNames);
+    LOG_IF_DIFFERENT(anchorScope);
     LOG_IF_DIFFERENT(positionAnchor);
+    LOG_IF_DIFFERENT(positionArea);
     LOG_IF_DIFFERENT(positionTryFallbacks);
 
     LOG_IF_DIFFERENT(blockStepSize);

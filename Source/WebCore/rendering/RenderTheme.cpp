@@ -835,7 +835,7 @@ bool RenderTheme::paint(const RenderBox& box, const PaintInfo& paintInfo, const 
     case StyleAppearance::Listbox:
         return true;
     case StyleAppearance::SearchField:
-        return paintSearchField(box, paintInfo, integralSnappedRect);
+        return paintSearchField(box, paintInfo, devicePixelSnappedRect);
     case StyleAppearance::SearchFieldCancelButton:
         return paintSearchFieldCancelButton(box, paintInfo, integralSnappedRect);
     case StyleAppearance::SearchFieldDecoration:
@@ -938,9 +938,6 @@ void RenderTheme::paintDecorations(const RenderBox& box, const PaintInfo& paintI
         break;
     case StyleAppearance::TextArea:
         paintTextAreaDecorations(box, paintInfo, devicePixelSnappedRect);
-        break;
-    case StyleAppearance::SquareButton:
-        paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
         break;
     case StyleAppearance::ColorWell:
         paintColorWellDecorations(box, paintInfo, devicePixelSnappedRect);
@@ -1120,7 +1117,7 @@ bool RenderTheme::isControlStyled(const RenderStyle& style, const RenderStyle& u
     }
 }
 
-bool RenderTheme::supportsFocusRing(const RenderStyle& style) const
+bool RenderTheme::supportsFocusRing(const RenderObject&, const RenderStyle& style) const
 {
     return style.hasUsedAppearance()
         && style.usedAppearance() != StyleAppearance::TextField
@@ -1224,7 +1221,7 @@ bool RenderTheme::isDefault(const RenderObject& o) const
 bool RenderTheme::hasListButton(const RenderObject& renderer) const
 {
     RefPtr input = dynamicDowncast<HTMLInputElement>(renderer.generatingNode());
-    return input && input->list();
+    return input && input->hasDataList();
 }
 
 bool RenderTheme::hasListButtonPressed(const RenderObject& renderer) const

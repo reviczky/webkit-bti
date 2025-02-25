@@ -610,60 +610,68 @@ bool Element::dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouse
     return simulateClick(*this, underlyingEvent, eventOptions, visualOptions, SimulatedClickSource::UserAgent);
 }
 
-Ref<Node> Element::cloneNodeInternal(TreeScope& treeScope, CloningOperation type)
+Ref<Node> Element::cloneNodeInternal(Document& document, CloningOperation type, CustomElementRegistry* registry)
 {
     switch (type) {
     case CloningOperation::OnlySelf:
     case CloningOperation::SelfWithTemplateContent: {
-        Ref clone = cloneElementWithoutChildren(treeScope);
+        Ref clone = cloneElementWithoutChildren(document, registry);
         ScriptDisallowedScope::EventAllowedScope eventAllowedScope { clone };
-        cloneShadowTreeIfPossible(clone);
+        cloneShadowTreeIfPossible(clone, registry);
         return clone;
     }
     case CloningOperation::Everything:
         break;
     }
-    return cloneElementWithChildren(treeScope);
+    return cloneElementWithChildren(document, registry);
 }
 
-void Element::cloneShadowTreeIfPossible(Element& newHost)
+void Element::cloneShadowTreeIfPossible(Element& newHost, CustomElementRegistry* registry)
 {
     RefPtr oldShadowRoot = this->shadowRoot();
     if (!oldShadowRoot || !oldShadowRoot->isClonable())
         return;
 
     Ref clonedShadowRoot = [&] {
-        Ref clone = oldShadowRoot->cloneNodeInternal(newHost.treeScope(), Node::CloningOperation::SelfWithTemplateContent);
+        Ref clone = oldShadowRoot->cloneNodeInternal(newHost.document(), Node::CloningOperation::SelfWithTemplateContent, registry);
         return downcast<ShadowRoot>(WTFMove(clone));
     }();
+    if (oldShadowRoot->usesNullCustomElementRegistry())
+        clonedShadowRoot->setUsesNullCustomElementRegistry(); // Set this flag for Element::insertedIntoAncestor.
+    else if (RefPtr registry = oldShadowRoot->customElementRegistry())
+        clonedShadowRoot->setCustomElementRegistry(registry.releaseNonNull());
     newHost.addShadowRoot(clonedShadowRoot.copyRef());
-    oldShadowRoot->cloneChildNodes(clonedShadowRoot, clonedShadowRoot);
+    oldShadowRoot->cloneChildNodes(newHost.document(), clonedShadowRoot->usesNullCustomElementRegistry() ? nullptr : registry, clonedShadowRoot);
 }
 
-Ref<Element> Element::cloneElementWithChildren(TreeScope& treeScope)
+Ref<Element> Element::cloneElementWithChildren(Document& document, CustomElementRegistry* registry)
 {
-    Ref clone = cloneElementWithoutChildren(treeScope);
+    Ref clone = cloneElementWithoutChildren(document, registry);
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { clone };
-    cloneShadowTreeIfPossible(clone);
-    cloneChildNodes(treeScope, clone);
+    cloneShadowTreeIfPossible(clone, registry);
+    cloneChildNodes(document, registry, clone);
     return clone;
 }
 
-Ref<Element> Element::cloneElementWithoutChildren(TreeScope& treeScope)
+Ref<Element> Element::cloneElementWithoutChildren(Document& document, CustomElementRegistry* registry)
 {
-    Ref clone = cloneElementWithoutAttributesAndChildren(treeScope);
+    Ref clone = cloneElementWithoutAttributesAndChildren(document, registry);
 
     // This will catch HTML elements in the wrong namespace that are not correctly copied.
     // This is a sanity check as HTML overloads some of the DOM methods.
     ASSERT(isHTMLElement() == clone->isHTMLElement());
 
     clone->cloneDataFromElement(*this);
+
+    if (usesNullCustomElementRegistry() && !registry)
+        clone->setUsesNullCustomElementRegistry();
+
     return clone;
 }
 
-Ref<Element> Element::cloneElementWithoutAttributesAndChildren(TreeScope& treeScope)
+Ref<Element> Element::cloneElementWithoutAttributesAndChildren(Document& document, CustomElementRegistry* registry)
 {
-    return treeScope.createElement(tagQName(), false);
+    return document.createElement(tagQName(), false, registry);
 }
 
 Ref<Attr> Element::detachAttribute(unsigned index)
@@ -1927,7 +1935,7 @@ std::optional<std::pair<CheckedPtr<RenderObject>, FloatRect>> Element::boundingA
 FloatRect Element::boundingClientRect()
 {
     Ref document = this->document();
-    document->updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout, LayoutOptions::CanDeferUpdateLayerPositions }, this);
+    document->updateLayoutIfDimensionsOutOfDate(*this, { DimensionsCheck::Left, DimensionsCheck::Top, DimensionsCheck::Width, DimensionsCheck::Height, DimensionsCheck::IgnoreOverflow }, { LayoutOptions::ContentVisibilityForceLayout, LayoutOptions::CanDeferUpdateLayerPositions, LayoutOptions::IgnorePendingStylesheets });
     LocalFrameView::AutoPreventLayerAccess preventAccess(document->view());
     auto pair = boundingAbsoluteRectWithoutLayout();
     if (!pair)
@@ -2001,7 +2009,6 @@ static ExceptionOr<String> trustedTypesCompliantAttributeValue(const String attr
             if (attributeType.isNull() || attributeType == "TrustedScript"_s)
                 return trustedScript->toString();
             return trustedTypeCompliantString(stringToTrustedType(attributeType), *(element->document().scriptExecutionContext()), trustedScript->toString(), sink);
-
         },
         [&](const RefPtr<TrustedScriptURL>& trustedScriptURL) -> ExceptionOr<String> {
             if (attributeType.isNull() || attributeType == "TrustedScriptURL"_s)
@@ -2065,16 +2072,20 @@ ExceptionOr<void> Element::setAttribute(const AtomString& qualifiedName, const T
     auto caseAdjustedQualifiedName = shouldIgnoreAttributeCase(*this) ? qualifiedName.convertToASCIILowercase() : qualifiedName;
     unsigned index = elementData() ? elementData()->findAttributeIndexByName(caseAdjustedQualifiedName, false) : ElementData::attributeNotFound;
     auto name = index != ElementData::attributeNotFound ? attributeAt(index).name() : QualifiedName { nullAtom(), caseAdjustedQualifiedName, nullAtom() };
-    if (!document().scriptExecutionContext()->settingsValues().trustedTypesEnabled)
+    if (!document().settings().trustedTypesEnabled())
         setAttributeInternal(index, name, std::get<AtomString>(value), InSynchronizationOfLazyAttribute::No);
     else {
-        auto attributeTypeAndSink = trustedTypeForAttribute(nodeName(), name.localName().convertToASCIILowercase(), this->namespaceURI(), name.namespaceURI());
+        AttributeTypeAndSink attributeTypeAndSink;
+        if (document().requiresTrustedTypes())
+            attributeTypeAndSink = trustedTypeForAttribute(nodeName(), name.localName().convertToASCIILowercase(), this->namespaceURI(), name.namespaceURI());
         auto attributeValue = trustedTypesCompliantAttributeValue(attributeTypeAndSink.attributeType, value, this, attributeTypeAndSink.sink);
 
         if (attributeValue.hasException())
             return attributeValue.releaseException();
 
-        index = validateAttributeIndex(index, name);
+        if (!attributeTypeAndSink.attributeType.isNull())
+            index = validateAttributeIndex(index, name);
+
         setAttributeInternal(index, name,  AtomString(attributeValue.releaseReturnValue()), InSynchronizationOfLazyAttribute::No);
     }
     return { };
@@ -2083,7 +2094,7 @@ ExceptionOr<void> Element::setAttribute(const AtomString& qualifiedName, const T
 ExceptionOr<void> Element::setAttribute(const QualifiedName& name, const AtomString& value, bool enforceTrustedTypes)
 {
     synchronizeAttribute(name);
-    if (enforceTrustedTypes && document().scriptExecutionContext()->settingsValues().trustedTypesEnabled) {
+    if (enforceTrustedTypes && document().requiresTrustedTypes()) {
         auto attributeTypeAndSink = trustedTypeForAttribute(nodeName(), name.localName().convertToASCIILowercase(), this->namespaceURI(), name.namespaceURI());
         auto attributeValue = trustedTypesCompliantAttributeValue(attributeTypeAndSink.attributeType, value, this, attributeTypeAndSink.sink);
 
@@ -2349,26 +2360,37 @@ static RefPtr<Element> getElementByIdIncludingDisconnected(const Element& startE
     return nullptr;
 }
 
-RefPtr<Element> Element::getElementAttribute(const QualifiedName& attributeName) const
+RefPtr<Element> Element::elementForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    RefPtr<Element> element;
+    bool hasExplicitlySetElement = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
         auto it = map->find(attributeName);
         if (it != map->end()) {
             ASSERT(it->value.size() == 1);
-            RefPtr element = it->value[0].get();
-            if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
-                return element;
-            return nullptr;
+            hasExplicitlySetElement = true;
+            RefPtr explicitlySetElement = it->value[0].get();
+            if (explicitlySetElement && isDescendantOrShadowDescendantOf(explicitlySetElement->rootNode()))
+                element = explicitlySetElement;
         }
     }
 
-    auto id = getAttribute(attributeName);
-    if (id.isNull())
+    if (!hasExplicitlySetElement) {
+        const AtomString& id = getAttribute(attributeName);
+        element = getElementByIdIncludingDisconnected(*this, id);
+    }
+
+    if (!element)
         return nullptr;
 
-    return getElementByIdIncludingDisconnected(*this, id);
+    return element->resolveReferenceTarget();
+}
+
+RefPtr<Element> Element::getElementAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementReflectionAttribute(document().settings(), attributeName));
+    return retargetReferenceTargetForBindings(elementForAttributeInternal(attributeName));
 }
 
 void Element::setElementAttribute(const QualifiedName& attributeName, Element* element)
@@ -2390,13 +2412,16 @@ void Element::setElementAttribute(const QualifiedName& attributeName, Element* e
         cache->updateRelations(*this, attributeName);
 }
 
-std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const QualifiedName& attributeName) const
+std::optional<Vector<Ref<Element>>> Element::elementsArrayForAttributeInternal(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements;
+    bool hasExplicitlySetElements = false;
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
-        if (auto it = map->find(attributeName); it != map->end()) {
-            return compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
+        auto it = map->find(attributeName);
+        if (it != map->end()) {
+            hasExplicitlySetElements = true;
+            elements = compactMap(it->value, [&](auto& weakElement) -> std::optional<Ref<Element>> {
                 RefPtr element = weakElement.get();
                 if (element && isDescendantOrShadowDescendantOf(element->rootNode()))
                     return element.releaseNonNull();
@@ -2405,17 +2430,49 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
         }
     }
 
-    auto attr = attributeName;
-    if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
-        attr = HTMLNames::aria_labeledbyAttr;
+    if (!hasExplicitlySetElements) {
+        auto attr = attributeName;
+        if (attr == HTMLNames::aria_labelledbyAttr && !hasAttribute(HTMLNames::aria_labelledbyAttr) && hasAttribute(HTMLNames::aria_labeledbyAttr))
+            attr = HTMLNames::aria_labeledbyAttr;
 
-    if (!hasAttribute(attr))
+        if (!hasAttribute(attr))
+            return std::nullopt;
+
+        SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
+        elements = compactMap(ids, [&](auto& id) {
+            return getElementByIdIncludingDisconnected(*this, id);
+        });
+    }
+
+    if (!elements)
         return std::nullopt;
 
-    SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
-    return WTF::compactMap(ids, [&](auto& id) {
-        return getElementByIdIncludingDisconnected(*this, id);
-    });
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        elements = compactMap(elements.value(), [&](Ref<Element>& element) -> std::optional<Ref<Element>> {
+            if (RefPtr deepReferenceTarget = element->resolveReferenceTarget())
+                return *deepReferenceTarget;
+            return std::nullopt;
+        });
+    }
+
+    return elements;
+}
+
+std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttributeForBindings(const QualifiedName& attributeName) const
+{
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
+    std::optional<Vector<Ref<Element>>> elements = elementsArrayForAttributeInternal(attributeName);
+
+    if (!elements)
+        return std::nullopt;
+
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        return map(elements.value(), [&](Ref<Element>& element) -> Ref<Element> {
+            return *retargetReferenceTargetForBindings(element.ptr());
+        });
+    }
+
+    return elements;
 }
 
 void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<Ref<Element>>>&& elements)
@@ -2615,6 +2672,11 @@ void Element::invalidateForQueryContainerSizeChange()
     // FIXME: Ideally we would just recompute things that are actually affected by containers queries within the subtree.
     Node::invalidateStyle(Style::Validity::SubtreeInvalid);
     setElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
+}
+
+void Element::invalidateForAnchorRectChange()
+{
+    Node::invalidateStyle(Style::Validity::ElementInvalid);
 }
 
 void Element::invalidateForResumingQueryContainerResolution()
@@ -2918,8 +2980,20 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
             if (newHTMLDocument)
                 updateNameForDocument(*newHTMLDocument, nullAtom(), nameValue);
         }
-        if (parentOfInsertedTree.isInTreeScope() && usesScopedCustomElementRegistryMap())
-            CustomElementRegistry::removeFromScopedCustomElementRegistryMap(*this);
+
+        if (parentOfInsertedTree.isInTreeScope() && usesScopedCustomElementRegistryMap()) {
+            if (CustomElementRegistry::registryForElement(*this) == treeScope().customElementRegistry())
+                CustomElementRegistry::removeFromScopedCustomElementRegistryMap(*this);
+        }
+    }
+
+    if (usesNullCustomElementRegistry() && !parentOfInsertedTree.usesNullCustomElementRegistry()) {
+        clearUsesNullCustomElementRegistry();
+        if (UNLIKELY(parentOfInsertedTree.usesScopedCustomElementRegistryMap())) {
+            RefPtr registry = CustomElementRegistry::registryForElement(downcast<Element>(parentOfInsertedTree));
+            ASSERT(registry);
+            CustomElementRegistry::addToScopedCustomElementRegistryMap(*this, *registry);
+        }
     }
 
     if (insertionType.connectedToDocument) {
@@ -3010,7 +3084,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
         }
         if (oldParentOfRemovedTree.isInShadowTree()) {
             if (RefPtr registry = oldTreeScope.customElementRegistry()) {
-                if (UNLIKELY(registry->isScoped()))
+                if (UNLIKELY(registry->isScoped() && !usesScopedCustomElementRegistryMap()))
                     CustomElementRegistry::addToScopedCustomElementRegistryMap(*this, *registry);
             }
         }
@@ -3176,7 +3250,7 @@ static bool canAttachAuthorShadowRoot(const Element& element)
     return false;
 }
 
-ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
+ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init, CustomElementRegistryKind registryKind)
 {
     if (init.mode == ShadowRootMode::UserAgent)
         return Exception { ExceptionCode::TypeError };
@@ -3193,22 +3267,30 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         }
         return Exception { ExceptionCode::NotSupportedError };
     }
-    RefPtr registry = init.registry;
-    if (!registry) {
-        if (RefPtr window = document().domWindow())
-            registry = window->customElementRegistry();
-    }
+    RefPtr registry = init.customElements;
+    auto scopedRegistry = ShadowRoot::ScopedCustomElementRegistry::No;
+    if (registryKind == CustomElementRegistryKind::Null) {
+        ASSERT(!registry);
+        scopedRegistry = ShadowRoot::ScopedCustomElementRegistry::Yes;
+    } else if (registry) {
+        ASSERT(registryKind == CustomElementRegistryKind::Window);
+        scopedRegistry = ShadowRoot::ScopedCustomElementRegistry::Yes;
+    } else
+        registry = document().customElementRegistry();
     Ref shadow = ShadowRoot::create(document(), init.mode, init.slotAssignment,
         init.delegatesFocus ? ShadowRoot::DelegatesFocus::Yes : ShadowRoot::DelegatesFocus::No,
         init.clonable ? ShadowRoot::Clonable::Yes : ShadowRoot::Clonable::No,
         init.serializable ? ShadowRoot::Serializable::Yes : ShadowRoot::Serializable::No,
         isPrecustomizedOrDefinedCustomElement() ? ShadowRoot::AvailableToElementInternals::Yes : ShadowRoot::AvailableToElementInternals::No,
-        WTFMove(registry), init.registry ? ShadowRoot::ScopedCustomElementRegistry::Yes : ShadowRoot::ScopedCustomElementRegistry::No);
+        WTFMove(registry), scopedRegistry);
+    if (registryKind == CustomElementRegistryKind::Null)
+        shadow->setUsesNullCustomElementRegistry(); // Set this flag for Element::insertedIntoAncestor.
+    shadow->setReferenceTarget(AtomString(init.referenceTarget));
     addShadowRoot(shadow.copyRef());
     return shadow.get();
 }
 
-ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable)
+ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable, String referenceTarget, CustomElementRegistryKind registryKind)
 {
     if (this->shadowRoot())
         return Exception { ExceptionCode::NotSupportedError };
@@ -3219,7 +3301,8 @@ ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, S
         serializable == ShadowRootSerializable::Yes,
         SlotAssignmentMode::Named,
         nullptr,
-    });
+        referenceTarget,
+    }, registryKind);
     if (exceptionOrShadowRoot.hasException())
         return exceptionOrShadowRoot.releaseException();
     Ref shadowRoot = exceptionOrShadowRoot.releaseReturnValue();
@@ -3238,6 +3321,34 @@ RefPtr<ShadowRoot> Element::shadowRootForBindings(JSC::JSGlobalObject& lexicalGl
     if (JSC::jsCast<JSDOMGlobalObject*>(&lexicalGlobalObject)->world().shadowRootIsAlwaysOpen())
         return shadow;
     return nullptr;
+}
+
+RefPtr<Element> Element::resolveReferenceTarget() const
+{
+    if (!document().settings().shadowRootReferenceTargetEnabled())
+        return const_cast<Element*>(this);
+
+    RefPtr element = this;
+    RefPtr shadow = shadowRoot();
+
+    while (shadow && shadow->hasReferenceTarget()) {
+        element = shadow->referenceTargetElement();
+        shadow = element ? element->shadowRoot() : nullptr;
+    }
+    return const_cast<Element*>(element.get());
+}
+
+RefPtr<Element> Element::retargetReferenceTargetForBindings(RefPtr<Element> element) const
+{
+    if (!element)
+        return nullptr;
+
+    if (document().settings().shadowRootReferenceTargetEnabled()) {
+        Ref<Node> retargeted = treeScope().retargetToScope(*element);
+        return dynamicDowncast<Element>(retargeted);
+    }
+
+    return element;
 }
 
 ShadowRoot* Element::userAgentShadowRoot() const
@@ -3342,6 +3453,13 @@ CustomElementReactionQueue* Element::reactionQueue() const
     return elementRareData()->customElementReactionQueue();
 }
 
+CustomElementRegistry* Element::customElementRegistry() const
+{
+    if (RefPtr window = document().domWindow())
+        window->ensureCustomElementRegistry(); // Create the global registry before querying since registryForElement doesn't ensure it.
+    return CustomElementRegistry::registryForElement(*this);
+}
+
 CustomElementDefaultARIA& Element::customElementDefaultARIA()
 {
     ASSERT(isPrecustomizedOrDefinedCustomElement());
@@ -3410,7 +3528,7 @@ void Element::childrenChanged(const ChildChange& change)
 
 void Element::setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue)
 {
-    setAttributeEventListener(eventType, JSLazyEventListener::create(*this, attributeName, attributeValue), mainThreadNormalWorld());
+    setAttributeEventListener(eventType, JSLazyEventListener::create(*this, attributeName, attributeValue), mainThreadNormalWorldSingleton());
 }
 
 void Element::removeAllEventListeners()
@@ -3517,13 +3635,16 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNode(Attr& attrNode)
     // before making changes to attrNode's Element connections.
     auto attrNodeValue = attrNode.value();
 
-    if (document().scriptExecutionContext()->settingsValues().trustedTypesEnabled) {
+    if (document().requiresTrustedTypes()) {
         auto attributeTypeAndSink = trustedTypeForAttribute(nodeName(), attrNode.qualifiedName().localName().convertToASCIILowercase(), this->namespaceURI(), attrNode.qualifiedName().namespaceURI());
         auto attributeNodeValue = trustedTypesCompliantAttributeValue(attributeTypeAndSink.attributeType, attrNodeValue, this, attributeTypeAndSink.sink);
 
         if (attributeNodeValue.hasException())
             return attributeNodeValue.releaseException();
         attrNodeValue = AtomString(attributeNodeValue.releaseReturnValue());
+
+        if (!attributeTypeAndSink.attributeType.isNull() && attrNode.ownerElement() && attrNode.ownerElement() != this)
+            return Exception { ExceptionCode::InUseAttributeError };
     }
 
     auto existingAttributeIndex = elementData.findAttributeIndexByName(attrNode.qualifiedName());
@@ -3567,13 +3688,16 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNodeNS(Attr& attrNode)
     auto attrNodeValue = attrNode.value();
     unsigned index = 0;
 
-    if (document().scriptExecutionContext()->settingsValues().trustedTypesEnabled) {
+    if (document().requiresTrustedTypes()) {
         auto attributeTypeAndSink = trustedTypeForAttribute(nodeName(), attrNode.qualifiedName().localName(), this->namespaceURI(), attrNode.qualifiedName().namespaceURI());
         auto attributeNodeValue = trustedTypesCompliantAttributeValue(attributeTypeAndSink.attributeType, attrNodeValue, this, attributeTypeAndSink.sink);
 
         if (attributeNodeValue.hasException())
             return attributeNodeValue.releaseException();
         attrNodeValue = AtomString(attributeNodeValue.releaseReturnValue());
+
+        if (!attributeTypeAndSink.attributeType.isNull() && attrNode.ownerElement() && attrNode.ownerElement() != this)
+            return Exception { ExceptionCode::InUseAttributeError };
     }
 
     {
@@ -3642,11 +3766,13 @@ ExceptionOr<void> Element::setAttributeNS(const AtomString& namespaceURI, const 
     auto result = parseAttributeName(namespaceURI, qualifiedName);
     if (result.hasException())
         return result.releaseException();
-    if (!document().scriptExecutionContext()->settingsValues().trustedTypesEnabled)
+    if (!document().settings().trustedTypesEnabled())
         setAttribute(result.releaseReturnValue(), std::get<AtomString>(value));
     else {
         QualifiedName parsedAttributeName  = result.returnValue();
-        auto attributeTypeAndSink = trustedTypeForAttribute(nodeName(), parsedAttributeName.localName(), this->namespaceURI(), parsedAttributeName.namespaceURI());
+        AttributeTypeAndSink attributeTypeAndSink;
+        if (document().requiresTrustedTypes())
+            attributeTypeAndSink = trustedTypeForAttribute(nodeName(), parsedAttributeName.localName(), this->namespaceURI(), parsedAttributeName.namespaceURI());
         auto attributeValue = trustedTypesCompliantAttributeValue(attributeTypeAndSink.attributeType, value, this, attributeTypeAndSink.sink);
 
         if (attributeValue.hasException())
@@ -4008,9 +4134,21 @@ void Element::dispatchFocusOutEventIfNeeded(RefPtr<Element>&& newFocusedElement)
 
 void Element::dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, const FocusOptions& options)
 {
-    dispatchEvent(FocusEvent::create(eventNames().focusEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(oldFocusedElement)));
+#if PLATFORM(COCOA)
+    static bool dispatchEventBeforeNotifyingClient = WTF::linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::DispatchFocusEventBeforeNotifyingClient);
+#else
+    static bool dispatchEventBeforeNotifyingClient = false;
+#endif
+
+    Ref focusEvent = FocusEvent::create(eventNames().focusEvent, Event::CanBubble::No, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(oldFocusedElement));
+    if (dispatchEventBeforeNotifyingClient)
+        dispatchEvent(WTFMove(focusEvent));
+
     if (RefPtr page = document().page(); page && document().focusedElement() == this)
         page->chrome().client().elementDidFocus(*this, options);
+
+    if (!dispatchEventBeforeNotifyingClient)
+        dispatchEvent(WTFMove(focusEvent));
 }
 
 void Element::dispatchBlurEvent(RefPtr<Element>&& newFocusedElement)
@@ -4774,7 +4912,13 @@ void Element::webkitRequestFullscreen()
 // FIXME: Options are currently ignored.
 void Element::requestFullscreen(FullscreenOptions&&, RefPtr<DeferredPromise>&& promise)
 {
-    protectedDocument()->fullscreenManager().requestFullscreenForElement(*this, WTFMove(promise), FullscreenManager::EnforceIFrameAllowFullscreenRequirement);
+    protectedDocument()->fullscreenManager().requestFullscreenForElement(*this, FullscreenManager::EnforceIFrameAllowFullscreenRequirement, [promise = WTFMove(promise)] (auto result) {
+        if (!promise)
+            return;
+        if (result.hasException())
+            return promise->reject(result.releaseException());
+        return promise->resolve();
+    });
 }
 
 void Element::setFullscreenFlag(bool flag)
@@ -5573,7 +5717,7 @@ String Element::completeURLsInAttributeValue(const URL& base, const Attribute& a
     return resolveURLStringIfNeeded(attribute.value(), resolveURLs, base);
 }
 
-Attribute Element::replaceURLsInAttributeValue(const Attribute& attribute, const UncheckedKeyHashMap<String, String>&) const
+Attribute Element::replaceURLsInAttributeValue(const Attribute& attribute, const CSS::SerializationContext&) const
 {
     return attribute;
 }
