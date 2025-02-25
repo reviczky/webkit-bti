@@ -168,11 +168,13 @@ public:
     ~RenderLayer();
 
     WEBCORE_EXPORT RenderLayerScrollableArea* scrollableArea() const;
+    WEBCORE_EXPORT CheckedPtr<RenderLayerScrollableArea> checkedScrollableArea() const;
     WEBCORE_EXPORT RenderLayerScrollableArea* ensureLayerScrollableArea();
 
     String name() const;
 
     Page& page() const { return renderer().page(); }
+    Ref<Page> protectedPage() const { return renderer().page(); }
     RenderLayerModelObject& renderer() const { return m_renderer; }
     RenderBox* renderBox() const { return dynamicDowncast<RenderBox>(renderer()); }
 
@@ -557,21 +559,33 @@ public:
     bool behavesAsFixed() const { return m_behavesAsFixed; }
 
     struct PaintedContentRequest {
-        void makeStatesUndetermined()
-        {
-            if (hasPaintedContent == RequestState::Unknown)
-                hasPaintedContent = RequestState::Undetermined;
-        }
+        PaintedContentRequest() = default;
+        PaintedContentRequest(const RenderLayer& owningLayer);
 
         void setHasPaintedContent() { hasPaintedContent = RequestState::True; }
-
-        bool needToDeterminePaintedContentState() const { return hasPaintedContent == RequestState::Unknown; }
-
+        void makePaintedContentUndetermined() { hasPaintedContent = RequestState::Undetermined; }
         bool probablyHasPaintedContent() const { return hasPaintedContent == RequestState::True || hasPaintedContent == RequestState::Undetermined; }
-        
-        bool isSatisfied() const { return hasPaintedContent != RequestState::Unknown; }
+        bool isPaintedContentSatisfied() const { return hasPaintedContent != RequestState::Unknown; }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        void setHasPaintedHDRContent() { hasPaintedHDRContent = RequestState::True; }
+        void makePaintedHDRContentUnknown() { hasPaintedHDRContent = RequestState::Unknown; }
+        bool isPaintedHDRContentSatisfied() const { return hasPaintedHDRContent != RequestState::Unknown; }
+#endif
+
+        bool isSatisfied() const
+        {
+#if HAVE(SUPPORT_HDR_DISPLAY)
+            if (!isPaintedHDRContentSatisfied())
+                return false;
+#endif
+            return isPaintedContentSatisfied();
+        }
 
         RequestState hasPaintedContent { RequestState::Unknown };
+#if HAVE(SUPPORT_HDR_DISPLAY)
+        RequestState hasPaintedHDRContent { RequestState::DontCare };
+#endif
     };
 
     bool isVisibilityHiddenOrOpacityZero() const;
@@ -579,7 +593,11 @@ public:
     // Returns true if this layer has visible content (ignoring any child layers).
     bool isVisuallyNonEmpty(PaintedContentRequest* = nullptr) const;
     // True if this layer container renderers that paint.
-    bool hasNonEmptyChildRenderers(PaintedContentRequest&) const;
+    void determineNonLayerDescendantsPaintedContent(PaintedContentRequest&) const;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    // True of if renderer itself draws HDR content, no traversal is done.
+    bool isReplacedElementWithHDR() const;
+#endif
 
     // FIXME: We should ASSERT(!m_hasSelfPaintingLayerDescendantDirty); here but we hit the same bugs as visible content above.
     // Part of the issue is with subtree relayout: we don't check if our ancestors have some descendant flags dirty, missing some updates.
@@ -883,6 +901,10 @@ public:
     void establishesTopLayerDidChange();
 
     bool isBitmapOnly() const;
+
+#if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+    bool allowsDynamicContentScaling() const;
+#endif
 
     enum ViewportConstrainedNotCompositedReason {
         NoNotCompositedReason,

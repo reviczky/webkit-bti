@@ -296,11 +296,11 @@ public:
 
         Ref<OverflowEvent> overflowEvent = OverflowEvent::create(horizontalLayoutOverflowChanged, hasHorizontalLayoutOverflow, verticalLayoutOverflowChanged, hasVerticalLayoutOverflow);
         overflowEvent->setTarget(RefPtr { m_block->element() });
-        m_block->document().enqueueOverflowEvent(WTFMove(overflowEvent));
+        m_block->protectedDocument()->enqueueOverflowEvent(WTFMove(overflowEvent));
     }
 
 private:
-    const RenderBlock* m_block;
+    CheckedPtr<const RenderBlock> m_block;
     bool m_shouldDispatchEvent;
     bool m_hadHorizontalLayoutOverflow;
     bool m_hadVerticalLayoutOverflow;
@@ -435,7 +435,7 @@ RenderPtr<RenderBlock> RenderBlock::clone() const
         cloneBlock->setChildrenInline(childrenInline());
     } else {
         RenderTreePosition insertionPosition(*parent());
-        cloneBlock = static_pointer_cast<RenderBlock>(element()->createElementRenderer(RenderStyle::clone(style()), insertionPosition));
+        cloneBlock = static_pointer_cast<RenderBlock>(protectedElement()->createElementRenderer(RenderStyle::clone(style()), insertionPosition));
         cloneBlock->initializeStyle();
 
         // This takes care of setting the right value of childrenInline in case
@@ -449,8 +449,8 @@ RenderPtr<RenderBlock> RenderBlock::clone() const
 
 void RenderBlock::deleteLines()
 {
-    if (AXObjectCache* cache = document().existingAXObjectCache())
-        cache->deferRecomputeIsIgnored(element());
+    if (AXObjectCache* cache = protectedDocument()->existingAXObjectCache())
+        cache->deferRecomputeIsIgnored(protectedElement().get());
 }
 
 bool RenderBlock::childrenPreventSelfCollapsing() const
@@ -549,7 +549,7 @@ void RenderBlock::layout()
 
     // Table cells call layoutBlock directly, so don't add any logic here.  Put code into
     // layoutBlock().
-    layoutBlock(false);
+    layoutBlock(RelayoutChildren::No);
     
     // It's safe to check for control clip here, since controls can never be table cells.
     // If we have a lightweight clip, there can never be any overflow from children.
@@ -580,7 +580,7 @@ RenderBlockRareData& RenderBlock::ensureBlockRareData()
     }).iterator->value;
 }
 
-void RenderBlock::preparePaginationBeforeBlockLayout(bool& relayoutChildren)
+void RenderBlock::preparePaginationBeforeBlockLayout(RelayoutChildren& relayoutChildren)
 {
     // Fragments changing widths can force us to relayout our children.
     if (CheckedPtr fragmentedFlow = enclosingFragmentedFlow())
@@ -599,7 +599,7 @@ bool RenderBlock::recomputeLogicalWidth()
     return oldWidth != logicalWidth() || hasBorderOrPaddingLogicalWidthChanged;
 }
 
-void RenderBlock::layoutBlock(bool, LayoutUnit)
+void RenderBlock::layoutBlock(RelayoutChildren, LayoutUnit)
 {
     ASSERT_NOT_REACHED();
     clearNeedsLayout();
@@ -764,7 +764,7 @@ void RenderBlock::setLogicalTopForChild(RenderBox& child, LayoutUnit logicalTop,
     }
 }
 
-void RenderBlock::updateBlockChildDirtyBitsBeforeLayout(bool relayoutChildren, RenderBox& child)
+void RenderBlock::updateBlockChildDirtyBitsBeforeLayout(RelayoutChildren relayoutChildren, RenderBox& child)
 {
     if (child.isOutOfFlowPositioned())
         return;
@@ -775,11 +775,11 @@ void RenderBlock::updateBlockChildDirtyBitsBeforeLayout(bool relayoutChildren, R
         auto& style = child.style();
         return style.height().isPercentOrCalculated() || style.minHeight().isPercentOrCalculated() || style.maxHeight().isPercentOrCalculated();
     };
-    if (relayoutChildren || (childHasRelativeHeight() && !isRenderView()))
+    if (relayoutChildren == RelayoutChildren::Yes || (childHasRelativeHeight() && !isRenderView()))
         child.setChildNeedsLayout(MarkOnlyThis);
 
     // If relayoutChildren is set and the child has percentage padding or an embedded content box, we also need to invalidate the childs pref widths.
-    if (relayoutChildren && child.needsPreferredWidthsRecalculation())
+    if (relayoutChildren == RelayoutChildren::Yes && child.needsPreferredWidthsRecalculation())
         child.setPreferredLogicalWidthsDirty(true, MarkOnlyThis);
 }
 
@@ -839,6 +839,8 @@ bool RenderBlock::canPerformSimplifiedLayout() const
         return false;
     if (auto wasSkippedDuringLastLayout = wasSkippedDuringLastLayoutDueToContentVisibility(); wasSkippedDuringLastLayout && *wasSkippedDuringLastLayout)
         return false;
+    if (layoutContext().isSkippedContentRootForLayout(*this) && (posChildNeedsLayout() || canContainFixedPositionObjects()))
+        return false;
     return posChildNeedsLayout() || needsSimplifiedNormalFlowLayout();
 }
 
@@ -849,10 +851,6 @@ bool RenderBlock::simplifiedLayout()
 
     LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || writingMode().isBlockFlipped());
     if (needsPositionedMovementLayout() && !tryLayoutDoingPositionedMovementOnly())
-        return false;
-
-    bool canContainFixedPosObjects = canContainFixedPositionObjects();
-    if (layoutContext().isSkippedContentRootForLayout(*this) && (posChildNeedsLayout() || canContainFixedPosObjects))
         return false;
 
     // Lay out positioned descendants or objects that just need to recompute overflow.
@@ -869,8 +867,9 @@ bool RenderBlock::simplifiedLayout()
     // child, neither the fixed element nor its container learn of the movement since posChildNeedsLayout() is only marked as far as the 
     // relative positioned container. So if we can have fixed pos objects in our positioned objects list check if any of them
     // are statically positioned and thus need to move with their absolute ancestors.
+    bool canContainFixedPosObjects = canContainFixedPositionObjects();
     if (posChildNeedsLayout() || canContainFixedPosObjects)
-        layoutPositionedObjects(false, !posChildNeedsLayout() && canContainFixedPosObjects);
+        layoutPositionedObjects(RelayoutChildren::No, !posChildNeedsLayout() && canContainFixedPosObjects);
 
     // Recompute our overflow information.
     // FIXME: We could do better here by computing a temporary overflow object from layoutPositionedObjects and only
@@ -934,7 +933,7 @@ LayoutUnit RenderBlock::marginIntrinsicLogicalWidthForChild(RenderBox& child) co
     return margin;
 }
 
-void RenderBlock::layoutPositionedObject(RenderBox& r, bool relayoutChildren, bool fixedPositionObjectsOnly)
+void RenderBlock::layoutPositionedObject(RenderBox& r, RelayoutChildren relayoutChildren, bool fixedPositionObjectsOnly)
 {
     if (layoutContext().isSkippedContentRootForLayout(*this)) {
         r.clearNeedsLayoutForSkippedContent();
@@ -956,11 +955,11 @@ void RenderBlock::layoutPositionedObject(RenderBox& r, bool relayoutChildren, bo
     // non-positioned block.  Rather than trying to detect all of these movement cases, we just always lay out positioned
     // objects that are positioned implicitly like this.  Such objects are rare, and so in typical DHTML menu usage (where everything is
     // positioned explicitly) this should not incur a performance penalty.
-    if (relayoutChildren || (r.style().hasStaticBlockPosition(isHorizontalWritingMode()) && r.parent() != this))
+    if (relayoutChildren == RelayoutChildren::Yes || (r.style().hasStaticBlockPosition(isHorizontalWritingMode()) && r.parent() != this))
         r.setChildNeedsLayout(MarkOnlyThis);
-        
+
     // If relayoutChildren is set and the child has percentage padding or an embedded content box, we also need to invalidate the childs pref widths.
-    if (relayoutChildren && r.needsPreferredWidthsRecalculation())
+    if (relayoutChildren == RelayoutChildren::Yes && r.needsPreferredWidthsRecalculation())
         r.setPreferredLogicalWidthsDirty(true, MarkOnlyThis);
     
     r.markForPaginationRelayoutIfNeeded();
@@ -1012,7 +1011,7 @@ void RenderBlock::layoutPositionedObject(RenderBox& r, bool relayoutChildren, bo
     }
 }
 
-void RenderBlock::layoutPositionedObjects(bool relayoutChildren, bool fixedPositionObjectsOnly)
+void RenderBlock::layoutPositionedObjects(RelayoutChildren relayoutChildren, bool fixedPositionObjectsOnly)
 {
     auto* positionedDescendants = positionedObjects();
     if (!positionedDescendants)
@@ -1082,9 +1081,13 @@ void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     // Our scrollbar widgets paint exactly when we tell them to, so that they work properly with
     // z-index. We paint after we painted the background/border, so that the scrollbars will
     // sit above the background/border.
-    if ((phase == PaintPhase::BlockBackground || phase == PaintPhase::ChildBlockBackground) && hasNonVisibleOverflow() && layer()
-        && layer()->scrollableArea() && style().usedVisibility() == Visibility::Visible && paintInfo.shouldPaintWithinRoot(*this) && !paintInfo.paintRootBackgroundOnly())
-        layer()->scrollableArea()->paintOverflowControls(paintInfo.context(), roundedIntPoint(adjustedPaintOffset), snappedIntRect(paintInfo.rect));
+    if (phase == PaintPhase::BlockBackground || phase == PaintPhase::ChildBlockBackground) {
+        CheckedPtr layer = this->layer();
+        if (hasNonVisibleOverflow() && layer && layer->scrollableArea() && style().usedVisibility() == Visibility::Visible
+            && paintInfo.shouldPaintWithinRoot(*this) && !paintInfo.paintRootBackgroundOnly()) {
+            layer->checkedScrollableArea()->paintOverflowControls(paintInfo.context(), roundedIntPoint(adjustedPaintOffset), snappedIntRect(paintInfo.rect));
+        }
+    }
 }
 
 void RenderBlock::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
@@ -1195,7 +1198,7 @@ void RenderBlock::paintCaret(PaintInfo& paintInfo, const LayoutPoint& paintOffse
 
         bool isContentEditable = page().dragCaretController().isContentEditable();
         if (shouldPaintCaret(caretPainter, isContentEditable))
-            page().dragCaretController().paintDragCaret(&frame(), paintInfo.context(), paintOffset);
+            page().dragCaretController().paintDragCaret(protectedFrame().ptr(), paintInfo.context(), paintOffset);
 
         break;
     }
@@ -1259,11 +1262,12 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
     if (paintPhase == PaintPhase::EventRegion) {
         auto borderRect = LayoutRect(paintOffset, size());
 
+        Ref document = this->document();
         if (paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeBackground) && visibleToHitTesting()) {
             auto borderShape = BorderShape::shapeForBorderRect(style(), borderRect);
             LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " uniting region " << borderShape.deprecatedRoundedRect() << " event listener types " << style().eventListenerRegionTypes());
-            bool overrideUserModifyIsEditable = isRenderTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable();
-            paintInfo.eventRegionContext()->unite(borderShape.deprecatedPixelSnappedRoundedRect(document().deviceScaleFactor()), *this, style(), overrideUserModifyIsEditable);
+            bool overrideUserModifyIsEditable = isRenderTextControl() && downcast<RenderTextControl>(*this).protectedTextFormControlElement()->isInnerTextElementEditable();
+            paintInfo.eventRegionContext()->unite(borderShape.deprecatedPixelSnappedRoundedRect(document->deviceScaleFactor()), *this, style(), overrideUserModifyIsEditable);
         }
 
         if (!paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeForeground))
@@ -1273,20 +1277,25 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
         LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " needsTraverseDescendants for event region: hasVisualOverflow: " << hasVisualOverflow() << " containsFloats: "
             << containsFloats() <<  " border box is outside current region: " << !paintInfo.eventRegionContext()->contains(enclosingIntRect(borderRect)) << " needsEventRegionUpdateForNonCompositedFrame:" << view().needsEventRegionUpdateForNonCompositedFrame());
 #if ENABLE(TOUCH_ACTION_REGIONS)
-        needsTraverseDescendants |= document().mayHaveElementsWithNonAutoTouchAction();
-        LOG_WITH_STREAM(EventRegions, stream << "  may have touch-action elements: " << document().mayHaveElementsWithNonAutoTouchAction());
+        needsTraverseDescendants |= document->mayHaveElementsWithNonAutoTouchAction();
+        LOG_WITH_STREAM(EventRegions, stream << "  may have touch-action elements: " << document->mayHaveElementsWithNonAutoTouchAction());
 #endif
 #if ENABLE(WHEEL_EVENT_REGIONS)
-        needsTraverseDescendants |= document().hasWheelEventHandlers();
-        LOG_WITH_STREAM(EventRegions, stream << "  has wheel event handlers: " << document().hasWheelEventHandlers());
+        needsTraverseDescendants |= document->hasWheelEventHandlers();
+        LOG_WITH_STREAM(EventRegions, stream << "  has wheel event handlers: " << document->hasWheelEventHandlers());
 #endif
+#if ENABLE(TOUCH_EVENT_REGIONS)
+        needsTraverseDescendants |= document->hasTouchEventHandlers();
+        LOG_WITH_STREAM(EventRegions, stream << "  has touch event handlers: " << document->hasTouchEventHandlers());
+#endif
+
 #if ENABLE(EDITABLE_REGION)
         // We treat the entire text control as editable to match users' expectation even
         // though it's actually the inner text element of the control that is editable.
         // So, no need to traverse to find the inner text element in this case.
         if (!isRenderTextControl()) {
-            needsTraverseDescendants |= document().mayHaveEditableElements() && page().shouldBuildEditableRegion();
-            LOG_WITH_STREAM(EventRegions, stream << "  needs editable event region: " << (document().mayHaveEditableElements() && page().shouldBuildEditableRegion()));
+            needsTraverseDescendants |= document->mayHaveEditableElements() && page().shouldBuildEditableRegion();
+            LOG_WITH_STREAM(EventRegions, stream << "  needs editable event region: " << (document->mayHaveEditableElements() && page().shouldBuildEditableRegion()));
         }
 #endif
 
@@ -1409,7 +1418,7 @@ bool RenderBlock::establishesIndependentFormattingContextIgnoringDisplayType(con
         || isBlockBoxWithPotentiallyScrollableOverflow()
         || style.containsLayout()
         || style.containerType() != ContainerType::Normal
-        || WebCore::shouldApplyPaintContainment(style, *element())
+        || WebCore::shouldApplyPaintContainment(style, *protectedElement())
         || (style.isDisplayBlockLevel() && style.blockStepSize());
 }
 
@@ -1511,7 +1520,7 @@ bool RenderBlock::isSelectionRoot() const
         return true;
     
     if (view().selection().start()) {
-        Node* startElement = view().selection().start()->node();
+        RefPtr startElement = view().selection().start()->node();
         if (startElement && startElement->rootEditableElement() == element())
             return true;
     }
@@ -1741,7 +1750,7 @@ LayoutRect RenderBlock::blockSelectionGap(RenderBlock& rootBlock, const LayoutPo
 
     LayoutRect gapRect = rootBlock.logicalRectToPhysicalRect(rootBlockPhysicalPosition, LayoutRect(logicalLeft, logicalTop, logicalWidth, logicalHeight));
     if (paintInfo)
-        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, document().deviceScaleFactor()), selectionBackgroundColor());
+        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, protectedDocument()->deviceScaleFactor()), selectionBackgroundColor());
     return gapRect;
 }
 
@@ -1757,7 +1766,7 @@ LayoutRect RenderBlock::logicalLeftSelectionGap(RenderBlock& rootBlock, const La
 
     LayoutRect gapRect = rootBlock.logicalRectToPhysicalRect(rootBlockPhysicalPosition, LayoutRect(rootBlockLogicalLeft, rootBlockLogicalTop, rootBlockLogicalWidth, logicalHeight));
     if (paintInfo)
-        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, document().deviceScaleFactor()), selObj->selectionBackgroundColor());
+        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, protectedDocument()->deviceScaleFactor()), selObj->selectionBackgroundColor());
     return gapRect;
 }
 
@@ -1773,7 +1782,7 @@ LayoutRect RenderBlock::logicalRightSelectionGap(RenderBlock& rootBlock, const L
 
     LayoutRect gapRect = rootBlock.logicalRectToPhysicalRect(rootBlockPhysicalPosition, LayoutRect(rootBlockLogicalLeft, rootBlockLogicalTop, rootBlockLogicalWidth, logicalHeight));
     if (paintInfo)
-        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, document().deviceScaleFactor()), selObj->selectionBackgroundColor());
+        paintInfo->context().fillRect(snapRectToDevicePixels(gapRect, protectedDocument()->deviceScaleFactor()), selObj->selectionBackgroundColor());
     return gapRect;
 }
 
@@ -2008,7 +2017,7 @@ LayoutUnit RenderBlock::adjustLogicalLeftOffsetForLine(LayoutUnit offsetFromFloa
         return left;
 
     // FIXME: Should letter-spacing apply? This is complicated since it doesn't apply at the edge?
-    float maxCharWidth = lineGrid->style().fontCascade().primaryFont().maxCharWidth();
+    float maxCharWidth = lineGrid->style().fontCascade().primaryFont()->maxCharWidth();
     if (!maxCharWidth)
         return left;
 
@@ -2045,7 +2054,7 @@ LayoutUnit RenderBlock::adjustLogicalRightOffsetForLine(LayoutUnit offsetFromFlo
         return right;
 
     // FIXME: Should letter-spacing apply? This is complicated since it doesn't apply at the edge?
-    float maxCharWidth = lineGrid->style().fontCascade().primaryFont().maxCharWidth();
+    float maxCharWidth = lineGrid->style().fontCascade().primaryFont()->maxCharWidth();
     if (!maxCharWidth)
         return right;
 
@@ -2069,7 +2078,7 @@ bool RenderBlock::isPointInOverflowControl(HitTestResult& result, const LayoutPo
 {
     if (!scrollsOverflow())
         return false;
-    if (auto* scrollableArea = layer() ? layer()->scrollableArea() : nullptr)
+    if (CheckedPtr scrollableArea = layer() ? layer()->scrollableArea() : nullptr)
         return scrollableArea->hitTestOverflowControls(result, roundedIntPoint(locationInContainer - toLayoutSize(accumulatedOffset)));
     return false;
 }
@@ -2189,7 +2198,7 @@ static inline bool isEditingBoundary(RenderElement* ancestor, RenderObject& chil
     ASSERT(!ancestor || ancestor->nonPseudoElement());
     ASSERT(child.nonPseudoNode());
     return !ancestor || !ancestor->parent() || (ancestor->hasLayer() && ancestor->parent()->isRenderView())
-        || ancestor->nonPseudoElement()->hasEditableStyle() == child.nonPseudoNode()->hasEditableStyle();
+        || ancestor->protectedNonPseudoElement()->hasEditableStyle() == child.protectedNonPseudoNode()->hasEditableStyle();
 }
 
 // FIXME: This function should go on RenderObject as an instance method. Then
@@ -2205,7 +2214,7 @@ VisiblePosition positionForPointRespectingEditingBoundaries(RenderBlock& parent,
     LayoutPoint pointInChildCoordinates(toLayoutPoint(pointInParentCoordinates - childLocation));
 
     // If this is an anonymous renderer, we just recur normally
-    Element* childElement= child.nonPseudoElement();
+    RefPtr childElement= child.nonPseudoElement();
     if (!childElement)
         return child.positionForPoint(pointInChildCoordinates, source, nullptr);
 
@@ -2519,13 +2528,8 @@ void RenderBlock::computeChildPreferredLogicalWidths(RenderBox& childBox, Layout
 
 bool RenderBlock::hasLineIfEmpty() const
 {
-    if (!element())
-        return false;
-    
-    if (element()->isRootEditableElement())
-        return true;
-    
-    return false;
+    RefPtr element = this->element();
+    return element && element->isRootEditableElement();
 }
 
 LayoutUnit RenderBlock::lineHeight(bool firstLine, LineDirectionMode direction, LinePositionMode linePositionMode) const
@@ -2564,7 +2568,7 @@ LayoutUnit RenderBlock::baselinePosition(FontBaseline baselineType, bool firstLi
             if (isWritingModeRoot())
                 return true;
 
-            auto* scrollableArea = layer() ? layer()->scrollableArea() : nullptr;
+            CheckedPtr scrollableArea = layer() ? layer()->scrollableArea() : nullptr;
             if (!scrollableArea)
                 return false;
 
@@ -3352,7 +3356,7 @@ std::optional<LayoutUnit> RenderBlock::availableLogicalHeightForPercentageComput
     return availableHeight();
 }
     
-void RenderBlock::layoutExcludedChildren(bool relayoutChildren)
+void RenderBlock::layoutExcludedChildren(RelayoutChildren relayoutChildren)
 {
     if (!isFieldset())
         return;
@@ -3371,7 +3375,7 @@ void RenderBlock::layoutExcludedChildren(bool relayoutChildren)
     }
 
     RenderBox& legend = *box;
-    if (relayoutChildren)
+    if (relayoutChildren == RelayoutChildren::Yes)
         legend.setChildNeedsLayout(MarkOnlyThis);
     legend.layoutIfNeeded();
     
@@ -3660,8 +3664,8 @@ String RenderBlock::updateSecurityDiscCharacters(const RenderStyle& style, Strin
         return WTFMove(string);
     // This PUA character in the system font is used to render password field dots on Cocoa platforms.
     constexpr UChar textSecurityDiscPUACodePoint = 0xF79A;
-    auto& font = style.fontCascade().primaryFont();
-    if (!(font.platformData().isSystemFont() && font.glyphForCharacter(textSecurityDiscPUACodePoint)))
+    Ref font = style.fontCascade().primaryFont();
+    if (!(font->platformData().isSystemFont() && font->glyphForCharacter(textSecurityDiscPUACodePoint)))
         return WTFMove(string);
 
     // See RenderText::setRenderedText()

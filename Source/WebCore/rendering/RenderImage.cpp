@@ -310,7 +310,7 @@ LayoutUnit RenderImage::baselinePosition(FontBaseline baselineType, bool firstLi
     LayoutUnit offset;
 #if ENABLE(MULTI_REPRESENTATION_HEIC)
     if (isMultiRepresentationHEIC()) {
-        auto metrics = style().fontCascade().primaryFont().metricsForMultiRepresentationHEIC();
+        auto metrics = style().fontCascade().primaryFont()->metricsForMultiRepresentationHEIC();
         offset = LayoutUnit::fromFloatRound(metrics.descent);
     }
 #endif
@@ -459,22 +459,6 @@ bool RenderImage::isShowingAltText() const
 bool RenderImage::shouldDisplayBrokenImageIcon() const
 {
     return imageResource().errorOccurred();
-}
-
-bool RenderImage::hasNonBitmapImage() const
-{
-    if (!imageResource().cachedImage())
-        return false;
-
-    Image* image = cachedImage()->imageForRenderer(this);
-    return image && !is<BitmapImage>(image);
-}
-
-bool RenderImage::hasAnimatedImage() const
-{
-    if (auto* image = cachedImage() ? cachedImage()->image() : nullptr)
-        return image->isAnimated();
-    return false;
 }
 
 #if ENABLE(MULTI_REPRESENTATION_HEIC)

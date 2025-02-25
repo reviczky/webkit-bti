@@ -54,7 +54,6 @@ struct WEBCORE_EXPORT QuirksData {
     bool needsChromeMediaControlsPseudoElementQuirk { false };
     bool needsHotelsAnimationQuirk { false };
     bool needsMozillaFileTypeForDataTransferQuirk { false };
-    bool needsRelaxedCorsMixedContentCheckQuirk { false };
     bool needsResettingTransitionCancelsRunningTransitionQuirk { false };
     bool needsScrollbarWidthThinDisabledQuirk { false };
     bool needsSeekingSupportDisabledQuirk { false };
@@ -102,20 +101,16 @@ struct WEBCORE_EXPORT QuirksData {
     bool shouldEnableApplicationCacheQuirk { false };
     bool shouldIgnoreAriaForFastPathContentObservationCheckQuirk { false };
     bool shouldNavigatorPluginsBeEmpty { false };
+    bool shouldSilenceWindowResizeEventsDuringApplicationSnapshotting { false };
     bool shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreasQuirk { false };
     bool shouldSynthesizeTouchEventsAfterNonSyntheticClickQuirk { false };
     bool shouldTreatAddingMouseOutEventListenerAsContentChange { false };
 #endif // PLATFORM(IOS_FAMILY)
 
-#if PLATFORM(IOS)
-    bool needsGetElementsByNameQuirk { false };
-#endif
-
 #if PLATFORM(IOS) || PLATFORM(VISION)
     bool allowLayeredFullscreenVideos { false };
     bool shouldSilenceMediaQueryListChangeEvents { false };
     bool shouldSilenceResizeObservers { false };
-    bool shouldSilenceWindowResizeEvents { false };
 #endif
 
 #if PLATFORM(VISION)
@@ -174,9 +169,10 @@ struct WEBCORE_EXPORT QuirksData {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     bool requiresUserGestureToLoadInPictureInPictureQuirk { false };
     bool requiresUserGestureToPauseInPictureInPictureQuirk { false };
-    bool shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk { false };
     bool shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk { false };
 #endif
+
+    bool needsNowPlayingFullscreenSwapQuirk { false };
 };
 
 } // namespace WebCore

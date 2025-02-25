@@ -87,6 +87,7 @@ public:
     Element* element() const { return downcast<Element>(RenderObject::node()); }
     RefPtr<Element> protectedElement() const { return element(); }
     Element* nonPseudoElement() const { return downcast<Element>(RenderObject::nonPseudoNode()); }
+    RefPtr<Element> protectedNonPseudoElement() const { return nonPseudoElement(); }
     Element* generatingElement() const;
 
     RenderObject* firstChild() const { return m_firstChild.get(); }
@@ -141,7 +142,8 @@ public:
     void setOutOfFlowChildNeedsStaticPositionLayout();
     void clearChildNeedsLayout();
     void setNeedsPositionedMovementLayout(const RenderStyle* oldStyle);
-    void setNeedsSimplifiedNormalFlowLayout();
+    void setNeedsLayoutForStyleDifference(StyleDifference, const RenderStyle* oldStyle);
+    void setNeedsLayoutForOverflowChange();
 
     // paintOffset is the offset from the origin of the GraphicsContext at which to paint the current object.
     virtual void paint(PaintInfo&, const LayoutPoint& paintOffset) = 0;
@@ -299,6 +301,8 @@ public:
     void setHasCachedSVGResource(bool b) { m_hasCachedSVGResource = b; }
     bool renderBoxHasShapeOutsideInfo() const { return m_renderBoxHasShapeOutsideInfo; }
     bool hasCachedSVGResource() const { return m_hasCachedSVGResource; }
+
+    virtual bool overflowChangesMayAffectLayout() const { return false; }
 
 protected:
     RenderElement(Type, Element&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);

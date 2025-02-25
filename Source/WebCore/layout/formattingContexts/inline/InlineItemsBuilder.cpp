@@ -102,9 +102,10 @@ void InlineItemsBuilder::build(InlineItemPosition startPosition)
     auto contentAttributes = computeContentAttributesAndInlineTextItemWidths(inlineItemList, startPosition, inlineItemCache.content());
     auto adjustInlineContentCacheWithNewInlineItems = [&] {
         ASSERT(!startPosition || startPosition.index < inlineItemCache.content().size());
+        auto isPopulatedFromCache = m_textContentPopulatedFromCache && *m_textContentPopulatedFromCache ? InlineContentCache::InlineItems::IsPopulatedFromCache::Yes : InlineContentCache::InlineItems::IsPopulatedFromCache::No;
         if (!startPosition || startPosition.index >= inlineItemCache.content().size())
-            return inlineItemCache.set(WTFMove(inlineItemList), contentAttributes);
-        inlineItemCache.replace(startPosition.index, WTFMove(inlineItemList), contentAttributes);
+            return inlineItemCache.set(WTFMove(inlineItemList), contentAttributes, isPopulatedFromCache);
+        inlineItemCache.replace(startPosition.index, WTFMove(inlineItemList), contentAttributes, isPopulatedFromCache);
     };
     adjustInlineContentCacheWithNewInlineItems();
 
@@ -787,8 +788,12 @@ InlineContentCache::InlineItems::ContentAttributes InlineItemsBuilder::computeCo
             auto needsMeasuring = inlineTextItem->length() && !inlineTextItem->isZeroWidthSpaceSeparator() && canCacheMeasuredWidthOnInlineTextItem(inlineTextItem->inlineTextBox(), inlineTextItem->isWhitespace());
             if (needsMeasuring) {
                 auto start = inlineTextItem->start();
-                if (auto inlineBoxBoundaryTextSpacing = inlineBoxBoundaryTextSpacings.find(inlineItemIndex - 1); inlineBoxBoundaryTextSpacing != inlineBoxBoundaryTextSpacings.end())
-                    extraInlineTextSpacing = inlineBoxBoundaryTextSpacing->value;
+                if (inlineItemIndex) {
+                    // Box boudary text spacing is potentially registered for inline box start items which appear logically before an inline text item
+                    auto potentialInlineBoxStartIndex = inlineItemIndex - 1;
+                    if (auto inlineBoxBoundaryTextSpacing = inlineBoxBoundaryTextSpacings.find(potentialInlineBoxStartIndex); inlineBoxBoundaryTextSpacing != inlineBoxBoundaryTextSpacings.end())
+                        extraInlineTextSpacing = inlineBoxBoundaryTextSpacing->value;
+                }
                 inlineTextItem->setWidth(TextUtil::width(*inlineTextItem, inlineTextItem->style().fontCascade(), start, start + inlineTextItem->length(), { }, TextUtil::UseTrailingWhitespaceMeasuringOptimization::Yes, spacingState) + extraInlineTextSpacing);
                 handleTextSpacing(spacingState, trimmableTextSpacings, *inlineTextItem, inlineItemIndex);
             }
@@ -868,9 +873,13 @@ void InlineItemsBuilder::handleTextContent(const InlineTextBox& inlineTextBox, I
     if (inlineTextBox.isCombined())
         return inlineItemList.append(InlineTextItem::createNonWhitespaceItem(inlineTextBox, { }, contentLength, UBIDI_DEFAULT_LTR, false, { }));
 
-    if (!partialContentOffset && buildInlineItemListForTextFromBreakingPositionsCache(inlineTextBox, inlineItemList))
+    if (!partialContentOffset && buildInlineItemListForTextFromBreakingPositionsCache(inlineTextBox, inlineItemList)) {
+        if (!m_textContentPopulatedFromCache)
+            m_textContentPopulatedFromCache = true;
         return;
+    }
 
+    m_textContentPopulatedFromCache = false;
     auto& style = inlineTextBox.style();
     auto shouldPreserveSpacesAndTabs = TextUtil::shouldPreserveSpacesAndTabs(inlineTextBox);
     auto shouldPreserveNewline = TextUtil::shouldPreserveNewline(inlineTextBox);

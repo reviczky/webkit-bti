@@ -485,6 +485,9 @@ void BackgroundPainter::paintFillLayer(const Color& color, const FillLayer& bgLa
         if (!geometry.destinationRect.isEmpty() && (image = bgImage->image(backgroundObject ? backgroundObject : &m_renderer, geometry.tileSize, isFirstLine))) {
             context.setDrawLuminanceMask(bgLayer.maskMode() == MaskMode::Luminance);
 
+            // FIXME: <http://webkit.org/b/288163> Allow HDR display for background images when CSS HDR images are able to set GraphicsLayer::drawHDRContent.
+            auto headroom = Headroom::None;
+
             ImagePaintingOptions options = {
                 op == CompositeOperator::SourceOver ? bgLayer.compositeForPainting() : op,
                 bgLayer.blendMode(),
@@ -492,7 +495,8 @@ void BackgroundPainter::paintFillLayer(const Color& color, const FillLayer& bgLa
                 ImageOrientation::Orientation::FromImage,
                 m_renderer.chooseInterpolationQuality(context, *image, &bgLayer, geometry.tileSize),
                 document().settings().imageSubsamplingEnabled() ? AllowImageSubsampling::Yes : AllowImageSubsampling::No,
-                document().settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No
+                document().settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No,
+                headroom
             };
 
             auto drawResult = context.drawTiledImage(*image, geometry.destinationRect, toLayoutPoint(geometry.relativePhase()), geometry.tileSize, geometry.spaceSize, options);
@@ -597,7 +601,7 @@ BackgroundImageGeometry BackgroundPainter::calculateBackgroundImageGeometry(cons
         }
     } else {
         LayoutRect viewportRect;
-        float topContentInset = 0;
+        FloatBoxExtent obscuredContentInsets;
         if (renderer.settings().fixedBackgroundsPaintRelativeToDocument())
             viewportRect = view.unscaledDocumentRect();
         else {
@@ -613,23 +617,24 @@ BackgroundImageGeometry BackgroundPainter::calculateBackgroundImageGeometry(cons
 
             if (renderer.fixedBackgroundPaintsInLocalCoordinates()) {
                 if (!useFixedLayout) {
-                    // Shifting location up by topContentInset is needed for layout tests which expect
-                    // layout to be shifted down when calling window.internals.setTopContentInset().
-                    topContentInset = frameView.topContentInset(ScrollView::TopContentInsetType::WebCoreOrPlatformContentInset);
-                    viewportRect.setLocation(LayoutPoint(0, -topContentInset));
+                    // Shifting location by the content insets is needed for layout tests which expect
+                    // layout to be shifted when calling window.internals.setObscuredContentInsets().
+                    obscuredContentInsets = frameView.obscuredContentInsets(ScrollView::InsetType::WebCoreOrPlatformInset);
+                    viewportRect.setLocation({ -obscuredContentInsets.left(), -obscuredContentInsets.top() });
                 }
             } else if (useFixedLayout || frameView.frameScaleFactor() != 1) {
                 // scrollPositionForFixedPosition() is adjusted for page scale and it does not include
-                // topContentInset so do not add it to the calculation below.
+                // insets so do not add it to the calculation below.
                 viewportRect.setLocation(frameView.scrollPositionForFixedPosition());
             } else {
-                // documentScrollPositionRelativeToViewOrigin() includes -topContentInset in its height
+                // documentScrollPositionRelativeToViewOrigin() is already adjusted for content insets
                 // so we need to account for that in calculating the phase size
-                topContentInset = frameView.topContentInset(ScrollView::TopContentInsetType::WebCoreOrPlatformContentInset);
+                obscuredContentInsets = frameView.obscuredContentInsets(ScrollView::InsetType::WebCoreOrPlatformInset);
                 viewportRect.setLocation(frameView.documentScrollPositionRelativeToViewOrigin());
             }
 
-            top += topContentInset;
+            left += obscuredContentInsets.left();
+            top += obscuredContentInsets.top();
         }
 
         if (paintContainer)
@@ -637,7 +642,8 @@ BackgroundImageGeometry BackgroundPainter::calculateBackgroundImageGeometry(cons
 
         destinationRect = viewportRect;
         positioningAreaSize = destinationRect.size();
-        positioningAreaSize.setHeight(positioningAreaSize.height() - topContentInset);
+        positioningAreaSize.setWidth(positioningAreaSize.width() - obscuredContentInsets.left());
+        positioningAreaSize.setHeight(positioningAreaSize.height() - obscuredContentInsets.top());
         positioningAreaSize = LayoutSize(snapRectToDevicePixels(LayoutRect(destinationRect.location(), positioningAreaSize), deviceScaleFactor).size());
     }
 

@@ -33,6 +33,7 @@
 #include "AttachmentAssociatedElement.h"
 #include "CSSComputedStyleDeclaration.h"
 #include "CSSPropertyNames.h"
+#include "CSSSerializationContext.h"
 #include "CSSValueList.h"
 #include "CSSValuePool.h"
 #include "CachedResourceLoader.h"
@@ -1123,14 +1124,14 @@ String Editor::selectionStartCSSPropertyValue(CSSPropertyID propertyID)
     return selectionStyle->style()->getPropertyValue(propertyID);
 }
 
-static void notifyTextFromControls(Element* startRoot, Element* endRoot)
+static void notifyTextFromControls(Element* startRoot, Element* endRoot, bool wasUserEdit = true)
 {
     RefPtr startingTextControl { enclosingTextFormControl(firstPositionInOrBeforeNode(startRoot)) };
     RefPtr endingTextControl { enclosingTextFormControl(firstPositionInOrBeforeNode(endRoot)) };
     if (startingTextControl)
-        startingTextControl->didEditInnerTextValue();
+        startingTextControl->didEditInnerTextValue(wasUserEdit);
     if (endingTextControl && startingTextControl != endingTextControl)
-        endingTextControl->didEditInnerTextValue();
+        endingTextControl->didEditInnerTextValue(wasUserEdit);
 }
 
 static inline bool shouldRemoveAutocorrectionIndicator(bool shouldConsiderApplyingAutocorrection, bool autocorrectionWasApplied, bool isAutocompletion)
@@ -1245,7 +1246,11 @@ void Editor::appliedEditing(CompositeEditCommand& command)
     Ref composition = *command.composition();
     VisibleSelection newSelection(command.endingSelection());
 
-    notifyTextFromControls(composition->startingRootEditableElement(), composition->endingRootEditableElement());
+    bool wasUserEdit = [&command] {
+        RefPtr typingCommand = dynamicDowncast<TypingCommand>(command);
+        return !typingCommand || !typingCommand->triggeringEventWasCreatedFromBindings();
+    }();
+    notifyTextFromControls(composition->startingRootEditableElement(), composition->endingRootEditableElement(), wasUserEdit);
 
     if (command.isTopLevelCommand()) {
         // Don't clear the typing style with this selection change. We do those things elsewhere if necessary.
@@ -1453,7 +1458,8 @@ bool Editor::insertTextWithoutSendingTextEvent(const String& text, bool selectIn
                     options.add(TypingCommand::Option::IsAutocompletion);
                 if (shouldRemoveAutocorrectionIndicator(shouldConsiderApplyingAutocorrection, autocorrectionWasApplied, options.contains(TypingCommand::Option::IsAutocompletion)))
                     options.remove(TypingCommand::Option::RetainAutocorrectionIndicator);
-                TypingCommand::insertText(document.copyRef(), text, selection, options, triggeringEvent && triggeringEvent->isComposition() ? TypingCommand::TextCompositionType::Final : TypingCommand::TextCompositionType::None);
+                auto compositionType = triggeringEvent && triggeringEvent->isComposition() ? TypingCommand::TextCompositionType::Final : TypingCommand::TextCompositionType::None;
+                TypingCommand::insertText(document.copyRef(), text, triggeringEvent, selection, options, compositionType);
             }
 
             // Reveal the current selection. Note that focus may have changed after insertion.
@@ -2411,6 +2417,7 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
     client()->startDelayingAndCoalescingContentChangeNotifications();
 #endif
 
+    RefPtr<CompositionEvent> event;
     RefPtr target { document->focusedElement() };
     if (target) {
         // Dispatch an appropriate composition event to the focused node.
@@ -2428,7 +2435,6 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
         // 3. Canceling the ongoing composition.
         //    Send a compositionend event when function deletes the existing composition node, i.e.
         //    m_compositionNode != 0 && test.isEmpty().
-        RefPtr<CompositionEvent> event;
         if (!m_compositionNode) {
             // We should send a compositionstart event only when the given text is not empty because this
             // function doesn't create a composition node when the text is empty.
@@ -2464,7 +2470,7 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
     m_customCompositionAnnotations.clear();
 
     if (!text.isEmpty()) {
-        TypingCommand::insertText(document.copyRef(), text, OptionSet { TypingCommand::Option::SelectInsertedText, TypingCommand::Option::PreventSpellChecking }, TypingCommand::TextCompositionType::Pending);
+        TypingCommand::insertText(document.copyRef(), text, event.get(), OptionSet { TypingCommand::Option::SelectInsertedText, TypingCommand::Option::PreventSpellChecking }, TypingCommand::TextCompositionType::Pending);
 
         // Find out what node has the composition now.
         Position base = document->selection().selection().base().downstream();
@@ -3142,13 +3148,12 @@ void Editor::markAndReplaceFor(const SpellCheckRequest& request, const Vector<Te
     auto textCheckingOptions = request.data().checkingTypes();
     TextCheckingParagraph paragraph(request.checkingRange(), request.automaticReplacementRange(), request.paragraphRange());
 
-    // FIXME: Mark this const once MSVC bug is fixed: <https://developercommunity.visualstudio.com/content/problem/316713/msvc-cant-compile-webkits-optionsetcontainsany.html>.
-    bool shouldPerformReplacement = textCheckingOptions.containsAny({ TextCheckingType::Quote, TextCheckingType::Dash, TextCheckingType::Replacement });
-    bool shouldMarkSpelling = textCheckingOptions.contains(TextCheckingType::Spelling);
-    bool shouldMarkGrammar = textCheckingOptions.contains(TextCheckingType::Grammar);
-    bool shouldMarkLink = textCheckingOptions.contains(TextCheckingType::Link);
-    bool shouldShowCorrectionPanel = textCheckingOptions.contains(TextCheckingType::ShowCorrectionPanel);
-    bool shouldCheckForCorrection = shouldShowCorrectionPanel || textCheckingOptions.contains(TextCheckingType::Correction);
+    const bool shouldPerformReplacement = textCheckingOptions.containsAny({ TextCheckingType::Quote, TextCheckingType::Dash, TextCheckingType::Replacement });
+    const bool shouldMarkSpelling = textCheckingOptions.contains(TextCheckingType::Spelling);
+    const bool shouldMarkGrammar = textCheckingOptions.contains(TextCheckingType::Grammar);
+    const bool shouldMarkLink = textCheckingOptions.contains(TextCheckingType::Link);
+    const bool shouldShowCorrectionPanel = textCheckingOptions.contains(TextCheckingType::ShowCorrectionPanel);
+    const bool shouldCheckForCorrection = shouldShowCorrectionPanel || textCheckingOptions.contains(TextCheckingType::Correction);
 #if !USE(AUTOCORRECTION_PANEL)
     ASSERT(!shouldShowCorrectionPanel);
 #endif
@@ -4805,7 +4810,7 @@ const RenderStyle* Editor::styleForSelectionStart(RefPtr<Node>& nodeToRemove)
 
     auto styleElement = HTMLSpanElement::create(document);
 
-    auto styleText = makeAtomString(typingStyle->style()->asText(), " display: inline"_s);
+    auto styleText = makeAtomString(typingStyle->style()->asText(CSS::defaultSerializationContext()), " display: inline"_s);
     styleElement->setAttribute(HTMLNames::styleAttr, styleText);
 
     styleElement->appendChild(document->createEditingTextNode(String { emptyString() }));
@@ -4835,7 +4840,7 @@ RefPtr<Font> Editor::fontForSelection(bool& hasMultipleFonts)
             if (!style)
                 return nullptr;
             ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-            font = const_cast<Font*>(&style->fontCascade().primaryFont());
+            font = const_cast<Font*>(style->fontCascade().primaryFont().ptr());
         }
 
         if (nodeToRemove)
@@ -4861,10 +4866,10 @@ RefPtr<Font> Editor::fontForSelection(bool& hasMultipleFonts)
         auto renderer = node.renderer();
         if (!renderer)
             continue;
-        auto& primaryFont = renderer->style().fontCascade().primaryFont();
+        Ref primaryFont = renderer->style().fontCascade().primaryFont();
         if (!font)
-            font = const_cast<Font*>(&primaryFont);
-        else if (font != &primaryFont) {
+            font = const_cast<Font*>(primaryFont.ptr());
+        else if (font != primaryFont.ptr()) {
             hasMultipleFonts = true;
             break;
         }

@@ -248,10 +248,6 @@
 #define ENABLE_GPU_PROCESS_WEBGL_BY_DEFAULT 0
 #endif
 
-#if !defined(ENABLE_HDR_FOR_IMAGES)
-#define ENABLE_HDR_FOR_IMAGES 0
-#endif
-
 #if !defined(ENABLE_HDR_FOR_WEBGPU)
 #define ENABLE_HDR_FOR_WEBGPU 0
 #endif
@@ -567,6 +563,10 @@
 
 #if !defined(ENABLE_WHEEL_EVENT_REGIONS)
 #define ENABLE_WHEEL_EVENT_REGIONS 0
+#endif
+
+#if !defined(ENABLE_TOUCH_EVENT_REGIONS)
+#define ENABLE_TOUCH_EVENT_REGIONS 0
 #endif
 
 #if !defined(ENABLE_WRITING_TOOLS)

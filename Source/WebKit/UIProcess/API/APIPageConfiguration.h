@@ -134,6 +134,7 @@ public:
     void setProcessPool(RefPtr<WebKit::WebProcessPool>&&);
 
     WebKit::WebUserContentControllerProxy& userContentController() const;
+    Ref<WebKit::WebUserContentControllerProxy> protectedUserContentController() const;
     void setUserContentController(RefPtr<WebKit::WebUserContentControllerProxy>&&);
 
 #if ENABLE(WK_WEB_EXTENSIONS)
@@ -141,9 +142,11 @@ public:
     void setRequiredWebExtensionBaseURL(WTF::URL&&);
 
     WebKit::WebExtensionController* webExtensionController() const;
+    RefPtr<WebKit::WebExtensionController> protectedWebExtensionController() const;
     void setWebExtensionController(RefPtr<WebKit::WebExtensionController>&&);
 
     WebKit::WebExtensionController* weakWebExtensionController() const;
+    RefPtr<WebKit::WebExtensionController> protectedWeakWebExtensionController() const;
     void setWeakWebExtensionController(WebKit::WebExtensionController*);
 #endif
 
@@ -151,6 +154,7 @@ public:
     void setPageGroup(RefPtr<WebKit::WebPageGroup>&&);
 
     WebKit::WebPreferences& preferences() const;
+    Ref<WebKit::WebPreferences> protectedPreferences() const;
     void setPreferences(RefPtr<WebKit::WebPreferences>&&);
 
     WebKit::WebPageProxy* relatedPage() const;
@@ -163,10 +167,12 @@ public:
     void setAlternateWebViewForNavigationGestures(WeakPtr<WebKit::WebPageProxy>&&);
 
     WebKit::VisitedLinkStore& visitedLinkStore() const;
+    Ref<WebKit::VisitedLinkStore> protectedVisitedLinkStore() const;
     void setVisitedLinkStore(RefPtr<WebKit::VisitedLinkStore>&&);
 
     WebKit::WebsiteDataStore& websiteDataStore() const;
     WebKit::WebsiteDataStore* websiteDataStoreIfExists() const;
+    RefPtr<WebKit::WebsiteDataStore> protectedWebsiteDataStoreIfExists() const;
     Ref<WebKit::WebsiteDataStore> protectedWebsiteDataStore() const;
     void setWebsiteDataStore(RefPtr<WebKit::WebsiteDataStore>&&);
 
@@ -257,6 +263,7 @@ public:
 
 #if ENABLE(APPLICATION_MANIFEST)
     ApplicationManifest* applicationManifest() const;
+    RefPtr<ApplicationManifest> protectedApplicationManifest() const;
     void setApplicationManifest(RefPtr<ApplicationManifest>&&);
 #endif
 
@@ -387,6 +394,9 @@ public:
 
     bool incompleteImageBorderEnabled() const { return m_data.incompleteImageBorderEnabled; }
     void setIncompleteImageBorderEnabled(bool enabled) { m_data.incompleteImageBorderEnabled = enabled; }
+
+    bool showsSystemScreenTimeBlockingView() const { return m_data.showsSystemScreenTimeBlockingView; }
+    void setShowsSystemScreenTimeBlockingView(bool shows) { m_data.showsSystemScreenTimeBlockingView = shows; }
 
     bool shouldDeferAsynchronousScriptsUntilAfterDocumentLoad() const { return m_data.shouldDeferAsynchronousScriptsUntilAfterDocumentLoad; }
     void setShouldDeferAsynchronousScriptsUntilAfterDocumentLoad(bool defer) { m_data.shouldDeferAsynchronousScriptsUntilAfterDocumentLoad = defer; }
@@ -627,6 +637,7 @@ private:
         bool allowsInlinePredictions { false };
         bool scrollToTextFragmentIndicatorEnabled { true };
         bool scrollToTextFragmentMarkingEnabled { true };
+        bool showsSystemScreenTimeBlockingView { true };
 #if PLATFORM(VISION)
 
 #if ENABLE(GAMEPAD)

@@ -42,11 +42,61 @@ namespace Layout {
 // used decreases. So, we ignore this ideal number of lines requirement beyond this threshold.
 static const size_t maximumLinesToBalanceWithLineRequirement { 12 };
 
-static float computeCost(InlineLayoutUnit candidateLineWidth, InlineLayoutUnit idealLineWidth)
+// Define the penalty associated with show text wider/narrower than ideal bounds.
+// Separating stretchability and shrinkability allows us to weight under/over
+// filling the ideal bounds differently.
+static const InlineLayoutUnit textWrapPrettyStretchability = 10;
+static const InlineLayoutUnit textWrapPrettyShrinkability = 10;
+
+// Defines the maximum shrink/stretch factor allowed for text-wrap-pretty.
+static const float textWrapPrettyMaxStretch = 2;
+static const float textWrapPrettyMaxShrink = 2;
+
+static bool validLineWidthPretty(InlineLayoutUnit candidateLineWidth, InlineLayoutUnit idealLineWidth)
 {
-    auto difference = idealLineWidth - candidateLineWidth;
-    return difference * difference;
+    auto difference = candidateLineWidth - idealLineWidth;
+    if (difference > 0)
+        return difference <= textWrapPrettyStretchability * textWrapPrettyMaxStretch;
+    return abs(difference) <= textWrapPrettyShrinkability * textWrapPrettyMaxShrink;
+}
+
+// Full implementation of the raggedness function defined in:
+// http://www.eprg.org/G53DOC/pdfs/knuth-plass-breaking.pdf
+static float computeRaggedness(InlineLayoutUnit candidateLineWidth, InlineLayoutUnit idealLineWidth)
+{
+    auto difference = candidateLineWidth - idealLineWidth;
+    auto intermediate = difference / (difference > 0 ? textWrapPrettyStretchability : textWrapPrettyShrinkability);
+    return 100 * abs(pow(intermediate, 3));
 };
+
+static float computeCostBalance(InlineLayoutUnit candidateLineWidth, InlineLayoutUnit idealLineWidth)
+{
+    return computeRaggedness(candidateLineWidth, idealLineWidth);
+};
+
+static float computeCostPretty(InlineLayoutUnit candidateLineWidth, InlineLayoutUnit idealLineWidth, size_t breakIndex, size_t numberOfBreakOpportunities, InlineLayoutUnit lastLineWidth)
+{
+    // Keeping the last line width longer than 20% of the previous is a heuristic to avoid orphan and "orphan-like" paragraph endings
+    // (lines that have more than one word but are still sufficiently short to appear like an orphan)
+    // FIXME: add support for river minimization.
+    if (breakIndex == numberOfBreakOpportunities - 1) {
+        const auto minimumLastLineWidth = lastLineWidth * 0.2;
+        const auto maximumLastLineWidth = lastLineWidth;
+        if (candidateLineWidth < minimumLastLineWidth || candidateLineWidth > maximumLastLineWidth)
+            return std::numeric_limits<float>::infinity();
+        return 0;
+    }
+    // text-wrap-mode:pretty disallows stretching/shrinking beyond accepted bounds.
+    if (!validLineWidthPretty(candidateLineWidth, idealLineWidth))
+        return std::numeric_limits<float>::infinity();
+
+    return computeRaggedness(candidateLineWidth, idealLineWidth);
+};
+
+static LayoutUnit computeLineWidthFromSlidingWidth(InlineLayoutUnit indentWidth, SlidingWidth slidingWidth)
+{
+    return LayoutUnit::fromFloatCeil(indentWidth + slidingWidth.width() + LayoutUnit::epsilon());
+}
 
 static bool containsTrailingSoftHyphen(const InlineItem& inlineItem)
 {
@@ -91,12 +141,59 @@ static bool cannotConstrainInlineItem(const InlineItem& inlineItem)
     return false;
 }
 
+static PreviousLine buildPreviousLine(size_t lineIndex, LineLayoutResult lineLayoutResult)
+{
+    return PreviousLine { lineIndex, lineLayoutResult.contentGeometry.trailingOverflowingContentWidth, !lineLayoutResult.inlineContent.isEmpty() && lineLayoutResult.inlineContent.last().isLineBreak(), !lineLayoutResult.inlineContent.isEmpty(), lineLayoutResult.directionality.inlineBaseDirection, WTFMove(lineLayoutResult.floatContent.suspendedFloats) };
+}
+
 InlineContentConstrainer::InlineContentConstrainer(InlineFormattingContext& inlineFormattingContext, const InlineItemList& inlineItemList, const HorizontalConstraints& horizontalConstraints)
     : m_inlineFormattingContext(inlineFormattingContext)
     , m_inlineItemList(inlineItemList)
     , m_horizontalConstraints(horizontalConstraints)
 {
     initialize();
+}
+
+void InlineContentConstrainer::updateCachedWidths()
+{
+    // We should only initialize the inline item width cache once.
+    ASSERT(!m_hasValidInlineItemWidthCache);
+    m_inlineItemWidths = Vector<InlineLayoutUnit>(m_numberOfInlineItems);
+    m_firstLineStyleInlineItemWidths = Vector<InlineLayoutUnit>(m_numberOfInlineItems);
+    // Cache inline item widths to speed up later computations.
+    for (size_t i = 0; i < m_numberOfInlineItems; i++) {
+        const auto& item = m_inlineItemList[i];
+        m_inlineItemWidths[i] = m_inlineFormattingContext.formattingUtils().inlineItemWidth(item, 0, false);
+        m_firstLineStyleInlineItemWidths[i] = m_inlineFormattingContext.formattingUtils().inlineItemWidth(item, 0, true);
+    }
+    m_hasValidInlineItemWidthCache = true;
+}
+
+void InlineContentConstrainer::checkCanConstrainInlineItems()
+{
+    for (auto& inlineItem : m_inlineItemList) {
+        if (cannotConstrainInlineItem(inlineItem)) {
+            m_cannotConstrainContent = true;
+            return;
+        }
+    }
+}
+
+InlineContentConstrainer::EntryPretty InlineContentConstrainer::layoutSingleLineForPretty(InlineItemRange layoutRange, InlineLayoutUnit idealLineWidth, EntryPretty lastValidEntry)
+{
+    auto lineBuilder = LineBuilder { m_inlineFormattingContext, m_horizontalConstraints, m_inlineItemList };
+    InlineRect lineInitialRect = InlineRect { 0.f, m_horizontalConstraints.logicalLeft, idealLineWidth, 0.f };
+    LineLayoutResult lineLayoutResult = lineBuilder.layoutInlineContent({ layoutRange, lineInitialRect }, lastValidEntry.previousLine);
+    auto lineEnd = InlineFormattingUtils::leadingInlineItemPositionForNextLine(lineLayoutResult.inlineItemRange.end, lastValidEntry.lineEnd, !lineLayoutResult.floatContent.hasIntrusiveFloat.isEmpty() || !lineLayoutResult.floatContent.placedFloats.isEmpty(), layoutRange.end);
+    return { lastValidEntry.accumulatedCost,
+        // This function is only called when there are no more viable break points for PrettifyRange.
+        // Use the last valid entry's accumulated cost as we must use this breakpoint no matter what.
+        layoutRange.startIndex(),
+        lastValidEntry.lineIndex + 1,
+        lineLayoutResult.contentGeometry.logicalWidth,
+        lineEnd,
+        buildPreviousLine(lastValidEntry.lineIndex + 1, lineLayoutResult)
+    };
 }
 
 void InlineContentConstrainer::initialize()
@@ -116,19 +213,11 @@ void InlineContentConstrainer::initialize()
     }
 
     m_numberOfInlineItems = m_inlineItemList.size();
-    m_maximumLineWidth = m_horizontalConstraints.logicalWidth;
+    m_maximumLineWidthConstraint = m_horizontalConstraints.logicalWidth;
 
-    // Compute inline item widths beforehand to speed up later computations
-    m_inlineItemWidths.reserveCapacity(m_numberOfInlineItems);
-    for (size_t i = 0; i < m_numberOfInlineItems; i++) {
-        const auto& item = m_inlineItemList[i];
-        if (cannotConstrainInlineItem(item)) {
-            m_cannotConstrainContent = true;
-            return;
-        }
-        m_inlineItemWidths.append(m_inlineFormattingContext.formattingUtils().inlineItemWidth(item, 0, false));
-        m_firstLineStyleInlineItemWidths.append(m_inlineFormattingContext.formattingUtils().inlineItemWidth(item, 0, true));
-    }
+    checkCanConstrainInlineItems();
+    if (m_cannotConstrainContent)
+        return;
 
     // Perform a line layout with `text-wrap: wrap` to compute useful metrics such as:
     //  - the number of lines used
@@ -150,8 +239,8 @@ void InlineContentConstrainer::initialize()
         bool isFirstLineInChunk = !lineIndex || m_originalLineEndsWithForcedBreak[lineIndex - 1];
         SlidingWidth lineSlidingWidth { *this, m_inlineItemList, lineLayoutResult.inlineItemRange.startIndex(), lineLayoutResult.inlineItemRange.endIndex(), useFirstLineStyle, isFirstLineInChunk };
         auto previousLineEndsWithLineBreak = lineIndex ? std::optional<bool> { m_originalLineEndsWithForcedBreak[lineIndex - 1] } : std::nullopt;
-        auto textIndent = computeTextIndent(previousLineEndsWithLineBreak);
-        m_originalLineWidths.append(textIndent + lineSlidingWidth.width());
+        auto textIndent = m_inlineFormattingContext.formattingUtils().computedTextIndent(InlineFormattingUtils::IsIntrinsicWidthMode::No, previousLineEndsWithLineBreak, m_maximumLineWidthConstraint);
+        m_originalLineConstraints.append(computeLineWidthFromSlidingWidth(textIndent, lineSlidingWidth));
 
         // If next line count would match (or exceed) the number of visible lines due to line-clamp, we can bail out early.
         if (numberOfVisibleLinesAllowed && (lineIndex + 1 >= numberOfVisibleLinesAllowed))
@@ -159,10 +248,12 @@ void InlineContentConstrainer::initialize()
 
         layoutRange.start = InlineFormattingUtils::leadingInlineItemPositionForNextLine(lineLayoutResult.inlineItemRange.end, previousLineEnd, !lineLayoutResult.floatContent.hasIntrusiveFloat.isEmpty() || !lineLayoutResult.floatContent.placedFloats.isEmpty(), layoutRange.end);
         previousLineEnd = layoutRange.start;
-        previousLine = PreviousLine { lineIndex, lineLayoutResult.contentGeometry.trailingOverflowingContentWidth, !lineLayoutResult.inlineContent.isEmpty() && lineLayoutResult.inlineContent.last().isLineBreak(), !lineLayoutResult.inlineContent.isEmpty(), lineLayoutResult.directionality.inlineBaseDirection, WTFMove(lineLayoutResult.floatContent.suspendedFloats) };
+        previousLine = buildPreviousLine(lineIndex, lineLayoutResult);
         lineIndex++;
     }
 
+    // Cache inline item widths after laying out all inline content with LineBuilder.
+    updateCachedWidths();
     m_numberOfLinesInOriginalLayout = lineIndex;
 }
 
@@ -171,7 +262,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::computeParagraphLeve
     ASSERT(wrapStyle == TextWrapStyle::Balance || wrapStyle == TextWrapStyle::Pretty);
 
     if (m_cannotConstrainContent || m_hasSingleLineVisibleContent)
-        return std::nullopt;
+        return { };
 
     // If forced line breaks exist, then we can constrain each forced-break-delimited
     // chunk of text separately. This helps simplify first line/indentation logic.
@@ -193,10 +284,10 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::computeParagraphLeve
         const bool isFirstChunk = !chunkStart;
         auto rangeToConstrain = InlineItemRange { m_originalLineInlineItemRanges[chunkStart].startIndex(), m_originalLineInlineItemRanges[chunkStart + chunkSize - 1].endIndex() };
         if (rangeToConstrain.startIndex() >= rangeToConstrain.endIndex())
-            return std::nullopt;
+            return { };
         InlineLayoutUnit totalWidth = 0;
         for (size_t line = 0; line < chunkSize; line++)
-            totalWidth += m_originalLineWidths[chunkStart + line];
+            totalWidth += m_originalLineConstraints[chunkStart + line];
 
         if (wrapStyle == TextWrapStyle::Balance) {
             const InlineLayoutUnit idealLineWidth = totalWidth / chunkSize;
@@ -206,14 +297,12 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::computeParagraphLeve
         }
 
         if (wrapStyle == TextWrapStyle::Pretty) {
-            // Targetting a line length slightly shorter than the maximum allows the algorithm to both
-            // overshoot and undershoot the target line length, giving more flexibility in the solution search
-            const InlineLayoutUnit idealLineWidth = m_maximumLineWidth * 0.95;
+            const InlineLayoutUnit idealLineWidth = m_maximumLineWidthConstraint  - textWrapPrettyStretchability * textWrapPrettyMaxStretch;
             return prettifyRange(rangeToConstrain, idealLineWidth, isFirstChunk);
         }
 
         ASSERT_NOT_REACHED();
-        return std::nullopt;
+        return { };
     };
 
     size_t chunkStart = 0;
@@ -222,7 +311,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::computeParagraphLeve
         auto constrainedLineWidthsForChunk = constrainChunk(chunkStart, chunkSize);
         if (!constrainedLineWidthsForChunk) {
             for (size_t i = 0; i < chunkSize; i++)
-                constrainedLineWidths.append(m_maximumLineWidth);
+                constrainedLineWidths.append(m_maximumLineWidthConstraint);
         } else {
             for (auto constrainedLineWidth : *constrainedLineWidthsForChunk)
                 constrainedLineWidths.append(constrainedLineWidth);
@@ -248,16 +337,10 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithLine
     auto previousLineEndsWithLineBreak = isFirstChunk ? std::nullopt : std::optional<bool> { true };
     auto firstLineTextIndent = computeTextIndent(previousLineEndsWithLineBreak);
     auto textIndent = computeTextIndent(false);
-
-    struct Entry {
-        float accumulatedCost { std::numeric_limits<float>::infinity() };
-        size_t previousBreakIndex { 0 };
-    };
-
     // state[i][j] holds the optimal set of line breaks where the jth line break (1-indexed) is
     // right before m_inlineItemList[breakOpportunities[i]]. "Optimal" in this context means the
     // lowest possible accumulated cost.
-    Vector<Vector<Entry>> state(numberOfBreakOpportunities, Vector<Entry>(numberOfLines + 1));
+    Vector<Vector<EntryBalance>> state(numberOfBreakOpportunities, Vector<EntryBalance>(numberOfLines + 1));
     state[0][0].accumulatedCost = 0.f;
 
     // Special case the first line because of ::first-line styling, indentation, etc.
@@ -266,11 +349,11 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithLine
         auto end = breakOpportunities[breakIndex];
         firstLineSlidingWidth.advanceEndTo(end);
 
-        auto firstLineCandidateWidth = firstLineSlidingWidth.width() + firstLineTextIndent;
-        if (firstLineCandidateWidth > m_maximumLineWidth)
+        auto firstLineCandidateWidth = computeLineWidthFromSlidingWidth(firstLineTextIndent, firstLineSlidingWidth);
+        if (firstLineCandidateWidth > m_maximumLineWidthConstraint)
             break;
 
-        auto cost = computeCost(firstLineCandidateWidth, idealLineWidth);
+        auto cost = computeCostBalance(firstLineCandidateWidth, idealLineWidth);
         state[breakIndex][1].accumulatedCost = cost;
     }
 
@@ -282,7 +365,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithLine
         slidingWidth.advanceEndTo(end);
 
         // We prune our search space by limiting the possible starting positions for our candidate line.
-        while (textIndent + slidingWidth.width() > m_maximumLineWidth) {
+        while (computeLineWidthFromSlidingWidth(textIndent, slidingWidth) > m_maximumLineWidthConstraint) {
             firstStartIndex++;
             if (firstStartIndex > breakIndex)
                 break;
@@ -295,9 +378,9 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithLine
             size_t start = breakOpportunities[startIndex];
             ASSERT(start != range.startIndex());
             innerSlidingWidth.advanceStartTo(start);
-            auto candidateLineWidth = textIndent + innerSlidingWidth.width();
-            auto candidateLineCost = computeCost(candidateLineWidth, idealLineWidth);
-            ASSERT(candidateLineWidth <= m_maximumLineWidth);
+            auto candidateLineWidth = computeLineWidthFromSlidingWidth(textIndent, innerSlidingWidth);
+            auto candidateLineCost = computeCostBalance(candidateLineWidth, idealLineWidth);
+            ASSERT(candidateLineWidth <= m_maximumLineWidthConstraint);
 
             // Compute the cost of this line based on the line index
             for (size_t lineIndex = 1; lineIndex <= numberOfLines; lineIndex++) {
@@ -313,7 +396,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithLine
 
     // Check if we found no solution
     if (std::isinf(state[numberOfBreakOpportunities - 1][numberOfLines].accumulatedCost))
-        return std::nullopt;
+        return { };
 
     // breaks[i] equals the index into m_inlineItemList before which the ith line will break
     Vector<size_t> breaks(numberOfLines);
@@ -344,15 +427,10 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithNoLi
     auto firstLineTextIndent = computeTextIndent(previousLineEndsWithLineBreak);
     auto textIndent = computeTextIndent(false);
 
-    struct Entry {
-        float accumulatedCost { std::numeric_limits<float>::infinity() };
-        size_t previousBreakIndex { 0 };
-    };
-
     // state[i] holds the optimal set of line breaks where the last line break is right
     // before m_inlineItemList[breakOpportunities[i]]. "Optimal" in this context means the
     // lowest possible accumulated cost.
-    Vector<Entry> state(numberOfBreakOpportunities);
+    Vector<EntryBalance> state(numberOfBreakOpportunities);
     state[0].accumulatedCost = 0.f;
 
     // Special case the first line because of ::first-line styling, indentation, etc.
@@ -361,11 +439,11 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithNoLi
         auto end = breakOpportunities[breakIndex];
         firstLineSlidingWidth.advanceEndTo(end);
 
-        auto firstLineCandidateWidth = firstLineSlidingWidth.width() + firstLineTextIndent;
-        if (firstLineCandidateWidth > m_maximumLineWidth)
+        auto firstLineCandidateWidth = computeLineWidthFromSlidingWidth(firstLineTextIndent, firstLineSlidingWidth);
+        if (firstLineCandidateWidth > m_maximumLineWidthConstraint)
             break;
 
-        auto cost = computeCost(firstLineCandidateWidth, idealLineWidth);
+        auto cost = computeCostBalance(firstLineCandidateWidth, idealLineWidth);
         state[breakIndex].accumulatedCost = cost;
     }
 
@@ -377,7 +455,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithNoLi
         slidingWidth.advanceEndTo(end);
 
         // We prune our search space by limiting the possible starting positions for our candidate line.
-        while (textIndent + slidingWidth.width() > m_maximumLineWidth) {
+        while (computeLineWidthFromSlidingWidth(textIndent, slidingWidth) > m_maximumLineWidthConstraint) {
             firstStartIndex++;
             if (firstStartIndex > breakIndex)
                 break;
@@ -390,9 +468,9 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithNoLi
             size_t start = breakOpportunities[startIndex];
             ASSERT(start != range.startIndex());
             innerSlidingWidth.advanceStartTo(start);
-            auto candidateLineWidth = textIndent + innerSlidingWidth.width();
-            auto candidateLineCost = computeCost(candidateLineWidth, idealLineWidth);
-            ASSERT(candidateLineWidth <= m_maximumLineWidth);
+            auto candidateLineWidth = computeLineWidthFromSlidingWidth(textIndent, innerSlidingWidth);
+            auto candidateLineCost = computeCostBalance(candidateLineWidth, idealLineWidth);
+            ASSERT(candidateLineWidth <= m_maximumLineWidthConstraint);
 
             auto accumulatedCost = candidateLineCost + state[startIndex].accumulatedCost;
             if (accumulatedCost < state[breakIndex].accumulatedCost) {
@@ -404,7 +482,7 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::balanceRangeWithNoLi
 
     // Check if we found no solution
     if (std::isinf(state[numberOfBreakOpportunities - 1].accumulatedCost))
-        return std::nullopt;
+        return { };
 
     // breaks[i] equals the index into m_inlineItemList before which the ith line will break
     Vector<size_t> breaks;
@@ -433,36 +511,15 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::prettifyRange(Inline
 
     // Indentation offsets
     auto previousLineEndsWithLineBreak = isFirstChunk ? std::nullopt : std::optional<bool> { true };
-    auto firstLineTextIndent = m_inlineFormattingContext.formattingUtils().computedTextIndent(InlineFormattingUtils::IsIntrinsicWidthMode::No, previousLineEndsWithLineBreak, m_maximumLineWidth);
-    auto textIndent = m_inlineFormattingContext.formattingUtils().computedTextIndent(InlineFormattingUtils::IsIntrinsicWidthMode::No, false, m_maximumLineWidth);
-
-    struct Entry {
-        float accumulatedCost { std::numeric_limits<float>::infinity() };
-        size_t previousBreakIndex { 0 };
-        InlineLayoutUnit lastLineWidth { 0 };
-        bool endsWithHyphen { false };
-
-        auto operator<=>(const Entry&) const = default;
-    };
+    auto firstLineTextIndent = computeTextIndent(previousLineEndsWithLineBreak);
+    auto textIndent = computeTextIndent(false);
 
     // state[i] holds the optimal set of line breaks where the last line break is right
     // before m_inlineItemList[breakOpportunities[i]]. "Optimal" in this context means the
     // lowest possible accumulated cost.
-    //
-    // We keep track of the `numberOfBestSolutions` best solutions for each breakpoint,
-    // so that if one solution leads to an invalid breaking (e.g. due to an orphan),
-    // we can backtrack and find a valid breaking.
-    //
-    // The `numberOfBestSolutions` constant represents a tradeoff: a higher number gives
-    // higher quality breakings at the cost of speed.
-    Vector<PriorityQueue<Entry, isGreaterThan>> state(numberOfBreakOpportunities);
-    constexpr size_t numberOfBestSolutions = 3;
-    auto recordAndMaintainBestSolutions = [&](size_t breakIndex, Entry solution) {
-        state[breakIndex].enqueue(solution);
-        while (state[breakIndex].size() > numberOfBestSolutions)
-            state[breakIndex].dequeue();
-    };
-    recordAndMaintainBestSolutions(0, Entry { .accumulatedCost = 0.f });
+    Vector<EntryPretty> state(numberOfBreakOpportunities);
+    state[0].accumulatedCost = 0.f;
+    std::optional<size_t> lastValidBreakpoint;
 
     // Special case the first line because of ::first-line styling, indentation, etc.
     SlidingWidth firstLineSlidingWidth { *this, m_inlineItemList, range.startIndex(), range.startIndex(), isFirstChunk, true };
@@ -470,13 +527,33 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::prettifyRange(Inline
         auto end = breakOpportunities[breakIndex];
         firstLineSlidingWidth.advanceEndTo(end);
 
-        auto firstLineCandidateWidth = firstLineSlidingWidth.width() + firstLineTextIndent;
-        if (firstLineCandidateWidth > m_maximumLineWidth)
+        auto firstLineCandidateWidth = computeLineWidthFromSlidingWidth(firstLineTextIndent, firstLineSlidingWidth);
+        if (firstLineCandidateWidth > m_maximumLineWidthConstraint)
             break;
 
-        auto cost = computeCost(firstLineCandidateWidth, idealLineWidth);
-        recordAndMaintainBestSolutions(breakIndex, Entry { .accumulatedCost = cost, .previousBreakIndex = 0, .lastLineWidth = firstLineCandidateWidth });
+        auto cost = computeCostPretty(firstLineCandidateWidth, idealLineWidth, breakIndex, numberOfBreakOpportunities, idealLineWidth);
+        if (cost < state[breakIndex].accumulatedCost) {
+            lastValidBreakpoint = std::max(lastValidBreakpoint.value_or(0), breakIndex);
+            state[breakIndex].accumulatedCost = cost;
+            state[breakIndex].previousBreakIndex = range.startIndex();
+            state[breakIndex].lineIndex = state[range.startIndex()].lineIndex + 1;
+            state[breakIndex].lastLineWidth = firstLineCandidateWidth;
+            state[breakIndex].lineEnd = { .index = breakIndex, .offset = 0 };
+            auto lineInitialRect = InlineRect { 0.f, m_horizontalConstraints.logicalLeft, firstLineCandidateWidth, 0.f };
+            auto lineBuilder = LineBuilder { m_inlineFormattingContext, m_horizontalConstraints, m_inlineItemList };
+            auto lineLayoutResult = lineBuilder.layoutInlineContent({ { range.startIndex(), breakIndex }, lineInitialRect }, state[range.startIndex()].previousLine);
+            state[breakIndex].previousLine = buildPreviousLine(state[breakIndex].lineIndex, lineLayoutResult);
+        }
     }
+
+    // If we are unable to build a valid line from without hyphenation,
+    // try to build a valid line using hyphenation from the beginning.
+    if (!lastValidBreakpoint.has_value()) {
+        auto newEntry = layoutSingleLineForPretty({ breakOpportunities[0], range.endIndex() }, idealLineWidth, state[breakOpportunities[0]]);
+        state[newEntry.lineEnd.index] = newEntry;
+        lastValidBreakpoint = newEntry.lineEnd.index;
+    }
+    ASSERT(lastValidBreakpoint.has_value());
 
     // breakOpportunities[firstStartIndex] is the first possible starting position for a candidate line that is NOT the first line
     size_t firstStartIndex = 1;
@@ -486,11 +563,20 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::prettifyRange(Inline
         slidingWidth.advanceEndTo(end);
 
         // We prune our search space by limiting the possible starting positions for our candidate line.
-        while (textIndent + slidingWidth.width() > m_maximumLineWidth) {
+        while (computeLineWidthFromSlidingWidth(textIndent, slidingWidth) > m_maximumLineWidthConstraint) {
             firstStartIndex++;
             if (firstStartIndex > breakIndex)
                 break;
             slidingWidth.advanceStartTo(breakOpportunities[firstStartIndex]);
+        }
+
+        // If the start of our slidingWidth is past the last valid breaking point, we will not be able to find a valid solution.
+        // Try to find a solution using hyphenation.
+        if (firstStartIndex>lastValidBreakpoint.value()) {
+            // If hyphenation does not create a valid solution, we should return early.
+            auto newEntry = layoutSingleLineForPretty({ lastValidBreakpoint.value(), range.endIndex() }, idealLineWidth, state[lastValidBreakpoint.value()]);
+            state[newEntry.lineEnd.index] = newEntry;
+            lastValidBreakpoint = newEntry.lineEnd.index;
         }
 
         // Evaluate all possible lines that break before m_inlineItemList[end]
@@ -499,56 +585,46 @@ std::optional<Vector<LayoutUnit>> InlineContentConstrainer::prettifyRange(Inline
             size_t start = breakOpportunities[startIndex];
             ASSERT(start != range.startIndex());
             innerSlidingWidth.advanceStartTo(start);
-            auto candidateLineWidth = textIndent + innerSlidingWidth.width();
-            for (const auto& entry : state[startIndex]) {
-                auto previousLineWidth = entry.lastLineWidth;
-                auto candidateLineCost = computeCost(candidateLineWidth, idealLineWidth);
-                if (breakIndex == numberOfBreakOpportunities - 1) {
-                    // Keeping the last line width longer than 20% of the previous is a heuristic to avoid orphan and "orphan-like" paragraph endings
-                    // (lines that have more than one word but are still sufficiently short to appear like an orphan)
-                    const auto minimumLastLineWidth = previousLineWidth * 0.2;
-                    const auto maximumLastLineWidth = previousLineWidth;
-                    candidateLineCost = 0;
-                    if (candidateLineWidth < minimumLastLineWidth || candidateLineWidth > maximumLastLineWidth)
-                        candidateLineCost = std::numeric_limits<float>::infinity();
-                }
-                auto accumulatedCost = candidateLineCost + entry.accumulatedCost;
-                recordAndMaintainBestSolutions(breakIndex, Entry { accumulatedCost, startIndex, candidateLineWidth });
-                if (breakIndex + 100 < numberOfBreakOpportunities)
-                    break;
+            auto candidateLineWidth = computeLineWidthFromSlidingWidth(textIndent, innerSlidingWidth);
+            // TODO: update candidateLineWidth here using state[startIndex].lineEnd.offset.
+            auto candidateLineCost = computeCostPretty(candidateLineWidth, idealLineWidth, breakIndex, numberOfBreakOpportunities, state[startIndex].lastLineWidth);
+            auto accumulatedCost = candidateLineCost + state[startIndex].accumulatedCost;
+
+            if (accumulatedCost < state[breakIndex].accumulatedCost) {
+                state[breakIndex].accumulatedCost = accumulatedCost;
+                state[breakIndex].previousBreakIndex = startIndex;
+                state[breakIndex].lastLineWidth = candidateLineWidth;
+                state[breakIndex].lineEnd = { .index = breakIndex, .offset = 0 };
+                state[breakIndex].lineIndex = state[startIndex].lineIndex + 1;
+                auto lineInitialRect = InlineRect { 0.f, m_horizontalConstraints.logicalLeft, candidateLineWidth, 0.f };
+                auto lineBuilder = LineBuilder { m_inlineFormattingContext, m_horizontalConstraints, m_inlineItemList };
+                auto lineLayoutResult = lineBuilder.layoutInlineContent({ { startIndex, breakIndex }, lineInitialRect }, state[startIndex].previousLine);
+                state[breakIndex].previousLine = buildPreviousLine(state[breakIndex].lineIndex, lineLayoutResult);
+                lastValidBreakpoint = std::max(lastValidBreakpoint.value(), breakIndex);
             }
         }
     }
 
-    auto bestSolution = [&](const auto& solutions) {
-        if (solutions.isEmpty()) {
-            ASSERT_NOT_REACHED();
-            return Entry { };
-        }
-        auto bestSolution = *solutions.begin();
-        for (const auto& solution : solutions)
-            bestSolution = std::min(bestSolution, solution);
-        return bestSolution;
-    };
     // Check if we found no solution
-    if (std::isinf(bestSolution(state[numberOfBreakOpportunities - 1]).accumulatedCost))
-        return std::nullopt;
-
+    if (std::isinf(state[numberOfBreakOpportunities - 1].accumulatedCost))
+        return { };
     // breaks[i] equals the index into m_inlineItemList before which the ith line will break
-    Vector<size_t> breaks;
+    Vector<LayoutUnit> widths;
     size_t breakIndex = numberOfBreakOpportunities - 1;
     do {
-        breaks.append(breakOpportunities[breakIndex]);
-        breakIndex = bestSolution(state[breakIndex]).previousBreakIndex;
+        widths.append(state[breakIndex].lastLineWidth);
+        breakIndex = state[breakIndex].previousBreakIndex;
     } while (breakIndex);
-    breaks.reverse();
-
-    return computeLineWidthsFromBreaks(range, breaks, isFirstChunk);
+    widths.reverse();
+    return widths;
 }
 
 InlineLayoutUnit InlineContentConstrainer::inlineItemWidth(size_t inlineItemIndex, bool useFirstLineStyle) const
 {
-    return useFirstLineStyle ? m_firstLineStyleInlineItemWidths[inlineItemIndex] : m_inlineItemWidths[inlineItemIndex];
+    if (m_hasValidInlineItemWidthCache)
+        return useFirstLineStyle ? m_firstLineStyleInlineItemWidths[inlineItemIndex] : m_inlineItemWidths[inlineItemIndex];
+    // If inline items width cache has not yet been initialized, we should explicitly calculate the item's width.
+    return m_inlineFormattingContext.formattingUtils().inlineItemWidth(m_inlineItemList[inlineItemIndex], 0, useFirstLineStyle);
 }
 
 bool InlineContentConstrainer::shouldTrimLeading(size_t inlineItemIndex, bool useFirstLineStyle, bool isFirstLineInChunk) const
@@ -595,7 +671,7 @@ bool InlineContentConstrainer::shouldTrimTrailing(size_t inlineItemIndex, bool u
     return false;
 }
 
-InlineContentConstrainer::SlidingWidth::SlidingWidth(const InlineContentConstrainer& inlineContentConstrainer, const InlineItemList& inlineItemList, size_t start, size_t end, bool useFirstLineStyle, bool isFirstLineInChunk)
+SlidingWidth::SlidingWidth(const InlineContentConstrainer& inlineContentConstrainer, const InlineItemList& inlineItemList, size_t start, size_t end, bool useFirstLineStyle, bool isFirstLineInChunk)
     : m_inlineContentConstrainer(inlineContentConstrainer)
     , m_inlineItemList(inlineItemList)
     , m_start(start)
@@ -604,16 +680,15 @@ InlineContentConstrainer::SlidingWidth::SlidingWidth(const InlineContentConstrai
     , m_isFirstLineInChunk(isFirstLineInChunk)
 {
     ASSERT(start <= end);
-    while (m_end < end)
-        advanceEnd();
+    advanceEndTo(end);
 }
 
-InlineLayoutUnit InlineContentConstrainer::SlidingWidth::width()
+InlineLayoutUnit SlidingWidth::width()
 {
     return m_totalWidth - m_leadingTrimmableWidth - m_trailingTrimmableWidth;
 }
 
-void InlineContentConstrainer::SlidingWidth::advanceStart()
+void SlidingWidth::advanceStart()
 {
     ASSERT(m_start < m_end);
     auto startItemIndex = m_start;
@@ -644,14 +719,14 @@ void InlineContentConstrainer::SlidingWidth::advanceStart()
         m_trailingTrimmableWidth = m_totalWidth - m_leadingTrimmableWidth;
 }
 
-void InlineContentConstrainer::SlidingWidth::advanceStartTo(size_t newStart)
+void SlidingWidth::advanceStartTo(size_t newStart)
 {
     ASSERT(m_start <= newStart);
     while (m_start < newStart)
         advanceStart();
 }
 
-void InlineContentConstrainer::SlidingWidth::advanceEnd()
+void SlidingWidth::advanceEnd()
 {
     ASSERT(m_end < m_inlineItemList.size());
     auto endItemIndex = m_end;
@@ -676,7 +751,7 @@ void InlineContentConstrainer::SlidingWidth::advanceEnd()
     m_trailingTrimmableWidth = 0;
 }
 
-void InlineContentConstrainer::SlidingWidth::advanceEndTo(size_t newEnd)
+void SlidingWidth::advanceEndTo(size_t newEnd)
 {
     ASSERT(m_end <= newEnd);
     while (m_end < newEnd)
@@ -705,14 +780,14 @@ Vector<LayoutUnit> InlineContentConstrainer::computeLineWidthsFromBreaks(InlineI
         auto end = breaks[i];
         auto indentWidth = !i ? firstLineTextIndent : textIndent;
         SlidingWidth slidingWidth { *this, m_inlineItemList, start, end, !i && isFirstChunk, !i };
-        lineWidths[i] = LayoutUnit::fromFloatCeil(indentWidth + slidingWidth.width() + LayoutUnit::epsilon());
+        lineWidths[i] = computeLineWidthFromSlidingWidth(indentWidth, slidingWidth);
     }
     return lineWidths;
 }
 
 InlineLayoutUnit InlineContentConstrainer::computeTextIndent(std::optional<bool> previousLineEndsWithLineBreak) const
 {
-    return m_inlineFormattingContext.formattingUtils().computedTextIndent(InlineFormattingUtils::IsIntrinsicWidthMode::No, previousLineEndsWithLineBreak, m_maximumLineWidth);
+    return m_inlineFormattingContext.formattingUtils().computedTextIndent(InlineFormattingUtils::IsIntrinsicWidthMode::No, previousLineEndsWithLineBreak, m_maximumLineWidthConstraint);
 }
 
 }

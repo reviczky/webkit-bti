@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Copyright (C) 2022-2023 Apple Inc. All rights reserved.
-# Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+# Copyright (C) 2024-2025 Samuel Weinig <sam@webkit.org>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -119,7 +119,16 @@ class Schema:
             self.convert_to = convert_to
 
     def __init__(self, *entries):
-        self.entries = {entry.key: entry for entry in entries}
+        self.entries = {}
+
+        # Give the schema an implement entry called `comment`, allowing each group to have a top level comment.
+        self.entries["comment"] = Schema.Entry("comment", allowed_types=[str])
+
+        # For each entry, add it to the entries dictionary along with a support entry with key `*-comment` to
+        # support all fields having an implicit `*-comment` field to go along with it.
+        for entry in entries:
+            self.entries[entry.key] = entry
+            self.entries[entry.key + "-comment"] = Schema.Entry(entry.key + "-comment", allowed_types=[str])
 
     def __add__(self, other):
         return Schema(*list({**self.entries, **other.entries}.values()))
@@ -232,7 +241,6 @@ class ValueKeywordName(Name):
 
 class Status:
     schema = Schema(
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("enabled-by-default", allowed_types=[bool]),
         Schema.Entry("status", allowed_types=[str]),
     )
@@ -260,7 +268,6 @@ class Status:
 class Specification:
     schema = Schema(
         Schema.Entry("category", allowed_types=[str]),
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("description", allowed_types=[str]),
         Schema.Entry("documentation-url", allowed_types=[str]),
         Schema.Entry("keywords", allowed_types=[list], default_value=[]),
@@ -288,7 +295,6 @@ class Specification:
 
 class Value:
     schema = Schema(
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("enable-if", allowed_types=[str]),
         Schema.Entry("settings-flag", allowed_types=[str]),
         Schema.Entry("status", allowed_types=[str]),
@@ -450,47 +456,47 @@ class Longhand:
 class StylePropertyCodeGenProperties:
     schema = Schema(
         Schema.Entry("aliases", allowed_types=[list], default_value=[]),
+        Schema.Entry("animation-property", allowed_types=[bool], default_value=False),
         Schema.Entry("auto-functions", allowed_types=[bool], default_value=False),
+        Schema.Entry("cascade-alias", allowed_types=[str]),
         Schema.Entry("color-property", allowed_types=[bool], default_value=False),
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("computable", allowed_types=[bool]),
-        Schema.Entry("conditional-converter", allowed_types=[str]),
-        Schema.Entry("converter", allowed_types=[str]),
-        Schema.Entry("custom", allowed_types=[str]),
         Schema.Entry("disables-native-appearance", allowed_types=[bool], default_value=False),
         Schema.Entry("enable-if", allowed_types=[str]),
         Schema.Entry("fast-path-inherited", allowed_types=[bool], default_value=False),
         Schema.Entry("fill-layer-property", allowed_types=[bool], default_value=False),
         Schema.Entry("font-property", allowed_types=[bool], default_value=False),
-        Schema.Entry("getter", allowed_types=[str]),
         Schema.Entry("high-priority", allowed_types=[bool], default_value=False),
-        Schema.Entry("initial", allowed_types=[str]),
         Schema.Entry("internal-only", allowed_types=[bool], default_value=False),
         Schema.Entry("logical-property-group", allowed_types=[dict]),
         Schema.Entry("longhands", allowed_types=[list]),
-        Schema.Entry("name-for-methods", allowed_types=[str]),
         Schema.Entry("parser-exported", allowed_types=[bool]),
         Schema.Entry("parser-function", allowed_types=[str]),
         Schema.Entry("parser-function-allows-number-or-integer-input", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-function-requires-additional-parameters", allowed_types=[list], default_value=[]),
-        Schema.Entry("parser-function-requires-current-shorthand", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-function-requires-current-property", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-current-shorthand", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-function-requires-value-pool", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-grammar", allowed_types=[str]),
-        Schema.Entry("parser-grammar-comment", allowed_types=[str]),
         Schema.Entry("parser-grammar-unused", allowed_types=[str]),
         Schema.Entry("parser-grammar-unused-reason", allowed_types=[str]),
-        Schema.Entry("cascade-alias", allowed_types=[str]),
+        Schema.Entry("render-style-getter", allowed_types=[str]),
+        Schema.Entry("render-style-initial", allowed_types=[str]),
+        Schema.Entry("render-style-name-for-methods", allowed_types=[str]),
+        Schema.Entry("render-style-setter", allowed_types=[str]),
         Schema.Entry("separator", allowed_types=[str]),
-        Schema.Entry("setter", allowed_types=[str]),
         Schema.Entry("settings-flag", allowed_types=[str]),
         Schema.Entry("sink-priority", allowed_types=[bool], default_value=False),
-        Schema.Entry("skip-builder", allowed_types=[bool], default_value=False),
         Schema.Entry("skip-codegen", allowed_types=[bool], default_value=False),
         Schema.Entry("skip-parser", allowed_types=[bool], default_value=False),
+        Schema.Entry("skip-style-builder", allowed_types=[bool], default_value=False),
         Schema.Entry("status", allowed_types=[str]),
+        Schema.Entry("style-builder-conditional-converter", allowed_types=[str]),
+        Schema.Entry("style-builder-converter", allowed_types=[str]),
+        Schema.Entry("style-builder-custom", allowed_types=[str]),
         Schema.Entry("svg", allowed_types=[bool], default_value=False),
         Schema.Entry("top-priority", allowed_types=[bool], default_value=False),
+        Schema.Entry("top-priority-reason", allowed_types=[str]),
         Schema.Entry("url", allowed_types=[str]),
         Schema.Entry("visited-link-color-support", allowed_types=[bool], default_value=False),
     )
@@ -513,25 +519,25 @@ class StylePropertyCodeGenProperties:
         assert(type(json_value) is dict)
         StylePropertyCodeGenProperties.schema.validate_dictionary(parsing_context, f"{key_path}.codegen-properties", json_value, label=f"StylePropertyCodeGenProperties")
 
-        property_name = PropertyName(name, name_for_methods=json_value.get("name-for-methods"))
+        property_name = PropertyName(name, name_for_methods=json_value.get("render-style-name-for-methods"))
 
-        if "getter" not in json_value:
-            json_value["getter"] = property_name.name_for_methods[0].lower() + property_name.name_for_methods[1:]
+        if "render-style-getter" not in json_value:
+            json_value["render-style-getter"] = property_name.name_for_methods[0].lower() + property_name.name_for_methods[1:]
 
-        if "setter" not in json_value:
-            json_value["setter"] = f"set{property_name.name_for_methods}"
+        if "render-style-setter" not in json_value:
+            json_value["render-style-setter"] = f"set{property_name.name_for_methods}"
 
-        if "initial" not in json_value:
+        if "render-style-initial" not in json_value:
             if "fill-layer-property" in json_value:
-                json_value["initial"] = f"initialFill{property_name.name_for_methods}"
+                json_value["render-style-initial"] = f"initialFill{property_name.name_for_methods}"
             else:
-                json_value["initial"] = f"initial{property_name.name_for_methods}"
+                json_value["render-style-initial"] = f"initial{property_name.name_for_methods}"
 
-        if "custom" not in json_value:
-            json_value["custom"] = ""
-        elif json_value["custom"] == "All":
-            json_value["custom"] = "Initial|Inherit|Value"
-        json_value["custom"] = frozenset(json_value["custom"].split("|"))
+        if "style-builder-custom" not in json_value:
+            json_value["style-builder-custom"] = ""
+        elif json_value["style-builder-custom"] == "All":
+            json_value["style-builder-custom"] = "Initial|Inherit|Value"
+        json_value["style-builder-custom"] = frozenset(json_value["style-builder-custom"].split("|"))
 
         if "logical-property-group" in json_value:
             if json_value.get("longhands"):
@@ -554,8 +560,8 @@ class StylePropertyCodeGenProperties:
                 json_value["computable"] = True
 
         if json_value.get("top-priority", False):
-            if json_value.get("comment") is None:
-                raise Exception(f"{key_path} has top priority, but no comment to justify.")
+            if json_value.get("top-priority-reason") is None:
+                raise Exception(f"{key_path} has top priority, but no reason justifying it.")
             if json_value.get("longhands"):
                 raise Exception(f"{key_path} is a shorthand, but has top priority.")
             if json_value.get("high-priority", False):
@@ -619,9 +625,10 @@ class StylePropertyCodeGenProperties:
 
 class StyleProperty:
     schema = Schema(
-        Schema.Entry("animatable", allowed_types=[bool], default_value=False),
+        Schema.Entry("animation-type", allowed_types=[str]),
         Schema.Entry("codegen-properties", allowed_types=[dict, list]),
         Schema.Entry("inherited", allowed_types=[bool], default_value=False),
+        Schema.Entry("initial", allowed_types=[str]),
         Schema.Entry("specification", allowed_types=[dict], convert_to=Specification),
         Schema.Entry("status", allowed_types=[dict, str], convert_to=Status),
         Schema.Entry("values", allowed_types=[list]),
@@ -655,6 +662,27 @@ class StyleProperty:
                 print(f"SKIPPED {name} due to 'skip-codegen'")
             return None
 
+        if "animation-type" in json_value:
+            VALID_ANIMATION_TYPES = [
+                'discrete',
+                'by computed value',
+                'repeatable list',
+                'see prose',
+                'not animatable',
+                'not animatable (needs triage)',
+                'not animatable (legacy)',
+                'not animatable (internal)'
+            ]
+            if json_value["animation-type"] not in VALID_ANIMATION_TYPES:
+                raise Exception(f"'{name}' specified invalid animation type '{json_value['animation-type']}'. Must specify an animation type from {VALID_ANIMATION_TYPES}.")
+        else:
+            if not (codegen_properties.longhands or codegen_properties.cascade_alias):
+                raise Exception(f"'{name}' must specify an 'animation-type'.")
+
+        if "initial" not in json_value:
+            if not (codegen_properties.longhands or codegen_properties.cascade_alias or codegen_properties.skip_style_builder):
+                raise Exception(f"'{name}' must specify 'initial'.")
+
         if "values" in json_value:
             if not (codegen_properties.parser_grammar or codegen_properties.skip_parser or codegen_properties.parser_function or codegen_properties.longhands):
                 raise Exception(f"'{name}' must specify a 'parser-grammar', 'skip-parser', 'parser-function' or 'longhands' when specifying a 'values' array.")
@@ -684,8 +712,8 @@ class StyleProperty:
             if self.codegen_properties.cascade_alias not in all_properties.all_by_name:
                 raise Exception(f"Property {self.name} is a cascade alias for an unknown property: {self.codegen_properties.cascade_alias}.")
 
-            if not self.codegen_properties.skip_builder:
-                raise Exception(f"Property {self.name} is a cascade alias and should also set skip-builder.")
+            if not self.codegen_properties.skip_style_builder:
+                raise Exception(f"Property {self.name} is a cascade alias and should also set 'skip-style-builder'.")
 
             self.codegen_properties.cascade_alias = all_properties.all_by_name[self.codegen_properties.cascade_alias]
 
@@ -761,7 +789,7 @@ class StyleProperty:
         if not self.codegen_properties.computable:
             return True
 
-        if self.codegen_properties.skip_builder and not self.codegen_properties.is_logical and not self.codegen_properties.cascade_alias:
+        if self.codegen_properties.skip_style_builder and not self.codegen_properties.is_logical and not self.codegen_properties.cascade_alias:
             return True
 
         if self.codegen_properties.longhands is not None:
@@ -970,7 +998,6 @@ class StyleProperties:
 class DescriptorCodeGenProperties:
     schema = Schema(
         Schema.Entry("aliases", allowed_types=[list], default_value=[]),
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("enable-if", allowed_types=[str]),
         Schema.Entry("internal-only", allowed_types=[bool], default_value=False),
         Schema.Entry("longhands", allowed_types=[list]),
@@ -982,7 +1009,6 @@ class DescriptorCodeGenProperties:
         Schema.Entry("parser-function-requires-current-property", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-function-requires-value-pool", allowed_types=[bool], default_value=False),
         Schema.Entry("parser-grammar", allowed_types=[str]),
-        Schema.Entry("parser-grammar-comment", allowed_types=[str]),
         Schema.Entry("parser-grammar-unused", allowed_types=[str]),
         Schema.Entry("parser-grammar-unused-reason", allowed_types=[str]),
         Schema.Entry("settings-flag", allowed_types=[str]),
@@ -1088,7 +1114,6 @@ class Descriptor:
             if parsing_context.verbose:
                 print(f"SKIPPED {name} due to 'skip-codegen'")
             return None
-
 
         if "values" in json_value:
             if not (codegen_properties.parser_grammar or codegen_properties.skip_parser or codegen_properties.parser_function or codegen_properties.longhands):
@@ -1570,7 +1595,6 @@ class ReferenceTerm:
             return all_rules.rules_by_name[name_for_lookup].grammar.root_term.perform_fixups(all_rules)
         return self
 
-
     def perform_fixups_for_values_references(self, values):
         # NOTE: The actual name in the grammar is "<<values>>", which we store as is_internal + 'values'.
         if self.is_internal and self.name.name == "values":
@@ -1584,6 +1608,10 @@ class ReferenceTerm:
     @property
     def supported_keywords(self):
         return set()
+
+    @property
+    def has_non_builtin_reference_terms(self):
+        return not self.is_builtin
 
 
 # LiteralTerm represents a direct match of a literal character or string. The
@@ -1616,6 +1644,10 @@ class LiteralTerm:
     @property
     def supported_keywords(self):
         return set()
+
+    @property
+    def has_non_builtin_reference_terms(self):
+        return False
 
 
 # KeywordTerm represents a direct keyword match. The syntax in the CSS specifications
@@ -1651,6 +1683,10 @@ class KeywordTerm:
     @property
     def supported_keywords(self):
         return {self.value.name}
+
+    @property
+    def has_non_builtin_reference_terms(self):
+        return False
 
     @property
     def requires_context(self):
@@ -1748,6 +1784,10 @@ class MatchOneTerm:
             result.update(term.supported_keywords)
         return result
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return any(term.has_non_builtin_reference_terms for term in self.terms)
+
 
 # GroupTerm represents matching a list of provided terms with
 # options for whether the matches are ordered and whether all
@@ -1813,6 +1853,10 @@ class GroupTerm:
             result.update(subterm.supported_keywords)
         return result
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return any(term.has_non_builtin_reference_terms for term in self.subterms)
+
 
 # OptionalTerm represents matching a term that is allowed to
 # be ommited. The syntax in the CSS specifications uses a
@@ -1853,6 +1897,10 @@ class OptionalTerm:
     @property
     def supported_keywords(self):
         return self.subterm.supported_keywords
+
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.subterm.has_non_builtin_reference_terms
 
 
 # UnboundedRepetitionTerm represents matching a list of terms
@@ -1924,6 +1972,10 @@ class UnboundedRepetitionTerm:
     def supported_keywords(self):
         return self.repeated_term.supported_keywords
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.repeated_term.has_non_builtin_reference_terms
+
 
 # BoundedRepetitionTerm represents matching a list of terms
 # separated by either spaces or commas where the list of terms
@@ -1978,6 +2030,10 @@ class BoundedRepetitionTerm:
     def supported_keywords(self):
         return self.repeated_term.supported_keywords
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.repeated_term.has_non_builtin_reference_terms
+
 
 # FixedSizeRepetitionTerm represents matching a list of terms
 # separated by either spaces or commas where the list of terms
@@ -2031,6 +2087,10 @@ class FixedSizeRepetitionTerm:
     def supported_keywords(self):
         return self.repeated_term.supported_keywords
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.repeated_term.has_non_builtin_reference_terms
+
 
 # FunctionTerm represents matching a use of the CSS function call syntax
 # which provides a way for specifications to differentiate groups by
@@ -2067,6 +2127,10 @@ class FunctionTerm:
     def supported_keywords(self):
         return self.parameter_group_term.supported_keywords
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.parameter_group_term.has_non_builtin_reference_terms
+
 
 # Container for the name and root term for a grammar. Used for both shared rules and property specific grammars.
 class Grammar:
@@ -2093,6 +2157,10 @@ class Grammar:
         self.root_term = self.root_term.perform_fixups_for_values_references(values)
 
     def check_against_values(self, values):
+        if self.has_non_builtin_reference_terms:
+            # If the grammar has any  non-builtin references, the grammar is incomplete and this check cannot be performed.
+            return
+
         keywords_supported_by_grammar = self.supported_keywords
         keywords_listed_as_values = frozenset(value.name for value in values)
 
@@ -2138,12 +2206,15 @@ class Grammar:
     def supported_keywords(self):
         return self.root_term.supported_keywords
 
+    @property
+    def has_non_builtin_reference_terms(self):
+        return self.root_term.has_non_builtin_reference_terms
+
 
 # A shared grammar rule and metadata describing it. Part of the set of rules tracked by SharedGrammarRules.
 class SharedGrammarRule:
     schema = Schema(
         Schema.Entry("aliased-to", allowed_types=[str], convert_to=ValueKeywordName),
-        Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("exported", allowed_types=[bool], default_value=False),
         Schema.Entry("grammar", allowed_types=[str], required=True),
         Schema.Entry("specification", allowed_types=[dict], convert_to=Specification),
@@ -2389,10 +2460,10 @@ class GenerationContext:
         to.newline()
 
     def generate_property_id_bit_set(self, *, to, name, iterable, mapping_to_property=lambda p: p):
-        to.write(f"const WTF::BitSet<numCSSProperties> {name} = ([]() -> WTF::BitSet<numCSSProperties> {{")
+        to.write(f"const WTF::BitSet<cssPropertyIDEnumValueCount> {name} = ([]() -> WTF::BitSet<cssPropertyIDEnumValueCount> {{")
 
         with to.indent():
-            to.write(f"WTF::BitSet<numCSSProperties> result;")
+            to.write(f"WTF::BitSet<cssPropertyIDEnumValueCount> result;")
 
             for item in iterable:
                 to.write(f"result.set({mapping_to_property(item).id});")
@@ -2470,9 +2541,7 @@ class GenerateCSSPropertyNames:
         )
 
         to.write_block("""\
-            // Using std::numeric_limits<uint16_t>::max() here would be cleaner,
-            // but is not possible due to missing constexpr support in MSVC 2013.
-            static_assert(numCSSProperties + 1 <= 65535, "CSSPropertyID should fit into uint16_t.");
+            static_assert(cssPropertyIDEnumValueCount <= (std::numeric_limits<uint16_t>::max() + 1), "CSSPropertyID should fit into uint16_t.");
             """)
 
         all_computed_property_ids = (f"{property.id}," for property in self.properties_and_descriptors.style_properties.all_computed)
@@ -2671,7 +2740,7 @@ class GenerateCSSPropertyNames:
     def _generate_is_inherited_property(self, *, to):
         all_inherited_and_ids = (f'{"true " if hasattr(property, "inherited") and property.inherited else "false"}, // {property.id}' for property in self.properties_and_descriptors.all_unique)
 
-        to.write(f"constexpr bool isInheritedPropertyTable[numCSSProperties + {GenerationContext.number_of_predefined_properties}] = {{")
+        to.write(f"constexpr bool isInheritedPropertyTable[cssPropertyIDEnumValueCount] = {{")
         with to.indent():
             to.write(f"false, // CSSPropertyID::CSSPropertyInvalid")
             to.write(f"true , // CSSPropertyID::CSSPropertyCustom")
@@ -2681,7 +2750,7 @@ class GenerateCSSPropertyNames:
         to.write_block("""
             bool CSSProperty::isInheritedProperty(CSSPropertyID id)
             {
-                ASSERT(id < firstCSSProperty + numCSSProperties);
+                ASSERT(id < cssPropertyIDEnumValueCount);
                 ASSERT(id != CSSPropertyID::CSSPropertyInvalid);
                 return isInheritedPropertyTable[id];
             }
@@ -2992,8 +3061,18 @@ class GenerateCSSPropertyNames:
         to.write(f"}};")
         to.newline()
 
+        to.write(f"// Enum value of the first \"real\" CSS property, which excludes")
+        to.write(f"// CSSPropertyInvalid and CSSPropertyCustom.")
         to.write(f"constexpr uint16_t firstCSSProperty = {first};")
+
+        to.write(f"// Total number of enum values in the CSSPropertyID enum. If making an array")
+        to.write(f"// that can be indexed into using the enum value, use this as the size.")
+        to.write(f"constexpr uint16_t cssPropertyIDEnumValueCount = {count};")
+
+        to.write(f"// Number of \"real\" CSS properties. This differs from cssPropertyIDEnumValueCount,")
+        to.write(f"// as this doesn't consider CSSPropertyInvalid and CSSPropertyCustom.")
         to.write(f"constexpr uint16_t numCSSProperties = {num};")
+
         to.write(f"constexpr unsigned maxCSSPropertyNameLength = {max_length};")
         to.write(f"constexpr auto firstTopPriorityProperty = {first_top_priority_property.id};")
         to.write(f"constexpr auto lastTopPriorityProperty = {last_top_priority_property.id};")
@@ -3310,24 +3389,24 @@ class GenerateStyleBuilderGenerated:
     # Color property setters.
 
     def _generate_color_property_initial_value_setter(self, to, property):
-        if property.codegen_properties.initial == "currentColor":
+        if property.codegen_properties.render_style_initial == "currentColor":
             initial_function = "Style::Color::currentColor"
         else:
-            initial_function = "RenderStyle::" + property.codegen_properties.initial
+            initial_function = "RenderStyle::" + property.codegen_properties.render_style_initial
         to.write(f"if (builderState.applyPropertyToRegularStyle())")
-        to.write(f"    builderState.style().{property.codegen_properties.setter}({initial_function}());")
+        to.write(f"    builderState.style().{property.codegen_properties.render_style_setter}({initial_function}());")
         to.write(f"if (builderState.applyPropertyToVisitedLinkStyle())")
         to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}({initial_function}());")
 
     def _generate_color_property_inherit_value_setter(self, to, property):
         to.write(f"if (builderState.applyPropertyToRegularStyle())")
-        to.write(f"    builderState.style().{property.codegen_properties.setter}(builderState.parentStyle().{property.codegen_properties.getter}());")
+        to.write(f"    builderState.style().{property.codegen_properties.render_style_setter}(builderState.parentStyle().{property.codegen_properties.render_style_getter}());")
         to.write(f"if (builderState.applyPropertyToVisitedLinkStyle())")
-        to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}(builderState.parentStyle().{property.codegen_properties.getter}());")
+        to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}(builderState.parentStyle().{property.codegen_properties.render_style_getter}());")
 
     def _generate_color_property_value_setter(self, to, property, value):
         to.write(f"if (builderState.applyPropertyToRegularStyle())")
-        to.write(f"    builderState.style().{property.codegen_properties.setter}(builderState.createStyleColor({value}, ForVisitedLink::No));")
+        to.write(f"    builderState.style().{property.codegen_properties.render_style_setter}(builderState.createStyleColor({value}, ForVisitedLink::No));")
         to.write(f"if (builderState.applyPropertyToVisitedLinkStyle())")
         to.write(f"    builderState.style().setVisitedLink{property.name_for_methods}(builderState.createStyleColor({value}, ForVisitedLink::Yes));")
 
@@ -3337,7 +3416,7 @@ class GenerateStyleBuilderGenerated:
         to.write(f"auto& list = builderState.style().{property.method_name_for_ensure_animations_or_transitions}();")
         to.write(f"if (list.isEmpty())")
         to.write(f"    list.append(Animation::create());")
-        to.write(f"list.animation(0).{property.codegen_properties.setter}(Animation::{property.codegen_properties.initial}());")
+        to.write(f"list.animation(0).{property.codegen_properties.render_style_setter}(Animation::{property.codegen_properties.render_style_initial}());")
         to.write(f"for (auto& animation : list)")
         to.write(f"    animation->clear{property.name_for_methods}();")
 
@@ -3348,7 +3427,7 @@ class GenerateStyleBuilderGenerated:
         to.write(f"for ( ; i < parentSize && parentList->animation(i).is{property.name_for_methods}Set(); ++i) {{")
         to.write(f"    if (list.size() <= i)")
         to.write(f"        list.append(Animation::create());")
-        to.write(f"    list.animation(i).{property.codegen_properties.setter}(parentList->animation(i).{property.codegen_properties.getter}());")
+        to.write(f"    list.animation(i).{property.codegen_properties.render_style_setter}(parentList->animation(i).{property.codegen_properties.render_style_getter}());")
         to.write(f"}}")
         to.write(f"// Reset any remaining animations to not have the property set.")
         to.write(f"for ( ; i < list.size(); ++i)")
@@ -3380,30 +3459,30 @@ class GenerateStyleBuilderGenerated:
 
     def _generate_font_property_initial_value_setter(self, to, property):
         to.write(f"auto fontDescription = builderState.fontDescription();")
-        to.write(f"fontDescription.{property.codegen_properties.setter}(FontCascadeDescription::{property.codegen_properties.initial}());")
+        to.write(f"fontDescription.{property.codegen_properties.render_style_setter}(FontCascadeDescription::{property.codegen_properties.render_style_initial}());")
         to.write(f"builderState.setFontDescription(WTFMove(fontDescription));")
 
     def _generate_font_property_inherit_value_setter(self, to, property):
         to.write(f"auto fontDescription = builderState.fontDescription();")
-        to.write(f"auto inheritedValue = builderState.parentFontDescription().{property.codegen_properties.getter}();")
-        to.write(f"fontDescription.{property.codegen_properties.setter}(WTFMove(inheritedValue));")
+        to.write(f"auto inheritedValue = builderState.parentFontDescription().{property.codegen_properties.render_style_getter}();")
+        to.write(f"fontDescription.{property.codegen_properties.render_style_setter}(WTFMove(inheritedValue));")
         to.write(f"builderState.setFontDescription(WTFMove(fontDescription));")
 
     def _generate_font_property_value_setter(self, to, property, value):
         to.write(f"auto fontDescription = builderState.fontDescription();")
-        to.write(f"fontDescription.{property.codegen_properties.setter}({value});")
+        to.write(f"fontDescription.{property.codegen_properties.render_style_setter}({value});")
         to.write(f"builderState.setFontDescription(WTFMove(fontDescription));")
 
     # Fill Layer property setters.
 
     def _generate_fill_layer_property_initial_value_setter(self, to, property):
-        initial = f"FillLayer::{property.codegen_properties.initial}({property.enum_name_for_layers_type})"
+        initial = f"FillLayer::{property.codegen_properties.render_style_initial}({property.enum_name_for_layers_type})"
         to.write(f"// Check for (single-layer) no-op before clearing anything.")
         to.write(f"auto& layers = builderState.style().{property.method_name_for_layers}();")
-        to.write(f"if (!layers.next() && (!layers.is{property.name_for_methods}Set() || layers.{property.codegen_properties.getter}() == {initial}))")
+        to.write(f"if (!layers.next() && (!layers.is{property.name_for_methods}Set() || layers.{property.codegen_properties.render_style_getter}() == {initial}))")
         to.write(f"    return;")
         to.write(f"auto* child = &builderState.style().{property.method_name_for_ensure_layers}();")
-        to.write(f"child->{property.codegen_properties.setter}({initial});")
+        to.write(f"child->{property.codegen_properties.render_style_setter}({initial});")
         to.write(f"for (child = child->next(); child; child = child->next())")
         to.write(f"    child->clear{property.name_for_methods}();")
 
@@ -3418,7 +3497,7 @@ class GenerateStyleBuilderGenerated:
         to.write(f"        previousChild->setNext(FillLayer::create({property.enum_name_for_layers_type}));")
         to.write(f"        child = previousChild->next();")
         to.write(f"    }}")
-        to.write(f"    child->{property.codegen_properties.setter}(parent->{property.codegen_properties.getter}());")
+        to.write(f"    child->{property.codegen_properties.render_style_setter}(parent->{property.codegen_properties.render_style_getter}());")
         to.write(f"    previousChild = child;")
         to.write(f"    child = previousChild->next();")
         to.write(f"}}")
@@ -3449,24 +3528,24 @@ class GenerateStyleBuilderGenerated:
     # SVG property setters.
 
     def _generate_svg_property_initial_value_setter(self, to, property):
-        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.setter}(SVGRenderStyle::{property.codegen_properties.initial}());")
+        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.render_style_setter}(SVGRenderStyle::{property.codegen_properties.render_style_initial}());")
 
     def _generate_svg_property_inherit_value_setter(self, to, property):
-        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.setter}(forwardInheritedValue(builderState.parentStyle().svgStyle().{property.codegen_properties.getter}()));")
+        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.render_style_setter}(forwardInheritedValue(builderState.parentStyle().svgStyle().{property.codegen_properties.render_style_getter}()));")
 
     def _generate_svg_property_value_setter(self, to, property, value):
-        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.setter}({value});")
+        to.write(f"builderState.style().accessSVGStyle().{property.codegen_properties.render_style_setter}({value});")
 
     # All other property setters.
 
     def _generate_property_initial_value_setter(self, to, property):
-        to.write(f"builderState.style().{property.codegen_properties.setter}(RenderStyle::{property.codegen_properties.initial}());")
+        to.write(f"builderState.style().{property.codegen_properties.render_style_setter}(RenderStyle::{property.codegen_properties.render_style_initial}());")
 
     def _generate_property_inherit_value_setter(self, to, property):
-        to.write(f"builderState.style().{property.codegen_properties.setter}(forwardInheritedValue(builderState.parentStyle().{property.codegen_properties.getter}()));")
+        to.write(f"builderState.style().{property.codegen_properties.render_style_setter}(forwardInheritedValue(builderState.parentStyle().{property.codegen_properties.render_style_getter}()));")
 
     def _generate_property_value_setter(self, to, property, value):
-        to.write(f"builderState.style().{property.codegen_properties.setter}({value});")
+        to.write(f"builderState.style().{property.codegen_properties.render_style_setter}({value});")
 
     # Property setter dispatch.
 
@@ -3479,7 +3558,7 @@ class GenerateStyleBuilderGenerated:
                 to.write(f"builderState.style().setHasAuto{property.name_for_methods}();")
             elif property.codegen_properties.visited_link_color_support:
                 self._generate_color_property_initial_value_setter(to, property)
-            elif property.animatable:
+            elif property.codegen_properties.animation_property:
                 self._generate_animation_property_initial_value_setter(to, property)
             elif property.codegen_properties.font_property:
                 self._generate_font_property_initial_value_setter(to, property)
@@ -3513,7 +3592,7 @@ class GenerateStyleBuilderGenerated:
                     self._generate_property_inherit_value_setter(to, property)
             elif property.codegen_properties.visited_link_color_support:
                 self._generate_color_property_inherit_value_setter(to, property)
-            elif property.animatable:
+            elif property.codegen_properties.animation_property:
                 self._generate_animation_property_inherit_value_setter(to, property)
             elif property.codegen_properties.font_property:
                 self._generate_font_property_inherit_value_setter(to, property)
@@ -3538,16 +3617,16 @@ class GenerateStyleBuilderGenerated:
 
         with to.indent():
             def converted_value(property):
-                if property.codegen_properties.converter:
-                    return f"BuilderConverter::convert{property.codegen_properties.converter}(builderState, value)"
-                elif property.codegen_properties.conditional_converter:
+                if property.codegen_properties.style_builder_converter:
+                    return f"BuilderConverter::convert{property.codegen_properties.style_builder_converter}(builderState, value)"
+                elif property.codegen_properties.style_builder_conditional_converter:
                     return f"WTFMove(convertedValue.value())"
                 elif property.codegen_properties.color_property and not property.codegen_properties.visited_link_color_support:
                     return f"builderState.createStyleColor(value, ForVisitedLink::No)"
                 else:
                     return "fromCSSValueDeducingType(builderState, value)"
 
-            if property in self.style_properties.all_by_name["font"].codegen_properties.longhands and "Initial" not in property.codegen_properties.custom and not property.codegen_properties.converter:
+            if property in self.style_properties.all_by_name["font"].codegen_properties.longhands and "Initial" not in property.codegen_properties.style_builder_custom and not property.codegen_properties.style_builder_converter:
                 to.write(f"if (CSSPropertyParserHelpers::isSystemFontShorthand(value.valueID())) {{")
                 with to.indent():
                     to.write(f"applyInitial{property.id_without_prefix}(builderState);")
@@ -3566,15 +3645,15 @@ class GenerateStyleBuilderGenerated:
                     self._generate_property_value_setter(to, property, converted_value(property))
             elif property.codegen_properties.visited_link_color_support:
                 self._generate_color_property_value_setter(to, property, converted_value(property))
-            elif property.animatable:
+            elif property.codegen_properties.animation_property:
                 self._generate_animation_property_value_setter(to, property)
             elif property.codegen_properties.font_property:
                 self._generate_font_property_value_setter(to, property, converted_value(property))
             elif property.codegen_properties.fill_layer_property:
                 self._generate_fill_layer_property_value_setter(to, property)
             else:
-                if property.codegen_properties.conditional_converter:
-                    to.write(f"auto convertedValue = BuilderConverter::convert{property.codegen_properties.conditional_converter}(builderState, value);")
+                if property.codegen_properties.style_builder_conditional_converter:
+                    to.write(f"auto convertedValue = BuilderConverter::convert{property.codegen_properties.style_builder_conditional_converter}(builderState, value);")
                     to.write(f"if (convertedValue)")
                     with to.indent():
                         if property.codegen_properties.svg:
@@ -3600,17 +3679,17 @@ class GenerateStyleBuilderGenerated:
             for property in self.style_properties.all:
                 if property.codegen_properties.longhands:
                     continue
-                if property.codegen_properties.skip_builder:
+                if property.codegen_properties.skip_style_builder:
                     continue
 
                 if property.codegen_properties.is_logical:
-                    raise Exception(f"Property '{property.name}' is logical but doesn't have skip-builder.")
+                    raise Exception(f"Property '{property.name}' is logical but doesn't have skip-style-builder.")
 
-                if "Initial" not in property.codegen_properties.custom:
+                if "Initial" not in property.codegen_properties.style_builder_custom:
                     self._generate_style_builder_generated_cpp_initial_value_setter(to, property)
-                if "Inherit" not in property.codegen_properties.custom:
+                if "Inherit" not in property.codegen_properties.style_builder_custom:
                     self._generate_style_builder_generated_cpp_inherit_value_setter(to, property)
-                if "Value" not in property.codegen_properties.custom:
+                if "Value" not in property.codegen_properties.style_builder_custom:
                     self._generate_style_builder_generated_cpp_value_setter(to, property)
 
         to.write(f"}};")
@@ -3628,7 +3707,7 @@ class GenerateStyleBuilderGenerated:
 
         with to.indent():
             def scope_for_function(property, function):
-                if function in property.codegen_properties.custom:
+                if function in property.codegen_properties.style_builder_custom:
                     return "BuilderCustom"
                 return "BuilderFunctions"
 
@@ -3645,7 +3724,7 @@ class GenerateStyleBuilderGenerated:
                     if property.codegen_properties.longhands:
                         to.write(f"ASSERT(isShorthand(id));")
                         to.write(f"ASSERT_NOT_REACHED();")
-                    elif not property.codegen_properties.skip_builder:
+                    elif not property.codegen_properties.skip_style_builder:
                         apply_initial_arguments = ["builderState"]
                         apply_inherit_arguments = ["builderState"]
                         apply_value_arguments = ["builderState", "value"]
@@ -3959,8 +4038,10 @@ class GenerateCSSPropertyParsing:
                     "CSSParserIdioms.h",
                     "CSSPropertyParser.h",
                     "CSSPropertyParserConsumer+Align.h",
+                    "CSSPropertyParserConsumer+Anchor.h",
                     "CSSPropertyParserConsumer+Angle.h",
                     "CSSPropertyParserConsumer+Animations.h",
+                    "CSSPropertyParserConsumer+AppleVisualEffect.h",
                     "CSSPropertyParserConsumer+Attr.h",
                     "CSSPropertyParserConsumer+Background.h",
                     "CSSPropertyParserConsumer+Box.h",

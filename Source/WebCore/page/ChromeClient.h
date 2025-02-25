@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2023 Apple, Inc. All rights reserved.
+ * Copyright (C) 2006-2025 Apple, Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  * Copyright (C) 2012 Samsung Electronics. All rights reserved.
  *
@@ -25,8 +25,11 @@
 #include "ContactInfo.h"
 #include "DatabaseDetails.h"
 #include "DeviceOrientationOrMotionPermissionState.h"
+#include "DigitalCredentialsRequestData.h"
+#include "DigitalCredentialsResponseData.h"
 #include "DisabledAdaptations.h"
 #include "DocumentStorageAccess.h"
+#include "ExceptionData.h"
 #include "FocusDirection.h"
 #include "HTMLMediaElementEnums.h"
 #include "HighlightVisibility.h"
@@ -155,6 +158,8 @@ enum class TextAnimationRunMode : uint8_t;
 
 enum class MediaProducerMediaState : uint32_t;
 using MediaProducerMediaStateFlags = OptionSet<MediaProducerMediaState>;
+
+template<typename> class ExceptionOr;
 
 namespace ShapeDetection {
 class BarcodeDetector;
@@ -371,10 +376,18 @@ public:
     virtual void runOpenPanel(LocalFrame&, FileChooser&) = 0;
     virtual void showShareSheet(ShareDataWithParsedURL&, CompletionHandler<void(bool)>&& callback) { callback(false); }
     virtual void showContactPicker(const ContactsRequestData&, CompletionHandler<void(std::optional<Vector<ContactInfo>>&&)>&& callback) { callback(std::nullopt); }
-    
+
+    virtual void showDigitalCredentialsPicker(const DigitalCredentialsRequestData&, CompletionHandler<void(Expected<DigitalCredentialsResponseData, ExceptionData>&&)>&& completionHandler)
+    {
+        completionHandler(makeUnexpected(WebCore::ExceptionData { WebCore::ExceptionCode::NotSupportedError, "Digital credentials are not supported."_s }));
+    }
+    virtual void dismissDigitalCredentialsPicker(CompletionHandler<void(bool)>&& completionHandler)
+    {
+        completionHandler(false);
+    }
+
     // Asynchronous request to load an icon for specified filenames.
     virtual void loadIconForFiles(const Vector<String>&, FileIconLoader&) = 0;
-        
     virtual void elementDidFocus(Element&, const FocusOptions&) { }
     virtual void elementDidBlur(Element&) { }
     virtual void elementDidRefocus(Element&, const FocusOptions&) { }
@@ -387,7 +400,7 @@ public:
 
     // Allows ports to customize the type of graphics layers created by this page.
     virtual GraphicsLayerFactory* graphicsLayerFactory() const { return nullptr; }
-    
+
     virtual DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const { return nullptr; }
 
     virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float, const DestinationColorSpace&, ImageBufferPixelFormat) const { return nullptr; }
@@ -426,6 +439,8 @@ public:
     // regardless of the settings.
     virtual bool allowsAcceleratedCompositing() const { return true; }
 
+    virtual bool isWebChromeClient() const { return false; }
+
     enum CompositingTrigger {
         ThreeDTransformTrigger = 1 << 0,
         VideoTrigger = 1 << 1,
@@ -457,6 +472,7 @@ public:
 #endif
 
 #if ENABLE(VIDEO)
+    virtual void setPlayerIdentifierForVideoElement(HTMLVideoElement&) { }
     virtual void enterVideoFullscreenForVideoElement(HTMLVideoElement&, HTMLMediaElementEnums::VideoFullscreenMode, bool standby) { UNUSED_PARAM(standby); }
     virtual void setUpPlaybackControlsManager(HTMLMediaElement&) { }
     virtual void clearPlaybackControlsManager() { }
@@ -475,11 +491,15 @@ public:
 
 #if ENABLE(FULLSCREEN_API)
     virtual bool supportsFullScreenForElement(const Element&, bool) { return false; }
-    virtual void enterFullScreenForElement(Element&, HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard) { }
+    virtual void enterFullScreenForElement(Element&, HTMLMediaElementEnums::VideoFullscreenMode, CompletionHandler<void(ExceptionOr<void>)>&& willEnterFullscreen, CompletionHandler<bool(bool)>&& didEnterFullscreen)
+    {
+        willEnterFullscreen({ });
+        didEnterFullscreen(false);
+    }
 #if ENABLE(QUICKLOOK_FULLSCREEN)
     virtual void updateImageSource(Element&) { }
 #endif // ENABLE(QUICKLOOK_FULLSCREEN)
-    virtual void exitFullScreenForElement(Element*) { }
+    virtual void exitFullScreenForElement(Element*, CompletionHandler<void()>&& completionHandler) { completionHandler(); }
     virtual void setRootFullScreenLayer(GraphicsLayer*) { }
 #endif
 
@@ -571,10 +591,10 @@ public:
 #endif
 
 #if ENABLE(SERVICE_CONTROLS)
-    virtual void handleSelectionServiceClick(FrameSelection&, const Vector<String>&, const IntPoint&) { }
+    virtual void handleSelectionServiceClick(FrameIdentifier, FrameSelection&, const Vector<String>&, const IntPoint&) { }
     virtual bool hasRelevantSelectionServices(bool /*isTextOnly*/) const { return false; }
-    virtual void handleImageServiceClick(const IntPoint&, Image&, HTMLImageElement&) { }
-    virtual void handlePDFServiceClick(const IntPoint&, HTMLAttachmentElement&) { }
+    virtual void handleImageServiceClick(FrameIdentifier, const IntPoint&, Image&, HTMLImageElement&) { }
+    virtual void handlePDFServiceClick(FrameIdentifier, const IntPoint&, HTMLAttachmentElement&) { }
 #endif
 
     virtual std::pair<URL, DidFilterLinkDecoration> applyLinkDecorationFilteringWithResult(const URL& url, LinkDecorationFilteringTrigger) const { return { url, DidFilterLinkDecoration::No }; };

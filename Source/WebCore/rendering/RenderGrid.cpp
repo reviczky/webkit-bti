@@ -39,6 +39,7 @@
 #include "RenderLayoutState.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
+#include <wtf/Scope.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -308,11 +309,16 @@ void RenderGrid::computeLayoutRequirementsForItemsBeforeLayout(GridLayoutState& 
     }
 }
 
-void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
+void RenderGrid::layoutBlock(RelayoutChildren relayoutChildren, LayoutUnit)
 {
     ASSERT(needsLayout());
 
-    if (!relayoutChildren && simplifiedLayout())
+    auto postLayoutTasks = WTF::makeScopeExit([&] {
+        m_outOfFlowItemColumn.clear();
+        m_outOfFlowItemRow.clear();
+    });
+
+    if (relayoutChildren ==RelayoutChildren::No && simplifiedLayout())
         return;
 
     // The layoutBlock was handling the layout of both the grid and masonry implementations.
@@ -324,7 +330,7 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
         layoutMasonry(relayoutChildren);
 }
 
-void RenderGrid::layoutGrid(bool relayoutChildren)
+void RenderGrid::layoutGrid(RelayoutChildren relayoutChildren)
 {
     LayoutRepainter repainter(*this);
     {
@@ -431,12 +437,14 @@ void RenderGrid::layoutGrid(bool relayoutChildren)
         endAndCommitUpdateScrollInfoAfterLayoutTransaction();
 
         if (size() != previousSize)
-            relayoutChildren = true;
+            relayoutChildren = RelayoutChildren::Yes;
 
-        m_outOfFlowItemColumn.clear();
-        m_outOfFlowItemRow.clear();
 
-        layoutPositionedObjects(relayoutChildren || isDocumentElementRenderer());
+        if (isDocumentElementRenderer())
+            layoutPositionedObjects(RelayoutChildren::Yes);
+        else
+            layoutPositionedObjects(relayoutChildren);
+
         m_trackSizingAlgorithm.reset();
 
         computeOverflow(layoutOverflowLogicalBottom(*this));
@@ -458,7 +466,7 @@ void RenderGrid::layoutGrid(bool relayoutChildren)
     m_baselineItemsCached = false;
 }
 
-void RenderGrid::layoutMasonry(bool relayoutChildren)
+void RenderGrid::layoutMasonry(RelayoutChildren relayoutChildren)
 {
     LayoutRepainter repainter(*this);
     {
@@ -565,12 +573,14 @@ void RenderGrid::layoutMasonry(bool relayoutChildren)
         endAndCommitUpdateScrollInfoAfterLayoutTransaction();
 
         if (size() != previousSize)
-            relayoutChildren = true;
+            relayoutChildren = RelayoutChildren::Yes;
 
-        m_outOfFlowItemColumn.clear();
-        m_outOfFlowItemRow.clear();
 
-        layoutPositionedObjects(relayoutChildren || isDocumentElementRenderer());
+        if (isDocumentElementRenderer())
+            layoutPositionedObjects(RelayoutChildren::Yes);
+        else
+            layoutPositionedObjects(relayoutChildren);
+
         m_trackSizingAlgorithm.reset();
 
         computeOverflow(layoutOverflowLogicalBottom(*this));
@@ -1511,7 +1521,7 @@ bool RenderGrid::hasStaticPositionForGridItem(const RenderBox& gridItem, GridTra
     return direction == GridTrackSizingDirection::ForColumns ? gridItem.style().hasStaticInlinePosition(isHorizontalWritingMode()) : gridItem.style().hasStaticBlockPosition(isHorizontalWritingMode());
 }
 
-void RenderGrid::layoutPositionedObject(RenderBox& gridItem, bool relayoutChildren, bool fixedPositionObjectsOnly)
+void RenderGrid::layoutPositionedObject(RenderBox& gridItem, RelayoutChildren relayoutChildren, bool fixedPositionObjectsOnly)
 {
     if (layoutContext().isSkippedContentRootForLayout(*this)) {
         gridItem.clearNeedsLayoutForSkippedContent();

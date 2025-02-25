@@ -217,6 +217,7 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
     setProperty(AXProperty::BrailleRoleDescription, object.brailleRoleDescription().isolatedCopy());
     setProperty(AXProperty::BrailleLabel, object.brailleLabel().isolatedCopy());
     setProperty(AXProperty::IsNonLayerSVGObject, object.isNonLayerSVGObject());
+    setProperty(AXProperty::TextContentPrefixFromListMarker, object.textContentPrefixFromListMarker());
 
     bool isWebArea = axObject->isWebArea();
     bool isScrollArea = axObject->isScrollView();
@@ -685,30 +686,16 @@ const AXCoreObject::AccessibilityChildrenVector& AXIsolatedObject::children(bool
 #elif USE(ATSPI)
     ASSERT(!isMainThread());
 #endif
-    RefPtr<AXIsolatedObject> protectedThis;
-    if (updateChildrenIfNeeded) {
-        // updateBackingStore can delete `this`, so protect it until the end of this function.
-        protectedThis = this;
-        updateBackingStore();
-
-        if (m_childrenDirty) {
-            m_children = WTF::compactMap(m_childrenIDs, [&](auto& childID) -> std::optional<Ref<AXCoreObject>> {
-                if (RefPtr child = tree()->objectForID(childID))
-                    return child.releaseNonNull();
-                return std::nullopt;
-            });
-            m_childrenDirty = false;
-        }
+    if (updateChildrenIfNeeded && m_childrenDirty) {
+        m_children = WTF::compactMap(m_childrenIDs, [&](auto& childID) -> std::optional<Ref<AXCoreObject>> {
+            if (RefPtr child = tree()->objectForID(childID))
+                return child.releaseNonNull();
+            return std::nullopt;
+        });
+        m_childrenDirty = false;
         ASSERT(m_children.size() == m_childrenIDs.size());
     }
     return m_children;
-}
-
-void AXIsolatedObject::updateChildrenIfNecessary()
-{
-    // FIXME: this is a no-op for isolated objects and should be removed from
-    // the public interface. It is used in the mac implementation of
-    // [WebAccessibilityObjectWrapper accessibilityHitTest].
 }
 
 void AXIsolatedObject::setSelectedChildren(const AccessibilityChildrenVector& selectedChildren)
@@ -1399,20 +1386,7 @@ FloatPoint AXIsolatedObject::screenRelativePosition() const
 {
     if (auto point = optionalAttributeValue<FloatPoint>(AXProperty::ScreenRelativePosition))
         return *point;
-
-    if (RefPtr rootNode = tree()->rootNode()) {
-        auto rootPoint = rootNode->propertyValue<FloatPoint>(AXProperty::ScreenRelativePosition);
-        auto rootRelativeFrame = rootNode->relativeFrame();
-        auto relativeFrame = this->relativeFrame();
-        // Relative frames are top-left origin, but screen relative positions are bottom-left origin.
-        return { rootPoint.x() + relativeFrame.x(), rootPoint.y() + (rootRelativeFrame.maxY() - relativeFrame.maxY()) };
-    }
-
-    return Accessibility::retrieveValueFromMainThread<FloatPoint>([&, this] () -> FloatPoint {
-        if (auto* axObject = associatedAXObject())
-            return axObject->screenRelativePosition();
-        return { };
-    });
+    return convertFrameToSpace(relativeFrame(), AccessibilityConversionSpace::Screen).location();
 }
 
 FloatRect AXIsolatedObject::relativeFrame() const
@@ -1501,6 +1475,16 @@ FloatRect AXIsolatedObject::relativeFrameFromChildren() const
 
 FloatRect AXIsolatedObject::convertFrameToSpace(const FloatRect& rect, AccessibilityConversionSpace space) const
 {
+    if (space == AccessibilityConversionSpace::Screen) {
+        if (RefPtr rootNode = tree()->rootNode()) {
+            auto rootPoint = rootNode->propertyValue<FloatPoint>(AXProperty::ScreenRelativePosition);
+            auto rootRelativeFrame = rootNode->relativeFrame();
+            // Relative frames are top-left origin, but screen relative positions are bottom-left origin.
+            FloatPoint position = { rootPoint.x() + rect.x(), rootPoint.y() + (rootRelativeFrame.maxY() - rect.maxY()) };
+            return { WTFMove(position), rect.size() };
+        }
+    }
+
     return Accessibility::retrieveValueFromMainThread<FloatRect>([&rect, &space, this] () -> FloatRect {
         if (auto* axObject = associatedAXObject())
             return axObject->convertFrameToSpace(rect, space);
@@ -1996,6 +1980,11 @@ bool AXIsolatedObject::inheritsPresentationalRole() const
 void AXIsolatedObject::setAccessibleName(const AtomString&)
 {
     ASSERT_NOT_REACHED();
+}
+
+String AXIsolatedObject::textContentPrefixFromListMarker() const
+{
+    return propertyValue<String>(AXProperty::TextContentPrefixFromListMarker);
 }
 
 String AXIsolatedObject::titleAttributeValue() const

@@ -61,6 +61,10 @@
 #include "AppleVisualEffect.h"
 #endif
 
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/CSSValueKeywordsAdditions.h>
+#endif
+
 namespace WebCore {
 
 template<typename TargetType> TargetType fromCSSValue(const CSSValue& value)
@@ -2014,6 +2018,12 @@ constexpr CSSValueID toCSSValueID(AppleVisualEffect effect)
         return CSSValueAppleSystemBlurMaterialThick;
     case AppleVisualEffect::BlurChromeMaterial:
         return CSSValueAppleSystemBlurMaterialChrome;
+#if HAVE(MATERIAL_HOSTING)
+    case AppleVisualEffect::HostedBlurMaterial:
+        return CSSValueAppleSystemHostedBlurMaterial;
+    case AppleVisualEffect::HostedThinBlurMaterial:
+        return CSSValueAppleSystemHostedThinBlurMaterial;
+#endif
     case AppleVisualEffect::VibrancyLabel:
         return CSSValueAppleSystemVibrancyLabel;
     case AppleVisualEffect::VibrancySecondaryLabel:
@@ -2050,6 +2060,12 @@ template<> constexpr AppleVisualEffect fromCSSValueID(CSSValueID valueID)
         return AppleVisualEffect::BlurThickMaterial;
     case CSSValueAppleSystemBlurMaterialChrome:
         return AppleVisualEffect::BlurChromeMaterial;
+#if HAVE(MATERIAL_HOSTING)
+    case CSSValueAppleSystemHostedBlurMaterial:
+        return AppleVisualEffect::HostedBlurMaterial;
+    case CSSValueAppleSystemHostedThinBlurMaterial:
+        return AppleVisualEffect::HostedThinBlurMaterial;
+#endif
     case CSSValueAppleSystemVibrancyLabel:
         return AppleVisualEffect::VibrancyLabel;
     case CSSValueAppleSystemVibrancySecondaryLabel:

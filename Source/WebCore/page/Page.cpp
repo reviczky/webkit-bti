@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
  * This library is free software; you can redistribute it and/or
@@ -264,7 +264,7 @@ unsigned Page::nonUtilityPageCount()
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, pageCounter, ("Page"));
 
-void Page::forEachPage(const Function<void(Page&)>& function)
+void Page::forEachPage(NOESCAPE const Function<void(Page&)>& function)
 {
     for (auto& page : allPages())
         function(Ref { page.get() });
@@ -418,7 +418,9 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #endif
 #if ENABLE(WEB_AUTHN)
     , m_authenticatorCoordinator(makeUniqueRef<AuthenticatorCoordinator>(WTFMove(pageConfiguration.authenticatorCoordinatorClient)))
-    , m_credentialRequestCoordinator(makeUniqueRef<CredentialRequestCoordinator>(WTFMove(pageConfiguration.credentialRequestCoordinatorClient)))
+#endif
+#if HAVE(DIGITAL_CREDENTIALS_UI)
+    , m_credentialRequestCoordinator(CredentialRequestCoordinator::create(WTFMove(pageConfiguration.credentialRequestCoordinatorClient), *this))
 #endif
 #if ENABLE(APPLICATION_MANIFEST)
     , m_applicationManifest(pageConfiguration.applicationManifest)
@@ -537,6 +539,9 @@ Page::~Page()
     if (RefPtr scrollingCoordinator = m_scrollingCoordinator)
         scrollingCoordinator->pageDestroyed();
 
+    if (RefPtr resourceUsageOverlay = m_resourceUsageOverlay)
+        resourceUsageOverlay->detachFromPage();
+
     checkedBackForward()->close();
     if (!isUtilityPage())
         BackForwardCache::singleton().removeAllItemsForPage(*this);
@@ -571,7 +576,7 @@ void Page::clearPreviousItemFromAllPages(BackForwardItemIdentifier itemID)
         if (!localMainFrame)
             return;
 
-        CheckedRef controller = localMainFrame->loader().history();
+        Ref controller = localMainFrame->loader().history();
         if (controller->previousItem() && controller->previousItem()->itemID() == itemID) {
             controller->clearPreviousItem();
             return;
@@ -892,21 +897,6 @@ bool Page::topDocumentHasDocumentClass(DocumentClass documentClass) const
     return m_topDocumentSyncData->documentClasses.contains(documentClass);
 }
 
-void Page::setTopDocumentHasFullscreenElement(bool hasFullscreenElement)
-{
-    if (hasFullscreenElement == m_topDocumentSyncData->hasFullscreenElement)
-        return;
-
-    m_topDocumentSyncData->hasFullscreenElement = hasFullscreenElement;
-    if (settings().siteIsolationEnabled())
-        processSyncClient().broadcastHasFullscreenElementToOtherProcesses(hasFullscreenElement);
-}
-
-bool Page::topDocumentHasFullscreenElement()
-{
-    return m_topDocumentSyncData->hasFullscreenElement;
-}
-
 bool Page::hasInjectedUserScript()
 {
     return m_topDocumentSyncData->hasInjectedUserScript;
@@ -928,7 +918,6 @@ void Page::updateProcessSyncData(const ProcessSyncData& data)
     case ProcessSyncDataType::DocumentClasses:
     case ProcessSyncDataType::DocumentSecurityOrigin:
     case ProcessSyncDataType::DocumentURL:
-    case ProcessSyncDataType::HasFullscreenElement:
     case ProcessSyncDataType::HasInjectedUserScript:
     case ProcessSyncDataType::IsAutofocusProcessed:
     case ProcessSyncDataType::UserDidInteractWithPage:
@@ -986,16 +975,16 @@ void Page::goToItem(LocalFrame& frame, HistoryItem& item, FrameLoadType type, Sh
     // being deref()-ed. Make sure we can still use it with HistoryController::goToItem later.
     Ref protectedItem { item };
 
-    if (frame.loader().checkedHistory()->shouldStopLoadingForHistoryItem(item))
+    if (frame.loader().protectedHistory()->shouldStopLoadingForHistoryItem(item))
         frame.protectedLoader()->stopAllLoadersAndCheckCompleteness();
-    frame.loader().checkedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
+    frame.loader().protectedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
 }
 
 void Page::goToItemForNavigationAPI(LocalFrame& frame, HistoryItem& item, FrameLoadType type, LocalFrame& triggeringFrame, NavigationAPIMethodTracker* tracker)
 {
-    if (frame.loader().checkedHistory()->shouldStopLoadingForHistoryItem(item))
+    if (frame.loader().protectedHistory()->shouldStopLoadingForHistoryItem(item))
         frame.protectedLoader()->stopAllLoadersAndCheckCompleteness();
-    frame.loader().checkedHistory()->goToItemForNavigationAPI(item, type, triggeringFrame, tracker);
+    frame.loader().protectedHistory()->goToItemForNavigationAPI(item, type, triggeringFrame, tracker);
 }
 
 void Page::setGroupName(const String& name)
@@ -1085,6 +1074,11 @@ PluginData& Page::pluginData()
     if (!m_pluginData)
         m_pluginData = PluginData::create(*this);
     return *m_pluginData;
+}
+
+Ref<PluginData> Page::protectedPluginData()
+{
+    return pluginData();
 }
 
 void Page::clearPluginData()
@@ -1871,15 +1865,15 @@ void Page::setOutsideViewportThrottlingEnabledForTesting(bool isEnabled)
     m_throttlingReasons.remove(ThrottlingReason::OutsideViewport);
 }
 
-void Page::setTopContentInset(float contentInset)
+void Page::setObscuredContentInsets(const FloatBoxExtent& obscuredContentInsets)
 {
-    if (m_topContentInset == contentInset)
+    if (m_obscuredContentInsets == obscuredContentInsets)
         return;
-    
-    m_topContentInset = contentInset;
+
+    m_obscuredContentInsets = obscuredContentInsets;
     RefPtr localMainFrame = this->localMainFrame();
     if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
-        view->topContentInsetDidChange(m_topContentInset);
+        view->obscuredContentInsetsDidChange(obscuredContentInsets);
 }
 
 void Page::setShouldSuppressScrollbarAnimations(bool suppressAnimations)
@@ -2151,7 +2145,7 @@ void Page::updateRendering()
     });
 
     runProcessingStep(RenderingUpdateStep::MediaQueryEvaluation, [] (Document& document) {
-        document.evaluateMediaQueriesAndReportChanges();        
+        document.evaluateMediaQueriesAndReportChanges();
     });
 
     // FIXME: This suppression shouldn't be needed.
@@ -2163,8 +2157,13 @@ void Page::updateRendering()
         document.updateAnimationsAndSendEvents();
     });
 
-    // FIXME: Run the fullscreen steps.
+#if ENABLE(FULLSCREEN_API)
+    runProcessingStep(RenderingUpdateStep::Fullscreen, [] (Document& document) {
+        document.fullscreenManager().dispatchPendingEvents();
+    });
+#else
     m_renderingUpdateRemainingSteps.last().remove(RenderingUpdateStep::Fullscreen);
+#endif
 
     runProcessingStep(RenderingUpdateStep::VideoFrameCallbacks, [] (Document& document) {
         document.serviceRequestVideoFrameCallbacks();
@@ -2251,7 +2250,7 @@ void Page::doAfterUpdateRendering()
     // Code here should do once-per-frame work that needs to be done before painting, and requires
     // layout to be up-to-date. It should not run script, trigger layout, or dirty layout.
 
-    auto runProcessingStep = [&](RenderingUpdateStep step, const Function<void(Document&)>& perDocumentFunction) {
+    auto runProcessingStep = [&](RenderingUpdateStep step, NOESCAPE const Function<void(Document&)>& perDocumentFunction) {
         m_renderingUpdateRemainingSteps.last().remove(step);
         forEachRenderableDocument(perDocumentFunction);
     };
@@ -2907,13 +2906,6 @@ void Page::domTimerAlignmentIntervalIncreaseTimerFired()
 
     // Alignment interval is increased to equal the time the page has been throttled, to a limit.
     updateDOMTimerAlignmentInterval();
-}
-
-void Page::dnsPrefetchingStateChanged()
-{
-    forEachDocument([] (Document& document) {
-        document.initDNSPrefetch();
-    });
 }
 
 void Page::storageBlockingStateChanged()
@@ -4113,6 +4105,24 @@ void Page::appearanceDidChange()
     });
 }
 
+void Page::clearAXObjectCache()
+{
+    m_axObjectCache = nullptr;
+}
+
+AXObjectCache* Page::axObjectCache()
+{
+    if (!m_axObjectCache) {
+        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+        RefPtr mainFrameDocument = localMainFrame ? localMainFrame->document() : nullptr;
+        if (mainFrameDocument && !mainFrameDocument->hasLivingRenderTree())
+            return nullptr;
+        m_axObjectCache = makeUnique<AXObjectCache>(*this, mainFrameDocument.get());
+        Document::hasEverCreatedAnAXObjectCache = true;
+    }
+    return m_axObjectCache.get();
+}
+
 void Page::setUnobscuredSafeAreaInsets(const FloatBoxExtent& insets)
 {
     if (m_unobscuredSafeAreaInsets == insets)
@@ -4224,6 +4234,16 @@ void Page::setFullscreenAutoHideDuration(Seconds duration)
         document.constantProperties().setFullscreenAutoHideDuration(duration);
     });
 }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+bool Page::canDrawHDRContent() const
+{
+    if (!(m_settings->supportHDRDisplayEnabled() || m_settings->canvasPixelFormatEnabled()))
+        return false;
+
+    return screenSupportsHighDynamicRange();
+}
+#endif
 
 Document* Page::outermostFullscreenDocument() const
 {
@@ -4345,7 +4365,7 @@ void Page::forEachDocument(NOESCAPE const Function<void(Document&)>& functor) co
     forEachDocumentFromMainFrame(protectedMainFrame(), functor);
 }
 
-bool Page::findMatchingLocalDocument(const Function<bool(Document&)>& functor) const
+bool Page::findMatchingLocalDocument(NOESCAPE const Function<bool(Document&)>& functor) const
 {
     for (RefPtr frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         RefPtr localFrame = dynamicDowncast<LocalFrame>(*frame);
@@ -4360,7 +4380,7 @@ bool Page::findMatchingLocalDocument(const Function<bool(Document&)>& functor) c
     return false;
 }
 
-void Page::forEachRenderableDocument(const Function<void(Document&)>& functor) const
+void Page::forEachRenderableDocument(NOESCAPE const Function<void(Document&)>& functor) const
 {
     Vector<Ref<Document>> documents;
     for (RefPtr frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
@@ -4391,7 +4411,7 @@ void Page::forEachMediaElement(NOESCAPE const Function<void(HTMLMediaElement&)>&
 #endif
 }
 
-void Page::forEachLocalFrame(const Function<void(LocalFrame&)>& functor)
+void Page::forEachLocalFrame(NOESCAPE const Function<void(LocalFrame&)>& functor)
 {
     Vector<Ref<LocalFrame>> frames;
     for (RefPtr frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
@@ -4403,7 +4423,7 @@ void Page::forEachLocalFrame(const Function<void(LocalFrame&)>& functor)
         functor(frame);
 }
 
-void Page::forEachWindowEventLoop(const Function<void(WindowEventLoop&)>& functor)
+void Page::forEachWindowEventLoop(NOESCAPE const Function<void(WindowEventLoop&)>& functor)
 {
     UncheckedKeyHashSet<Ref<WindowEventLoop>> windowEventLoops;
     RefPtr<WindowEventLoop> lastEventLoop;
@@ -4933,7 +4953,7 @@ JSC::JSGlobalObject* Page::serviceWorkerGlobalObject(DOMWrapperWorld& world)
         return nullptr;
 
     // FIXME: We currently do not support non-normal worlds in service workers.
-    RELEASE_ASSERT(&downcast<JSVMClientData>(serviceWorkerGlobalScope->vm().clientData)->normalWorld() == &world);
+    RELEASE_ASSERT(&downcast<JSVMClientData>(serviceWorkerGlobalScope->vm().clientData)->normalWorldSingleton() == &world);
     return scriptController->globalScopeWrapper();
 }
 

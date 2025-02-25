@@ -42,6 +42,11 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 
 namespace JSC {
 
+constinit const WTF::BitSet<256> whiteSpaceTable = makeLatin1CharacterBitSet(
+    [](LChar ch) {
+        return ch == ' ' || ch == '\t' || ch == 0xB || ch == 0xC || ch == 0xA0;
+    });
+
 bool isLexerKeyword(const Identifier& identifier)
 {
     return JSC::mainTable.entry(identifier);

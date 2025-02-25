@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
@@ -318,7 +318,7 @@ RefPtr<Page> WebChromeClient::createWindow(LocalFrame& frame, const String& open
 {
 #if ENABLE(FULLSCREEN_API)
     if (RefPtr document = frame.document())
-        document->fullscreenManager().cancelFullscreen();
+        document->fullscreenManager().fullyExitFullscreen();
 #endif
 
     auto& webProcess = WebProcess::singleton();
@@ -890,6 +890,18 @@ void WebChromeClient::showContactPicker(const WebCore::ContactsRequestData& requ
     protectedPage()->showContactPicker(requestData, WTFMove(callback));
 }
 
+#if HAVE(DIGITAL_CREDENTIALS_UI)
+void WebChromeClient::showDigitalCredentialsPicker(const WebCore::DigitalCredentialsRequestData& requestData, WTF::CompletionHandler<void(Expected<WebCore::DigitalCredentialsResponseData, WebCore::ExceptionData>&&)>&& callback)
+{
+    protectedPage()->showDigitalCredentialsPicker(requestData, WTFMove(callback));
+}
+
+void WebChromeClient::dismissDigitalCredentialsPicker(WTF::CompletionHandler<void(bool)>&& completionHandler)
+{
+    protectedPage()->dismissDigitalCredentialsPicker(WTFMove(completionHandler));
+}
+#endif
+
 void WebChromeClient::loadIconForFiles(const Vector<String>& filenames, FileIconLoader& loader)
 {
     loader.iconLoaded(createIconForFiles(filenames));
@@ -1252,6 +1264,11 @@ void WebChromeClient::enterVideoFullscreenForVideoElement(HTMLVideoElement& vide
     protectedPage()->videoPresentationManager().enterVideoFullscreenForVideoElement(videoElement, mode, standby);
 }
 
+void WebChromeClient::setPlayerIdentifierForVideoElement(HTMLVideoElement& videoElement)
+{
+    protectedPage()->videoPresentationManager().setPlayerIdentifierForVideoElement(videoElement);
+}
+
 void WebChromeClient::exitVideoFullscreenForVideoElement(HTMLVideoElement& videoElement, CompletionHandler<void(bool)>&& completionHandler)
 {
     protectedPage()->videoPresentationManager().exitVideoFullscreenForVideoElement(videoElement, WTFMove(completionHandler));
@@ -1317,9 +1334,9 @@ bool WebChromeClient::supportsFullScreenForElement(const Element& element, bool 
     return protectedPage()->fullScreenManager().supportsFullScreenForElement(element, withKeyboard);
 }
 
-void WebChromeClient::enterFullScreenForElement(Element& element, HTMLMediaElementEnums::VideoFullscreenMode mode)
+void WebChromeClient::enterFullScreenForElement(Element& element, HTMLMediaElementEnums::VideoFullscreenMode mode, CompletionHandler<void(ExceptionOr<void>)>&& willEnterFullscreen, CompletionHandler<bool(bool)>&& didEnterFullscreen)
 {
-    protectedPage()->fullScreenManager().enterFullScreenForElement(element, mode);
+    protectedPage()->fullScreenManager().enterFullScreenForElement(element, mode, WTFMove(willEnterFullscreen), WTFMove(didEnterFullscreen));
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     if (RefPtr videoElement = dynamicDowncast<HTMLVideoElement>(element); videoElement && mode == HTMLMediaElementEnums::VideoFullscreenModeInWindow)
         setVideoFullscreenMode(*videoElement, mode);
@@ -1333,7 +1350,7 @@ void WebChromeClient::updateImageSource(Element& element)
 }
 #endif // ENABLE(QUICKLOOK_FULLSCREEN)
 
-void WebChromeClient::exitFullScreenForElement(Element* element)
+void WebChromeClient::exitFullScreenForElement(Element* element, CompletionHandler<void()>&& completionHandler)
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     bool exitingInWindowFullscreen = false;
@@ -1342,7 +1359,7 @@ void WebChromeClient::exitFullScreenForElement(Element* element)
             exitingInWindowFullscreen = videoElement->fullscreenMode() == HTMLMediaElementEnums::VideoFullscreenModeInWindow;
     }
 #endif
-    protectedPage()->fullScreenManager().exitFullScreenForElement(element);
+    protectedPage()->fullScreenManager().exitFullScreenForElement(element, WTFMove(completionHandler));
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     if (exitingInWindowFullscreen)
         clearVideoFullscreenMode(*dynamicDowncast<HTMLVideoElement>(*element), HTMLMediaElementEnums::VideoFullscreenModeInWindow);
@@ -1528,9 +1545,9 @@ void WebChromeClient::handleClickForDataDetectionResult(const DataDetectorElemen
 
 #if ENABLE(SERVICE_CONTROLS)
 
-void WebChromeClient::handleSelectionServiceClick(FrameSelection& selection, const Vector<String>& telephoneNumbers, const IntPoint& point)
+void WebChromeClient::handleSelectionServiceClick(WebCore::FrameIdentifier frameID, FrameSelection& selection, const Vector<String>& telephoneNumbers, const IntPoint& point)
 {
-    protectedPage()->handleSelectionServiceClick(selection, telephoneNumbers, point);
+    protectedPage()->handleSelectionServiceClick(frameID, selection, telephoneNumbers, point);
 }
 
 bool WebChromeClient::hasRelevantSelectionServices(bool isTextOnly) const
@@ -1538,14 +1555,14 @@ bool WebChromeClient::hasRelevantSelectionServices(bool isTextOnly) const
     return (isTextOnly && WebProcess::singleton().hasSelectionServices()) || WebProcess::singleton().hasRichContentServices();
 }
 
-void WebChromeClient::handleImageServiceClick(const IntPoint& point, Image& image, HTMLImageElement& element)
+void WebChromeClient::handleImageServiceClick(WebCore::FrameIdentifier frameID, const IntPoint& point, Image& image, HTMLImageElement& element)
 {
-    protectedPage()->handleImageServiceClick(point, image, element);
+    protectedPage()->handleImageServiceClick(frameID, point, image, element);
 }
 
-void WebChromeClient::handlePDFServiceClick(const IntPoint& point, HTMLAttachmentElement& element)
+void WebChromeClient::handlePDFServiceClick(WebCore::FrameIdentifier frameID, const IntPoint& point, HTMLAttachmentElement& element)
 {
-    protectedPage()->handlePDFServiceClick(point, element);
+    protectedPage()->handlePDFServiceClick(frameID, point, element);
 }
 
 #endif

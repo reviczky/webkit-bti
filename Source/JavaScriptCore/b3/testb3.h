@@ -816,6 +816,12 @@ void testFloorFloorArg(float);
 void testCeilFloorArg(float);
 void testFloorArgWithUselessDoubleConversion(float);
 void testFloorArgWithEffectfulDoubleConversion(float);
+void testFTruncArg(double);
+void testFTruncImm(double);
+void testFTruncMem(double);
+void testFTruncArg(float);
+void testFTruncImm(float);
+void testFTruncMem(float);
 double correctSqrt(double value);
 void testSqrtArg(double);
 void testSqrtImm(double);
@@ -1318,6 +1324,7 @@ void testTernarySubInstructionSelection(B3::Opcode valueModifier, Type valueType
 void testNegDouble(double);
 void testNegFloat(float);
 void testNegFloatWithUselessDoubleConversion(float);
+void testImpureNaN();
 
 void addArgTests(const TestConfig*, Deque<RefPtr<SharedTask<void()>>>&);
 void addBitTests(const TestConfig*, Deque<RefPtr<SharedTask<void()>>>&);

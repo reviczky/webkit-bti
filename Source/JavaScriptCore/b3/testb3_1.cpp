@@ -161,6 +161,7 @@ void run(const TestConfig* config)
     RUN_UNARY(testNegDouble, floatingPointOperands<double>());
     RUN_UNARY(testNegFloat, floatingPointOperands<float>());
     RUN_UNARY(testNegFloatWithUselessDoubleConversion, floatingPointOperands<float>());
+    RUN(testImpureNaN());
 
     addBitTests(config, tasks);
 
@@ -277,6 +278,13 @@ void run(const TestConfig* config)
     RUN_UNARY(testCeilFloorArg, floatingPointOperands<float>());
     RUN_UNARY(testFloorArgWithUselessDoubleConversion, floatingPointOperands<float>());
     RUN_UNARY(testFloorArgWithEffectfulDoubleConversion, floatingPointOperands<float>());
+
+    RUN_UNARY(testFTruncArg, floatingPointOperands<double>());
+    RUN_UNARY(testFTruncImm, floatingPointOperands<double>());
+    RUN_UNARY(testFTruncMem, floatingPointOperands<double>());
+    RUN_UNARY(testFTruncArg, floatingPointOperands<float>());
+    RUN_UNARY(testFTruncImm, floatingPointOperands<float>());
+    RUN_UNARY(testFTruncMem, floatingPointOperands<float>());
 
     RUN_UNARY(testSqrtArg, floatingPointOperands<double>());
     RUN_UNARY(testSqrtImm, floatingPointOperands<double>());

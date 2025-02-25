@@ -225,6 +225,7 @@ Shared/IPCConnectionTester.cpp
 Shared/IPCStreamTester.cpp
 Shared/IPCTester.cpp
 Shared/IPCTesterReceiver.cpp
+Shared/KeyEventInterpretationContext.cpp
 Shared/PersistencyUtils.cpp
 Shared/PrintInfo.cpp
 Shared/ProcessTerminationReason.cpp
@@ -559,11 +560,10 @@ UIProcess/Authentication/WebProtectionSpace.cpp
 // FIXME(206266): AutomationProtocolObjects.h's "namespace Protocol" conflicts with objc/runtime.h's "typedef struct objc_object Protocol"
 UIProcess/Automation/SimulatedInputDispatcher.cpp @no-unify
 UIProcess/Automation/WebAutomationSession.cpp @no-unify
+UIProcess/Automation/WebDriverBidiProcessor.cpp @no-unify
 
 UIProcess/Downloads/DownloadProxy.cpp
 UIProcess/Downloads/DownloadProxyMap.cpp
-
-UIProcess/DigitalCredentials/DigitalCredentialsCoordinatorProxy.cpp
 
 UIProcess/Extensions/WebExtension.cpp
 UIProcess/Extensions/WebExtensionAlarm.cpp
@@ -747,6 +747,7 @@ WebProcess/GPU/graphics/WebGPU/RemoteXRProjectionLayerProxy.cpp
 WebProcess/GPU/graphics/WebGPU/RemoteXRSubImageProxy.cpp
 WebProcess/GPU/graphics/WebGPU/RemoteXRViewProxy.cpp
 WebProcess/GPU/graphics/WebGPU/WebGPUDowncastConvertToBackingContext.cpp
+WebProcess/GPU/graphics/ImageBufferRemoteDisplayListBackend.cpp
 WebProcess/GPU/graphics/ImageBufferRemotePDFDocumentBackend.cpp
 WebProcess/GPU/graphics/ImageBufferShareableBitmapBackend.cpp
 WebProcess/GPU/graphics/PrepareBackingStoreBuffersData.cpp
@@ -901,7 +902,6 @@ WebProcess/WebStorage/WebStorageNamespaceProvider.cpp
 
 WebProcess/XR/PlatformXRSystemProxy.cpp
 
-DigitalCredentialsCoordinatorProxyMessageReceiver.cpp
 IPCConnectionTesterMessageReceiver.cpp
 IPCStreamTesterMessageReceiver.cpp
 IPCStreamTesterProxyMessageReceiver.cpp

@@ -123,8 +123,8 @@ const int defaultHeight = 150;
 
 HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document, TypeFlag::HasDidMoveToNewDocument)
-    , CanvasBase(IntSize(defaultWidth, defaultHeight), document)
     , ActiveDOMObject(document)
+    , CanvasBase(IntSize(defaultWidth, defaultHeight), document)
 {
     ASSERT(hasTagName(canvasTag));
 }
@@ -842,11 +842,7 @@ RefPtr<VideoFrame> HTMLCanvasElement::toVideoFrame()
         return nullptr;
 
     // FIXME: Set color space.
-#if PLATFORM(COCOA)
     return VideoFrame::createFromPixelBuffer(pixelBuffer.releaseNonNull());
-#elif USE(GSTREAMER)
-    return VideoFrameGStreamer::createFromPixelBuffer(pixelBuffer.releaseNonNull(), VideoFrameGStreamer::CanvasContentType::Canvas2D);
-#endif
 #else
     return nullptr;
 #endif

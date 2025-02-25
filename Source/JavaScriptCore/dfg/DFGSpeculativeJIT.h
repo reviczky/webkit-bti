@@ -1190,14 +1190,6 @@ public:
         return call;
     }
 
-    JITCompiler::Call callThrowOperationWithCallFrameRollback(V_JITOperation_Cb operation, GPRReg codeBlockGPR)
-    {
-        setupArguments<V_JITOperation_Cb>(codeBlockGPR);
-        JITCompiler::Call call = appendCall(operation);
-        exceptionJumpWithCallFrameRollback();
-        return call;
-    }
-
     void prepareForExternalCall()
     {
 #if !defined(NDEBUG) && !CPU(ARM_THUMB2)
@@ -1686,7 +1678,7 @@ public:
     void compileGetRestLength(Node*);
     void compileArraySlice(Node*);
     void compileArraySplice(Node*);
-    void compileArrayIndexOf(Node*);
+    void compileArrayIndexOfOrArrayIncludes(Node*);
     void compileArrayPush(Node*);
     void compileNotifyWrite(Node*);
     void compileRegExpExec(Node*);
@@ -1713,6 +1705,7 @@ public:
     void compileSetRegExpObjectLastIndex(Node*);
     void compileLazyJSConstant(Node*);
     void compileMaterializeNewObject(Node*);
+    void compileMaterializeNewArrayWithConstantSize(Node*);
     void compileRecordRegExpCachedResult(Node*);
     void compileToObjectOrCallObjectConstructor(Node*);
     void compileResolveScope(Node*);
@@ -1759,6 +1752,7 @@ public:
     void compileStrCat(Node*);
     void compileNewArrayBuffer(Node*);
     void compileNewArrayWithSize(Node*);
+    void compileNewArrayWithConstantSizeImpl(Node*, GPRReg, GPRReg);
     void compileNewArrayWithConstantSize(Node*);
     void compileNewArrayWithSpecies(Node*);
     void compileNewArrayWithSizeAndStructure(Node*);
@@ -1893,10 +1887,10 @@ public:
     void speculateCellType(Edge, GPRReg cellGPR, SpeculatedType, JSType);
     
     void speculateInt32(Edge);
+    void speculateInt32(Edge, JSValueRegs);
 #if USE(JSVALUE64)
     void convertAnyInt(Edge, GPRReg resultGPR);
     void speculateAnyInt(Edge);
-    void speculateInt32(Edge, JSValueRegs);
     void speculateDoubleRepAnyInt(Edge);
 #endif // USE(JSVALUE64)
 #if USE(BIGINT32)

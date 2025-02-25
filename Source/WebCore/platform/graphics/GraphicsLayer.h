@@ -424,6 +424,11 @@ public:
     bool drawsContent() const { return m_drawsContent; }
     WEBCORE_EXPORT virtual void setDrawsContent(bool);
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    bool drawsHDRContent() const { return m_drawsHDRContent; }
+    WEBCORE_EXPORT virtual void setDrawsHDRContent(bool);
+#endif
+
     bool contentsAreVisible() const { return m_contentsVisible; }
     virtual void setContentsVisible(bool b) { m_contentsVisible = b; }
 
@@ -450,8 +455,8 @@ public:
 #endif
 
 #if HAVE(CORE_MATERIAL)
-    AppleVisualEffect appleVisualEffect() const { return m_appleVisualEffect; }
-    virtual void setAppleVisualEffect(AppleVisualEffect effect) { m_appleVisualEffect = effect; }
+    AppleVisualEffectData appleVisualEffectData() const { return m_appleVisualEffectData; }
+    virtual void setAppleVisualEffectData(AppleVisualEffectData effectData) { m_appleVisualEffectData = effectData; }
 #endif
 
     bool needsBackdrop() const;
@@ -613,11 +618,6 @@ public:
     virtual void setShowRepaintCounter(bool show) { m_showRepaintCounter = show; }
     bool isShowingRepaintCounter() const { return m_showRepaintCounter; }
 
-#if ENABLE(HDR_FOR_IMAGES)
-    virtual void setHDRForImagesEnabled(bool b) { m_hdrForImagesEnabled = b; }
-    bool hdrForImagesEnabled() const { return m_hdrForImagesEnabled; }
-#endif
-
     // FIXME: this is really a paint count.
     int repaintCount() const { return m_repaintCount; }
     int incrementRepaintCount() { return ++m_repaintCount; }
@@ -717,7 +717,7 @@ public:
     const std::optional<FloatRect>& animationExtent() const { return m_animationExtent; }
     void setAnimationExtent(std::optional<FloatRect> animationExtent) { m_animationExtent = animationExtent; }
 
-    static void traverse(GraphicsLayer&, const Function<void(GraphicsLayer&)>&);
+    static void traverse(GraphicsLayer&, NOESCAPE const Function<void(GraphicsLayer&)>&);
 
     virtual void markFrontBufferVolatileForTesting() { }
 
@@ -810,7 +810,7 @@ protected:
     CustomAppearance m_customAppearance { CustomAppearance::None };
 
 #if HAVE(CORE_MATERIAL)
-    AppleVisualEffect m_appleVisualEffect { AppleVisualEffect::None };
+    AppleVisualEffectData m_appleVisualEffectData;
 #endif
 
     OptionSet<GraphicsLayerPaintingPhase> m_paintingPhase { GraphicsLayerPaintingPhase::Foreground, GraphicsLayerPaintingPhase::Background };
@@ -822,6 +822,9 @@ protected:
     bool m_backfaceVisibility : 1;
     bool m_masksToBounds : 1;
     bool m_drawsContent : 1;
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    bool m_drawsHDRContent : 1 { false };
+#endif
     bool m_contentsVisible : 1;
     bool m_contentsRectClipsDescendants : 1;
     bool m_acceleratesDrawing : 1;
@@ -845,9 +848,6 @@ protected:
     bool m_isSeparatedPortal : 1;
     bool m_isDescendentOfSeparatedPortal : 1;
 #endif
-#endif
-#if ENABLE(HDR_FOR_IMAGES)
-    bool m_hdrForImagesEnabled : 1;
 #endif
 
     int m_repaintCount { 0 };

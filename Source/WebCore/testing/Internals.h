@@ -267,6 +267,7 @@ public:
     unsigned remoteImagesCountForTesting() const;
     void setAsyncDecodingEnabledForTesting(HTMLImageElement&, bool enabled);
     void setForceUpdateImageDataEnabledForTesting(HTMLImageElement&, bool enabled);
+    void setHeadroomForTesting(HTMLImageElement&, float headroom);
 
 #if ENABLE(WEB_CODECS)
     bool hasPendingActivity(const WebCodecsVideoDecoder&) const;
@@ -651,6 +652,17 @@ public:
     void setFullscreenInsets(FullscreenInsets);
     ExceptionOr<void> setFullscreenAutoHideDuration(double);
 
+    enum ContentsFormat {
+        RGBA8,
+#if ENABLE(PIXEL_FORMAT_RGB10)
+        RGBA10,
+#endif
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
+        RGBA16F,
+#endif
+    };
+    void setScreenContentsFormatsForTesting(const Vector<Internals::ContentsFormat>&);
+
 #if ENABLE(VIDEO)
     bool isChangingPresentationMode(HTMLVideoElement&) const;
 #endif
@@ -910,6 +922,7 @@ public:
     void setMediaControlsHidePlaybackRates(HTMLMediaElement&, bool);
 #endif // ENABLE(VIDEO)
 
+    float pageMediaVolume();
     void setPageMediaVolume(float);
 
     String userVisibleString(const DOMURL&);
@@ -1541,7 +1554,7 @@ public:
     void setResourceCachingDisabledByWebInspector(bool);
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    void setResourceMonitorNetworkUsageThreshold(size_t threshold, double randomness = ResourceMonitorChecker::networkUsageThresholdRandomness);
+    void setResourceMonitorNetworkUsageThreshold(size_t threshold, double randomness = ResourceMonitorChecker::defaultNetworkUsageThresholdRandomness);
     bool shouldSkipResourceMonitorThrottling() const;
     void setShouldSkipResourceMonitorThrottling(bool);
 #endif

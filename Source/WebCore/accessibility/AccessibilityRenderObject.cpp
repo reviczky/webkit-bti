@@ -68,6 +68,7 @@
 #include "HitTestRequest.h"
 #include "HitTestResult.h"
 #include "Image.h"
+#include "InlineIteratorTextBoxInlines.h"
 #include "LegacyRenderSVGRoot.h"
 #include "LegacyRenderSVGShape.h"
 #include "LocalFrame.h"
@@ -1402,18 +1403,19 @@ CharacterRange AccessibilityRenderObject::selectedTextRange() const
 #if ENABLE(AX_THREAD_TEXT_APIS)
 AXTextRuns AccessibilityRenderObject::textRuns()
 {
-    if (auto* renderLineBreak = dynamicDowncast<RenderLineBreak>(renderer())) {
+    constexpr std::array<uint16_t, 2> lengthOneDomOffsets = { 0, 1 };
+    CheckedPtr renderer = this->renderer();
+    if (auto* renderLineBreak = dynamicDowncast<RenderLineBreak>(renderer.get())) {
         auto box = InlineIterator::boxFor(*renderLineBreak);
-        return { renderLineBreak->containingBlock(), { AXTextRun(box ? box->lineIndex() : 0, makeString('\n').isolatedCopy()) } };
+        return { renderLineBreak->containingBlock(), { AXTextRun(box ? box->lineIndex() : 0, makeString('\n').isolatedCopy(), { lengthOneDomOffsets }) }, /* estimatedCharacterSize */ 12 };
     }
 
     if (is<HTMLImageElement>(node()) || is<HTMLMediaElement>(node())) {
-        auto* renderer = this->renderer();
         auto* containingBlock = renderer ? renderer->containingBlock() : nullptr;
-        return containingBlock ? AXTextRuns(containingBlock, { AXTextRun(0, String(span(objectReplacementCharacter))) }) : AXTextRuns();
+        return containingBlock ? AXTextRuns(containingBlock, { AXTextRun(0, String(span(objectReplacementCharacter)), { lengthOneDomOffsets }) }, /* estimatedCharacterSize */ 255) : AXTextRuns();
     }
 
-    WeakPtr renderText = dynamicDowncast<RenderText>(renderer());
+    WeakPtr renderText = dynamicDowncast<RenderText>(renderer.get());
     if (!renderText)
         return { };
 
@@ -1421,6 +1423,7 @@ AXTextRuns AccessibilityRenderObject::textRuns()
     // other text in the line, and AccessibilityRenderObject::computeIsIgnored ignores the
     // first-letter RenderText, meaning we can't recover it later by combining text across AX objects.
 
+    std::optional<uint8_t> estimatedCharacterWidth;
     Vector<AXTextRun> runs;
     StringBuilder lineString;
     // Appends text to the current lineString, collapsing whitespace as necessary (similar to how TextIterator::handleTextRun() does).
@@ -1428,6 +1431,15 @@ AXTextRuns AccessibilityRenderObject::textRuns()
         auto text = textBox->originalText();
         if (text.isEmpty())
             return;
+
+        if (!estimatedCharacterWidth) {
+            auto textRun = textBox->textRun(InlineIterator::TextRunMode::Editing);
+            unsigned end = textRun.length() - 1;
+            float width = renderText->style().fontCascade().widthOfTextRange(textRun, 0, end);
+            float perCharacterWidth = width / end + 1;
+            estimatedCharacterWidth = std::min(static_cast<unsigned>(std::numeric_limits<uint8_t>::max()), static_cast<unsigned>(std::ceil(perCharacterWidth)));
+        }
+
         bool collapseTabs = textBox->style().collapseWhiteSpace();
         bool collapseNewlines = !textBox->style().preserveNewline();
         if (!collapseTabs && !collapseNewlines) {
@@ -1447,13 +1459,22 @@ AXTextRuns AccessibilityRenderObject::textRuns()
         }
     };
 
+    auto domOffset = [] (unsigned value) -> uint16_t {
+        // It shouldn't be possible for any textbox to have more than 65535 characters.
+        RELEASE_ASSERT(value <= std::numeric_limits<uint16_t>::max());
+        return static_cast<uint16_t>(value);
+    };
+
+    Vector<std::array<uint16_t, 2>> textRunDomOffsets;
+    // FIXME: Use InlineIteratorLogicalOrderTraversal instead. Otherwise we'll do the wrong thing for mixed direction content.
     auto textBox = InlineIterator::lineLeftmostTextBoxFor(*renderText);
     size_t currentLineIndex = textBox ? textBox->lineIndex() : 0;
     for (; textBox; textBox.traverseNextTextBox()) {
+        textRunDomOffsets.append({ domOffset(textBox->minimumCaretOffset()), domOffset(textBox->maximumCaretOffset()) });
         size_t newLineIndex = textBox->lineIndex();
         if (newLineIndex != currentLineIndex) {
             // FIXME: Currently, this is only ever called to ship text runs off to the accessibility thread. But maybe we should we make the isolatedCopy()s in this function optional based on a parameter?
-            runs.append({ currentLineIndex, lineString.toString().isolatedCopy() });
+            runs.append({ currentLineIndex, lineString.toString().isolatedCopy(), { std::exchange(textRunDomOffsets, { }) } });
             lineString.clear();
         }
         currentLineIndex = newLineIndex;
@@ -1462,8 +1483,8 @@ AXTextRuns AccessibilityRenderObject::textRuns()
     }
 
     if (!lineString.isEmpty())
-        runs.append({ currentLineIndex, lineString.toString().isolatedCopy() });
-    return { renderText->containingBlock(), WTFMove(runs) };
+        runs.append({ currentLineIndex, lineString.toString().isolatedCopy(), WTFMove(textRunDomOffsets) });
+    return { renderText->containingBlock(), WTFMove(runs), estimatedCharacterWidth.value_or(AXTextRuns::defaultEstimatedCharacterWidth) };
 }
 
 AXTextRunLineID AccessibilityRenderObject::listMarkerLineID() const
@@ -2413,7 +2434,7 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
     WeakPtr cache = axObjectCache();
     if (!cache)
         return;
-    // FIXME: This algorithm does not work correctly when ENABLE(INCLUDE_IGNORED_IN_CORE_TREE) due to use of m_children, as this algorithm is written assuming m_children only every contains unignored objects.
+    // FIXME: This algorithm does not work correctly when ENABLE(INCLUDE_IGNORED_IN_CORE_AX_TREE) due to use of m_children, as this algorithm is written assuming m_children only every contains unignored objects.
     // Iterate through all of the children, including those that may have already been added, and
     // try to insert the nodes in the correct place in the DOM order.
     unsigned insertionIndex = 0;
@@ -2429,8 +2450,12 @@ void AccessibilityRenderObject::addNodeOnlyChildren()
                     childObject = nullptr;
             }
 
-            if (childObject)
-                insertionIndex = m_children.find(Ref { *childObject }) + 1;
+            if (childObject) {
+                insertionIndex = m_children.findIf([&childObject] (const Ref<AXCoreObject>& child) {
+                    return child.ptr() == childObject;
+                });
+                ++insertionIndex;
+            }
             continue;
         }
 
@@ -2553,12 +2578,12 @@ void AccessibilityRenderObject::addChildren()
     // being part of the accessibility tree.
     RefPtr node = dynamicDowncast<ContainerNode>(this->node());
     auto* element = dynamicDowncast<Element>(node.get());
-    CheckedPtr cache = axObjectCache();
+    WeakPtr cache = axObjectCache();
 
     // ::before and ::after pseudos should be the first and last children of the element
     // that generates them (rather than being siblings to the generating element).
     if (RefPtr beforePseudo = element ? element->beforePseudoElement() : nullptr) {
-        if (RefPtr pseudoObject = cache->getOrCreate(*beforePseudo))
+        if (RefPtr pseudoObject = cache ? cache->getOrCreate(*beforePseudo) : nullptr)
             addChildIfNeeded(*pseudoObject);
     }
 
@@ -2579,7 +2604,7 @@ void AccessibilityRenderObject::addChildren()
     }
 
     if (RefPtr afterPseudo = element ? element->afterPseudoElement() : nullptr) {
-        if (RefPtr pseudoObject = cache->getOrCreate(*afterPseudo))
+        if (RefPtr pseudoObject = cache ? cache->getOrCreate(*afterPseudo) : nullptr)
             addChildIfNeeded(*pseudoObject);
     }
 #else

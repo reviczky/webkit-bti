@@ -60,7 +60,6 @@ class DestinationColorSpace;
 class FloatPoint;
 class FloatRect;
 class FloatSize;
-class PlatformCALayerClient;
 class Widget;
 
 using PlatformDisplayID = uint32_t;
@@ -82,7 +81,7 @@ double screenDPI(PlatformDisplayID); // dpi of the display device, corrected for
 FloatRect screenRect(Widget*);
 FloatRect screenAvailableRect(Widget*);
 
-WEBCORE_EXPORT ContentsFormat screenContentsFormat(Widget* = nullptr, PlatformCALayerClient* = nullptr);
+WEBCORE_EXPORT OptionSet<ContentsFormat> screenContentsFormats(Widget* = nullptr);
 WEBCORE_EXPORT bool screenSupportsExtendedColor(Widget* = nullptr);
 
 enum class DynamicRangeMode : uint8_t {
@@ -112,7 +111,12 @@ WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
 const ScreenProperties& getScreenProperties();
 WEBCORE_EXPORT const ScreenData* screenData(PlatformDisplayID screendisplayID);
 WEBCORE_EXPORT PlatformDisplayID primaryScreenDisplayID();
-    
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+WEBCORE_EXPORT void setScreenContentsFormatsForTesting(OptionSet<ContentsFormat>);
+OptionSet<ContentsFormat> screenContentsFormatsForTesting();
+#endif
+
 #if PLATFORM(MAC)
 
 WEBCORE_EXPORT PlatformDisplayID displayID(NSScreen *);

@@ -87,6 +87,8 @@ class NetworkResourceLoader final
     , public CanMakeWeakPtr<NetworkResourceLoader>
 #endif
     , public WebCore::ReportingClient {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(NetworkResourceLoader);
 public:
 #if ENABLE(CONTENT_FILTERING)
     void ref() const final { RefCounted::ref(); }
@@ -284,6 +286,10 @@ private:
 
     bool shouldSendResourceLoadMessages() const;
 
+    void sendDidReceiveDataMessage(const WebCore::FragmentedSharedBuffer&, size_t encodedDataLength);
+    void updateBytesTransferredOverNetwork(size_t bytesTransferredOverNetwork);
+    void reportNetworkUsageToAllSharedWorkers(WebCore::SharedWorkerIdentifier, size_t bytesTransferredOverNetwork);
+
     NetworkResourceLoadParameters m_parameters;
 
     Ref<NetworkConnectionToWebProcess> m_connection;
@@ -303,6 +309,7 @@ private:
     bool m_didConsumeSandboxExtensions { false };
     bool m_isAllowedToAskUserForCredentials { false };
     size_t m_numBytesReceived { 0 };
+    size_t m_bytesTransferredOverNetwork { 0 };
 
     unsigned m_retrievedDerivedDataCount { 0 };
 

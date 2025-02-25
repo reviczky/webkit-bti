@@ -580,7 +580,7 @@ void Internals::resetToConsistentState(Page& page)
     if (mainFrameView) {
         page.setHeaderHeight(0);
         page.setFooterHeight(0);
-        page.setTopContentInset(0);
+        page.setObscuredContentInsets({ });
         mainFrameView->setUseFixedLayout(false);
         mainFrameView->setFixedLayoutSize(IntSize());
         mainFrameView->enableFixedWidthAutoSizeMode(false, { });
@@ -1251,6 +1251,12 @@ void Internals::setForceUpdateImageDataEnabledForTesting(HTMLImageElement& eleme
 {
     if (auto* cachedImage = element.cachedImage())
         cachedImage->setForceUpdateImageDataEnabledForTesting(enabled);
+}
+
+void Internals::setHeadroomForTesting(HTMLImageElement& element, float headroom)
+{
+    if (auto* bitmapImage = bitmapImageFromImageElement(element))
+        bitmapImage->setHeadroomForTesting(headroom);
 }
 
 #if ENABLE(WEB_CODECS)
@@ -3927,6 +3933,35 @@ ExceptionOr<void> Internals::setFullscreenAutoHideDuration(double duration)
     return { };
 }
 
+void Internals::setScreenContentsFormatsForTesting(const Vector<Internals::ContentsFormat>& formats)
+{
+    OptionSet<WebCore::ContentsFormat> contentsFormats;
+
+    for (auto format : formats) {
+        switch (format) {
+        case Internals::ContentsFormat::RGBA8:
+            contentsFormats.add(WebCore::ContentsFormat::RGBA8);
+            break;
+#if ENABLE(PIXEL_FORMAT_RGB10)
+        case Internals::ContentsFormat::RGBA10:
+            contentsFormats.add(WebCore::ContentsFormat::RGBA10);
+            break;
+#endif
+#if ENABLE(PIXEL_FORMAT_RGBA16F)
+        case Internals::ContentsFormat::RGBA16F:
+            contentsFormats.add(WebCore::ContentsFormat::RGBA16F);
+            break;
+#endif
+        }
+    }
+
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    WebCore::setScreenContentsFormatsForTesting(contentsFormats);
+#else
+    UNUSED_PARAM(contentsFormats);
+#endif
+}
+
 #if ENABLE(VIDEO)
 bool Internals::isChangingPresentationMode(HTMLVideoElement& element) const
 {
@@ -4724,14 +4759,14 @@ void Internals::initializeMockMediaSource()
 
 void Internals::setMaximumSourceBufferSize(SourceBuffer& buffer, uint64_t maximumSize, DOMPromiseDeferred<void>&& promise)
 {
-    buffer.setMaximumSourceBufferSize(maximumSize)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)]() mutable {
+    buffer.setMaximumSourceBufferSize(maximumSize)->whenSettled(RunLoop::protectedCurrent(), [promise = WTFMove(promise)]() mutable {
         promise.resolve();
     });
 }
 
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
-    buffer.bufferedSamplesForTrackId(parseInteger<uint64_t>(trackId).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+    buffer.bufferedSamplesForTrackId(parseInteger<uint64_t>(trackId).value_or(0))->whenSettled(RunLoop::protectedCurrent(), [promise = WTFMove(promise)](auto&& samples) mutable {
         if (!samples) {
             promise.reject(Exception { ExceptionCode::OperationError, makeString("Error "_s, samples.error()) });
             return;
@@ -4742,7 +4777,7 @@ void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString
 
 void Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID, BufferedSamplesPromise&& promise)
 {
-    buffer.enqueuedSamplesForTrackID(parseInteger<uint64_t>(trackID).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+    buffer.enqueuedSamplesForTrackID(parseInteger<uint64_t>(trackID).value_or(0))->whenSettled(RunLoop::protectedCurrent(), [promise = WTFMove(promise)](auto&& samples) mutable {
         if (!samples) {
             promise.reject(Exception { ExceptionCode::OperationError, makeString("Error "_s, samples.error()) });
             return;
@@ -5499,8 +5534,7 @@ String Internals::createTemporaryFile(const String& name, const String& contents
     if (!FileSystem::isHandleValid(file))
         return nullString();
 
-    auto contentsUTF8 = contents.utf8();
-    FileSystem::writeToFile(file, contentsUTF8.span());
+    FileSystem::writeToFile(file, byteCast<uint8_t>(contents.utf8().span()));
 
     FileSystem::closeFile(file);
 
@@ -5659,6 +5693,19 @@ void Internals::setPageMediaVolume(float volume)
         return;
 
     page->setMediaVolume(volume);
+}
+
+float Internals::pageMediaVolume()
+{
+    Document* document = contextDocument();
+    if (!document)
+        return 0;
+
+    Page* page = document->page();
+    if (!page)
+        return 0;
+
+    return page->mediaVolume();
 }
 
 #if !PLATFORM(COCOA)

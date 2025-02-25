@@ -629,11 +629,6 @@ void ResourceLoader::didReceiveResponse(const ResourceResponse& r, CompletionHan
     RefPtr frameLoader = this->frameLoader();
     if (frameLoader && m_options.sendLoadCallbacks == SendCallbackPolicy::SendCallbacks)
         frameLoader->notifier().didReceiveResponse(this, m_response);
-
-#if ENABLE(CONTENT_EXTENSIONS)
-    if (RefPtr monitor = resourceMonitorIfExists())
-        monitor->didReceiveResponse(m_response.url(), m_resourceType);
-#endif
 }
 
 void ResourceLoader::didReceiveData(const SharedBuffer& buffer, long long encodedDataLength, DataPayloadType dataPayloadType)
@@ -662,11 +657,6 @@ void ResourceLoader::didReceiveBuffer(const FragmentedSharedBuffer& buffer, long
     RefPtr frameLoader = this->frameLoader();
     if (m_options.sendLoadCallbacks == SendCallbackPolicy::SendCallbacks && frame && frameLoader)
         frameLoader->notifier().didReceiveData(this, buffer.makeContiguous(), static_cast<int>(encodedDataLength));
-
-#if ENABLE(CONTENT_EXTENSIONS)
-    if (RefPtr monitor = resourceMonitorIfExists())
-        monitor->addNetworkUsage(encodedDataLength > 0 ? static_cast<size_t>(encodedDataLength) : buffer.size());
-#endif
 }
 
 void ResourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMetrics)

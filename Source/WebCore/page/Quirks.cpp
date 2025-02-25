@@ -649,18 +649,18 @@ bool Quirks::shouldSilenceResizeObservers() const
 #endif
 }
 
-bool Quirks::shouldSilenceWindowResizeEvents() const
+bool Quirks::shouldSilenceWindowResizeEventsDuringApplicationSnapshotting() const
 {
 #if PLATFORM(IOS) || PLATFORM(VISION)
     if (!needsQuirks())
         return false;
 
-    if (!m_quirksData.shouldSilenceWindowResizeEvents)
+    if (!m_quirksData.shouldSilenceWindowResizeEventsDuringApplicationSnapshotting)
         return false;
 
-    // We silence window resize events during the 'homing out' snapshot sequence when on nytimes.com
-    // to address <rdar://problem/59763843>, and on x.com (twitter) to address <rdar://problem/58804852> &
-    // <rdar://problem/61731801>.
+    // We silence window resize events during the 'homing out' snapshot sequence when on icloud.com/mail
+    // to address <rdar://131836301>, on nytimes.com to address <rdar://problem/59763843>, and on
+    // x.com (twitter) to address <rdar://problem/58804852> & <rdar://problem/61731801>.
     auto* page = m_document->page();
     if (!page || !page->isTakingSnapshotsForApplicationSuspension())
         return false;
@@ -1199,18 +1199,6 @@ bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFull
 #endif
 }
 
-// bbc.com: rdar://108304377
-bool Quirks::shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk() const
-{
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-    // This quirk delay the "webkitstartfullscreen" and "fullscreenchange" event when a video exits picture-in-picture
-    // to fullscreen.
-    return needsQuirks() && m_quirksData.shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk;
-#else
-    return false;
-#endif
-}
-
 // teams.live.com rdar://88678598
 // teams.microsoft.com rdar://90434296
 bool Quirks::shouldAllowNavigationToCustomProtocolWithoutUserGesture(StringView protocol, const SecurityOriginData& requesterOrigin)
@@ -1415,29 +1403,6 @@ bool Quirks::needsIPadMiniUserAgent(const URL& url)
     if (host == "cctv.com"_s || host.endsWith(".cctv.com"_s))
         return true;
 
-#if USE(HSBC_MOBILE_SITE_FOR_IPAD)
-    if (host.contains("hsbc."_s)) {
-        if (host == "hsbc.com.au"_s || host.endsWith(".hsbc.com.au"_s))
-            return true;
-        if (host == "hsbc.com.eg"_s || host.endsWith(".hsbc.com.eg"_s))
-            return true;
-        if (host == "hsbc.lk"_s || host.endsWith(".hsbc.lk"_s))
-            return true;
-        if (host == "hsbc.co.uk"_s || host.endsWith(".hsbc.co.uk"_s))
-            return true;
-        if (host == "hsbc.com.hk"_s || host.endsWith(".hsbc.com.hk"_s))
-            return true;
-        if (host == "hsbc.com.mx"_s || host.endsWith(".hsbc.com.mx"_s))
-            return true;
-        if (host == "hsbc.com.ph"_s || host.endsWith(".hsbc.com.ph"_s))
-            return true;
-        if (host == "hsbc.com"_s || host.endsWith(".hsbc.com"_s))
-            return true;
-        if (host == "hsbc.com.cn"_s || host.endsWith(".hsbc.com.cn"_s))
-            return true;
-    }
-#endif
-
     // FIXME: Remove this quirk when <rdar://problem/61733101> is complete.
     if (host == "roblox.com"_s || host.endsWith(".roblox.com"_s))
         return true;
@@ -1503,24 +1468,6 @@ bool Quirks::shouldUseEphemeralPartitionedStorageForDOMCookies(const URL& url) c
         return true;
 
     return false;
-}
-
-// This quirk has intentionally limited exposure to increase the odds of being able to remove it
-// again within a reasonable timeframe as the impacted apps are being updated. <rdar://122548304>
-bool Quirks::needsGetElementsByNameQuirk() const
-{
-#if PLATFORM(IOS)
-    return needsQuirks() && m_quirksData.needsGetElementsByNameQuirk;
-#else
-    return false;
-#endif
-}
-
-// tripadvisor.com: rdar://112851939
-// FIXME: Remove this quirk when <rdar://127247321> is complete
-bool Quirks::needsRelaxedCorsMixedContentCheckQuirk() const
-{
-    return needsQuirks() && m_quirksData.needsRelaxedCorsMixedContentCheckQuirk;
 }
 
 // rdar://127398734
@@ -1840,6 +1787,11 @@ bool Quirks::needsLimitedMatroskaSupport() const
 #endif
 }
 
+bool Quirks::needsNowPlayingFullscreenSwapQuirk() const
+{
+    return needsQuirks() && m_quirksData.needsNowPlayingFullscreenSwapQuirk;
+}
+
 URL Quirks::topDocumentURL() const
 {
     if (UNLIKELY(!m_topDocumentURLForTesting.isEmpty()))
@@ -1855,7 +1807,7 @@ void Quirks::setTopDocumentURLForTesting(URL&& url)
 }
 
 // FIXME(rdar://141554467): The set of static functions below will be generated from a JSON file in a future patch. For now, we just move the logic
-// for deciding if a particular quirk is needed to domain-specific functionss below:
+// for deciding if a particular quirk is needed to domain-specific functions below:
 #if PLATFORM(IOS) || PLATFORM(VISION)
 static void handle365ScoresQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
 {
@@ -1865,7 +1817,7 @@ static void handle365ScoresQuirks(QuirksData& quirksData, const URL& quirksURL, 
     UNUSED_PARAM(quirksURL);
     UNUSED_PARAM(documentURL);
     // 365scores.com rdar://116491386
-    quirksData.shouldSilenceWindowResizeEvents = true;
+    quirksData.shouldSilenceWindowResizeEventsDuringApplicationSnapshotting = true;
 }
 
 static void handleNYTimesQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
@@ -1876,7 +1828,7 @@ static void handleNYTimesQuirks(QuirksData& quirksData, const URL& quirksURL, co
     UNUSED_PARAM(quirksURL);
     UNUSED_PARAM(documentURL);
     // nytimes.com: rdar://problem/5976384
-    quirksData.shouldSilenceWindowResizeEvents = true;
+    quirksData.shouldSilenceWindowResizeEventsDuringApplicationSnapshotting = true;
 }
 #endif
 
@@ -2044,6 +1996,24 @@ static void handleScriptToEvaluateBeforeRunningScriptFromURLQuirk(QuirksData& qu
 }
 #endif
 
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
+static void handleICloudQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
+{
+    if (quirksDomainString != "icloud.com"_s)
+        return;
+
+    UNUSED_PARAM(documentURL);
+#if PLATFORM(IOS_FAMILY)
+    // icloud.com rdar://131836301
+    quirksData.shouldSilenceWindowResizeEventsDuringApplicationSnapshotting = quirksURL.path().contains("mail"_s) || quirksURL.fragmentIdentifier().contains("mail"_s);
+#endif
+#if PLATFORM(MAC)
+    // icloud.com rdar://26013388
+    quirksData.isNeverRichlyEditableForTouchBarQuirk = quirksURL.path().contains("notes"_s) || quirksURL.fragmentIdentifier().contains("notes"_s);
+#endif
+}
+#endif
+
 #if PLATFORM(MAC)
 static void handleCEACStateGovQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
 {
@@ -2054,16 +2024,6 @@ static void handleCEACStateGovQuirks(QuirksData& quirksData, const URL& quirksUR
         // ceac.state.gov https://bugs.webkit.org/show_bug.cgi?id=193478
         quirksData.needsFormControlToBeMouseFocusableQuirk = true;
     }
-}
-
-static void handleICloudQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
-{
-    if (quirksDomainString != "icloud.com"_s)
-        return;
-
-    UNUSED_PARAM(documentURL);
-    // icloud.com rdar://26013388
-    quirksData.isNeverRichlyEditableForTouchBarQuirk = quirksURL.path().contains("notes"_s) || quirksURL.fragmentIdentifier().contains("notes"_s);
 }
 
 static void handleTrixEditorQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
@@ -2234,13 +2194,6 @@ static void handleBBCQuirks(QuirksData& quirksData, const URL& quirksURL, const 
         // bbc.co.uk rdar://126494734
         quirksData.returnNullPictureInPictureElementDuringFullscreenChangeQuirk = true;
     }
-
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (quirksDomainString == "bbc.com"_s) {
-        // bbc.com rdar://108304377
-        quirksData.shouldDelayFullscreenEventWhenExitingPictureInPictureQuirk = true;
-    }
-#endif
 }
 
 static void handleBankOfAmericaQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
@@ -2449,6 +2402,10 @@ static void handleNetflixQuirks(QuirksData& quirksData, const URL& quirksURL, co
     quirksData.isNetflix = true;
     // netflix.com https://bugs.webkit.org/show_bug.cgi?id=173030
     quirksData.needsSeekingSupportDisabledQuirk = true;
+
+#if PLATFORM(VISION)
+    quirksData.needsNowPlayingFullscreenSwapQuirk = true;
+#endif
 }
 
 static void handlePandoraQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
@@ -2522,17 +2479,6 @@ static void handleSpotifyQuirks(QuirksData& quirksData, const URL& quirksURL, co
 #if PLATFORM(MAC)
     quirksData.shouldAvoidStartingSelectionOnMouseDown = true;
 #endif
-}
-
-static void handleTripAdvisorQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
-{
-    if (quirksDomainString != "tripadvisor.com"_s)
-        return;
-
-    UNUSED_PARAM(quirksURL);
-    UNUSED_PARAM(documentURL);
-    // tripadvisor.com: rdar://112851939
-    quirksData.needsRelaxedCorsMixedContentCheckQuirk = true;
 }
 
 static void handleVictoriasSecretQuirks(QuirksData& quirksData, const URL& quirksURL, const String& quirksDomainString, const URL& documentURL)
@@ -2620,7 +2566,7 @@ static void handleTwitterXQuirks(QuirksData& quirksData, const URL& quirksURL, c
     // (Ref: rdar://121473410)
     quirksData.shouldSilenceMediaQueryListChangeEvents = true;
     // twitter.com: rdar://problem/58804852 and rdar://problem/61731801
-    quirksData.shouldSilenceWindowResizeEvents = true;
+    quirksData.shouldSilenceWindowResizeEventsDuringApplicationSnapshotting = true;
 #endif
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     // twitter.com: rdar://73369869
@@ -2719,13 +2665,6 @@ void Quirks::determineRelevantQuirks()
     m_quirksData.needsResettingTransitionCancelsRunningTransitionQuirk = needsResettingTransitionCancelsRunningTransitionQuirk;
 #endif
 
-#if PLATFORM(IOS)
-    // This quirk has intentionally limited exposure to increase the odds of being able to remove it
-    // again within a reasonable timeframe as the impacted apps are being updated. <rdar://122548304>
-    static const bool needsGetElementsByNameQuirk = !PAL::currentUserInterfaceIdiomIsSmallScreen() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::NoGetElementsByNameQuirk);
-    m_quirksData.needsGetElementsByNameQuirk = needsGetElementsByNameQuirk;
-#endif
-
 #if PLATFORM(MAC)
     // Push state file path restrictions break Mimeo Photo Plugin (rdar://112445672).
     m_quirksData.shouldDisablePushStateFilePathRestrictions = WTF::MacApplication::isMimeoPhotoProject();
@@ -2778,7 +2717,7 @@ void Quirks::determineRelevantQuirks()
         { "hbomax"_s, &handleHBOMaxQuirks },
         { "hotels"_s, &handleHotelsQuirks },
         { "hulu"_s, &handleHuluQuirks },
-#if PLATFORM(MAC)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
         { "icloud"_s, &handleICloudQuirks },
 #endif
         { "imdb"_s, &handleIMDBQuirks },
@@ -2823,7 +2762,6 @@ void Quirks::determineRelevantQuirks()
 #if PLATFORM(IOS_FAMILY)
         { "thesaurus"_s, &handleScriptToEvaluateBeforeRunningScriptFromURLQuirk },
 #endif
-        { "tripadvisor"_s, &handleTripAdvisorQuirks },
 #if PLATFORM(MAC)
         { "trix-editor"_s, &handleTrixEditorQuirks },
 #endif

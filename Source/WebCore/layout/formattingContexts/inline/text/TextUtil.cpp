@@ -51,7 +51,7 @@ namespace Layout {
 static inline InlineLayoutUnit spaceWidth(const FontCascade& fontCascade, bool canUseSimplifiedContentMeasuring)
 {
     if (canUseSimplifiedContentMeasuring)
-        return fontCascade.primaryFont().spaceWidth();
+        return fontCascade.primaryFont()->spaceWidth();
     return fontCascade.widthOfSpaceString();
 }
 
@@ -139,7 +139,7 @@ static void fallbackFontsForRunWithIterator(SingleThreadWeakHashSet<const Font>&
 {
     auto isRTL = run.rtl();
     auto isSmallCaps = fontCascade.isSmallCaps();
-    auto& primaryFont = fontCascade.primaryFont();
+    Ref primaryFont = fontCascade.primaryFont();
 
     char32_t currentCharacter = 0;
     unsigned clusterLength = 0;
@@ -150,7 +150,7 @@ static void fallbackFontsForRunWithIterator(SingleThreadWeakHashSet<const Font>&
                 character = u_toupper(character);
 
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
-            if (glyphData.glyph && glyphData.font && glyphData.font != &primaryFont) {
+            if (glyphData.glyph && glyphData.font && glyphData.font != primaryFont.ptr()) {
                 auto isNonSpacingMark = U_MASK(u_charType(character)) & U_GC_MN_MASK;
 
                 // https://drafts.csswg.org/css-text-3/#white-space-processing
@@ -197,7 +197,7 @@ static TextUtil::EnclosingAscentDescent enclosingGlyphBoundsForRunWithIterator(c
     auto enclosingAscent = std::optional<InlineLayoutUnit> { };
     auto enclosingDescent = std::optional<InlineLayoutUnit> { };
     auto isSmallCaps = fontCascade.isSmallCaps();
-    auto& primaryFont = fontCascade.primaryFont();
+    Ref primaryFont = fontCascade.primaryFont();
 
     char32_t currentCharacter = 0;
     unsigned clusterLength = 0;
@@ -208,8 +208,8 @@ static TextUtil::EnclosingAscentDescent enclosingGlyphBoundsForRunWithIterator(c
                 character = u_toupper(character);
 
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
-            auto& font = glyphData.font ? *glyphData.font : primaryFont;
-            auto bounds = font.boundsForGlyph(glyphData.glyph);
+            Ref font = glyphData.font ? Ref { *glyphData.font } : primaryFont;
+            auto bounds = font->boundsForGlyph(glyphData.glyph);
 
             enclosingAscent = std::min(enclosingAscent.value_or(bounds.y()), bounds.y());
             enclosingDescent = std::max(enclosingDescent.value_or(bounds.maxY()), bounds.maxY());
@@ -267,13 +267,6 @@ TextUtil::WordBreakLeft TextUtil::breakWord(const InlineTextBox& inlineTextBox, 
                 return alignedStartIndex;
             };
 
-            auto nextUserPerceivedCharacterIndex = [&] (auto index) -> size_t {
-                if (text.is8Bit())
-                    return index + 1;
-                U16_FWD_1(text, index, startPosition + length);
-                return index;
-            };
-
             auto trySimplifiedBreakingPosition = [&] (auto start) -> std::optional<WordBreakLeft> {
                 auto mayUseSimplifiedBreakingPositionForFixedPitch = fontCascade.isFixedPitch() && inlineTextBox.canUseSimplifiedContentMeasuring();
                 if (!mayUseSimplifiedBreakingPositionForFixedPitch)
@@ -292,6 +285,44 @@ TextUtil::WordBreakLeft TextUtil::breakWord(const InlineTextBox& inlineTextBox, 
             };
             if (auto leftSide = trySimplifiedBreakingPosition(startPosition))
                 return *leftSide;
+
+            auto tryEstimateBreakingPosition = [&] (auto start) -> std::optional<WordBreakLeft> {
+                // Determine if the breaking position can be found within the range of [-1, 1] by using the average width of the characters.
+                auto averageCharacterWidth = InlineLayoutUnit { textWidth / length };
+                size_t candidateLength = availableWidth / averageCharacterWidth;
+                auto candidateEnd = userPerceivedCharacterBoundaryAlignedIndex(start + candidateLength);
+                if (candidateEnd <= start || candidateEnd >= start + length)
+                    return { };
+                auto contentWidthAtCandidatePosition = TextUtil::width(inlineTextBox, fontCascade, start, candidateEnd, contentLogicalLeft);
+                if (contentWidthAtCandidatePosition == availableWidth)
+                    return { WordBreakLeft { candidateEnd - start, contentWidthAtCandidatePosition } };
+
+                if (contentWidthAtCandidatePosition > availableWidth) {
+                    // Overshot.
+                    if (auto adjustedCandidateEnd = userPerceivedCharacterBoundaryAlignedIndex(candidateEnd - 1); adjustedCandidateEnd > start) {
+                        auto adjustedContentWidth = TextUtil::width(inlineTextBox, fontCascade, start, adjustedCandidateEnd, contentLogicalLeft);
+                        if (adjustedContentWidth <= availableWidth)
+                            return { WordBreakLeft { adjustedCandidateEnd - start, adjustedContentWidth } };
+                    }
+                } else if (auto adjustedCandidateEnd = userPerceivedCharacterBoundaryAlignedIndex(candidateEnd + 1); adjustedCandidateEnd < start + length) {
+                    // Undershot.
+                    auto adjustedContentWidth = TextUtil::width(inlineTextBox, fontCascade, start, adjustedCandidateEnd, contentLogicalLeft);
+                    if (adjustedContentWidth > availableWidth)
+                        return { WordBreakLeft { candidateEnd - start, contentWidthAtCandidatePosition } };
+                    if (adjustedContentWidth == availableWidth)
+                        return { WordBreakLeft { adjustedCandidateEnd - start, adjustedContentWidth } };
+                }
+                return { };
+            };
+            if (auto leftSide = tryEstimateBreakingPosition(startPosition))
+                return *leftSide;
+
+            auto nextUserPerceivedCharacterIndex = [&] (auto index) -> size_t {
+                if (text.is8Bit())
+                    return index + 1;
+                U16_FWD_1(text, index, startPosition + length);
+                return index;
+            };
 
             auto left = startPosition;
             auto right = left + length - 1;
@@ -578,8 +609,6 @@ size_t TextUtil::firstUserPerceivedCharacterLength(const InlineTextItem& inlineT
 
 TextDirection TextUtil::directionForTextContent(StringView content)
 {
-    if (content.is8Bit())
-        return TextDirection::LTR;
     return baseTextDirection(content).value_or(TextDirection::LTR);
 }
 
@@ -689,8 +718,8 @@ bool TextUtil::canUseSimplifiedTextMeasuring(StringView textContent, const FontC
     if (firstLineStyle && fontCascade != firstLineStyle->fontCascade())
         return false;
 
-    auto& primaryFont = fontCascade.primaryFont();
-    if (primaryFont.syntheticBoldOffset())
+    Ref primaryFont = fontCascade.primaryFont();
+    if (primaryFont->syntheticBoldOffset())
         return false;
 
     if (textContent.is8Bit())

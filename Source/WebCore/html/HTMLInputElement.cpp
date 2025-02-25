@@ -65,7 +65,6 @@
 #include "NodeName.h"
 #include "NodeRenderStyle.h"
 #include "Page.h"
-#include "PlatformMouseEvent.h"
 #include "PseudoClassChangeInvalidation.h"
 #include "RadioInputType.h"
 #include "RenderStyleSetters.h"
@@ -128,9 +127,9 @@ Ref<HTMLInputElement> HTMLInputElement::create(const QualifiedName& tagName, Doc
     return adoptRef(*new HTMLInputElement(tagName, document, form, createdByParser ? CreationType::ByParser : CreationType::Normal));
 }
 
-Ref<Element> HTMLInputElement::cloneElementWithoutAttributesAndChildren(TreeScope& treeScope)
+Ref<Element> HTMLInputElement::cloneElementWithoutAttributesAndChildren(Document& document, CustomElementRegistry*)
 {
-    return adoptRef(*new HTMLInputElement(tagQName(), treeScope.documentScope(), nullptr, CreationType::ByCloning));
+    return adoptRef(*new HTMLInputElement(tagQName(), document, nullptr, CreationType::ByCloning));
 }
 
 HTMLImageLoader& HTMLInputElement::ensureImageLoader()
@@ -882,17 +881,17 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
         if (document().settings().switchControlEnabled()) {
             auto hasSwitchAttribute = !newValue.isNull();
             m_hasSwitchAttribute = hasSwitchAttribute;
+#if ENABLE(TOUCH_EVENTS)
+            updateTouchEventHandler();
+#endif
             if (attributeModificationReason != AttributeModificationReason::Directly)
-                return; // initializeInputTypeAfterParsingOrCloning and updateUserAgentShadowTree will take care of this.
+                return; // updateUserAgentShadowTree will take care of this.
             if (isSwitch())
                 m_inputType->createShadowSubtreeIfNeeded();
             else if (isCheckbox())
                 m_inputType->removeShadowSubtree();
             if (renderer())
                 invalidateStyleAndRenderersForSubtree();
-#if ENABLE(TOUCH_EVENTS)
-            updateTouchEventHandler();
-#endif
         }
         break;
     case AttributeNames::alphaAttr:
@@ -1886,6 +1885,12 @@ Vector<Color> HTMLInputElement::suggestedColors() const
 
 RefPtr<HTMLElement> HTMLInputElement::list() const
 {
+    // FIXME: The downcast should be unnecessary, but the WPT was written before https://github.com/WICG/webcomponents/issues/1072 was resolved. Update once the WPT has been updated.
+    return dynamicDowncast<HTMLDataListElement>(retargetReferenceTargetForBindings(dataList()));
+}
+
+bool HTMLInputElement::hasDataList() const
+{
     return dataList();
 }
 
@@ -1894,7 +1899,7 @@ RefPtr<HTMLDataListElement> HTMLInputElement::dataList() const
     if (!m_hasNonEmptyList || !m_inputType->shouldRespectListAttribute())
         return nullptr;
 
-    return dynamicDowncast<HTMLDataListElement>(treeScope().getElementById(attributeWithoutSynchronization(listAttr)));
+    return dynamicDowncast<HTMLDataListElement>(elementForAttributeInternal(listAttr));
 }
 
 void HTMLInputElement::resetListAttributeTargetObserver()

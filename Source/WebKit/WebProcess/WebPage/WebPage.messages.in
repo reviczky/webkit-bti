@@ -40,10 +40,10 @@ messages -> WebPage WantsAsyncDispatchMessage {
     TestProcessIncomingSyncMessagesWhenWaitingForSyncReply() -> (bool handled) Synchronous AllowedWhenWaitingForSyncReplyDuringUnboundedIPC
 
 #if PLATFORM(COCOA)
-    SetTopContentInsetFenced(float contentInset, MachSendRight machSendRight)
+    SetObscuredContentInsetsFenced(WebCore::FloatBoxExtent obscuredContentInsets, MachSendRight machSendRight)
 #endif
 #if !PLATFORM(COCOA)
-    SetTopContentInset(float contentInset)
+    SetObscuredContentInsets(WebCore::FloatBoxExtent obscuredContentInsets)
 #endif
 
     SetUnderlayColor(WebCore::Color color)
@@ -70,7 +70,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
 
     AttemptSyntheticClick(WebCore::IntPoint point, OptionSet<WebKit::WebEventModifier> modifiers, WebKit::TransactionID lastLayerTreeTransactionId)
     PotentialTapAtPosition(WebKit::TapIdentifier requestID, WebCore::FloatPoint point, bool shouldRequestMagnificationInformation)
-    CommitPotentialTap(OptionSet<WebKit::WebEventModifier> modifiers, WebKit::TransactionID lastLayerTreeTransactionId, WebCore::PointerID pointerId, String pointerType)
+    CommitPotentialTap(OptionSet<WebKit::WebEventModifier> modifiers, WebKit::TransactionID lastLayerTreeTransactionId, WebCore::PointerID pointerId)
     CancelPotentialTap()
     TapHighlightAtPosition(WebKit::TapIdentifier requestID, WebCore::FloatPoint point)
     DidRecognizeLongPress()
@@ -301,9 +301,6 @@ messages -> WebPage WantsAsyncDispatchMessage {
     DidScalePageInViewCoordinates(double scale, WebCore::IntPoint origin)
     DidScalePageRelativeToScrollPosition(double scale, WebCore::IntPoint origin)
     DidScaleView(double scale)
-#if ENABLE(PDF_PLUGIN)
-    SetPluginScaleFactor(double scale, WebCore::IntPoint origin);
-#endif
 
     SetUseFixedLayout(bool fixed)
     SetFixedLayoutSize(WebCore::IntSize size)
@@ -366,6 +363,12 @@ messages -> WebPage WantsAsyncDispatchMessage {
     DidStartDrag()
     DragEnded(std::optional<WebCore::FrameIdentifier> frameID, WebCore::IntPoint clientPosition, WebCore::IntPoint globalPosition, OptionSet<WebCore::DragOperation> dragOperationMask) -> (struct std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData)
     DragCancelled()
+#endif
+
+#if ENABLE(MODEL_PROCESS)
+    RequestInteractiveModelElementAtPoint(WebCore::IntPoint clientPosition)
+    StageModeSessionDidUpdate(std::optional<WebCore::ElementIdentifier> elementID, WebCore::TransformationMatrix transform)
+    StageModeSessionDidEnd(std::optional<WebCore::ElementIdentifier> elementID)
 #endif
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(DRAG_SUPPORT)
@@ -437,7 +440,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
-    MediaKeySystemWasGranted(WebCore::MediaKeySystemRequestIdentifier mediaKeySystemID)
+    MediaKeySystemWasGranted(WebCore::MediaKeySystemRequestIdentifier mediaKeySystemID, String mediaKeysHashSalt)
     MediaKeySystemWasDenied(WebCore::MediaKeySystemRequestIdentifier mediaKeySystemID, String message)
 #endif
 
@@ -496,7 +499,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
 
     BindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier frameID, Vector<uint8_t> dataToken) -> (Vector<uint8_t> token, int processIdentifier) Synchronous
     UpdateRemotePageAccessibilityOffset(WebCore::FrameIdentifier frameID, WebCore::IntPoint offset);
-    ResolveAccessibilityHitTestForTesting(WebCore::IntPoint point) -> (String result)
+    ResolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier frameID, WebCore::IntPoint point) -> (String result)
     EnableAccessibility()
 
 #if PLATFORM(COCOA)
@@ -647,7 +650,7 @@ messages -> WebPage WantsAsyncDispatchMessage {
     URLSchemeTaskDidReceiveData(WebKit::WebURLSchemeHandlerIdentifier handlerIdentifier, WebCore::ResourceLoaderIdentifier taskIdentifier, Ref<WebCore::SharedBuffer> data)
     URLSchemeTaskDidComplete(WebKit::WebURLSchemeHandlerIdentifier handlerIdentifier, WebCore::ResourceLoaderIdentifier taskIdentifier, WebCore::ResourceError error)
 
-    SetIsSuspended(bool suspended)
+    SetIsSuspended(bool suspended) -> (std::optional<bool> didSuspend)
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     InsertAttachment(String identifier, std::optional<uint64_t> fileSize, String fileName, String contentType) -> ()
@@ -834,8 +837,8 @@ messages -> WebPage WantsAsyncDispatchMessage {
     AdjustVisibilityForTargetedElements(Vector<WebCore::TargetedElementAdjustment> adjustments) -> (bool success)
     NumberOfVisibilityAdjustmentRects() -> (uint64_t count)
 
-    RemoteViewRectToRootView(WebCore::FrameIdentifier frameID, WebCore::FloatRect rect) -> (WebCore::FloatRect rect)
-    RemoteViewPointToRootView(WebCore::FrameIdentifier frameID, WebCore::FloatPoint point) -> (WebCore::FloatPoint point)
+    ContentsToRootViewRect(WebCore::FrameIdentifier frameID, WebCore::FloatRect rect) -> (WebCore::FloatRect rect)
+    ContentsToRootViewPoint(WebCore::FrameIdentifier frameID, WebCore::FloatPoint point) -> (WebCore::FloatPoint point)
     RemoteDictionaryPopupInfoToRootView(WebCore::FrameIdentifier frameID, struct WebCore::DictionaryPopupInfo popupInfo) -> (struct WebCore::DictionaryPopupInfo popupInfo)
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
@@ -865,5 +868,10 @@ messages -> WebPage WantsAsyncDispatchMessage {
 
 #if HAVE(AUDIT_TOKEN)
     SetPresentingApplicationAuditTokenAndBundleIdentifier(struct WebKit::CoreIPCAuditToken auditToken, String bundleIdentifier)
+#endif
+
+#if USE(UICONTEXTMENU)
+    WillBeginContextMenuInteraction()
+    DidEndContextMenuInteraction()
 #endif
 }

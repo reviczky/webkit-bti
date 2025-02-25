@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,7 @@ public:
 #endif
 
 private:
+    bool isWebChromeClient() const final { return true; }
     void chromeDestroyed() final;
     
     void setWindowRect(const WebCore::FloatRect&) final;
@@ -207,6 +208,12 @@ private:
     void runOpenPanel(WebCore::LocalFrame&, WebCore::FileChooser&) final;
     void showShareSheet(WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void(bool)>&&) final;
     void showContactPicker(const WebCore::ContactsRequestData&, WTF::CompletionHandler<void(std::optional<Vector<WebCore::ContactInfo>>&&)>&&) final;
+
+#if HAVE(DIGITAL_CREDENTIALS_UI)
+    void showDigitalCredentialsPicker(const WebCore::DigitalCredentialsRequestData&, WTF::CompletionHandler<void(Expected<WebCore::DigitalCredentialsResponseData, WebCore::ExceptionData>&&)>&&) final;
+    void dismissDigitalCredentialsPicker(WTF::CompletionHandler<void(bool)>&&) final;
+#endif
+
     void loadIconForFiles(const Vector<String>&, WebCore::FileIconLoader&) final;
 
     void setCursor(const WebCore::Cursor&) final;
@@ -307,7 +314,8 @@ private:
     bool supportsVideoFullscreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode) final;
     bool supportsVideoFullscreenStandby() final;
     void setMockVideoPresentationModeEnabled(bool) final;
-    void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, bool standby) final;
+    void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, bool) final;
+    void setPlayerIdentifierForVideoElement(WebCore::HTMLVideoElement&) final;
     void exitVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&, WTF::CompletionHandler<void(bool)>&& = [](bool) { }) final;
     void setUpPlaybackControlsManager(WebCore::HTMLMediaElement&) final;
     void clearPlaybackControlsManager() final;
@@ -328,11 +336,11 @@ private:
 
 #if ENABLE(FULLSCREEN_API)
     bool supportsFullScreenForElement(const WebCore::Element&, bool withKeyboard) final;
-    void enterFullScreenForElement(WebCore::Element&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard) final;
+    void enterFullScreenForElement(WebCore::Element&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, CompletionHandler<void(WebCore::ExceptionOr<void>)>&&, CompletionHandler<bool(bool)>&&) final;
 #if ENABLE(QUICKLOOK_FULLSCREEN)
     void updateImageSource(WebCore::Element&) final;
 #endif // ENABLE(QUICKLOOK_FULLSCREEN)
-    void exitFullScreenForElement(WebCore::Element*) final;
+    void exitFullScreenForElement(WebCore::Element*, CompletionHandler<void()>&&) final;
 #endif // ENABLE(FULLSCREEN_API)
 
 #if PLATFORM(COCOA)
@@ -402,10 +410,10 @@ private:
 #endif
 
 #if ENABLE(SERVICE_CONTROLS)
-    void handleSelectionServiceClick(WebCore::FrameSelection&, const Vector<String>& telephoneNumbers, const WebCore::IntPoint&) final;
+    void handleSelectionServiceClick(WebCore::FrameIdentifier, WebCore::FrameSelection&, const Vector<String>& telephoneNumbers, const WebCore::IntPoint&) final;
     bool hasRelevantSelectionServices(bool isTextOnly) const final;
-    void handleImageServiceClick(const WebCore::IntPoint&, WebCore::Image&, WebCore::HTMLImageElement&) final;
-    void handlePDFServiceClick(const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&);
+    void handleImageServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::Image&, WebCore::HTMLImageElement&) final;
+    void handlePDFServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&);
 #endif
 
     bool shouldDispatchFakeMouseMoveEvents() const final;
@@ -572,3 +580,7 @@ private:
 RefPtr<API::Object> userDataFromJSONData(JSON::Value&);
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::WebChromeClient) \
+    static bool isType(const WebCore::ChromeClient& client) { return client.isWebChromeClient(); } \
+SPECIALIZE_TYPE_TRAITS_END()

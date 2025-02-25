@@ -1,3 +1,16 @@
+=================
+WebKitGTK 2.47.90
+=================
+
+What's new in WebKitGTK 2.47.90?
+
+  - Ensure WebKitCookieManager APIs keep cookie cache up to date.
+  - Use two GPU rendering threads if the system has more than 4 cores.
+  - Fix web view contents not rendered in some cases.
+  - Fix invalid DPI-aware font size conversion.
+  - Reduce memory copies when rendering DMABufs video frames.
+  - Translation updates: Brazilian Portuguese.
+
 ================
 WebKitGTK 2.47.4
 ================

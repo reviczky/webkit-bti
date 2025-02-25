@@ -135,7 +135,7 @@ DocumentThreadableLoader::DocumentThreadableLoader(Document& document, Threadabl
     // Setting a referrer header is only supported in the async code path.
     ASSERT(m_async || m_referrer.isEmpty());
 
-    if (document.settings().disallowSyncXHRDuringPageDismissalEnabled() && !m_async && (!document.page() || !document.page()->areSynchronousLoadsAllowed())) {
+    if (!m_async && (!document.page() || !document.page()->areSynchronousLoadsAllowed())) {
         document.didRejectSyncXHRDuringPageDismissal();
         logErrorAndFail(ResourceError(errorDomainWebKitInternal, 0, request.url(), "Synchronous loads are not allowed at this time"_s));
         return;
@@ -451,10 +451,10 @@ void DocumentThreadableLoader::didReceiveResponse(ResourceLoaderIdentifier ident
 void DocumentThreadableLoader::dataReceived(CachedResource& resource, const SharedBuffer& buffer)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
-    didReceiveData(*m_resource->resourceLoaderIdentifier(), buffer);
+    didReceiveData(buffer);
 }
 
-void DocumentThreadableLoader::didReceiveData(ResourceLoaderIdentifier, const SharedBuffer& buffer)
+void DocumentThreadableLoader::didReceiveData(const SharedBuffer& buffer)
 {
     ASSERT(m_client);
 
@@ -686,7 +686,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     didReceiveResponse(identifier, response);
 
     if (data)
-        didReceiveData(identifier, *data);
+        didReceiveData(*data);
 
     const auto* timing = response.deprecatedNetworkLoadMetricsOrNull();
     auto resourceTiming = ResourceTiming::fromSynchronousLoad(requestURL, m_options.initiatorType, loadTiming, timing ? *timing : NetworkLoadMetrics::emptyMetrics(), response, securityOrigin());

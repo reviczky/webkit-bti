@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2025 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
  * This library is free software; you can redistribute it and/or
@@ -23,6 +23,7 @@
 #include "ActivityState.h"
 #include "AnimationFrameRate.h"
 #include "BackForwardItemIdentifier.h"
+#include "BoxExtents.h"
 #include "Color.h"
 #include "FindOptions.h"
 #include "FrameLoaderTypes.h"
@@ -92,6 +93,7 @@ namespace IDBClient {
 class IDBConnectionToServer;
 }
 
+class AXObjectCache;
 class AccessibilityRootAtspi;
 class ApplePayAMSUIPaymentHandler;
 class ActivityStateChangeObserver;
@@ -365,6 +367,7 @@ public:
 
     static void refreshPlugins(bool reload);
     WEBCORE_EXPORT PluginData& pluginData();
+    WEBCORE_EXPORT Ref<PluginData> protectedPluginData();
     void clearPluginData();
 
     OpportunisticTaskScheduler& opportunisticTaskScheduler() const { return m_opportunisticTaskScheduler.get(); }
@@ -397,8 +400,6 @@ public:
     void setAutofocusProcessed();
     bool autofocusProcessed() const;
     bool topDocumentHasDocumentClass(DocumentClass) const;
-    void setTopDocumentHasFullscreenElement(bool);
-    WEBCORE_EXPORT bool topDocumentHasFullscreenElement();
 
     bool hasInjectedUserScript();
     WEBCORE_EXPORT void setHasInjectedUserScript();
@@ -430,7 +431,7 @@ public:
     WEBCORE_EXPORT Ref<BroadcastChannelRegistry> protectedBroadcastChannelRegistry() const;
     WEBCORE_EXPORT void setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&&); // Only used by WebKitLegacy.
 
-    WEBCORE_EXPORT static void forEachPage(const Function<void(Page&)>&);
+    WEBCORE_EXPORT static void forEachPage(NOESCAPE const Function<void(Page&)>&);
     WEBCORE_EXPORT static unsigned nonUtilityPageCount();
 
     unsigned subframeCount() const;
@@ -622,12 +623,6 @@ public:
     WEBCORE_EXPORT std::optional<FramesPerSecond> preferredRenderingUpdateFramesPerSecond(OptionSet<PreferredRenderingUpdateOption> = allPreferredRenderingUpdateOptions) const;
     WEBCORE_EXPORT Seconds preferredRenderingUpdateInterval() const;
 
-    float topContentInset() const { return m_topContentInset; }
-    WEBCORE_EXPORT void setTopContentInset(float);
-
-    const FloatBoxExtent& obscuredInsets() const { return m_obscuredInsets; }
-    void setObscuredInsets(const FloatBoxExtent& obscuredInsets) { m_obscuredInsets = obscuredInsets; }
-
     const FloatBoxExtent& contentInsets() const { return m_contentInsets; }
     void setContentInsets(const FloatBoxExtent& insets) { m_contentInsets = insets; }
 
@@ -637,7 +632,13 @@ public:
 #if PLATFORM(IOS_FAMILY)
     bool enclosedInScrollableAncestorView() const { return m_enclosedInScrollableAncestorView; }
     void setEnclosedInScrollableAncestorView(bool f) { m_enclosedInScrollableAncestorView = f; }
+
+    const FloatBoxExtent& obscuredInsets() const { return m_obscuredInsets; }
+    void setObscuredInsets(const FloatBoxExtent& insets) { m_obscuredInsets = insets; }
 #endif
+
+    const FloatBoxExtent& obscuredContentInsets() const { return m_obscuredContentInsets; }
+    WEBCORE_EXPORT void setObscuredContentInsets(const FloatBoxExtent&);
 
     WEBCORE_EXPORT void useSystemAppearanceChanged();
 
@@ -663,6 +664,10 @@ public:
 
     Document* outermostFullscreenDocument() const;
 
+#if HAVE(SUPPORT_HDR_DISPLAY)
+    bool canDrawHDRContent() const;
+#endif
+
     bool shouldSuppressScrollbarAnimations() const { return m_suppressScrollbarAnimations; }
     WEBCORE_EXPORT void setShouldSuppressScrollbarAnimations(bool suppressAnimations);
     void lockAllOverlayScrollbarsToHidden(bool lockOverlayScrollbars);
@@ -675,6 +680,10 @@ public:
 
     WEBCORE_EXPORT void accessibilitySettingsDidChange();
     WEBCORE_EXPORT void appearanceDidChange();
+
+    void clearAXObjectCache();
+    AXObjectCache* existingAXObjectCache() { return m_axObjectCache.get(); }
+    WEBCORE_EXPORT AXObjectCache* axObjectCache();
 
     // Page and FrameView both store a Pagination value. Page::pagination() is set only by API,
     // and FrameView::pagination() is set only by CSS. Page::pagination() will affect all
@@ -731,7 +740,9 @@ public:
 
 #if ENABLE(WEB_AUTHN)
     AuthenticatorCoordinator& authenticatorCoordinator() { return m_authenticatorCoordinator.get(); }
-    CredentialRequestCoordinator& credentialRequestCoordinator() { return m_credentialRequestCoordinator.get(); }
+#if HAVE(DIGITAL_CREDENTIALS_UI)
+    CredentialRequestCoordinator& credentialRequestCoordinator() { return *m_credentialRequestCoordinator; }
+#endif
 #endif
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -822,7 +833,6 @@ public:
 
     WEBCORE_EXPORT void userAgentChanged();
 
-    void dnsPrefetchingStateChanged();
     void storageBlockingStateChanged();
 
 #if ENABLE(RESOURCE_USAGE)
@@ -1111,12 +1121,12 @@ public:
 #endif
 
     WEBCORE_EXPORT void forEachDocument(NOESCAPE const Function<void(Document&)>&) const;
-    bool findMatchingLocalDocument(const Function<bool(Document&)>&) const;
-    void forEachRenderableDocument(const Function<void(Document&)>&) const;
+    bool findMatchingLocalDocument(NOESCAPE const Function<bool(Document&)>&) const;
+    void forEachRenderableDocument(NOESCAPE const Function<void(Document&)>&) const;
     void forEachMediaElement(NOESCAPE const Function<void(HTMLMediaElement&)>&);
     static void forEachDocumentFromMainFrame(const Frame&, NOESCAPE const Function<void(Document&)>&);
-    void forEachLocalFrame(const Function<void(LocalFrame&)>&);
-    void forEachWindowEventLoop(const Function<void(WindowEventLoop&)>&);
+    void forEachLocalFrame(NOESCAPE const Function<void(LocalFrame&)>&);
+    void forEachWindowEventLoop(NOESCAPE const Function<void(WindowEventLoop&)>&);
 
     bool shouldDisableCorsForRequestTo(const URL&) const;
     bool shouldAssumeSameSiteForRequestTo(const URL& url) const { return shouldDisableCorsForRequestTo(url); }
@@ -1414,7 +1424,7 @@ private:
     std::unique_ptr<PerformanceLoggingClient> m_performanceLoggingClient;
 
 #if ENABLE(SPEECH_SYNTHESIS)
-    RefPtr<SpeechSynthesisClient> m_speechSynthesisClient;
+    const RefPtr<SpeechSynthesisClient> m_speechSynthesisClient;
 #endif
 
     const UniqueRef<SpeechRecognitionProvider> m_speechRecognitionProvider;
@@ -1444,14 +1454,14 @@ private:
     float m_deviceScaleFactor { 1 };
     float m_viewScaleFactor { 1 };
 
-    float m_topContentInset { 0 };
-    FloatBoxExtent m_obscuredInsets;
+    FloatBoxExtent m_obscuredContentInsets;
     FloatBoxExtent m_contentInsets;
     FloatBoxExtent m_unobscuredSafeAreaInsets;
     FloatBoxExtent m_fullscreenInsets;
     Seconds m_fullscreenAutoHideDuration { 0_s };
 
 #if PLATFORM(IOS_FAMILY)
+    FloatBoxExtent m_obscuredInsets;
     bool m_enclosedInScrollableAncestorView { false };
     bool m_canShowWhileLocked { false };
 #endif
@@ -1491,6 +1501,7 @@ private:
 #if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
     bool m_prefersNonBlinkingCursor { false };
 #endif
+    std::unique_ptr<AXObjectCache> m_axObjectCache;
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
     MonotonicTime m_timerThrottlingStateLastChangedTime;
@@ -1628,8 +1639,12 @@ private:
 
 #if ENABLE(WEB_AUTHN)
     const UniqueRef<AuthenticatorCoordinator> m_authenticatorCoordinator;
-    const UniqueRef<CredentialRequestCoordinator> m_credentialRequestCoordinator;
+
+#if HAVE(DIGITAL_CREDENTIALS_UI)
+    const RefPtr<CredentialRequestCoordinator> m_credentialRequestCoordinator;
 #endif
+
+#endif // ENABLE(WEB_AUTHN)
 
 #if ENABLE(APPLICATION_MANIFEST)
     std::optional<ApplicationManifest> m_applicationManifest;
@@ -1749,6 +1764,13 @@ private:
 inline Page* Frame::page() const
 {
     return m_page.get();
+}
+
+inline std::optional<PageIdentifier> Frame::pageID() const
+{
+    if (auto* page = this->page())
+        return page->identifier();
+    return std::nullopt;
 }
 
 inline RefPtr<Page> Frame::protectedPage() const

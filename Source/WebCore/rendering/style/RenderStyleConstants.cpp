@@ -510,6 +510,14 @@ TextStream& operator<<(TextStream& ts, EventListenerRegionType listenerType)
     case EventListenerRegionType::Wheel: ts << "wheel"; break;
     case EventListenerRegionType::NonPassiveWheel: ts << "active wheel"; break;
     case EventListenerRegionType::MouseClick: ts << "mouse click"; break;
+    case EventListenerRegionType::TouchStart: ts << "touch start"; break;
+    case EventListenerRegionType::NonPassiveTouchStart: ts << "active touch start"; break;
+    case EventListenerRegionType::TouchEnd: ts << "touch end"; break;
+    case EventListenerRegionType::NonPassiveTouchEnd: ts << "active touch end"; break;
+    case EventListenerRegionType::TouchCancel: ts << "touch cancel"; break;
+    case EventListenerRegionType::NonPassiveTouchCancel: ts << "active touch cancel"; break;
+    case EventListenerRegionType::TouchMove: ts << "touch move"; break;
+    case EventListenerRegionType::NonPassiveTouchMove: ts << "active touch move"; break;
     }
     return ts;
 }
@@ -1074,8 +1082,8 @@ TextStream& operator<<(TextStream& ts, StyleDifference diff)
     case StyleDifference::RepaintIfText: ts << "repaint if text"; break;
     case StyleDifference::RepaintLayer: ts << "repaint layer"; break;
     case StyleDifference::LayoutPositionedMovementOnly: ts << "layout positioned movement only"; break;
-    case StyleDifference::SimplifiedLayout: ts << "simplified layout"; break;
-    case StyleDifference::SimplifiedLayoutAndPositionedMovement: ts << "simplified layout and positioned movement"; break;
+    case StyleDifference::Overflow: ts << "overflow"; break;
+    case StyleDifference::OverflowAndPositionedMovement: ts << "overflow and positioned movement"; break;
     case StyleDifference::Layout: ts << "layout"; break;
     case StyleDifference::NewStyle: ts << "new style"; break;
     }

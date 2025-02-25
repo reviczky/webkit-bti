@@ -2624,10 +2624,7 @@ void webkitWebViewBaseWillEnterFullScreen(WebKitWebViewBase* webkitWebViewBase, 
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
     ASSERT(priv->fullScreenState == WebFullScreenManagerProxy::FullscreenState::NotInFullscreen);
-    if (auto* fullScreenManagerProxy = priv->pageProxy->fullScreenManager())
-        fullScreenManagerProxy->willEnterFullScreen(WTFMove(completionHandler));
-    else
-        completionHandler(false);
+    completionHandler(true);
     priv->fullScreenState = WebFullScreenManagerProxy::FullscreenState::EnteringFullscreen;
 }
 
@@ -2652,18 +2649,16 @@ static void webkitWebViewBaseDidEnterFullScreen(WebKitWebViewBase* webkitWebView
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
     ASSERT(priv->fullScreenState == WebFullScreenManagerProxy::FullscreenState::EnteringFullscreen);
-    if (auto* fullScreenManagerProxy = priv->pageProxy->fullScreenManager())
-        fullScreenManagerProxy->didEnterFullScreen();
+    // FIXME: Call CompletionHandler from PageClientImpl::beganEnterFullScreen here.
     priv->fullScreenState = WebFullScreenManagerProxy::FullscreenState::InFullscreen;
     priv->sleepDisabler = PAL::SleepDisabler::create(String::fromUTF8(_("Website running in fullscreen mode")), PAL::SleepDisabler::Type::Display);
 }
 
-void webkitWebViewBaseWillExitFullScreen(WebKitWebViewBase* webkitWebViewBase)
+void webkitWebViewBaseWillExitFullScreen(WebKitWebViewBase* webkitWebViewBase, CompletionHandler<void()>&& completionHandler)
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
     ASSERT(priv->fullScreenState == WebFullScreenManagerProxy::FullscreenState::EnteringFullscreen || priv->fullScreenState == WebFullScreenManagerProxy::FullscreenState::InFullscreen);
-    if (auto* fullScreenManagerProxy = priv->pageProxy->fullScreenManager())
-        fullScreenManagerProxy->willExitFullScreen();
+    completionHandler();
     priv->fullScreenState = WebFullScreenManagerProxy::FullscreenState::ExitingFullscreen;
 }
 
@@ -2685,8 +2680,6 @@ static void webkitWebViewBaseDidExitFullScreen(WebKitWebViewBase* webkitWebViewB
 {
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
     ASSERT(priv->fullScreenState == WebFullScreenManagerProxy::FullscreenState::ExitingFullscreen);
-    if (auto* fullScreenManagerProxy = priv->pageProxy->fullScreenManager())
-        fullScreenManagerProxy->didExitFullScreen();
     priv->fullScreenState = WebFullScreenManagerProxy::FullscreenState::NotInFullscreen;
     priv->sleepDisabler = nullptr;
 }
@@ -3043,7 +3036,7 @@ static void emojiChooserClosed(WebKitWebViewBase* webkitWebViewBase)
 {
     // The emoji chooser first closes the popover and then emits emoji-picked signal, so complete
     // the request if the emoji isn't picked before the next run loop iteration.
-    RunLoop::main().dispatch([webViewBase = GRefPtr<WebKitWebViewBase>(webkitWebViewBase)] {
+    RunLoop::protectedMain()->dispatch([webViewBase = GRefPtr<WebKitWebViewBase>(webkitWebViewBase)] {
         webkitWebViewBaseCompleteEmojiChooserRequest(webViewBase.get(), emptyString());
     });
     webkitWebViewBase->priv->releaseEmojiChooserTimer.startOneShot(2_min);

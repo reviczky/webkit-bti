@@ -32,12 +32,14 @@
 #include "Document.h"
 #include "Element.h"
 #include "LegacyRenderSVGModelObject.h"
+#include "RenderBlock.h"
 #include "RenderBox.h"
 #include "RenderBoxInlines.h"
 #include "RenderInline.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderSVGModelObject.h"
 #include "ScrollAnchoringController.h"
+#include "ScrollingConstraints.h"
 #include "StyleBuilderConverter.h"
 #include "StyleScrollPadding.h"
 #include "WebAnimation.h"
@@ -63,6 +65,8 @@ ExceptionOr<Ref<ViewTimeline>> ViewTimeline::create(Document& document, ViewTime
 
     viewTimeline->m_specifiedInsets = WTFMove(specifiedInsets);
     viewTimeline->setSubject(options.subject.get());
+    if (auto subject = options.subject)
+        subject->protectedDocument()->updateLayoutIgnorePendingStylesheets();
     viewTimeline->cacheCurrentTime();
 
     return viewTimeline;
@@ -196,6 +200,89 @@ AnimationTimelinesController* ViewTimeline::controller() const
     return nullptr;
 }
 
+StickinessAdjustmentData StickinessAdjustmentData::computeStickinessAdjustmentData(const StickyPositionViewportConstraints& constraints, ScrollTimeline::ResolvedScrollDirection scrollDirection, float scrollContainerSize, float subjectSize, float subjectOffset)
+{
+    // For a sticky container, determine the amount of adjustment that is possible, which is the distance from the edge of the sticky container
+    // to the edge of its containing block. We also need to determine where the subject element is relative to the scroller when the stickiness
+    // occurs, so that we can properly adjust the start and end of the range, as well as for a specific animation-range.
+
+    StickinessAdjustmentData data;
+
+    auto computeSubjectStickinessLocation = [] (float stickyBoxStuckPosition, float stickyBoxStaticPosition, float scrollContainerSize, float subjectSize, float subjectOffset) {
+        float subjectPositionInScroller = stickyBoxStuckPosition + subjectOffset - stickyBoxStaticPosition;
+        if (subjectPositionInScroller > scrollContainerSize)
+            return StickinessLocation::BeforeEntry;
+        if (subjectPositionInScroller + subjectSize > scrollContainerSize)
+            return StickinessLocation::DuringEntry;
+        if (subjectPositionInScroller + subjectSize < 0)
+            return StickinessLocation::AfterExit;
+        if (subjectPositionInScroller < 0)
+            return StickinessLocation::DuringExit;
+        return StickinessLocation::WhileContained;
+    };
+
+    if (scrollDirection.isVertical) {
+        if (constraints.hasAnchorEdge(ViewportConstraints::AnchorEdgeTop)) {
+            data.stickyTopOrLeftAdjustment = constraints.containingBlockRect().maxY() - constraints.stickyBoxRect().maxY();
+            data.topOrLeftAdjustmentLocation = computeSubjectStickinessLocation(constraints.topOffset(), constraints.stickyBoxRect().y(), scrollContainerSize, subjectSize, subjectOffset);
+        }
+        if (constraints.hasAnchorEdge(ViewportConstraints::AnchorEdgeBottom)) {
+            data.stickyBottomOrRightAdjustment = constraints.containingBlockRect().y() - constraints.stickyBoxRect().y();
+            data.bottomOrRightAdjustmentLocation = computeSubjectStickinessLocation(scrollContainerSize - constraints.bottomOffset() - constraints.stickyBoxRect().height(), constraints.stickyBoxRect().y(), scrollContainerSize, subjectSize, subjectOffset);
+        }
+    } else {
+        if (constraints.hasAnchorEdge(ViewportConstraints::AnchorEdgeLeft)) {
+            data.stickyTopOrLeftAdjustment = constraints.containingBlockRect().maxX() - constraints.stickyBoxRect().maxX();
+            data.topOrLeftAdjustmentLocation = computeSubjectStickinessLocation(constraints.leftOffset(), constraints.stickyBoxRect().x(), scrollContainerSize, subjectSize, subjectOffset);
+        }
+        if (constraints.hasAnchorEdge(ViewportConstraints::AnchorEdgeRight)) {
+            data.stickyBottomOrRightAdjustment = constraints.containingBlockRect().x() - constraints.stickyBoxRect().x();
+            data.bottomOrRightAdjustmentLocation = computeSubjectStickinessLocation(scrollContainerSize - constraints.rightOffset() - constraints.stickyBoxRect().width(), constraints.stickyBoxRect().x(), scrollContainerSize, subjectSize, subjectOffset);
+        }
+    }
+    return data;
+}
+
+float StickinessAdjustmentData::entryDistanceAdjustment() const
+{
+    float entryDistanceAdjustment = 0;
+    if (topOrLeftAdjustmentLocation == StickinessLocation::DuringEntry)
+        entryDistanceAdjustment += stickyTopOrLeftAdjustment;
+    if (bottomOrRightAdjustmentLocation == StickinessLocation::DuringEntry)
+        entryDistanceAdjustment -= stickyBottomOrRightAdjustment;
+    return entryDistanceAdjustment;
+}
+
+float StickinessAdjustmentData::exitDistanceAdjustment() const
+{
+    float exitDistanceAdjustment = 0;
+    if (topOrLeftAdjustmentLocation == StickinessLocation::DuringExit)
+        exitDistanceAdjustment += stickyTopOrLeftAdjustment;
+    if (bottomOrRightAdjustmentLocation == StickinessLocation::DuringExit)
+        exitDistanceAdjustment -= stickyBottomOrRightAdjustment;
+    return exitDistanceAdjustment;
+}
+
+float StickinessAdjustmentData::rangeStartAdjustment() const
+{
+    auto rangeStartAdjustment = 0;
+    if (topOrLeftAdjustmentLocation == StickinessLocation::BeforeEntry)
+        rangeStartAdjustment += stickyTopOrLeftAdjustment;
+    if (bottomOrRightAdjustmentLocation != StickinessLocation::BeforeEntry)
+        rangeStartAdjustment += stickyBottomOrRightAdjustment;
+    return rangeStartAdjustment;
+}
+
+float StickinessAdjustmentData::rangeEndAdjustment() const
+{
+    auto rangeEndAdjustment = 0;
+    if (topOrLeftAdjustmentLocation != StickinessLocation::AfterExit)
+        rangeEndAdjustment += stickyTopOrLeftAdjustment;
+    if (bottomOrRightAdjustmentLocation == StickinessLocation::AfterExit)
+        rangeEndAdjustment += stickyBottomOrRightAdjustment;
+    return rangeEndAdjustment;
+}
+
 void ViewTimeline::cacheCurrentTime()
 {
     auto previousCurrentTimeData = m_cachedCurrentTimeData;
@@ -230,9 +317,9 @@ void ViewTimeline::cacheCurrentTime()
         float scrollContainerSize = scrollDirection->isVertical ? sourceScrollableArea->visibleHeight() : sourceScrollableArea->visibleWidth();
 
         // https://drafts.csswg.org/scroll-animations-1/#view-timelines-ranges
-        // Transforms are ignored, but relative and absolute positioning are accounted for.
-        OptionSet<MapCoordinatesMode> excludeTransforms { };
-        auto subjectOffsetFromSource = subjectRenderer->localToContainerPoint(pointForLocalToContainer(*sourceScrollableArea), sourceRenderer.get(), excludeTransforms);
+        // Transforms and sticky position offsets are ignored, but relative and absolute positioning are accounted for.
+        OptionSet<MapCoordinatesMode> options { IgnoreStickyOffsets };
+        auto subjectOffsetFromSource = subjectRenderer->localToContainerPoint(pointForLocalToContainer(*sourceScrollableArea), sourceRenderer.get(), options);
         float subjectOffset = scrollDirection->isVertical ? subjectOffsetFromSource.y() : subjectOffsetFromSource.x();
 
         // Ensure borders are subtracted.
@@ -306,13 +393,22 @@ void ViewTimeline::cacheCurrentTime()
             insetEnd = Style::evaluate(scrollPadding(PaddingEdge::End), scrollContainerSize);
         }
 
+        StickinessAdjustmentData stickyData;
+        if (auto stickyContainer = dynamicDowncast<RenderBoxModelObject>(this->stickyContainer())) {
+            FloatRect constrainingRect = stickyContainer->constrainingRectForStickyPosition();
+            StickyPositionViewportConstraints constraints;
+            stickyContainer->computeStickyPositionConstraints(constraints, constrainingRect);
+            stickyData = StickinessAdjustmentData::computeStickinessAdjustmentData(constraints, *scrollDirection, scrollContainerSize, subjectSize, subjectOffset);
+        }
+
         return {
             scrollOffset,
             scrollContainerSize,
             subjectOffset,
             subjectSize,
             insetStart,
-            insetEnd
+            insetEnd,
+            stickyData
         };
     }();
 
@@ -320,7 +416,8 @@ void ViewTimeline::cacheCurrentTime()
         || previousCurrentTimeData.subjectOffset != m_cachedCurrentTimeData.subjectOffset
         || previousCurrentTimeData.subjectSize != m_cachedCurrentTimeData.subjectSize
         || previousCurrentTimeData.insetStart != m_cachedCurrentTimeData.insetStart
-        || previousCurrentTimeData.insetEnd != m_cachedCurrentTimeData.insetEnd;
+        || previousCurrentTimeData.insetEnd != m_cachedCurrentTimeData.insetEnd
+        || previousCurrentTimeData.stickinessData != m_cachedCurrentTimeData.stickinessData;
 
     if (metricsChanged) {
         for (auto& animation : m_animations)
@@ -363,6 +460,23 @@ const RenderBox* ViewTimeline::sourceScrollerRenderer() const
     return subjectRenderer->enclosingScrollableContainer();
 }
 
+const RenderElement* ViewTimeline::stickyContainer() const
+{
+    auto subject = m_subject.styleable();
+    if (!subject)
+        return nullptr;
+
+    CheckedPtr renderer = subject->renderer();
+
+    auto scrollerRenderer = sourceScrollerRenderer();
+    while (renderer && renderer != scrollerRenderer) {
+        if (renderer->isStickilyPositioned())
+            return renderer.get();
+        renderer = renderer->containingBlock();
+    }
+    return nullptr;
+}
+
 ScrollTimeline::Data ViewTimeline::computeTimelineData() const
 {
     if (!m_cachedCurrentTimeData.scrollOffset && !m_cachedCurrentTimeData.scrollContainerSize)
@@ -374,9 +488,96 @@ ScrollTimeline::Data ViewTimeline::computeTimelineData() const
 
     return {
         m_cachedCurrentTimeData.scrollOffset,
-        rangeStart + m_cachedCurrentTimeData.insetEnd,
-        rangeEnd - m_cachedCurrentTimeData.insetStart
+        rangeStart + m_cachedCurrentTimeData.insetEnd + m_cachedCurrentTimeData.stickinessData.rangeStartAdjustment(),
+        rangeEnd - m_cachedCurrentTimeData.insetStart + m_cachedCurrentTimeData.stickinessData.rangeEndAdjustment()
     };
+}
+
+std::pair<double, double> ViewTimeline::intervalForTimelineRangeName(const ScrollTimeline::Data& data, const SingleTimelineRange::Name name) const
+{
+    auto subjectRangeStart = [&]() {
+        switch (name) {
+        case SingleTimelineRange::Name::Normal:
+        case SingleTimelineRange::Name::Omitted:
+        case SingleTimelineRange::Name::Cover:
+        case SingleTimelineRange::Name::Entry:
+        case SingleTimelineRange::Name::EntryCrossing:
+            return data.rangeStart;
+        case SingleTimelineRange::Name::Contain:
+            return data.rangeStart + m_cachedCurrentTimeData.subjectSize + m_cachedCurrentTimeData.stickinessData.entryDistanceAdjustment();
+        case SingleTimelineRange::Name::Exit:
+        case SingleTimelineRange::Name::ExitCrossing:
+            return data.rangeEnd - m_cachedCurrentTimeData.subjectSize - m_cachedCurrentTimeData.stickinessData.exitDistanceAdjustment();
+        default:
+            break;
+        }
+        ASSERT_NOT_REACHED();
+        return 0.f;
+    }();
+
+    auto subjectRangeEnd = [&]() {
+        switch (name) {
+        case SingleTimelineRange::Name::Normal:
+        case SingleTimelineRange::Name::Omitted:
+        case SingleTimelineRange::Name::Cover:
+        case SingleTimelineRange::Name::Exit:
+        case SingleTimelineRange::Name::ExitCrossing:
+            return data.rangeEnd;
+        case SingleTimelineRange::Name::Contain:
+            return data.rangeEnd - m_cachedCurrentTimeData.subjectSize - m_cachedCurrentTimeData.stickinessData.exitDistanceAdjustment();
+        case SingleTimelineRange::Name::Entry:
+        case SingleTimelineRange::Name::EntryCrossing:
+            return data.rangeStart + m_cachedCurrentTimeData.subjectSize + m_cachedCurrentTimeData.stickinessData.entryDistanceAdjustment();
+        default:
+            break;
+        }
+        ASSERT_NOT_REACHED();
+        return 0.f;
+    }();
+
+    if (subjectRangeEnd < subjectRangeStart)
+        std::swap(subjectRangeStart, subjectRangeEnd);
+
+    return { subjectRangeStart, subjectRangeEnd };
+}
+
+template<typename F> double ViewTimeline::mapOffsetToTimelineRange(const ScrollTimeline::Data& data, const SingleTimelineRange::Name name, F&& valueWithinSubjectRange) const
+{
+    auto timelineRange = data.rangeEnd - data.rangeStart;
+    ASSERT(timelineRange);
+    auto [subjectRangeStart, subjectRangeEnd] = intervalForTimelineRangeName(data, name);
+    auto subjectRange = subjectRangeEnd - subjectRangeStart;
+    auto positionWithinContainer = subjectRangeStart + valueWithinSubjectRange(subjectRange);
+    auto positionWithinTimelineRange = positionWithinContainer - data.rangeStart;
+    return positionWithinTimelineRange / timelineRange;
+}
+
+std::pair<double, double> ViewTimeline::offsetIntervalForTimelineRangeName(const SingleTimelineRange::Name name) const
+{
+    auto data = computeTimelineData();
+    auto computeOffset = [&](double offset) {
+        return mapOffsetToTimelineRange(data, name, [&](const float& subjectRange) {
+            return offset * subjectRange;
+        });
+    };
+    return { computeOffset(0), computeOffset(1) };
+}
+
+std::pair<double, double> ViewTimeline::offsetIntervalForAttachmentRange(const TimelineRange& attachmentRange) const
+{
+    auto data = computeTimelineData();
+    auto timelineRange = data.rangeEnd - data.rangeStart;
+    ASSERT(timelineRange);
+
+    auto offsetForSingleTimelineRange = [&](const SingleTimelineRange& rangeToConvert) {
+        auto [conversionRangeStart, conversionRangeEnd] = intervalForTimelineRangeName(data, rangeToConvert.name);
+        auto conversionRange = conversionRangeEnd - conversionRangeStart;
+        auto convertedValue = floatValueForOffset(rangeToConvert.offset, conversionRange);
+        auto position = conversionRangeStart + convertedValue;
+        return (position - data.rangeStart) / timelineRange;
+    };
+
+    return { offsetForSingleTimelineRange(attachmentRange.start), offsetForSingleTimelineRange(attachmentRange.end) };
 }
 
 std::pair<WebAnimationTime, WebAnimationTime> ViewTimeline::intervalForAttachmentRange(const TimelineRange& attachmentRange) const
@@ -387,59 +588,11 @@ std::pair<WebAnimationTime, WebAnimationTime> ViewTimeline::intervalForAttachmen
     if (!timelineRange)
         return { WebAnimationTime::fromPercentage(0), WebAnimationTime::fromPercentage(100) };
 
-    auto subjectRangeStartForName = [&](SingleTimelineRange::Name name) {
-        switch (name) {
-        case SingleTimelineRange::Name::Normal:
-        case SingleTimelineRange::Name::Omitted:
-        case SingleTimelineRange::Name::Cover:
-        case SingleTimelineRange::Name::Entry:
-        case SingleTimelineRange::Name::EntryCrossing:
-            return data.rangeStart;
-        case SingleTimelineRange::Name::Contain:
-            return data.rangeStart + m_cachedCurrentTimeData.subjectSize;
-        case SingleTimelineRange::Name::Exit:
-        case SingleTimelineRange::Name::ExitCrossing:
-            return m_cachedCurrentTimeData.subjectOffset - m_cachedCurrentTimeData.insetEnd;
-        default:
-            break;
-        }
-        ASSERT_NOT_REACHED();
-        return 0.f;
-    };
-
-    auto subjectRangeEndForName = [&](SingleTimelineRange::Name name) {
-        switch (name) {
-        case SingleTimelineRange::Name::Normal:
-        case SingleTimelineRange::Name::Omitted:
-        case SingleTimelineRange::Name::Cover:
-        case SingleTimelineRange::Name::Exit:
-        case SingleTimelineRange::Name::ExitCrossing:
-            return data.rangeEnd;
-        case SingleTimelineRange::Name::Contain:
-            return m_cachedCurrentTimeData.subjectOffset - m_cachedCurrentTimeData.insetEnd;
-        case SingleTimelineRange::Name::Entry:
-        case SingleTimelineRange::Name::EntryCrossing:
-            return data.rangeStart + m_cachedCurrentTimeData.subjectSize;
-        default:
-            break;
-        }
-        ASSERT_NOT_REACHED();
-        return 0.f;
-    };
-
     auto computeTime = [&](const SingleTimelineRange& rangeToConvert) {
-        auto subjectRangeStart = subjectRangeStartForName(rangeToConvert.name);
-        auto subjectRangeEnd = subjectRangeEndForName(rangeToConvert.name);
-        if (subjectRangeEnd < subjectRangeStart)
-            std::swap(subjectRangeStart, subjectRangeEnd);
-        auto subjectRange = subjectRangeEnd - subjectRangeStart;
-
-        auto& length = rangeToConvert.offset;
-        auto valueWithinSubjectRange = floatValueForOffset(length, subjectRange);
-        auto positionWithinContainer = subjectRangeStart + valueWithinSubjectRange;
-        auto positionWithinTimelineRange = positionWithinContainer - data.rangeStart;
-        auto offsetWithinTimelineRange = positionWithinTimelineRange / timelineRange;
-        return WebAnimationTime::fromPercentage(offsetWithinTimelineRange * 100);
+        auto mappedOffset = mapOffsetToTimelineRange(data, rangeToConvert.name, [&](const float& subjectRange) {
+            return floatValueForOffset(rangeToConvert.offset, subjectRange);
+        });
+        return WebAnimationTime::fromPercentage(mappedOffset * 100);
     };
 
     auto attachmentRangeOrDefault = attachmentRange.isDefault() ? defaultRange() : attachmentRange;
@@ -457,6 +610,24 @@ Ref<CSSNumericValue> ViewTimeline::startOffset() const
 Ref<CSSNumericValue> ViewTimeline::endOffset() const
 {
     return CSSNumericFactory::px(computeTimelineData().rangeEnd);
+}
+
+WTF::TextStream& operator<<(WTF::TextStream& ts, const StickinessAdjustmentData& stickiness)
+{
+    ts << "[ TopOrLeftAdjustment: " << stickiness.stickyTopOrLeftAdjustment << ", TopOrLeftLocation: " << stickiness.topOrLeftAdjustmentLocation << ", BottomOrRightAdjustment: " << stickiness.stickyBottomOrRightAdjustment << ", BottomOrRightLocation: " << stickiness.bottomOrRightAdjustmentLocation << " ]";
+    return ts;
+}
+
+WTF::TextStream& operator<<(WTF::TextStream& ts, const StickinessAdjustmentData::StickinessLocation& stickiness)
+{
+    switch (stickiness) {
+    case StickinessAdjustmentData::StickinessLocation::BeforeEntry: ts << "BeforeEntry"; break;
+    case StickinessAdjustmentData::StickinessLocation::DuringEntry: ts << "DuringEntry"; break;
+    case StickinessAdjustmentData::StickinessLocation::WhileContained: ts << "WhileContained"; break;
+    case StickinessAdjustmentData::StickinessLocation::DuringExit: ts << "DuringExit"; break;
+    case StickinessAdjustmentData::StickinessLocation::AfterExit: ts << "AfterExit"; break;
+    }
+    return ts;
 }
 
 } // namespace WebCore

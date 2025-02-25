@@ -177,7 +177,9 @@ public:
     static void didDispatchEventOnWindow(LocalFrame*, const Event&);
     static void eventDidResetAfterDispatch(const Event&);
     static void willEvaluateScript(LocalFrame&, const String& url, int lineNumber, int columnNumber);
+    static void willEvaluateScript(WorkerOrWorkletGlobalScope&, const String& url, int lineNumber, int columnNumber);
     static void didEvaluateScript(LocalFrame&);
+    static void didEvaluateScript(WorkerOrWorkletGlobalScope&);
     static void willFireTimer(ScriptExecutionContext&, int timerId, bool oneShot);
     static void didFireTimer(ScriptExecutionContext&, int timerId, bool oneShot);
     static void didInvalidateLayout(LocalFrame&);
@@ -271,10 +273,10 @@ public:
 
     static void performanceMark(ScriptExecutionContext&, const String&, std::optional<MonotonicTime>);
 
-    static void didRequestAnimationFrame(Document&, int callbackId);
-    static void didCancelAnimationFrame(Document&, int callbackId);
-    static void willFireAnimationFrame(Document&, int callbackId);
-    static void didFireAnimationFrame(Document&, int callbackId);
+    static void didRequestAnimationFrame(ScriptExecutionContext&, int callbackId);
+    static void didCancelAnimationFrame(ScriptExecutionContext&, int callbackId);
+    static void willFireAnimationFrame(ScriptExecutionContext&, int callbackId);
+    static void didFireAnimationFrame(ScriptExecutionContext&, int callbackId);
 
     static void willFireObserverCallback(ScriptExecutionContext&, const String& callbackType);
     static void didFireObserverCallback(ScriptExecutionContext&);
@@ -474,7 +476,7 @@ private:
 
     static void performanceMarkImpl(InstrumentingAgents&, const String& label, std::optional<MonotonicTime>);
 
-    static void didRequestAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
+    static void didRequestAnimationFrameImpl(InstrumentingAgents&, int callbackId, ScriptExecutionContext&);
     static void didCancelAnimationFrameImpl(InstrumentingAgents&, int callbackId);
     static void willFireAnimationFrameImpl(InstrumentingAgents&, int callbackId);
     static void didFireAnimationFrameImpl(InstrumentingAgents&, int callbackId);
@@ -953,11 +955,23 @@ inline void InspectorInstrumentation::willEvaluateScript(LocalFrame& frame, cons
         willEvaluateScriptImpl(*agents, url, lineNumber, columnNumber);
 }
 
+inline void InspectorInstrumentation::willEvaluateScript(WorkerOrWorkletGlobalScope& globalScope, const String& url, int lineNumber, int columnNumber)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    willEvaluateScriptImpl(instrumentingAgents(globalScope), url, lineNumber, columnNumber);
+}
+
 inline void InspectorInstrumentation::didEvaluateScript(LocalFrame& frame)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
     if (auto* agents = instrumentingAgents(frame))
         didEvaluateScriptImpl(*agents);
+}
+
+inline void InspectorInstrumentation::didEvaluateScript(WorkerOrWorkletGlobalScope& globalScope)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    didEvaluateScriptImpl(instrumentingAgents(globalScope));
 }
 
 inline void InspectorInstrumentation::willFireTimer(ScriptExecutionContext& context, int timerId, bool oneShot)
@@ -1665,31 +1679,31 @@ inline void InspectorInstrumentation::performanceMark(ScriptExecutionContext& co
         performanceMarkImpl(*agents, label, WTFMove(startTime));
 }
 
-inline void InspectorInstrumentation::didRequestAnimationFrame(Document& document, int callbackId)
+inline void InspectorInstrumentation::didRequestAnimationFrame(ScriptExecutionContext& scriptExecutionContext, int callbackId)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(document))
-        didRequestAnimationFrameImpl(*agents, callbackId, document);
+    if (auto* agents = instrumentingAgents(scriptExecutionContext))
+        didRequestAnimationFrameImpl(*agents, callbackId, scriptExecutionContext);
 }
 
-inline void InspectorInstrumentation::didCancelAnimationFrame(Document& document, int callbackId)
+inline void InspectorInstrumentation::didCancelAnimationFrame(ScriptExecutionContext& scriptExecutionContext, int callbackId)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(document))
+    if (auto* agents = instrumentingAgents(scriptExecutionContext))
         didCancelAnimationFrameImpl(*agents, callbackId);
 }
 
-inline void InspectorInstrumentation::willFireAnimationFrame(Document& document, int callbackId)
+inline void InspectorInstrumentation::willFireAnimationFrame(ScriptExecutionContext& scriptExecutionContext, int callbackId)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(document))
+    if (auto* agents = instrumentingAgents(scriptExecutionContext))
         willFireAnimationFrameImpl(*agents, callbackId);
 }
 
-inline void InspectorInstrumentation::didFireAnimationFrame(Document& document, int callbackId)
+inline void InspectorInstrumentation::didFireAnimationFrame(ScriptExecutionContext& scriptExecutionContext, int callbackId)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(document))
+    if (auto* agents = instrumentingAgents(scriptExecutionContext))
         didFireAnimationFrameImpl(*agents, callbackId);
 }
 

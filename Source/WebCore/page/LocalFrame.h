@@ -154,7 +154,7 @@ public:
     Editor& editor() { return protectedDocument()->editor(); }
     const Editor& editor() const { return protectedDocument()->editor(); }
     WEBCORE_EXPORT Ref<Editor> protectedEditor();
-    Ref<const Editor> protectedEditor() const;
+    WEBCORE_EXPORT Ref<const Editor> protectedEditor() const;
 
     EventHandler& eventHandler() { return m_eventHandler; }
     const EventHandler& eventHandler() const { return m_eventHandler; }
@@ -334,6 +334,7 @@ public:
 
 #if ENABLE(CONTENT_EXTENSIONS)
     WEBCORE_EXPORT void showResourceMonitoringError();
+    WEBCORE_EXPORT void reportResourceMonitoringWarning();
 #endif
 
 protected:

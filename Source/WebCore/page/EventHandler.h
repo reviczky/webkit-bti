@@ -104,6 +104,10 @@ class VisibleSelection;
 class WheelEvent;
 class Widget;
 
+#if ENABLE(MODEL_PROCESS)
+class HTMLModelElement;
+#endif
+
 struct DragState;
 struct RemoteUserInputEventData;
 
@@ -162,6 +166,8 @@ public:
 
     bool mousePressed() const { return m_mousePressed; }
     Node* mousePressNode() const { return m_mousePressNode.get(); }
+
+    WEBCORE_EXPORT ScrollableArea* focusedScrollableArea() const;
 
     WEBCORE_EXPORT void setCapturingMouseEventsElement(RefPtr<Element>&&);
     void pointerCaptureElementDidChange(Element*);
@@ -348,6 +354,12 @@ public:
 
     static Widget* widgetForEventTarget(Element* eventTarget);
 
+#if ENABLE(MODEL_PROCESS)
+    WEBCORE_EXPORT std::optional<ElementIdentifier> requestInteractiveModelElementAtPoint(const IntPoint& clientPosition);
+    WEBCORE_EXPORT void stageModeSessionDidUpdate(std::optional<ElementIdentifier>, const TransformationMatrix&);
+    WEBCORE_EXPORT void stageModeSessionDidEnd(std::optional<ElementIdentifier>);
+#endif
+
 #if PLATFORM(IOS_FAMILY) && ENABLE(DRAG_SUPPORT)
     WEBCORE_EXPORT bool tryToBeginDragAtPoint(const IntPoint& clientPosition, const IntPoint& globalPosition);
 #endif
@@ -452,7 +464,7 @@ private:
     enum class FireMouseOverOut : bool { No, Yes };
     void updateMouseEventTargetNode(const AtomString& eventType, Node*, const PlatformMouseEvent&, FireMouseOverOut);
 
-    ScrollableArea* enclosingScrollableArea(Node*);
+    ScrollableArea* enclosingScrollableArea(Node*) const;
     void notifyScrollableAreasOfMouseEvents(const AtomString& eventType, Element* lastElementUnderMouse, Element* elementUnderMouse);
 
     MouseEventWithHitTestResults prepareMouseEvent(const HitTestRequest&, const PlatformMouseEvent&);

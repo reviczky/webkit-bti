@@ -27,6 +27,7 @@
 
 #include "FloatSize.h"
 #include "FourCC.h"
+#include "HdrMetadataType.h"
 #include "PlatformVideoColorSpace.h"
 #include "SharedBuffer.h"
 #include <functional>
@@ -101,6 +102,8 @@ public:
     virtual SampleFlags flags() const = 0;
     virtual PlatformSample platformSample() const = 0;
     virtual PlatformSample::Type platformSampleType() const = 0;
+
+    virtual bool isImageDecoderAVFObjCSample() const { return false; }
 
     struct ByteRange {
         size_t byteOffset { 0 };
@@ -218,6 +221,8 @@ public:
         MediaTime duration { MediaTime::zeroTime() };
         std::pair<MediaTime, MediaTime> trimInterval { MediaTime::zeroTime(), MediaTime::zeroTime() };
         MediaSampleDataType data;
+        RefPtr<SharedBuffer> hdrMetadata { nullptr };
+        std::optional<HdrMetadataType> hdrMetadataType { std::nullopt };
         uint32_t flags { };
         bool isSync() const { return flags & MediaSample::IsSync; }
     };
@@ -234,6 +239,7 @@ public:
 
     void setInfo(RefPtr<const TrackInfo>&& info) { m_info = WTFMove(info); }
     const TrackInfo* info() const { return m_info.get(); }
+    RefPtr<const TrackInfo> protectedInfo() const { return m_info; }
     MediaTime presentationTime() const { return isEmpty() ? MediaTime::invalidTime() : first().presentationTime; }
     MediaTime duration() const
     {
