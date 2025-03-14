@@ -9668,10 +9668,10 @@ void SpeculativeJIT::compileArrayIndexOfOrArrayIncludes(Node* node)
             JumpList falseCase;
 
             loadPtr(BaseIndex(storageGPR, indexGPR, TimesEight), leftStringGPR);
+
+            falseCase.append(branchIfEmpty(leftStringGPR));
             falseCase.append(branchIfNotCell(leftStringGPR));
             falseCase.append(branchIfNotString(leftStringGPR));
-
-            loadPtr(BaseIndex(storageGPR, indexGPR, TimesEight, PayloadOffset), leftStringGPR);
 
             loadPtr(Address(leftStringGPR, JSString::offsetOfValue()), leftStringGPR);
 
@@ -13407,6 +13407,9 @@ void SpeculativeJIT::compileRecordRegExpCachedResult(Node* node)
     store8(
         TrustedImm32(0),
         Address(globalObjectGPR, offset + RegExpCachedResult::offsetOfReified()));
+    store8(
+        TrustedImm32(0),
+        Address(globalObjectGPR, offset + RegExpCachedResult::offsetOfOneCharacterMatch()));
 
     noResult(node);
 }

@@ -6116,7 +6116,19 @@ bool RenderBox::hasAutoHeightOrContainingBlockWithAutoHeight(UpdatePercentageHei
 
 bool RenderBox::overflowChangesMayAffectLayout() const
 {
-    return !canUseOverlayScrollbars() && (style().overflowY() == Overflow::Auto || style().overflowX() == Overflow::Auto);
+    if (style().overflowY() != Overflow::Auto && style().overflowX() != Overflow::Auto)
+        return false;
+
+    if (style().usesLegacyScrollbarStyle())
+        return true;
+
+    // FIXME: Bug 273167
+#if PLATFORM(IOS_FAMILY)
+    if (!ScrollbarTheme::theme().isMockTheme())
+        return false;
+#endif
+    return !ScrollbarTheme::theme().usesOverlayScrollbars();
+
 }
 
 } // namespace WebCore

@@ -2386,9 +2386,13 @@ void FrameLoader::commitProvisionalLoad()
 
 #if PLATFORM(IOS_FAMILY)
         page->chrome().setDispatchViewportDataDidChangeSuppressed(false);
-        page->chrome().dispatchViewportPropertiesDidChange(frame->page()->viewportArguments());
 #endif
-        page->chrome().dispatchDisabledAdaptationsDidChange(frame->page()->disabledAdaptations());
+        if (RefPtr framePage = frame->page()) {
+#if PLATFORM(IOS_FAMILY)
+            page->chrome().dispatchViewportPropertiesDidChange(framePage->viewportArguments());
+#endif
+            page->chrome().dispatchDisabledAdaptationsDidChange(framePage->disabledAdaptations());
+        }
 
         auto& title = m_documentLoader->title();
         if (!title.string.isNull())
@@ -3990,7 +3994,7 @@ void FrameLoader::continueLoadAfterNavigationPolicy(const ResourceRequest& reque
     FrameLoadType type = policyChecker().loadType();
 
     {
-        SetForScope<bool> doNotAbortNavigationAPI { m_doNotAbortNavigationAPI, m_policyDocumentLoader->triggeringAction().isFromNavigationAPI() };
+        SetForScope<bool> doNotAbortNavigationAPI { m_doNotAbortNavigationAPI, m_policyDocumentLoader && m_policyDocumentLoader->triggeringAction().isFromNavigationAPI() };
 
         // A new navigation is in progress, so don't clear the history's provisional item.
         stopAllLoaders(ClearProvisionalItem::No);

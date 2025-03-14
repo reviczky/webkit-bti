@@ -192,9 +192,7 @@ void WebBackForwardList::addItem(Ref<WebBackForwardListItem>&& newItem)
 
 void WebBackForwardList::goToItem(WebBackForwardListItem& item)
 {
-    if (m_provisionalIndex)
-        m_currentIndex = std::exchange(m_provisionalIndex, std::nullopt);
-
+    commitProvisionalItem();
     goToItemInternal(item, m_currentIndex);
 }
 
@@ -273,12 +271,9 @@ void WebBackForwardList::clearProvisionalItem(WebBackForwardListFrameItem& frame
     m_provisionalIndex = std::nullopt;
 }
 
-void WebBackForwardList::commitProvisionalItem(WebBackForwardListFrameItem& frameItem)
+void WebBackForwardList::commitProvisionalItem()
 {
     if (!m_provisionalIndex)
-        return;
-
-    if (m_entries[*m_provisionalIndex].ptr() != frameItem.backForwardListItem())
         return;
 
     if (*m_provisionalIndex >= m_entries.size()) {
@@ -299,6 +294,19 @@ WebBackForwardListItem* WebBackForwardList::currentItem() const
 RefPtr<WebBackForwardListItem> WebBackForwardList::protectedCurrentItem() const
 {
     return currentItem();
+}
+
+WebBackForwardListItem* WebBackForwardList::provisionalItem() const
+{
+    if (!m_provisionalIndex)
+        return nullptr;
+
+    if (*m_provisionalIndex >= m_entries.size()) {
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    }
+
+    return m_entries[*m_provisionalIndex].ptr();
 }
 
 WebBackForwardListItem* WebBackForwardList::backItem() const
@@ -489,7 +497,7 @@ BackForwardListState WebBackForwardList::backForwardListState(WTF::Function<bool
             continue;
         }
 
-        backForwardListState.items.append(entry->navigatedFrameState());
+        backForwardListState.items.append(entry->mainFrameState());
     }
 
     if (backForwardListState.items.isEmpty())
@@ -520,8 +528,9 @@ void WebBackForwardList::restoreFromState(BackForwardListState backForwardListSt
         Ref stateCopy = state->copy();
         setBackForwardItemIdentifiers(stateCopy, BackForwardItemIdentifier::generate());
         m_currentIndex = m_entries.isEmpty() ? std::nullopt : std::optional(m_entries.size() - 1);
+        // FIXME: navigatedFrameID will always be the main frame ID, causing the restored session state to be sent to an incorrect process when going back or forward with site isolation enabled.
         auto navigatedFrameID = stateCopy->frameID;
-        return WebBackForwardListItem::create(completeFrameStateForNavigation(WTFMove(stateCopy)), m_page->identifier(), navigatedFrameID);
+        return WebBackForwardListItem::create(WTFMove(stateCopy), m_page->identifier(), navigatedFrameID);
     });
     m_currentIndex = backForwardListState.currentIndex ? std::optional<size_t>(*backForwardListState.currentIndex) : std::nullopt;
 

@@ -5518,8 +5518,9 @@ bool LocalFrameView::handleWheelEventForScrolling(const PlatformWheelEvent& whee
 
 #if ENABLE(ASYNC_SCROLLING)
     if (RefPtr scrollingCoordinator = this->scrollingCoordinator()) {
-        if (scrollingCoordinator->coordinatesScrollingForFrameView(*this)) {
-            auto result = scrollingCoordinator->handleWheelEventForScrolling(wheelEvent, *scrollingNodeID(), gestureState);
+        auto scrollingNodeID = this->scrollingNodeID();
+        if (scrollingNodeID && scrollingCoordinator->coordinatesScrollingForFrameView(*this)) {
+            auto result = scrollingCoordinator->handleWheelEventForScrolling(wheelEvent, *scrollingNodeID, gestureState);
             if (!result.needsMainThreadProcessing())
                 return result.wasHandled;
         }

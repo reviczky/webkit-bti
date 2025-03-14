@@ -137,10 +137,12 @@ void NetworkStorageSession::setCookieStorage(GRefPtr<SoupCookieJar>&& jar)
     m_cookieStorage = WTFMove(jar);
     g_signal_connect_swapped(m_cookieStorage.get(), "changed", G_CALLBACK(cookiesDidChange), this);
 
+#if HAVE(COOKIE_CHANGE_LISTENER_API)
     for (auto& [host, observers] : m_cookieChangeObservers) {
         for (auto& observer : observers)
             observer.allCookiesDeleted();
     }
+#endif
 }
 
 void NetworkStorageSession::setCookieObserverHandler(Function<void ()>&& handler)
@@ -567,10 +569,12 @@ void NetworkStorageSession::deleteAllCookies(CompletionHandler<void()>&& complet
         soup_cookie_jar_delete_cookie(cookieJar, cookie);
     }
 
+#if HAVE(COOKIE_CHANGE_LISTENER_API)
     for (auto& [host, observers] : m_cookieChangeObservers) {
         for (auto& observer : observers)
             observer.allCookiesDeleted();
     }
+#endif
 
     completionHandler();
 }
@@ -673,7 +677,7 @@ static std::optional<CookieList> lookupCookies(const NetworkStorageSession& sess
     CookieList cookies(soup_cookie_jar_get_cookie_list_with_same_site_info(session.cookieStorage(), uri.get(), firstPartyURI.get(), cookieURI.get(), forHTTPHeader == ForHTTPHeader::Yes,
         sameSiteInfo.isSafeHTTPMethod, sameSiteInfo.isTopSite));
 #else
-    CookieList cookies(soup_cookie_jar_get_cookie_list(cookieStorage(), uri.get(), forHTTPHeader == ForHTTPHeader::Yes));
+    CookieList cookies(soup_cookie_jar_get_cookie_list(session.cookieStorage(), uri.get(), forHTTPHeader == ForHTTPHeader::Yes));
 #endif
     if (!cookies)
         return nullptr;

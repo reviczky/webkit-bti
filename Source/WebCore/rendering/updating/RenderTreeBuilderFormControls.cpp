@@ -27,6 +27,7 @@
 #include "RenderTreeBuilderFormControls.h"
 
 #include "RenderBlockInlines.h"
+#include "RenderBoxInlines.h"
 #include "RenderButton.h"
 #include "RenderMenuList.h"
 #include "RenderTreeBuilderBlock.h"
