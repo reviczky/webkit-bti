@@ -1,3 +1,16 @@
+================
+WebKitGTK 2.48.0
+================
+
+What's new in WebKitGTK 2.48.0?
+
+  - Fix YouTube playing by using a different user agent quirk.
+  - Avoid adding redundant tracks to MediaPlayer.
+  - Propagate the font's computed locale to HarfBuzz.
+  - Fix build on non-Linux platforms.
+  - Fix several crashes and rendering issues.
+  - Translation updates: Polish.
+
 =================
 WebKitGTK 2.47.90
 =================

@@ -7170,6 +7170,11 @@ void WebPageProxy::didCommitLoadForFrame(IPC::Connection& connection, FrameIdent
     if (frame->isMainFrame() && preferences->textExtractionEnabled())
         prepareTextExtractionSupportIfNeeded();
 #endif
+
+    if (isBackForwardLoadType(frameLoadType)) {
+        if (RefPtr provisionalItem = m_backForwardList->provisionalItem(); provisionalItem && provisionalItem->navigatedFrameID() == frameID)
+            m_backForwardList->commitProvisionalItem();
+    }
 }
 
 void WebPageProxy::didFinishDocumentLoadForFrame(IPC::Connection& connection, FrameIdentifier frameID, std::optional<WebCore::NavigationIdentifier> navigationID, const UserData& userData, WallTime timestamp)
@@ -9729,12 +9734,6 @@ void WebPageProxy::backForwardClearProvisionalItem(IPC::Connection& connection, 
     if (RefPtr frameItem = WebBackForwardListFrameItem::itemForID(itemID, frameItemID))
         m_backForwardList->clearProvisionalItem(*frameItem);
     completionHandler(m_backForwardList->counts());
-}
-
-void WebPageProxy::backForwardCommitProvisionalItem(IPC::Connection& connection, BackForwardItemIdentifier itemID, BackForwardFrameItemIdentifier frameItemID)
-{
-    if (RefPtr frameItem = WebBackForwardListFrameItem::itemForID(itemID, frameItemID))
-        m_backForwardList->commitProvisionalItem(*frameItem);
 }
 
 void WebPageProxy::backForwardItemAtIndex(int32_t index, FrameIdentifier frameID, CompletionHandler<void(RefPtr<FrameState>&&)>&& completionHandler)
@@ -13418,32 +13417,39 @@ void WebPageProxy::takeSnapshot(IntRect rect, IntSize bitmapSize, SnapshotOption
 
 void WebPageProxy::navigationGestureDidBegin()
 {
-    RefPtr protectedPageClient { pageClient() };
+    RefPtr pageClient = this->pageClient();
+    if (!pageClient)
+        return;
 
     m_isShowingNavigationGestureSnapshot = true;
-    protectedPageClient->navigationGestureDidBegin();
+    pageClient->navigationGestureDidBegin();
 
     m_navigationClient->didBeginNavigationGesture(*this);
 }
 
 void WebPageProxy::navigationGestureWillEnd(bool willNavigate, WebBackForwardListItem& item)
 {
-    RefPtr protectedPageClient { pageClient() };
+    RefPtr pageClient = this->pageClient();
+    if (!pageClient)
+        return;
+
     if (willNavigate) {
         m_isLayerTreeFrozenDueToSwipeAnimation = true;
         send(Messages::WebPage::SwipeAnimationDidStart());
     }
 
-    protectedPageClient->navigationGestureWillEnd(willNavigate, item);
+    pageClient->navigationGestureWillEnd(willNavigate, item);
 
     m_navigationClient->willEndNavigationGesture(*this, willNavigate, item);
 }
 
 void WebPageProxy::navigationGestureDidEnd(bool willNavigate, WebBackForwardListItem& item)
 {
-    RefPtr protectedPageClient { pageClient() };
+    RefPtr pageClient = this->pageClient();
+    if (!pageClient)
+        return;
 
-    protectedPageClient->navigationGestureDidEnd(willNavigate, item);
+    pageClient->navigationGestureDidEnd(willNavigate, item);
 
     m_navigationClient->didEndNavigationGesture(*this, willNavigate, item);
 
@@ -13458,16 +13464,14 @@ void WebPageProxy::navigationGestureDidEnd(bool willNavigate, WebBackForwardList
 
 void WebPageProxy::navigationGestureDidEnd()
 {
-    RefPtr protectedPageClient { pageClient() };
-
-    protectedPageClient->navigationGestureDidEnd();
+    if (RefPtr pageClient = this->pageClient())
+        pageClient->navigationGestureDidEnd();
 }
 
 void WebPageProxy::willRecordNavigationSnapshot(WebBackForwardListItem& item)
 {
-    RefPtr protectedPageClient { pageClient() };
-
-    protectedPageClient->willRecordNavigationSnapshot(item);
+    if (RefPtr pageClient = this->pageClient())
+        pageClient->willRecordNavigationSnapshot(item);
 }
 
 void WebPageProxy::navigationGestureSnapshotWasRemoved()
