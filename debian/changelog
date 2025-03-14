@@ -1,4 +1,4 @@
-webkit2gtk (2.48.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.48.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Bring all changes from the 2.47 (experimental) branch.
@@ -30,7 +30,7 @@ webkit2gtk (2.48.0-1) UNRELEASED; urgency=medium
       problem when we were building without -g1 and had very large debug
       packages.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 14 Mar 2025 13:51:38 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 14 Mar 2025 23:12:01 +0100
 
 webkit2gtk (2.46.6-1) unstable; urgency=high
 
