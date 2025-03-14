@@ -105,6 +105,9 @@ SKCMS_API bool skcms_TransferFunction_isHLGish (const skcms_TransferFunction*);
 // Unified representation of 'curv' or 'para' tag data, or a 1D table from 'mft1' or 'mft2'
 typedef union skcms_Curve {
     struct {
+        // this needs to line up with alias_of_table_entries so we can tell if there are or
+        // are not table entries. If this is 0, this struct is a parametric function,
+        // otherwise it's a table entry.
         uint32_t alias_of_table_entries;
         skcms_TransferFunction parametric;
     };
@@ -123,44 +126,44 @@ typedef struct skcms_A2B {
     // Optional: N 1D "A" curves, followed by an N-dimensional CLUT.
     // If input_channels == 0, these curves and CLUT are skipped,
     // Otherwise, input_channels must be in [1, 4].
-    uint32_t        input_channels;
     skcms_Curve     input_curves[4];
-    uint8_t         grid_points[4];
     const uint8_t*  grid_8;
     const uint8_t*  grid_16;
+    uint32_t        input_channels;
+    uint8_t         grid_points[4];
 
     // Optional: 3 1D "M" curves, followed by a color matrix.
     // If matrix_channels == 0, these curves and matrix are skipped,
     // Otherwise, matrix_channels must be 3.
-    uint32_t        matrix_channels;
     skcms_Curve     matrix_curves[3];
     skcms_Matrix3x4 matrix;
+    uint32_t        matrix_channels;
 
     // Required: 3 1D "B" curves. Always present, and output_channels must be 3.
-    uint32_t        output_channels;
+    uint32_t        output_channels; // list first to pack with matrix_channels
     skcms_Curve     output_curves[3];
 } skcms_A2B;
 
 typedef struct skcms_B2A {
     // Required: 3 1D "B" curves. Always present, and input_channels must be 3.
-    uint32_t        input_channels;
     skcms_Curve     input_curves[3];
+    uint32_t        input_channels;
 
     // Optional: a color matrix, followed by 3 1D "M" curves.
     // If matrix_channels == 0, this matrix and these curves are skipped,
     // Otherwise, matrix_channels must be 3.
-    uint32_t        matrix_channels;
-    skcms_Matrix3x4 matrix;
+    uint32_t        matrix_channels; // list first to pack with input_channels
     skcms_Curve     matrix_curves[3];
+    skcms_Matrix3x4 matrix;
 
     // Optional: an N-dimensional CLUT, followed by N 1D "A" curves.
     // If output_channels == 0, this CLUT and these curves are skipped,
     // Otherwise, output_channels must be in [1, 4].
-    uint32_t        output_channels;
-    uint8_t         grid_points[4];
+    skcms_Curve     output_curves[4];
     const uint8_t*  grid_8;
     const uint8_t*  grid_16;
-    skcms_Curve     output_curves[4];
+    uint8_t         grid_points[4];
+    uint32_t        output_channels;
 } skcms_B2A;
 
 typedef struct skcms_CICP {
@@ -182,30 +185,31 @@ typedef struct skcms_ICCProfile {
 
     // If we can parse red, green and blue transfer curves from the profile,
     // trc will be set to those three curves, and has_trc will be true.
-    bool                   has_trc;
     skcms_Curve            trc[3];
 
     // If this profile's gamut can be represented by a 3x3 transform to XYZD50,
     // skcms_Parse() sets toXYZD50 to that transform and has_toXYZD50 to true.
-    bool                   has_toXYZD50;
     skcms_Matrix3x3        toXYZD50;
 
     // If the profile has a valid A2B0 or A2B1 tag, skcms_Parse() sets A2B to
     // that data, and has_A2B to true.  skcms_ParseWithA2BPriority() does the
     // same following any user-provided prioritization of A2B0, A2B1, or A2B2.
-    bool                   has_A2B;
     skcms_A2B              A2B;
 
     // If the profile has a valid B2A0 or B2A1 tag, skcms_Parse() sets B2A to
     // that data, and has_B2A to true.  skcms_ParseWithA2BPriority() does the
     // same following any user-provided prioritization of B2A0, B2A1, or B2A2.
-    bool                   has_B2A;
     skcms_B2A              B2A;
 
     // If the profile has a valid CICP tag, skcms_Parse() sets CICP to that data,
     // and has_CICP to true.
-    bool                   has_CICP;
     skcms_CICP             CICP;
+
+    bool                   has_trc;
+    bool                   has_toXYZD50;
+    bool                   has_A2B;
+    bool                   has_B2A;
+    bool                   has_CICP;
 } skcms_ICCProfile;
 
 // The sRGB color profile is so commonly used that we offer a canonical skcms_ICCProfile for it.
@@ -258,16 +262,44 @@ SKCMS_API bool skcms_ApproximateCurve(const skcms_Curve* curve,
 SKCMS_API bool skcms_GetCHAD(const skcms_ICCProfile*, skcms_Matrix3x3*);
 SKCMS_API bool skcms_GetWTPT(const skcms_ICCProfile*, float xyz[3]);
 
+// Returns the number of channels of input data that are expected on the "A" side of the profile.
+// This is useful for image codecs, where the image data and the accompanying profile might have
+// conflicting data shapes. In some cases, the result is unclear or invalid. In that case, the
+// function will return a negative value to signal an error.
+SKCMS_API int skcms_GetInputChannelCount(const skcms_ICCProfile*);
+
 // These are common ICC signature values
 enum {
-    // data_color_space
+    // common data_color_space values
     skcms_Signature_CMYK = 0x434D594B,
     skcms_Signature_Gray = 0x47524159,
     skcms_Signature_RGB  = 0x52474220,
 
-    // pcs
+    // pcs (or data_color_space)
     skcms_Signature_Lab  = 0x4C616220,
     skcms_Signature_XYZ  = 0x58595A20,
+
+    // other, less common data_color_space values
+    skcms_Signature_CIELUV = 0x4C757620,
+    skcms_Signature_YCbCr  = 0x59436272,
+    skcms_Signature_CIEYxy = 0x59787920,
+    skcms_Signature_HSV    = 0x48535620,
+    skcms_Signature_HLS    = 0x484C5320,
+    skcms_Signature_CMY    = 0x434D5920,
+    skcms_Signature_2CLR   = 0x32434C52,
+    skcms_Signature_3CLR   = 0x33434C52,
+    skcms_Signature_4CLR   = 0x34434C52,
+    skcms_Signature_5CLR   = 0x35434C52,
+    skcms_Signature_6CLR   = 0x36434C52,
+    skcms_Signature_7CLR   = 0x37434C52,
+    skcms_Signature_8CLR   = 0x38434C52,
+    skcms_Signature_9CLR   = 0x39434C52,
+    skcms_Signature_10CLR  = 0x41434C52,
+    skcms_Signature_11CLR  = 0x42434C52,
+    skcms_Signature_12CLR  = 0x43434C52,
+    skcms_Signature_13CLR  = 0x44434C52,
+    skcms_Signature_14CLR  = 0x45434C52,
+    skcms_Signature_15CLR  = 0x46434C52,
 };
 
 typedef enum skcms_PixelFormat {

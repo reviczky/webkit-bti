@@ -129,6 +129,7 @@ int main(int argc, char** argv)
     g_set_prgname(FileSystem::currentExecutableName().data());
     g_setenv("WEBKIT_EXEC_PATH", WEBKIT_EXEC_PATH, FALSE);
     g_setenv("WEBKIT_INJECTED_BUNDLE_PATH", WEBKIT_INJECTED_BUNDLE_PATH, FALSE);
+    g_setenv("WEBKIT_INSPECTOR_RESOURCES_PATH", WEBKIT_INSPECTOR_RESOURCES_PATH, FALSE);
     // Sandbox requires using GApplication.
     g_setenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1", TRUE);
     g_setenv("LC_ALL", "C", TRUE);
@@ -137,6 +138,9 @@ int main(int argc, char** argv)
     // Get rid of runtime warnings about deprecated properties and signals, since they break the tests.
     g_setenv("G_ENABLE_DIAGNOSTIC", "0", TRUE);
     g_setenv("TZ", "America/Los_Angeles", TRUE);
+#if PLATFORM(WPE)
+    g_setenv("WPE_PLATFORMS_PATH", WPE_MOCK_PLATFORM_DIR, TRUE);
+#endif
     g_test_bug_base("https://bugs.webkit.org/");
 
     registerGResource();

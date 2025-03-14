@@ -107,17 +107,21 @@ public:
     explicit WebInspectorUIProxy(WebPageProxy&);
     virtual ~WebInspectorUIProxy();
 
+    void ref() const final { API::ObjectImpl<API::Object::Type::Inspector>::ref(); }
+    void deref() const final { API::ObjectImpl<API::Object::Type::Inspector>::deref(); }
+
     void invalidate();
 
     API::InspectorClient& inspectorClient() { return *m_inspectorClient; }
     void setInspectorClient(std::unique_ptr<API::InspectorClient>&&);
 
     // Public APIs
-    RefPtr<WebPageProxy> inspectedPage() const { return m_inspectedPage.get(); }
-    RefPtr<WebPageProxy> inspectorPage() const { return m_inspectorPage.get(); }
+    RefPtr<WebPageProxy> protectedInspectedPage() const { return m_inspectedPage.get(); }
+    RefPtr<WebPageProxy> protectedInspectorPage() const { return m_inspectorPage.get(); }
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
     WebInspectorUIExtensionControllerProxy* extensionController() const { return m_extensionController.get(); }
+    RefPtr<WebInspectorUIExtensionControllerProxy> protectedExtensionController() const;
 #endif
 
     bool isConnected() const { return !!m_inspectorPage; }
@@ -195,6 +199,7 @@ public:
     void toggleElementSelection();
 
     bool isUnderTest() const { return m_underTest; }
+    void markAsUnderTest() { m_underTest = true; }
 
     void setDiagnosticLoggingAvailable(bool);
 
@@ -224,7 +229,7 @@ private:
     void sendMessageToFrontend(const String& message) override;
     ConnectionType connectionType() const override { return ConnectionType::Local; }
 
-    WebPageProxy* platformCreateFrontendPage();
+    RefPtr<WebPageProxy> platformCreateFrontendPage();
     void platformCreateFrontendWindow();
     void platformCloseFrontendPageAndWindow();
 
@@ -251,7 +256,7 @@ private:
     void platformLoad(const String& path, CompletionHandler<void(const String&)>&&);
     void platformPickColorFromScreen(CompletionHandler<void(const std::optional<WebCore::Color>&)>&&);
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || PLATFORM(GTK)
     bool platformCanAttach(bool webProcessCanAttach);
 #elif PLATFORM(WPE)
     bool platformCanAttach(bool) { return false; }
@@ -260,9 +265,10 @@ private:
 #endif
 
     // Called by WebInspectorUIProxy messages
-    void openLocalInspectorFrontend(bool canAttach, bool underTest);
+    void requestOpenLocalInspectorFrontend();
     void setFrontendConnection(IPC::Connection::Handle&&);
 
+    void openLocalInspectorFrontend();
     void sendMessageToBackend(const String&);
     void frontendLoaded();
     void didClose();
@@ -294,6 +300,7 @@ private:
     unsigned inspectionLevel() const;
 
     WebPreferences& inspectorPagePreferences() const;
+    Ref<WebPreferences> protectedInspectorPagePreferences() const;
 
 #if PLATFORM(MAC)
     void applyForcedAppearance();

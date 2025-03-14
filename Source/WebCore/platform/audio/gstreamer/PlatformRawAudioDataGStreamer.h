@@ -44,10 +44,13 @@ public:
 
     size_t memoryCost() const final;
 
-    bool isGStreamer() const final { return true; }
+    constexpr MediaPlatformType platformType() const final { return MediaPlatformType::GStreamer; }
 
-    GstSample* sample() const { return m_sample.get(); }
+    const GRefPtr<GstSample>& sample() const { return m_sample; }
     const GstAudioInfo* info() const { return &m_info; }
+
+    bool isInterleaved() const;
+    std::variant<Vector<std::span<uint8_t>>, Vector<std::span<int16_t>>, Vector<std::span<int32_t>>, Vector<std::span<float>>> planesOfSamples(size_t);
 
 private:
     PlatformRawAudioDataGStreamer(GRefPtr<GstSample>&&);
@@ -59,7 +62,7 @@ private:
 }
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::PlatformRawAudioDataGStreamer)
-static bool isType(const WebCore::PlatformRawAudioData& data) { return data.isGStreamer(); }
+static bool isType(const WebCore::PlatformRawAudioData& data) { return data.platformType() == WebCore::MediaPlatformType::GStreamer; }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(WEB_CODECS) && USE(GSTREAMER)

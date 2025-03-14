@@ -31,8 +31,11 @@
 // renaming of more LibWebRTC-prefixed files in WebKit.
 // https://bugs.webkit.org/show_bug.cgi?id=243774
 
+#include <wtf/Compiler.h>
+
 #if USE(LIBWEBRTC)
 
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakRef.h>
 
 #if PLATFORM(COCOA)
@@ -61,11 +64,14 @@ using LibWebRTCProviderBase = WebCore::LibWebRTCProvider;
 #endif
 
 class LibWebRTCProvider final : public LibWebRTCProviderBase {
+    WTF_MAKE_TZONE_ALLOCATED(LibWebRTCProvider);
 public:
     explicit LibWebRTCProvider(WebPage&);
     ~LibWebRTCProvider();
 
 private:
+    bool isLibWebRTCProvider() const final { return true; }
+
     std::unique_ptr<SuspendableSocketFactory> createSocketFactory(String&& /* userAgent */, WebCore::ScriptExecutionContextIdentifier, bool /* isFirstParty */, WebCore::RegistrableDomain&&) final;
 
     rtc::scoped_refptr<webrtc::PeerConnectionInterface> createPeerConnection(WebCore::ScriptExecutionContextIdentifier, webrtc::PeerConnectionObserver&, rtc::PacketSocketFactory*, webrtc::PeerConnectionInterface::RTCConfiguration&&) final;
@@ -107,3 +113,7 @@ inline UniqueRef<LibWebRTCProvider> createLibWebRTCProvider(WebPage&)
 #endif // USE(LIBWEBRTC)
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::LibWebRTCProvider) \
+static bool isType(const WebCore::WebRTCProvider& provider) { return provider.isLibWebRTCProvider(); } \
+SPECIALIZE_TYPE_TRAITS_END()

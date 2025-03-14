@@ -28,10 +28,12 @@
 #include "WebContentMode.h"
 #include "WebsiteAutoplayPolicy.h"
 #include "WebsiteAutoplayQuirk.h"
+#include "WebsiteInlineMediaPlaybackPolicy.h"
 #include "WebsiteLegacyOverflowScrollingTouchPolicy.h"
 #include "WebsiteMediaSourcePolicy.h"
 #include "WebsiteMetaViewportPolicy.h"
 #include "WebsitePopUpPolicy.h"
+#include "WebsitePushAndNotificationsEnabledPolicy.h"
 #include "WebsiteSimulatedMouseEventsDispatchPolicy.h"
 #include <WebCore/AdvancedPrivacyProtections.h>
 #include <WebCore/CustomHeaderFields.h>
@@ -41,11 +43,6 @@
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
 #include <wtf/TZoneMalloc.h>
-
-namespace IPC {
-class Decoder;
-class Encoder;
-}
 
 namespace WebCore {
 class DocumentLoader;
@@ -68,6 +65,9 @@ public:
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtections;
     OptionSet<WebsiteAutoplayQuirk> allowedAutoplayQuirks;
     WebCore::ContentExtensionEnablement contentExtensionEnablement { WebCore::ContentExtensionDefaultEnablement::Enabled, { } };
+#if ENABLE(TOUCH_EVENTS)
+    std::optional<bool> overrideTouchEventDOMAttributesEnabled;
+#endif
     WebsiteAutoplayPolicy autoplayPolicy { WebsiteAutoplayPolicy::Default };
     WebsitePopUpPolicy popUpPolicy { WebsitePopUpPolicy::Default };
     WebsiteMetaViewportPolicy metaViewportPolicy { WebsiteMetaViewportPolicy::Default };
@@ -86,6 +86,8 @@ public:
     bool idempotentModeAutosizingOnlyHonorsPercentages { false };
     bool allowPrivacyProxy { true };
     bool allowSiteSpecificQuirksToOverrideContentMode { false };
+    WebsitePushAndNotificationsEnabledPolicy pushAndNotificationsEnabledPolicy { WebsitePushAndNotificationsEnabledPolicy::UseGlobalPolicy };
+    WebsiteInlineMediaPlaybackPolicy inlineMediaPlaybackPolicy { WebsiteInlineMediaPlaybackPolicy::Default };
 };
 
 } // namespace WebKit

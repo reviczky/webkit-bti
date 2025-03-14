@@ -30,6 +30,7 @@
 #include "Utilities.h"
 #include <wtf/FileSystem.h>
 #include <wtf/MainThread.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/StringExtras.h>
 #include <wtf/text/MakeString.h>
 
@@ -125,7 +126,7 @@ TEST_F(FileSystemTest, MappingExistingFile)
     EXPECT_TRUE(success);
     EXPECT_TRUE(!!mappedFileData);
     EXPECT_TRUE(mappedFileData.size() == strlen(FileSystemTestData));
-    EXPECT_TRUE(strnstr(FileSystemTestData, byteCast<char>(mappedFileData.span().data()), mappedFileData.size()));
+    EXPECT_TRUE(contains(FileSystemTestData.span(), mappedFileData.span()));
 }
 
 TEST_F(FileSystemTest, MappingExistingEmptyFile)
@@ -173,6 +174,8 @@ TEST_F(FileSystemTest, fileType)
     EXPECT_EQ(FileSystem::fileType(tempEmptyFolderSymlinkPath()), FileSystem::FileType::SymbolicLink);
 }
 
+#if OS(UNIX)
+// FIXME: https://webkit.org/b/283603 Test crashes on Windows
 TEST_F(FileSystemTest, fileTypeFollowingSymlinks)
 {
     auto doesNotExistPath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), "does-not-exist"_s);
@@ -203,7 +206,6 @@ TEST_F(FileSystemTest, fileTypeFollowingSymlinks)
     EXPECT_FALSE(FileSystem::fileTypeFollowingSymlinks(tempEmptyFolderSymlinkPath()));
 }
 
-#if OS(UNIX)
 TEST_F(FileSystemTest, isHiddenFile)
 {
     auto hiddenFilePath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), ".hiddenFile"_s);
@@ -617,6 +619,8 @@ TEST_F(FileSystemTest, createSymbolicLink)
     EXPECT_TRUE(FileSystem::fileExists(tempFilePath()));
 }
 
+#if OS(UNIX)
+// FIXME: https://webkit.org/b/283603 Test crashes on Windows
 TEST_F(FileSystemTest, createSymbolicLinkFolder)
 {
     auto symlinkPath = tempEmptyFolderSymlinkPath();
@@ -631,6 +635,7 @@ TEST_F(FileSystemTest, createSymbolicLinkFolder)
     EXPECT_FALSE(FileSystem::fileExists(symlinkPath));
     EXPECT_TRUE(FileSystem::fileExists(tempEmptyFolderPath()));
 }
+#endif
 
 TEST_F(FileSystemTest, createSymbolicLinkFileDoesNotExist)
 {
@@ -751,7 +756,7 @@ static void runGetFileModificationTimeTest(const String& path, Function<std::opt
     // Modify the file.
     auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::ReadWrite);
     EXPECT_TRUE(FileSystem::isHandleValid(fileHandle));
-    FileSystem::writeToFile(fileHandle, "foo"_span);
+    FileSystem::writeToFile(fileHandle, "foo"_span8);
     FileSystem::closeFile(fileHandle);
 
     auto newModificationTime = fileModificationTime(path);
@@ -899,6 +904,8 @@ TEST_F(FileSystemTest, listDirectory)
     EXPECT_TRUE(FileSystem::deleteNonEmptyDirectory(tempEmptyFolderPath()));
 }
 
+#if OS(UNIX)
+// FIXME: https://webkit.org/b/283603 Test crashes on Windows
 TEST_F(FileSystemTest, realPath)
 {
     auto doesNotExistPath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), "does-not-exist"_s);
@@ -924,6 +931,7 @@ TEST_F(FileSystemTest, realPath)
     EXPECT_STREQ(FileSystem::realPath(FileSystem::pathByAppendingComponents(subFolderPath, { ".."_s, "subfolder"_s })).utf8().data(), resolvedSubFolderPath.utf8().data()); // Should resolve "..".
     EXPECT_STREQ(FileSystem::realPath(FileSystem::pathByAppendingComponents(subFolderPath, { ".."_s, "."_s, "."_s, "subfolder"_s })).utf8().data(), resolvedSubFolderPath.utf8().data()); // Should resolve ".." and "."
 }
+#endif
 
 TEST_F(FileSystemTest, readEntireFile)
 {

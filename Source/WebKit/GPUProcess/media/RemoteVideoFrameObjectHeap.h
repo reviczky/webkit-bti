@@ -44,10 +44,13 @@ class VideoFrame;
 namespace WebKit {
 
 // Holds references to all VideoFrame instances that are mapped from GPU process to Web process.
-class RemoteVideoFrameObjectHeap final : public IPC::WorkQueueMessageReceiver {
+class RemoteVideoFrameObjectHeap final : public IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any> {
 public:
     static Ref<RemoteVideoFrameObjectHeap> create(Ref<IPC::Connection>&&);
     ~RemoteVideoFrameObjectHeap();
+
+    void ref() const final { IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any>::ref(); }
+    void deref() const final { IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any>::deref(); }
 
     void close();
     RemoteVideoFrameProxy::Properties add(Ref<WebCore::VideoFrame>&&);
@@ -58,6 +61,8 @@ public:
 
 private:
     explicit RemoteVideoFrameObjectHeap(Ref<IPC::Connection>&&);
+
+    Ref<IPC::Connection> protectedConnection() const { return m_connection; }
 
     // IPC::MessageReceiver overrides.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;

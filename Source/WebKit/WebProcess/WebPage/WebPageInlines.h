@@ -43,12 +43,12 @@ inline WebCore::IntRect WebPage::bounds() const
 
 inline StorageNamespaceIdentifier WebPage::sessionStorageNamespaceIdentifier() const
 {
-    return LegacyNullableObjectIdentifier<StorageNamespaceIdentifierType>(m_webPageProxyIdentifier.toUInt64());
+    return ObjectIdentifier<StorageNamespaceIdentifierType>(m_webPageProxyIdentifier.toUInt64());
 }
 
 inline void WebPage::setHiddenPageDOMTimerThrottlingIncreaseLimit(Seconds limit)
 {
-    m_page->setDOMTimerAlignmentIntervalIncreaseLimit(limit);
+    protectedCorePage()->setDOMTimerAlignmentIntervalIncreaseLimit(limit);
 }
 
 inline bool WebPage::isVisible() const

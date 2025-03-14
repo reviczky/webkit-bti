@@ -27,7 +27,6 @@
 
 #if ENABLE(FULLSCREEN_API)
 
-#include "WebCoreArgumentCoders.h"
 #include <WebCore/EventListener.h>
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/HTMLMediaElementEnums.h>
@@ -49,11 +48,13 @@ class Element;
 class WeakPtrImplWithEventTargetData;
 class GraphicsLayer;
 class HTMLVideoElement;
+class RenderImage;
 }
 
 namespace WebKit {
 
 class WebPage;
+struct FullScreenMediaDetails;
 
 class WebFullScreenManager final : public WebCore::EventListener {
 public:
@@ -64,17 +65,19 @@ public:
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
 
-    bool supportsFullScreen(bool withKeyboard);
-    void enterFullScreenForElement(WebCore::Element*, WebCore::HTMLMediaElementEnums::VideoFullscreenMode);
-    void exitFullScreenForElement(WebCore::Element*);
+    bool supportsFullScreenForElement(const WebCore::Element&, bool withKeyboard);
+    void enterFullScreenForElement(WebCore::Element&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, CompletionHandler<void(WebCore::ExceptionOr<void>)>&&, CompletionHandler<bool(bool)>&&);
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    void updateImageSource(WebCore::Element&);
+#endif // ENABLE(QUICKLOOK_FULLSCREEN)
+    void exitFullScreenForElement(WebCore::Element*, CompletionHandler<void()>&&);
 
-    void willEnterFullScreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard);
-    void didEnterFullScreen();
-    void willExitFullScreen();
-    void didExitFullScreen();
+    void didEnterFullScreen(CompletionHandler<bool(bool)>&&);
+    void willExitFullScreen(CompletionHandler<void()>&&);
+    void didExitFullScreen(CompletionHandler<void()>&&);
 
-    void saveScrollPosition();
-    void restoreScrollPosition();
+    void enterFullScreenForOwnerElements(WebCore::FrameIdentifier, CompletionHandler<void()>&&);
+    void exitFullScreenInMainFrame(CompletionHandler<void()>&&);
 
     WebCore::Element* element();
 
@@ -87,21 +90,24 @@ protected:
 
     void setPIPStandbyElement(WebCore::HTMLVideoElement*);
 
+    void willEnterFullScreen(CompletionHandler<void(WebCore::ExceptionOr<void>)>&&, CompletionHandler<bool(bool)>&&, WebCore::HTMLMediaElementEnums::VideoFullscreenMode = WebCore::HTMLMediaElementEnums::VideoFullscreenModeStandard);
     void setAnimatingFullScreen(bool);
     void requestRestoreFullScreen(CompletionHandler<void(bool)>&&);
     void requestExitFullScreen();
     void setFullscreenInsets(const WebCore::FloatBoxExtent&);
     void setFullscreenAutoHideDuration(Seconds);
 
-    void didReceiveWebFullScreenManagerMessage(IPC::Connection&, IPC::Decoder&);
-
     WebCore::IntRect m_initialFrame;
     WebCore::IntRect m_finalFrame;
     WebCore::IntPoint m_scrollPosition;
-    float m_topContentInset { 0 };
     Ref<WebPage> m_page;
     RefPtr<WebCore::Element> m_element;
     WeakPtr<WebCore::Element, WebCore::WeakPtrImplWithEventTargetData> m_elementToRestore;
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+    WebCore::FloatSize m_oldSize;
+    double m_scaleFactor { 1 };
+    double m_minEffectiveWidth { 0 };
+#endif
 #if ENABLE(VIDEO)
     RefPtr<WebCore::HTMLVideoElement> m_pipStandbyElement;
 #endif
@@ -116,7 +122,7 @@ private:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return m_logger; }
-    const void* logIdentifier() const { return m_logIdentifier; }
+    uint64_t logIdentifier() const { return m_logIdentifier; }
     ASCIILiteral logClassName() const { return "WebFullScreenManager"_s; }
     WTFLogChannel& logChannel() const;
 #endif
@@ -138,6 +144,8 @@ private:
 #endif // ENABLE(VIDEO)
 
 #if ENABLE(QUICKLOOK_FULLSCREEN)
+    enum class IsUpdating : bool { No, Yes };
+    FullScreenMediaDetails getImageMediaDetails(CheckedPtr<WebCore::RenderImage>, IsUpdating);
     bool m_willUseQuickLookForFullscreen { false };
 #endif
 
@@ -145,7 +153,7 @@ private:
     bool m_inWindowFullScreenMode { false };
 #if !RELEASE_LOG_DISABLED
     Ref<const Logger> m_logger;
-    const void* m_logIdentifier;
+    const uint64_t m_logIdentifier;
 #endif
 };
 

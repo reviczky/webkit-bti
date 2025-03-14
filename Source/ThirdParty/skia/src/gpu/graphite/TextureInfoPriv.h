@@ -12,7 +12,12 @@
 
 #include <cstdint>
 
+class SkStream;
+class SkWStream;
+
 namespace skgpu::graphite {
+
+class Caps;
 
 class TextureInfoData {
 public:
@@ -29,15 +34,19 @@ protected:
 
 private:
     friend class TextureInfo;
+    friend class TextureInfoPriv; // for serialize
 
     virtual size_t bytesPerPixel() const = 0;
     virtual SkTextureCompressionType compressionType() const = 0;
+    virtual bool isMemoryless() const = 0;
     virtual SkString toString() const = 0;
     virtual SkString toRPAttachmentString(uint32_t sampleCount) const = 0;
 
     virtual void copyTo(AnyTextureInfoData&) const = 0;
     virtual bool equal(const TextureInfoData* that) const = 0;
     virtual bool isCompatible(const TextureInfoData* that) const = 0;
+
+    virtual bool serialize(SkWStream*) const { return false; }
 };
 
 class TextureInfoPriv {
@@ -54,6 +63,9 @@ public:
     static const TextureInfoData* GetData(const TextureInfo& info) {
         return info.fTextureInfoData.get();
     }
+
+    static bool Serialize(SkWStream*, const TextureInfo&);
+    static bool Deserialize(const Caps*, SkStream*, TextureInfo* out);
 };
 
 }  // namespace skgpu::graphite

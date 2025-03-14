@@ -32,6 +32,7 @@
 #include <WebCore/FrameIdentifier.h>
 #include <pal/SessionID.h>
 #include <wtf/Forward.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/StdSet.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
@@ -39,15 +40,6 @@
 #if HAVE(CORE_PREDICTION)
 #include "ResourceLoadStatisticsClassifierCocoa.h"
 #endif
-
-namespace WebKit {
-class ResourceLoadStatisticsStore;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::ResourceLoadStatisticsStore> : std::true_type { };
-}
 
 namespace WebCore {
 class KeyedDecoder;
@@ -95,7 +87,7 @@ enum class CanRequestStorageAccessWithoutUserInteraction : bool { No, Yes };
 enum class DataRemovalFrequency : uint8_t { Never, Short, Long };
 
 // This is always constructed / used / destroyed on the WebResourceLoadStatisticsStore's statistics queue.
-class ResourceLoadStatisticsStore final : public DatabaseUtilities, public CanMakeWeakPtr<ResourceLoadStatisticsStore> {
+class ResourceLoadStatisticsStore final : public RefCountedAndCanMakeWeakPtr<ResourceLoadStatisticsStore>,  public DatabaseUtilities {
     WTF_MAKE_TZONE_ALLOCATED(ResourceLoadStatisticsStore);
 public:
     using ResourceLoadStatistics = WebCore::ResourceLoadStatistics;
@@ -111,7 +103,11 @@ public:
     using DomainInNeedOfStorageAccess = WebCore::RegistrableDomain;
     using OpenerDomain = WebCore::RegistrableDomain;
     
-    ResourceLoadStatisticsStore(WebResourceLoadStatisticsStore&, SuspendableWorkQueue&, ShouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID);
+    static Ref<ResourceLoadStatisticsStore> create(WebResourceLoadStatisticsStore& webResourceLoadStatisticsStore, SuspendableWorkQueue& suspendableWorkQueue, ShouldIncludeLocalhost shouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID sessionID)
+    {
+        return adoptRef(*new ResourceLoadStatisticsStore(webResourceLoadStatisticsStore, suspendableWorkQueue, shouldIncludeLocalhost, storageDirectoryPath, sessionID));
+    }
+
     virtual ~ResourceLoadStatisticsStore();
 
     void clear(CompletionHandler<void()>&&);
@@ -160,7 +156,6 @@ public:
     void setPruneEntriesDownTo(size_t pruneTargetCount);
     void resetParametersToDefaultValues();
 
-    void setNotifyPagesWhenDataRecordsWereScanned(bool);
     bool shouldSkip(const RegistrableDomain&) const;
     void setShouldClassifyResourcesBeforeDataRecordsRemoval(bool);
     void setTimeToLiveUserInteraction(Seconds);
@@ -205,7 +200,7 @@ public:
 
     void didCreateNetworkProcess();
 
-    const WebResourceLoadStatisticsStore& store() const { return m_store; }
+    const WebResourceLoadStatisticsStore& store() const { return m_store.get(); }
 
     bool domainIDExistsInDatabase(int);
     bool observedDomainNavigationWithLinkDecoration(int);
@@ -216,7 +211,9 @@ public:
     static void interruptAllDatabases();
 
 private:
-    WebResourceLoadStatisticsStore& store() { return m_store; }
+    ResourceLoadStatisticsStore(WebResourceLoadStatisticsStore&, SuspendableWorkQueue&, ShouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID);
+
+    WebResourceLoadStatisticsStore& store() { return m_store.get(); }
 
     struct Parameters {
         size_t pruneEntriesDownTo { 800 };
@@ -229,7 +226,6 @@ private:
         Seconds clientSideCookiesForLinkDecorationTargetPageAgeCapTime { 24_h };
         Seconds minDelayAfterMainFrameDocumentLoadToNotBeARedirect { 5_s };
         size_t minimumTopFrameRedirectsForSameSiteStrictEnforcement { 10 };
-        bool shouldNotifyPagesWhenDataRecordsWereScanned { false };
         bool shouldClassifyResourcesBeforeDataRecordsRemoval { true };
         bool isRunningTest { false };
     };
@@ -335,7 +331,7 @@ private:
     String ensureAndMakeDomainList(const HashSet<RegistrableDomain>&);
     std::optional<WallTime> mostRecentUserInteractionTime(const DomainData&);
     void grandfatherDataForDomains(const HashSet<RegistrableDomain>&);
-    bool areAllThirdPartyCookiesBlockedUnder(const TopFrameDomain&);
+    bool areAllUnpartitionedThirdPartyCookiesBlockedUnder(const TopFrameDomain&);
     bool hasStatisticsExpired(WallTime mostRecentUserInteractionTime, OperatingDatesWindow) const;
     void scheduleStatisticsProcessingRequestIfNecessary();
     void pruneStatisticsIfNeeded();
@@ -354,8 +350,8 @@ private:
     void deleteTable(StringView);
     void destroyStatements() final;
 
-    WebResourceLoadStatisticsStore& m_store;
-    Ref<SuspendableWorkQueue> m_workQueue;
+    CheckedRef<WebResourceLoadStatisticsStore> m_store;
+    const Ref<SuspendableWorkQueue> m_workQueue;
 #if HAVE(CORE_PREDICTION)
     ResourceLoadStatisticsClassifierCocoa m_resourceLoadStatisticsClassifier;
 #else

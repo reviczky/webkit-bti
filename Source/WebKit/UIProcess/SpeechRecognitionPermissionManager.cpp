@@ -69,6 +69,11 @@ static SpeechRecognitionPermissionManager::CheckResult computeSpeechRecognitionS
 #endif
 }
 
+Ref<SpeechRecognitionPermissionManager> SpeechRecognitionPermissionManager::create(WebPageProxy& page)
+{
+    return adoptRef(*new SpeechRecognitionPermissionManager(page));
+}
+
 SpeechRecognitionPermissionManager::SpeechRecognitionPermissionManager(WebPageProxy& page)
     : m_page(page)
 {
@@ -76,25 +81,30 @@ SpeechRecognitionPermissionManager::SpeechRecognitionPermissionManager(WebPagePr
 
 SpeechRecognitionPermissionManager::~SpeechRecognitionPermissionManager()
 {
-    for (auto& request : m_requests)
+    for (auto& [request, frameInfo] : m_requests)
         request->complete(WebCore::SpeechRecognitionError { WebCore::SpeechRecognitionErrorType::NotAllowed, "Permission manager has exited"_s });
 }
 
-Ref<WebPageProxy> SpeechRecognitionPermissionManager::protectedPage() const
+RefPtr<WebPageProxy> SpeechRecognitionPermissionManager::protectedPage() const
 {
     return m_page.get();
 }
 
-void SpeechRecognitionPermissionManager::request(WebCore::SpeechRecognitionRequest& request, SpeechRecognitionPermissionRequestCallback&& completiontHandler)
+void SpeechRecognitionPermissionManager::request(WebCore::SpeechRecognitionRequest& request, FrameInfoData&& frameInfo, SpeechRecognitionPermissionRequestCallback&& completiontHandler)
 {
-    m_requests.append(SpeechRecognitionPermissionRequest::create(request, WTFMove(completiontHandler)));
+    m_requests.append({ SpeechRecognitionPermissionRequest::create(request, WTFMove(completiontHandler)), WTFMove(frameInfo) });
     if (m_requests.size() == 1)
         startNextRequest();
 }
 
+WebPageProxy* SpeechRecognitionPermissionManager::page()
+{
+    return m_page.get();
+}
+
 void SpeechRecognitionPermissionManager::startNextRequest()
 {
-    while (!m_requests.isEmpty() && !m_requests.first()->request())
+    while (!m_requests.isEmpty() && !m_requests.first().first->request())
         m_requests.removeFirst();
 
     if (m_requests.isEmpty())
@@ -125,7 +135,7 @@ void SpeechRecognitionPermissionManager::startProcessingRequest()
         }
 
 #if HAVE(SPEECHRECOGNIZER)
-        if (!checkSpeechRecognitionServiceAvailability(m_requests.first()->request()->lang())) {
+        if (!checkSpeechRecognitionServiceAvailability(m_requests.first().first->request()->lang())) {
             completeCurrentRequest(WebCore::SpeechRecognitionError { WebCore::SpeechRecognitionErrorType::ServiceNotAllowed, "Speech recognition service is not available"_s });
             return;
         }
@@ -143,7 +153,8 @@ void SpeechRecognitionPermissionManager::startProcessingRequest()
 void SpeechRecognitionPermissionManager::continueProcessingRequest()
 {
     ASSERT(!m_requests.isEmpty());
-    auto recognitionRequest = m_requests.first()->request();
+    auto recognitionRequest = m_requests.first().first->request();
+    auto frameInfo = m_requests.first().second;
     if (!recognitionRequest) {
         completeCurrentRequest();
         return;
@@ -162,7 +173,7 @@ void SpeechRecognitionPermissionManager::continueProcessingRequest()
     ASSERT(m_microphoneCheck == CheckResult::Granted);
 
     if (m_userPermissionCheck == CheckResult::Unknown) {
-        requestUserPermission(*recognitionRequest);
+        requestUserPermission(*recognitionRequest, WTFMove(frameInfo));
         return;
     }
     ASSERT(m_userPermissionCheck == CheckResult::Granted);
@@ -178,7 +189,7 @@ void SpeechRecognitionPermissionManager::continueProcessingRequest()
 void SpeechRecognitionPermissionManager::completeCurrentRequest(std::optional<WebCore::SpeechRecognitionError>&& error)
 {
     ASSERT(!m_requests.isEmpty());
-    auto currentRequest = m_requests.takeFirst();
+    auto [currentRequest, frameInfo] = m_requests.takeFirst();
     currentRequest->complete(WTFMove(error));
 
     startNextRequest();
@@ -224,7 +235,7 @@ void SpeechRecognitionPermissionManager::requestMicrophoneAccess()
 #endif
 }
 
-void SpeechRecognitionPermissionManager::requestUserPermission(WebCore::SpeechRecognitionRequest& recognitionRequest)
+void SpeechRecognitionPermissionManager::requestUserPermission(WebCore::SpeechRecognitionRequest& recognitionRequest, FrameInfoData&& frameInfo)
 {
     auto clientOrigin = recognitionRequest.clientOrigin();
     auto requestingOrigin = clientOrigin.clientOrigin.securityOrigin();
@@ -241,13 +252,16 @@ void SpeechRecognitionPermissionManager::requestUserPermission(WebCore::SpeechRe
 
         continueProcessingRequest();
     };
-    protectedPage()->requestUserMediaPermissionForSpeechRecognition(recognitionRequest.frameIdentifier(), requestingOrigin, topOrigin, WTFMove(decisionHandler));
+    protectedPage()->requestUserMediaPermissionForSpeechRecognition(recognitionRequest.mainFrameIdentifier(), WTFMove(frameInfo), requestingOrigin, topOrigin, WTFMove(decisionHandler));
 }
 
 void SpeechRecognitionPermissionManager::decideByDefaultAction(const WebCore::SecurityOriginData& origin, CompletionHandler<void(bool)>&& completionHandler)
 {
 #if PLATFORM(COCOA)
-    alertForPermission(protectedPage(), MediaPermissionReason::SpeechRecognition, origin, WTFMove(completionHandler));
+    if (RefPtr page = m_page.get())
+        alertForPermission(*page, MediaPermissionReason::SpeechRecognition, origin, WTFMove(completionHandler));
+    else
+        completionHandler(false);
 #else
     completionHandler(false);
 #endif

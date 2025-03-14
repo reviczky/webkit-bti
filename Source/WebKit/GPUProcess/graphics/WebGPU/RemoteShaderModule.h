@@ -62,7 +62,7 @@ public:
 
     virtual ~RemoteShaderModule();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -77,6 +77,10 @@ private:
     RemoteShaderModule& operator=(RemoteShaderModule&&) = delete;
 
     WebCore::WebGPU::ShaderModule& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::ShaderModule> protectedBacking();
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
+    Ref<WebGPU::ObjectHeap> protectedObjectHeap() const { return m_objectHeap.get(); }
+    Ref<RemoteGPU> protectedGPU() const { return m_gpu.get(); }
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

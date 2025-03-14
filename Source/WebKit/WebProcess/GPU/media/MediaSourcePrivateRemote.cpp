@@ -34,6 +34,7 @@
 #include "RemoteMediaSourceProxyMessages.h"
 #include "RemoteSourceBufferIdentifier.h"
 #include "SourceBufferPrivateRemote.h"
+#include <WebCore/MediaSourceConfiguration.h>
 #include <WebCore/NotImplemented.h>
 #include <mutex>
 #include <wtf/NativePromise.h>
@@ -103,7 +104,7 @@ MediaSourcePrivateRemote::~MediaSourcePrivateRemote()
         gpuProcessConnection->connection().removeWorkQueueMessageReceiver(Messages::MediaSourcePrivateRemoteMessageReceiver::messageReceiverName(), m_identifier.toUInt64());
 }
 
-MediaSourcePrivate::AddStatus MediaSourcePrivateRemote::addSourceBuffer(const ContentType& contentType, bool, RefPtr<SourceBufferPrivate>& outPrivate)
+MediaSourcePrivate::AddStatus MediaSourcePrivateRemote::addSourceBuffer(const ContentType& contentType, const MediaSourceConfiguration& configuration, RefPtr<SourceBufferPrivate>& outPrivate)
 {
     RefPtr mediaPlayerPrivate = m_mediaPlayerPrivate.get();
     RefPtr gpuProcessConnection = m_gpuProcessConnection.get();
@@ -111,30 +112,28 @@ MediaSourcePrivate::AddStatus MediaSourcePrivateRemote::addSourceBuffer(const Co
         return AddStatus::NotSupported;
 
     AddStatus returnedStatus;
-    RemoteSourceBufferIdentifier returnedIdentifier;
     RefPtr<SourceBufferPrivate> returnedSourceBuffer;
     DEBUG_LOG(LOGIDENTIFIER, contentType);
 
     // the sendSync() call requires us to run on the connection's dispatcher, which is the main thread.
     // FIXME: Uses a new Connection for remote playback, and not the main GPUProcessConnection's one.
     // FIXME: m_mimeTypeCache is a main-thread only object.
-    callOnMainRunLoopAndWait([this, &returnedStatus, &returnedIdentifier, contentTypeString = contentType.raw().isolatedCopy(), &returnedSourceBuffer, mediaPlayerPrivate, gpuProcessConnection] {
+    callOnMainRunLoopAndWait([this, &returnedStatus, contentTypeString = contentType.raw().isolatedCopy(), &returnedSourceBuffer, gpuProcessConnection, configuration] {
         ContentType contentType { contentTypeString };
         MediaEngineSupportParameters parameters;
         parameters.isMediaSource = true;
         parameters.type = contentType;
-        if (m_mimeTypeCache.supportsTypeAndCodecs(parameters) == MediaPlayer::SupportsType::IsNotSupported) {
+        if (m_mimeTypeCache->supportsTypeAndCodecs(parameters) == MediaPlayer::SupportsType::IsNotSupported) {
             returnedStatus = AddStatus::NotSupported;
             return;
         }
 
-        auto sendResult = gpuProcessConnection->connection().sendSync(Messages::RemoteMediaSourceProxy::AddSourceBuffer(WTFMove(contentType)), m_identifier);
+        auto sendResult = gpuProcessConnection->connection().sendSync(Messages::RemoteMediaSourceProxy::AddSourceBuffer(WTFMove(contentType), configuration), m_identifier);
         auto [status, remoteSourceBufferIdentifier] = sendResult.takeReplyOr(AddStatus::NotSupported, std::nullopt);
 
         if (status == AddStatus::Ok) {
             ASSERT(remoteSourceBufferIdentifier.has_value());
-            returnedIdentifier = * remoteSourceBufferIdentifier;
-            returnedSourceBuffer = SourceBufferPrivateRemote::create(*gpuProcessConnection, *remoteSourceBufferIdentifier, *this, *mediaPlayerPrivate);
+            returnedSourceBuffer = SourceBufferPrivateRemote::create(*gpuProcessConnection, *remoteSourceBufferIdentifier, *this);
         }
         returnedStatus = status;
     });
@@ -152,6 +151,24 @@ MediaSourcePrivate::AddStatus MediaSourcePrivateRemote::addSourceBuffer(const Co
 RefPtr<WebCore::MediaPlayerPrivateInterface> MediaSourcePrivateRemote::player() const
 {
     return m_mediaPlayerPrivate.get();
+}
+
+void MediaSourcePrivateRemote::setPlayer(MediaPlayerPrivateInterface* player)
+{
+    m_mediaPlayerPrivate = downcast<MediaPlayerPrivateRemote>(player);
+}
+
+void MediaSourcePrivateRemote::shutdown()
+{
+    m_shutdown = true;
+    m_mediaPlayerReadyState = MediaPlayer::ReadyState::HaveNothing;
+    ensureOnDispatcher([protectedThis = Ref { *this }, this] {
+        auto gpuProcessConnection = m_gpuProcessConnection.get();
+        if (!gpuProcessConnection)
+            return;
+
+        gpuProcessConnection->connection().send(Messages::RemoteMediaSourceProxy::Shutdown(), m_identifier);
+    });
 }
 
 void MediaSourcePrivateRemote::durationChanged(const MediaTime& duration)
@@ -271,17 +288,6 @@ void MediaSourcePrivateRemote::MessageReceiver::proxySeekToTime(const MediaTime&
         return;
     }
     completionHandler(makeUnexpected(PlatformMediaError::SourceRemoved));
-}
-
-void MediaSourcePrivateRemote::MessageReceiver::mediaSourcePrivateShuttingDown(CompletionHandler<void()>&& completionHandler)
-{
-    assertIsCurrent(MediaSourcePrivateRemote::queue());
-
-    if (RefPtr parent = m_parent.get()) {
-        parent->m_shutdown = true;
-        parent->m_mediaPlayerReadyState = MediaPlayer::ReadyState::HaveNothing;
-    };
-    completionHandler();
 }
 
 MediaSourcePrivateRemote::MessageReceiver::MessageReceiver(MediaSourcePrivateRemote& parent)

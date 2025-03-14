@@ -9,6 +9,7 @@
 
 #include <dawn/webgpu_cpp.h>
 #include <stdint.h>
+#include <climits>
 
 #include "libANGLE/Caps.h"
 #include "libANGLE/Error.h"
@@ -24,6 +25,20 @@
                                    ANGLE_FUNCTION, __LINE__);                                \
             return angle::Result::Stop;                                                      \
         }                                                                                    \
+    } while (0)
+
+#define ANGLE_WGPU_BEGIN_DEBUG_ERROR_SCOPE(context)                             \
+    ::rx::webgpu::DebugErrorScope(context->getInstance(), context->getDevice(), \
+                                  wgpu::ErrorFilter::Validation)
+#define ANGLE_WGPU_END_DEBUG_ERROR_SCOPE(context, scope) \
+    ANGLE_TRY(scope.PopScope(context, __FILE__, ANGLE_FUNCTION, __LINE__))
+
+#define ANGLE_WGPU_SCOPED_DEBUG_TRY(context, command)                                            \
+    do                                                                                           \
+    {                                                                                            \
+        ::rx::webgpu::DebugErrorScope _errorScope = ANGLE_WGPU_BEGIN_DEBUG_ERROR_SCOPE(context); \
+        (command);                                                                               \
+        ANGLE_WGPU_END_DEBUG_ERROR_SCOPE(context, _errorScope);                                  \
     } while (0)
 
 #define ANGLE_GL_OBJECTS_X(PROC) \
@@ -91,6 +106,44 @@ constexpr uint32_t kUnpackedColorBuffersMask =
 // WebGPU image level index.
 using LevelIndex = gl::LevelIndexWrapper<uint32_t>;
 
+class ErrorScope : public angle::NonCopyable
+{
+  public:
+    ErrorScope(wgpu::Instance instance, wgpu::Device device, wgpu::ErrorFilter errorType);
+    ~ErrorScope();
+
+    angle::Result PopScope(ContextWgpu *context,
+                           const char *file,
+                           const char *function,
+                           unsigned int line);
+
+  private:
+    wgpu::Instance mInstance;
+    wgpu::Device mDevice;
+    bool mActive = false;
+};
+
+class NoOpErrorScope : public angle::NonCopyable
+{
+  public:
+    NoOpErrorScope(wgpu::Instance instance, wgpu::Device device, wgpu::ErrorFilter errorType) {}
+    ~NoOpErrorScope() {}
+
+    angle::Result PopScope(ContextWgpu *context,
+                           const char *file,
+                           const char *function,
+                           unsigned int line)
+    {
+        return angle::Result::Continue;
+    }
+};
+
+#if defined(ANGLE_ENABLE_ASSERTS)
+using DebugErrorScope = ErrorScope;
+#else
+using DebugErrorScope = NoOpErrorScope;
+#endif
+
 enum class RenderPassClosureReason
 {
     NewRenderPass,
@@ -100,6 +153,9 @@ enum class RenderPassClosureReason
     GLFinish,
     EGLSwapBuffers,
     GLReadPixels,
+    IndexRangeReadback,
+    VertexArrayStreaming,
+    VertexArrayLineLoop,
 
     InvalidEnum,
     EnumCount = InvalidEnum,
@@ -109,6 +165,8 @@ struct ClearValues
 {
     wgpu::Color clearColor;
     uint32_t depthSlice;
+    float depthValue;
+    uint32_t stencilValue;
 };
 
 class ClearValuesArray final
@@ -120,7 +178,8 @@ class ClearValuesArray final
     ClearValuesArray(const ClearValuesArray &other);
     ClearValuesArray &operator=(const ClearValuesArray &rhs);
 
-    void store(uint32_t index, ClearValues clearValues);
+    void store(uint32_t index, const ClearValues &clearValues);
+
     gl::DrawBufferMask getColorMask() const;
     void reset()
     {
@@ -132,6 +191,16 @@ class ClearValuesArray final
         mValues[index] = {};
         mEnabled.reset(index);
     }
+    void resetDepth()
+    {
+        mValues[kUnpackedDepthIndex] = {};
+        mEnabled.reset(kUnpackedDepthIndex);
+    }
+    void resetStencil()
+    {
+        mValues[kUnpackedStencilIndex] = {};
+        mEnabled.reset(kUnpackedStencilIndex);
+    }
     const ClearValues &operator[](size_t index) const { return mValues[index]; }
 
     bool empty() const { return mEnabled.none(); }
@@ -139,12 +208,17 @@ class ClearValuesArray final
 
     bool test(size_t index) const { return mEnabled.test(index); }
 
+    float getDepthValue() const { return mValues[kUnpackedDepthIndex].depthValue; }
+    uint32_t getStencilValue() const { return mValues[kUnpackedStencilIndex].stencilValue; }
+    bool hasDepth() const { return mEnabled.test(kUnpackedDepthIndex); }
+    bool hasStencil() const { return mEnabled.test(kUnpackedStencilIndex); }
+
   private:
     gl::AttachmentArray<ClearValues> mValues;
     gl::AttachmentsMask mEnabled;
 };
 
-void GenerateCaps(const wgpu::Device &device,
+void GenerateCaps(const wgpu::Limits &limitWgpu,
                   gl::Caps *glCaps,
                   gl::TextureCapsMap *glTextureCapsMap,
                   gl::Extensions *glExtensions,
@@ -159,6 +233,12 @@ wgpu::Instance GetInstance(const gl::Context *context);
 wgpu::RenderPassColorAttachment CreateNewClearColorAttachment(wgpu::Color clearValue,
                                                               uint32_t depthSlice,
                                                               wgpu::TextureView textureView);
+wgpu::RenderPassDepthStencilAttachment CreateNewDepthStencilAttachment(
+    float depthClearValue,
+    uint32_t stencilClearValue,
+    wgpu::TextureView textureView,
+    bool hasDepthValue   = false,
+    bool hasStencilValue = false);
 
 bool IsWgpuError(wgpu::WaitStatus waitStatus);
 bool IsWgpuError(WGPUBufferMapAsyncStatus mapBufferStatus);
@@ -166,7 +246,8 @@ bool IsWgpuError(WGPUBufferMapAsyncStatus mapBufferStatus);
 bool IsStripPrimitiveTopology(wgpu::PrimitiveTopology topology);
 
 // Required alignments for buffer sizes and mapping
-constexpr size_t kBufferSizeAlignment      = 4;
+constexpr size_t kBufferSizeAlignment         = 4;
+constexpr size_t kBufferCopyToBufferAlignment = 4;
 constexpr size_t kBufferMapSizeAlignment   = kBufferSizeAlignment;
 constexpr size_t kBufferMapOffsetAlignment = 8;
 
@@ -194,8 +275,10 @@ wgpu::FrontFace GetFrontFace(GLenum frontFace);
 wgpu::CullMode GetCullMode(gl::CullFaceMode mode, bool cullFaceEnabled);
 wgpu::ColorWriteMask GetColorWriteMask(bool r, bool g, bool b, bool a);
 
-wgpu::CompareFunction getCompareFunc(const GLenum glCompareFunc);
+wgpu::CompareFunction GetCompareFunc(const GLenum glCompareFunc, bool testEnabled);
 wgpu::StencilOperation getStencilOp(const GLenum glStencilOp);
+
+uint32_t GetFirstIndexForDrawCall(gl::DrawElementsType indexType, const void *indices);
 }  // namespace gl_wgpu
 
 // Number of reserved binding slots to implement the default uniform block
@@ -203,7 +286,10 @@ constexpr uint32_t kReservedPerStageDefaultUniformSlotCount = 0;
 
 }  // namespace rx
 
-#define ANGLE_WGPU_WRAPPER_OBJECTS_X(PROC) PROC(RenderPipeline)
+#define ANGLE_WGPU_WRAPPER_OBJECTS_X(PROC) \
+    PROC(BindGroup)                        \
+    PROC(Buffer)                           \
+    PROC(RenderPipeline)
 
 // Add a hash function for all wgpu cpp wrappers that hashes the underlying C object pointer.
 #define ANGLE_WGPU_WRAPPER_OBJECT_HASH(OBJ)               \

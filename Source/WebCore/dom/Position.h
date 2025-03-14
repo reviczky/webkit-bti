@@ -187,7 +187,7 @@ public:
     static bool nodeIsUserSelectAll(const Node*);
     static RefPtr<Node> rootUserSelectAllForNode(Node*);
 
-    void debugPosition(const char* msg = "") const;
+    void debugPosition(ASCIILiteral msg = ""_s) const;
 
 #if ENABLE(TREE_DEBUGGING)
     String debugDescription() const;
@@ -250,7 +250,7 @@ Position lastPositionInNode(Node* anchorNode);
 
 bool offsetIsBeforeLastNodeOffset(unsigned offset, Node* anchorNode);
 
-Node* commonInclusiveAncestor(const Position&, const Position&);
+WEBCORE_EXPORT Node* commonInclusiveAncestor(const Position&, const Position&);
 
 WTF::TextStream& operator<<(WTF::TextStream&, const Position&);
 

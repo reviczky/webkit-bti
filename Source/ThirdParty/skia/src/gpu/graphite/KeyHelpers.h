@@ -21,6 +21,7 @@
 #include "include/private/SkColorData.h"
 #include "include/private/base/SkTArray.h"
 #include "src/core/SkColorSpaceXformSteps.h"
+#include "src/gpu/graphite/PaintParamsKey.h"
 #include "src/gpu/graphite/ReadSwizzle.h"
 #include "src/gpu/graphite/TextureProxy.h"
 #include "src/shaders/SkShaderBase.h"
@@ -56,14 +57,6 @@ enum class DstColorType {
  * different blend blocks outlined below. The different Src/Dst pairings could instead be encoded
  * as parent-child relationships.
  */
-
-struct DstReadSampleBlock {
-    static void AddBlock(const KeyContext&,
-                         PaintParamsKeyBuilder*,
-                         PipelineDataGatherer*,
-                         sk_sp<TextureProxy> dst,
-                         SkIPoint dstOffset);
-};
 
 struct SolidColorShaderBlock {
     static void AddBlock(const KeyContext&,
@@ -171,9 +164,8 @@ struct ImageShaderBlock {
                   SkTileMode tileModeY,
                   SkISize imgSize,
                   SkRect subset);
-
         SkSamplingOptions fSampling;
-        SkTileMode fTileModes[2];
+        std::pair<SkTileMode, SkTileMode> fTileModes;
         SkISize fImgSize;
         SkRect fSubset;
 
@@ -199,7 +191,7 @@ struct YUVImageShaderBlock {
 
         SkSamplingOptions fSampling;
         SkSamplingOptions fSamplingUV;
-        SkTileMode fTileModes[2];
+        std::pair<SkTileMode, SkTileMode> fTileModes;
         SkISize fImgSize;
         SkISize fImgSizeUV;  // Size of UV planes relative to Y's texel space
         SkRect fSubset;
@@ -286,28 +278,22 @@ struct PerlinNoiseShaderBlock {
                          const PerlinNoiseData&);
 };
 
-struct BlendShaderBlock {
+struct BlendComposeBlock {
     static void BeginBlock(const KeyContext&, PaintParamsKeyBuilder*, PipelineDataGatherer*);
 };
 
-struct BlendModeBlenderBlock {
-    static void AddBlock(const KeyContext&,
-                         PaintParamsKeyBuilder*,
-                         PipelineDataGatherer*,
-                         SkBlendMode);
-};
-
-struct CoeffBlenderBlock {
+struct PorterDuffBlenderBlock {
     static void AddBlock(const KeyContext&,
                          PaintParamsKeyBuilder*,
                          PipelineDataGatherer*,
                          SkSpan<const float> coeffs);
 };
 
-struct ClipShaderBlock {
-    static void BeginBlock(const KeyContext&,
-                           PaintParamsKeyBuilder*,
-                           PipelineDataGatherer*);
+struct HSLCBlenderBlock {
+    static void AddBlock(const KeyContext&,
+                         PaintParamsKeyBuilder*,
+                         PipelineDataGatherer*,
+                         SkSpan<const float> coeffs);
 };
 
 struct ComposeBlock {
@@ -374,30 +360,47 @@ struct ColorSpaceTransformBlock {
                          const ColorSpaceTransformData&);
 };
 
-struct CircularRRectClipBlock {
-    struct CircularRRectClipData {
-        CircularRRectClipData(SkRect rect,
-                              SkPoint radiusPlusHalf,
-                              SkRect edgeSelect) :
-            fRect(rect),
-            fRadiusPlusHalf(radiusPlusHalf),
-            fEdgeSelect(edgeSelect) {}
-        SkRect  fRect;
-        SkPoint fRadiusPlusHalf;
-        SkRect  fEdgeSelect;
+struct NonMSAAClipBlock {
+    struct NonMSAAClipData {
+        NonMSAAClipData(SkRect rect,
+                        SkPoint radiusPlusHalf,
+                        SkRect edgeSelect,
+                        SkPoint texCoordOffset,
+                        SkRect maskBounds,
+                        sk_sp<TextureProxy> atlasTexture)
+                : fRect(rect)
+                , fRadiusPlusHalf(radiusPlusHalf)
+                , fEdgeSelect(edgeSelect)
+                , fTexCoordOffset(texCoordOffset)
+                , fMaskBounds(maskBounds)
+                , fAtlasTexture(std::move(atlasTexture)){}
+        // analytic clip
+        SkRect  fRect;            // bounds, outset by 0.5
+        SkPoint fRadiusPlusHalf;  // abs() of .x is radius+0.5, if < 0 indicates inverse fill
+                                  // .y is 1/(radius+0.5)
+        SkRect  fEdgeSelect;      // 1 indicates a rounded corner on that side (LTRB), 0 otherwise
+
+        // atlas clip
+        SkPoint fTexCoordOffset;  // translation from local coords to unnormalized texel coords
+        SkRect  fMaskBounds;      // bounds of mask area, in unnormalized texel coords
+
+        sk_sp<TextureProxy> fAtlasTexture;
     };
 
     static void AddBlock(const KeyContext&,
                          PaintParamsKeyBuilder*,
                          PipelineDataGatherer*,
-                         const CircularRRectClipData&);
+                         const NonMSAAClipData&);
 };
 
-struct PrimitiveColorBlock {
-    static void AddBlock(const KeyContext&,
-                         PaintParamsKeyBuilder*,
-                         PipelineDataGatherer*);
-};
+/**
+ * Adds a block that references the primitive color produced by the RenderStep and accounts for
+ * color space transformation.
+ */
+void AddPrimitiveColor(const KeyContext&,
+                       PaintParamsKeyBuilder*,
+                       PipelineDataGatherer*,
+                       const SkColorSpace* primitiveColorSpace);
 
 /**
  * Blend mode color filters blend their input (as the dst color) with some given color (supplied
@@ -473,6 +476,39 @@ void AddToKey(const KeyContext& keyContext,
 void NotifyImagesInUse(Recorder*, DrawContext*, const SkBlender*);
 void NotifyImagesInUse(Recorder*, DrawContext*, const SkColorFilter*);
 void NotifyImagesInUse(Recorder*, DrawContext*, const SkShader*);
+
+template <typename AddBlendToKeyT, typename AddSrcToKeyT, typename AddDstToKeyT>
+void Blend(const KeyContext& keyContext,
+           PaintParamsKeyBuilder* keyBuilder,
+           PipelineDataGatherer* gatherer,
+           AddBlendToKeyT addBlendToKey,
+           AddSrcToKeyT addSrcToKey,
+           AddDstToKeyT addDstToKey) {
+    BlendComposeBlock::BeginBlock(keyContext, keyBuilder, gatherer);
+
+        addSrcToKey();
+
+        addDstToKey();
+
+        addBlendToKey();
+
+    keyBuilder->endBlock();  // BlendComposeBlock
+}
+
+template <typename AddInnerToKeyT, typename AddOuterToKeyT>
+void Compose(const KeyContext& keyContext,
+             PaintParamsKeyBuilder* keyBuilder,
+             PipelineDataGatherer* gatherer,
+             AddInnerToKeyT addInnerToKey,
+             AddOuterToKeyT addOuterToKey) {
+    ComposeBlock::BeginBlock(keyContext, keyBuilder, gatherer);
+
+        addInnerToKey();
+
+        addOuterToKey();
+
+    keyBuilder->endBlock();  // ComposeBlock
+}
 
 } // namespace skgpu::graphite
 

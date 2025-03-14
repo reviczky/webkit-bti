@@ -46,6 +46,10 @@ enum class FrameLoadType : uint8_t;
 class ResourceResponse;
 }
 
+namespace WebKit {
+class WebBackForwardListFrameItem;
+}
+
 namespace API {
 
 struct SubstituteData {
@@ -78,9 +82,9 @@ public:
         return adoptRef(*new Navigation(processID, WTFMove(currentAndTargetItem)));
     }
 
-    static Ref<Navigation> create(WebCore::ProcessIdentifier processID, Ref<WebKit::WebBackForwardListItem>&& targetItem, RefPtr<WebKit::WebBackForwardListItem>&& fromItem, WebCore::FrameLoadType backForwardFrameLoadType)
+    static Ref<Navigation> create(WebCore::ProcessIdentifier processID, Ref<WebKit::WebBackForwardListFrameItem>&& targetFrameItem, RefPtr<WebKit::WebBackForwardListItem>&& fromItem, WebCore::FrameLoadType backForwardFrameLoadType)
     {
-        return adoptRef(*new Navigation(processID, WTFMove(targetItem), WTFMove(fromItem), backForwardFrameLoadType));
+        return adoptRef(*new Navigation(processID, WTFMove(targetFrameItem), WTFMove(fromItem), backForwardFrameLoadType));
     }
 
     static Ref<Navigation> create(WebCore::ProcessIdentifier processID, WebCore::ResourceRequest&& request, RefPtr<WebKit::WebBackForwardListItem>&& fromItem)
@@ -110,7 +114,9 @@ public:
     bool currentRequestIsRedirect() const { return !m_lastNavigationAction.redirectResponse.isNull(); }
     bool currentRequestIsCrossSiteRedirect() const;
 
-    WebKit::WebBackForwardListItem* targetItem() const { return m_targetItem.get(); }
+    WebKit::WebBackForwardListItem* targetItem() const;
+    RefPtr<WebKit::WebBackForwardListItem> protectedTargetItem() const { return targetItem(); }
+    WebKit::WebBackForwardListFrameItem* targetFrameItem() const { return m_targetFrameItem.get(); }
     WebKit::WebBackForwardListItem* fromItem() const { return m_fromItem.get(); }
     std::optional<WebCore::FrameLoadType> backForwardFrameLoadType() const { return m_backForwardFrameLoadType; }
     WebKit::WebBackForwardListItem* reloadItem() const { return m_reloadItem.get(); }
@@ -135,14 +141,13 @@ public:
     WebCore::LockBackForwardList lockBackForwardList() const { return m_lastNavigationAction.lockBackForwardList; }
 
     WTF::String clientRedirectSourceForHistory() const { return m_lastNavigationAction.clientRedirectSourceForHistory; }
-    WebCore::SandboxFlags effectiveSandboxFlags() const { return m_lastNavigationAction.effectiveSandboxFlags; }
     std::optional<WebCore::OwnerPermissionsPolicyData> ownerPermissionsPolicy() const { return m_lastNavigationAction.ownerPermissionsPolicy; }
 
     void setLastNavigationAction(const WebKit::NavigationActionData& navigationAction) { m_lastNavigationAction = navigationAction; }
     const WebKit::NavigationActionData& lastNavigationAction() const { return m_lastNavigationAction; }
 
     void setOriginatingFrameInfo(const WebKit::FrameInfoData& frameInfo) { m_originatingFrameInfo = frameInfo; }
-    const WebKit::FrameInfoData& originatingFrameInfo() const { return m_originatingFrameInfo; }
+    const std::optional<WebKit::FrameInfoData>& originatingFrameInfo() const { return m_originatingFrameInfo; }
 
     void setDestinationFrameSecurityOrigin(const WebCore::SecurityOriginData& origin) { m_destinationFrameSecurityOrigin = origin; }
     const WebCore::SecurityOriginData& destinationFrameSecurityOrigin() const { return m_destinationFrameSecurityOrigin; }
@@ -158,7 +163,7 @@ public:
 
     const std::optional<WebCore::PrivateClickMeasurement>& privateClickMeasurement() const { return m_lastNavigationAction.privateClickMeasurement; }
 
-    void setClientNavigationActivity(WebKit::ProcessThrottler::ActivityVariant&& activity) { m_clientNavigationActivity = WTFMove(activity); }
+    void setClientNavigationActivity(RefPtr<WebKit::ProcessThrottler::Activity>&& activity) { Ref { m_clientNavigationActivity }->setActivity(WTFMove(activity)); }
 
     void setIsLoadedWithNavigationShared(bool value) { m_isLoadedWithNavigationShared = value; }
     bool isLoadedWithNavigationShared() const { return m_isLoadedWithNavigationShared; }
@@ -177,7 +182,7 @@ private:
     Navigation(WebCore::ProcessIdentifier);
     Navigation(WebCore::ProcessIdentifier, RefPtr<WebKit::WebBackForwardListItem>&&);
     Navigation(WebCore::ProcessIdentifier, WebCore::ResourceRequest&&, RefPtr<WebKit::WebBackForwardListItem>&& fromItem);
-    Navigation(WebCore::ProcessIdentifier, Ref<WebKit::WebBackForwardListItem>&& targetItem, RefPtr<WebKit::WebBackForwardListItem>&& fromItem, WebCore::FrameLoadType);
+    Navigation(WebCore::ProcessIdentifier, Ref<WebKit::WebBackForwardListFrameItem>&& targetItem, RefPtr<WebKit::WebBackForwardListItem>&& fromItem, WebCore::FrameLoadType);
     Navigation(WebCore::ProcessIdentifier, std::unique_ptr<SubstituteData>&&);
     Navigation(WebCore::ProcessIdentifier, WebCore::ResourceRequest&&, std::unique_ptr<SubstituteData>&&, RefPtr<WebKit::WebBackForwardListItem>&& fromItem);
 
@@ -188,17 +193,17 @@ private:
     std::optional<WebCore::ProcessIdentifier> m_currentRequestProcessIdentifier;
     Vector<WTF::URL> m_redirectChain;
 
-    RefPtr<WebKit::WebBackForwardListItem> m_targetItem;
+    const RefPtr<WebKit::WebBackForwardListFrameItem> m_targetFrameItem;
     RefPtr<WebKit::WebBackForwardListItem> m_fromItem;
     RefPtr<WebKit::WebBackForwardListItem> m_reloadItem;
     std::optional<WebCore::FrameLoadType> m_backForwardFrameLoadType;
     std::unique_ptr<SubstituteData> m_substituteData;
     WebKit::NavigationActionData m_lastNavigationAction;
-    WebKit::FrameInfoData m_originatingFrameInfo;
+    std::optional<WebKit::FrameInfoData> m_originatingFrameInfo;
     WebCore::SecurityOriginData m_destinationFrameSecurityOrigin;
     bool m_userContentExtensionsEnabled { true };
     WebKit::WebContentMode m_effectiveContentMode { WebKit::WebContentMode::Recommended };
-    WebKit::ProcessThrottler::TimedActivity m_clientNavigationActivity;
+    Ref<WebKit::ProcessThrottler::TimedActivity> m_clientNavigationActivity;
     bool m_isLoadedWithNavigationShared { false };
     RefPtr<API::WebsitePolicies> m_websitePolicies;
     std::optional<OptionSet<WebCore::AdvancedPrivacyProtections>> m_originatorAdvancedPrivacyProtections;

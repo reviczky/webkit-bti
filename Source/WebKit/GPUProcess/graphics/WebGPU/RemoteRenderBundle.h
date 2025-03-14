@@ -59,7 +59,7 @@ public:
 
     virtual ~RemoteRenderBundle();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,8 @@ private:
     RemoteRenderBundle& operator=(RemoteRenderBundle&&) = delete;
 
     WebCore::WebGPU::RenderBundle& backing() { return m_backing; }
+
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

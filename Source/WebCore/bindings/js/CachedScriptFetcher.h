@@ -41,20 +41,20 @@ class CachedScriptFetcher : public JSC::ScriptFetcher {
 public:
     virtual CachedResourceHandle<CachedScript> requestModuleScript(Document&, const URL& sourceURL, String&& integrity) const;
 
-    static Ref<CachedScriptFetcher> create(const String& charset);
+    static Ref<CachedScriptFetcher> create(const AtomString& charset);
 
 protected:
-    CachedScriptFetcher(const String& nonce, ReferrerPolicy referrerPolicy, RequestPriority fetchPriorityHint, const String& charset, const AtomString& initiatorType, bool isInUserAgentShadowTree)
+    CachedScriptFetcher(const String& nonce, ReferrerPolicy referrerPolicy, RequestPriority fetchPriority, const AtomString& charset, const AtomString& initiatorType, bool isInUserAgentShadowTree)
         : m_nonce(nonce)
         , m_charset(charset)
         , m_initiatorType(initiatorType)
         , m_isInUserAgentShadowTree(isInUserAgentShadowTree)
         , m_referrerPolicy(referrerPolicy)
-        , m_fetchPriorityHint(fetchPriorityHint)
+        , m_fetchPriority(fetchPriority)
     {
     }
 
-    CachedScriptFetcher(const String& charset)
+    CachedScriptFetcher(const AtomString& charset)
         : m_charset(charset)
     {
     }
@@ -63,11 +63,11 @@ protected:
 
 private:
     String m_nonce;
-    String m_charset;
+    AtomString m_charset;
     AtomString m_initiatorType;
     bool m_isInUserAgentShadowTree { false };
     ReferrerPolicy m_referrerPolicy { ReferrerPolicy::EmptyString };
-    RequestPriority m_fetchPriorityHint { RequestPriority::Auto };
+    RequestPriority m_fetchPriority { RequestPriority::Auto };
 };
 
 } // namespace WebCore

@@ -49,8 +49,16 @@ PerActivityStateCPUUsageSampler::PerActivityStateCPUUsageSampler(WebProcessPool&
     m_loggingTimer.startRepeating(loggingInterval);
 }
 
-PerActivityStateCPUUsageSampler::~PerActivityStateCPUUsageSampler()
+PerActivityStateCPUUsageSampler::~PerActivityStateCPUUsageSampler() = default;
+
+void PerActivityStateCPUUsageSampler::ref() const
 {
+    m_processPool->ref();
+}
+
+void PerActivityStateCPUUsageSampler::deref() const
+{
+    m_processPool->deref();
 }
 
 void PerActivityStateCPUUsageSampler::reportWebContentCPUTime(Seconds cpuTime, ActivityStateForCPUSampling activityState)
@@ -96,7 +104,7 @@ void PerActivityStateCPUUsageSampler::loggingTimerFired()
 
 RefPtr<WebPageProxy> PerActivityStateCPUUsageSampler::pageForLogging() const
 {
-    for (Ref webProcess : m_processPool.processes()) {
+    for (Ref webProcess : Ref { m_processPool.get() }->processes()) {
         if (!webProcess->pageCount())
             continue;
         return webProcess->pages()[0].ptr();

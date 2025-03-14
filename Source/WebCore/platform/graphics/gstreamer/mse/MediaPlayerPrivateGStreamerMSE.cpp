@@ -73,8 +73,8 @@ static const char* dumpReadyState(WebCore::MediaPlayer::ReadyState readyState)
 }
 #endif // GST_DISABLE_GST_DEBUG
 
-GST_DEBUG_CATEGORY(webkit_mse_debug);
-#define GST_CAT_DEFAULT webkit_mse_debug
+GST_DEBUG_CATEGORY_STATIC(webkit_mse_player_debug);
+#define GST_CAT_DEFAULT webkit_mse_player_debug
 
 namespace WebCore {
 
@@ -119,7 +119,7 @@ static Vector<RefPtr<MediaSourceTrackGStreamer>> filterOutRepeatingTracks(const 
 
 void MediaPlayerPrivateGStreamerMSE::registerMediaEngine(MediaEngineRegistrar registrar)
 {
-    GST_DEBUG_CATEGORY_INIT(webkit_mse_debug, "webkitmse", 0, "WebKit MSE media player");
+    GST_DEBUG_CATEGORY_INIT(webkit_mse_player_debug, "webkitmseplayer", 0, "WebKit MSE media player");
     registrar(makeUnique<MediaPlayerFactoryGStreamerMSE>());
 }
 
@@ -144,11 +144,16 @@ void MediaPlayerPrivateGStreamerMSE::load(const String&)
         player->networkStateChanged();
 }
 
-void MediaPlayerPrivateGStreamerMSE::load(const URL& url, const ContentType&, MediaSourcePrivateClient& mediaSource)
+void MediaPlayerPrivateGStreamerMSE::load(const URL& url, const LoadOptions&, MediaSourcePrivateClient& mediaSource)
 {
     auto mseBlobURI = makeString("mediasource"_s, url.string().isEmpty() ? "blob://"_s : url.string());
     GST_DEBUG("Loading %s", mseBlobURI.ascii().data());
-    m_mediaSourcePrivate = MediaSourcePrivateGStreamer::open(mediaSource, *this);
+    if (RefPtr mediaSourcePrivate = downcast<MediaSourcePrivateGStreamer>(mediaSource.mediaSourcePrivate())) {
+        mediaSourcePrivate->setPlayer(this);
+        m_mediaSourcePrivate = WTFMove(mediaSourcePrivate);
+        mediaSource.reOpen();
+    } else
+        m_mediaSourcePrivate = MediaSourcePrivateGStreamer::open(mediaSource, *this);
 
     MediaPlayerPrivateGStreamer::load(mseBlobURI);
 }
@@ -269,7 +274,7 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const SeekTarget& target, float rate
     // This will also add support for fastSeek once done (see webkit.org/b/260607)
     if (!m_mediaSourcePrivate)
         return false;
-    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::current(), [this, weakThis = ThreadSafeWeakPtr { *this }](auto&& result) {
+    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::protectedCurrent(), [this, weakThis = ThreadSafeWeakPtr { *this }](auto&& result) {
         RefPtr self = weakThis.get();
         if (!self || !result)
             return;
@@ -413,7 +418,7 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
 {
     bool isWaitingPreroll = isPipelineWaitingPreroll();
     bool shouldUpdatePlaybackState = false;
-    bool shouldBePlaying = (!m_isPaused && !m_isPausedByViewport && readyState() >= MediaPlayer::ReadyState::HaveFutureData && m_playbackRatePausedState != PlaybackRatePausedState::RatePaused)
+    bool shouldBePlaying = (!m_isPaused && !isPausedByViewport() && readyState() >= MediaPlayer::ReadyState::HaveFutureData && m_playbackRatePausedState != PlaybackRatePausedState::RatePaused)
         || m_playbackRatePausedState == PlaybackRatePausedState::ShouldMoveToPlaying;
     GST_DEBUG_OBJECT(pipeline(), "shouldBePlaying = %s, m_isPipelinePlaying = %s, is seeking %s", boolForPrinting(shouldBePlaying),
         boolForPrinting(m_isPipelinePlaying), boolForPrinting(isWaitingPreroll));
@@ -431,6 +436,11 @@ void MediaPlayerPrivateGStreamerMSE::updateStates()
             GST_ERROR_OBJECT(pipeline(), "Setting the pipeline to PAUSED failed");
 
         shouldUpdatePlaybackState = result == ChangePipelineStateResult::Ok;
+    } else if (m_isEosWithNoBuffers) {
+        if (auto player = m_player.get()) {
+            // Trigger playback end detection in HTMLMediaElement.
+            player->timeChanged();
+        }
     }
 
     if (!shouldUpdatePlaybackState)
@@ -484,6 +494,24 @@ void MediaPlayerPrivateGStreamerMSE::startSource(const Vector<RefPtr<MediaSource
 {
     m_tracks = filterOutRepeatingTracks(tracks);
     webKitMediaSrcEmitStreams(WEBKIT_MEDIA_SRC(m_source.get()), m_tracks);
+}
+
+void MediaPlayerPrivateGStreamerMSE::setEosWithNoBuffers(bool eosWithNoBuffers)
+{
+    m_isEosWithNoBuffers = eosWithNoBuffers;
+    // Parsebin will trigger an error, instruct MediaPlayerPrivateGStreamer to ignore it.
+    if (eosWithNoBuffers) {
+        // On GStreamer 1.18.6, EOS with no buffers causes a parsebin error here:
+        // https://github.com/GStreamer/gst-plugins-base/blob/1.18.6/gst/playback/gstparsebin.c#L3495
+        // On GStreamer 1.24 (at least) that doesn't happen. Let's play safe and protect against the
+        // error in lower versions.
+        if (!webkitGstCheckVersion(1, 24, 0))
+            m_ignoreErrors = true;
+        GST_DEBUG_OBJECT(pipeline(), "EOS with no buffers, setting pipeline to READY state.");
+        changePipelineState(GST_STATE_READY);
+        if (!webkitGstCheckVersion(1, 24, 0))
+            m_ignoreErrors = false;
+    }
 }
 
 void MediaPlayerPrivateGStreamerMSE::getSupportedTypes(HashSet<String>& types)

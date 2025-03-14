@@ -30,6 +30,7 @@
 #include "RTCPriorityType.h"
 
 #include <wtf/MainThread.h>
+#include <wtf/TZoneMallocInlines.h>
 
 GST_DEBUG_CATEGORY(webkit_webrtc_data_channel_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_data_channel_debug
@@ -47,6 +48,8 @@ GST_DEBUG_CATEGORY(webkit_webrtc_data_channel_debug);
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GStreamerDataChannelHandler);
 
 GUniquePtr<GstStructure> GStreamerDataChannelHandler::fromRTCDataChannelInit(const RTCDataChannelInit& options)
 {
@@ -153,7 +156,7 @@ String GStreamerDataChannelHandler::label() const
     return String::fromUTF8(label.get());
 }
 
-void GStreamerDataChannelHandler::setClient(RTCDataChannelHandlerClient& client, ScriptExecutionContextIdentifier contextIdentifier)
+void GStreamerDataChannelHandler::setClient(RTCDataChannelHandlerClient& client, std::optional<ScriptExecutionContextIdentifier> contextIdentifier)
 {
     Locker locker { m_clientLock };
     ASSERT(!m_client);
@@ -430,7 +433,7 @@ void GStreamerDataChannelHandler::postTask(Function<void()>&& function)
         callOnMainThread(WTFMove(function));
         return;
     }
-    ScriptExecutionContext::postTaskTo(m_contextIdentifier, WTFMove(function));
+    ScriptExecutionContext::postTaskTo(*m_contextIdentifier, WTFMove(function));
 }
 
 #undef GST_CAT_DEFAULT

@@ -19,17 +19,6 @@
 #include "src/gpu/graphite/dawn/DawnSharedContext.h"
 
 namespace skgpu::graphite {
-namespace {
-size_t ComputeDawnTextureSize(const SkISize& dimensions, const TextureInfo& info) {
-#if !defined(__EMSCRIPTEN__)
-    const DawnTextureSpec dawnSpec = TextureInfos::GetDawnTextureSpec(info);
-    if (dawnSpec.fUsage & wgpu::TextureUsage::TransientAttachment) {
-        return 0;
-    }
-#endif
-    return ComputeSize(dimensions, info);
-}
-}  // namespace
 
 wgpu::Texture DawnTexture::MakeDawnTexture(const DawnSharedContext* sharedContext,
                                            SkISize dimensions,
@@ -60,7 +49,7 @@ wgpu::Texture DawnTexture::MakeDawnTexture(const DawnSharedContext* sharedContex
 #if !defined(__EMSCRIPTEN__)
     // If a non-default YCbCr descriptor is provided, either the vkFormat or the externalFormat must
     // be defined.
-    if (ycbcrUtils::DawnDescriptorIsValid(dawnSpec.fYcbcrVkDescriptor) &&
+    if (DawnDescriptorIsValid(dawnSpec.fYcbcrVkDescriptor) &&
         dawnSpec.fYcbcrVkDescriptor.vkFormat == 0 &&
         dawnSpec.fYcbcrVkDescriptor.externalFormat == 0) {
         return {};
@@ -98,15 +87,12 @@ DawnTexture::DawnTexture(const DawnSharedContext* sharedContext,
                          wgpu::Texture texture,
                          wgpu::TextureView sampleTextureView,
                          wgpu::TextureView renderTextureView,
-                         Ownership ownership,
-                         skgpu::Budgeted budgeted)
+                         Ownership ownership)
         : Texture(sharedContext,
                   dimensions,
                   info,
                   /*mutableState=*/nullptr,
-                  ownership,
-                  budgeted,
-                  ComputeDawnTextureSize(dimensions, info))
+                  ownership)
         , fTexture(std::move(texture))
         , fSampleTextureView(std::move(sampleTextureView))
         , fRenderTextureView(std::move(renderTextureView)) {}
@@ -121,6 +107,14 @@ std::pair<wgpu::TextureView, wgpu::TextureView> DawnTexture::CreateTextureViews(
         viewDesc.dimension = wgpu::TextureViewDimension::e2D;
         viewDesc.baseArrayLayer = dawnSpec.fSlice;
         viewDesc.arrayLayerCount = 1;
+#if !defined(__EMSCRIPTEN__)
+        // Ensure that the TextureView is configured to use YCbCr sampling if the Texture is
+        // doing so.
+        const wgpu::YCbCrVkDescriptor& ycbcrDesc = dawnSpec.fYcbcrVkDescriptor;
+        if (DawnDescriptorIsValid(ycbcrDesc)) {
+            viewDesc.nextInChain = &ycbcrDesc;
+        }
+#endif
         wgpu::TextureView sampleTextureView = texture.CreateView(&viewDesc);
         wgpu::TextureView renderTextureView;
         if (info.mipmapped() == Mipmapped::kYes) {
@@ -155,8 +149,7 @@ std::pair<wgpu::TextureView, wgpu::TextureView> DawnTexture::CreateTextureViews(
 
 sk_sp<Texture> DawnTexture::Make(const DawnSharedContext* sharedContext,
                                  SkISize dimensions,
-                                 const TextureInfo& info,
-                                 skgpu::Budgeted budgeted) {
+                                 const TextureInfo& info) {
     auto texture = MakeDawnTexture(sharedContext, dimensions, info);
     if (!texture) {
         return {};
@@ -168,8 +161,7 @@ sk_sp<Texture> DawnTexture::Make(const DawnSharedContext* sharedContext,
                                           std::move(texture),
                                           std::move(sampleTextureView),
                                           std::move(renderTextureView),
-                                          Ownership::kOwned,
-                                          budgeted));
+                                          Ownership::kOwned));
 }
 
 sk_sp<Texture> DawnTexture::MakeWrapped(const DawnSharedContext* sharedContext,
@@ -188,8 +180,7 @@ sk_sp<Texture> DawnTexture::MakeWrapped(const DawnSharedContext* sharedContext,
                                           std::move(texture),
                                           std::move(sampleTextureView),
                                           std::move(renderTextureView),
-                                          Ownership::kWrapped,
-                                          skgpu::Budgeted::kNo));
+                                          Ownership::kWrapped));
 }
 
 sk_sp<Texture> DawnTexture::MakeWrapped(const DawnSharedContext* sharedContext,
@@ -206,8 +197,7 @@ sk_sp<Texture> DawnTexture::MakeWrapped(const DawnSharedContext* sharedContext,
                                           /*texture=*/nullptr,
                                           /*sampleTextureView=*/textureView,
                                           /*renderTextureView=*/textureView,
-                                          Ownership::kWrapped,
-                                          skgpu::Budgeted::kNo));
+                                          Ownership::kWrapped));
 }
 
 void DawnTexture::freeGpuData() {
@@ -243,4 +233,3 @@ void DawnTexture::setBackendLabel(char const* label) {
 }
 
 } // namespace skgpu::graphite
-

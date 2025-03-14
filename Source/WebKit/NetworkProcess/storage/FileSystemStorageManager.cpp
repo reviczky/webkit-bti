@@ -35,6 +35,11 @@ namespace WebKit {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(FileSystemStorageManager);
 
+Ref<FileSystemStorageManager> FileSystemStorageManager::create(String&& path, FileSystemStorageHandleRegistry& registry, QuotaCheckFunction&& quotaCheckFunction)
+{
+    return adoptRef(*new FileSystemStorageManager(WTFMove(path), registry, WTFMove(quotaCheckFunction)));
+}
+
 FileSystemStorageManager::FileSystemStorageManager(String&& path, FileSystemStorageHandleRegistry& registry, QuotaCheckFunction&& quotaCheckFunction)
     : m_path(WTFMove(path))
     , m_registry(registry)
@@ -93,14 +98,15 @@ Expected<WebCore::FileSystemHandleIdentifier, FileSystemStorageError> FileSystem
         }
     }
 
-    auto newHandle = FileSystemStorageHandle::create(*this, type, WTFMove(path), WTFMove(name));
+    RefPtr newHandle = FileSystemStorageHandle::create(*this, type, WTFMove(path), WTFMove(name));
     if (!newHandle)
         return makeUnexpected(FileSystemStorageError::Unknown);
     auto newHandleIdentifier = newHandle->identifier();
     m_handlesByConnection.ensure(connection, [&] {
         return HashSet<WebCore::FileSystemHandleIdentifier> { };
     }).iterator->value.add(newHandleIdentifier);
-    m_registry.registerHandle(newHandleIdentifier, *newHandle);
+    if (RefPtr registry = m_registry.get())
+        registry->registerHandle(newHandleIdentifier, *newHandle);
     m_handles.add(newHandleIdentifier, WTFMove(newHandle));
     return newHandleIdentifier;
 }
@@ -126,7 +132,8 @@ void FileSystemStorageManager::closeHandle(FileSystemStorageHandle& handle)
         if (handles.remove(identifier))
             break;
     }
-    m_registry.unregisterHandle(identifier);
+    if (RefPtr registry = m_registry.get())
+        registry->unregisterHandle(identifier);
 }
 
 void FileSystemStorageManager::connectionClosed(IPC::Connection::UniqueID connection)
@@ -139,13 +146,11 @@ void FileSystemStorageManager::connectionClosed(IPC::Connection::UniqueID connec
 
     auto identifiers = connectionHandles->value;
     for (auto identifier : identifiers) {
-        m_handles.remove(identifier);
-        m_registry.unregisterHandle(identifier);
+        if (RefPtr handle = m_handles.take(identifier))
+            handle->close();
+        if (RefPtr registry = m_registry.get())
+            registry->unregisterHandle(identifier);
     }
-
-    m_lockMap.removeIf([&identifiers](auto& entry) {
-        return identifiers.contains(entry.value);
-    });
 
     m_handlesByConnection.remove(connectionHandles);
 }
@@ -157,23 +162,48 @@ Expected<WebCore::FileSystemHandleIdentifier, FileSystemStorageError> FileSystem
     return createHandle(connection, FileSystemStorageHandle::Type::Directory, String { m_path }, { }, true);
 }
 
-bool FileSystemStorageManager::acquireLockForFile(const String& path, WebCore::FileSystemHandleIdentifier identifier)
+// https://fs.spec.whatwg.org/#file-entry-lock-take
+bool FileSystemStorageManager::acquireLockForFile(const String& path, LockType lockType)
 {
-    if (m_lockMap.contains(path))
-        return false;
+    auto iterator = m_lockMap.ensure(path, [] {
+        return Lock { };
+    }).iterator;
 
-    m_lockMap.add(path, identifier);
-    return true;
-}
-
-bool FileSystemStorageManager::releaseLockForFile(const String& path, WebCore::FileSystemHandleIdentifier identifier)
-{
-    if (auto lockedByIdentifier = m_lockMap.get(path); lockedByIdentifier == identifier) {
-        m_lockMap.remove(path);
-        return true;
+    auto& lock = iterator->value;
+    if (lockType == LockType::Exclusive) {
+        if (lock.state == Lock::State::Open) {
+            lock.state = Lock::State::TakenExclusive;
+            return true;
+        }
+    } else if (lockType == LockType::Shared) {
+        if (lock.state == Lock::State::Open) {
+            lock.state = Lock::State::TakenShared;
+            lock.count = 1;
+            return true;
+        }
+        if (lock.state == Lock::State::TakenShared) {
+            ++lock.count;
+            return true;
+        }
     }
 
     return false;
+}
+
+// https://fs.spec.whatwg.org/#file-entry-lock-release
+bool FileSystemStorageManager::releaseLockForFile(const String& path)
+{
+    auto iterator = m_lockMap.find(path);
+    if (iterator == m_lockMap.end())
+        return false;
+
+    auto& lock = iterator->value;
+    if (lock.state == Lock::State::TakenShared) {
+        if (--lock.count)
+            return false;
+    }
+    m_lockMap.remove(iterator);
+    return true;
 }
 
 void FileSystemStorageManager::close()
@@ -183,11 +213,15 @@ void FileSystemStorageManager::close()
     for (auto& [connectionID, identifiers] : m_handlesByConnection) {
         for (auto identifier : identifiers) {
             auto takenHandle = m_handles.take(identifier);
-            m_registry.unregisterHandle(identifier);
+            if (RefPtr registry = m_registry.get())
+                registry->unregisterHandle(identifier);
 
-            // Send message to web process to invalidate active sync access handle.
+            // Send messages to web process to invalidate active sync access handle and writables.
             if (auto accessHandleIdentifier = takenHandle->activeSyncAccessHandle())
                 IPC::Connection::send(connectionID, Messages::WebFileSystemStorageConnection::InvalidateAccessHandle(*accessHandleIdentifier), 0);
+
+            for (auto writableIdentifier : takenHandle->writables())
+                IPC::Connection::send(connectionID, Messages::WebFileSystemStorageConnection::InvalidateWritable(writableIdentifier), 0);
         }
     }
 

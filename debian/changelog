@@ -1,3 +1,36 @@
+webkit2gtk (2.46.6-2) UNRELEASED; urgency=medium
+
+  * Bring all changes from the 2.47 (experimental) branch.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
+  * Remove libwebkit2gtk-4.0-37.lintian-overrides.
+  * debian/control.in:
+    - Add build dependency on flite1-dev (for speech synthesis).
+    - Remove the minimum versions of all build dependencies in the cases
+      where they are very old.
+    - Remove build dependencies on all lib*-doc packages.
+  * Enable clang again in the architectures where it's available and known
+    to work.
+  * Replace USE_OLD_*_PKG with USE_OLD_PKG_NAMES.
+  * debian/copyright:
+    - Update copyright information of all files.
+  * debian/gbp.conf:
+    - Update upstream branch name.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
+  * fix-bmalloc-armhf.patch:
+    - Drop this patch, the armhf build works fine now without it.
+  * fix-ftbfs-hurd.patch:
+    - Drop this patch, I forgot to do it in 2.46.1-2.
+  * disable-nvidia-dmabuf.patch:
+    - Update this patch for the 2.48.x branch.
+  * debian/rules:
+    - Stop overriding dh_builddeb, running it in parallel used to be a
+      problem when we were building without -g1 and had very large debug
+      packages.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 14 Mar 2025 13:51:38 +0100
+
 webkit2gtk (2.46.6-1) unstable; urgency=high
 
   * New upstream release (Closes: #1092311).

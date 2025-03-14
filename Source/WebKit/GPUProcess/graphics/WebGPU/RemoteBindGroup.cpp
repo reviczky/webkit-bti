@@ -32,6 +32,7 @@
 #include "StreamServerConnection.h"
 #include "WebGPUObjectHeap.h"
 #include <WebCore/WebGPUBindGroup.h>
+#include <WebCore/WebGPUExternalTexture.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
@@ -45,30 +46,42 @@ RemoteBindGroup::RemoteBindGroup(WebCore::WebGPU::BindGroup& bindGroup, WebGPU::
     , m_gpu(gpu)
     , m_identifier(identifier)
 {
-    m_streamConnection->startReceivingMessages(*this, Messages::RemoteBindGroup::messageReceiverName(), m_identifier.toUInt64());
+    protectedStreamConnection()->startReceivingMessages(*this, Messages::RemoteBindGroup::messageReceiverName(), m_identifier.toUInt64());
 }
 
 RemoteBindGroup::~RemoteBindGroup() = default;
 
 void RemoteBindGroup::destruct()
 {
-    m_objectHeap->removeObject(m_identifier);
+    protectedObjectHeap()->removeObject(m_identifier);
 }
 
-void RemoteBindGroup::updateExternalTextures(WebGPUIdentifier externalTextureIdentifier)
+void RemoteBindGroup::updateExternalTextures(WebGPUIdentifier externalTextureIdentifier, CompletionHandler<void(bool)>&& completion)
 {
-    if (auto* externalTexture = m_objectHeap->convertExternalTextureFromBacking(externalTextureIdentifier))
-        m_backing->updateExternalTextures(*externalTexture);
+    if (auto externalTexture = protectedObjectHeap()->convertExternalTextureFromBacking(externalTextureIdentifier); externalTexture.get())
+        completion(protectedBacking()->updateExternalTextures(*externalTexture.get()));
+    else
+        completion(false);
 }
 
 void RemoteBindGroup::stopListeningForIPC()
 {
-    m_streamConnection->stopReceivingMessages(Messages::RemoteBindGroup::messageReceiverName(), m_identifier.toUInt64());
+    protectedStreamConnection()->stopReceivingMessages(Messages::RemoteBindGroup::messageReceiverName(), m_identifier.toUInt64());
 }
 
 void RemoteBindGroup::setLabel(String&& label)
 {
-    m_backing->setLabel(WTFMove(label));
+    protectedBacking()->setLabel(WTFMove(label));
+}
+
+Ref<WebCore::WebGPU::BindGroup> RemoteBindGroup::protectedBacking()
+{
+    return m_backing;
+}
+
+Ref<IPC::StreamServerConnection> RemoteBindGroup::protectedStreamConnection() const
+{
+    return m_streamConnection;
 }
 
 } // namespace WebKit

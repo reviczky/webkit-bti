@@ -1,9 +1,0 @@
-Package: libwebkit2gtk-4.0-doc
-Build-Profiles: <!nodoc>
-Section: oldlibs
-Architecture: all
-Multi-Arch: foreign
-Depends: libwebkitgtk-doc, ${misc:Depends}
-Description: WebKitGTK documentation (transitional dummy package)
- This is a transitional dummy package, it can be safely removed.
-

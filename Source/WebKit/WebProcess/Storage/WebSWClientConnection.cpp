@@ -33,7 +33,6 @@
 #include "NetworkProcessConnection.h"
 #include "NetworkProcessMessages.h"
 #include "SharedBufferReference.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebMessagePortChannelProvider.h"
 #include "WebPage.h"
 #include "WebPageProxyMessages.h"
@@ -43,6 +42,7 @@
 #include "WebSWServerConnectionMessages.h"
 #include <WebCore/BackgroundFetchInformation.h>
 #include <WebCore/BackgroundFetchRequest.h>
+#include <WebCore/CookieChangeSubscription.h>
 #include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/Document.h>
 #include <WebCore/DocumentLoader.h>
@@ -59,6 +59,7 @@
 #include <WebCore/ServiceWorkerRegistrationKey.h>
 #include <WebCore/WorkerFetchResult.h>
 #include <WebCore/WorkerScriptLoader.h>
+#include <wtf/Vector.h>
 
 namespace WebKit {
 
@@ -103,7 +104,7 @@ void WebSWClientConnection::addServiceWorkerRegistrationInServer(ServiceWorkerRe
 void WebSWClientConnection::removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier identifier)
 {
     if (WebProcess::singleton().removeServiceWorkerRegistration(identifier)) {
-        RunLoop::main().dispatch([identifier, connection = Ref { *this }]() {
+        RunLoop::protectedMain()->dispatch([identifier, connection = Ref { *this }]() {
             connection->send(Messages::WebSWServerConnection::RemoveServiceWorkerRegistrationInServer { identifier });
         });
     }
@@ -298,6 +299,7 @@ void WebSWClientConnection::getPushPermissionState(WebCore::ServiceWorkerRegistr
     });
 }
 
+#if ENABLE(NOTIFICATION_EVENT)
 void WebSWClientConnection::getNotifications(const URL& registrationURL, const String& tag, GetNotificationsCallback&& callback)
 {
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
@@ -315,6 +317,7 @@ void WebSWClientConnection::getNotifications(const URL& registrationURL, const S
 
     WebProcess::singleton().parentProcessConnection()->sendWithAsyncReply(Messages::WebProcessProxy::GetNotifications { registrationURL, tag }, WTFMove(callback));
 }
+#endif
 
 void WebSWClientConnection::enableNavigationPreload(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, ExceptionOrVoidCallback&& callback)
 {
@@ -411,25 +414,83 @@ void WebSWClientConnection::notifyRecordResponseBodyEnd(RetrieveRecordResponseBo
         callback(makeUnexpected(WTFMove(error)));
 }
 
+static RefPtr<Page> pageFromScriptExecutionContextIdentifier(ScriptExecutionContextIdentifier clientIdentifier)
+{
+    RefPtr document = Document::allDocumentsMap().get(clientIdentifier);
+    if (!document) {
+        RefPtr loader = DocumentLoader::fromScriptExecutionContextIdentifier(clientIdentifier);
+        RefPtr frame = loader ? loader->frame() : nullptr;
+        return frame ? frame->page() : nullptr;
+    }
+    return document->page();
+}
+
 void WebSWClientConnection::focusServiceWorkerClient(ScriptExecutionContextIdentifier clientIdentifier, CompletionHandler<void(std::optional<ServiceWorkerClientData>&&)>&& callback)
 {
-    RefPtr client = Document::allDocumentsMap().get(clientIdentifier);
-    auto* page = client ? client->page() : nullptr;
+    RefPtr page = pageFromScriptExecutionContextIdentifier(clientIdentifier);
     if (!page) {
         callback({ });
         return;
     }
 
-    WebPage::fromCorePage(*page)->sendWithAsyncReply(Messages::WebPageProxy::FocusFromServiceWorker { }, [clientIdentifier, callback = WTFMove(callback)]() mutable {
-        RefPtr client = Document::allDocumentsMap().get(clientIdentifier);
-        RefPtr frame = client ? client->frame() : nullptr;
-        auto* page = frame ? frame->page() : nullptr;
-        if (!page) {
-            callback({ });
+    WebPage::fromCorePage(*page)->sendWithAsyncReply(Messages::WebPageProxy::FocusFromServiceWorker { }, [clientIdentifier, callback = WTFMove(callback)] () mutable {
+        auto doFocusSteps = [callback = WTFMove(callback)] (auto* document) mutable {
+            if (!document) {
+                callback({ });
+                return;
+            }
+
+            document->eventLoop().queueTask(TaskSource::Networking, [document = RefPtr { document }, callback = WTFMove(callback)] () mutable {
+                RefPtr frame = document ? document->frame() : nullptr;
+                RefPtr page = frame ? frame->page() : nullptr;
+
+                if (!page) {
+                    callback({ });
+                    return;
+                }
+
+                page->focusController().setFocusedFrame(frame.get());
+                callback(ServiceWorkerClientData::from(*document));
+            });
+        };
+
+        RefPtr document = Document::allDocumentsMap().get(clientIdentifier);
+        if (!document) {
+            RefPtr loader = DocumentLoader::fromScriptExecutionContextIdentifier(clientIdentifier);
+            if (!loader) {
+                callback({ });
+                return;
+            };
+            loader->whenDocumentIsCreated(WTFMove(doFocusSteps));
             return;
         }
-        page->focusController().setFocusedFrame(frame.get());
-        callback(ServiceWorkerClientData::from(*client));
+
+        doFocusSteps(document.get());
+    });
+}
+
+void WebSWClientConnection::addCookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, Vector<WebCore::CookieChangeSubscription>&& subscriptions, ExceptionOrVoidCallback&& callback)
+{
+    sendWithAsyncReply(Messages::WebSWServerConnection::AddCookieChangeSubscriptions { registrationIdentifier, subscriptions }, [callback = WTFMove(callback)](auto&& error) mutable {
+        if (error)
+            return callback(error->toException());
+        callback({ });
+    });
+}
+
+void WebSWClientConnection::removeCookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, Vector<WebCore::CookieChangeSubscription>&& subscriptions, ExceptionOrVoidCallback&& callback)
+{
+    sendWithAsyncReply(Messages::WebSWServerConnection::RemoveCookieChangeSubscriptions { registrationIdentifier, subscriptions }, [callback = WTFMove(callback)](auto&& error) mutable {
+        if (error)
+            return callback(error->toException());
+        callback({ });
+    });
+}
+
+void WebSWClientConnection::cookieChangeSubscriptions(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, ExceptionOrCookieChangeSubscriptionsCallback&& callback)
+{
+    sendWithAsyncReply(Messages::WebSWServerConnection::CookieChangeSubscriptions { registrationIdentifier }, [callback = WTFMove(callback)](auto&& result) mutable {
+        callExceptionOrResultCallback(WTFMove(callback), WTFMove(result));
     });
 }
 

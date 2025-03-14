@@ -67,7 +67,7 @@ HTMLSlotElement::InsertedIntoAncestorResult HTMLSlotElement::insertedIntoAncesto
             shadowRoot->addSlotElementByName(attributeWithoutSynchronization(nameAttr), *this);
     }
 
-    return InsertedIntoAncestorResult::Done;
+    return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
 }
 
 void HTMLSlotElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
@@ -99,6 +99,13 @@ void HTMLSlotElement::attributeChanged(const QualifiedName& name, const AtomStri
         if (RefPtr shadowRoot = containingShadowRoot())
             shadowRoot->renameSlotElement(*this, oldValue, newValue);
     }
+}
+
+void HTMLSlotElement::didFinishInsertingNode()
+{
+    HTMLElement::didFinishInsertingNode();
+    if (selfOrPrecedingNodesAffectDirAuto())
+        updateEffectiveTextDirection();
 }
 
 const Vector<WeakPtr<Node, WeakPtrImplWithEventTargetData>>* HTMLSlotElement::assignedNodes() const
@@ -173,7 +180,7 @@ void HTMLSlotElement::assign(FixedVector<ElementOrText>&& nodes)
     }
 
     auto previous = std::exchange(m_manuallyAssignedNodes, { });
-    HashSet<RefPtr<Node>> seenNodes;
+    UncheckedKeyHashSet<RefPtr<Node>> seenNodes;
     m_manuallyAssignedNodes = WTF::compactMap(nodes, [&seenNodes](ElementOrText& node) -> std::optional<WeakPtr<Node, WeakPtrImplWithEventTargetData>> {
         auto mapper = [&seenNodes]<typename T>(RefPtr<T>& node) -> std::optional<WeakPtr<Node, WeakPtrImplWithEventTargetData>> {
             if (seenNodes.contains(node))
@@ -225,5 +232,10 @@ void HTMLSlotElement::dispatchSlotChangeEvent()
     dispatchEvent(event);
 }
 
+void HTMLSlotElement::updateAccessibilityOnSlotChange() const
+{
+    if (CheckedPtr cache = protectedDocument()->existingAXObjectCache())
+        cache->onSlottedContentChange(*this);
 }
 
+} // namespace WebCore

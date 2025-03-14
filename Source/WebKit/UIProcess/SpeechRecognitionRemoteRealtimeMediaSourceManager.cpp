@@ -43,13 +43,23 @@ SpeechRecognitionRemoteRealtimeMediaSourceManager::SpeechRecognitionRemoteRealti
 {
 }
 
+void SpeechRecognitionRemoteRealtimeMediaSourceManager::ref() const
+{
+    m_process->ref();
+}
+
+void SpeechRecognitionRemoteRealtimeMediaSourceManager::deref() const
+{
+    m_process->deref();
+}
+
 void SpeechRecognitionRemoteRealtimeMediaSourceManager::addSource(SpeechRecognitionRemoteRealtimeMediaSource& source, const WebCore::CaptureDevice& captureDevice)
 {
     auto identifier = source.identifier();
     ASSERT(!m_sources.contains(identifier));
     m_sources.add(identifier, source);
 
-    send(Messages::SpeechRecognitionRealtimeMediaSourceManager::CreateSource(identifier, captureDevice, source.pageIdentifier()));
+    send(Messages::SpeechRecognitionRealtimeMediaSourceManager::CreateSource(identifier, captureDevice, *source.pageIdentifier()));
 }
 
 void SpeechRecognitionRemoteRealtimeMediaSourceManager::removeSource(SpeechRecognitionRemoteRealtimeMediaSource& source)
@@ -99,7 +109,7 @@ void SpeechRecognitionRemoteRealtimeMediaSourceManager::setStorage(WebCore::Real
 
 #endif
 
-const SharedPreferencesForWebProcess& SpeechRecognitionRemoteRealtimeMediaSourceManager::sharedPreferencesForWebProcess() const
+std::optional<SharedPreferencesForWebProcess> SpeechRecognitionRemoteRealtimeMediaSourceManager::sharedPreferencesForWebProcess() const
 {
     return m_process->sharedPreferencesForWebProcess();
 }

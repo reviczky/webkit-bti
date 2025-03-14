@@ -37,8 +37,10 @@
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/WeakHashSet.h>
 
-
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WorkerInspectorProxy);
+
 using namespace Inspector;
 
 static Lock proxiesPerWorkerGlobalScopeLock;

@@ -31,6 +31,7 @@
 
 #include "DMABufRendererBufferFormat.h"
 #include "MessageReceiver.h"
+#include <WebCore/Damage.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RunLoop.h>
 #include <wtf/TZoneMalloc.h>
@@ -52,18 +53,31 @@ class ShareableBitmapHandle;
 }
 
 namespace WebKit {
+class AcceleratedSurfaceDMABuf;
+}
 
+namespace WTF {
+template<typename T> struct IsDeprecatedTimerSmartPointerException;
+template<> struct IsDeprecatedTimerSmartPointerException<WebKit::AcceleratedSurfaceDMABuf> : std::true_type { };
+}
+
+namespace WebKit {
+
+class ThreadedCompositor;
 class WebPage;
 
 class AcceleratedSurfaceDMABuf final : public AcceleratedSurface, public IPC::MessageReceiver {
 public:
-    static std::unique_ptr<AcceleratedSurfaceDMABuf> create(WebPage&, Client&);
+    static std::unique_ptr<AcceleratedSurfaceDMABuf> create(ThreadedCompositor&, WebPage&, Function<void()>&& frameCompleteHandler);
     ~AcceleratedSurfaceDMABuf();
+
+    void ref() const final;
+    void deref() const final;
 
 private:
     uint64_t window() const override { return 0; }
     uint64_t surfaceID() const override;
-    void clientResize(const WebCore::IntSize&) override;
+    bool resize(const WebCore::IntSize&) override;
     bool shouldPaintMirrored() const override
     {
 #if PLATFORM(WPE) || (PLATFORM(GTK) && USE(GTK4))
@@ -72,10 +86,13 @@ private:
         return true;
 #endif
     }
-    void didCreateGLContext() override;
     void willDestroyGLContext() override;
     void willRenderFrame() override;
-    void didRenderFrame(WebCore::Region&&) override;
+    void didRenderFrame() override;
+
+#if ENABLE(DAMAGE_TRACKING)
+    const WebCore::Damage& addDamage(const WebCore::Damage&) override;
+#endif
 
     void didCreateCompositingRunLoop(WTF::RunLoop&) override;
     void willDestroyCompositingRunLoop() override;
@@ -87,7 +104,7 @@ private:
     void visibilityDidChange(bool) override;
     bool backgroundColorDidChange() override;
 
-    AcceleratedSurfaceDMABuf(WebPage&, Client&);
+    AcceleratedSurfaceDMABuf(ThreadedCompositor&, WebPage&, Function<void()>&& frameCompleteHandler);
 
     // IPC::MessageReceiver.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -102,13 +119,16 @@ private:
         virtual ~RenderTarget();
 
         uint64_t id() const { return m_id; }
+#if ENABLE(DAMAGE_TRACKING)
+        const WebCore::Damage& damage() { return m_damage; }
+        void addDamage(const WebCore::Damage&);
+#endif
 
-        virtual void willRenderFrame() const;
-        virtual void didRenderFrame() { }
+        virtual void willRenderFrame();
+        virtual void didRenderFrame();
 
         std::unique_ptr<WebCore::GLFence> createRenderingFence(bool) const;
         void setReleaseFenceFD(UnixFileDescriptor&&);
-        void waitRelease();
 
     protected:
         RenderTarget(uint64_t, const WebCore::IntSize&);
@@ -116,19 +136,13 @@ private:
         virtual bool supportsExplicitSync() const = 0;
 
         uint64_t m_id { 0 };
+        unsigned m_fbo { 0 };
         uint64_t m_surfaceID { 0 };
         unsigned m_depthStencilBuffer { 0 };
         UnixFileDescriptor m_releaseFenceFD;
-    };
-
-    class RenderTargetColorBuffer : public RenderTarget {
-    protected:
-        RenderTargetColorBuffer(uint64_t, const WebCore::IntSize&);
-        virtual ~RenderTargetColorBuffer();
-
-        void willRenderFrame() const final;
-
-        unsigned m_colorBuffer { 0 };
+#if ENABLE(DAMAGE_TRACKING)
+        WebCore::Damage m_damage { WebCore::Damage::invalid() };
+#endif
     };
 
 #if USE(GBM)
@@ -163,7 +177,7 @@ private:
         RefPtr<WebCore::DRMDeviceNode> drmDeviceNode;
     };
 
-    class RenderTargetEGLImage final : public RenderTargetColorBuffer {
+    class RenderTargetEGLImage final : public RenderTarget {
     public:
         static std::unique_ptr<RenderTarget> create(uint64_t, const WebCore::IntSize&, const BufferFormat&);
         RenderTargetEGLImage(uint64_t, const WebCore::IntSize&, EGLImage, uint32_t format, Vector<WTF::UnixFileDescriptor>&&, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier, DMABufRendererBufferFormat::Usage);
@@ -172,20 +186,22 @@ private:
     private:
         bool supportsExplicitSync() const override { return true; }
 
+        unsigned m_colorBuffer { 0 };
         EGLImage m_image { nullptr };
     };
 #endif
 
-    class RenderTargetSHMImage final : public RenderTargetColorBuffer {
+    class RenderTargetSHMImage final : public RenderTarget {
     public:
         static std::unique_ptr<RenderTarget> create(uint64_t, const WebCore::IntSize&);
         RenderTargetSHMImage(uint64_t, const WebCore::IntSize&, Ref<WebCore::ShareableBitmap>&&, WebCore::ShareableBitmapHandle&&);
-        ~RenderTargetSHMImage() = default;
+        ~RenderTargetSHMImage();
 
     private:
         bool supportsExplicitSync() const override { return false; }
         void didRenderFrame() override;
 
+        unsigned m_colorBuffer { 0 };
         Ref<WebCore::ShareableBitmap> m_bitmap;
     };
 
@@ -197,7 +213,6 @@ private:
 
     private:
         bool supportsExplicitSync() const override { return true; }
-        void willRenderFrame() const override;
 
         unsigned m_texture { 0 };
     };
@@ -224,6 +239,10 @@ private:
         void reset();
         void releaseUnusedBuffers();
 
+#if ENABLE(DAMAGE_TRACKING)
+        void addDamage(const WebCore::Damage&);
+#endif
+
         unsigned size() const { return m_freeTargets.size() + m_lockedTargets.size(); }
 
 #if USE(GBM)
@@ -247,12 +266,15 @@ private:
 #endif
     };
 
+    CheckedRef<ThreadedCompositor> m_compositor;
     uint64_t m_id { 0 };
-    unsigned m_fbo { 0 };
     SwapChain m_swapChain;
     RenderTarget* m_target { nullptr };
     bool m_isVisible { false };
     bool m_useExplicitSync { false };
+#if ENABLE(DAMAGE_TRACKING)
+    WebCore::Damage m_frameDamage;
+#endif
     std::unique_ptr<RunLoop::Timer> m_releaseUnusedBuffersTimer;
 };
 

@@ -27,6 +27,7 @@
 
 #include "GLDisplay.h"
 #include <wtf/Noncopyable.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/TypeCasts.h>
 #include <wtf/text/WTFString.h>
 
@@ -37,15 +38,17 @@ typedef void *EGLDisplay;
 typedef void *EGLImage;
 typedef unsigned EGLenum;
 
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
 #include "GRefPtrGStreamer.h"
 
 typedef struct _GstGLContext GstGLContext;
 typedef struct _GstGLDisplay GstGLDisplay;
-#endif // ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#endif // ENABLE(VIDEO) && USE(GSTREAMER)
 
 #if USE(SKIA)
-#include <skia/gpu/GrDirectContext.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
+#include <skia/gpu/ganesh/GrDirectContext.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #include <wtf/ThreadSafeWeakHashSet.h>
 #endif
 
@@ -57,7 +60,8 @@ class SkiaGLContext;
 #endif
 
 class PlatformDisplay {
-    WTF_MAKE_NONCOPYABLE(PlatformDisplay); WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PlatformDisplay);
+    WTF_MAKE_NONCOPYABLE(PlatformDisplay);
 public:
     WEBCORE_EXPORT static PlatformDisplay& sharedDisplay();
 #if !PLATFORM(WIN)
@@ -95,6 +99,9 @@ public:
     bool destroyEGLImage(EGLImage) const;
 #if USE(GBM)
     const Vector<GLDisplay::DMABufFormat>& dmabufFormats();
+#if USE(GSTREAMER)
+    const Vector<GLDisplay::DMABufFormat>& dmabufFormatsForVideo();
+#endif
 #endif
 
 #if ENABLE(WEBGL)
@@ -102,7 +109,7 @@ public:
     EGLContext angleSharingGLContext();
 #endif
 
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     GstGLDisplay* gstGLDisplay() const;
     GstGLContext* gstGLContext() const;
     void clearGStreamerGLState();
@@ -141,7 +148,7 @@ private:
     EGLContext m_angleSharingGLContext { nullptr };
 #endif
 
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     mutable GRefPtr<GstGLDisplay> m_gstGLDisplay;
     mutable GRefPtr<GstGLContext> m_gstGLContext;
 #endif

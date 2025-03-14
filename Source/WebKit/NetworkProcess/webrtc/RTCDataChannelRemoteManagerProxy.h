@@ -36,7 +36,7 @@ namespace WebKit {
 
 class NetworkConnectionToWebProcess;
 
-class RTCDataChannelRemoteManagerProxy final : public IPC::WorkQueueMessageReceiver {
+class RTCDataChannelRemoteManagerProxy final : public IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any> {
 public:
     static Ref<RTCDataChannelRemoteManagerProxy> create() { return adoptRef(*new RTCDataChannelRemoteManagerProxy); }
 
@@ -45,6 +45,8 @@ public:
 
 private:
     RTCDataChannelRemoteManagerProxy();
+
+    Ref<WorkQueue> protectedQueue();
 
     // IPC::WorkQueueMessageReceiver overrides.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;

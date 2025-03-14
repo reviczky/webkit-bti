@@ -28,13 +28,14 @@
 #include "WebProcess.h"
 
 #include "Logging.h"
+#include "SystemSettingsManager.h"
 #include "WebKitWebProcessExtensionPrivate.h"
 #include "WebPage.h"
 #include "WebProcessCreationParameters.h"
 #include "WebProcessExtensionManager.h"
 
-#include <WebCore/FontRenderOptions.h>
 #include <WebCore/PlatformScreen.h>
+#include <WebCore/RenderTheme.h>
 #include <WebCore/ScreenProperties.h>
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -86,11 +87,6 @@
 #include <WebCore/AccessibilityAtspi.h>
 #endif
 
-#if PLATFORM(GTK)
-#include "GtkSettingsManagerProxy.h"
-#include <gtk/gtk.h>
-#endif
-
 #if USE(CAIRO)
 #include <WebCore/CairoUtilities.h>
 #endif
@@ -132,6 +128,8 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
     // Disable RealTimeThreads in WebProcess initially, since it depends on having a visible web page.
     RealTimeThreads::singleton().setEnabled(false);
 #endif
+
+    addSupplementWithoutRefCountedCheck<SystemSettingsManager>();
 }
 
 void WebProcess::initializePlatformDisplayIfNeeded() const
@@ -140,7 +138,7 @@ void WebProcess::initializePlatformDisplayIfNeeded() const
         return;
 
 #if USE(GBM)
-    if (m_dmaBufRendererBufferMode.contains(DMABufRendererBufferMode::Hardware)) {
+    if (m_rendererBufferTransportMode.contains(RendererBufferTransportMode::Hardware)) {
         bool disabled = false;
 #if PLATFORM(GTK)
         const char* disableGBM = getenv("WEBKIT_DMABUF_RENDERER_DISABLE_GBM");
@@ -174,30 +172,23 @@ void WebProcess::initializePlatformDisplayIfNeeded() const
 void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
 #if USE(SKIA)
-#if PLATFORM(WPE)
-    bool useAcceleratedBuffers = false;
-#else
-    bool useAcceleratedBuffers = true;
-#endif
-
-    if (const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING"))
-        useAcceleratedBuffers = (enableCPURendering == "0"_s);
-
-    ProcessCapabilities::setCanUseAcceleratedBuffers(useAcceleratedBuffers);
+    const char* enableCPURendering = getenv("WEBKIT_SKIA_ENABLE_CPU_RENDERING");
+    if (enableCPURendering && strcmp(enableCPURendering, "0"))
+        ProcessCapabilities::setCanUseAcceleratedBuffers(false);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-    addSupplement<UserMediaCaptureManager>();
+    addSupplementWithoutRefCountedCheck<UserMediaCaptureManager>();
 #endif
 
 #if USE(GBM)
     DRMDeviceManager::singleton().initializeMainDevice(parameters.renderDeviceFile);
 #endif
 
-    m_dmaBufRendererBufferMode = parameters.dmaBufRendererBufferMode;
+    m_rendererBufferTransportMode = parameters.rendererBufferTransportMode;
 #if PLATFORM(WPE)
     if (!parameters.isServiceWorkerProcess) {
-        if (m_dmaBufRendererBufferMode.isEmpty()) {
+        if (m_rendererBufferTransportMode.isEmpty()) {
             auto& implementationLibraryName = parameters.implementationLibraryName;
             if (!implementationLibraryName.isNull() && implementationLibraryName.data()[0] != '\0')
                 wpe_loader_init(parameters.implementationLibraryName.data());
@@ -237,15 +228,11 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
         FontRenderOptions::singleton().disableHintingForTesting();
 
 #if PLATFORM(GTK)
-    GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
-#endif
-
-#if PLATFORM(GTK)
     WebCore::setScreenProperties(parameters.screenProperties);
 #endif
 
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
-    if (!m_dmaBufRendererBufferMode.isEmpty())
+    if (!m_rendererBufferTransportMode.isEmpty())
         WebCore::setScreenProperties(parameters.screenProperties);
 #endif
 }

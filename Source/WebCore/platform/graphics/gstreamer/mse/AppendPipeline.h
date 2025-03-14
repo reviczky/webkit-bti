@@ -31,6 +31,7 @@
 #include <gst/gst.h>
 #include <mutex>
 #include <wtf/Condition.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Threading.h>
 
 namespace WebCore {
@@ -44,7 +45,7 @@ struct PadProbeInformation {
 #endif
 
 class AppendPipeline {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(AppendPipeline);
 public:
     AppendPipeline(SourceBufferPrivateGStreamer&, MediaPlayerPrivateGStreamerMSE&);
     virtual ~AppendPipeline();
@@ -61,13 +62,14 @@ private:
     enum StreamType { Audio, Video, Text, Unknown, Invalid };
 #ifndef GST_DISABLE_GST_DEBUG
     static const char * streamTypeToString(StreamType);
+    static const char * streamTypeToStringLower(StreamType);
 #endif
 
     struct Track {
         // Track objects are created on pad-added for the first initialization segment, and destroyed after
         // the pipeline state has been set to GST_STATE_NULL.
+        WTF_MAKE_TZONE_ALLOCATED(Track);
         WTF_MAKE_NONCOPYABLE(Track);
-        WTF_MAKE_FAST_ALLOCATED;
     public:
 
         Track(TrackID trackId, StreamType streamType, const GRefPtr<GstCaps>& caps, const FloatSize& presentationSize)
@@ -80,12 +82,15 @@ private:
         TrackID trackId;
         StreamType streamType;
         GRefPtr<GstCaps> caps;
+        GRefPtr<GstCaps> finalCaps;
         FloatSize presentationSize;
 
-        // Needed by some formats. To simplify the code, parser can be a GstIdentity when not needed.
+        // Needed by some formats. To simplify the code, parser/encoder can be a GstIdentity when not needed.
         GRefPtr<GstElement> parser;
+        GRefPtr<GstElement> encoder;
         GRefPtr<GstElement> appsink;
         GRefPtr<GstPad> entryPad; // Sink pad of the parser/GstIdentity.
+        GRefPtr<GstPad> encoderPad; // Sink pad of the encoder/GstIdentity.
         GRefPtr<GstPad> appsinkPad;
 
         RefPtr<WebCore::TrackPrivateBase> webKitTrack;
@@ -97,6 +102,7 @@ private:
         struct PadProbeInformation appsinkPadEventProbeInformation;
 #endif
 
+        void emplaceOptionalEncoderForFormat(GstBin*, const GRefPtr<GstCaps>&);
         void emplaceOptionalParserForFormat(GstBin*, const GRefPtr<GstCaps>&);
         void initializeElements(AppendPipeline*, GstBin*);
         bool isLinked() const { return gst_pad_is_linked(entryPad.get()); }
@@ -113,7 +119,7 @@ private:
 
     void hookTrackEvents(Track&);
     static std::tuple<GRefPtr<GstCaps>, AppendPipeline::StreamType, FloatSize> parseDemuxerSrcPadCaps(GstCaps*);
-    Ref<WebCore::TrackPrivateBase> makeWebKitTrack(int trackIndex, TrackID);
+    Ref<WebCore::TrackPrivateBase> makeWebKitTrack(Track& appendPipelineTrack, int trackIndex, TrackID);
     void appsinkCapsChanged(Track&);
     void appsinkNewSample(const Track&, GRefPtr<GstSample>&&);
     void handleEndOfAppend();

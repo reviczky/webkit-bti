@@ -21,10 +21,10 @@
 #include "include/core/SkYUVAInfo.h"
 #include "include/core/SkYUVAPixmaps.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrContextOptions.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrContextOptions.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/private/SkIDChangeListener.h"
 #include "include/private/base/SkMutex.h"
@@ -342,6 +342,9 @@ GrSurfaceProxyView LockTextureProxyView(GrRecordingContext* rContext,
                 installKey(view);
                 return view;
             }
+            // The fallback for this would be to generate a bitmap, but some picture-backed
+            // images can only be played back on the GPU.
+            return {};
         } else if (img->generator()->isTextureGenerator()) {
             auto sharedGenerator = img->generator();
             SkAutoMutexExclusive mutex(sharedGenerator->fMutex);

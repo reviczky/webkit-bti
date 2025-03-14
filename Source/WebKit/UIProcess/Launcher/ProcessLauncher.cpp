@@ -53,30 +53,30 @@ ProcessLauncher::~ProcessLauncher()
         tracePoint(ProcessLaunchEnd, m_launchOptions.processIdentifier.toUInt64(), static_cast<uint64_t>(m_launchOptions.processType));
 }
 
-#if !PLATFORM(COCOA) && !USE(GLIB)
+#if !PLATFORM(COCOA)
 void ProcessLauncher::platformDestroy()
 {
 }
 #endif
 
-void ProcessLauncher::didFinishLaunchingProcess(ProcessID processIdentifier, IPC::Connection::Identifier identifier)
+void ProcessLauncher::didFinishLaunchingProcess(ProcessID processIdentifier, IPC::Connection::Identifier&& identifier)
 {
     m_processID = processIdentifier;
     m_isLaunching = false;
 
     tracePoint(ProcessLaunchEnd, m_launchOptions.processIdentifier.toUInt64(), static_cast<uint64_t>(m_launchOptions.processType), static_cast<uint64_t>(m_processID));
 
-    if (!m_client) {
-        // FIXME: Make Identifier a move-only object and release port rights/connections in the destructor.
-#if OS(DARWIN) && !PLATFORM(GTK)
-        // FIXME: Should really be something like USE(MACH)
+    CheckedPtr client = m_client;
+    if (!client) {
+#if OS(DARWIN) && !USE(UNIX_DOMAIN_SOCKETS)
+        // FIXME: Release port rights/connections in the Connection::Identifier destructor.
         if (identifier.port)
             mach_port_mod_refs(mach_task_self(), identifier.port, MACH_PORT_RIGHT_RECEIVE, -1);
 #endif
         return;
     }
-    
-    m_client->didFinishLaunching(this, identifier);
+
+    client->didFinishLaunching(this, WTFMove(identifier));
 }
 
 void ProcessLauncher::invalidate()

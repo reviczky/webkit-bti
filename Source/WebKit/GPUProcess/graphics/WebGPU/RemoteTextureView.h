@@ -59,7 +59,7 @@ public:
 
     virtual ~RemoteTextureView();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,7 @@ private:
     RemoteTextureView& operator=(RemoteTextureView&&) = delete;
 
     WebCore::WebGPU::TextureView& backing() { return m_backing; }
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

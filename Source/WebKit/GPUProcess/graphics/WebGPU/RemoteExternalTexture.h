@@ -59,7 +59,7 @@ public:
 
     virtual ~RemoteExternalTexture();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,9 @@ private:
     RemoteExternalTexture& operator=(RemoteExternalTexture&&) = delete;
 
     WebCore::WebGPU::ExternalTexture& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::ExternalTexture> protectedBacking();
+
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

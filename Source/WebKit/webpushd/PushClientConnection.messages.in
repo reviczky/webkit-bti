@@ -22,6 +22,7 @@
 
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
 
+[ExceptionForEnabledBy]
 messages -> WebPushD::PushClientConnection NotUsingIPCConnection {
     SetPushAndNotificationsEnabledForOrigin(String originString, bool enabled) -> ()
     GetPendingPushMessage() -> (std::optional<WebKit::WebPushMessage> message)
@@ -40,10 +41,11 @@ messages -> WebPushD::PushClientConnection NotUsingIPCConnection {
     GetPushTopicsForTesting() -> (Vector<String> enabled, Vector<String> ignored)
     ShowNotification(struct WebCore::NotificationData notificationData, RefPtr<WebCore::NotificationResources> notificationResources) -> ()
     GetNotifications(URL registrationURL, String tag) -> (Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData> result)
-    CancelNotification(WTF::UUID notificationID)
+    CancelNotification(WebCore::SecurityOriginData origin, WTF::UUID notificationID)
     RequestPushPermission(WebCore::SecurityOriginData origin) -> (bool granted)
     SetAppBadge(WebCore::SecurityOriginData origin, std::optional<uint64_t> badge)
     GetAppBadgeForTesting() -> (std::optional<uint64_t> badge)
+    SetProtocolVersionForTesting(unsigned version) -> ()
 }
 
 #endif // ENABLE(WEB_PUSH_NOTIFICATIONS)

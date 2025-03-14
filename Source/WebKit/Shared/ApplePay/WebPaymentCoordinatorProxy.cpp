@@ -30,7 +30,6 @@
 
 #include "MessageReceiverMap.h"
 #include "MessageSenderInlines.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebPageProxy.h"
 #include "WebPaymentCoordinatorMessages.h"
 #include "WebPaymentCoordinatorProxyMessages.h"
@@ -43,6 +42,7 @@
 #include <wtf/TZoneMallocInlines.h>
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, *messageSenderConnection())
+#define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, *messageSenderConnection(), completion)
 
 namespace WebKit {
 
@@ -54,9 +54,15 @@ static WeakPtr<WebPaymentCoordinatorProxy>& activePaymentCoordinatorProxy()
     return activePaymentCoordinatorProxy.get();
 }
 
+Ref<WorkQueue> WebPaymentCoordinatorProxy::protectedCanMakePaymentsQueue() const
+{
+    return m_canMakePaymentsQueue;
+}
+
 IPC::Connection* WebPaymentCoordinatorProxy::messageSenderConnection() const
 {
-    return m_client.paymentCoordinatorConnection(*this);
+    CheckedPtr client = m_client.get();
+    return client ? client->paymentCoordinatorConnection(*this) : nullptr;
 }
 
 uint64_t WebPaymentCoordinatorProxy::messageSenderDestinationID() const
@@ -71,15 +77,15 @@ void WebPaymentCoordinatorProxy::canMakePayments(CompletionHandler<void(bool)>&&
 
 void WebPaymentCoordinatorProxy::canMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, CompletionHandler<void(bool)>&& completionHandler)
 {
-    MESSAGE_CHECK(!merchantIdentifier.isNull());
-    MESSAGE_CHECK(!domainName.isNull());
+    MESSAGE_CHECK_COMPLETION(!merchantIdentifier.isNull(), completionHandler(false));
+    MESSAGE_CHECK_COMPLETION(!domainName.isNull(), completionHandler(false));
     platformCanMakePaymentsWithActiveCard(merchantIdentifier, domainName, WTFMove(completionHandler));
 }
 
 void WebPaymentCoordinatorProxy::openPaymentSetup(const String& merchantIdentifier, const String& domainName, CompletionHandler<void(bool)>&& completionHandler)
 {
-    MESSAGE_CHECK(!merchantIdentifier.isNull());
-    MESSAGE_CHECK(!domainName.isNull());
+    MESSAGE_CHECK_COMPLETION(!merchantIdentifier.isNull(), completionHandler(false));
+    MESSAGE_CHECK_COMPLETION(!domainName.isNull(), completionHandler(false));
     platformOpenPaymentSetup(merchantIdentifier, domainName, WTFMove(completionHandler));
 }
 
@@ -89,9 +95,9 @@ void WebPaymentCoordinatorProxy::showPaymentUI(WebCore::PageIdentifier destinati
         coordinator->didReachFinalState();
     activePaymentCoordinatorProxy() = *this;
 
-    MESSAGE_CHECK(canBegin());
-    MESSAGE_CHECK(!m_destinationID);
-    MESSAGE_CHECK(!m_authorizationPresenter);
+    MESSAGE_CHECK_COMPLETION(canBegin(), completionHandler(false));
+    MESSAGE_CHECK_COMPLETION(!m_destinationID, completionHandler(false));
+    MESSAGE_CHECK_COMPLETION(!m_authorizationPresenter, completionHandler(false));
 
     m_destinationID = destinationID;
     m_state = State::Activating;
@@ -102,24 +108,25 @@ void WebPaymentCoordinatorProxy::showPaymentUI(WebCore::PageIdentifier destinati
         return URL { linkIconURLString };
     });
 
-    platformShowPaymentUI(webPageProxyID, originatingURL, linkIconURLs, paymentRequest, [this, weakThis = WeakPtr { *this }](bool result) {
-        if (!weakThis)
+    platformShowPaymentUI(webPageProxyID, originatingURL, linkIconURLs, paymentRequest, [weakThis = WeakPtr { *this }](bool result) {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return;
 
-        if (m_state == State::Idle) {
+        if (protectedThis->m_state == State::Idle) {
             ASSERT(!activePaymentCoordinatorProxy());
-            ASSERT(!m_destinationID);
-            ASSERT(m_merchantValidationState == MerchantValidationState::Idle);
+            ASSERT(!protectedThis->m_destinationID);
+            ASSERT(protectedThis->m_merchantValidationState == MerchantValidationState::Idle);
             return;
         }
 
-        ASSERT(m_state == State::Activating);
+        ASSERT(protectedThis->m_state == State::Activating);
         if (!result) {
-            didReachFinalState();
+            protectedThis->didReachFinalState();
             return;
         }
 
-        m_state = State::Active;
+        protectedThis->m_state = State::Active;
     });
 
     completionHandler(true);
@@ -273,7 +280,8 @@ void WebPaymentCoordinatorProxy::presenterDidSelectShippingContact(PaymentAuthor
 
 CocoaWindow* WebPaymentCoordinatorProxy::presentingWindowForPaymentAuthorization(PaymentAuthorizationPresenter&) const
 {
-    return m_client.paymentCoordinatorPresentingWindow(*this);
+    CheckedPtr client = m_client.get();
+    return client ? client->paymentCoordinatorPresentingWindow(*this) : nullptr;
 }
 
 void WebPaymentCoordinatorProxy::presenterDidSelectPaymentMethod(PaymentAuthorizationPresenter&, const WebCore::PaymentMethod& paymentMethod)

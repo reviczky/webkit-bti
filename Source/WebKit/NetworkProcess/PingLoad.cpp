@@ -45,7 +45,7 @@ PingLoad::PingLoad(NetworkProcess& networkProcess, PAL::SessionID sessionID, Net
     , m_parameters(WTFMove(parameters))
     , m_completionHandler(WTFMove(completionHandler))
     , m_timeoutTimer(*this, &PingLoad::timeoutTimerFired)
-    , m_networkLoadChecker(makeUniqueRef<NetworkLoadChecker>(networkProcess, nullptr, nullptr, FetchOptions { m_parameters.options }, m_sessionID, m_parameters.webPageProxyID, WTFMove(m_parameters.originalRequestHeaders), URL { m_parameters.request.url() }, URL { m_parameters.documentURL }, m_parameters.sourceOrigin.copyRef(), m_parameters.topOrigin.copyRef(), m_parameters.parentOrigin(), m_parameters.preflightPolicy, m_parameters.request.httpReferrer(), m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections))
+    , m_networkLoadChecker(NetworkLoadChecker::create(networkProcess, nullptr, nullptr, FetchOptions { m_parameters.options }, m_sessionID, m_parameters.webPageProxyID, WTFMove(m_parameters.originalRequestHeaders), URL { m_parameters.request.url() }, URL { m_parameters.documentURL }, m_parameters.sourceOrigin.copyRef(), m_parameters.topOrigin.copyRef(), m_parameters.parentOrigin(), m_parameters.preflightPolicy, m_parameters.request.httpReferrer(), m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections))
 {
     initialize(networkProcess);
 }
@@ -55,7 +55,7 @@ PingLoad::PingLoad(NetworkConnectionToWebProcess& connection, NetworkResourceLoa
     , m_parameters(WTFMove(parameters))
     , m_completionHandler(WTFMove(completionHandler))
     , m_timeoutTimer(*this, &PingLoad::timeoutTimerFired)
-    , m_networkLoadChecker(makeUniqueRef<NetworkLoadChecker>(connection.networkProcess(), nullptr,  &connection.schemeRegistry(), FetchOptions { m_parameters.options }, m_sessionID, m_parameters.webPageProxyID, WTFMove(m_parameters.originalRequestHeaders), URL { m_parameters.request.url() }, URL { m_parameters.documentURL }, m_parameters.sourceOrigin.copyRef(), m_parameters.topOrigin.copyRef(), m_parameters.parentOrigin(), m_parameters.preflightPolicy, m_parameters.request.httpReferrer(), m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections))
+    , m_networkLoadChecker(NetworkLoadChecker::create(connection.networkProcess(), nullptr,  &connection.schemeRegistry(), FetchOptions { m_parameters.options }, m_sessionID, m_parameters.webPageProxyID, WTFMove(m_parameters.originalRequestHeaders), URL { m_parameters.request.url() }, URL { m_parameters.documentURL }, m_parameters.sourceOrigin.copyRef(), m_parameters.topOrigin.copyRef(), m_parameters.parentOrigin(), m_parameters.preflightPolicy, m_parameters.request.httpReferrer(), m_parameters.allowPrivacyProxy, m_parameters.advancedPrivacyProtections))
     , m_blobFiles(connection.resolveBlobReferences(m_parameters))
 {
     for (auto& file : m_blobFiles) {
@@ -81,19 +81,20 @@ void PingLoad::initialize(NetworkProcess& networkProcess)
     // Set a very generous timeout, just in case.
     m_timeoutTimer.startOneShot(60000_s);
 
-    m_networkLoadChecker->check(ResourceRequest { m_parameters.request }, nullptr, [this, weakThis = WeakPtr { *this }, networkProcess = Ref { networkProcess }] (auto&& result) {
-        if (!weakThis)
+    m_networkLoadChecker->check(ResourceRequest { m_parameters.request }, nullptr, [weakThis = WeakPtr { *this }, networkProcess = Ref { networkProcess }] (auto&& result) {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return;
         WTF::switchOn(result,
-            [this] (ResourceError& error) {
-                this->didFinish(error);
+            [&protectedThis] (ResourceError& error) {
+                protectedThis->didFinish(error);
             },
             [] (NetworkLoadChecker::RedirectionTriplet& triplet) {
                 // We should never send a synthetic redirect for PingLoads.
                 ASSERT_NOT_REACHED();
             },
-            [&] (ResourceRequest& request) {
-                this->loadRequest(networkProcess, WTFMove(request));
+            [&protectedThis, &networkProcess] (ResourceRequest& request) {
+                protectedThis->loadRequest(networkProcess, WTFMove(request));
             }
         );
     });
@@ -115,7 +116,8 @@ PingLoad::~PingLoad()
 void PingLoad::didFinish(const ResourceError& error, const ResourceResponse& response)
 {
     m_completionHandler(error, response);
-    delete this;
+
+    m_selfReference = nullptr;
 }
 
 void PingLoad::loadRequest(NetworkProcess& networkProcess, ResourceRequest&& request)
@@ -132,15 +134,15 @@ void PingLoad::loadRequest(NetworkProcess& networkProcess, ResourceRequest&& req
 
 void PingLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse, ResourceRequest&& request, RedirectCompletionHandler&& completionHandler)
 {
-    m_networkLoadChecker->checkRedirection(ResourceRequest { }, WTFMove(request), WTFMove(redirectResponse), nullptr, [this, completionHandler = WTFMove(completionHandler)] (auto&& result) mutable {
+    m_networkLoadChecker->checkRedirection(ResourceRequest { }, WTFMove(request), WTFMove(redirectResponse), nullptr, [protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)] (auto&& result) mutable {
         if (!result.has_value()) {
-            this->didFinish(result.error());
+            protectedThis->didFinish(result.error());
             completionHandler({ });
             return;
         }
         auto request = WTFMove(result->redirectRequest);
         if (!request.url().protocolIsInHTTPFamily()) {
-            this->didFinish(ResourceError { String { }, 0, request.url(), "Redirection to URL with a scheme that is not HTTP(S)"_s, ResourceError::Type::AccessControl });
+            protectedThis->didFinish(ResourceError { String { }, 0, request.url(), "Redirection to URL with a scheme that is not HTTP(S)"_s, ResourceError::Type::AccessControl });
             completionHandler({ });
             return;
         }
@@ -153,7 +155,7 @@ void PingLoad::didReceiveChallenge(AuthenticationChallenge&& challenge, Negotiat
 {
     PING_RELEASE_LOG("didReceiveChallenge");
     if (challenge.protectionSpace().authenticationScheme() == ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested) {
-        m_networkLoadChecker->networkProcess().authenticationManager().didReceiveAuthenticationChallenge(m_sessionID, m_parameters.webPageProxyID,  m_parameters.topOrigin ? &m_parameters.topOrigin->data() : nullptr, challenge, negotiatedLegacyTLS, WTFMove(completionHandler));
+        m_networkLoadChecker->networkProcess().protectedAuthenticationManager()->didReceiveAuthenticationChallenge(m_sessionID, m_parameters.webPageProxyID,  m_parameters.topOrigin ? &m_parameters.topOrigin->data() : nullptr, challenge, negotiatedLegacyTLS, WTFMove(completionHandler));
         return;
     }
     WeakPtr weakThis { *this };

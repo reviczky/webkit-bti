@@ -56,8 +56,8 @@ std::pair<const char*, const char*> GStreamerCodecUtilities::parseH264ProfileAnd
 
     std::array<uint8_t, 3> sps;
     sps[0] = spsAsInteger >> 16;
-    sps[1] = spsAsInteger >> 8;
-    sps[2] = spsAsInteger;
+    sps[1] = (spsAsInteger >> 8) & 0xff;
+    sps[2] = spsAsInteger & 0xff;
 
     const char* profile = gst_codec_utils_h264_get_profile(sps.data(), 3);
     const char* level = gst_codec_utils_h264_get_level(sps.data(), 3);
@@ -132,8 +132,8 @@ const char* GStreamerCodecUtilities::parseHEVCProfile(const String& codec)
         return nullptr;
     }
 
-    uint8_t profileTierLevel[11] = { 0, };
-    memset(profileTierLevel, 0, 11);
+    std::array<uint8_t, 11> profileTierLevel;
+    memset(profileTierLevel.data(), 0, 11);
     profileTierLevel[0] = parameters->generalProfileIDC;
 
     if (profileTierLevel[0] >= 4) {
@@ -142,7 +142,7 @@ const char* GStreamerCodecUtilities::parseHEVCProfile(const String& codec)
             profileTierLevel[i] = constraints[j];
     }
 
-    return gst_codec_utils_h265_get_profile(profileTierLevel, sizeof(profileTierLevel));
+    return gst_codec_utils_h265_get_profile(profileTierLevel.data(), profileTierLevel.size());
 }
 
 static std::pair<GRefPtr<GstCaps>, GRefPtr<GstCaps>> h265CapsFromCodecString(const String& codecString)

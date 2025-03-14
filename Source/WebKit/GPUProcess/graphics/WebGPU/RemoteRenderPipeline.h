@@ -59,7 +59,7 @@ public:
 
     virtual ~RemoteRenderPipeline();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,12 @@ private:
     RemoteRenderPipeline& operator=(RemoteRenderPipeline&&) = delete;
 
     WebCore::WebGPU::RenderPipeline& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::RenderPipeline> protectedBacking();
+
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
+
+    Ref<WebGPU::ObjectHeap> protectedObjectHeap() const { return m_objectHeap.get(); }
+    Ref<RemoteGPU> protectedGPU() const { return m_gpu.get(); }
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

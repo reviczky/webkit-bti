@@ -26,8 +26,6 @@
 #include "config.h"
 #include "WebColorPickerGtk.h"
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
 #include "WebPageProxy.h"
 #include <WebCore/Color.h>
 #include <WebCore/GtkUtilities.h>
@@ -71,10 +69,8 @@ void WebColorPickerGtk::endPicker()
 
 void WebColorPickerGtk::didChooseColor(const Color& color)
 {
-    if (!m_client)
-        return;
-
-    m_client->didChooseColor(color);
+    if (CheckedPtr client = this->client())
+        client->didChooseColor(color);
 }
 
 void WebColorPickerGtk::colorChooserDialogRGBAChangedCallback(GtkColorChooser* colorChooser, GParamSpec*, WebColorPickerGtk* colorPicker)
@@ -93,7 +89,7 @@ void WebColorPickerGtk::colorChooserDialogResponseCallback(GtkColorChooser*, int
 
 void WebColorPickerGtk::showColorPicker(const Color& color)
 {
-    if (!m_client)
+    if (!client())
         return;
 
     m_initialColor = color;
@@ -111,5 +107,3 @@ void WebColorPickerGtk::showColorPicker(const Color& color)
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(INPUT_TYPE_COLOR)

@@ -34,7 +34,9 @@
 #include <wtf/Lock.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomString.h>
 
@@ -43,13 +45,13 @@ namespace WebCore {
 using TrackID = uint64_t;
 
 class WEBCORE_EXPORT TrackPrivateBase
-    : public ThreadSafeRefCounted<TrackPrivateBase>
+    : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<TrackPrivateBase>
 #if !RELEASE_LOG_DISABLED
     , public LoggerHelper
 #endif
 {
+    WTF_MAKE_TZONE_ALLOCATED(TrackPrivateBase);
     WTF_MAKE_NONCOPYABLE(TrackPrivateBase);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
     virtual ~TrackPrivateBase() = default;
 
@@ -79,9 +81,9 @@ public:
     virtual Type type() const = 0;
 
 #if !RELEASE_LOG_DISABLED
-    virtual void setLogger(const Logger&, const void*);
+    virtual void setLogger(const Logger&, uint64_t);
     const Logger& logger() const final { ASSERT(m_logger); return *m_logger.get(); }
-    const void* logIdentifier() const final { return m_logIdentifier; }
+    uint64_t logIdentifier() const final { return m_logIdentifier; }
     WTFLogChannel& logChannel() const final;
 #endif
 
@@ -115,7 +117,7 @@ protected:
 
 #if !RELEASE_LOG_DISABLED
     RefPtr<const Logger> m_logger;
-    const void* m_logIdentifier;
+    uint64_t m_logIdentifier { 0 };
 #endif
 };
 

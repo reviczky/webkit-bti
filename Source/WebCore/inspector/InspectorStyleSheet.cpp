@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010, Google Inc. All rights reserved.
- * Copyright (C) 2021-2023, Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2025, Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,6 +33,7 @@
 #include "CSSLayerStatementRule.h"
 #include "CSSMediaRule.h"
 #include "CSSParser.h"
+#include "CSSParserEnum.h"
 #include "CSSParserImpl.h"
 #include "CSSParserObserver.h"
 #include "CSSPropertyNames.h"
@@ -70,6 +71,8 @@
 #include <JavaScriptCore/RegularExpression.h>
 #include <wtf/NotFound.h>
 #include <wtf/text/MakeString.h>
+#include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/ParsingUtilities.h>
 #include <wtf/text/StringBuilder.h>
 
 using JSON::ArrayOf;
@@ -103,7 +106,9 @@ static RuleFlatteningStrategy flatteningStrategyForStyleRuleType(StyleRuleType s
     // https://bugs.webkit.org/show_bug.cgi?id=264496
     case StyleRuleType::Scope:
 
-    case StyleRuleType::Unknown:
+    // FIXME (webkit.org/b/284176): support @position-try in Web Inspector.
+    case StyleRuleType::PositionTry:
+
     case StyleRuleType::Charset:
     case StyleRuleType::Import:
     case StyleRuleType::FontFace:
@@ -119,6 +124,7 @@ static RuleFlatteningStrategy flatteningStrategyForStyleRuleType(StyleRuleType s
     case StyleRuleType::FontPaletteValues:
     case StyleRuleType::Property:
     case StyleRuleType::ViewTransition:
+    case StyleRuleType::NestedDeclarations:
         // These rule types do not contain rules that apply directly to an element (i.e. these rules should not appear
         // in the Styles details sidebar of the Elements tab in Web Inspector).
         return RuleFlatteningStrategy::Ignore;
@@ -149,7 +155,7 @@ static ASCIILiteral atRuleIdentifierForType(StyleRuleType styleRuleType)
     }
 }
 
-static bool isValidRuleHeaderText(const String& headerText, StyleRuleType styleRuleType, Document* document, CSSParserEnum::IsNestedContext isNestedContext)
+static bool isValidRuleHeaderText(const String& headerText, StyleRuleType styleRuleType, Document* document, CSSParserEnum::NestedContext nestedContext = { })
 {
     auto isValidAtRuleHeaderText = [&] (const String& atRuleIdentifier) {
         if (headerText.isEmpty())
@@ -184,7 +190,7 @@ static bool isValidRuleHeaderText(const String& headerText, StyleRuleType styleR
     switch (styleRuleType) {
     case StyleRuleType::Style: {
         CSSParser parser(parserContextForDocument(document));
-        return !!parser.parseSelectorList(headerText, nullptr, isNestedContext);
+        return !!parser.parseSelectorList(headerText, nullptr, nestedContext);
     }
     case StyleRuleType::Media:
     case StyleRuleType::Supports:
@@ -215,7 +221,7 @@ static std::optional<Inspector::Protocol::CSS::Grouping::Type> protocolGroupingT
 }
 
 class ParsedStyleSheet {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ParsedStyleSheet);
 public:
     ParsedStyleSheet();
 
@@ -233,6 +239,8 @@ private:
     bool m_hasText;
     std::unique_ptr<RuleSourceDataList> m_sourceData;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ParsedStyleSheet);
 
 ParsedStyleSheet::ParsedStyleSheet()
     : m_hasText(false)
@@ -328,7 +336,7 @@ template <typename CharacterType> inline void StyleSheetHandler::setRuleHeaderEn
 {
     while (data.size() > m_currentRuleDataStack.last()->ruleHeaderRange.start) {
         if (isASCIIWhitespace<CharacterType>(data[data.size() - 1]))
-            data = data.first(data.size() - 1);
+            dropLast(data);
         else
             break;
     }
@@ -720,7 +728,7 @@ InspectorStyle::InspectorStyle(const InspectorCSSId& styleId, Ref<CSSStyleDeclar
 
 InspectorStyle::~InspectorStyle() = default;
 
-Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::buildObjectForStyle() const
+Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::buildObjectForStyle()
 {
     auto result = styleWithProperties();
     if (auto styleId = m_styleId.asProtocolValue<Inspector::Protocol::CSS::CSSStyleId>())
@@ -737,7 +745,7 @@ Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::buildObjectForStyle() co
     return result;
 }
 
-Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSComputedStyleProperty>> InspectorStyle::buildArrayForComputedStyle() const
+Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSComputedStyleProperty>> InspectorStyle::buildArrayForComputedStyle()
 {
     auto result = JSON::ArrayOf<Inspector::Protocol::CSS::CSSComputedStyleProperty>::create();
     for (auto& property : collectProperties(true)) {
@@ -751,7 +759,7 @@ Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSComputedStyleProperty>> Inspector
     return result;
 }
 
-ExceptionOr<String> InspectorStyle::text() const
+ExceptionOr<String> InspectorStyle::text()
 {
     // Precondition: m_parentStyleSheet->ensureParsedDataReady() has been called successfully.
     auto sourceData = extractSourceData();
@@ -774,7 +782,7 @@ static String lowercasePropertyName(const String& name)
     return name.convertToASCIILowercase();
 }
 
-Vector<InspectorStyleProperty> InspectorStyle::collectProperties(bool includeAll) const
+Vector<InspectorStyleProperty> InspectorStyle::collectProperties(bool includeAll)
 {
     Vector<InspectorStyleProperty> result;
     HashSet<String> sourcePropertyNames;
@@ -819,7 +827,7 @@ Vector<InspectorStyleProperty> InspectorStyle::collectProperties(bool includeAll
     return result;
 }
 
-Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() const
+Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties()
 {
     auto properties = collectProperties(false);
 
@@ -833,11 +841,11 @@ Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() co
     auto sourceData = extractSourceData();
     unsigned ruleBodyRangeStart = sourceData ? sourceData->ruleBodyRange.start : 0;
 
-    for (Vector<InspectorStyleProperty>::iterator it = properties.begin(), itEnd = properties.end(); it != itEnd; ++it) {
-        const CSSPropertySourceData& propertyEntry = it->sourceData;
+    for (auto& styleProperty : properties) {
+        const CSSPropertySourceData& propertyEntry = styleProperty.sourceData;
         const String& name = propertyEntry.name;
 
-        auto status = it->disabled ? Inspector::Protocol::CSS::CSSPropertyStatus::Disabled : Inspector::Protocol::CSS::CSSPropertyStatus::Active;
+        auto status = styleProperty.disabled ? Inspector::Protocol::CSS::CSSPropertyStatus::Disabled : Inspector::Protocol::CSS::CSSPropertyStatus::Active;
 
         auto property = Inspector::Protocol::CSS::CSSProperty::create()
             .setName(lowercasePropertyName(name))
@@ -854,14 +862,14 @@ Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() co
         // Default "parsedOk" == true.
         if (!propertyEntry.parsedOk || !isExposed(propertyId, m_style->settings()))
             property->setParsedOk(false);
-        if (it->hasRawText())
-            property->setText(it->rawText);
+        if (styleProperty.hasRawText())
+            property->setText(styleProperty.rawText);
 
         // Default "priority" == "".
         if (propertyEntry.important)
             property->setPriority("important"_s);
 
-        if (it->hasSource) {
+        if (styleProperty.hasSource) {
             // The property range is relative to the style body start.
             // Should be converted into an absolute range (relative to the stylesheet start)
             // for the proper conversion into line:column.
@@ -872,8 +880,8 @@ Ref<Inspector::Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() co
                 property->setRange(range.releaseNonNull());
         }
 
-        if (!it->disabled) {
-            if (it->hasSource) {
+        if (!styleProperty.disabled) {
+            if (styleProperty.hasSource) {
                 ASSERT(sourceData);
                 property->setImplicit(false);
 
@@ -1052,9 +1060,6 @@ void InspectorStyleSheet::reparseStyleSheet(const String& text)
         m_pageStyleSheet->clearChildRuleCSSOMWrappers();
         fireStyleSheetChanged();
     }
-
-    // We just wiped the entire contents of the stylesheet. Clear the mutation flag.
-    m_pageStyleSheet->clearHadRulesMutation();
 }
 
 ExceptionOr<void> InspectorStyleSheet::setText(const String& text)
@@ -1085,16 +1090,6 @@ ExceptionOr<String> InspectorStyleSheet::ruleHeaderText(const InspectorCSSId& id
     return sheetText.substring(sourceData->ruleHeaderRange.start, sourceData->ruleHeaderRange.length());
 }
 
-static CSSParserEnum::IsNestedContext isNestedContext(CSSRule* rule)
-{
-    for (CSSRule *parentRule = rule->parentRule(); parentRule; parentRule = parentRule->parentRule()) {
-        if (is<CSSStyleRule>(parentRule))
-            return CSSParserEnum::IsNestedContext::Yes;
-    }
-
-    return CSSParserEnum::IsNestedContext::No;
-}
-
 ExceptionOr<void> InspectorStyleSheet::setRuleHeaderText(const InspectorCSSId& id, const String& newHeaderText)
 {
     if (!m_pageStyleSheet)
@@ -1104,7 +1099,7 @@ ExceptionOr<void> InspectorStyleSheet::setRuleHeaderText(const InspectorCSSId& i
     if (!rule)
         return Exception { ExceptionCode::NotFoundError };
 
-    if (!isValidRuleHeaderText(newHeaderText, rule->styleRuleType(), m_pageStyleSheet->ownerDocument(), isNestedContext(rule)))
+    if (!isValidRuleHeaderText(newHeaderText, rule->styleRuleType(), m_pageStyleSheet->ownerDocument(), rule->nestedContext()))
         return Exception { ExceptionCode::SyntaxError };
 
     CSSStyleSheet* styleSheet = rule->parentStyleSheet();
@@ -1141,7 +1136,6 @@ ExceptionOr<void> InspectorStyleSheet::setRuleHeaderText(const InspectorCSSId& i
         // Set the style sheet text directly so we don't rebuild our flat rule set. The CSSStyleRule has been directly
         // updated already.
         m_parsedStyleSheet->setText(sheetText);
-        m_pageStyleSheet->clearHadRulesMutation();
         fireStyleSheetChanged();
     } else {
         setText(sheetText);
@@ -1156,7 +1150,7 @@ ExceptionOr<CSSStyleRule*> InspectorStyleSheet::addRule(const String& selector)
     if (!m_pageStyleSheet)
         return Exception { ExceptionCode::NotSupportedError };
 
-    if (!isValidRuleHeaderText(selector, StyleRuleType::Style, m_pageStyleSheet->ownerDocument(), CSSParserEnum::IsNestedContext::No))
+    if (!isValidRuleHeaderText(selector, StyleRuleType::Style, m_pageStyleSheet->ownerDocument()))
         return Exception { ExceptionCode::SyntaxError };
 
     auto text = this->text();
@@ -1562,13 +1556,12 @@ ExceptionOr<void> InspectorStyleSheet::setRuleStyleText(const InspectorCSSId& id
     String replacementBodyText = newRuleText ? *newRuleText : computeCanonicalRuleText(styleSheetText, newStyleDeclarationText, *logicalContainingRuleSourceData);
 
     m_parsedStyleSheet->setText(makeStringByReplacing(styleSheetText, bodyStart, bodyEnd - bodyStart, replacementBodyText));
-    m_pageStyleSheet->clearHadRulesMutation();
     fireStyleSheetChanged();
 
     return { };
 }
 
-ExceptionOr<String> InspectorStyleSheet::text() const
+ExceptionOr<String> InspectorStyleSheet::text()
 {
     if (!ensureText())
         return Exception { ExceptionCode::NotFoundError };
@@ -1658,18 +1651,12 @@ unsigned InspectorStyleSheet::ruleIndexByStyle(StyleDeclarationOrCSSRule ruleOrD
     return UINT_MAX;
 }
 
-bool InspectorStyleSheet::styleSheetMutated() const
-{
-    return m_pageStyleSheet && m_pageStyleSheet->hadRulesMutation();
-}
-
 bool InspectorStyleSheet::ensureParsedDataReady()
 {
-    bool allowParsedData = m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::Inspector || !styleSheetMutated();
-    return allowParsedData && ensureText() && ensureSourceData();
+    return ensureText() && ensureSourceData();
 }
 
-bool InspectorStyleSheet::ensureText() const
+bool InspectorStyleSheet::ensureText()
 {
     if (!m_parsedStyleSheet)
         return false;
@@ -1677,12 +1664,23 @@ bool InspectorStyleSheet::ensureText() const
         return true;
 
     String text;
-    bool success = originalStyleSheetText(&text);
-    if (success)
-        m_parsedStyleSheet->setText(text);
-    // No need to clear m_flatRules here - it's empty.
+    if (m_pageStyleSheet->wasMutated()) {
+        // This style sheet in memory no longer matches its original text from static source.
+        // Reconstruct its current text by serializing the contained CSSRules.
+        if (!styleSheetTextFromCSSRuleSerialization(&text))
+            return false;
 
-    return success;
+        m_parsedStyleSheet->setText(text);
+        fireStyleSheetChanged();
+        return true;
+    }
+
+    if (!originalStyleSheetText(&text))
+        return false;
+
+    m_parsedStyleSheet->setText(text);
+    // No need to clear m_flatRules here - it's empty.
+    return true;
 }
 
 bool InspectorStyleSheet::ensureSourceData()
@@ -1761,6 +1759,20 @@ bool InspectorStyleSheet::extensionStyleSheetText(String* result) const
     return true;
 }
 
+bool InspectorStyleSheet::styleSheetTextFromCSSRuleSerialization(String* result) const
+{
+    if (!m_pageStyleSheet || m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::UserAgent)
+        return false;
+
+    StringBuilder text;
+    for (unsigned i = 0, length = m_pageStyleSheet->length(); i < length; ++i) {
+        text.append(m_pageStyleSheet->item(i)->cssText());
+        text.append('\n');
+    }
+    *result = text.toString();
+    return true;
+}
+
 Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSRule>> InspectorStyleSheet::buildArrayForRuleList(CSSRuleList* ruleList)
 {
     auto result = JSON::ArrayOf<Inspector::Protocol::CSS::CSSRule>::create();
@@ -1830,7 +1842,7 @@ void InspectorStyleSheetForInlineStyle::didModifyElementAttribute()
     m_ruleSourceData = nullptr;
 }
 
-ExceptionOr<String> InspectorStyleSheetForInlineStyle::text() const
+ExceptionOr<String> InspectorStyleSheetForInlineStyle::text()
 {
     if (!m_isStyleTextValid) {
         m_styleText = elementStyleText();

@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WebKit</a></h3>
         <p>API Version: 6.0</p>
         
-        <p>Library Version: 2.46.6</p>
+        <p>Library Version: 2.47.90</p>
         
       </div>
       
@@ -161,14 +161,19 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1469">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1483">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Whether the <code>WebKitWebView</code> is controlled by automation. This should only be used when
-creating a new <code>WebKitWebView</code> as a response to <code>WebKitAutomationSession::create-web-view</code>
-signal&nbsp;request.</p>
+        <p>Whether the <code>WebKitWebView</code> is controlled by automation tools (e.g. WebDriver, Selenium). This is
+required for views returned as a response to <code>WebKitAutomationSession::create-web-view</code> signal,
+alongside any view you want to control during an automation&nbsp;session.</p>
+<p>As a <code>G_PARAM_CONSTRUCT_ONLY</code>, you need to set it during construction and it can&#8217;t be&nbsp;modified.</p>
+<p>If <code>WebKitWebView:related-view</code> is also passed during construction, <code>WebKitWebView:is-controlled-by-automation</code>
+ignores its own parameter and inherits directly from the related view <code>WebKitWebView:is-controlled-by-automation</code>
+property. This is the recommended way when creating new views as a response to the <code>WebKitWebView::create</code>
+signal. For example, as response to JavaScript <code>window.open()</code> calls during an automation&nbsp;session.</p>
       </div>
 
       <div class="docblock">

@@ -45,6 +45,11 @@ using namespace WebCore;
 
 const size_t CtapChannelIdSize = 4;
 
+Ref<VirtualHidConnection> VirtualHidConnection::create(const String& authenticatorId, const VirtualAuthenticatorConfiguration& configuration, const WeakPtr<VirtualAuthenticatorManager>& manager)
+{
+    return adoptRef(*new VirtualHidConnection(authenticatorId, configuration, manager));
+}
+
 VirtualHidConnection::VirtualHidConnection(const String& authenticatorId, const VirtualAuthenticatorConfiguration& configuration, const WeakPtr<VirtualAuthenticatorManager>& manager)
     : HidConnection(nullptr)
     , m_manager(manager)
@@ -74,7 +79,7 @@ void VirtualHidConnection::send(Vector<uint8_t>&& data, DataSentCallback&& callb
     ASSERT(isInitialized());
     auto task = makeBlockPtr([weakThis = WeakPtr { *this }, data = WTFMove(data), callback = WTFMove(callback)]() mutable {
         ASSERT(!RunLoop::isMain());
-        RunLoop::main().dispatch([weakThis, data = WTFMove(data), callback = WTFMove(callback)]() mutable {
+        RunLoop::protectedMain()->dispatch([weakThis, data = WTFMove(data), callback = WTFMove(callback)]() mutable {
             if (!weakThis) {
                 callback(DataSent::No);
                 return;
@@ -106,7 +111,7 @@ void VirtualHidConnection::receiveHidMessage(fido::FidoHidMessage&& message)
 {
     while (message.numPackets()) {
         auto report = message.popNextPacket();
-        RunLoop::main().dispatch([report = WTFMove(report), weakThis = WeakPtr { *this }]() mutable {
+        RunLoop::protectedMain()->dispatch([report = WTFMove(report), weakThis = WeakPtr { *this }]() mutable {
             if (!weakThis)
                 return;
             weakThis->receiveReport(WTFMove(report));
@@ -127,9 +132,9 @@ void VirtualHidConnection::parseRequest()
 {
     if (!m_requestMessage)
         return;
-    if (!m_manager)
+    RefPtr manager = m_manager.get();
+    if (!manager)
         return;
-    auto* manager = m_manager.get();
     m_currentChannel = m_requestMessage->channelId();
     switch (m_requestMessage->cmd()) {
     case FidoHidDeviceCommand::kInit: {
@@ -293,7 +298,7 @@ void VirtualHidConnection::parseRequest()
                     }
                 }
             }
-            auto matchingCredentials = m_manager->credentialsMatchingList(m_authenticatorId, rpId, allowList);
+            auto matchingCredentials = manager->credentialsMatchingList(m_authenticatorId, rpId, allowList);
             if (matchingCredentials.isEmpty()) {
                 recieveResponseCode(CtapDeviceResponseCode::kCtap2ErrNoCredentials);
                 return;

@@ -28,11 +28,11 @@
 #include <wtf/URL.h>
 
 #if USE(SKIA)
-IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkBitmap.h>
-IGNORE_CLANG_WARNINGS_END
 #include <skia/core/SkCanvas.h>
 #include <skia/core/SkImageInfo.h>
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 namespace WebCore {
@@ -131,7 +131,7 @@ DragImageRef dissolveDragImageToFraction(DragImageRef image, float fraction)
 #endif
 }
 
-DragImageRef createDragImageFromImage(Image* image, ImageOrientation)
+DragImageRef createDragImageFromImage(Image* image, ImageOrientation, GraphicsClient*, float)
 {
     return image->currentNativeImage()->platformImage();
 }

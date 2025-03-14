@@ -28,6 +28,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "RemoteDeviceProxy.h"
 #include "RemoteGPUProxy.h"
 #include "RemoteXRBindingMessages.h"
 #include "RemoteXRProjectionLayerProxy.h"
@@ -37,6 +38,8 @@
 #include <WebCore/WebGPUTextureFormat.h>
 
 namespace WebKit::WebGPU {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteXRBindingProxy);
 
 RemoteXRBindingProxy::RemoteXRBindingProxy(RemoteDeviceProxy& parent, ConvertToBackingContext& convertToBackingContext, WebGPUIdentifier identifier)
     : m_backing(identifier)
@@ -59,7 +62,7 @@ RefPtr<WebCore::WebGPU::XRProjectionLayer> RemoteXRBindingProxy::createProjectio
     if (sendResult != IPC::Error::NoError)
         return nullptr;
 
-    auto result = RemoteXRProjectionLayerProxy::create(root(), m_convertToBackingContext, identifier);
+    auto result = RemoteXRProjectionLayerProxy::create(protectedRoot(), m_convertToBackingContext, identifier);
     return result;
 }
 
@@ -69,20 +72,20 @@ RefPtr<WebCore::WebGPU::XRSubImage> RemoteXRBindingProxy::getSubImage(WebCore::W
     return nullptr;
 }
 
-RefPtr<WebCore::WebGPU::XRSubImage> RemoteXRBindingProxy::getViewSubImage(WebCore::WebGPU::XRProjectionLayer& projectionLayer, WebCore::WebGPU::XREye eye)
+RefPtr<WebCore::WebGPU::XRSubImage> RemoteXRBindingProxy::getViewSubImage(WebCore::WebGPU::XRProjectionLayer& projectionLayer)
 {
     auto identifier = WebGPUIdentifier::generate();
-    auto sendResult = send(Messages::RemoteXRBinding::GetViewSubImage(static_cast<RemoteXRProjectionLayerProxy&>(projectionLayer).backing(), eye, identifier));
+    auto sendResult = send(Messages::RemoteXRBinding::GetViewSubImage(downcast<RemoteXRProjectionLayerProxy>(projectionLayer).backing(), identifier));
     if (sendResult != IPC::Error::NoError)
         return nullptr;
 
-    auto result = RemoteXRSubImageProxy::create(root(), m_convertToBackingContext, identifier);
+    auto result = RemoteXRSubImageProxy::create(protectedRoot(), m_convertToBackingContext, identifier);
     return result;
 }
 
 WebCore::WebGPU::TextureFormat RemoteXRBindingProxy::getPreferredColorFormat()
 {
-    return WebCore::WebGPU::TextureFormat::Bgra8unorm;
+    return WebCore::WebGPU::TextureFormat::Bgra8unormSRGB;
 }
 
 } // namespace WebKit::WebGPU

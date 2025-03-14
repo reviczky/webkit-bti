@@ -37,6 +37,7 @@
 #include <WebCore/NavigationRequester.h>
 #include <WebCore/ResourceLoaderIdentifier.h>
 #include <WebCore/SecurityContext.h>
+#include <WebCore/SharedWorkerIdentifier.h>
 #include <wtf/Seconds.h>
 
 namespace IPC {
@@ -51,7 +52,7 @@ public:
     NetworkResourceLoadParameters() = default;
     NetworkResourceLoadParameters(
         NetworkLoadParameters&&
-        , WebCore::ResourceLoaderIdentifier
+        , std::optional<WebCore::ResourceLoaderIdentifier>
         , RefPtr<WebCore::FormData>&& httpBody
         , std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensionIfHttpBody
         , std::optional<SandboxExtension::Handle>&& sandboxExtensionIflocalFile
@@ -73,6 +74,7 @@ public:
         , URL&& documentURL
         , bool isCrossOriginOpenerPolicyEnabled
         , bool isClearSiteDataHeaderEnabled
+        , bool isClearSiteDataExecutionContextEnabled
         , bool isDisplayingInitialEmptyDocument
         , WebCore::SandboxFlags effectiveSandboxFlags
         , URL&& openerURL
@@ -83,6 +85,7 @@ public:
         , std::optional<WebCore::ServiceWorkerRegistrationIdentifier>
         , OptionSet<WebCore::HTTPHeadersToKeepFromCleaning>
         , std::optional<WebCore::FetchIdentifier> navigationPreloadIdentifier
+        , std::optional<WebCore::SharedWorkerIdentifier>
 #if ENABLE(CONTENT_EXTENSIONS)
         , URL&& mainDocumentURL
         , std::optional<UserContentControllerIdentifier>
@@ -99,7 +102,7 @@ public:
 
     RefPtr<WebCore::SecurityOrigin> parentOrigin() const;
 
-    WebCore::ResourceLoaderIdentifier identifier;
+    Markable<WebCore::ResourceLoaderIdentifier> identifier;
     Vector<RefPtr<SandboxExtension>> requestBodySandboxExtensions; // Created automatically for the sender.
     RefPtr<SandboxExtension> resourceSandboxExtension; // Created automatically for the sender.
     Seconds maximumBufferingTime;
@@ -121,8 +124,9 @@ public:
 
     bool isCrossOriginOpenerPolicyEnabled { false };
     bool isClearSiteDataHeaderEnabled { false };
+    bool isClearSiteDataExecutionContextEnabled { false };
     bool isDisplayingInitialEmptyDocument { false };
-    WebCore::SandboxFlags effectiveSandboxFlags { WebCore::SandboxNone };
+    WebCore::SandboxFlags effectiveSandboxFlags;
     URL openerURL;
     WebCore::CrossOriginOpenerPolicy sourceCrossOriginOpenerPolicy;
     std::optional<WebCore::NavigationIdentifier> navigationID;
@@ -132,6 +136,7 @@ public:
     std::optional<WebCore::ServiceWorkerRegistrationIdentifier> serviceWorkerRegistrationIdentifier;
     OptionSet<WebCore::HTTPHeadersToKeepFromCleaning> httpHeadersToKeep;
     std::optional<WebCore::FetchIdentifier> navigationPreloadIdentifier;
+    std::optional<WebCore::SharedWorkerIdentifier> workerIdentifier;
 
 #if ENABLE(CONTENT_EXTENSIONS)
     URL mainDocumentURL;

@@ -29,25 +29,33 @@
 
 namespace WebKit {
 
+class ProcessAssertion;
 class ProcessThrottlerActivity;
+class RemotePageProxy;
+class WebPageProxy;
 class WebProcessProxy;
 
 class WebProcessActivityState {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    explicit WebProcessActivityState(WebProcessProxy&);
+    explicit WebProcessActivityState(WebPageProxy&);
+    explicit WebProcessActivityState(RemotePageProxy&);
+
     void takeVisibleActivity();
     void takeAudibleActivity();
     void takeCapturingActivity();
+    void takeMutedCaptureAssertion();
 
     void reset();
     void dropVisibleActivity();
     void dropAudibleActivity();
     void dropCapturingActivity();
+    void dropMutedCaptureAssertion();
 
     bool hasValidVisibleActivity() const;
     bool hasValidAudibleActivity() const;
     bool hasValidCapturingActivity() const;
+    bool hasValidMutedCaptureAssertion() const;
 
 #if PLATFORM(IOS_FAMILY)
     void takeOpeningAppLinkActivity();
@@ -55,17 +63,32 @@ public:
     bool hasValidOpeningAppLinkActivity() const;
 #endif
 
-private:
-    WeakRef<WebProcessProxy> m_process;
-
-    std::unique_ptr<ProcessThrottlerActivity> m_isVisibleActivity;
-#if PLATFORM(MAC)
-    UniqueRef<ProcessThrottlerTimedActivity> m_wasRecentlyVisibleActivity;
+#if ENABLE(WEB_PROCESS_SUSPENSION_DELAY)
+    void updateWebProcessSuspensionDelay();
+    void takeAccessibilityActivityWhenInWindow();
+    void takeAccessibilityActivity();
+    bool hasAccessibilityActivityForTesting() const;
+    void viewDidEnterWindow();
+    void viewDidLeaveWindow();
 #endif
-    std::unique_ptr<ProcessThrottlerActivity> m_isAudibleActivity;
-    std::unique_ptr<ProcessThrottlerActivity> m_isCapturingActivity;
+
+private:
+    WebProcessProxy& process() const;
+    Ref<WebProcessProxy> protectedProcess() const;
+
+    std::variant<WeakRef<WebPageProxy>, WeakRef<RemotePageProxy>> m_page;
+
+    RefPtr<ProcessThrottlerActivity> m_isVisibleActivity;
+#if ENABLE(WEB_PROCESS_SUSPENSION_DELAY)
+    Ref<ProcessThrottlerTimedActivity> m_wasRecentlyVisibleActivity;
+    RefPtr<ProcessThrottlerActivity> m_accessibilityActivity;
+    bool m_takeAccessibilityActivityWhenInWindow { false };
+#endif
+    RefPtr<ProcessThrottlerActivity> m_isAudibleActivity;
+    RefPtr<ProcessThrottlerActivity> m_isCapturingActivity;
+    RefPtr<ProcessAssertion> m_isMutedCaptureAssertion;
 #if PLATFORM(IOS_FAMILY)
-    std::unique_ptr<ProcessThrottlerActivity> m_openingAppLinkActivity;
+    RefPtr<ProcessThrottlerActivity> m_openingAppLinkActivity;
 #endif
 };
 

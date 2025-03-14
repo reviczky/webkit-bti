@@ -26,7 +26,6 @@
 #include "config.h"
 #include "WebPrintOperationGtk.h"
 
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebPage.h"
 #include "WebPageProxyMessages.h"
@@ -81,6 +80,7 @@ WebPrintOperationGtk::PrintPagesData::PrintPagesData(WebPrintOperationGtk* print
     }
 
     if (printOperation->m_pagesToPrint == GTK_PRINT_PAGES_RANGES) {
+        WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GTK port
         Vector<GtkPageRange> pageRanges;
         GtkPageRange* ranges = printOperation->m_pageRanges;
         size_t rangesCount = printOperation->m_pageRangesCount;
@@ -103,7 +103,7 @@ WebPrintOperationGtk::PrintPagesData::PrintPagesData(WebPrintOperationGtk* print
             for (int j = pageRanges[i].start; j <= pageRanges[i].end; ++j)
                 pages.append(j);
         }
-
+        WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     } else {
         for (int i = 0; i < printOperation->pageCount(); ++i)
             pages.append(i);
@@ -371,11 +371,35 @@ void WebPrintOperationGtk::endPage(SkPictureRecorder& recorder)
     }
 }
 
+static SkPDF::DateTime skiaDateTimeNow()
+{
+    GRefPtr<GDateTime> now = adoptGRef(g_date_time_new_now_local());
+    return SkPDF::DateTime {
+        .fTimeZoneMinutes = static_cast<int16_t>((g_date_time_get_utc_offset(now.get()) / G_USEC_PER_SEC) * 60),
+        .fYear = static_cast<uint16_t>(g_date_time_get_year(now.get())),
+        .fMonth = static_cast<uint8_t>(g_date_time_get_month(now.get())),
+        .fDayOfWeek = static_cast<uint8_t>(g_date_time_get_day_of_week(now.get()) % 7),
+        .fDay = static_cast<uint8_t>(g_date_time_get_day_of_month(now.get())),
+        .fHour = static_cast<uint8_t>(g_date_time_get_hour(now.get())),
+        .fMinute = static_cast<uint8_t>(g_date_time_get_minute(now.get())),
+        .fSecond = static_cast<uint8_t>(g_date_time_get_second(now.get()))
+    };
+}
+
 void WebPrintOperationGtk::endPrint()
 {
     SkDynamicMemoryWStream memoryBuffer;
+    SkPDF::Metadata metadata;
+    metadata.fCreation = skiaDateTimeNow();
+    metadata.fModified = metadata.fCreation;
+    if (m_printContext) {
+        if (auto* document = m_printContext->frame()->document()) {
+            auto title = document->title().utf8();
+            metadata.fTitle = SkString(title.data(), title.length());
+        }
+    }
 
-    auto document = SkPDF::MakeDocument(&memoryBuffer);
+    auto document = SkPDF::MakeDocument(&memoryBuffer, metadata);
     ASSERT(document);
     for (auto page : m_pages) {
         const auto& rect = page->cullRect();

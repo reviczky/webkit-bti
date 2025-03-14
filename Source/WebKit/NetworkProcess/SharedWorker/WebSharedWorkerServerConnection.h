@@ -38,11 +38,6 @@ namespace WebKit {
 class WebSharedWorkerServerConnection;
 }
 
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::WebSharedWorkerServerConnection> : std::true_type { };
-}
-
 namespace WebCore {
 class ResourceError;
 struct SharedWorkerKey;
@@ -59,16 +54,19 @@ class WebSharedWorkerServer;
 class WebSharedWorkerServerToContextConnection;
 class NetworkSession;
 
-class WebSharedWorkerServerConnection : public IPC::MessageSender, public IPC::MessageReceiver {
+class WebSharedWorkerServerConnection : public IPC::MessageSender, public IPC::MessageReceiver, public RefCounted<WebSharedWorkerServerConnection> {
     WTF_MAKE_TZONE_ALLOCATED(WebSharedWorkerServerConnection);
 public:
-    WebSharedWorkerServerConnection(NetworkProcess&, WebSharedWorkerServer&, IPC::Connection&, WebCore::ProcessIdentifier);
+    static Ref<WebSharedWorkerServerConnection> create(NetworkProcess&, WebSharedWorkerServer&, IPC::Connection&, WebCore::ProcessIdentifier);
+
     ~WebSharedWorkerServerConnection();
 
-    WebSharedWorkerServer& server() { return m_server; }
-    const WebSharedWorkerServer& server() const { return m_server; }
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
-    PAL::SessionID sessionID();
+    WebSharedWorkerServer* server();
+    const WebSharedWorkerServer* server() const;
+
     NetworkSession* session();
     WebCore::ProcessIdentifier webProcessIdentifier() const { return m_webProcessIdentifier; }
 
@@ -77,8 +75,12 @@ public:
     void fetchScriptInClient(const WebSharedWorker&, WebCore::SharedWorkerObjectIdentifier, CompletionHandler<void(WebCore::WorkerFetchResult&&, WebCore::WorkerInitializationData&&)>&&);
     void notifyWorkerObjectOfLoadCompletion(WebCore::SharedWorkerObjectIdentifier, const WebCore::ResourceError&);
     void postErrorToWorkerObject(WebCore::SharedWorkerObjectIdentifier, const String& errorMessage, int lineNumber, int columnNumber, const String& sourceURL, bool isErrorEvent);
+    void reportNetworkUsageToWorkerObject(WebCore::SharedWorkerObjectIdentifier, size_t bytesTransferredOverNetwork);
 
 private:
+    WebSharedWorkerServerConnection(NetworkProcess&, WebSharedWorkerServer&, IPC::Connection&, WebCore::ProcessIdentifier);
+    Ref<NetworkProcess> protectedNetworkProcess();
+
     // IPC::MessageSender.
     IPC::Connection* messageSenderConnection() const final;
     uint64_t messageSenderDestinationID() const final { return 0; }
@@ -91,7 +93,7 @@ private:
 
     Ref<IPC::Connection> m_contentConnection;
     Ref<NetworkProcess> m_networkProcess;
-    WebSharedWorkerServer& m_server;
+    WeakPtr<WebSharedWorkerServer> m_server;
     WebCore::ProcessIdentifier m_webProcessIdentifier;
 };
 

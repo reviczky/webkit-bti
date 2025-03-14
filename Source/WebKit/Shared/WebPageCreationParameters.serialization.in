@@ -63,20 +63,20 @@ enum class WebCore::UserInterfaceLayoutDirection : bool;
 
     String userAgent;
 
-    bool itemStatesWereRestoredByAPIRequest;
-    Vector<WebKit::BackForwardListItemState> itemStates;
-
     WebKit::VisitedLinkTableIdentifier visitedLinkTableID;
     bool canRunBeforeUnloadConfirmPanel;
     bool canRunModal;
 
     float deviceScaleFactor;
+#if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
+    float intrinsicDeviceScaleFactor;
+#endif
     float viewScaleFactor;
 
     double textZoomFactor;
     double pageZoomFactor;
 
-    float topContentInset;
+    WebCore::FloatBoxExtent obscuredContentInsets;
 
     float mediaVolume;
     WebCore::MediaProducerMutedStateFlags muted;
@@ -109,7 +109,6 @@ enum class WebCore::UserInterfaceLayoutDirection : bool;
 
 #if PLATFORM(MAC)
     std::optional<WebCore::DestinationColorSpace> colorSpace;
-    bool useSystemAppearance;
     bool useFormSemanticContext;
     int headerBannerHeight;
     int footerBannerHeight;
@@ -230,10 +229,6 @@ enum class WebCore::UserInterfaceLayoutDirection : bool;
 
     bool httpsUpgradeEnabled;
 
-#if PLATFORM(IOS) || PLATFORM(VISION)
-    bool allowsDeprecatedSynchronousXMLHttpRequestDuringUnload;
-#endif
-
 #if ENABLE(APP_HIGHLIGHTS)
     WebCore::HighlightVisibility appHighlightsVisible;
 #endif
@@ -247,8 +242,12 @@ enum class WebCore::UserInterfaceLayoutDirection : bool;
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension;
 
     std::optional<WebKit::RemotePageParameters> remotePageParameters;
-    std::optional<WebCore::FrameIdentifier> openerFrameIdentifier;
+    std::optional<WebKit::ProvisionalFrameCreationParameters> provisionalFrameCreationParameters;
     WebCore::FrameIdentifier mainFrameIdentifier;
+    String openedMainFrameName;
+    std::optional<WebCore::FrameIdentifier> mainFrameOpenerIdentifier;
+    WebCore::SandboxFlags initialSandboxFlags;
+    std::optional<WebCore::WindowFeatures> windowFeatures;
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     Vector<WebCore::LinkDecorationFilteringData> linkDecorationFilteringData;
@@ -267,6 +266,14 @@ enum class WebCore::UserInterfaceLayoutDirection : bool;
 
 #if PLATFORM(VISION) && ENABLE(GAMEPAD)
     WebCore::ShouldRequireExplicitConsentForGamepadAccess gamepadAccessRequiresExplicitConsent;
+#endif
+
+#if HAVE(AUDIT_TOKEN)
+    std::optional<WebKit::CoreIPCAuditToken> presentingApplicationAuditToken;
+#endif
+
+#if PLATFORM(COCOA)
+    String presentingApplicationBundleIdentifier;
 #endif
 }
 

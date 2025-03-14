@@ -6,7 +6,7 @@ Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -219,15 +219,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+@@ -216,15 +216,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
          WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fmax-errors=20)
      endif ()
  
@@ -26,7 +26,7 @@ Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/mathutil.h
 ===================================================================
 --- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/mathutil.h
 +++ webkitgtk/Source/ThirdParty/ANGLE/src/common/mathutil.h
-@@ -550,7 +550,7 @@ inline R roundToNearest(T input)
+@@ -597,7 +597,7 @@ inline R roundToNearest(T input)
  {
      static_assert(std::is_floating_point<T>::value);
      static_assert(std::numeric_limits<R>::is_integer);

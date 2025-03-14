@@ -140,10 +140,11 @@ void DrawingAreaWC::setLayerTreeStateIsFrozen(bool isFrozen)
     }
 }
 
-void DrawingAreaWC::updateGeometryWC(uint64_t backingStoreStateID, IntSize viewSize, float deviceScaleFactor)
+void DrawingAreaWC::updateGeometryWC(uint64_t backingStoreStateID, IntSize viewSize, float deviceScaleFactor, float intrinsicDeviceScaleFactor)
 {
     m_backingStoreStateID = backingStoreStateID;
     m_webPage->setDeviceScaleFactor(deviceScaleFactor);
+    m_webPage->setIntrinsicDeviceScaleFactor(intrinsicDeviceScaleFactor);
     m_webPage->setSize(viewSize);
 }
 
@@ -272,7 +273,7 @@ void DrawingAreaWC::sendUpdateAC()
         else
             size = frame->size();
         FloatSize viewport { size };
-        viewport.scale(m_webPage->deviceScaleFactor());
+        viewport.scale(m_webPage->intrinsicDeviceScaleFactor());
         m_updateInfo.viewport = WebCore::expandedIntSize(viewport);
         updateRootLayerDeviceScaleFactor(rootLayer.layer);
         rootLayer.layer->flushCompositingStateForThisLayerOnly();
@@ -286,7 +287,7 @@ void DrawingAreaWC::sendUpdateAC()
 
         m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = std::exchange(m_updateInfo, { }), fence = WTFMove(fence), willCallDisplayDidRefresh]() mutable {
             fence();
-            RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), willCallDisplayDidRefresh]() mutable {
+            RunLoop::protectedMain()->dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), willCallDisplayDidRefresh]() mutable {
                 if (!weakThis)
                     return;
                 m_remoteWCLayerTreeHostProxy->update(WTFMove(updateInfo), [this, weakThis = WTFMove(weakThis), stateID, willCallDisplayDidRefresh](std::optional<UpdateInfo> updateInfo) {
@@ -307,9 +308,8 @@ void DrawingAreaWC::sendUpdateAC()
 
 void DrawingAreaWC::updateRootLayerDeviceScaleFactor(WebCore::GraphicsLayer& layer)
 {
-    float deviceScaleFactor = m_webPage->deviceScaleFactor();
     TransformationMatrix m;
-    m.scale(deviceScaleFactor);
+    m.scale(m_webPage->intrinsicDeviceScaleFactor());
     layer.setTransform(m);
 }
 
@@ -371,7 +371,7 @@ void DrawingAreaWC::sendUpdateNonAC()
 
     m_commitQueue->dispatch([this, weakThis = WeakPtr(*this), stateID = m_backingStoreStateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image), fence = WTFMove(fence)]() mutable {
         fence();
-        RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image)]() mutable {
+        RunLoop::protectedMain()->dispatch([this, weakThis = WTFMove(weakThis), stateID, updateInfo = WTFMove(updateInfo), image = WTFMove(image)]() mutable {
             if (!weakThis)
                 return;
             if (stateID != m_backingStoreStateID) {
@@ -393,13 +393,13 @@ void DrawingAreaWC::sendUpdateNonAC()
 void DrawingAreaWC::graphicsLayerAdded(GraphicsLayerWC& layer)
 {
     m_liveGraphicsLayers.append(&layer);
-    m_updateInfo.addedLayers.append(layer.primaryLayerID());
+    m_updateInfo.addedLayers.append(*layer.primaryLayerID());
 }
 
 void DrawingAreaWC::graphicsLayerRemoved(GraphicsLayerWC& layer)
 {
     m_liveGraphicsLayers.remove(&layer);
-    m_updateInfo.removedLayers.append(layer.primaryLayerID());
+    m_updateInfo.removedLayers.append(*layer.primaryLayerID());
 }
 
 void DrawingAreaWC::commitLayerUpdateInfo(WCLayerUpdateInfo&& info)
@@ -410,7 +410,7 @@ void DrawingAreaWC::commitLayerUpdateInfo(WCLayerUpdateInfo&& info)
 RefPtr<ImageBuffer> DrawingAreaWC::createImageBuffer(FloatSize size, float deviceScaleFactor)
 {
     if (WebProcess::singleton().shouldUseRemoteRenderingFor(RenderingPurpose::DOM))
-        return Ref { m_webPage.get() }->ensureRemoteRenderingBackendProxy().createImageBuffer(size, RenderingPurpose::DOM, deviceScaleFactor, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8, { });
+        return Ref { m_webPage.get() }->ensureRemoteRenderingBackendProxy().createImageBuffer(size, RenderingMode::Unaccelerated, RenderingPurpose::DOM, deviceScaleFactor, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8);
     return ImageBuffer::create<ImageBufferShareableBitmapBackend>(size, deviceScaleFactor, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8, RenderingPurpose::DOM, { });
 }
 
