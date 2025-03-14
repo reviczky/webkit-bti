@@ -1,5 +1,6 @@
-webkit2gtk (2.46.6-2) UNRELEASED; urgency=medium
+webkit2gtk (2.48.0-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * Bring all changes from the 2.47 (experimental) branch.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
