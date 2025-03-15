@@ -1,6 +1,7 @@
 wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Refresh all patches.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 15 Mar 2025 21:43:25 +0100
 
