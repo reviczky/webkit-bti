@@ -31,6 +31,7 @@
 #include "GridMasonryLayout.h"
 #include "GridTrackSizingAlgorithm.h"
 #include "RenderBlock.h"
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -39,15 +40,13 @@ class GridLayoutState;
 class GridSpan;
 
 struct ContentAlignmentData {
-    WTF_MAKE_NONCOPYABLE(ContentAlignmentData); WTF_MAKE_FAST_ALLOCATED;
-public:
-    ContentAlignmentData() = default;
-
     LayoutUnit positionOffset;
     LayoutUnit distributionOffset;
 };
 
 enum class GridAxisPosition : uint8_t { GridAxisStart, GridAxisEnd, GridAxisCenter };
+
+enum class SubgridDidChange : bool { No, Yes };
 
 class GridItemSizeCache {
 public:
@@ -69,12 +68,11 @@ public:
     Element& element() const { return downcast<Element>(nodeForNonAnonymous()); }
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
-    void layoutBlock(bool relayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) override;
+    void layoutBlock(RelayoutChildren, LayoutUnit pageLogicalHeight = 0_lu) override;
 
-    bool avoidsFloats() const override { return true; }
     bool canDropAnonymousBlockChild() const override { return false; }
 
-    void dirtyGrid(bool subgridChanged = false);
+    void dirtyGrid(SubgridDidChange descendantSubgridsNeedItemPlacement = SubgridDidChange::No);
     Vector<LayoutUnit> trackSizesForComputedStyle(GridTrackSizingDirection) const;
 
     const Vector<LayoutUnit>& columnPositions() const { return m_columnPositions; }
@@ -100,8 +98,8 @@ public:
     // the grid is a standard grid or a masonry one. While masonry is an extension of grid,
     // keeping the logic in the same function was leading to a messy amount of if statements being added to handle
     // specific masonry cases.
-    void layoutGrid(bool);
-    void layoutMasonry(bool);
+    void layoutGrid(RelayoutChildren);
+    void layoutMasonry(RelayoutChildren);
 
     // Computes the span relative to this RenderGrid, even if the RenderBox is a grid item
     // of a descendant subgrid.
@@ -168,7 +166,7 @@ private:
     bool selfAlignmentChangedToStretch(GridAxis, const RenderStyle& oldStyle, const RenderStyle& newStyle, const RenderBox&) const;
     bool selfAlignmentChangedFromStretch(GridAxis, const RenderStyle& oldStyle, const RenderStyle& newStyle, const RenderBox&) const;
 
-    bool subgridDidChange(const RenderStyle& oldStyle) const;
+    SubgridDidChange subgridDidChange(const RenderStyle& oldStyle) const;
     bool explicitGridDidResize(const RenderStyle&) const;
     bool namedGridLinesDefinitionDidChange(const RenderStyle&) const;
     bool implicitGridLinesDefinitionDidChange(const RenderStyle&) const;
@@ -202,7 +200,7 @@ private:
     bool canPerformSimplifiedLayout() const final;
     void prepareGridItemForPositionedLayout(RenderBox&);
     bool hasStaticPositionForGridItem(const RenderBox&, GridTrackSizingDirection) const;
-    void layoutPositionedObject(RenderBox&, bool relayoutChildren, bool fixedPositionObjectsOnly) override;
+    void layoutPositionedObject(RenderBox&, RelayoutChildren, bool fixedPositionObjectsOnly) override;
 
     void computeTrackSizesForDefiniteSize(GridTrackSizingDirection, LayoutUnit availableSpace, GridLayoutState&);
     void computeTrackSizesForIndefiniteSize(GridTrackSizingAlgorithm&, GridTrackSizingDirection, GridLayoutState&, LayoutUnit* minIntrinsicSize = nullptr, LayoutUnit* maxIntrinsicSize = nullptr) const;
@@ -215,7 +213,7 @@ private:
     void layoutGridItems(GridLayoutState&);
     void layoutMasonryItems(GridLayoutState&);
 
-    void populateGridPositionsForDirection(GridTrackSizingDirection);
+    void populateGridPositionsForDirection(const GridTrackSizingAlgorithm&, GridTrackSizingDirection);
 
     LayoutUnit gridAreaBreadthForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection);
     LayoutUnit logicalOffsetForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection, LayoutUnit) const;
@@ -227,7 +225,7 @@ private:
     GridAxisPosition rowAxisPositionForGridItem(const RenderBox&) const;
     LayoutUnit columnAxisOffsetForGridItem(const RenderBox&) const;
     LayoutUnit rowAxisOffsetForGridItem(const RenderBox&) const;
-    void computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks);
+    ContentAlignmentData computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks) const;
     void setLogicalPositionForGridItem(RenderBox&) const;
     void setLogicalOffsetForGridItem(RenderBox&, GridTrackSizingDirection) const;
     LayoutUnit logicalOffsetForGridItem(const RenderBox&, GridTrackSizingDirection) const;
@@ -269,7 +267,6 @@ private:
     LayoutUnit translateRTLCoordinate(LayoutUnit) const;
 
     bool shouldResetLogicalHeightBeforeLayout() const override { return true; }
-    bool establishesIndependentFormattingContext() const override;
 
     bool aspectRatioPrefersInline(const RenderBox& gridItem, bool blockFlowIsColumnAxis);
 
@@ -303,7 +300,7 @@ private:
 
     mutable GridMasonryLayout m_masonryLayout;
 
-    using OutOfFlowPositionsMap = HashMap<SingleThreadWeakRef<const RenderBox>, std::optional<size_t>>;
+    using OutOfFlowPositionsMap = UncheckedKeyHashMap<SingleThreadWeakRef<const RenderBox>, std::optional<size_t>>;
     OutOfFlowPositionsMap m_outOfFlowItemColumn;
     OutOfFlowPositionsMap m_outOfFlowItemRow;
 

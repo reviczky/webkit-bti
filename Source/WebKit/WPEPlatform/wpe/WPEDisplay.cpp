@@ -59,6 +59,7 @@ struct _WPEDisplayPrivate {
     HashMap<String, bool> extensionsMap;
     GRefPtr<WPEBufferDMABufFormats> preferredDMABufFormats;
     GRefPtr<WPEKeymap> keymap;
+    GRefPtr<WPESettings> settings;
 };
 
 WEBKIT_DEFINE_ABSTRACT_TYPE(WPEDisplay, wpe_display, G_TYPE_OBJECT)
@@ -70,7 +71,7 @@ enum {
     LAST_SIGNAL
 };
 
-static guint signals[LAST_SIGNAL] = { 0, };
+static std::array<unsigned, LAST_SIGNAL> signals;
 
 /**
  * wpe_display_error_quark:
@@ -95,7 +96,10 @@ static void wpeDisplayDispose(GObject* object)
 {
     auto* priv = WPE_DISPLAY(object)->priv;
 
-    g_clear_pointer(&priv->eglDisplay, eglTerminate);
+    if (priv->eglDisplay) {
+        eglTerminate(priv->eglDisplay);
+        priv->eglDisplay = nullptr;
+    }
 
     G_OBJECT_CLASS(wpe_display_parent_class)->dispose(object);
 }
@@ -158,7 +162,11 @@ bool wpeDisplayCheckEGLExtension(WPEDisplay* display, const char* extensionName)
 WPEInputMethodContext* wpeDisplayCreateInputMethodContext(WPEDisplay* display)
 {
     auto* wpeDisplayClass = WPE_DISPLAY_GET_CLASS(display);
-    return wpeDisplayClass->create_input_method_context ? wpeDisplayClass->create_input_method_context(display) : wpeInputMethodContextNoneNew();
+
+    auto* inputMethodContext = wpeDisplayClass->create_input_method_context ? wpeDisplayClass->create_input_method_context(display) : nullptr;
+    if (!inputMethodContext)
+        inputMethodContext = wpeInputMethodContextNoneNew();
+    return inputMethodContext;
 }
 
 /**
@@ -322,6 +330,25 @@ WPEKeymap* wpe_display_get_keymap(WPEDisplay* display, GError** error)
     }
 
     return wpeDisplayClass->get_keymap(display, error);
+}
+
+/**
+ * wpe_display_get_settings:
+ * @display: a #WPEDisplay
+ *
+ * Get the #WPESettings of @display
+ *
+ * Returns: (transfer none): a #WPESettings
+ */
+WPESettings* wpe_display_get_settings(WPEDisplay* display)
+{
+    g_return_val_if_fail(WPE_IS_DISPLAY(display), nullptr);
+
+    auto* priv = display->priv;
+    if (!priv->settings)
+        priv->settings = adoptGRef(WPE_SETTINGS(g_object_new(WPE_TYPE_SETTINGS, nullptr)));
+
+    return priv->settings.get();
 }
 
 #if USE(LIBDRM)

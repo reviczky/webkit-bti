@@ -34,6 +34,10 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/TZoneMalloc.h>
 
+#if PLATFORM(IOS_FAMILY) && ENABLE(MODEL_PROCESS)
+#include <WebCore/ElementIdentifier.h>
+#endif
+
 OBJC_CLASS CAAnimation;
 OBJC_CLASS WKAnimationDelegate;
 
@@ -52,10 +56,11 @@ public:
     explicit RemoteLayerTreeHost(RemoteLayerTreeDrawingAreaProxy&);
     ~RemoteLayerTreeHost();
 
-    RemoteLayerTreeNode* nodeForID(WebCore::PlatformLayerIdentifier) const;
+    RemoteLayerTreeNode* nodeForID(std::optional<WebCore::PlatformLayerIdentifier>) const;
     RemoteLayerTreeNode* rootNode() const { return m_rootNode.get(); }
+    RefPtr<RemoteLayerTreeNode> protectedRootNode() const { return m_rootNode.get(); }
 
-    CALayer *layerForID(WebCore::PlatformLayerIdentifier) const;
+    CALayer *layerForID(std::optional<WebCore::PlatformLayerIdentifier>) const;
     CALayer *rootLayer() const;
 
     RemoteLayerTreeDrawingAreaProxy& drawingArea() const;
@@ -70,8 +75,8 @@ public:
     typedef HashMap<WebCore::PlatformLayerIdentifier, RetainPtr<WKAnimationDelegate>> LayerAnimationDelegateMap;
     LayerAnimationDelegateMap& animationDelegates() { return m_animationDelegates; }
 
-    void animationDidStart(WebCore::PlatformLayerIdentifier, CAAnimation *, MonotonicTime startTime);
-    void animationDidEnd(WebCore::PlatformLayerIdentifier, CAAnimation *);
+    void animationDidStart(std::optional<WebCore::PlatformLayerIdentifier>, CAAnimation *, MonotonicTime startTime);
+    void animationDidEnd(std::optional<WebCore::PlatformLayerIdentifier>, CAAnimation *);
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     void animationsWereAddedToNode(RemoteLayerTreeNode&);
@@ -96,15 +101,17 @@ public:
     bool cssUnprefixedBackdropFilterEnabled() const;
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
-    Seconds acceleratedTimelineTimeOrigin() const;
-    MonotonicTime animationCurrentTime() const;
+    Seconds acceleratedTimelineTimeOrigin(WebCore::ProcessIdentifier) const;
+    MonotonicTime animationCurrentTime(WebCore::ProcessIdentifier) const;
 #endif
 
     void remotePageProcessDidTerminate(WebCore::ProcessIdentifier);
 
 private:
+    Ref<RemoteLayerTreeDrawingAreaProxy> protectedDrawingArea() const;
+
     void createLayer(const RemoteLayerTreeTransaction::LayerCreationProperties&);
-    std::unique_ptr<RemoteLayerTreeNode> makeNode(const RemoteLayerTreeTransaction::LayerCreationProperties&);
+    RefPtr<RemoteLayerTreeNode> makeNode(const RemoteLayerTreeTransaction::LayerCreationProperties&);
 
     bool updateBannerLayers(const RemoteLayerTreeTransaction&);
 
@@ -114,7 +121,7 @@ private:
 
     WeakPtr<RemoteLayerTreeDrawingAreaProxy> m_drawingArea;
     WeakPtr<RemoteLayerTreeNode> m_rootNode;
-    HashMap<WebCore::PlatformLayerIdentifier, std::unique_ptr<RemoteLayerTreeNode>> m_nodes;
+    HashMap<WebCore::PlatformLayerIdentifier, Ref<RemoteLayerTreeNode>> m_nodes;
     HashMap<WebCore::LayerHostingContextIdentifier, WebCore::PlatformLayerIdentifier> m_hostingLayers;
     HashMap<WebCore::LayerHostingContextIdentifier, WebCore::PlatformLayerIdentifier> m_hostedLayers;
     HashMap<WebCore::ProcessIdentifier, HashSet<WebCore::PlatformLayerIdentifier>> m_hostedLayersInProcess;
@@ -124,6 +131,9 @@ private:
 #endif
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
     HashSet<WebCore::PlatformLayerIdentifier> m_overlayRegionIDs;
+#endif
+#if PLATFORM(IOS_FAMILY) && ENABLE(MODEL_PROCESS)
+    HashSet<WebCore::PlatformLayerIdentifier> m_modelLayers;
 #endif
     bool m_isDebugLayerTreeHost { false };
 };

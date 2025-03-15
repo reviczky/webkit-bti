@@ -44,11 +44,6 @@
 #include <WebCore/CurlProxySettings.h>
 #endif
 
-#if PLATFORM(COCOA)
-extern "C" CFStringRef const WebKit2HTTPProxyDefaultsKey;
-extern "C" CFStringRef const WebKit2HTTPSProxyDefaultsKey;
-#endif
-    
 namespace WebKit {
 
 enum class AllowsCellularAccess : bool { No, Yes };
@@ -109,6 +104,7 @@ struct NetworkSessionCreationParameters {
     String webPushPartitionString;
     bool enablePrivateClickMeasurementDebugMode { false };
     bool isBlobRegistryTopOriginPartitioningEnabled { false };
+    bool isOptInCookiePartitioningEnabled { false };
     bool shouldSendPrivateTokenIPCForTesting { false };
 
     UnifiedOriginStorageLevel unifiedOriginStorageLevel { UnifiedOriginStorageLevel::Standard };
@@ -137,6 +133,11 @@ struct NetworkSessionCreationParameters {
     std::optional<Vector<std::pair<Vector<uint8_t>, WTF::UUID>>> proxyConfigData;
 #endif
     ResourceLoadStatisticsParameters resourceLoadStatisticsParameters;
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    String resourceMonitorThrottlerDirectory;
+    SandboxExtension::Handle resourceMonitorThrottlerDirectoryExtensionHandle;
+#endif
 };
 
 } // namespace WebKit

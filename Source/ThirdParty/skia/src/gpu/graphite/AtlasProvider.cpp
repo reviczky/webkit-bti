@@ -8,6 +8,7 @@
 #include "src/gpu/graphite/AtlasProvider.h"
 
 #include "include/gpu/graphite/Recorder.h"
+#include "src/gpu/graphite/ClipAtlasManager.h"
 #include "src/gpu/graphite/ComputePathAtlas.h"
 #include "src/gpu/graphite/DrawContext.h"
 #include "src/gpu/graphite/Log.h"
@@ -31,6 +32,7 @@ AtlasProvider::PathAtlasFlagsBitMask AtlasProvider::QueryPathAtlasSupport(const 
 AtlasProvider::AtlasProvider(Recorder* recorder)
         : fTextAtlasManager(std::make_unique<TextAtlasManager>(recorder))
         , fRasterPathAtlas(std::make_unique<RasterPathAtlas>(recorder))
+        , fClipAtlasManager(std::make_unique<ClipAtlasManager>(recorder))
         , fPathAtlasFlags(QueryPathAtlasSupport(recorder->priv().caps())) {}
 
 std::unique_ptr<ComputePathAtlas> AtlasProvider::createComputePathAtlas(Recorder* recorder) const {
@@ -42,6 +44,10 @@ std::unique_ptr<ComputePathAtlas> AtlasProvider::createComputePathAtlas(Recorder
 
 RasterPathAtlas* AtlasProvider::getRasterPathAtlas() const {
     return fRasterPathAtlas.get();
+}
+
+ClipAtlasManager* AtlasProvider::getClipAtlasManager() const {
+    return fClipAtlasManager.get();
 }
 
 sk_sp<TextureProxy> AtlasProvider::getAtlasTexture(Recorder* recorder,
@@ -87,7 +93,7 @@ void AtlasProvider::freeGpuResources() {
     // Only compact the atlases, not fully free the atlases. freeGpuResources() can be called while
     // there is pending work on the Recorder that refers to pages. In the event this is called right
     // after a snap(), all pages would eligible for cleanup during compaction anyways.
-    this->compact();
+    this->compact(/*forceCompact=*/true);
     // Release any textures held directly by the provider. These textures are used by transient
     // ComputePathAtlases that are reset every time a DrawContext snaps a DrawTask so there is no
     // need to reset those atlases explicitly here. Since the AtlasProvider gives out refs to the
@@ -104,12 +110,18 @@ void AtlasProvider::recordUploads(DrawContext* dc) {
     if (fRasterPathAtlas) {
         fRasterPathAtlas->recordUploads(dc);
     }
+    if (fClipAtlasManager) {
+        fClipAtlasManager->recordUploads(dc);
+    }
 }
 
-void AtlasProvider::compact() {
-    fTextAtlasManager->compact();
+void AtlasProvider::compact(bool forceCompact) {
+    fTextAtlasManager->compact(forceCompact);
     if (fRasterPathAtlas) {
-        fRasterPathAtlas->compact();
+        fRasterPathAtlas->compact(forceCompact);
+    }
+    if (fClipAtlasManager) {
+        fClipAtlasManager->compact(forceCompact);
     }
 }
 
@@ -121,6 +133,9 @@ void AtlasProvider::invalidateAtlases() {
     fTextAtlasManager->evictAtlases();
     if (fRasterPathAtlas) {
         fRasterPathAtlas->evictAtlases();
+    }
+    if (fClipAtlasManager) {
+        fClipAtlasManager->evictAtlases();
     }
 }
 

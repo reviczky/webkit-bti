@@ -87,7 +87,7 @@ ImageFrameAnimator* BitmapImageSource::frameAnimator() const
     if (!isAnimated())
         return nullptr;
 
-    m_frameAnimator = ImageFrameAnimator::create(const_cast<BitmapImageSource&>(*this));
+    m_frameAnimator = makeUniqueWithoutRefCountedCheck<ImageFrameAnimator>(const_cast<BitmapImageSource&>(*this));
     return m_frameAnimator.get();
 }
 
@@ -267,7 +267,7 @@ void BitmapImageSource::startAnimation()
 
 bool BitmapImageSource::startAnimation(SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
 {
-    auto frameAnimator = this->frameAnimator();
+    RefPtr frameAnimator = this->frameAnimator();
     if (!frameAnimator)
         return false;
 
@@ -363,7 +363,7 @@ void BitmapImageSource::decode(Function<void(DecodingStatus)>&& decodeCallback)
     }
 
     bool isCompatibleNativeImage = isCompatibleWithOptionsAtIndex(index, SubsamplingLevel::Default, DecodingMode::Asynchronous);
-    auto frameAnimator = this->frameAnimator();
+    RefPtr frameAnimator = this->frameAnimator();
 
     if (frameAnimator && (frameAnimator->hasEverAnimated() || isCompatibleNativeImage)) {
         // startAnimation() always decodes the nextFrame which is currentFrameIndex + 1.
@@ -641,7 +641,7 @@ RefPtr<NativeImage> BitmapImageSource::preTransformedNativeImageAtIndex(unsigned
     if (orientation == ImageOrientation::Orientation::None && size == sourceSize)
         return nativeImage;
 
-    RefPtr buffer = ImageBuffer::create(size, RenderingPurpose::Unspecified, 1, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8);
+    RefPtr buffer = ImageBuffer::create(size, RenderingMode::Unaccelerated, RenderingPurpose::Unspecified, 1, DestinationColorSpace::SRGB(), ImageBufferPixelFormat::BGRA8);
     if (!buffer)
         return nativeImage;
 
@@ -689,8 +689,7 @@ long long BitmapImageSource::expectedContentLength() const
 
 CString BitmapImageSource::sourceUTF8() const
 {
-    constexpr const char* emptyString = "";
-    return m_bitmapImage ? m_bitmapImage->sourceUTF8() : emptyString;
+    return m_bitmapImage ? m_bitmapImage->sourceUTF8() : ""_s;
 }
 
 void BitmapImageSource::setMinimumDecodingDurationForTesting(Seconds duration)

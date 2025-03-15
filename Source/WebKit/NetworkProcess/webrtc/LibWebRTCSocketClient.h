@@ -31,13 +31,9 @@
 
 #include "NetworkRTCProvider.h"
 
-ALLOW_COMMA_BEGIN
-ALLOW_DEPRECATED_DECLARATIONS_BEGIN
-
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <webrtc/rtc_base/async_packet_socket.h>
-
-ALLOW_DEPRECATED_DECLARATIONS_END
-ALLOW_COMMA_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 
 #include <wtf/TZoneMalloc.h>
 
@@ -72,7 +68,7 @@ private:
 
     WebCore::LibWebRTCSocketIdentifier m_identifier;
     Type m_type;
-    NetworkRTCProvider& m_rtcProvider;
+    CheckedRef<NetworkRTCProvider> m_rtcProvider;
     std::unique_ptr<rtc::AsyncPacketSocket> m_socket;
     Ref<IPC::Connection> m_connection;
     int m_sendError { 0 };

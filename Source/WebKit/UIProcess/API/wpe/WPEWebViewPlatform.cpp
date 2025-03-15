@@ -44,9 +44,11 @@
 #endif
 
 #if USE(SKIA)
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
 #include <skia/core/SkPixmap.h>
 IGNORE_CLANG_WARNINGS_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
 #endif
 
 using namespace WebKit;
@@ -130,8 +132,8 @@ ViewPlatform::ViewPlatform(WPEDisplay* display, const API::PageConfiguration& co
     m_pageProxy->windowScreenDidChange(m_displayID);
     m_backingStore = AcceleratedBackingStoreDMABuf::create(*m_pageProxy, m_wpeView.get());
 
-    auto& openerInfo = m_pageProxy->configuration().openerInfo();
-    m_pageProxy->initializeWebPage(openerInfo ? openerInfo->site : Site(aboutBlankURL()));
+    auto& pageConfiguration = m_pageProxy->configuration();
+    m_pageProxy->initializeWebPage(pageConfiguration.openedSite(), pageConfiguration.initialSandboxFlags());
 }
 
 ViewPlatform::~ViewPlatform()
@@ -169,9 +171,7 @@ void ViewPlatform::enterFullScreen()
 void ViewPlatform::didEnterFullScreen()
 {
     ASSERT(m_fullscreenState == WebFullScreenManagerProxy::FullscreenState::EnteringFullscreen);
-
-    if (auto* fullScreenManagerProxy = page().fullScreenManager())
-        fullScreenManagerProxy->didEnterFullScreen();
+    // FIXME: Call CompletionHandler from PageClientImpl::beganEnterFullScreen here.
     m_fullscreenState = WebFullScreenManagerProxy::FullscreenState::InFullscreen;
 }
 
@@ -195,9 +195,6 @@ void ViewPlatform::exitFullScreen()
 void ViewPlatform::didExitFullScreen()
 {
     ASSERT(m_fullscreenState == WebFullScreenManagerProxy::FullscreenState::ExitingFullscreen);
-
-    if (auto* fullScreenManagerProxy = page().fullScreenManager())
-        fullScreenManagerProxy->didExitFullScreen();
     m_fullscreenState = WebFullScreenManagerProxy::FullscreenState::NotInFullscreen;
 }
 
@@ -439,9 +436,9 @@ void ViewPlatform::handleGesture(WPEEvent* event)
     }
 }
 
-void ViewPlatform::synthesizeCompositionKeyPress(const String&, std::optional<Vector<WebCore::CompositionUnderline>>&&, std::optional<EditingRange>&&)
+void ViewPlatform::synthesizeCompositionKeyPress(const String& text, std::optional<Vector<WebCore::CompositionUnderline>>&& underlines, std::optional<EditingRange>&& selectionRange)
 {
-    // FIXME: implement.
+    page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(text, WTFMove(underlines), WTFMove(selectionRange)));
 }
 
 void ViewPlatform::setCursor(const WebCore::Cursor& cursor)
@@ -580,6 +577,20 @@ void ViewPlatform::setCursor(const WebCore::Cursor& cursor)
     wpe_view_set_cursor_from_bytes(m_wpeView.get(), bytes.get(), pixmap.width(), pixmap.height(), pixmap.rowBytes(), hotspot.x(), hotspot.y());
 #endif
 }
+
+#if ENABLE(POINTER_LOCK)
+void ViewPlatform::requestPointerLock()
+{
+    if (wpe_view_lock_pointer(m_wpeView.get()))
+        setCursor(WebCore::noneCursor());
+}
+
+void ViewPlatform::didLosePointerLock()
+{
+    if (wpe_view_unlock_pointer(m_wpeView.get()))
+        setCursor(WebCore::pointerCursor());
+}
+#endif
 
 void ViewPlatform::callAfterNextPresentationUpdate(CompletionHandler<void()>&& callback)
 {

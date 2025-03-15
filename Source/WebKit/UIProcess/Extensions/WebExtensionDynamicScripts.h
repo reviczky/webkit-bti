@@ -46,6 +46,7 @@ namespace WebKit {
 
 class WebExtensionContext;
 class WebExtensionTab;
+struct WebExtensionScriptInjectionParameters;
 
 namespace WebExtensionDynamicScripts {
 
@@ -105,15 +106,16 @@ private:
     void removeUserScripts(const String& identifier);
 };
 
-std::optional<SourcePair> sourcePairForResource(String path, RefPtr<WebExtension>);
-SourcePairs getSourcePairsForParameters(const WebExtensionScriptInjectionParameters&, RefPtr<WebExtension>);
-Vector<RetainPtr<_WKFrameTreeNode>> getFrames(_WKFrameTreeNode *, std::optional<Vector<WebExtensionFrameIdentifier>>);
+std::optional<SourcePair> sourcePairForResource(const String& path, WebExtensionContext&);
+SourcePairs getSourcePairsForParameters(const WebExtensionScriptInjectionParameters&, WebExtensionContext&);
 
 void executeScript(const SourcePairs&, WKWebView *, API::ContentWorld&, WebExtensionTab&, const WebExtensionScriptInjectionParameters&, WebExtensionContext&, CompletionHandler<void(InjectionResults&&)>&&);
 void injectStyleSheets(const SourcePairs&, WKWebView *, API::ContentWorld&, WebCore::UserStyleLevel, WebCore::UserContentInjectedFrames, WebExtensionContext&);
 void removeStyleSheets(const SourcePairs&, WKWebView *, WebCore::UserContentInjectedFrames, WebExtensionContext&);
 
+#if PLATFORM(COCOA)
 WebExtensionScriptInjectionResultParameters toInjectionResultParameters(id resultOfExecution, WKFrameInfo *, NSString *errorMessage);
+#endif
 
 } // namespace WebExtensionDynamicScripts
 

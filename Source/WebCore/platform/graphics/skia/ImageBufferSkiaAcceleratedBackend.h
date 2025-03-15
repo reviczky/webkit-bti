@@ -26,23 +26,16 @@
 #pragma once
 
 #if USE(SKIA)
-
 #include "ImageBuffer.h"
 #include "ImageBufferSkiaSurfaceBackend.h"
+#include <wtf/Lock.h>
 #include <wtf/TZoneMalloc.h>
-
-#if USE(NICOSIA)
-#include "NicosiaContentLayer.h"
-#endif
 
 namespace WebCore {
 
-class BitmapTexture;
+class GLFence;
 
 class ImageBufferSkiaAcceleratedBackend final : public ImageBufferSkiaSurfaceBackend
-#if USE(NICOSIA)
-    , public Nicosia::ContentLayer::Client
-#endif
 {
     WTF_MAKE_TZONE_OR_ISO_ALLOCATED(ImageBufferSkiaAcceleratedBackend);
     WTF_MAKE_NONCOPYABLE(ImageBufferSkiaAcceleratedBackend);
@@ -53,7 +46,10 @@ public:
     static constexpr RenderingMode renderingMode = RenderingMode::Accelerated;
 
 private:
+    static std::unique_ptr<ImageBufferSkiaAcceleratedBackend> create(const Parameters&, const ImageBufferCreationContext&, sk_sp<SkSurface>&&);
     ImageBufferSkiaAcceleratedBackend(const Parameters&, sk_sp<SkSurface>&&);
+
+    void prepareForDisplay() final;
 
     RefPtr<NativeImage> copyNativeImage() final;
     RefPtr<NativeImage> createNativeImageReference() final;
@@ -61,17 +57,21 @@ private:
     void getPixelBuffer(const IntRect&, PixelBuffer&) final;
     void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) final;
 
-#if USE(NICOSIA)
-    RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() const final;
-    void swapBuffersIfNeeded() final;
+    void finishAcceleratedRenderingAndCreateFence() final;
+    void waitForAcceleratedRenderingFenceCompletion() final;
 
-    RefPtr<Nicosia::ContentLayer> m_contentLayer;
+    const GrDirectContext* skiaGrContext() const final { return m_skiaGrContext; }
+    RefPtr<ImageBuffer> copyAcceleratedImageBufferBorrowingBackendRenderTarget(const ImageBuffer&) const final;
+
+#if USE(COORDINATED_GRAPHICS)
+    RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() const final;
+
     RefPtr<GraphicsLayerContentsDisplayDelegate> m_layerContentsDisplayDelegate;
-    struct {
-        RefPtr<BitmapTexture> back;
-        RefPtr<BitmapTexture> front;
-    } m_texture;
 #endif
+
+    const GrDirectContext* m_skiaGrContext { nullptr };
+    std::unique_ptr<GLFence> m_fence WTF_GUARDED_BY_LOCK(m_fenceLock);
+    Lock m_fenceLock;
 };
 
 } // namespace WebCore

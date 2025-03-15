@@ -52,6 +52,7 @@ VPATH = \
     $(WebKit2)/WebProcess/Automation \
     $(WebKit2)/WebProcess/Cache \
     $(WebKit2)/WebProcess/Databases/IndexedDB \
+    $(WebKit2)/WebProcess/DigitalCredentials \
     $(WebKit2)/WebProcess/Extensions/Interfaces \
     $(WebKit2)/WebProcess/FullScreen \
     $(WebKit2)/WebProcess/Geolocation \
@@ -88,6 +89,7 @@ VPATH = \
     $(WebKit2)/UIProcess/Automation \
     $(WebKit2)/UIProcess/Cocoa \
     $(WebKit2)/UIProcess/Databases \
+    $(WebKit2)/UIProcess/DigitalCredentials \
     $(WebKit2)/UIProcess/Downloads \
     $(WebKit2)/UIProcess/GPU \
     $(WebKit2)/UIProcess/Inspector \
@@ -124,7 +126,11 @@ else
     DELETE = rm -f
 endif
 
+to-pattern = $(join $(basename $1), $(subst .,%,$(suffix $1)))
+
 MESSAGE_RECEIVERS = \
+	LogStream \
+	NetworkProcess/Authentication/AuthenticationManager \
 	NetworkProcess/NetworkBroadcastChannelRegistry \
 	NetworkProcess/NetworkConnectionToWebProcess \
 	NetworkProcess/NetworkContentRuleListManager \
@@ -148,7 +154,6 @@ MESSAGE_RECEIVERS = \
 	Shared/AuxiliaryProcess \
 	Shared/API/Cocoa/RemoteObjectRegistry \
 	Shared/ApplePay/WebPaymentCoordinatorProxy \
-	Shared/Authentication/AuthenticationManager \
 	Shared/Notifications/NotificationManagerMessageHandler \
 	Shared/IPCConnectionTester \
 	Shared/IPCStreamTester \
@@ -306,9 +311,7 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/graphics/WebGPU/RemoteXRView \
 	GPUProcess/webrtc/LibWebRTCCodecsProxy \
 	GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager \
-	GPUProcess/webrtc/RemoteMediaRecorderManager \
 	GPUProcess/webrtc/RemoteSampleBufferDisplayLayer \
-	GPUProcess/webrtc/RemoteMediaRecorder \
 	GPUProcess/webrtc/RemoteAudioMediaStreamTrackRendererInternalUnitManager \
 	GPUProcess/GPUProcess \
 	GPUProcess/media/RemoteImageDecoderAVFProxy \
@@ -325,6 +328,7 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteMediaEngineConfigurationFactoryProxy \
 	GPUProcess/media/RemoteMediaPlayerManagerProxy \
 	GPUProcess/media/RemoteMediaPlayerProxy \
+	GPUProcess/media/RemoteMediaRecorderPrivateWriterManager \
 	GPUProcess/media/RemoteMediaResourceManager \
 	GPUProcess/media/RemoteVideoFrameObjectHeap \
 	GPUProcess/media/RemoteMediaSourceProxy \
@@ -376,7 +380,7 @@ MESSAGE_RECEIVER_FILES := $(addsuffix MessageReceiver.cpp,$(notdir $(MESSAGE_REC
 MESSAGES_FILES := $(addsuffix Messages.h,$(notdir $(MESSAGE_RECEIVERS)))
 
 GENERATED_MESSAGES_FILES := $(MESSAGE_RECEIVER_FILES) $(MESSAGES_FILES) MessageNames.h MessageNames.cpp MessageArgumentDescriptions.cpp
-GENERATED_MESSAGES_FILES_AS_PATTERNS := $(subst .,%,$(GENERATED_MESSAGES_FILES))
+GENERATED_MESSAGES_FILES_AS_PATTERNS := $(call to-pattern, $(GENERATED_MESSAGES_FILES))
 
 MESSAGES_IN_FILES := $(addsuffix .messages.in,$(MESSAGE_RECEIVERS))
 
@@ -384,9 +388,39 @@ SANDBOX_IMPORT_DIR=$(SDKROOT)/usr/local/share/sandbox/profiles/embedded/imports
 
 .PHONY : all
 
+# Log messages
+
+all : WebCoreLogDefinitions.h WebKitLogDefinitions.h
+
+WEBCORE_LOG_DECLARATIONS_FILES = \
+    WebCoreLogDefinitions.h \
+    WebCoreVirtualLogFunctions.h \
+
+$(WEBCORE_LOG_DECLARATIONS_FILES) : $(WebCorePrivateHeaders)/LogMessages.in
+	@echo Creating WebCore log definitions $@
+	$(PYTHON) $(WebCorePrivateHeaders)/generate-log-declarations.py $< $(WEBCORE_LOG_DECLARATIONS_FILES)
+
+WEBKIT_LOG_DECLARATIONS_FILES = \
+    WebKitLogDefinitions.h \
+    WebKitVirtualLogFunctions.h \
+
+$(WEBKIT_LOG_DECLARATIONS_FILES) : Platform/LogMessages.in
+	@echo Creating WebKit log definitions $@
+	$(PYTHON) $(WebCorePrivateHeaders)/generate-log-declarations.py $< $(WEBKIT_LOG_DECLARATIONS_FILES)
+
+LOG_OUTPUT_FILES = \
+    LogStream.messages.in \
+    LogMessagesDeclarations.h \
+    LogMessagesImplementations.h \
+    WebKitLogClientDeclarations.h \
+    WebCoreLogClientDeclarations.h \
+
+$(LOG_OUTPUT_FILES) : $(WebKit2)/Scripts/generate-derived-log-sources.py Platform/LogMessages.in $(WebCorePrivateHeaders)/LogMessages.in
+	PYTHONPATH=$(WebCorePrivateHeaders) $(PYTHON) $^ $(LOG_OUTPUT_FILES)
+
 all : $(GENERATED_MESSAGES_FILES)
 
-$(GENERATED_MESSAGES_FILES_AS_PATTERNS) : $(MESSAGES_IN_FILES) $(GENERATE_MESSAGE_RECEIVER_SCRIPTS)
+$(GENERATED_MESSAGES_FILES_AS_PATTERNS) : $(LOG_OUTPUT_FILES) $(MESSAGES_IN_FILES) $(GENERATE_MESSAGE_RECEIVER_SCRIPTS)
 	$(PYTHON) $(GENERATE_MESSAGE_RECEIVER_SCRIPT) $(WebKit2) $(MESSAGE_RECEIVERS)
 
 TEXT_PREPROCESSOR_FLAGS=-E -P -w
@@ -432,7 +466,7 @@ NOTIFICATION_ALLOW_LISTS = \
 	$(WebKit2)/Scripts/compile-sandbox.sh $@.tmp $* $(SDK_NAME) $(SANDBOX_IMPORT_DIR)
 	mv $@.tmp $@
 
-AUTOMATION_PROTOCOL_GENERATOR_SCRIPTS = \
+JSON_RPC_GENERATOR_SCRIPTS = \
 	$(JavaScriptCore_SCRIPTS_DIR)/cpp_generator_templates.py \
 	$(JavaScriptCore_SCRIPTS_DIR)/cpp_generator.py \
 	$(JavaScriptCore_SCRIPTS_DIR)/generate_cpp_backend_dispatcher_header.py \
@@ -445,6 +479,8 @@ AUTOMATION_PROTOCOL_GENERATOR_SCRIPTS = \
 	$(JavaScriptCore_SCRIPTS_DIR)/generator.py \
 	$(JavaScriptCore_SCRIPTS_DIR)/models.py \
 	$(JavaScriptCore_SCRIPTS_DIR)/generate-inspector-protocol-bindings.py \
+	$(JavaScriptCore_SCRIPTS_DIR)/generate-combined-inspector-json.py \
+	$(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py \
 #
 
 AUTOMATION_PROTOCOL_INPUT_FILES = \
@@ -459,14 +495,15 @@ AUTOMATION_PROTOCOL_OUTPUT_FILES = \
     AutomationProtocolObjects.h \
     AutomationProtocolObjects.cpp \
 #
-AUTOMATION_PROTOCOL_OUTPUT_PATTERNS = $(subst .,%,$(AUTOMATION_PROTOCOL_OUTPUT_FILES))
+AUTOMATION_PROTOCOL_OUTPUT_PATTERNS = $(call to-pattern, $(AUTOMATION_PROTOCOL_OUTPUT_FILES))
 
-# JSON-RPC Frontend Dispatchers, Backend Dispatchers, Type Builders
-$(AUTOMATION_PROTOCOL_OUTPUT_PATTERNS) : $(AUTOMATION_PROTOCOL_INPUT_FILES) $(AUTOMATION_PROTOCOL_GENERATOR_SCRIPTS)
+# Files for the Automation protocol which implements WebDriver Classic commands.
+$(AUTOMATION_PROTOCOL_OUTPUT_PATTERNS) : $(AUTOMATION_PROTOCOL_INPUT_FILES) $(JSON_RPC_GENERATOR_SCRIPTS)
 	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/generate-inspector-protocol-bindings.py --framework WebKit --backend --outputDir . $(AUTOMATION_PROTOCOL_INPUT_FILES)
 
 all : $(AUTOMATION_PROTOCOL_OUTPUT_FILES)
 
+# For JavaScript Selenium / WebDriver atoms, generate symbols with byte arrays that contain the minified file contents.
 %ScriptSource.h : %.js $(JavaScriptCore_SCRIPTS_DIR)/jsmin.py $(JavaScriptCore_SCRIPTS_DIR)/xxd.pl
 	echo "//# sourceURL=__InjectedScript_$(notdir $<)" > $(basename $(notdir $<)).min.js
 	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/jsmin.py < $< >> $(basename $(notdir $<)).min.js
@@ -474,6 +511,38 @@ all : $(AUTOMATION_PROTOCOL_OUTPUT_FILES)
 	$(DELETE) $(basename $(notdir $<)).min.js
 
 all : WebAutomationSessionProxyScriptSource.h
+
+WEBDRIVER_BIDI_PROTOCOL_INPUT_FILES = \
+    $(WebKit2)/UIProcess/Automation/protocol/BidiBrowser.json \
+    $(WebKit2)/UIProcess/Automation/protocol/BidiBrowsingContext.json \
+    $(WebKit2)/UIProcess/Automation/protocol/BidiLog.json \
+#
+
+WEBDRIVER_BIDI_PROTOCOL_OUTPUT_FILES = \
+    WebDriverBidiBackendDispatchers.h \
+    WebDriverBidiBackendDispatchers.cpp \
+    WebDriverBidiFrontendDispatchers.h \
+    WebDriverBidiFrontendDispatchers.cpp \
+    WebDriverBidiProtocolObjects.h \
+    WebDriverBidiProtocolObjects.cpp \
+#
+
+# The combined JSON file depends on the actual set of domains and their file contents, so that
+# adding, modifying, or removing domains will trigger regeneration of inspector files.
+.PHONY: force
+EnabledWebDriverBidiDomains : $(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py force
+	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/UpdateContents.py '$(WEBDRIVER_BIDI_PROTOCOL_INPUT_FILES)' $@
+
+CombinedWebDriverBidiDomains.json : $(JavaScriptCore_SCRIPTS_DIR)/generate-combined-inspector-json.py $(WEBDRIVER_BIDI_PROTOCOL_INPUT_FILES) EnabledWebDriverBidiDomains
+	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/generate-combined-inspector-json.py $(WEBDRIVER_BIDI_PROTOCOL_INPUT_FILES) "$(FEATURE_AND_PLATFORM_DEFINES)" > ./CombinedWebDriverBidiDomains.json
+
+WEBDRIVER_BIDI_PROTOCOL_OUTPUT_PATTERNS = $(call to-pattern, $(WEBDRIVER_BIDI_PROTOCOL_OUTPUT_FILES))
+
+# Files for the WebDriverBidi protocol which implements WebDriver BiDi commands.
+$(WEBDRIVER_BIDI_PROTOCOL_OUTPUT_PATTERNS) : CombinedWebDriverBidiDomains.json $(JSON_RPC_GENERATOR_SCRIPTS)
+	$(PYTHON) $(JavaScriptCore_SCRIPTS_DIR)/generate-inspector-protocol-bindings.py --framework WebDriverBidi --backend --outputDir . ./CombinedWebDriverBidiDomains.json
+
+all : $(WEBDRIVER_BIDI_PROTOCOL_OUTPUT_FILES)
 
 # WebPreferences generation
 
@@ -495,7 +564,7 @@ WEB_PREFERENCES_TEMPLATES = \
     $(WebKit2)/Scripts/PreferencesTemplates/WebPreferencesStoreDefaultsMap.cpp.erb \
 #
 WEB_PREFERENCES_FILES = $(basename $(notdir $(WEB_PREFERENCES_TEMPLATES)))
-WEB_PREFERENCES_PATTERNS = $(subst .cpp,%cpp, $(subst .h,%h, $(subst .in,%in, $(WEB_PREFERENCES_FILES))))
+WEB_PREFERENCES_PATTERNS = $(call to-pattern, $(WEB_PREFERENCES_FILES))
 
 all : $(WEB_PREFERENCES_FILES)
 
@@ -513,6 +582,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	GPUProcess/media/InitializationSegmentInfo.serialization.in \
 	GPUProcess/media/MediaDescriptionInfo.serialization.in \
 	GPUProcess/media/RemoteMediaPlayerProxyConfiguration.serialization.in \
+	GPUProcess/media/RemoteTrackInfo.serialization.in \
 	GPUProcess/media/TextTrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/TrackPrivateRemoteConfiguration.serialization.in \
 	GPUProcess/media/VideoTrackPrivateRemoteConfiguration.serialization.in \
@@ -552,6 +622,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/API/APIURLResponse.serialization.in \
 	Shared/API/APIUserContentURLPattern.serialization.in \
 	Shared/AccessibilityPreferences.serialization.in \
+	Shared/AdditionalFonts.serialization.in \
 	Shared/AlternativeTextClient.serialization.in \
 	Shared/AppPrivacyReportTestingData.serialization.in \
 	Shared/Authentication/AuthenticationChallengeDisposition.serialization.in \
@@ -598,6 +669,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/SharedCARingBuffer.serialization.in \
 	Shared/Cocoa/WebCoreArgumentCodersCocoa.serialization.in \
 	Shared/CallbackID.serialization.in \
+	Shared/ContentWorldData.serialization.in \
 	Shared/ContextMenuContextData.serialization.in \
 	Shared/CoordinateSystem.serialization.in \
 	Shared/DebuggableInfoData.serialization.in \
@@ -607,6 +679,8 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/DrawingAreaInfo.serialization.in \
 	Shared/EditingRange.serialization.in \
 	Shared/EditorState.serialization.in \
+	Shared/KeyEventInterpretationContext.serialization.in \
+	Shared/Extensions/WebExtensionActionClickBehavior.serialization.in \
 	Shared/Extensions/WebExtensionAlarmParameters.serialization.in \
 	Shared/Extensions/WebExtensionCommandParameters.serialization.in \
 	Shared/Extensions/WebExtensionContentWorldType.serialization.in \
@@ -620,6 +694,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Extensions/WebExtensionMatchedRuleParameters.serialization.in \
 	Shared/Extensions/WebExtensionMenuItem.serialization.in \
 	Shared/Extensions/WebExtensionMessageSenderParameters.serialization.in \
+	Shared/Extensions/WebExtensionMessageTargetParameters.serialization.in \
 	Shared/Extensions/WebExtensionSidebarParameters.serialization.in \
 	Shared/Extensions/WebExtensionStorage.serialization.in \
 	Shared/Extensions/WebExtensionTab.serialization.in \
@@ -636,6 +711,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/ImageOptions.serialization.in \
 	Shared/InspectorExtensionTypes.serialization.in \
 	Shared/PlatformFontInfo.serialization.in \
+	Shared/ios/CursorContext.serialization.in \
 	Shared/ios/DynamicViewportSizeUpdate.serialization.in \
 	Shared/ios/GestureTypes.serialization.in \
 	Shared/ios/HardwareKeyboardState.serialization.in \
@@ -667,6 +743,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/ResourceLoadStatisticsParameters.serialization.in \
 	Shared/SameDocumentNavigationType.serialization.in \
 	Shared/SandboxExtension.serialization.in \
+	Shared/ScriptTelemetry.serialization.in \
 	Shared/ScrollingAccelerationCurve.serialization.in \
 	Shared/SessionState.serialization.in \
 	Shared/SyntheticEditingCommandType.serialization.in \
@@ -679,7 +756,6 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/UserContentControllerParameters.serialization.in \
 	Shared/UserData.serialization.in \
 	Shared/UserInterfaceIdiom.serialization.in \
-	Shared/VideoCodecType.serialization.in \
 	Shared/WebCompiledContentRuleListData.serialization.in \
 	Shared/ViewWindowCoordinates.serialization.in \
 	Shared/VisibleContentRectUpdateInfo.serialization.in \
@@ -691,6 +767,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebEvent.serialization.in \
 	Shared/WebFindOptions.serialization.in \
 	Shared/WebFoundTextRange.serialization.in \
+	Shared/WebFrameMetrics.serialization.in \
 	Shared/WebHitTestResultData.serialization.in \
 	Shared/WebImage.serialization.in \
 	Shared/WebNavigationDataStore.serialization.in \
@@ -707,6 +784,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/WebsiteAutoplayQuirk.serialization.in \
 	Shared/WebsitePoliciesData.serialization.in \
 	Shared/WebsitePopUpPolicy.serialization.in \
+	Shared/WebsitePushAndNotificationsEnabledPolicy.serialization.in \
 	Shared/ApplePay/ApplePayPaymentSetupFeatures.serialization.in \
 	Shared/ApplePay/PaymentSetupConfiguration.serialization.in \
 	Shared/Databases/IndexedDB/WebIDBResult.serialization.in \
@@ -724,6 +802,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/cf/CoreIPCSecCertificate.serialization.in \
 	Shared/cf/CoreIPCSecKeychainItem.serialization.in \
 	Shared/cf/CoreIPCSecTrust.serialization.in \
+	Shared/graphics/RemoteImageBufferSetConfiguration.serialization.in \
 	Shared/mac/PDFContextMenuItem.serialization.in \
 	Shared/mac/SecItemRequestData.serialization.in \
 	Shared/mac/SecItemResponseData.serialization.in \
@@ -838,6 +917,7 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	PlatformScreen.serialization.in \
 	PlatformWheelEvent.serialization.in \
 	PlaybackSessionModel.serialization.in \
+	ProcessSyncData.serialization.in \
 	ProtectionSpaceBase.serialization.in \
 	ScrollTypes.serialization.in \
 	WebGPU.serialization.in \
@@ -856,7 +936,7 @@ GENERATED_SERIALIZERS_OUTPUT_FILES = \
     WebKitPlatformGeneratedSerializers.mm \
 #
 
-GENERATED_SERIALIZERS_OUTPUT_PATTERNS = $(subst .,%,$(GENERATED_SERIALIZERS_OUTPUT_FILES))
+GENERATED_SERIALIZERS_OUTPUT_PATTERNS = $(call to-pattern, $(GENERATED_SERIALIZERS_OUTPUT_FILES))
 
 $(GENERATED_SERIALIZERS_OUTPUT_PATTERNS) : $(WebKit2)/Scripts/generate-serializers.py $(SERIALIZATION_DESCRIPTION_FILES) $(WebKit2)/DerivedSources.make $(WEBCORE_SERIALIZATION_DESCRIPTION_FILES_FULLPATH)
 	$(PYTHON) $(WebKit2)/Scripts/generate-serializers.py mm $(filter %.in,$^)
@@ -872,6 +952,7 @@ BINDINGS_SCRIPTS = \
     $(WebCorePrivateHeaders)/IDLParser.pm \
     $(WebCorePrivateHeaders)/CodeGenerator.pm \
     $(EXTENSIONS_SCRIPTS_DIR)/CodeGeneratorExtensions.pm \
+    $(EXTENSIONS_SCRIPTS_DIR)/GenerateImports.pl \
 #
 
 EXTENSION_INTERFACES = \
@@ -918,15 +999,16 @@ JS%.h JS%.mm : %.idl $(BINDINGS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(FEATURE_AND_PL
 	@echo Generating bindings for $*...
 	$(PERL) -I $(WebCorePrivateHeaders) -I $(EXTENSIONS_SCRIPTS_DIR) $(WebCorePrivateHeaders)/generate-bindings.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES)" --outputDir . --generator Extensions --idlAttributesFile $(IDL_ATTRIBUTES_FILE) --idlFileNamesList $(IDL_FILE_NAMES_LIST) $<
 
-all : $(EXTENSION_INTERFACES:%=JS%.h) $(EXTENSION_INTERFACES:%=JS%.mm)
+JSWebExtensionAPIUnified.mm: $(BINDINGS_SCRIPTS) $(EXTENSION_INTERFACES:%=JS%.mm)
+	@echo "Generating $@..."
+	$(PERL) $(EXTENSIONS_SCRIPTS_DIR)/GenerateImports.pl $@ $(EXTENSION_INTERFACES:%=JS%.mm)
 
-module.private.modulemap : $(WK_MODULEMAP_PRIVATE_FILE)
-	unifdef $(addprefix -D, $(FEATURE_AND_PLATFORM_DEFINES)) $(addprefix -U, $(FEATURE_AND_PLATFORM_UNDEFINES)) -o $@ $< || [ $$? -eq 1 ]
-
-all : module.private.modulemap
+all : JSWebExtensionAPIUnified.mm $(EXTENSION_INTERFACES:%=JS%.h) $(EXTENSION_INTERFACES:%=JS%.mm)
 
 ifeq ($(USE_INTERNAL_SDK),YES)
 WEBKIT_ADDITIONS_SWIFT_FILES = \
+	MaterialAdditions.swift \
+	WKSeparatedImageView.swift \
 #
 
 $(WEBKIT_ADDITIONS_SWIFT_FILES): %.swift : %.swift.in

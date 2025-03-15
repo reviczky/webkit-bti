@@ -33,6 +33,8 @@ namespace WebCore {
 GST_DEBUG_CATEGORY(webkit_webrtc_ice_transport_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_ice_transport_debug
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GStreamerIceTransportBackend);
+
 GStreamerIceTransportBackend::GStreamerIceTransportBackend(GRefPtr<GstWebRTCDTLSTransport>&& transport)
     : m_backend(WTFMove(transport))
 {
@@ -62,6 +64,13 @@ void GStreamerIceTransportBackend::iceTransportChanged()
         g_signal_handlers_disconnect_by_data(m_iceTransport.get(), this);
 
     g_object_get(m_backend.get(), "transport", &m_iceTransport.outPtr(), nullptr);
+
+    // Setting same libnice socket size options as LibWebRTC. 1MB for incoming streams and 256Kb for outgoing streams.
+    if (gstObjectHasProperty(GST_OBJECT_CAST(m_iceTransport.get()), "receive-buffer-size"))
+        g_object_set(m_iceTransport.get(), "receive-buffer-size", 1048576, nullptr);
+
+    if (gstObjectHasProperty(GST_OBJECT_CAST(m_iceTransport.get()), "send-buffer-size"))
+        g_object_set(m_iceTransport.get(), "send-buffer-size", 262144, nullptr);
 
     g_signal_connect_swapped(m_iceTransport.get(), "notify::state", G_CALLBACK(+[](GStreamerIceTransportBackend* backend) {
         backend->stateChanged();

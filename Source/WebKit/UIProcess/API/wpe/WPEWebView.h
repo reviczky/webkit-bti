@@ -76,8 +76,8 @@ public:
 
 #if ENABLE(FULLSCREEN_API)
     bool isFullScreen() const;
-    void willEnterFullScreen();
-    void willExitFullScreen();
+    void willEnterFullScreen(CompletionHandler<void(bool)>&&);
+    void willExitFullScreen(CompletionHandler<void()>&&);
 #endif
 
     void selectionDidChange();
@@ -95,6 +95,10 @@ public:
     virtual struct wpe_view_backend* backend() const { return nullptr; }
 #if ENABLE(WPE_PLATFORM)
     virtual WPEView* wpeView() const { return nullptr; }
+#endif
+#if ENABLE(POINTER_LOCK)
+    virtual void requestPointerLock() { };
+    virtual void didLosePointerLock() { };
 #endif
 
     virtual void setCursor(const WebCore::Cursor&) { };

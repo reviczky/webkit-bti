@@ -92,12 +92,6 @@ static ExceptionOr<CryptoAlgorithmIdentifier> toHashIdentifier(JSGlobalObject& s
     return digestParams.returnValue()->identifier;
 }
 
-static bool isRSAESPKCSWebCryptoDeprecated(JSGlobalObject& state)
-{
-    auto& globalObject = *JSC::jsCast<JSDOMGlobalObject*>(&state);
-    auto* context = globalObject.scriptExecutionContext();
-    return context && context->settingsValues().deprecateRSAESPKCSWebCryptoEnabled;
-}
 static bool isAESCFBWebCryptoDeprecated(JSGlobalObject& state)
 {
     auto& globalObject = *JSC::jsCast<JSDOMGlobalObject*>(&state);
@@ -136,6 +130,8 @@ static ExceptionOr<std::unique_ptr<CryptoAlgorithmParameters>> normalizeCryptoAl
     auto params = convertDictionary<CryptoAlgorithmParameters>(state, value.get());
     if (UNLIKELY(params.hasException(scope)))
         return Exception { ExceptionCode::ExistingExceptionError };
+    if (params.returnValue().name == "RSAES-PKCS1-v1_5"_s || params.returnValue().name == "rsaes-pkcs1-v1_5"_s)
+        return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
 
     auto identifier = CryptoAlgorithmRegistry::singleton().identifier(params.returnValue().name);
     if (UNLIKELY(!identifier))
@@ -153,10 +149,7 @@ static ExceptionOr<std::unique_ptr<CryptoAlgorithmParameters>> normalizeCryptoAl
     case Operations::Decrypt:
         switch (*identifier) {
         case CryptoAlgorithmIdentifier::RSAES_PKCS1_v1_5:
-            if (isRSAESPKCSWebCryptoDeprecated(state))
-                return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
-            result = makeUnique<CryptoAlgorithmParameters>(params.releaseReturnValue());
-            break;
+            return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
         case CryptoAlgorithmIdentifier::RSA_OAEP: {
             auto params = convertDictionary<CryptoAlgorithmRsaOaepParams>(state, value.get());
             if (UNLIKELY(params.hasException(scope)))
@@ -227,27 +220,21 @@ static ExceptionOr<std::unique_ptr<CryptoAlgorithmParameters>> normalizeCryptoAl
     case Operations::Digest:
         switch (*identifier) {
         case CryptoAlgorithmIdentifier::SHA_1:
-        case CryptoAlgorithmIdentifier::SHA_224:
         case CryptoAlgorithmIdentifier::SHA_256:
         case CryptoAlgorithmIdentifier::SHA_384:
         case CryptoAlgorithmIdentifier::SHA_512:
             result = makeUnique<CryptoAlgorithmParameters>(params.releaseReturnValue());
             break;
+        case CryptoAlgorithmIdentifier::DEPRECATED_SHA_224:
+            RELEASE_ASSERT_NOT_REACHED_WITH_MESSAGE(sha224DeprecationMessage);
         default:
             return Exception { ExceptionCode::NotSupportedError };
         }
         break;
     case Operations::GenerateKey:
         switch (*identifier) {
-        case CryptoAlgorithmIdentifier::RSAES_PKCS1_v1_5: {
-            if (isRSAESPKCSWebCryptoDeprecated(state))
-                return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
-            auto params = convertDictionary<CryptoAlgorithmRsaKeyGenParams>(state, value.get());
-            if (UNLIKELY(params.hasException(scope)))
-                return Exception { ExceptionCode::ExistingExceptionError };
-            result = makeUnique<CryptoAlgorithmRsaKeyGenParams>(params.releaseReturnValue());
-            break;
-        }
+        case CryptoAlgorithmIdentifier::RSAES_PKCS1_v1_5:
+            return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
         case CryptoAlgorithmIdentifier::RSASSA_PKCS1_v1_5:
         case CryptoAlgorithmIdentifier::RSA_PSS:
         case CryptoAlgorithmIdentifier::RSA_OAEP: {
@@ -369,10 +356,7 @@ static ExceptionOr<std::unique_ptr<CryptoAlgorithmParameters>> normalizeCryptoAl
     case Operations::ImportKey:
         switch (*identifier) {
         case CryptoAlgorithmIdentifier::RSAES_PKCS1_v1_5:
-            if (isRSAESPKCSWebCryptoDeprecated(state))
-                return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
-            result = makeUnique<CryptoAlgorithmParameters>(params.releaseReturnValue());
-            break;
+            return Exception { ExceptionCode::NotSupportedError, "RSAES-PKCS1-v1_5 support is deprecated"_s };
         case CryptoAlgorithmIdentifier::RSASSA_PKCS1_v1_5:
         case CryptoAlgorithmIdentifier::RSA_PSS:
         case CryptoAlgorithmIdentifier::RSA_OAEP: {
@@ -428,7 +412,7 @@ static ExceptionOr<std::unique_ptr<CryptoAlgorithmParameters>> normalizeCryptoAl
             result = makeUnique<CryptoAlgorithmParameters>(params.releaseReturnValue());
             break;
         case CryptoAlgorithmIdentifier::SHA_1:
-        case CryptoAlgorithmIdentifier::SHA_224:
+        case CryptoAlgorithmIdentifier::DEPRECATED_SHA_224:
         case CryptoAlgorithmIdentifier::SHA_256:
         case CryptoAlgorithmIdentifier::SHA_384:
         case CryptoAlgorithmIdentifier::SHA_512:
@@ -602,7 +586,7 @@ static bool isSupportedExportKey(JSGlobalObject& state, CryptoAlgorithmIdentifie
 {
     switch (identifier) {
     case CryptoAlgorithmIdentifier::RSAES_PKCS1_v1_5:
-        return !isRSAESPKCSWebCryptoDeprecated(state);
+        return false;
     case CryptoAlgorithmIdentifier::AES_CFB:
         return !isAESCFBWebCryptoDeprecated(state);
     case CryptoAlgorithmIdentifier::RSASSA_PKCS1_v1_5:
@@ -943,9 +927,8 @@ void SubtleCrypto::deriveKey(JSC::JSGlobalObject& state, AlgorithmIdentifier&& a
 
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
-    UseCryptoKit useCryptoKit = scriptExecutionContext()->settingsValues().cryptoKitEnabled ? UseCryptoKit::Yes : UseCryptoKit::No;
     WeakPtr weakThis { *this };
-    auto callback = [index, weakThis, importAlgorithm = WTFMove(importAlgorithm), importParams = crossThreadCopyImportParams(*importParams), extractable, keyUsagesBitmap, useCryptoKit](const Vector<uint8_t>& derivedKey) mutable {
+    auto callback = [index, weakThis, importAlgorithm = WTFMove(importAlgorithm), importParams = crossThreadCopyImportParams(*importParams), extractable, keyUsagesBitmap](const Vector<uint8_t>& derivedKey) mutable {
         // FIXME: https://bugs.webkit.org/show_bug.cgi?id=169395
         KeyData data = derivedKey;
         auto callback = [index, weakThis](CryptoKey& key) mutable {
@@ -962,7 +945,7 @@ void SubtleCrypto::deriveKey(JSC::JSGlobalObject& state, AlgorithmIdentifier&& a
                 rejectWithException(promise.releaseNonNull(), ec);
         };
 
-        importAlgorithm->importKey(SubtleCrypto::KeyFormat::Raw, WTFMove(data), *importParams, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+        importAlgorithm->importKey(SubtleCrypto::KeyFormat::Raw, WTFMove(data), *importParams, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
     };
     auto exceptionCallback = [index, weakThis](ExceptionCode ec) mutable {
         if (auto promise = getPromise(index, weakThis))
@@ -1031,7 +1014,6 @@ void SubtleCrypto::importKey(JSC::JSGlobalObject& state, KeyFormat format, KeyDa
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     WeakPtr weakThis { *this };
-    UseCryptoKit useCryptoKit = scriptExecutionContext()->settingsValues().cryptoKitEnabled ? UseCryptoKit::Yes : UseCryptoKit::No;
     auto callback = [index, weakThis](CryptoKey& key) mutable {
         if (auto promise = getPromise(index, weakThis)) {
             if ((key.type() == CryptoKeyType::Private || key.type() == CryptoKeyType::Secret) && !key.usagesBitmap()) {
@@ -1049,7 +1031,7 @@ void SubtleCrypto::importKey(JSC::JSGlobalObject& state, KeyFormat format, KeyDa
     // The 11 December 2014 version of the specification suggests we should perform the following task asynchronously:
     // https://www.w3.org/TR/WebCryptoAPI/#SubtleCrypto-method-importKey
     // It is not beneficial for less time consuming operations. Therefore, we perform it synchronously.
-    algorithm->importKey(format, WTFMove(keyData), *params, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+    algorithm->importKey(format, WTFMove(keyData), *params, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
 }
 
 void SubtleCrypto::exportKey(KeyFormat format, CryptoKey& key, Ref<DeferredPromise>&& promise)
@@ -1069,7 +1051,6 @@ void SubtleCrypto::exportKey(KeyFormat format, CryptoKey& key, Ref<DeferredPromi
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     WeakPtr weakThis { *this };
-    UseCryptoKit useCryptoKit = scriptExecutionContext()->settingsValues().cryptoKitEnabled ? UseCryptoKit::Yes : UseCryptoKit::No;
     auto callback = [index, weakThis](SubtleCrypto::KeyFormat format, KeyData&& key) mutable {
         if (auto promise = getPromise(index, weakThis)) {
             switch (format) {
@@ -1095,7 +1076,7 @@ void SubtleCrypto::exportKey(KeyFormat format, CryptoKey& key, Ref<DeferredPromi
     // The 11 December 2014 version of the specification suggests we should perform the following task asynchronously:
     // https://www.w3.org/TR/WebCryptoAPI/#SubtleCrypto-method-exportKey
     // It is not beneficial for less time consuming operations. Therefore, we perform it synchronously.
-    algorithm->exportKey(format, key, WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+    algorithm->exportKey(format, key, WTFMove(callback), WTFMove(exceptionCallback));
 }
 
 void SubtleCrypto::wrapKey(JSC::JSGlobalObject& state, KeyFormat format, CryptoKey& key, CryptoKey& wrappingKey, AlgorithmIdentifier&& wrapAlgorithmIdentifier, Ref<DeferredPromise>&& promise)
@@ -1144,8 +1125,7 @@ void SubtleCrypto::wrapKey(JSC::JSGlobalObject& state, KeyFormat format, CryptoK
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     WeakPtr weakThis { *this };
-    UseCryptoKit useCryptoKit = scriptExecutionContext()->settingsValues().cryptoKitEnabled ? UseCryptoKit::Yes : UseCryptoKit::No;
-    auto callback = [index, weakThis, wrapAlgorithm, wrappingKey = Ref { wrappingKey }, wrapParams = WTFMove(wrapParams), isEncryption, context, workQueue = m_workQueue, useCryptoKit](SubtleCrypto::KeyFormat format, KeyData&& key) mutable {
+    auto callback = [index, weakThis, wrapAlgorithm, wrappingKey = Ref { wrappingKey }, wrapParams = WTFMove(wrapParams), isEncryption, context, workQueue = m_workQueue](SubtleCrypto::KeyFormat format, KeyData&& key) mutable {
         if (!weakThis)
             return;
         RefPtr promise = weakThis->m_pendingPromises.get(index);
@@ -1183,7 +1163,7 @@ void SubtleCrypto::wrapKey(JSC::JSGlobalObject& state, KeyFormat format, CryptoK
             // The 11 December 2014 version of the specification suggests we should perform the following task asynchronously:
             // https://www.w3.org/TR/WebCryptoAPI/#SubtleCrypto-method-wrapKey
             // It is not beneficial for less time consuming operations. Therefore, we perform it synchronously.
-            wrapAlgorithm->wrapKey(wrappingKey.get(), WTFMove(bytes), WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+            wrapAlgorithm->wrapKey(wrappingKey.get(), WTFMove(bytes), WTFMove(callback), WTFMove(exceptionCallback));
             return;
         }
         // The following operation should be performed asynchronously.
@@ -1195,7 +1175,7 @@ void SubtleCrypto::wrapKey(JSC::JSGlobalObject& state, KeyFormat format, CryptoK
     };
 
     // The following operation should be performed synchronously.
-    exportAlgorithm->exportKey(format, key, WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+    exportAlgorithm->exportKey(format, key, WTFMove(callback), WTFMove(exceptionCallback));
 }
 
 void SubtleCrypto::unwrapKey(JSC::JSGlobalObject& state, KeyFormat format, BufferSource&& wrappedKeyBufferSource, CryptoKey& unwrappingKey, AlgorithmIdentifier&& unwrapAlgorithmIdentifier, AlgorithmIdentifier&& unwrappedKeyAlgorithmIdentifier, bool extractable, Vector<CryptoKeyUsage>&& keyUsages, Ref<DeferredPromise>&& promise)
@@ -1250,8 +1230,7 @@ void SubtleCrypto::unwrapKey(JSC::JSGlobalObject& state, KeyFormat format, Buffe
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     WeakPtr weakThis { *this };
-    UseCryptoKit useCryptoKit = scriptExecutionContext()->settingsValues().cryptoKitEnabled ? UseCryptoKit::Yes : UseCryptoKit::No;
-    auto callback = [index, weakThis, format, importAlgorithm, unwrappedKeyAlgorithm = crossThreadCopyImportParams(*unwrappedKeyAlgorithm), extractable, keyUsagesBitmap, useCryptoKit](const Vector<uint8_t>& bytes) mutable {
+    auto callback = [index, weakThis, format, importAlgorithm, unwrappedKeyAlgorithm = crossThreadCopyImportParams(*unwrappedKeyAlgorithm), extractable, keyUsagesBitmap](const Vector<uint8_t>& bytes) mutable {
         if (!weakThis)
             return;
         RefPtr promise = weakThis->m_pendingPromises.get(index);
@@ -1303,7 +1282,7 @@ void SubtleCrypto::unwrapKey(JSC::JSGlobalObject& state, KeyFormat format, Buffe
         };
 
         // The following operation should be performed synchronously.
-        importAlgorithm->importKey(format, WTFMove(keyData), *unwrappedKeyAlgorithm, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+        importAlgorithm->importKey(format, WTFMove(keyData), *unwrappedKeyAlgorithm, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
     };
     auto exceptionCallback = [index, weakThis](ExceptionCode ec) mutable {
         if (auto promise = getPromise(index, weakThis))
@@ -1317,7 +1296,7 @@ void SubtleCrypto::unwrapKey(JSC::JSGlobalObject& state, KeyFormat format, Buffe
         RefPtr context = weakThis->scriptExecutionContext();
         if (!context)
             return;
-        unwrapAlgorithm->unwrapKey(unwrappingKey, WTFMove(wrappedKey), WTFMove(callback), WTFMove(exceptionCallback), useCryptoKit);
+        unwrapAlgorithm->unwrapKey(unwrappingKey, WTFMove(wrappedKey), WTFMove(callback), WTFMove(exceptionCallback));
         return;
     }
 

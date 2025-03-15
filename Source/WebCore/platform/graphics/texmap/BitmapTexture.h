@@ -31,10 +31,13 @@
 #include "IntPoint.h"
 #include "IntRect.h"
 #include "IntSize.h"
+#include "PixelFormat.h"
 #include "TextureMapperGLHeaders.h"
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+
+typedef void *EGLImage;
 
 namespace WebCore {
 
@@ -50,16 +53,22 @@ public:
         DepthBuffer = 1 << 1,
     };
 
-    static Ref<BitmapTexture> create(const IntSize& size, OptionSet<Flags> flags = { }, GLint internalFormat = GL_DONT_CARE)
+    static Ref<BitmapTexture> create(const IntSize& size, OptionSet<Flags> flags = { })
     {
-        return adoptRef(*new BitmapTexture(size, flags, internalFormat));
+        return adoptRef(*new BitmapTexture(size, flags));
     }
+
+#if USE(GBM)
+    static Ref<BitmapTexture> create(EGLImage image, OptionSet<Flags> flags = { })
+    {
+        return adoptRef(*new BitmapTexture(image, flags));
+    }
+#endif
 
     WEBCORE_EXPORT ~BitmapTexture();
 
     const IntSize& size() const { return m_size; };
     OptionSet<Flags> flags() const { return m_flags; }
-    GLint internalFormat() const { return m_internalFormat; }
     bool isOpaque() const { return !m_flags.contains(Flags::SupportsAlpha); }
 
     void bindAsSurface();
@@ -69,8 +78,9 @@ public:
 
     void updateContents(NativeImage*, const IntRect&, const IntPoint& offset);
     void updateContents(GraphicsLayer*, const IntRect& target, const IntPoint& offset, float scale = 1);
-    void updateContents(const void*, const IntRect& target, const IntPoint& offset, int bytesPerLine);
+    void updateContents(const void* srcData, const IntRect& targetRect, const IntPoint& sourceOffset, int bytesPerLine, PixelFormat);
 
+    void swapTexture(BitmapTexture&);
     void reset(const IntSize&, OptionSet<Flags> = { });
 
     int numberOfBytes() const { return size().width() * size().height() * 32 >> 3; }
@@ -84,10 +94,13 @@ public:
     void copyFromExternalTexture(BitmapTexture& sourceTexture, const IntRect& sourceRect, const IntSize& destinationOffset);
     void copyFromExternalTexture(GLuint sourceTextureID, const IntRect& targetRect, const IntSize& sourceOffset);
 
-    OptionSet<TextureMapperFlags> colorConvertFlags() const { return m_colorConvertFlags; }
+    OptionSet<TextureMapperFlags> colorConvertFlags() const;
 
 private:
-    BitmapTexture(const IntSize&, OptionSet<Flags>, GLint internalFormat);
+    BitmapTexture(const IntSize&, OptionSet<Flags>);
+#if USE(GBM)
+    BitmapTexture(EGLImage, OptionSet<Flags>);
+#endif
 
     void clearIfNeeded();
     void createFboIfNeeded();
@@ -101,10 +114,8 @@ private:
     bool m_stencilBound { false };
     bool m_shouldClear { true };
     ClipStack m_clipStack;
-    OptionSet<TextureMapperFlags> m_colorConvertFlags;
     RefPtr<const FilterOperation> m_filterOperation;
-    GLint m_internalFormat { 0 };
-    GLenum m_format { 0 };
+    PixelFormat m_pixelFormat { PixelFormat::RGBA8 };
 };
 
 } // namespace WebCore

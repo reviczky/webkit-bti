@@ -60,7 +60,7 @@ public:
 
     virtual ~RemoteComputePassEncoder();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -75,6 +75,10 @@ private:
     RemoteComputePassEncoder& operator=(RemoteComputePassEncoder&&) = delete;
 
     WebCore::WebGPU::ComputePassEncoder& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::ComputePassEncoder> protectedBacking();
+
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
+    Ref<WebGPU::ObjectHeap> protectedObjectHeap() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

@@ -253,16 +253,12 @@ ViewLegacy::ViewLegacy(struct wpe_view_backend* backend, const API::PageConfigur
 #if ENABLE(FULLSCREEN_API) && WPE_CHECK_VERSION(1, 11, 1)
     static struct wpe_view_backend_fullscreen_client s_fullscreenClient = {
         // did_enter_fullscreen
-        [](void* data)
+        [](void*)
         {
-            auto& view = *reinterpret_cast<ViewLegacy*>(data);
-            view.page().fullScreenManager()->didEnterFullScreen();
         },
         // did_exit_fullscreen
-        [](void* data)
+        [](void*)
         {
-            auto& view = *reinterpret_cast<ViewLegacy*>(data);
-            view.page().fullScreenManager()->didExitFullScreen();
         },
         // request_enter_fullscreen
         [](void* data)
@@ -286,8 +282,8 @@ ViewLegacy::ViewLegacy(struct wpe_view_backend* backend, const API::PageConfigur
 
     wpe_view_backend_initialize(m_backend);
 
-    auto& openerInfo = m_pageProxy->configuration().openerInfo();
-    m_pageProxy->initializeWebPage(openerInfo ? openerInfo->site : Site(aboutBlankURL()));
+    auto& pageConfiguration = m_pageProxy->configuration();
+    m_pageProxy->initializeWebPage(pageConfiguration.openedSite(), pageConfiguration.initialSandboxFlags());
 
     viewsVector().append(this);
 }
@@ -404,7 +400,9 @@ WebKit::WebPageProxy* ViewLegacy::platformWebPageProxyForGamepadInput()
 
 void ViewLegacy::callAfterNextPresentationUpdate(CompletionHandler<void()>&& callback)
 {
-    RELEASE_ASSERT(m_pageProxy->drawingArea());
+    if (!m_pageProxy->drawingArea())
+        return callback();
+
     downcast<DrawingAreaProxyCoordinatedGraphics>(*m_pageProxy->drawingArea()).dispatchAfterEnsuringDrawing(WTFMove(callback));
 }
 

@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2022 Metrological Group B.V.
- * Copyright (C) 2022 Igalia S.L.
+ * Copyright (C) 2024 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,101 +25,38 @@
 
 #include "config.h"
 #include "RemoteGraphicsContextGLProxy.h"
-#include "RemoteRenderingBackendProxy.h"
 
-#if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(GBM)
-
-// This is a standalone check of additional requirements in this implementation,
-// avoiding having to place an overwhelming amount of build guards over the rest of the code.
-#if !USE(NICOSIA) || !USE(TEXTURE_MAPPER_DMABUF)
-#error RemoteGraphicsContextGLProxyGBM implementation also depends on USE_NICOSIA and USE_TEXTURE_MAPPER_DMABUF
-#endif
-
-#include "WebProcess.h"
-#include <WebCore/DMABufObject.h>
-#include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
-#include <WebCore/NicosiaContentLayer.h>
+#if ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(GBM)
+#include <WebCore/CoordinatedPlatformLayerBufferDMABuf.h>
+#include <WebCore/DMABufBuffer.h>
+#include <WebCore/GraphicsLayerContentsDisplayDelegateCoordinated.h>
 #include <WebCore/TextureMapperFlags.h>
-#include <WebCore/TextureMapperPlatformLayerProxyDMABuf.h>
 
 namespace WebKit {
-
-class NicosiaDisplayDelegate final : public WebCore::GraphicsLayerContentsDisplayDelegate, public Nicosia::ContentLayer::Client {
-public:
-    explicit NicosiaDisplayDelegate(bool isOpaque);
-    virtual ~NicosiaDisplayDelegate();
-
-    void present(WebCore::DMABufObject&& dmabufObject)
-    {
-        m_pending = WTFMove(dmabufObject);
-    }
-
-private:
-    // WebCore::GraphicsLayerContentsDisplayDelegate
-    Nicosia::PlatformLayer* platformLayer() const final;
-
-    // Nicosia::ContentLayer::Client
-    void swapBuffersIfNeeded() final;
-
-    bool m_isOpaque { false };
-    RefPtr<Nicosia::ContentLayer> m_contentLayer;
-    WebCore::DMABufObject m_pending { WebCore::DMABufObject(0) };
-};
-
-NicosiaDisplayDelegate::NicosiaDisplayDelegate(bool isOpaque)
-    : m_isOpaque(isOpaque)
-{
-    m_contentLayer = Nicosia::ContentLayer::create(*this, adoptRef(*new WebCore::TextureMapperPlatformLayerProxyDMABuf(WebCore::TextureMapperPlatformLayerProxy::ContentType::WebGL)));
-}
-
-NicosiaDisplayDelegate::~NicosiaDisplayDelegate()
-{ }
-
-Nicosia::PlatformLayer* NicosiaDisplayDelegate::platformLayer() const
-{
-    return m_contentLayer.get();
-}
-
-void NicosiaDisplayDelegate::swapBuffersIfNeeded()
-{
-    auto& proxy = m_contentLayer->proxy();
-    ASSERT(is<WebCore::TextureMapperPlatformLayerProxyDMABuf>(proxy));
-
-    if (!!m_pending.handle) {
-        Locker locker { proxy.lock() };
-
-        OptionSet<WebCore::TextureMapperFlags> flags = WebCore::TextureMapperFlags::ShouldFlipTexture;
-        if (!m_isOpaque)
-            flags.add(WebCore::TextureMapperFlags::ShouldBlend);
-
-        downcast<WebCore::TextureMapperPlatformLayerProxyDMABuf>(proxy).pushDMABuf(WTFMove(m_pending),
-            [](auto&& object) { return object; }, flags);
-    }
-    m_pending = WebCore::DMABufObject(0);
-}
+using namespace WebCore;
 
 class RemoteGraphicsContextGLProxyGBM final : public RemoteGraphicsContextGLProxy {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RemoteGraphicsContextGLProxyGBM);
 public:
-    RemoteGraphicsContextGLProxyGBM(const WebCore::GraphicsContextGLAttributes&, WTF::SerialFunctionDispatcher&);
     virtual ~RemoteGraphicsContextGLProxyGBM() = default;
 
 private:
+    friend class RemoteGraphicsContextGLProxy;
+    explicit RemoteGraphicsContextGLProxyGBM(const GraphicsContextGLAttributes& attributes)
+        : RemoteGraphicsContextGLProxy(attributes)
+        , m_layerContentsDisplayDelegate(GraphicsLayerContentsDisplayDelegateCoordinated::create())
+    {
+    }
+
     // WebCore::GraphicsContextGL
-    RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() final;
+    RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() final { return m_layerContentsDisplayDelegate.copyRef(); }
     void prepareForDisplay() final;
 
-    Ref<NicosiaDisplayDelegate> m_layerContentsDisplayDelegate;
+    Ref<GraphicsLayerContentsDisplayDelegate> m_layerContentsDisplayDelegate;
+    RefPtr<DMABufBuffer> m_drawingBuffer;
+    RefPtr<DMABufBuffer> m_displayBuffer;
 };
-
-RemoteGraphicsContextGLProxyGBM::RemoteGraphicsContextGLProxyGBM(const WebCore::GraphicsContextGLAttributes& attributes, WTF::SerialFunctionDispatcher& dispatcher)
-    : RemoteGraphicsContextGLProxy(attributes, dispatcher)
-    , m_layerContentsDisplayDelegate(adoptRef(*new NicosiaDisplayDelegate(!attributes.alpha)))
-{ }
-
-RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> RemoteGraphicsContextGLProxyGBM::layerContentsDisplayDelegate()
-{
-    return m_layerContentsDisplayDelegate.copyRef();
-}
 
 void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
 {
@@ -133,15 +69,28 @@ void RemoteGraphicsContextGLProxyGBM::prepareForDisplay()
         return;
     }
 
-    auto& [dmabufObject] = sendResult.reply();
-    m_layerContentsDisplayDelegate->present(WTFMove(dmabufObject));
+    auto [bufferID, bufferAttributes, fenceFD] = sendResult.takeReply();
+
+    if (bufferAttributes || (m_drawingBuffer && m_drawingBuffer->id() == bufferID))
+        std::swap(m_drawingBuffer, m_displayBuffer);
+
+    if (bufferAttributes)
+        m_displayBuffer = DMABufBuffer::create(bufferID, WTFMove(*bufferAttributes));
+
+    if (!m_displayBuffer)
+        return;
+
+    OptionSet<TextureMapperFlags> flags = TextureMapperFlags::ShouldFlipTexture;
+    if (contextAttributes().alpha)
+        flags.add(TextureMapperFlags::ShouldBlend);
+    m_layerContentsDisplayDelegate->setDisplayBuffer(CoordinatedPlatformLayerBufferDMABuf::create(Ref { *m_displayBuffer }, flags, WTFMove(fenceFD)));
 }
 
-Ref<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::platformCreate(const WebCore::GraphicsContextGLAttributes& attributes, SerialFunctionDispatcher& dispatcher)
+Ref<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::platformCreate(const GraphicsContextGLAttributes& attributes)
 {
-    return adoptRef(*new RemoteGraphicsContextGLProxyGBM(attributes, dispatcher));
+    return adoptRef(*new RemoteGraphicsContextGLProxyGBM(attributes));
 }
 
 } // namespace WebKit
 
-#endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(GBM)
+#endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && USE(COORDINATED_GRAPHICS) && USE(GBM)

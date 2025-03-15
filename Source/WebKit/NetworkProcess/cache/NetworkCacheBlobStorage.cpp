@@ -42,7 +42,7 @@ namespace WebKit {
 namespace NetworkCache {
 
 BlobStorage::BlobStorage(const String& blobDirectoryPath, Salt salt)
-    : m_blobDirectoryPath(blobDirectoryPath)
+    : m_blobDirectoryPath(crossThreadCopy(blobDirectoryPath))
     , m_salt(salt)
 {
 }
@@ -79,7 +79,7 @@ void BlobStorage::synchronize()
 String BlobStorage::blobPathForHash(const SHA1::Digest& hash) const
 {
     auto hashAsString = SHA1::hexDigest(hash);
-    return FileSystem::pathByAppendingComponent(blobDirectoryPathIsolatedCopy(), StringView::fromLatin1(hashAsString.data()));
+    return FileSystem::pathByAppendingComponent(blobDirectoryPathIsolatedCopy(), StringView::fromLatin1(byteCast<LChar>(hashAsString.span())));
 }
 
 BlobStorage::Blob BlobStorage::add(const String& path, const Data& data)

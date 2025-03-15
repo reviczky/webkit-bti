@@ -58,12 +58,12 @@ uint64_t PageClientImpl::viewWidget()
 #endif
 
 // PageClient's pure virtual functions
-std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
+Ref<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
 {
 #if USE(GRAPHICS_LAYER_WC)
-    return makeUnique<DrawingAreaProxyWC>(*m_view.page(), webProcessProxy);
+    return DrawingAreaProxyWC::create(*m_view.page(), webProcessProxy);
 #else
-    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(*m_view.page(), webProcessProxy);
+    return DrawingAreaProxyCoordinatedGraphics::create(*m_view.page(), webProcessProxy);
 #endif
 }
 
@@ -145,10 +145,6 @@ void PageClientImpl::setCursorHiddenUntilMouseMoves(bool)
 {
 }
 
-void PageClientImpl::didChangeViewportProperties(const WebCore::ViewportAttributes& attributes)
-{
-}
-
 void PageClientImpl::registerEditCommand(Ref<WebEditCommandProxy>&&, UndoOrRedo)
 {
 }
@@ -181,6 +177,11 @@ WebCore::FloatRect PageClientImpl::convertToUserSpace(const WebCore::FloatRect& 
 }
 
 WebCore::IntPoint PageClientImpl::screenToRootView(const WebCore::IntPoint& point)
+{
+    return point;
+}
+
+WebCore::IntPoint PageClientImpl::rootViewToScreen(const WebCore::IntPoint& point)
 {
     return point;
 }
@@ -246,6 +247,10 @@ WebFullScreenManagerProxyClient& PageClientImpl::fullScreenManagerProxyClient()
     return *(WebFullScreenManagerProxyClient*)this;
 }
 
+void PageClientImpl::setFullScreenClientForTesting(std::unique_ptr<WebFullScreenManagerProxyClient>&&)
+{
+}
+
 void PageClientImpl::closeFullScreenManager()
 {
     m_view.closeFullScreenManager();
@@ -256,24 +261,24 @@ bool PageClientImpl::isFullScreen()
     return m_view.isFullScreen();
 }
 
-void PageClientImpl::enterFullScreen()
+void PageClientImpl::enterFullScreen(WebCore::FloatSize, CompletionHandler<void(bool)>&& completionHandler)
 {
-    m_view.enterFullScreen();
+    m_view.enterFullScreen(WTFMove(completionHandler));
 }
 
-void PageClientImpl::exitFullScreen()
+void PageClientImpl::exitFullScreen(CompletionHandler<void()>&& completionHandler)
 {
-    m_view.exitFullScreen();
+    m_view.exitFullScreen(WTFMove(completionHandler));
 }
 
-void PageClientImpl::beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame)
+void PageClientImpl::beganEnterFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame, CompletionHandler<void(bool)>&& completionHandler)
 {
-    m_view.beganEnterFullScreen(initialFrame, finalFrame);
+    m_view.beganEnterFullScreen(initialFrame, finalFrame, WTFMove(completionHandler));
 }
 
-void PageClientImpl::beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame)
+void PageClientImpl::beganExitFullScreen(const WebCore::IntRect& initialFrame, const WebCore::IntRect& finalFrame, CompletionHandler<void()>&& completionHandler)
 {
-    m_view.beganExitFullScreen(initialFrame, finalFrame);
+    m_view.beganExitFullScreen(initialFrame, finalFrame, WTFMove(completionHandler));
 }
 #endif
 

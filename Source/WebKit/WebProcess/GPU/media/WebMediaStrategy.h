@@ -39,6 +39,8 @@ public:
 #endif
 
 private:
+    bool isWebMediaStrategy() const final { return true; }
+
 #if ENABLE(WEB_AUDIO)
     Ref<WebCore::AudioDestination> createAudioDestination(WebCore::AudioIOCallback&,
         const String& inputDeviceId, unsigned numberOfInputChannels, unsigned numberOfOutputChannels, float sampleRate) override;
@@ -48,6 +50,9 @@ private:
 #if ENABLE(MEDIA_SOURCE)
     void enableMockMediaSource() final;
 #endif
+#if PLATFORM(COCOA) && ENABLE(MEDIA_RECORDER)
+    std::unique_ptr<WebCore::MediaRecorderPrivateWriter> createMediaRecorderPrivateWriter(const String&, WebCore::MediaRecorderPrivateWriterListener&) const final;
+#endif
 
 #if ENABLE(GPU_PROCESS)
     std::atomic<bool> m_useGPUProcess { false };
@@ -55,3 +60,7 @@ private:
 };
 
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::WebMediaStrategy) \
+    static bool isType(const WebCore::MediaStrategy& strategy) { return strategy.isWebMediaStrategy(); } \
+SPECIALIZE_TYPE_TRAITS_END()

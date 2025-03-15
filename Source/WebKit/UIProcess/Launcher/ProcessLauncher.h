@@ -27,6 +27,7 @@
 
 #include "Connection.h"
 #include <WebCore/ProcessIdentifier.h>
+#include <wtf/CheckedPtr.h>
 #include <wtf/HashMap.h>
 #include <wtf/ProcessID.h>
 #include <wtf/RefPtr.h>
@@ -124,7 +125,7 @@ public:
     public:
         virtual ~Client() { }
         
-        virtual void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier) = 0;
+        virtual void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier&&) = 0;
         virtual bool shouldConfigureJSCForTesting() const { return false; }
         virtual bool isJITEnabled() const { return true; }
         virtual bool shouldEnableSharedArrayBuffer() const { return false; }
@@ -133,6 +134,12 @@ public:
 #if PLATFORM(COCOA)
         virtual RefPtr<XPCEventHandler> xpcEventHandler() const { return nullptr; }
 #endif
+
+        // CanMakeCheckedPtr.
+        virtual uint32_t checkedPtrCount() const = 0;
+        virtual uint32_t checkedPtrCountWithoutThreadCheck() const = 0;
+        virtual void incrementCheckedPtrCount() const = 0;
+        virtual void decrementCheckedPtrCount() const = 0;
     };
 
     static Ref<ProcessLauncher> create(Client* client, LaunchOptions&& launchOptions)
@@ -162,7 +169,7 @@ private:
 
     void launchProcess();
     void finishLaunchingProcess(ASCIILiteral name);
-    void didFinishLaunchingProcess(ProcessID, IPC::Connection::Identifier);
+    void didFinishLaunchingProcess(ProcessID, IPC::Connection::Identifier&&);
 
     void platformInvalidate();
     void platformDestroy();
@@ -171,7 +178,7 @@ private:
     void terminateXPCConnection();
 #endif
 
-    Client* m_client;
+    CheckedPtr<Client> m_client;
 
 #if PLATFORM(COCOA)
     OSObjectPtr<xpc_connection_t> m_xpcConnection;
@@ -197,7 +204,6 @@ private:
 
 #if USE(GLIB) && OS(LINUX)
     GSocketMonitor m_socketMonitor;
-    int m_pidServerSocket { -1 };
 #endif
 };
 

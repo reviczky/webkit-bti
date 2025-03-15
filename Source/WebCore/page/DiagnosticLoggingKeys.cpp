@@ -771,6 +771,16 @@ String DiagnosticLoggingKeys::mediaAudioCodecWatchTimeKey()
     return "watchtimeByAudioCodec"_s;
 }
 
+String DiagnosticLoggingKeys::mediaBufferingWatchTimeKey()
+{
+    return "watchtimeBuffering"_s;
+}
+
+String DiagnosticLoggingKeys::mediaTextTrackWatchTimeKey()
+{
+    return "watchtimeTextTrack"_s;
+}
+
 String DiagnosticLoggingKeys::secondsKey()
 {
     return "seconds"_s;
@@ -789,6 +799,21 @@ String DiagnosticLoggingKeys::videoCodecKey()
 String DiagnosticLoggingKeys::audioCodecKey()
 {
     return "audioCodec"_s;
+}
+
+String DiagnosticLoggingKeys::textTrackTypeKey()
+{
+    return "textTrackType"_s;
+}
+
+String DiagnosticLoggingKeys::textTrackKindKey()
+{
+    return "textTrackKind"_s;
+}
+
+String DiagnosticLoggingKeys::textTrackModeKey()
+{
+    return "textTrackMode"_s;
 }
 
 } // namespace WebCore

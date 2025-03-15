@@ -33,7 +33,6 @@
 #include "SharedBufferReference.h"
 #include "UndoOrRedo.h"
 #include "WKBundlePageEditorClient.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
 #include "WebPage.h"
 #include "WebPageProxy.h"
@@ -88,7 +87,7 @@ bool WebEditorClient::isSelectTrailingWhitespaceEnabled() const
 
 bool WebEditorClient::isContinuousSpellCheckingEnabled()
 {
-    return WebProcess::singleton().textCheckerState().isContinuousSpellCheckingEnabled;
+    return WebProcess::singleton().textCheckerState().contains(TextCheckerState::ContinuousSpellCheckingEnabled);
 }
 
 void WebEditorClient::toggleContinuousSpellChecking()
@@ -98,7 +97,7 @@ void WebEditorClient::toggleContinuousSpellChecking()
 
 bool WebEditorClient::isGrammarCheckingEnabled()
 {
-    return WebProcess::singleton().textCheckerState().isGrammarCheckingEnabled;
+    return WebProcess::singleton().textCheckerState().contains(TextCheckerState::GrammarCheckingEnabled);
 }
 
 void WebEditorClient::toggleGrammarChecking()
@@ -605,10 +604,6 @@ void WebEditorClient::willChangeSelectionForAccessibility()
 void WebEditorClient::didChangeSelectionForAccessibility()
 {
     m_page->didChangeSelectionForAccessibility();
-}
-
-void WebEditorClient::willSetInputMethodState()
-{
 }
 
 void WebEditorClient::setInputMethodState(Element* element)

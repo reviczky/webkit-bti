@@ -74,9 +74,9 @@ private:
     void setOption(int option, int value) final;
     void sendTo(std::span<const uint8_t>, const rtc::SocketAddress&, const rtc::PacketOptions&) final;
 
-    NetworkRTCProvider& m_rtcProvider;
+    CheckedRef<NetworkRTCProvider> m_rtcProvider;
     WebCore::LibWebRTCSocketIdentifier m_identifier;
-    Ref<NetworkRTCUDPSocketCocoaConnections> m_connections;
+    const Ref<NetworkRTCUDPSocketCocoaConnections> m_connections;
 };
 
 } // namespace WebKit

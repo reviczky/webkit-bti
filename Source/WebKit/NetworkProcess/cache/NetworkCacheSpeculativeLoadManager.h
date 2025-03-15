@@ -31,6 +31,7 @@
 #include "NetworkCache.h"
 #include "NetworkCacheStorage.h"
 #include <WebCore/ResourceRequest.h>
+#include <wtf/CheckedPtr.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
@@ -40,11 +41,6 @@ namespace WebKit {
 namespace NetworkCache {
 class SpeculativeLoadManager;
 }
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::NetworkCache::SpeculativeLoadManager> : std::true_type { };
 }
 
 namespace WebCore {
@@ -60,13 +56,14 @@ class SpeculativeLoad;
 class SubresourceInfo;
 class SubresourcesEntry;
 
-class SpeculativeLoadManager : public CanMakeWeakPtr<SpeculativeLoadManager> {
+class SpeculativeLoadManager final : public CanMakeWeakPtr<SpeculativeLoadManager>, public CanMakeCheckedPtr<SpeculativeLoadManager> {
     WTF_MAKE_TZONE_ALLOCATED(SpeculativeLoadManager);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(SpeculativeLoadManager);
 public:
     explicit SpeculativeLoadManager(Cache&, Storage&);
     ~SpeculativeLoadManager();
 
-    void registerLoad(const GlobalFrameID&, const WebCore::ResourceRequest&, const Key& resourceKey, std::optional<NavigatingToAppBoundDomain>, bool allowPrivacyProxy, OptionSet<WebCore::AdvancedPrivacyProtections>);
+    void registerLoad(GlobalFrameID, const WebCore::ResourceRequest&, const Key& resourceKey, std::optional<NavigatingToAppBoundDomain>, bool allowPrivacyProxy, OptionSet<WebCore::AdvancedPrivacyProtections>);
     void registerMainResourceLoadResponse(const GlobalFrameID&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 
     typedef Function<void (std::unique_ptr<Entry>)> RetrieveCompletionHandler;
@@ -90,8 +87,10 @@ private:
     static bool canUsePreloadedEntry(const PreloadedEntry&, const WebCore::ResourceRequest& actualRequest);
     static bool canUsePendingPreload(const SpeculativeLoad&, const WebCore::ResourceRequest& actualRequest);
 
-    Cache& m_cache;
-    Storage& m_storage;
+    Ref<Storage> protectedStorage() const;
+
+    WeakRef<Cache> m_cache;
+    ThreadSafeWeakPtr<Storage> m_storage; // Not expected to be null.
 
     class PendingFrameLoad;
     HashMap<GlobalFrameID, RefPtr<PendingFrameLoad>> m_pendingFrameLoads;

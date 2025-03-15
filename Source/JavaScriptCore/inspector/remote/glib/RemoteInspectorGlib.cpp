@@ -212,7 +212,7 @@ void RemoteInspector::pushListingsSoon()
 
     m_pushScheduled = true;
 
-    RunLoop::current().dispatch([this] {
+    RunLoop::protectedCurrent()->dispatch([this] {
         Locker locker { m_mutex };
         if (m_pushScheduled)
             pushListingsNow();
@@ -318,6 +318,16 @@ void RemoteInspector::requestAutomationSession(const char* sessionID, const Clie
 
     m_client->requestAutomationSession(String::fromUTF8(sessionID), capabilities);
     updateClientCapabilities();
+}
+
+void RemoteInspector::setInspectorServerAddress(CString&& address)
+{
+    s_inspectorServerAddress = WTFMove(address);
+}
+
+const CString& RemoteInspector::inspectorServerAddress()
+{
+    return s_inspectorServerAddress;
 }
 
 } // namespace Inspector

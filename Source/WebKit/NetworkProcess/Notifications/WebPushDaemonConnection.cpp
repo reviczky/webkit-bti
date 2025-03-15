@@ -37,22 +37,16 @@ namespace WebKit::WebPushD {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Connection);
 
-Connection::Connection(CString&& machServiceName, NetworkNotificationManager& manager, WebPushDaemonConnectionConfiguration&& configuration)
+Ref<Connection> Connection::create(CString&& machServiceName, WebPushDaemonConnectionConfiguration&& configuration)
+{
+    return adoptRef(*new Connection(WTFMove(machServiceName), WTFMove(configuration)));
+}
+
+Connection::Connection(CString&& machServiceName, WebPushDaemonConnectionConfiguration&& configuration)
     : Daemon::ConnectionToMachService<ConnectionTraits>(WTFMove(machServiceName))
-    , m_notificationManager(manager)
     , m_configuration(WTFMove(configuration))
 {
     LOG(Push, "Creating WebPushD connection to mach service: %s", this->machServiceName().data());
-}
-
-NetworkSession& Connection::networkSession() const
-{
-    return m_notificationManager.networkSession();
-}
-
-void Connection::debugMessage(const String& message)
-{
-    networkSession().networkProcess().broadcastConsoleMessage(networkSession().sessionID(), MessageSource::Other, JSC::MessageLevel::Info, message);
 }
 
 } // namespace WebKit::WebPushD

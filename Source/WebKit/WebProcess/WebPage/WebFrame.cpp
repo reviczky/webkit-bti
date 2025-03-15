@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,7 +45,6 @@
 #include "WKBundleAPICast.h"
 #include "WebChromeClient.h"
 #include "WebContextMenu.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebEventConversion.h"
 #include "WebEventFactory.h"
 #include "WebImage.h"
@@ -69,6 +68,7 @@
 #include <WebCore/EventHandler.h>
 #include <WebCore/File.h>
 #include <WebCore/FocusController.h>
+#include <WebCore/FrameLoader.h>
 #include <WebCore/FrameSnapshotting.h>
 #include <WebCore/HTMLFormElement.h>
 #include <WebCore/HTMLFrameOwnerElement.h>
@@ -84,6 +84,7 @@
 #include <WebCore/JSRange.h>
 #include <WebCore/LocalFrame.h>
 #include <WebCore/LocalFrameView.h>
+#include <WebCore/MouseEventTypes.h>
 #include <WebCore/OriginAccessPatterns.h>
 #include <WebCore/Page.h>
 #include <WebCore/PluginDocument.h>
@@ -132,15 +133,19 @@ void WebFrame::initWithCoreMainFrame(WebPage& page, Frame& coreFrame)
 
 Ref<WebFrame> WebFrame::createSubframe(WebPage& page, WebFrame& parent, const AtomString& frameName, HTMLFrameOwnerElement& ownerElement)
 {
+    auto effectiveSandboxFlags = ownerElement.sandboxFlags();
+    if (RefPtr parentLocalFrame = parent.coreLocalFrame())
+        effectiveSandboxFlags.add(parentLocalFrame->effectiveSandboxFlags());
+
     auto frameID = WebCore::FrameIdentifier::generate();
     auto frame = create(page, frameID);
     ASSERT(page.corePage());
-    auto coreFrame = LocalFrame::createSubframe(*page.corePage(), [frame] (auto& localFrame) {
-        return makeUniqueRef<WebLocalFrameLoaderClient>(localFrame, frame.get(), frame->makeInvalidator());
-    }, frameID, ownerElement);
+    auto coreFrame = LocalFrame::createSubframe(*page.corePage(), [frame] (auto& localFrame, auto& frameLoader) {
+        return makeUniqueRefWithoutRefCountedCheck<WebLocalFrameLoaderClient>(localFrame, frameLoader, frame.get(), frame->makeInvalidator());
+    }, frameID, effectiveSandboxFlags, ownerElement);
     frame->m_coreFrame = coreFrame.get();
 
-    page.send(Messages::WebPageProxy::DidCreateSubframe(parent.frameID(), coreFrame->frameID(), frameName));
+    page.send(Messages::WebPageProxy::DidCreateSubframe(parent.frameID(), coreFrame->frameID(), frameName, effectiveSandboxFlags, ownerElement.scrollingMode()));
 
     coreFrame->tree().setSpecifiedName(frameName);
     ASSERT(ownerElement.document().frame());
@@ -149,14 +154,20 @@ Ref<WebFrame> WebFrame::createSubframe(WebPage& page, WebFrame& parent, const At
     return frame;
 }
 
-Ref<WebFrame> WebFrame::createRemoteSubframe(WebPage& page, WebFrame& parent, WebCore::FrameIdentifier frameID, const String& frameName)
+Ref<WebFrame> WebFrame::createRemoteSubframe(WebPage& page, WebFrame& parent, WebCore::FrameIdentifier frameID, const String& frameName, std::optional<WebCore::FrameIdentifier> openerFrameID)
 {
+    RefPtr<WebCore::Frame> opener;
+    if (openerFrameID) {
+        if (RefPtr openerWebFrame = WebProcess::singleton().webFrame(*openerFrameID))
+            opener = openerWebFrame->coreFrame();
+    }
+
     auto frame = create(page, frameID);
     RELEASE_ASSERT(page.corePage());
     RELEASE_ASSERT(parent.coreFrame());
     auto coreFrame = RemoteFrame::createSubframe(*page.corePage(), [frame] (auto&) {
         return makeUniqueRef<WebRemoteFrameClient>(frame.copyRef(), frame->makeInvalidator());
-    }, frameID, *parent.coreFrame());
+    }, frameID, *parent.coreFrame(), opener.get());
     frame->m_coreFrame = coreFrame.get();
     coreFrame->tree().setSpecifiedName(AtomString(frameName));
     return frame;
@@ -176,9 +187,15 @@ WebFrame::WebFrame(WebPage& page, WebCore::FrameIdentifier frameID)
 WebLocalFrameLoaderClient* WebFrame::localFrameLoaderClient() const
 {
     if (auto* localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get()))
-        return toWebLocalFrameLoaderClient(localFrame->loader().client());
+        return dynamicDowncast<WebLocalFrameLoaderClient>(localFrame->loader().client());
     return nullptr;
 }
+
+RefPtr<WebLocalFrameLoaderClient> WebFrame::protectedLocalFrameLoaderClient() const
+{
+    return localFrameLoaderClient();
+}
+
 WebRemoteFrameClient* WebFrame::remoteFrameClient() const
 {
     if (auto* remoteFrame = dynamicDowncast<RemoteFrame>(m_coreFrame.get()))
@@ -189,7 +206,7 @@ WebRemoteFrameClient* WebFrame::remoteFrameClient() const
 WebFrameLoaderClient* WebFrame::frameLoaderClient() const
 {
     if (auto* localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get()))
-        return toWebLocalFrameLoaderClient(localFrame->loader().client());
+        return dynamicDowncast<WebLocalFrameLoaderClient>(localFrame->loader().client());
     if (auto* remoteFrame = dynamicDowncast<RemoteFrame>(m_coreFrame.get()))
         return static_cast<WebRemoteFrameClient*>(&remoteFrame->client());
     return nullptr;
@@ -223,7 +240,7 @@ RefPtr<WebPage> WebFrame::protectedPage() const
 RefPtr<WebFrame> WebFrame::fromCoreFrame(const Frame& frame)
 {
     if (auto* localFrame = dynamicDowncast<LocalFrame>(frame)) {
-        auto* webLocalFrameLoaderClient = toWebLocalFrameLoaderClient(localFrame->loader().client());
+        auto* webLocalFrameLoaderClient = dynamicDowncast<WebLocalFrameLoaderClient>(localFrame->loader().client());
         if (!webLocalFrameLoaderClient)
             return nullptr;
         return &webLocalFrameLoaderClient->webFrame();
@@ -255,25 +272,45 @@ WebCore::Frame* WebFrame::coreFrame() const
     return m_coreFrame.get();
 }
 
+RefPtr<WebCore::Frame> WebFrame::protectedCoreFrame() const
+{
+    return coreFrame();
+}
+
 FrameInfoData WebFrame::info() const
 {
     RefPtr parent = parentFrame();
+    RefPtr coreFrame = this->coreFrame();
+    RefPtr coreLocalFrame = this->coreLocalFrame();
+    RefPtr document = coreLocalFrame ? coreLocalFrame->document() : nullptr;
 
-    FrameInfoData info {
+    WebFrameMetrics metrics;
+    if (coreFrame) {
+        if (RefPtr coreView = coreFrame->virtualView()) {
+            IsScrollable isScrollable = hasHorizontalScrollbar() || hasVerticalScrollbar() ? IsScrollable::Yes : IsScrollable::No;
+            IntSize contentSize { coreView->contentsWidth(), coreView->contentsHeight() };
+            auto visibleContentSize = coreView->visibleContentRectIncludingScrollbars().size();
+            auto visibleContentSizeExcludingScrollbars = coreView->visibleContentRect().size();
+            metrics = { isScrollable, contentSize, visibleContentSize, visibleContentSizeExcludingScrollbars };
+        }
+    }
+
+    return {
         isMainFrame(),
-        is<WebCore::LocalFrame>(coreFrame()) ? FrameType::Local : FrameType::Remote,
+        coreLocalFrame ? FrameType::Local : FrameType::Remote,
         // FIXME: This should use the full request.
         ResourceRequest(url()),
-        SecurityOriginData::fromFrame(dynamicDowncast<LocalFrame>(m_coreFrame.get())),
-        m_coreFrame ? m_coreFrame->tree().specifiedName().string() : String(),
+        SecurityOriginData::fromFrame(coreLocalFrame.get()),
+        coreFrame ? coreFrame->tree().specifiedName().string() : String(),
         frameID(),
-        parent ? std::optional<WebCore::FrameIdentifier> { parent->frameID() } : std::nullopt,
+        parent ? std::optional { parent->frameID() } : std::nullopt,
+        document ? std::optional { document->identifier() } : std::nullopt,
+        certificateInfo(),
         getCurrentProcessID(),
         isFocused(),
-        coreLocalFrame() ? coreLocalFrame()->loader().errorOccurredInLoading() : false
+        coreLocalFrame ? coreLocalFrame->loader().errorOccurredInLoading() : false,
+        WTFMove(metrics)
     };
-
-    return info;
 }
 
 FrameTreeNodeData WebFrame::frameTreeData() const
@@ -302,16 +339,11 @@ FrameTreeNodeData WebFrame::frameTreeData() const
     return data;
 }
 
-WebCore::FrameIdentifier WebFrame::frameID() const
-{
-    ASSERT(m_frameID);
-    return m_frameID;
-}
-
 void WebFrame::invalidate()
 {
     ASSERT(!WebProcess::singleton().webFrame(m_frameID) || WebProcess::singleton().webFrame(m_frameID) == this);
-    WebProcess::singleton().removeWebFrame(frameID(), m_page ? std::optional<WebPageProxyIdentifier>(m_page->webPageProxyIdentifier()) : std::nullopt);
+    RefPtr page = m_page.get();
+    WebProcess::singleton().removeWebFrame(frameID(), page.get());
     m_coreFrame = nullptr;
 }
 
@@ -369,14 +401,10 @@ void WebFrame::loadDidCommitInAnotherProcess(std::optional<WebCore::LayerHosting
     };
     auto newFrame = ownerElement
         ? WebCore::RemoteFrame::createSubframeWithContentsInAnotherProcess(*corePage, WTFMove(clientCreator), m_frameID, *ownerElement, layerHostingContextIdentifier)
-        : parent ? WebCore::RemoteFrame::createSubframe(*corePage, WTFMove(clientCreator), m_frameID, *parent) : WebCore::RemoteFrame::createMainFrame(*corePage, WTFMove(clientCreator), m_frameID, localFrame->opener());
+        : parent ? WebCore::RemoteFrame::createSubframe(*corePage, WTFMove(clientCreator), m_frameID, *parent, nullptr) : WebCore::RemoteFrame::createMainFrame(*corePage, WTFMove(clientCreator), m_frameID, nullptr);
     if (!parent)
         corePage->setMainFrame(newFrame.copyRef());
-    newFrame->takeWindowProxyFrom(*localFrame);
-
-    newFrame->setOpener(localFrame->opener());
-    for (auto& frame : localFrame->openedFrames())
-        frame->setOpener(newFrame.ptr());
+    newFrame->takeWindowProxyAndOpenerFrom(*localFrame);
 
     newFrame->tree().setSpecifiedName(localFrame->tree().specifiedName());
     if (ownerRenderer)
@@ -401,19 +429,20 @@ void WebFrame::createProvisionalFrame(ProvisionalFrameCreationParameters&& param
         return;
     }
 
-    auto* corePage = remoteFrame->page();
+    RefPtr corePage = remoteFrame->page();
     if (!corePage) {
         ASSERT_NOT_REACHED();
         return;
     }
 
     RefPtr parent = remoteFrame->tree().parent();
-    auto clientCreator = [this, protectedThis = Ref { *this }] (auto& localFrame) mutable {
-        return makeUniqueRef<WebLocalFrameLoaderClient>(localFrame, WTFMove(protectedThis), makeInvalidator());
+    auto clientCreator = [this, protectedThis = Ref { *this }] (auto& localFrame, auto& frameLoader) mutable {
+        return makeUniqueRefWithoutRefCountedCheck<WebLocalFrameLoaderClient>(localFrame, frameLoader, WTFMove(protectedThis), makeInvalidator());
     };
-    auto localFrame = parent ? LocalFrame::createProvisionalSubframe(*corePage, WTFMove(clientCreator), m_frameID, *parent) : LocalFrame::createMainFrame(*corePage, WTFMove(clientCreator), m_frameID, remoteFrame->opener());
+    auto localFrame = parent ? LocalFrame::createProvisionalSubframe(*corePage, WTFMove(clientCreator), m_frameID, parameters.effectiveSandboxFlags, parameters.scrollingMode, *parent) : LocalFrame::createMainFrame(*corePage, WTFMove(clientCreator), m_frameID, parameters.effectiveSandboxFlags, nullptr);
     m_provisionalFrame = localFrame.ptr();
     localFrame->init();
+    localFrame->protectedDocument()->setURL(aboutBlankURL());
 
     if (parameters.layerHostingContextIdentifier)
         setLayerHostingContextIdentifier(*parameters.layerHostingContextIdentifier);
@@ -422,7 +451,7 @@ void WebFrame::createProvisionalFrame(ProvisionalFrameCreationParameters&& param
 void WebFrame::destroyProvisionalFrame()
 {
     if (RefPtr frame = std::exchange(m_provisionalFrame, nullptr)) {
-        if (auto* client = toWebLocalFrameLoaderClient(frame->loader().client()))
+        if (auto* client = dynamicDowncast<WebLocalFrameLoaderClient>(frame->loader().client()))
             client->takeFrameInvalidator().release();
         if (RefPtr parent = frame->tree().parent())
             parent->tree().removeChild(*frame);
@@ -468,11 +497,7 @@ void WebFrame::commitProvisionalFrame()
     localFrame->setOwnerElement(ownerElement.get());
     if (remoteFrame->isMainFrame())
         corePage->setMainFrame(*localFrame);
-    localFrame->takeWindowProxyFrom(*remoteFrame);
-
-    localFrame->setOpener(remoteFrame->opener());
-    for (auto& frame : remoteFrame->openedFrames())
-        frame->setOpener(localFrame.get());
+    localFrame->takeWindowProxyAndOpenerFrom(*remoteFrame);
 
     if (corePage->focusController().focusedFrame() == remoteFrame.get())
         corePage->focusController().setFocusedFrame(localFrame.get(), FocusController::BroadcastFocusedFrame::No);
@@ -613,7 +638,7 @@ void WebFrame::addConsoleMessage(MessageSource messageSource, MessageLevel messa
     auto* localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get());
     if (!localFrame)
         return;
-    if (auto* document = localFrame->document())
+    if (RefPtr document = localFrame->document())
         document->addConsoleMessage(messageSource, messageLevel, message, requestID);
 }
 
@@ -829,7 +854,7 @@ JSGlobalContextRef WebFrame::jsContext()
     if (!localFrame)
         return nullptr;
 
-    return toGlobalRef(localFrame->script().globalObject(mainThreadNormalWorld()));
+    return toGlobalRef(localFrame->script().globalObject(mainThreadNormalWorldSingleton()));
 }
 
 JSGlobalContextRef WebFrame::jsContextForWorld(DOMWrapperWorld& world)
@@ -872,7 +897,7 @@ void WebFrame::setAccessibleName(const AtomString& accessibleName)
     if (!document)
         return;
     
-    RefPtr rootObject = document->axObjectCache()->rootObject();
+    RefPtr rootObject = document->axObjectCache()->rootObjectForFrame(*localFrame);
     if (!rootObject)
         return;
 
@@ -1226,7 +1251,13 @@ inline DocumentLoader* WebFrame::policySourceDocumentLoader() const
     if (!document)
         return nullptr;
 
-    RefPtr policySourceDocumentLoader = document->topDocument().loader();
+    RefPtr mainFrameDocument = document->protectedMainFrameDocument();
+    if (!mainFrameDocument) {
+        LOG_ONCE(SiteIsolation, "Unable to properly calculate WebFrame::policySourceDocumentLoader() without access to the main frame document ");
+        return nullptr;
+    }
+
+    RefPtr policySourceDocumentLoader = mainFrameDocument->loader();
     if (!policySourceDocumentLoader)
         return nullptr;
 
@@ -1396,6 +1427,11 @@ String WebFrame::frameTextForTesting(bool includeSubframes)
     }
 
     return builder.toString();
+}
+
+WebFrame* WebFrame::webFrame(std::optional<WebCore::FrameIdentifier> frameID)
+{
+    return WebProcess::singleton().webFrame(frameID);
 }
 
 } // namespace WebKit

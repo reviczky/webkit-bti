@@ -32,13 +32,17 @@
 #include "WPEDisplayDRMPrivate.h"
 #include "WPEExtensions.h"
 #include "WPEScreenDRMPrivate.h"
+#include "WPESettings.h"
 #include "WPEToplevelDRM.h"
 #include "WPEViewDRM.h"
 #include <fcntl.h>
 #include <gio/gio.h>
 #include <libudev.h>
+#include <wtf/ASCIICType.h>
+#include <wtf/dtoa.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringView.h>
 #include <wtf/unix/UnixFileDescriptor.h>
 
 /**
@@ -64,6 +68,14 @@ struct _WPEDisplayDRMPrivate {
 WEBKIT_DEFINE_FINAL_TYPE_WITH_CODE(WPEDisplayDRM, wpe_display_drm, WPE_TYPE_DISPLAY, WPEDisplay,
     wpeEnsureExtensionPointsRegistered();
     g_io_extension_point_implement(WPE_DISPLAY_EXTENSION_POINT_NAME, g_define_type_id, "wpe-display-drm", -100))
+
+static void wpeDisplayDRMConstructed(GObject* object)
+{
+    G_OBJECT_CLASS(wpe_display_drm_parent_class)->constructed(object);
+
+    auto* settings = wpe_display_get_settings(WPE_DISPLAY(object));
+    RELEASE_ASSERT(wpe_settings_register(settings, WPE_SETTING_DRM_SCALE, G_VARIANT_TYPE_DOUBLE, g_variant_new_double(1.0), nullptr));
+}
 
 static void wpeDisplayDRMDispose(GObject* object)
 {
@@ -231,7 +243,7 @@ static std::unique_ptr<WPE::DRM::Plane> choosePlaneForCrtc(int fd, WPE::DRM::Pla
     return nullptr;
 }
 
-static gboolean wpeDisplayDRMConnect(WPEDisplay* display, GError** error)
+static gboolean wpeDisplayDRMSetup(WPEDisplayDRM* displayDRM, const char* deviceName, GError** error)
 {
     RefPtr<struct udev> udev = adoptRef(udev_new());
     if (!udev) {
@@ -240,19 +252,28 @@ static gboolean wpeDisplayDRMConnect(WPEDisplay* display, GError** error)
     }
 
     auto session = WPE::DRM::Session::create();
-    auto displayDevice = findDevice(udev.get(), session->seatID());
-    if (displayDevice.isNull()) {
-        g_set_error_literal(error, WPE_DISPLAY_ERROR, WPE_DISPLAY_ERROR_CONNECTION_FAILED, "No suitable DRM device found");
-        return FALSE;
+    DisplayDevice displayDevice;
+    if (!deviceName) {
+        displayDevice = findDevice(udev.get(), session->seatID());
+        if (displayDevice.isNull()) {
+            g_set_error_literal(error, WPE_DISPLAY_ERROR, WPE_DISPLAY_ERROR_CONNECTION_FAILED, "No suitable DRM device found");
+            return FALSE;
+        }
+    } else {
+        int fd = open(deviceName, O_RDWR | O_CLOEXEC);
+        if (fd < 0) {
+            g_set_error_literal(error, WPE_DISPLAY_ERROR, WPE_DISPLAY_ERROR_CONNECTION_FAILED, "Failed to open DRM device");
+            return FALSE;
+        }
+        WTF::UnixFileDescriptor unixFd(fd, WTF::UnixFileDescriptor::Adopt);
+        displayDevice = { deviceName, WTFMove(unixFd) };
     }
-
     auto fd = WTFMove(displayDevice.fd);
     if (drmSetMaster(fd.value()) == -1) {
         g_set_error_literal(error, WPE_DISPLAY_ERROR, WPE_DISPLAY_ERROR_CONNECTION_FAILED, "Failed to become DRM master");
         return FALSE;
     }
 
-    auto displayDRM = WPE_DISPLAY_DRM(display);
     if (!wpeDisplayDRMInitializeCapabilities(displayDRM, fd.value(), error))
         return FALSE;
 
@@ -296,13 +317,56 @@ static gboolean wpeDisplayDRMConnect(WPEDisplay* display, GError** error)
     displayDRM->priv->drmRenderNode = renderNodePath.get();
     displayDRM->priv->device = device;
     displayDRM->priv->connector = WTFMove(connector);
+
+    static const auto scaleIsInBounds = [](double scale) {
+        return (scale >= 0.05) && (scale <= 20.0);
+    };
+
+    std::optional<double> scaleFromEnvironment;
+    if (const auto scaleString = StringView::fromLatin1(getenv("WPE_DRM_SCALE"))) {
+        RELEASE_ASSERT(scaleString.is8Bit());
+        auto trimmedScaleString = scaleString.trim(isASCIIWhitespace<LChar>);
+        size_t parsedLength = 0;
+        auto scale = parseDouble(trimmedScaleString, parsedLength);
+        if (parsedLength == trimmedScaleString.length() && scaleIsInBounds(scale))
+            scaleFromEnvironment = scale;
+        else
+            g_warning("Invalid WPE_DRM_SCALE='%*s' value, or out of bounds.", static_cast<int>(scaleString.span8().size()), scaleString.span8().data());
+    }
+
+    int x = crtc->x();
+    int y = crtc->y();
+    int width = crtc->width();
+    int height = crtc->height();
     displayDRM->priv->screen = wpeScreenDRMCreate(WTFMove(crtc), *displayDRM->priv->connector);
+
+    double scale = scaleFromEnvironment.value_or(wpeScreenDRMGuessScale(WPE_SCREEN_DRM(displayDRM->priv->screen.get())));
+    RELEASE_ASSERT(wpe_settings_set_double(wpe_display_get_settings(WPE_DISPLAY(displayDRM)), WPE_SETTING_DRM_SCALE, scale, WPE_SETTINGS_SOURCE_PLATFORM, nullptr));
+
+    GUniqueOutPtr<GError> settingsError;
+    double scaleFromSettings = wpe_settings_get_double(wpe_display_get_settings(WPE_DISPLAY(displayDRM)), WPE_SETTING_DRM_SCALE, &settingsError.outPtr());
+    RELEASE_ASSERT(!settingsError);
+    if (scaleIsInBounds(scaleFromSettings))
+        scale = scaleFromSettings;
+    else
+        g_warning("Ignoring out of bounds WPE_SETTING_DRM_SCALE value '%.2f'.", scaleFromSettings);
+    RELEASE_ASSERT(scaleIsInBounds(scale));
+
+    wpe_screen_set_position(displayDRM->priv->screen.get(), x / scale, y / scale);
+    wpe_screen_set_size(displayDRM->priv->screen.get(), width / scale, height / scale);
+    wpe_screen_set_scale(displayDRM->priv->screen.get(), scale);
+
     displayDRM->priv->primaryPlane = WTFMove(primaryPlane);
     displayDRM->priv->seat = WTFMove(seat);
     if (cursorPlane)
         displayDRM->priv->cursor = makeUnique<WPE::DRM::Cursor>(WTFMove(cursorPlane), device, displayDRM->priv->cursorWidth, displayDRM->priv->cursorHeight);
 
     return TRUE;
+}
+
+static gboolean wpeDisplayDRMConnect(WPEDisplay* display, GError** error)
+{
+    return wpeDisplayDRMSetup(WPE_DISPLAY_DRM(display), nullptr, error);
 }
 
 static WPEView* wpeDisplayDRMCreateView(WPEDisplay* display)
@@ -363,6 +427,7 @@ static gboolean wpeDisplayDRMUseExplicitSync(WPEDisplay* display)
 static void wpe_display_drm_class_init(WPEDisplayDRMClass* displayDRMClass)
 {
     GObjectClass* objectClass = G_OBJECT_CLASS(displayDRMClass);
+    objectClass->constructed = wpeDisplayDRMConstructed;
     objectClass->dispose = wpeDisplayDRMDispose;
 
     WPEDisplayClass* displayClass = WPE_DISPLAY_CLASS(displayDRMClass);
@@ -411,6 +476,23 @@ const WPE::DRM::Seat& wpeDisplayDRMGetSeat(WPEDisplayDRM* display)
 WPEDisplay* wpe_display_drm_new(void)
 {
     return WPE_DISPLAY(g_object_new(WPE_TYPE_DISPLAY_DRM, nullptr));
+}
+
+/**
+ * wpe_display_drm_connect:
+ * @display: a #WPEDisplayDRM
+ * @name: (nullable): the name of the DRM device to connect to, or %NULL
+ * @error: return location for error or %NULL to ignore
+ *
+ * Connect to the DRM device named @name. If @name is %NULL it
+ * connects to the default device.
+ *
+ * Returns: %TRUE if connection succeeded, or %FALSE in case of error.
+ */
+gboolean wpe_display_drm_connect(WPEDisplayDRM* display, const char* name, GError** error)
+{
+    g_return_val_if_fail(WPE_IS_DISPLAY_DRM(display), FALSE);
+    return wpeDisplayDRMSetup(display, name, error);
 }
 
 /**

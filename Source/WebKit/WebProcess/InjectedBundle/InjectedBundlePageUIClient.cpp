@@ -34,10 +34,13 @@
 #include "WKBundleAPICast.h"
 #include "WebFrame.h"
 #include "WebPage.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebKit {
 using namespace WebCore;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(InjectedBundlePageUIClient);
 
 InjectedBundlePageUIClient::InjectedBundlePageUIClient(const WKBundlePageUIClientBase* client)
 {
@@ -54,12 +57,6 @@ void InjectedBundlePageUIClient::willAddMessageWithArgumentsToConsole(WebPage* p
 {
     if (m_client.willAddMessageWithDetailsToConsole)
         m_client.willAddMessageWithDetailsToConsole(toAPI(page), toAPI(message.impl()), toAPI(&API::Array::createStringArray(messageArguments).leakRef()), lineNumber, columnNumber, toAPI(sourceID.impl()), m_client.base.clientInfo);
-}
-
-void InjectedBundlePageUIClient::willSetStatusbarText(WebPage* page, const String& statusbarText)
-{
-    if (m_client.willSetStatusbarText)
-        m_client.willSetStatusbarText(toAPI(page), toAPI(statusbarText.impl()), m_client.base.clientInfo);
 }
 
 void InjectedBundlePageUIClient::willRunJavaScriptAlert(WebPage* page, const String& alertText, WebFrame* frame)
@@ -145,42 +142,6 @@ uint64_t InjectedBundlePageUIClient::didExceedDatabaseQuota(WebPage* page, API::
         return 0;
 
     return m_client.didExceedDatabaseQuota(toAPI(page), toAPI(origin), toAPI(databaseName.impl()), toAPI(databaseDisplayName.impl()), currentQuotaBytes, currentOriginUsageBytes, currentDatabaseUsageBytes, expectedUsageBytes, m_client.base.clientInfo);
-}
-
-String InjectedBundlePageUIClient::plugInStartLabelTitle(const String& mimeType) const
-{
-    if (!m_client.createPlugInStartLabelTitle)
-        return String();
-
-    RefPtr<API::String> title = adoptRef(toImpl(m_client.createPlugInStartLabelTitle(toAPI(mimeType.impl()), m_client.base.clientInfo)));
-    return title ? title->string() : String();
-}
-
-String InjectedBundlePageUIClient::plugInStartLabelSubtitle(const String& mimeType) const
-{
-    if (!m_client.createPlugInStartLabelSubtitle)
-        return String();
-
-    RefPtr<API::String> subtitle = adoptRef(toImpl(m_client.createPlugInStartLabelSubtitle(toAPI(mimeType.impl()), m_client.base.clientInfo)));
-    return subtitle ? subtitle->string() : String();
-}
-
-String InjectedBundlePageUIClient::plugInExtraStyleSheet() const
-{
-    if (!m_client.createPlugInExtraStyleSheet)
-        return String();
-
-    RefPtr<API::String> styleSheet = adoptRef(toImpl(m_client.createPlugInExtraStyleSheet(m_client.base.clientInfo)));
-    return styleSheet ? styleSheet->string() : String();
-}
-
-String InjectedBundlePageUIClient::plugInExtraScript() const
-{
-    if (!m_client.createPlugInExtraScript)
-        return String();
-
-    RefPtr<API::String> script = adoptRef(toImpl(m_client.createPlugInExtraScript(m_client.base.clientInfo)));
-    return script ? script->string() : String();
 }
 
 void InjectedBundlePageUIClient::didClickAutoFillButton(WebPage& page, InjectedBundleNodeHandle& nodeHandle, RefPtr<API::Object>& userData)

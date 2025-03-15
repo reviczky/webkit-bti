@@ -26,14 +26,13 @@
 #include "config.h"
 #include "NetworkResourceLoadParameters.h"
 
-#include "WebCoreArgumentCoders.h"
 
 namespace WebKit {
 using namespace WebCore;
 
 NetworkResourceLoadParameters::NetworkResourceLoadParameters(
     NetworkLoadParameters&& networkLoadParameters
-    , WebCore::ResourceLoaderIdentifier identifier
+    , std::optional<WebCore::ResourceLoaderIdentifier> identifier
     , RefPtr<WebCore::FormData>&& httpBody
     , std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensionIfHttpBody
     , std::optional<SandboxExtension::Handle>&& sandboxExtensionIflocalFile
@@ -55,6 +54,7 @@ NetworkResourceLoadParameters::NetworkResourceLoadParameters(
     , URL&& documentURL
     , bool isCrossOriginOpenerPolicyEnabled
     , bool isClearSiteDataHeaderEnabled
+    , bool isClearSiteDataExecutionContextEnabled
     , bool isDisplayingInitialEmptyDocument
     , WebCore::SandboxFlags effectiveSandboxFlags
     , URL&& openerURL
@@ -65,6 +65,7 @@ NetworkResourceLoadParameters::NetworkResourceLoadParameters(
     , std::optional<WebCore::ServiceWorkerRegistrationIdentifier> serviceWorkerRegistrationIdentifier
     , OptionSet<WebCore::HTTPHeadersToKeepFromCleaning> httpHeadersToKeep
     , std::optional<WebCore::FetchIdentifier> navigationPreloadIdentifier
+    , std::optional<WebCore::SharedWorkerIdentifier> workerIdentifier
 #if ENABLE(CONTENT_EXTENSIONS)
     , URL&& mainDocumentURL
     , std::optional<UserContentControllerIdentifier> userContentControllerIdentifier
@@ -94,6 +95,7 @@ NetworkResourceLoadParameters::NetworkResourceLoadParameters(
         , documentURL(WTFMove(documentURL))
         , isCrossOriginOpenerPolicyEnabled(isCrossOriginOpenerPolicyEnabled)
         , isClearSiteDataHeaderEnabled(isClearSiteDataHeaderEnabled)
+        , isClearSiteDataExecutionContextEnabled(isClearSiteDataExecutionContextEnabled)
         , isDisplayingInitialEmptyDocument(isDisplayingInitialEmptyDocument)
         , effectiveSandboxFlags(effectiveSandboxFlags)
         , openerURL(WTFMove(openerURL))
@@ -104,6 +106,7 @@ NetworkResourceLoadParameters::NetworkResourceLoadParameters(
         , serviceWorkerRegistrationIdentifier(serviceWorkerRegistrationIdentifier)
         , httpHeadersToKeep(httpHeadersToKeep)
         , navigationPreloadIdentifier(navigationPreloadIdentifier)
+        , workerIdentifier(workerIdentifier)
 #if ENABLE(CONTENT_EXTENSIONS)
         , mainDocumentURL(WTFMove(mainDocumentURL))
         , userContentControllerIdentifier(userContentControllerIdentifier)

@@ -37,7 +37,7 @@ void Caps::finishInitialization(const ContextOptions& options) {
         fShaderErrorHandler = DefaultShaderErrorHandler();
     }
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     if (options.fOptionsPriv) {
         fMaxTextureSize = std::min(fMaxTextureSize, options.fOptionsPriv->fMaxTextureSizeOverride);
         fMaxTextureAtlasSize = options.fOptionsPriv->fMaxTextureAtlasSize;
@@ -50,9 +50,7 @@ void Caps::finishInitialization(const ContextOptions& options) {
     fMaxPathAtlasTextureSize = options.fMaxPathAtlasTextureSize;
     fAllowMultipleAtlasTextures = options.fAllowMultipleAtlasTextures;
     fSupportBilerpFromGlyphAtlas = options.fSupportBilerpFromGlyphAtlas;
-    if (options.fDisableCachedGlyphUploads) {
-        fRequireOrderedRecordings = true;
-    }
+    fRequireOrderedRecordings = options.fRequireOrderedRecordings;
     fSetBackendLabels = options.fSetBackendLabels;
 }
 
@@ -68,18 +66,6 @@ bool Caps::isTexturable(const TextureInfo& info) const {
         return false;
     }
     return this->onIsTexturable(info);
-}
-
-GraphiteResourceKey Caps::makeSamplerKey(const SamplerDesc& samplerDesc) const {
-    GraphiteResourceKey samplerKey;
-    static const ResourceType kType = GraphiteResourceKey::GenerateResourceType();
-    GraphiteResourceKey::Builder builder(&samplerKey, kType, /*data32Count=*/1, Shareable::kYes);
-
-    // The default impl. of this method adds no additional backend information to the key.
-    builder[0] = samplerDesc.desc();
-
-    builder.finish();
-    return samplerKey;
 }
 
 bool Caps::areColorTypeAndTextureInfoCompatible(SkColorType ct, const TextureInfo& info) const {
@@ -105,6 +91,8 @@ static inline SkColorType color_type_fallback(SkColorType ct) {
         case kA16_float_SkColorType:
             return kRGBA_F16_SkColorType;
         case kGray_8_SkColorType:
+        case kRGB_F16F16F16x_SkColorType:
+        case kRGB_101010x_SkColorType:
             return kRGB_888x_SkColorType;
         default:
             return kUnknown_SkColorType;
@@ -149,12 +137,12 @@ skgpu::Swizzle Caps::getWriteSwizzle(SkColorType ct, const TextureInfo& info) co
     return colorTypeInfo->fWriteSwizzle;
 }
 
-DstReadRequirement Caps::getDstReadRequirement() const {
+DstReadStrategy Caps::getDstReadStrategy() const {
     // TODO(b/238757201): Currently this only supports dst reads by FB fetch and texture copy.
     if (this->shaderCaps()->fFBFetchSupport) {
-        return DstReadRequirement::kFramebufferFetch;
+        return DstReadStrategy::kFramebufferFetch;
     } else {
-        return DstReadRequirement::kTextureCopy;
+        return DstReadStrategy::kTextureCopy;
     }
 }
 

@@ -35,6 +35,7 @@
 #include <WebCore/PageIdentifier.h>
 #include <WebCore/RectEdges.h>
 #include <memory>
+#include <wtf/CheckedPtr.h>
 #include <wtf/Deque.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/Noncopyable.h>
@@ -44,6 +45,7 @@ namespace WebCore {
 struct DisplayUpdate;
 using FramesPerSecond = unsigned;
 using PlatformDisplayID = uint32_t;
+enum class RubberBandingBehavior : uint8_t;
 }
 
 namespace WebKit {
@@ -52,14 +54,16 @@ class MomentumEventDispatcher {
     WTF_MAKE_NONCOPYABLE(MomentumEventDispatcher);
     WTF_MAKE_TZONE_ALLOCATED(MomentumEventDispatcher);
 public:
-    class Client {
+    class Client : public CanMakeCheckedPtr<Client> {
+        WTF_MAKE_FAST_ALLOCATED;
+        WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(Client);
     friend class MomentumEventDispatcher;
     public:
         virtual ~Client() = default;
 
     private:
-        virtual void handleSyntheticWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&, WebCore::RectEdges<bool> rubberBandableEdges) = 0;
-        
+        virtual void handleSyntheticWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&, WebCore::RectEdges<WebCore::RubberBandingBehavior> rubberBandableEdges) = 0;
+
         virtual void startDisplayDidRefreshCallbacks(WebCore::PlatformDisplayID) = 0;
         virtual void stopDisplayDidRefreshCallbacks(WebCore::PlatformDisplayID) = 0;
 
@@ -71,7 +75,7 @@ public:
     MomentumEventDispatcher(Client&);
     ~MomentumEventDispatcher();
 
-    bool handleWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&, WebCore::RectEdges<bool> rubberBandableEdges);
+    bool handleWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&, WebCore::RectEdges<WebCore::RubberBandingBehavior> rubberBandableEdges);
 
     void setScrollingAccelerationCurve(WebCore::PageIdentifier, std::optional<ScrollingAccelerationCurve>);
 
@@ -143,13 +147,13 @@ private:
 
     Markable<WallTime> m_lastScrollTimestamp;
     std::optional<WebWheelEvent> m_lastIncomingEvent;
-    WebCore::RectEdges<bool> m_lastRubberBandableEdges;
+    WebCore::RectEdges<WebCore::RubberBandingBehavior> m_lastRubberBandableEdges;
     bool m_isInOverriddenPlatformMomentumGesture { false };
 
     struct {
         bool active { false };
 
-        WebCore::PageIdentifier pageIdentifier;
+        Markable<WebCore::PageIdentifier> pageIdentifier;
         std::optional<ScrollingAccelerationCurve> accelerationCurve;
         std::optional<WebWheelEvent> initiatingEvent;
 
@@ -177,7 +181,7 @@ private:
 
     mutable Lock m_accelerationCurvesLock;
     HashMap<WebCore::PageIdentifier, std::optional<ScrollingAccelerationCurve>> m_accelerationCurves WTF_GUARDED_BY_LOCK(m_accelerationCurvesLock);
-    Client& m_client;
+    CheckedRef<Client> m_client;
 };
 
 } // namespace WebKit

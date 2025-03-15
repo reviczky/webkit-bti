@@ -46,7 +46,7 @@ PageWorkerAgent::~PageWorkerAgent() = default;
 
 void PageWorkerAgent::connectToAllWorkerInspectorProxies()
 {
-    for (Ref proxy : WorkerInspectorProxy::proxiesForPage(*m_page.identifier()))
+    for (Ref proxy : WorkerInspectorProxy::proxiesForPage(*m_page->identifier()))
         connectToWorkerInspectorProxy(proxy);
 }
 

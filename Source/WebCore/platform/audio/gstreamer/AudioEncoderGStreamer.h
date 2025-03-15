@@ -23,8 +23,7 @@
 
 #include "AudioEncoder.h"
 
-#include "GRefPtrGStreamer.h"
-#include <wtf/FastMalloc.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UniqueRef.h>
 
 namespace WebCore {
@@ -32,16 +31,17 @@ namespace WebCore {
 class GStreamerInternalAudioEncoder;
 
 class GStreamerAudioEncoder : public AudioEncoder {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(GStreamerAudioEncoder);
 public:
-    static void create(const String& codecName, const Config&, CreateCallback&&, DescriptionCallback&&, OutputCallback&&, PostTaskCallback&&);
+    static Ref<CreatePromise> create(const String& codecName, const Config&, DescriptionCallback&&, OutputCallback&&);
 
-    GStreamerAudioEncoder(DescriptionCallback&&,  OutputCallback&&, PostTaskCallback&&, GRefPtr<GstElement>&&);
     ~GStreamerAudioEncoder();
 
 private:
-    void encode(RawFrame&&, EncodeCallback&&) final;
-    void flush(Function<void()>&&) final;
+    GStreamerAudioEncoder(Ref<GStreamerInternalAudioEncoder>&&);
+
+    Ref<EncodePromise> encode(RawFrame&&) final;
+    Ref<GenericPromise> flush() final;
     void reset() final;
     void close() final;
 

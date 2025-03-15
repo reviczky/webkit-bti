@@ -57,7 +57,7 @@ SpeculativeLoad::SpeculativeLoad(Cache& cache, const GlobalFrameID& globalFrameI
 
     auto* networkSession = m_cache->networkProcess().networkSession(m_cache->sessionID());
     if (!networkSession) {
-        RunLoop::main().dispatch([completionHandler = WTFMove(m_completionHandler)]() mutable {
+        RunLoop::protectedMain()->dispatch([completionHandler = WTFMove(m_completionHandler)]() mutable {
             completionHandler(nullptr);
         });
         return;
@@ -74,7 +74,7 @@ SpeculativeLoad::SpeculativeLoad(Cache& cache, const GlobalFrameID& globalFrameI
     parameters.isNavigatingToAppBoundDomain = isNavigatingToAppBoundDomain;
     parameters.allowPrivacyProxy = allowPrivacyProxy;
     parameters.advancedPrivacyProtections = advancedPrivacyProtections;
-    m_networkLoad = makeUnique<NetworkLoad>(*this, WTFMove(parameters), *networkSession);
+    m_networkLoad = NetworkLoad::create(*this, WTFMove(parameters), *networkSession);
     m_networkLoad->startWithScheduling();
 }
 

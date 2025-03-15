@@ -59,7 +59,7 @@ public:
 
     virtual ~RemoteQuerySet();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,9 @@ private:
     RemoteQuerySet& operator=(RemoteQuerySet&&) = delete;
 
     WebCore::WebGPU::QuerySet& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::QuerySet> protectedBacking();
+
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

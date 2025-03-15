@@ -33,15 +33,6 @@
 #import <wtf/WeakHashSet.h>
 #import <wtf/WeakPtr.h>
 
-namespace WebKit {
-class RemoteLayerBackingStoreCollection;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLayerBackingStoreCollection> : std::true_type { };
-}
-
 namespace WebCore {
 class ImageBuffer;
 class ThreadSafeImageBufferFlusher;
@@ -67,6 +58,9 @@ class RemoteLayerBackingStoreCollection : public CanMakeWeakPtr<RemoteLayerBacki
 public:
     RemoteLayerBackingStoreCollection(RemoteLayerTreeContext&);
     virtual ~RemoteLayerBackingStoreCollection();
+
+    void ref() const;
+    void deref() const;
 
     void markFrontBufferVolatileForTesting(RemoteLayerBackingStore&);
     virtual void backingStoreWasCreated(RemoteLayerBackingStore&);
@@ -94,7 +88,7 @@ public:
 
     virtual void gpuProcessConnectionWasDestroyed();
 
-    RemoteLayerTreeContext& layerTreeContext() const { return m_layerTreeContext; }
+    RemoteLayerTreeContext& layerTreeContext() const;
 
 protected:
 
@@ -118,13 +112,15 @@ private:
     bool updateUnreachableBackingStores();
     void volatilityTimerFired();
 
+    Ref<RemoteLayerTreeContext> protectedLayerTreeContext() const;
+
 protected:
     void sendMarkBuffersVolatile(Vector<std::pair<Ref<RemoteImageBufferSetProxy>, OptionSet<BufferInSetType>>>&&, CompletionHandler<void(bool)>&&, bool forcePurge = false);
 
     static constexpr auto volatileBackingStoreAgeThreshold = 1_s;
     static constexpr auto volatileSecondaryBackingStoreAgeThreshold = 200_ms;
 
-    RemoteLayerTreeContext& m_layerTreeContext;
+    WeakRef<RemoteLayerTreeContext> m_layerTreeContext;
 
     WeakHashSet<RemoteLayerBackingStore> m_liveBackingStore;
     WeakHashSet<RemoteLayerBackingStore> m_unparentedBackingStore;

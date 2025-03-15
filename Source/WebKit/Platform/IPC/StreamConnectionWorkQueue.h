@@ -36,7 +36,7 @@
 
 namespace IPC {
 
-class WTF_CAPABILITY("is current") StreamConnectionWorkQueue final : public SerialFunctionDispatcher, public ThreadSafeRefCounted<StreamConnectionWorkQueue> {
+class WTF_CAPABILITY("is current") StreamConnectionWorkQueue final : public SerialFunctionDispatcher {
 public:
     static Ref<StreamConnectionWorkQueue> create(ASCIILiteral name)
     {
@@ -47,9 +47,9 @@ public:
     ~StreamConnectionWorkQueue();
     void addStreamConnection(StreamServerConnection&);
     void removeStreamConnection(StreamServerConnection&);
-    void stopAndWaitForCompletion(WTF::Function<void()>&& cleanupFunction = nullptr);
+    void stopAndWaitForCompletion(NOESCAPE WTF::Function<void()>&& cleanupFunction = nullptr);
     void wakeUp();
-    Semaphore& wakeUpSemaphore();
+    Semaphore& wakeUpSemaphore() { return m_wakeUpSemaphore; }
 
     // SerialFunctionDispatcher
     void dispatch(WTF::Function<void()>&&) final;

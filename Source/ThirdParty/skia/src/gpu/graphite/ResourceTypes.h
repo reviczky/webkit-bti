@@ -20,12 +20,9 @@ namespace skgpu::graphite {
 
 class Buffer;
 
-enum class DepthStencilFlags : int {
-    kNone = 0b000,
-    kDepth = 0b001,
-    kStencil = 0b010,
-    kDepthStencil = kDepth | kStencil,
-};
+// This declaration of the DepthStencilFlags' SkEnumBitMask ops is here bc, internally, we use
+// DepthStencilFlags as bit fields but, externally (i.e., from the GraphiteTypes view), we want
+// it to appear as just an enum class.
 SK_MAKE_BITMASK_OPS(DepthStencilFlags)
 
 /**
@@ -61,6 +58,7 @@ enum class BufferType : int {
     kXferGpuToCpu,
     kUniform,
     kStorage,
+    kQuery,
 
     // GPU-only buffer types
     kIndirect,
@@ -74,7 +72,7 @@ static const int kBufferTypeCount = static_cast<int>(BufferType::kLast) + 1;
 /**
  * Data layout requirements on host-shareable buffer contents.
  */
-enum class Layout {
+enum class Layout : uint8_t {
     kInvalid = 0,
     kStd140,
     kStd430,
@@ -98,7 +96,7 @@ static constexpr const char* LayoutString(Layout layout) {
  * This is only a hint and the actual memory type will be determined based on the resource type and
  * backend capabilities.
  */
-enum class AccessPattern : int {
+enum class AccessPattern : uint8_t {
     // GPU-only memory does not need to support reads/writes from the CPU. GPU-private memory will
     // be preferred if the backend supports an efficient private memory type.
     kGpuOnly,
@@ -125,7 +123,7 @@ enum class Discardable : bool {
     kYes = true
 };
 
-enum class Ownership {
+enum class Ownership : uint8_t {
     kOwned,
     kWrapped,
 };
@@ -137,19 +135,10 @@ using ResourceType = uint32_t;
  * Can the resource be held by multiple users at the same time?
  * For example, stencil buffers, pipelines, etc.
  */
-enum class Shareable : bool {
-    kNo = false,
-    kYes = true,
-};
-
-/**
- * This enum is used to notify the ResourceCache which type of ref just dropped to zero on a
- * Resource.
- */
-enum class LastRemovedRef {
-    kUsage,
-    kCommandBuffer,
-    kCache,
+enum class Shareable : uint8_t {
+    kNo,      // The resource is visible in the ResourceCache once all its usage refs are dropped
+    kScratch, // The resource is visible to other Recorders, but acts like kNo within a Recording
+    kYes,     // The resource is always visible in the ResourceCache
 };
 
 /*
@@ -186,11 +175,14 @@ struct ImmutableSamplerInfo {
 struct SamplerDesc {
     static_assert(kSkTileModeCount <= 4 && kSkFilterModeCount <= 2 && kSkMipmapModeCount <= 4);
 
-    SamplerDesc(const SkSamplingOptions& samplingOptions,
-                const SkTileMode tileModes[2],
+    constexpr SamplerDesc(const SkSamplingOptions& samplingOptions, SkTileMode tileMode)
+            : SamplerDesc(samplingOptions, {tileMode, tileMode}) {}
+
+    constexpr SamplerDesc(const SkSamplingOptions& samplingOptions,
+                const std::pair<SkTileMode, SkTileMode> tileModes,
                 const ImmutableSamplerInfo info = {})
-            : fDesc((static_cast<int>(tileModes[0])               << kTileModeXShift           ) |
-                    (static_cast<int>(tileModes[1])               << kTileModeYShift           ) |
+            : fDesc((static_cast<int>(tileModes.first)            << kTileModeXShift           ) |
+                    (static_cast<int>(tileModes.second)           << kTileModeYShift           ) |
                     (static_cast<int>(samplingOptions.filter)     << kFilterModeShift          ) |
                     (static_cast<int>(samplingOptions.mipmap)     << kMipmapModeShift          ) |
                     (info.fNonFormatYcbcrConversionInfo           << kImmutableSamplerInfoShift) )
@@ -209,8 +201,8 @@ struct SamplerDesc {
         // the conversion information can fit within an uint32.
         SkASSERT(info.fNonFormatYcbcrConversionInfo >> kMaxNumConversionInfoBits == 0);
     }
-    SamplerDesc() = default;
-    SamplerDesc(const SamplerDesc&) = default;
+    constexpr SamplerDesc() = default;
+    constexpr SamplerDesc(const SamplerDesc&) = default;
 
     bool operator==(const SamplerDesc& o) const {
         return o.fDesc == fDesc && o.fFormat == fFormat &&
@@ -236,6 +228,11 @@ struct SamplerDesc {
         return SkSamplingOptions(filter, mipmap);
     }
 
+    ImmutableSamplerInfo immutableSamplerInfo() const {
+        return {this->desc() >> kImmutableSamplerInfoShift,
+                ((uint64_t) this->externalFormatMSBs() << 32) | (uint64_t) this->format()};
+    }
+
     SkSpan<const uint32_t> asSpan() const {
         // Span length depends upon whether the sampler is immutable and if it uses a known format
         return {&fDesc, 1 + this->isImmutable() + this->usesExternalFormat()};
@@ -255,10 +252,16 @@ struct SamplerDesc {
     static constexpr int kMipmapModeShift           = kFilterModeShift + kNumFilterModeBits;
     static constexpr int kImmutableSamplerInfoShift = kMipmapModeShift + kNumMipmapModeBits;
 
+    // Only relevant when using immutable samplers. Otherwise, can be ignored. The number of uint32s
+    // required to represent all relevant sampler desc information depends upon whether we are using
+    // a known or external format.
+    static constexpr int kInt32sNeededKnownFormat = 2;
+    static constexpr int kInt32sNeededExternalFormat = 3;
+
 private:
     // Note: The order of these member attributes matters to keep unique object representation
     // such that SkGoodHash can be used to hash SamplerDesc objects.
-    uint32_t fDesc;
+    uint32_t fDesc = 0;
 
     // Data fields populated by backend Caps which store texture format information (needed for
     // YCbCr sampling). Only relevant when using immutable samplers. Otherwise, can be ignored.

@@ -59,7 +59,7 @@ public:
 
     virtual ~RemotePipelineLayout();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -74,6 +74,7 @@ private:
     RemotePipelineLayout& operator=(RemotePipelineLayout&&) = delete;
 
     WebCore::WebGPU::PipelineLayout& backing() { return m_backing; }
+    Ref<IPC::StreamServerConnection> protectedStreamConnection() const;
 
     void didReceiveStreamMessage(IPC::StreamServerConnection&, IPC::Decoder&) final;
 

@@ -73,6 +73,16 @@ TEST_F(GStreamerTest, gstStructureGetters)
     auto emptyIntOpt = gstStructureGet<int>(structure.get(), "int-val-noexist2"_s);
     if (emptyIntOpt && *emptyIntOpt > 0)
         FAIL() << "emptyIntOpt should be empty, but has value " << *emptyIntOpt;
+
+    GUniquePtr<GstStructure> arrays(gst_structure_new_from_string("bar, empty-array=(GstStructure) <>, struct-array=(GstStructure) <[s1, a=2], [s2, b=3]>"_s));
+    GUniquePtr<GstStructure> s1(gst_structure_new_from_string("s1, a=2"_s));
+    GUniquePtr<GstStructure> s2(gst_structure_new_from_string("s2, b=3"_s));
+    ASSERT_TRUE(gstStructureGetArray<const GstStructure*>(arrays.get(), "empty-array"_s).isEmpty());
+
+    Vector<const GstStructure*> structArray(gstStructureGetArray<const GstStructure*>(arrays.get(), "struct-array"_s));
+    ASSERT_TRUE(gst_structure_is_equal(structArray.at(0), s1.get()));
+    ASSERT_TRUE(gst_structure_is_equal(structArray.at(1), s2.get()));
+    ASSERT_EQ(structArray.size(), 2);
 }
 
 TEST_F(GStreamerTest, gstStructureJSONSerializing)
@@ -89,6 +99,14 @@ TEST_F(GStreamerTest, gstStructureJSONSerializing)
     GUniquePtr<GstStructure> structureWithList(gst_structure_new_from_string("foo, words=(string){ hello, world }"));
     jsonString = gstStructureToJSONString(structureWithList.get());
     ASSERT_EQ(jsonString, "{\"words\":[\"hello\",\"world\"]}"_s);
+}
+
+TEST_F(GStreamerTest, streamIdParsing)
+{
+    ASSERT_EQ(parseStreamId("bec5903f-df6d-4773-85bb-05be65fc1bb8"_s), 0x85bb05be65fc1bb8);
+    ASSERT_EQ(parseStreamId("647a4b9b3856ef43869870dc9e8b490e7c76512c47f9cfa7e9cf236fb9d9693d/001"_s), 1);
+    ASSERT_EQ(parseStreamId("123"_s), 123);
+    ASSERT_TRUE(!parseStreamId("foo"_s).has_value());
 }
 
 TEST_F(GStreamerTest, hevcProfileParsing)
@@ -156,7 +174,7 @@ TEST_F(GStreamerTest, capsFromCodecString)
     // AV1 levels, per spec valid values range from 00 to 31, but we support only up to 23.
     for (unsigned i = 0; i < 23; i++) {
         GUniquePtr<char> codecString(g_strdup_printf("av01.0.%02dM.08", i));
-        TEST_CAPS_FROM_CODEC(makeString(span(codecString.get())), "I420", "video/x-av1, profile=(string)main, bit-depth-luma=(uint)8, bit-depth-chroma=(uint)8, chroma-format=(string)4:2:0");
+        TEST_CAPS_FROM_CODEC(makeString(unsafeSpan(codecString.get())), "I420", "video/x-av1, profile=(string)main, bit-depth-luma=(uint)8, bit-depth-chroma=(uint)8, chroma-format=(string)4:2:0");
     }
 
     // AV1 monochrome.

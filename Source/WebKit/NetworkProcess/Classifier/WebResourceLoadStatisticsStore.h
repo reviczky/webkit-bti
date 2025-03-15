@@ -50,6 +50,7 @@
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+class LoginStatus;
 class ResourceRequest;
 struct ResourceLoadStatistics;
 enum class ShouldSample : bool;
@@ -93,7 +94,9 @@ struct RegistrableDomainsToDeleteOrRestrictWebsiteDataFor {
     bool isEmpty() const { return domainsToDeleteAllCookiesFor.isEmpty() && domainsToDeleteAllButHttpOnlyCookiesFor.isEmpty() && domainsToDeleteAllScriptWrittenStorageFor.isEmpty() && domainsToEnforceSameSiteStrictFor.isEmpty(); }
 };
 
-class WebResourceLoadStatisticsStore final : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<WebResourceLoadStatisticsStore, WTF::DestructionThread::Main> {
+class WebResourceLoadStatisticsStore final : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<WebResourceLoadStatisticsStore, WTF::DestructionThread::Main>, public CanMakeThreadSafeCheckedPtr<WebResourceLoadStatisticsStore> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebResourceLoadStatisticsStore);
 public:
     using ResourceLoadStatistics = WebCore::ResourceLoadStatistics;
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -112,6 +115,7 @@ public:
     using StorageAccessScope = WebCore::StorageAccessScope;
     using RequestStorageAccessResult = WebCore::RequestStorageAccessResult;
     using IsLoggedIn = WebCore::IsLoggedIn;
+    using LoginStatus = WebCore::LoginStatus;
 
     static Ref<WebResourceLoadStatisticsStore> create(NetworkSession&, const String& resourceLoadStatisticsDirectory, ShouldIncludeLocalhost, ResourceLoadStatistics::IsEphemeral);
 
@@ -124,7 +128,6 @@ public:
     SuspendableWorkQueue& statisticsQueue() { return m_statisticsQueue.get(); }
 
     void populateMemoryStoreFromDisk(CompletionHandler<void()>&&);
-    void setNotifyPagesWhenDataRecordsWereScanned(bool);
     void setShouldClassifyResourcesBeforeDataRecordsRemoval(bool, CompletionHandler<void()>&&);
 
     void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, StorageAccessPromptWasShown, StorageAccessScope, CompletionHandler<void(RequestStorageAccessResult)>&&);
@@ -135,17 +138,17 @@ public:
     void clearUserInteraction(TopFrameDomain&&, CompletionHandler<void()>&&);
     void setTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
     void removeDataForDomain(const RegistrableDomain, CompletionHandler<void()>&&);
-    void deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType>, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&&, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
+    void deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType>, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&&, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
     void registrableDomains(CompletionHandler<void(Vector<RegistrableDomain>&&)>&&);
     void registrableDomainsWithLastAccessedTime(CompletionHandler<void(std::optional<HashMap<RegistrableDomain, WallTime>>)>&&);
     void registrableDomainsExemptFromWebsiteDataDeletion(CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
-    void registrableDomainsWithWebsiteData(OptionSet<WebsiteDataType>, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
+    void registrableDomainsWithWebsiteData(OptionSet<WebsiteDataType>, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
     StorageAccessWasGranted grantStorageAccessInStorageSession(const SubFrameDomain&, const TopFrameDomain&, std::optional<WebCore::FrameIdentifier>, WebCore::PageIdentifier, StorageAccessScope);
     void hasHadUserInteraction(RegistrableDomain&&, CompletionHandler<void(bool)>&&);
     void hasStorageAccess(SubFrameDomain&&, TopFrameDomain&&, std::optional<WebCore::FrameIdentifier>, WebCore::PageIdentifier, CompletionHandler<void(bool)>&&);
     bool hasStorageAccessForFrame(const SubFrameDomain&, const TopFrameDomain&, WebCore::FrameIdentifier, WebCore::PageIdentifier);
     void requestStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebPageProxyIdentifier, StorageAccessScope,  CompletionHandler<void(RequestStorageAccessResult)>&&);
-    void setLoginStatus(RegistrableDomain&&, IsLoggedIn, CompletionHandler<void()>&&);
+    void setLoginStatus(RegistrableDomain&&, IsLoggedIn, std::optional<LoginStatus>&&, CompletionHandler<void()>&&);
     void isLoggedIn(RegistrableDomain&&, CompletionHandler<void(bool)>&&);
     void setLastSeen(RegistrableDomain&&, Seconds, CompletionHandler<void()>&&);
     void mergeStatisticForTesting(RegistrableDomain&&, TopFrameDomain&& topFrameDomain1, TopFrameDomain&& topFrameDomain2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&&);
@@ -162,7 +165,6 @@ public:
     void clearPrevalentResource(RegistrableDomain&&, CompletionHandler<void()>&&);
     void setGrandfathered(RegistrableDomain&&, bool, CompletionHandler<void()>&&);
     void isGrandfathered(RegistrableDomain&&, CompletionHandler<void(bool)>&&);
-    void setNotifyPagesWhenDataRecordsWereScanned(bool, CompletionHandler<void()>&&);
     void setIsRunningTest(bool, CompletionHandler<void()>&&);
     void setSubframeUnderTopFrameDomain(SubFrameDomain&&, TopFrameDomain&&, CompletionHandler<void()>&&);
     void setSubresourceUnderTopFrameDomain(SubResourceDomain&&, TopFrameDomain&&, CompletionHandler<void()>&&);
@@ -212,8 +214,6 @@ public:
     void setPersistedDomains(const HashSet<RegistrableDomain>&);
     void didCreateNetworkProcess();
 
-    void notifyResourceLoadStatisticsProcessed();
-
     NetworkSession* networkSession();
     void invalidateAndCancel();
 
@@ -252,8 +252,8 @@ private:
     StorageAccessWasGranted storageAccessWasGrantedValueForFrame(WebCore::FrameIdentifier, const WebCore::RegistrableDomain&);
 
     WeakPtr<NetworkSession> m_networkSession;
-    Ref<SuspendableWorkQueue> m_statisticsQueue;
-    std::unique_ptr<ResourceLoadStatisticsStore> m_statisticsStore;
+    const Ref<SuspendableWorkQueue> m_statisticsQueue;
+    RefPtr<ResourceLoadStatisticsStore> m_statisticsStore;
 
     RunLoop::Timer m_dailyTasksTimer;
 
@@ -262,13 +262,13 @@ private:
 
     HashSet<RegistrableDomain> m_domainsWithUserInteractionQuirk;
     HashMap<TopFrameDomain, Vector<SubResourceDomain>> m_domainsWithCrossPageStorageAccessQuirk;
-    HashMap<RegistrableDomain, IsLoggedIn> m_loginStatus;
+    HashMap<RegistrableDomain, std::pair<IsLoggedIn, std::optional<WebCore::LoginStatus>>> m_loginStatus;
 
     bool m_hasScheduledProcessStats { false };
     bool m_firstNetworkProcessCreated { false };
 
     struct StorageAccessRequestRecordValue {
-        WebPageProxyIdentifier webPageProxyID;
+        Markable<WebPageProxyIdentifier> webPageProxyID;
         Markable<WallTime> lastRequestTime;
         WallTime lastLoadTime;
     };

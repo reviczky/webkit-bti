@@ -55,6 +55,7 @@ struct LogArgument {
     template<typename U = T> static std::enable_if_t<std::is_same_v<typename std::remove_reference_t<U>, AtomString>, String> toString(const AtomString& argument) { return argument.string(); }
     template<typename U = T> static std::enable_if_t<std::is_same_v<typename std::remove_reference_t<U>, String>, String> toString(String argument) { return argument; }
     template<typename U = T> static std::enable_if_t<std::is_same_v<typename std::remove_reference_t<U>, StringBuilder*>, String> toString(StringBuilder* argument) { return argument->toString(); }
+    template<typename U = T> static std::enable_if_t<std::is_same_v<typename std::remove_reference_t<U>, StringView>, String> toString(const StringView& argument) { return argument.toString(); }
     template<typename U = T> static std::enable_if_t<std::is_same_v<U, const char*>, String> toString(const char* argument) { return String::fromLatin1(argument); }
     template<typename U = T> static std::enable_if_t<std::is_same_v<U, ASCIILiteral>, String> toString(ASCIILiteral argument) { return argument; }
 #ifdef __OBJC__
@@ -291,16 +292,16 @@ public:
     }
 
     struct LogSiteIdentifier {
-        LogSiteIdentifier(const char* methodName, const void* objectPtr)
+        LogSiteIdentifier(const char* methodName, uint64_t objectIdentifier)
             : methodName { methodName }
-            , objectPtr { reinterpret_cast<uintptr_t>(objectPtr) }
+            , objectIdentifier { objectIdentifier }
         {
         }
 
-        LogSiteIdentifier(ASCIILiteral className, const char* methodName, const void* objectPtr)
+        LogSiteIdentifier(ASCIILiteral className, const char* methodName, uint64_t objectIdentifier)
             : className { className }
             , methodName { methodName }
-            , objectPtr { reinterpret_cast<uintptr_t>(objectPtr) }
+            , objectIdentifier { objectIdentifier }
         {
         }
 
@@ -308,7 +309,7 @@ public:
 
         ASCIILiteral className;
         const char* methodName { nullptr };
-        const uintptr_t objectPtr { 0 };
+        const uint64_t objectIdentifier { 0 };
     };
 
     static inline void addObserver(Observer& observer)
@@ -385,7 +386,7 @@ private:
         UNUSED_PARAM(line);
         UNUSED_PARAM(function);
 #elif ENABLE(JOURNALD_LOG)
-        auto fileString = makeString("CODE_FILE="_s, span(file));
+        auto fileString = makeString("CODE_FILE="_s, unsafeSpan(file));
         auto lineString = makeString("CODE_LINE="_s, line);
         sd_journal_send_with_location(fileString.utf8().data(), lineString.utf8().data(), function, "WEBKIT_SUBSYSTEM=%s", channel.subsystem, "WEBKIT_CHANNEL=%s", channel.name, "MESSAGE=%s", logMessage.utf8().data(), nullptr);
 #else

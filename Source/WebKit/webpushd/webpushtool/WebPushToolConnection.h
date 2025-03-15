@@ -30,22 +30,13 @@
 #include <WebCore/PushPermissionState.h>
 #include <memory>
 #include <wtf/CompletionHandler.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/URL.h>
-#include <wtf/WeakPtr.h>
 #include <wtf/spi/darwin/XPCSPI.h>
 
 using WebKit::WebPushD::PushMessageForTesting;
-
-namespace WebPushTool {
-class Connection;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebPushTool::Connection> : std::true_type { };
-}
 
 namespace WebPushTool {
 
@@ -59,14 +50,17 @@ enum class WaitForServiceToExist : bool {
     Yes,
 };
 
-class Connection final : public CanMakeWeakPtr<Connection>, public IPC::MessageSender {
+class Connection final : public RefCountedAndCanMakeWeakPtr<Connection>, public IPC::MessageSender {
     WTF_MAKE_TZONE_ALLOCATED(Connection);
 public:
-    static std::unique_ptr<Connection> create(PreferTestService, String bundleIdentifier, String pushPartition);
+    static Ref<Connection> create(PreferTestService, String bundleIdentifier, String pushPartition);
     Connection(PreferTestService, String bundleIdentifier, String pushPartition);
     ~Connection() final { }
 
     void connectToService(WaitForServiceToExist);
+
+    String bundleIdentifier() const { return m_bundleIdentifier; }
+    String pushPartition() const { return m_pushPartition; }
 
     void sendPushMessage(PushMessageForTesting&&, CompletionHandler<void(String)>&&);
     void getPushPermissionState(const String& scope, CompletionHandler<void(WebCore::PushPermissionState)>&&);
@@ -84,7 +78,7 @@ private:
     String m_pushPartition;
 
     RetainPtr<xpc_connection_t> m_connection;
-    const char* m_serviceName;
+    ASCIILiteral m_serviceName;
 };
 
 } // namespace WebPushTool

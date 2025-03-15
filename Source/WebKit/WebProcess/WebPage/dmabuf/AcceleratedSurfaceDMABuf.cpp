@@ -30,6 +30,7 @@
 
 #include "AcceleratedBackingStoreDMABufMessages.h"
 #include "AcceleratedSurfaceDMABufMessages.h"
+#include "ThreadedCompositor.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include <WebCore/GLFence.h>
@@ -62,9 +63,19 @@ static uint64_t generateID()
     return ++identifier;
 }
 
-std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(WebPage& webPage, Client& client)
+std::unique_ptr<AcceleratedSurfaceDMABuf> AcceleratedSurfaceDMABuf::create(ThreadedCompositor& compositor, WebPage& webPage, Function<void()>&& frameCompleteHandler)
 {
-    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(webPage, client));
+    return std::unique_ptr<AcceleratedSurfaceDMABuf>(new AcceleratedSurfaceDMABuf(compositor, webPage, WTFMove(frameCompleteHandler)));
+}
+
+void AcceleratedSurfaceDMABuf::ref() const
+{
+    m_compositor->ref();
+}
+
+void AcceleratedSurfaceDMABuf::deref() const
+{
+    m_compositor->deref();
 }
 
 static bool useExplicitSync()
@@ -74,8 +85,9 @@ static bool useExplicitSync()
     return extensions.ANDROID_native_fence_sync && (display.eglCheckVersion(1, 5) || extensions.KHR_fence_sync);
 }
 
-AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Client& client)
-    : AcceleratedSurface(webPage, client)
+AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(ThreadedCompositor& compositor, WebPage& webPage, Function<void()>&& frameCompleteHandler)
+    : AcceleratedSurface(webPage, WTFMove(frameCompleteHandler))
+    , m_compositor(compositor)
     , m_id(generateID())
     , m_swapChain(m_id)
     , m_isVisible(webPage.activityState().contains(WebCore::ActivityState::IsVisible))
@@ -83,7 +95,7 @@ AcceleratedSurfaceDMABuf::AcceleratedSurfaceDMABuf(WebPage& webPage, Client& cli
 {
 #if USE(GBM)
     if (m_swapChain.type() == SwapChain::Type::EGLImage)
-        m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+        m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 #endif
 }
 
@@ -97,24 +109,41 @@ static uint64_t generateTargetID()
     return ++identifier;
 }
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(AcceleratedSurfaceDMABufRenderTarget, AcceleratedSurfaceDMABuf::RenderTarget);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AcceleratedSurfaceDMABuf::RenderTarget);
 
 AcceleratedSurfaceDMABuf::RenderTarget::RenderTarget(uint64_t surfaceID, const WebCore::IntSize& size)
     : m_id(generateTargetID())
     , m_surfaceID(surfaceID)
 {
+    glGenFramebuffers(1, &m_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+
     glGenRenderbuffers(1, &m_depthStencilBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, m_depthStencilBuffer);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8_OES, size.width(), size.height());
+
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_depthStencilBuffer);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_depthStencilBuffer);
 }
 
 AcceleratedSurfaceDMABuf::RenderTarget::~RenderTarget()
 {
+    if (m_fbo)
+        glDeleteFramebuffers(1, &m_fbo);
+
     if (m_depthStencilBuffer)
         glDeleteRenderbuffers(1, &m_depthStencilBuffer);
 
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::DidDestroyBuffer(m_id), m_surfaceID);
 }
+
+#if ENABLE(DAMAGE_TRACKING)
+void AcceleratedSurfaceDMABuf::RenderTarget::addDamage(const WebCore::Damage& damage)
+{
+    if (!m_damage.isInvalid())
+        m_damage.add(damage);
+}
+#endif
 
 std::unique_ptr<WebCore::GLFence> AcceleratedSurfaceDMABuf::RenderTarget::createRenderingFence(bool useExplicitSync) const
 {
@@ -125,42 +154,26 @@ std::unique_ptr<WebCore::GLFence> AcceleratedSurfaceDMABuf::RenderTarget::create
     return WebCore::GLFence::create();
 }
 
-void AcceleratedSurfaceDMABuf::RenderTarget::willRenderFrame() const
+void AcceleratedSurfaceDMABuf::RenderTarget::willRenderFrame()
 {
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_depthStencilBuffer);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_depthStencilBuffer);
+    if (m_releaseFenceFD) {
+        if (auto fence = WebCore::GLFence::importFD(WTFMove(m_releaseFenceFD)))
+            fence->serverWait();
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+}
+
+void AcceleratedSurfaceDMABuf::RenderTarget::didRenderFrame()
+{
+#if ENABLE(DAMAGE_TRACKING)
+    m_damage = WebCore::Damage { };
+#endif
 }
 
 void AcceleratedSurfaceDMABuf::RenderTarget::setReleaseFenceFD(UnixFileDescriptor&& releaseFence)
 {
     m_releaseFenceFD = WTFMove(releaseFence);
-}
-
-void AcceleratedSurfaceDMABuf::RenderTarget::waitRelease()
-{
-    if (!m_releaseFenceFD)
-        return;
-
-    if (auto fence = WebCore::GLFence::importFD(WTFMove(m_releaseFenceFD)))
-        fence->serverWait();
-}
-
-AcceleratedSurfaceDMABuf::RenderTargetColorBuffer::RenderTargetColorBuffer(uint64_t surfaceID, const WebCore::IntSize& size)
-    : RenderTarget(surfaceID, size)
-{
-    glGenRenderbuffers(1, &m_colorBuffer);
-}
-
-AcceleratedSurfaceDMABuf::RenderTargetColorBuffer::~RenderTargetColorBuffer()
-{
-    if (m_colorBuffer)
-        glDeleteRenderbuffers(1, &m_colorBuffer);
-}
-
-void AcceleratedSurfaceDMABuf::RenderTargetColorBuffer::willRenderFrame() const
-{
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, m_colorBuffer);
-    RenderTarget::willRenderFrame();
 }
 
 #if USE(GBM)
@@ -256,21 +269,24 @@ std::unique_ptr<AcceleratedSurfaceDMABuf::RenderTarget> AcceleratedSurfaceDMABuf
 }
 
 AcceleratedSurfaceDMABuf::RenderTargetEGLImage::RenderTargetEGLImage(uint64_t surfaceID, const WebCore::IntSize& size, EGLImage image, uint32_t format, Vector<UnixFileDescriptor>&& fds, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier, DMABufRendererBufferFormat::Usage usage)
-    : RenderTargetColorBuffer(surfaceID, size)
+    : RenderTarget(surfaceID, size)
     , m_image(image)
 {
+    glGenRenderbuffers(1, &m_colorBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, m_colorBuffer);
     glEGLImageTargetRenderbufferStorageOES(GL_RENDERBUFFER, m_image);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, m_colorBuffer);
 
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::DidCreateBuffer(m_id, size, format, WTFMove(fds), WTFMove(offsets), WTFMove(strides), modifier, usage), surfaceID);
 }
 
 AcceleratedSurfaceDMABuf::RenderTargetEGLImage::~RenderTargetEGLImage()
 {
-    if (!m_image)
-        return;
+    if (m_colorBuffer)
+        glDeleteRenderbuffers(1, &m_colorBuffer);
 
-    WebCore::PlatformDisplay::sharedDisplay().destroyEGLImage(m_image);
+    if (m_image)
+        WebCore::PlatformDisplay::sharedDisplay().destroyEGLImage(m_image);
 }
 #endif
 
@@ -292,17 +308,26 @@ std::unique_ptr<AcceleratedSurfaceDMABuf::RenderTarget> AcceleratedSurfaceDMABuf
 }
 
 AcceleratedSurfaceDMABuf::RenderTargetSHMImage::RenderTargetSHMImage(uint64_t surfaceID, const WebCore::IntSize& size, Ref<WebCore::ShareableBitmap>&& bitmap, WebCore::ShareableBitmap::Handle&& bitmapHandle)
-    : RenderTargetColorBuffer(surfaceID, size)
+    : RenderTarget(surfaceID, size)
     , m_bitmap(WTFMove(bitmap))
 {
+    glGenRenderbuffers(1, &m_colorBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, m_colorBuffer);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, size.width(), size.height());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, m_colorBuffer);
 
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::DidCreateBufferSHM(m_id, WTFMove(bitmapHandle)), surfaceID);
 }
 
+AcceleratedSurfaceDMABuf::RenderTargetSHMImage::~RenderTargetSHMImage()
+{
+    if (m_colorBuffer)
+        glDeleteRenderbuffers(1, &m_colorBuffer);
+}
+
 void AcceleratedSurfaceDMABuf::RenderTargetSHMImage::didRenderFrame()
 {
+    RenderTarget::didRenderFrame();
     glReadPixels(0, 0, m_bitmap->size().width(), m_bitmap->size().height(), GL_BGRA, GL_UNSIGNED_BYTE, m_bitmap->mutableSpan().data());
 }
 
@@ -363,6 +388,8 @@ AcceleratedSurfaceDMABuf::RenderTargetTexture::RenderTargetTexture(uint64_t surf
     : RenderTarget(surfaceID, size)
     , m_texture(texture)
 {
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_texture, 0);
+
     WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::DidCreateBuffer(m_id, size, format, WTFMove(fds), WTFMove(offsets), WTFMove(strides), modifier, DMABufRendererBufferFormat::Usage::Rendering), surfaceID);
 }
 
@@ -372,19 +399,13 @@ AcceleratedSurfaceDMABuf::RenderTargetTexture::~RenderTargetTexture()
         glDeleteTextures(1, &m_texture);
 }
 
-void AcceleratedSurfaceDMABuf::RenderTargetTexture::willRenderFrame() const
-{
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_texture, 0);
-    RenderTarget::willRenderFrame();
-}
-
 AcceleratedSurfaceDMABuf::SwapChain::SwapChain(uint64_t surfaceID)
     : m_surfaceID(surfaceID)
 {
     auto& display = WebCore::PlatformDisplay::sharedDisplay();
     switch (display.type()) {
     case WebCore::PlatformDisplay::Type::Surfaceless:
-        if (display.eglExtensions().MESA_image_dma_buf_export && WebProcess::singleton().dmaBufRendererBufferMode().contains(DMABufRendererBufferMode::Hardware))
+        if (display.eglExtensions().MESA_image_dma_buf_export && WebProcess::singleton().rendererBufferTransportMode().contains(RendererBufferTransportMode::Hardware))
             m_type = Type::Texture;
         else
             m_type = Type::SharedMemory;
@@ -421,6 +442,8 @@ void AcceleratedSurfaceDMABuf::SwapChain::setupBufferFormat(const Vector<DMABufR
     BufferFormat dmabufFormat;
     const auto& supportedFormats = WebCore::PlatformDisplay::sharedDisplay().dmabufFormats();
     for (const auto& bufferFormat : preferredFormats) {
+
+        auto matchesOpacity = false;
         for (const auto& format : supportedFormats) {
             auto index = bufferFormat.formats.findIf([&](const auto& item) {
                 return format.fourcc == item.fourcc;
@@ -428,7 +451,7 @@ void AcceleratedSurfaceDMABuf::SwapChain::setupBufferFormat(const Vector<DMABufR
             if (index != notFound) {
                 const auto& preferredFormat = bufferFormat.formats[index];
 
-                bool matchesOpacity = isOpaqueFormat(preferredFormat.fourcc) == isOpaque;
+                matchesOpacity = isOpaqueFormat(preferredFormat.fourcc) == isOpaque;
                 if (!matchesOpacity && dmabufFormat.fourcc)
                     continue;
 
@@ -450,7 +473,7 @@ void AcceleratedSurfaceDMABuf::SwapChain::setupBufferFormat(const Vector<DMABufR
             }
         }
 
-        if (dmabufFormat.fourcc)
+        if (dmabufFormat.fourcc && matchesOpacity)
             break;
     }
 
@@ -539,13 +562,23 @@ void AcceleratedSurfaceDMABuf::SwapChain::releaseUnusedBuffers()
     m_freeTargets.clear();
 }
 
+#if ENABLE(DAMAGE_TRACKING)
+void AcceleratedSurfaceDMABuf::SwapChain::addDamage(const WebCore::Damage& damage)
+{
+    for (auto& renderTarget : m_freeTargets)
+        renderTarget->addDamage(damage);
+    for (auto& renderTarget : m_lockedTargets)
+        renderTarget->addDamage(damage);
+}
+#endif
+
 #if PLATFORM(WPE) && USE(GBM) && ENABLE(WPE_PLATFORM)
 void AcceleratedSurfaceDMABuf::preferredBufferFormatsDidChange()
 {
     if (m_swapChain.type() != SwapChain::Type::EGLImage)
         return;
 
-    m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+    m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 }
 #endif
 
@@ -573,7 +606,7 @@ bool AcceleratedSurfaceDMABuf::backgroundColorDidChange()
 
 #if USE(GBM)
     if (m_swapChain.type() == SwapChain::Type::EGLImage)
-        m_swapChain.setupBufferFormat(m_webPage.preferredBufferFormats(), m_isOpaque);
+        m_swapChain.setupBufferFormat(m_webPage->preferredBufferFormats(), m_isOpaque);
 #endif
 
     return true;
@@ -599,20 +632,9 @@ void AcceleratedSurfaceDMABuf::willDestroyCompositingRunLoop()
     WebProcess::singleton().parentProcessConnection()->removeMessageReceiver(Messages::AcceleratedSurfaceDMABuf::messageReceiverName(), m_id);
 }
 
-void AcceleratedSurfaceDMABuf::didCreateGLContext()
-{
-    glGenFramebuffers(1, &m_fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-}
-
 void AcceleratedSurfaceDMABuf::willDestroyGLContext()
 {
     m_swapChain.reset();
-
-    if (m_fbo) {
-        glDeleteFramebuffers(1, &m_fbo);
-        m_fbo = 0;
-    }
 }
 
 uint64_t AcceleratedSurfaceDMABuf::surfaceID() const
@@ -620,9 +642,13 @@ uint64_t AcceleratedSurfaceDMABuf::surfaceID() const
     return m_id;
 }
 
-void AcceleratedSurfaceDMABuf::clientResize(const WebCore::IntSize& size)
+bool AcceleratedSurfaceDMABuf::resize(const WebCore::IntSize& size)
 {
-    m_swapChain.resize(size);
+    if (!AcceleratedSurface::resize(size))
+        return false;
+
+    m_swapChain.resize(m_size);
+    return true;
 }
 
 void AcceleratedSurfaceDMABuf::willRenderFrame()
@@ -631,16 +657,12 @@ void AcceleratedSurfaceDMABuf::willRenderFrame()
     if (!m_target)
         return;
 
-    m_target->waitRelease();
-
-    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-
     m_target->willRenderFrame();
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         WTFLogAlways("AcceleratedSurfaceDMABuf was unable to construct a complete framebuffer");
 }
 
-void AcceleratedSurfaceDMABuf::didRenderFrame(WebCore::Region&& damage)
+void AcceleratedSurfaceDMABuf::didRenderFrame()
 {
     TraceScope traceScope(WaitForCompositionCompletionStart, WaitForCompositionCompletionEnd);
 
@@ -656,8 +678,30 @@ void AcceleratedSurfaceDMABuf::didRenderFrame(WebCore::Region&& damage)
         glFlush();
 
     m_target->didRenderFrame();
-    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::Frame(m_target->id(), WTFMove(damage), WTFMove(renderingFence)), m_id);
+
+    const auto& damageRegion = [this]() -> WebCore::Region {
+#if ENABLE(DAMAGE_TRACKING)
+        return m_frameDamage.region();
+#else
+        return Region { };
+#endif
+    }();
+
+    WebProcess::singleton().parentProcessConnection()->send(Messages::AcceleratedBackingStoreDMABuf::Frame(m_target->id(), damageRegion, WTFMove(renderingFence)), m_id);
+
+#if ENABLE(DAMAGE_TRACKING)
+    m_frameDamage = WebCore::Damage();
+#endif
 }
+
+#if ENABLE(DAMAGE_TRACKING)
+const WebCore::Damage& AcceleratedSurfaceDMABuf::addDamage(const WebCore::Damage& damage)
+{
+    m_frameDamage = damage;
+    m_swapChain.addDamage(damage);
+    return m_target ? m_target->damage() : WebCore::Damage::invalid();
+}
+#endif
 
 void AcceleratedSurfaceDMABuf::releaseBuffer(uint64_t targetID, UnixFileDescriptor&& releaseFence)
 {
@@ -666,7 +710,7 @@ void AcceleratedSurfaceDMABuf::releaseBuffer(uint64_t targetID, UnixFileDescript
 
 void AcceleratedSurfaceDMABuf::frameDone()
 {
-    m_client.frameComplete();
+    frameComplete();
     m_target = nullptr;
 }
 

@@ -23,11 +23,12 @@
 #include "GStreamerMediaEndpoint.h"
 #include "GStreamerWebRTCCommon.h"
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
 class GStreamerIncomingTrackProcessor : public RefCounted<GStreamerIncomingTrackProcessor> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(GStreamerIncomingTrackProcessor);
 
 public:
     static Ref<GStreamerIncomingTrackProcessor> create()
@@ -38,7 +39,6 @@ public:
 
     void configure(ThreadSafeWeakPtr<GStreamerMediaEndpoint>&&, GRefPtr<GstPad>&&);
     const GRefPtr<GstPad>& pad() const { return m_pad; }
-    const String& trackId() const { return m_data.trackId; }
 
     GstElement* bin() const { return m_bin.get(); }
 
@@ -46,6 +46,7 @@ public:
 
     bool isDecoding() const { return m_isDecoding; }
     bool isReady() const { return m_isReady; }
+    const String& trackId() const { return m_data.trackId; }
 
 private:
     GStreamerIncomingTrackProcessor();

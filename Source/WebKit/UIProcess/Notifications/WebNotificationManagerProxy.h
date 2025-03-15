@@ -54,7 +54,7 @@ class WebProcessPool;
 class WebsiteDataStore;
 
 enum class WebNotificationIdentifierType;
-using WebNotificationIdentifier = LegacyNullableObjectIdentifier<WebNotificationIdentifierType>;
+using WebNotificationIdentifier = ObjectIdentifier<WebNotificationIdentifierType>;
 
 class WebNotificationManagerProxy : public API::ObjectImpl<API::Object::Type::NotificationManager>, public WebContextSupplement {
 public:
@@ -62,7 +62,7 @@ public:
 
     static Ref<WebNotificationManagerProxy> create(WebProcessPool*);
 
-    static WebNotificationManagerProxy& sharedServiceWorkerManager();
+    static WebNotificationManagerProxy& serviceWorkerManagerSingleton();
 
     virtual ~WebNotificationManagerProxy();
 

@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.46.6</p>
+        <p>Library Version: 2.48.0</p>
         
       </div>
       
@@ -170,7 +170,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1819">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1840">[src]</a>
         
       </h4>
 
@@ -184,6 +184,8 @@ navigation action that triggered this&nbsp;signal.</p>
 <code>WebKitWebView:related-view</code> for more&nbsp;details.</p>
 <p>The new <code>WebKitWebView</code> should not be displayed to the user
 until the <code>WebKitWebView::ready-to-show</code> signal is&nbsp;emitted.</p>
+<p>For creating views as response to automation tools requests, see the
+<code>WebKitAutomationSession::create-web-view</code> signal.</p>
       </div>
 
       <div class="docblock">

@@ -54,7 +54,7 @@ RemoteTexture::RemoteTexture(GPUConnectionToWebProcess& gpuConnectionToWebProces
     , m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
     , m_gpu(gpu)
 {
-    m_streamConnection->startReceivingMessages(*this, Messages::RemoteTexture::messageReceiverName(), m_identifier.toUInt64());
+    Ref { m_streamConnection }->startReceivingMessages(*this, Messages::RemoteTexture::messageReceiverName(), m_identifier.toUInt64());
 }
 
 RemoteTexture::~RemoteTexture() = default;
@@ -69,36 +69,48 @@ RefPtr<IPC::Connection> RemoteTexture::connection() const
 
 void RemoteTexture::stopListeningForIPC()
 {
-    m_streamConnection->stopReceivingMessages(Messages::RemoteTexture::messageReceiverName(), m_identifier.toUInt64());
+    Ref { m_streamConnection }->stopReceivingMessages(Messages::RemoteTexture::messageReceiverName(), m_identifier.toUInt64());
 }
 
 void RemoteTexture::createView(const std::optional<WebGPU::TextureViewDescriptor>& descriptor, WebGPUIdentifier identifier)
 {
     std::optional<WebCore::WebGPU::TextureViewDescriptor> convertedDescriptor;
+    Ref objectHeap = m_objectHeap.get();
+
     if (descriptor) {
-        auto resultDescriptor = m_objectHeap->convertFromBacking(*descriptor);
+        auto resultDescriptor = objectHeap->convertFromBacking(*descriptor);
         MESSAGE_CHECK(resultDescriptor);
         convertedDescriptor = WTFMove(resultDescriptor);
     }
-    auto textureView = m_backing->createView(convertedDescriptor);
+    auto textureView = protectedBacking()->createView(convertedDescriptor);
     MESSAGE_CHECK(textureView);
-    auto remoteTextureView = RemoteTextureView::create(textureView.releaseNonNull(), m_objectHeap, m_streamConnection.copyRef(), m_gpu, identifier);
-    m_objectHeap->addObject(identifier, remoteTextureView);
+    auto remoteTextureView = RemoteTextureView::create(textureView.releaseNonNull(), objectHeap, m_streamConnection.copyRef(), Ref { m_gpu.get() }, identifier);
+    objectHeap->addObject(identifier, remoteTextureView);
 }
 
 void RemoteTexture::destroy()
 {
-    m_backing->destroy();
+    protectedBacking()->destroy();
+}
+
+void RemoteTexture::undestroy()
+{
+    protectedBacking()->undestroy();
 }
 
 void RemoteTexture::destruct()
 {
-    m_objectHeap->removeObject(m_identifier);
+    Ref { m_objectHeap.get() }->removeObject(m_identifier);
 }
 
 void RemoteTexture::setLabel(String&& label)
 {
-    m_backing->setLabel(WTFMove(label));
+    protectedBacking()->setLabel(WTFMove(label));
+}
+
+Ref<WebCore::WebGPU::Texture> RemoteTexture::protectedBacking()
+{
+    return m_backing;
 }
 
 } // namespace WebKit

@@ -26,9 +26,9 @@ enum class WebKit::PreconnectOnly : bool;
 enum class WebKit::NavigatingToAppBoundDomain : bool;
 
 class WebKit::NetworkLoadParameters {
-    WebKit::WebPageProxyIdentifier webPageProxyID;
-    WebCore::PageIdentifier webPageID;
-    WebCore::FrameIdentifier webFrameID;
+    Markable<WebKit::WebPageProxyIdentifier> webPageProxyID;
+    Markable<WebCore::PageIdentifier> webPageID;
+    Markable<WebCore::FrameIdentifier> webFrameID;
     RefPtr<WebCore::SecurityOrigin> topOrigin;
     RefPtr<WebCore::SecurityOrigin> sourceOrigin;
     WTF::ProcessID parentPID;
@@ -46,7 +46,6 @@ class WebKit::NetworkLoadParameters {
     bool needsCertificateInfo;
     bool isMainFrameNavigation;
     std::optional<WebKit::NavigationActionData> mainResourceNavigationDataForAnyFrame;
-    WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking;
     [NotSerialized] Vector<RefPtr<WebCore::BlobDataFileReference>> blobFileReferences;
     WebKit::PreconnectOnly shouldPreconnectOnly;
     [NotSerialized] std::optional<WebKit::NetworkActivityTracker> networkActivityTracker;
@@ -57,7 +56,7 @@ class WebKit::NetworkLoadParameters {
 }
 
 class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
-    WebCore::ResourceLoaderIdentifier identifier;
+    Markable<WebCore::ResourceLoaderIdentifier> identifier;
     
     RefPtr<WebCore::FormData> request.httpBody();
     std::optional<Vector<WebKit::SandboxExtensionHandle>> sandboxExtensionsIfHttpBody();
@@ -89,6 +88,7 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
 
     bool isCrossOriginOpenerPolicyEnabled;
     bool isClearSiteDataHeaderEnabled;
+    bool isClearSiteDataExecutionContextEnabled;
     bool isDisplayingInitialEmptyDocument;
     WebCore::SandboxFlags effectiveSandboxFlags;
     URL openerURL;
@@ -101,6 +101,7 @@ class WebKit::NetworkResourceLoadParameters : WebKit::NetworkLoadParameters {
     std::optional<WebCore::ServiceWorkerRegistrationIdentifier> serviceWorkerRegistrationIdentifier;
     OptionSet<WebCore::HTTPHeadersToKeepFromCleaning> httpHeadersToKeep;
     std::optional<WebCore::FetchIdentifier> navigationPreloadIdentifier;
+    std::optional<WebCore::SharedWorkerIdentifier> workerIdentifier;
 
 #if ENABLE(CONTENT_EXTENSIONS)
     URL mainDocumentURL;

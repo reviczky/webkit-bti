@@ -50,6 +50,12 @@ enum class WebKit::WebContentMode : uint8_t {
     Desktop
 };
 
+enum class WebKit::WebsiteInlineMediaPlaybackPolicy : uint8_t {
+    Default,
+    RequiresPlaysInlineAttribute,
+    DoesNotRequirePlaysInlineAttribute
+};
+
 struct WebKit::WebsitePoliciesData {
     HashMap<String, Vector<String>> activeContentRuleListActionPatterns;
     Vector<WebCore::CustomHeaderFields> customHeaderFields;
@@ -61,6 +67,9 @@ struct WebKit::WebsitePoliciesData {
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtections;
     OptionSet<WebKit::WebsiteAutoplayQuirk> allowedAutoplayQuirks;
     WebCore::ContentExtensionEnablement contentExtensionEnablement;
+#if ENABLE(TOUCH_EVENTS)
+    std::optional<bool> overrideTouchEventDOMAttributesEnabled;
+#endif
     WebKit::WebsiteAutoplayPolicy autoplayPolicy;
     WebKit::WebsitePopUpPolicy popUpPolicy;
     WebKit::WebsiteMetaViewportPolicy metaViewportPolicy;
@@ -79,4 +88,6 @@ struct WebKit::WebsitePoliciesData {
     bool idempotentModeAutosizingOnlyHonorsPercentages;
     bool allowPrivacyProxy;
     bool allowSiteSpecificQuirksToOverrideContentMode;
+    WebKit::WebsitePushAndNotificationsEnabledPolicy pushAndNotificationsEnabledPolicy;
+    WebKit::WebsiteInlineMediaPlaybackPolicy inlineMediaPlaybackPolicy;
 };

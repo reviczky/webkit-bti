@@ -50,6 +50,9 @@
 namespace API {
 using namespace WebKit;
 
+PageConfiguration::Data::Data()
+    : openedSite(aboutBlankURL()) { }
+
 Ref<WebKit::BrowsingContextGroup> PageConfiguration::Data::createBrowsingContextGroup()
 {
     return BrowsingContextGroup::create();
@@ -111,6 +114,36 @@ void PageConfiguration::setBrowsingContextGroup(RefPtr<BrowsingContextGroup>&& g
     m_data.browsingContextGroup = WTFMove(group);
 }
 
+const std::optional<WebCore::WindowFeatures>& PageConfiguration::windowFeatures() const
+{
+    return m_data.windowFeatures;
+}
+
+void PageConfiguration::setWindowFeatures(WebCore::WindowFeatures&& windowFeatures)
+{
+    m_data.windowFeatures = WTFMove(windowFeatures);
+}
+
+const WebCore::Site& PageConfiguration::openedSite() const
+{
+    return m_data.openedSite;
+}
+
+void PageConfiguration::setOpenedSite(const WebCore::Site& site)
+{
+    m_data.openedSite = site;
+}
+
+const WTF::String& PageConfiguration::openedMainFrameName() const
+{
+    return m_data.openedMainFrameName;
+}
+
+void PageConfiguration::setOpenedMainFrameName(const WTF::String& name)
+{
+    m_data.openedMainFrameName = name;
+}
+
 auto PageConfiguration::openerInfo() const -> const std::optional<OpenerInfo>&
 {
     return m_data.openerInfo;
@@ -123,9 +156,19 @@ void PageConfiguration::setOpenerInfo(std::optional<OpenerInfo>&& info)
 
 bool PageConfiguration::OpenerInfo::operator==(const OpenerInfo&) const = default;
 
+void PageConfiguration::setInitialSandboxFlags(WebCore::SandboxFlags sandboxFlags)
+{
+    m_data.initialSandboxFlags = sandboxFlags;
+}
+
 WebProcessPool& PageConfiguration::processPool() const
 {
     return m_data.processPool.get();
+}
+
+Ref<WebKit::WebProcessPool> PageConfiguration::protectedProcessPool() const
+{
+    return processPool();
 }
 
 void PageConfiguration::setProcessPool(RefPtr<WebProcessPool>&& processPool)
@@ -136,6 +179,11 @@ void PageConfiguration::setProcessPool(RefPtr<WebProcessPool>&& processPool)
 WebUserContentControllerProxy& PageConfiguration::userContentController() const
 {
     return m_data.userContentController.get();
+}
+
+Ref<WebUserContentControllerProxy> PageConfiguration::protectedUserContentController() const
+{
+    return userContentController();
 }
 
 void PageConfiguration::setUserContentController(RefPtr<WebUserContentControllerProxy>&& userContentController)
@@ -159,6 +207,11 @@ WebExtensionController* PageConfiguration::webExtensionController() const
     return m_data.webExtensionController.get();
 }
 
+RefPtr<WebExtensionController> PageConfiguration::protectedWebExtensionController() const
+{
+    return webExtensionController();
+}
+
 void PageConfiguration::setWebExtensionController(RefPtr<WebExtensionController>&& webExtensionController)
 {
     m_data.webExtensionController = WTFMove(webExtensionController);
@@ -167,6 +220,11 @@ void PageConfiguration::setWebExtensionController(RefPtr<WebExtensionController>
 WebExtensionController* PageConfiguration::weakWebExtensionController() const
 {
     return m_data.weakWebExtensionController.get();
+}
+
+RefPtr<WebExtensionController> PageConfiguration::protectedWeakWebExtensionController() const
+{
+    return weakWebExtensionController();
 }
 
 void PageConfiguration::setWeakWebExtensionController(WebExtensionController* webExtensionController)
@@ -180,7 +238,7 @@ HashSet<WTF::String> PageConfiguration::maskedURLSchemes() const
 {
     if (m_data.maskedURLSchemesWasSet)
         return m_data.maskedURLSchemes;
-#if ENABLE(WK_WEB_EXTENSIONS)
+#if ENABLE(WK_WEB_EXTENSIONS) && PLATFORM(COCOA)
     if (webExtensionController() || weakWebExtensionController())
         return WebKit::WebExtensionMatchPattern::extensionSchemes();
 #endif
@@ -202,6 +260,11 @@ WebPreferences& PageConfiguration::preferences() const
     return m_data.preferences.get();
 }
 
+Ref<WebPreferences> PageConfiguration::protectedPreferences() const
+{
+    return preferences();
+}
+
 void PageConfiguration::setPreferences(RefPtr<WebPreferences>&& preferences)
 {
     m_data.preferences = WTFMove(preferences);
@@ -210,11 +273,6 @@ void PageConfiguration::setPreferences(RefPtr<WebPreferences>&& preferences)
 WebPageProxy* PageConfiguration::relatedPage() const
 {
     return m_data.relatedPage.get();
-}
-
-void PageConfiguration::setRelatedPage(WeakPtr<WebPageProxy>&& relatedPage)
-{
-    m_data.relatedPage = WTFMove(relatedPage);
 }
 
 WebPageProxy* PageConfiguration::pageToCloneSessionStorageFrom() const
@@ -242,6 +300,11 @@ WebKit::VisitedLinkStore& PageConfiguration::visitedLinkStore() const
     return m_data.visitedLinkStore.get();
 }
 
+Ref<WebKit::VisitedLinkStore> PageConfiguration::protectedVisitedLinkStore() const
+{
+    return visitedLinkStore();
+}
+
 void PageConfiguration::setVisitedLinkStore(RefPtr<WebKit::VisitedLinkStore>&& visitedLinkStore)
 {
     m_data.visitedLinkStore = WTFMove(visitedLinkStore);
@@ -259,6 +322,11 @@ WebKit::WebsiteDataStore* PageConfiguration::websiteDataStoreIfExists() const
     return m_data.websiteDataStore.get();
 }
 
+RefPtr<WebKit::WebsiteDataStore> PageConfiguration::protectedWebsiteDataStoreIfExists() const
+{
+    return websiteDataStoreIfExists();
+}
+
 Ref<WebsiteDataStore> PageConfiguration::protectedWebsiteDataStore() const
 {
     return websiteDataStore();
@@ -272,6 +340,11 @@ void PageConfiguration::setWebsiteDataStore(RefPtr<WebsiteDataStore>&& websiteDa
 WebsitePolicies& PageConfiguration::defaultWebsitePolicies() const
 {
     return m_data.defaultWebsitePolicies.get();
+}
+
+Ref<WebsitePolicies> PageConfiguration::protectedDefaultWebsitePolicies() const
+{
+    return defaultWebsitePolicies();
 }
 
 void PageConfiguration::setDefaultWebsitePolicies(RefPtr<WebsitePolicies>&& policies)
@@ -312,15 +385,15 @@ bool PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() const
         return false;
     }
     if (m_data.delaysWebProcessLaunchUntilFirstLoad) {
-        RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %{public}s because of explicit client value", this, *m_data.delaysWebProcessLaunchUntilFirstLoad ? "true" : "false");
+        RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %" PUBLIC_LOG_STRING " because of explicit client value", this, *m_data.delaysWebProcessLaunchUntilFirstLoad ? "true" : "false");
         // If the client explicitly enabled / disabled the feature, then obey their directives.
         return *m_data.delaysWebProcessLaunchUntilFirstLoad;
     }
     if (RefPtr processPool = m_data.processPool.getIfExists()) {
-        RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %{public}s because of associated processPool value", this, processPool->delaysWebProcessLaunchDefaultValue() ? "true" : "false");
+        RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %" PUBLIC_LOG_STRING " because of associated processPool value", this, processPool->delaysWebProcessLaunchDefaultValue() ? "true" : "false");
         return processPool->delaysWebProcessLaunchDefaultValue();
     }
-    RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %{public}s because of global default value", this, WebProcessPool::globalDelaysWebProcessLaunchDefaultValue() ? "true" : "false");
+    RELEASE_LOG(Process, "%p - PageConfiguration::delaysWebProcessLaunchUntilFirstLoad() -> %" PUBLIC_LOG_STRING " because of global default value", this, WebProcessPool::globalDelaysWebProcessLaunchDefaultValue() ? "true" : "false");
     return WebProcessPool::globalDelaysWebProcessLaunchDefaultValue();
 }
 
@@ -337,10 +410,32 @@ ApplicationManifest* PageConfiguration::applicationManifest() const
     return m_data.applicationManifest.get();
 }
 
+RefPtr<ApplicationManifest> PageConfiguration::protectedApplicationManifest() const
+{
+    return applicationManifest();
+}
+
 void PageConfiguration::setApplicationManifest(RefPtr<ApplicationManifest>&& applicationManifest)
 {
     m_data.applicationManifest = WTFMove(applicationManifest);
 }
+#endif
+
+#if ENABLE(APPLE_PAY)
+
+bool PageConfiguration::applePayEnabled() const
+{
+    if (auto applePayEnabledOverride = m_data.applePayEnabledOverride)
+        return *applePayEnabledOverride;
+
+    return preferences().applePayEnabled();
+}
+
+void PageConfiguration::setApplePayEnabled(bool enabled)
+{
+    m_data.applePayEnabledOverride = enabled;
+}
+
 #endif
 
 } // namespace API

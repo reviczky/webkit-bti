@@ -37,6 +37,7 @@
 #include <WebCore/SWContextManager.h>
 #include <WebCore/ServiceWorkerClientData.h>
 #include <WebCore/ServiceWorkerTypes.h>
+#include <WebCore/Site.h>
 #include <wtf/URLHash.h>
 
 namespace IPC {
@@ -45,6 +46,7 @@ class FormDataReference;
 
 namespace WebCore {
 class ResourceRequest;
+class Site;
 
 enum class WorkerThreadMode : bool;
 
@@ -56,24 +58,25 @@ struct ServiceWorkerContextData;
 namespace WebKit {
 
 class RemoteWorkerFrameLoaderClient;
+class ServiceWorkerDebuggableFrontendChannel;
 class WebServiceWorkerFetchTaskClient;
 class WebUserContentController;
 struct RemoteWorkerInitializationData;
 
-class WebSWContextManagerConnection final : public WebCore::SWContextManager::Connection, public IPC::WorkQueueMessageReceiver {
+class WebSWContextManagerConnection final : public WebCore::SWContextManager::Connection, public IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop> {
 public:
-    static Ref<WebSWContextManagerConnection> create(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier pageID, const WebPreferencesStore& store, RemoteWorkerInitializationData&& initializationData) { return adoptRef(*new WebSWContextManagerConnection(WTFMove(connection), WTFMove(registrableDomain), serviceWorkerPageIdentifier, pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData))); }
+    static Ref<WebSWContextManagerConnection> create(Ref<IPC::Connection>&& connection, WebCore::Site&& site, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier pageID, const WebPreferencesStore& store, RemoteWorkerInitializationData&& initializationData) { return adoptRef(*new WebSWContextManagerConnection(WTFMove(connection), WTFMove(site), serviceWorkerPageIdentifier, pageGroupID, webPageProxyID, pageID, store, WTFMove(initializationData))); }
     ~WebSWContextManagerConnection();
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     WebCore::PageIdentifier pageIdentifier() const final { return m_pageID; }
 
-    void ref() const final { return IPC::WorkQueueMessageReceiver::ref(); }
-    void deref() const final { return IPC::WorkQueueMessageReceiver::deref(); }
+    void ref() const final { return IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::ref(); }
+    void deref() const final { return IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::deref(); }
 
 private:
-    WebSWContextManagerConnection(Ref<IPC::Connection>&&, WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, RemoteWorkerInitializationData&&);
+    WebSWContextManagerConnection(Ref<IPC::Connection>&&, WebCore::Site&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, RemoteWorkerInitializationData&&);
 
     // WebCore::SWContextManager::Connection.
     void establishConnection(CompletionHandler<void()>&&) final;
@@ -117,8 +120,6 @@ private:
 #if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
     void didSaveScriptsToDisk(WebCore::ServiceWorkerIdentifier, WebCore::ScriptBuffer&&, HashMap<URL, WebCore::ScriptBuffer>&& importedScripts);
 #endif
-    void matchAllCompleted(uint64_t matchAllRequestIdentifier, Vector<WebCore::ServiceWorkerClientData>&&);
-    void skipWaitingCompleted(uint64_t matchAllRequestIdentifier);
     void setUserAgent(String&& userAgent);
     void close();
     void setThrottleState(bool isThrottleable);
@@ -134,17 +135,20 @@ private:
     void setRegistrationLastUpdateTime(WebCore::ServiceWorkerRegistrationIdentifier, WallTime);
     void setRegistrationUpdateViaCache(WebCore::ServiceWorkerRegistrationIdentifier, WebCore::ServiceWorkerUpdateViaCache);
 
+#if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
+    void connectToInspector(WebCore::ServiceWorkerIdentifier);
+    void disconnectFromInspector(WebCore::ServiceWorkerIdentifier);
+    void dispatchMessageFromInspector(WebCore::ServiceWorkerIdentifier, String&&);
+#endif
+
     Ref<IPC::Connection> m_connectionToNetworkProcess;
-    WebCore::RegistrableDomain m_registrableDomain;
+    const WebCore::Site m_site;
     std::optional<WebCore::ScriptExecutionContextIdentifier> m_serviceWorkerPageIdentifier;
     PageGroupIdentifier m_pageGroupID;
     WebPageProxyIdentifier m_webPageProxyID;
     WebCore::PageIdentifier m_pageID;
 
     HashSet<std::unique_ptr<RemoteWorkerFrameLoaderClient>> m_loaders;
-    HashMap<uint64_t, WebCore::ServiceWorkerClientsMatchAllCallback> m_matchAllRequests;
-    HashMap<uint64_t, Function<void()>> m_skipWaitingCallbacks;
-    uint64_t m_previousRequestIdentifier { 0 };
     String m_userAgent;
     bool m_isThrottleable { true };
     Ref<WebUserContentController> m_userContentController;
@@ -153,6 +157,9 @@ private:
 
     using FetchKey = std::pair<WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier>;
     HashMap<FetchKey, Ref<WebServiceWorkerFetchTaskClient>> m_ongoingNavigationFetchTasks WTF_GUARDED_BY_CAPABILITY(m_queue.get());
+#if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
+    HashMap<WebCore::ServiceWorkerIdentifier, Ref<ServiceWorkerDebuggableFrontendChannel>> m_channels;
+#endif
 };
 
 } // namespace WebKit
