@@ -3,6 +3,8 @@ wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
   * New upstream release.
   * Refresh all patches.
   * Update copyright information of all files.
+  * debian/control:
+    - Add build dependency on flite1-dev (for speech synthesis).
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 15 Mar 2025 21:43:25 +0100
 
