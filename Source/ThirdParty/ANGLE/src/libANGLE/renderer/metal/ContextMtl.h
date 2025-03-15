@@ -282,11 +282,6 @@ class ContextMtl : public ContextImpl, public mtl::Context
                      const char *file,
                      const char *function,
                      unsigned int line) override;
-    void handleError(NSError *error,
-                     const char *message,
-                     const char *file,
-                     const char *function,
-                     unsigned int line) override;
 
     using ContextImpl::handleError;
 
@@ -325,11 +320,9 @@ class ContextMtl : public ContextImpl, public mtl::Context
     void onTransformFeedbackInactive(const gl::Context *context, TransformFeedbackMtl *xfb);
 
     // Invoked by multiple classes in SyncMtl.mm
-#if ANGLE_MTL_EVENT_AVAILABLE
     // Enqueue an event and return the command queue serial that the event was or will be placed in.
     uint64_t queueEventSignal(id<MTLEvent> event, uint64_t value);
     void serverWaitEvent(id<MTLEvent> event, uint64_t value);
-#endif
 
     const mtl::ClearColorValue &getClearColorValue() const;
     const mtl::WriteMaskArray &getWriteMaskArray() const;
@@ -539,6 +532,8 @@ class ContextMtl : public ContextImpl, public mtl::Context
 
     angle::Result startOcclusionQueryInRenderPass(QueryMtl *query, bool clearOldValue);
 
+    angle::Result checkCommandBufferError();
+
     // Dirty bits.
     enum DirtyBitType : size_t
     {
@@ -599,7 +594,6 @@ class ContextMtl : public ContextImpl, public mtl::Context
     mtl::RenderCommandEncoder mRenderEncoder;
     mtl::BlitCommandEncoder mBlitEncoder;
     mtl::ComputeCommandEncoder mComputeEncoder;
-    bool mHasMetalSharedEvents = false;
 
     mtl::PipelineCache mPipelineCache;
 
@@ -654,7 +648,7 @@ class ContextMtl : public ContextImpl, public mtl::Context
     IncompleteTextureSet mIncompleteTextures;
     ProvokingVertexHelper mProvokingVertexHelper;
 
-    mtl::RasterizationRateMapRef mRasterizationRateMap;
+    angle::ObjCPtr<id<MTLRasterizationRateMap>> mRasterizationRateMap;
     id<MTLTexture> mRasterizationRateMapTexture;
 
     mtl::ContextDevice mContextDevice;

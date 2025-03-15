@@ -34,6 +34,7 @@
 #include "WebMemoryPressureHandler.h"
 #include "WebProcessCreationParameters.h"
 #include <WebCore/PlatformDisplay.h>
+#include <WebCore/SystemSettings.h>
 #include <wtf/FileSystem.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/glib/Application.h>
@@ -62,7 +63,6 @@
 #if PLATFORM(GTK)
 #include "AcceleratedBackingStoreDMABuf.h"
 #include "Display.h"
-#include "GtkSettingsManager.h"
 #endif
 
 #if PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
@@ -70,7 +70,9 @@
 #endif
 
 #if !USE(SYSTEM_MALLOC) && OS(LINUX)
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GTK/WPE port
 #include <bmalloc/valgrind.h>
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
 namespace WebKit {
@@ -113,21 +115,21 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
 #endif
 
 #if PLATFORM(GTK)
-    parameters.dmaBufRendererBufferMode = AcceleratedBackingStoreDMABuf::rendererBufferMode();
+    parameters.rendererBufferTransportMode = AcceleratedBackingStoreDMABuf::rendererBufferTransportMode();
 #elif PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
     if (usingWPEPlatformAPI) {
 #if USE(GBM)
         if (!parameters.renderDeviceFile.isEmpty())
-            parameters.dmaBufRendererBufferMode.add(DMABufRendererBufferMode::Hardware);
+            parameters.rendererBufferTransportMode.add(RendererBufferTransportMode::Hardware);
 #endif
-        parameters.dmaBufRendererBufferMode.add(DMABufRendererBufferMode::SharedMemory);
+        parameters.rendererBufferTransportMode.add(RendererBufferTransportMode::SharedMemory);
     }
 #endif
 
 #if PLATFORM(WPE)
     parameters.isServiceWorkerProcess = process.isRunningServiceWorkers();
 
-    if (!parameters.isServiceWorkerProcess && parameters.dmaBufRendererBufferMode.isEmpty()) {
+    if (!parameters.isServiceWorkerProcess && parameters.rendererBufferTransportMode.isEmpty()) {
         parameters.hostClientFileDescriptor = UnixFileDescriptor { wpe_renderer_host_create_client(), UnixFileDescriptor::Adopt };
         parameters.implementationLibraryName = FileSystem::fileSystemRepresentation(String::fromLatin1(wpe_loader_get_loaded_implementation_library_name()));
     }
@@ -169,8 +171,9 @@ void WebProcessPool::platformInitializeWebProcess(const WebProcessProxy& process
     parameters.accessibilityBusName = accessibilityBusName();
 #endif
 
+    parameters.systemSettings = WebCore::SystemSettings::singleton().settingsState();
+
 #if PLATFORM(GTK)
-    parameters.gtkSettings = GtkSettingsManager::singleton().settingsState();
     parameters.screenProperties = ScreenManager::singleton().collectScreenProperties();
 #endif
 
@@ -207,9 +210,11 @@ void WebProcessPool::setSandboxEnabled(bool enabled)
         return;
     }
 
-#if !USE(SYSTEM_MALLOC)
+#if !USE(SYSTEM_MALLOC) && defined(RUNNING_ON_VALGRIND)
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GTK/WPE port
     if (RUNNING_ON_VALGRIND)
         return;
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
     if (const char* disableSandbox = getenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS")) {

@@ -69,7 +69,7 @@ public:
 
     virtual ~RemoteCommandEncoder();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
@@ -84,6 +84,10 @@ private:
     RemoteCommandEncoder& operator=(RemoteCommandEncoder&&) = delete;
 
     WebCore::WebGPU::CommandEncoder& backing() { return m_backing; }
+    Ref<WebCore::WebGPU::CommandEncoder> protectedBacking();
+
+    Ref<WebGPU::ObjectHeap> protectedObjectHeap() const { return m_objectHeap.get(); }
+    Ref<RemoteGPU> protectedGPU() const { return m_gpu.get(); }
 
     RefPtr<IPC::Connection> connection() const;
 
@@ -139,7 +143,7 @@ private:
 
     Ref<WebCore::WebGPU::CommandEncoder> m_backing;
     WeakRef<WebGPU::ObjectHeap> m_objectHeap;
-    Ref<IPC::StreamServerConnection> m_streamConnection;
+    const Ref<IPC::StreamServerConnection> m_streamConnection;
     WebGPUIdentifier m_identifier;
     ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     WeakRef<RemoteGPU> m_gpu;

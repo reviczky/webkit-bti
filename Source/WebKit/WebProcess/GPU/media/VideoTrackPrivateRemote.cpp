@@ -34,8 +34,11 @@
 #include "RemoteMediaPlayerProxyMessages.h"
 #include "VideoTrackPrivateRemoteConfiguration.h"
 #include <wtf/CrossThreadCopier.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(VideoTrackPrivateRemote);
 
 VideoTrackPrivateRemote::VideoTrackPrivateRemote(GPUProcessConnection& gpuProcessConnection, WebCore::MediaPlayerIdentifier playerIdentifier, VideoTrackPrivateRemoteConfiguration&& configuration)
     : m_gpuProcessConnection(gpuProcessConnection)
@@ -71,7 +74,7 @@ void VideoTrackPrivateRemote::updateConfiguration(VideoTrackPrivateRemoteConfigu
         m_label = configuration.label;
         if (changed && hasClients()) {
             notifyClients([label = crossThreadCopy(m_label)](auto& client) {
-                client.labelChanged(AtomString { label });
+                client.labelChanged(AtomString { label.isolatedCopy() });
             });
         }
     }
@@ -81,7 +84,7 @@ void VideoTrackPrivateRemote::updateConfiguration(VideoTrackPrivateRemoteConfigu
         m_language = configuration.language;
         if (changed && hasClients()) {
             notifyClients([language = crossThreadCopy(m_language)](auto& client) {
-                client.languageChanged(AtomString { language });
+                client.languageChanged(AtomString { language.isolatedCopy() });
             });
         }
     }

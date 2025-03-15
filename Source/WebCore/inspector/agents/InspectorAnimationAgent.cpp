@@ -26,11 +26,13 @@
 #include "config.h"
 #include "InspectorAnimationAgent.h"
 
+#include "Animation.h"
 #include "AnimationEffect.h"
 #include "AnimationEffectPhase.h"
 #include "BlendingKeyframes.h"
 #include "CSSAnimation.h"
 #include "CSSPropertyNames.h"
+#include "CSSSerializationContext.h"
 #include "CSSTransition.h"
 #include "CSSValue.h"
 #include "ComputedStyleExtractor.h"
@@ -60,6 +62,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/Seconds.h>
 #include <wtf/Stopwatch.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
@@ -68,6 +71,8 @@
 namespace WebCore {
 
 using namespace Inspector;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorAnimationAgent);
 
 static std::optional<double> protocolValueForSeconds(const Seconds& seconds)
 {
@@ -157,12 +162,12 @@ static Ref<JSON::ArrayOf<Inspector::Protocol::Animation::Keyframe>> buildObjectF
                     [&] (CSSPropertyID cssPropertyId) {
                         stylePayloadBuilder.append(nameString(cssPropertyId), ": "_s);
                         if (auto value = computedStyleExtractor.valueForPropertyInStyle(style, cssPropertyId, renderer))
-                            stylePayloadBuilder.append(value->cssText());
+                            stylePayloadBuilder.append(value->cssText(CSS::defaultSerializationContext()));
                     },
                     [&] (const AtomString& customProperty) {
                         stylePayloadBuilder.append(customProperty, ": "_s);
                         if (auto value = computedStyleExtractor.customPropertyValue(customProperty))
-                            stylePayloadBuilder.append(value->cssText());
+                            stylePayloadBuilder.append(value->cssText(CSS::defaultSerializationContext()));
                     }
                 );
                 stylePayloadBuilder.append(';');
@@ -186,7 +191,7 @@ static Ref<JSON::ArrayOf<Inspector::Protocol::Animation::Keyframe>> buildObjectF
                 keyframePayload->setEasing(timingFunction->cssText());
 
             if (!parsedKeyframe.style->isEmpty())
-                keyframePayload->setStyle(parsedKeyframe.style->asText());
+                keyframePayload->setStyle(parsedKeyframe.style->asText(CSS::defaultSerializationContext()));
 
             keyframesPayload->addItem(WTFMove(keyframePayload));
         }
@@ -200,17 +205,26 @@ static Ref<Inspector::Protocol::Animation::Effect> buildObjectForEffect(Animatio
     auto effectPayload = Inspector::Protocol::Animation::Effect::create()
         .release();
 
-    if (auto startDelay = protocolValueForSeconds(effect.delay()))
-        effectPayload->setStartDelay(startDelay.value());
+    // FIXME: convert this to WebAnimationTime.
+    if (auto delayTime = effect.delay().time()) {
+        if (auto delay = protocolValueForSeconds(*delayTime))
+            effectPayload->setStartDelay(*delay);
+    }
 
-    if (auto endDelay = protocolValueForSeconds(effect.endDelay()))
-        effectPayload->setEndDelay(endDelay.value());
+    // FIXME: convert this to WebAnimationTime.
+    if (auto endDelayTime = effect.endDelay().time()) {
+        if (auto endDelay = protocolValueForSeconds(*endDelayTime))
+            effectPayload->setEndDelay(*endDelay);
+    }
 
     effectPayload->setIterationCount(effect.iterations() == std::numeric_limits<double>::infinity() ? -1 : effect.iterations());
     effectPayload->setIterationStart(effect.iterationStart());
 
-    if (auto iterationDuration = protocolValueForSeconds(effect.iterationDuration()))
-        effectPayload->setIterationDuration(iterationDuration.value());
+    // FIXME: convert this to WebAnimationTime.
+    if (auto durationTime = effect.iterationDuration().time()) {
+        if (auto iterationDuration = protocolValueForSeconds(*durationTime))
+            effectPayload->setIterationDuration(iterationDuration.value());
+    }
 
     if (auto* timingFunction = effect.timingFunction())
         effectPayload->setTimingFunction(timingFunction->cssText());
@@ -265,7 +279,7 @@ Inspector::Protocol::ErrorStringOr<void> InspectorAnimationAgent::enable()
     const auto existsInCurrentPage = [&] (ScriptExecutionContext* scriptExecutionContext) {
         // FIXME: <https://webkit.org/b/168475> Web Inspector: Correctly display iframe's WebSockets
         RefPtr document = dynamicDowncast<Document>(scriptExecutionContext);
-        return document && document->page() == &m_inspectedPage;
+        return document && document->page() == m_inspectedPage.ptr();
     };
 
     {

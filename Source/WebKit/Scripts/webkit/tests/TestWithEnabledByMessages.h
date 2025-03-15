@@ -28,6 +28,7 @@
 #include "Connection.h"
 #include "MessageNames.h"
 #include <wtf/Forward.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/text/WTFString.h>
 
@@ -48,6 +49,7 @@ public:
     static constexpr bool isSync = false;
     static constexpr bool canDispatchOutOfOrder = false;
     static constexpr bool replyCanDispatchOutOfOrder = false;
+    static constexpr bool deferSendingIfSuspended = false;
 
     explicit AlwaysEnabled(const String& url)
         : m_arguments(url)
@@ -71,6 +73,7 @@ public:
     static constexpr bool isSync = false;
     static constexpr bool canDispatchOutOfOrder = false;
     static constexpr bool replyCanDispatchOutOfOrder = false;
+    static constexpr bool deferSendingIfSuspended = false;
 
     explicit ConditionallyEnabled(const String& url)
         : m_arguments(url)
@@ -86,14 +89,34 @@ private:
     std::tuple<const String&> m_arguments;
 };
 
-class MultiConditionallyEnabled {
+class ConditionallyEnabledAnd {
 public:
     using Arguments = std::tuple<>;
 
-    static IPC::MessageName name() { return IPC::MessageName::TestWithEnabledBy_MultiConditionallyEnabled; }
+    static IPC::MessageName name() { return IPC::MessageName::TestWithEnabledBy_ConditionallyEnabledAnd; }
     static constexpr bool isSync = false;
     static constexpr bool canDispatchOutOfOrder = false;
     static constexpr bool replyCanDispatchOutOfOrder = false;
+    static constexpr bool deferSendingIfSuspended = false;
+
+    auto&& arguments()
+    {
+        return WTFMove(m_arguments);
+    }
+
+private:
+    std::tuple<> m_arguments;
+};
+
+class ConditionallyEnabledOr {
+public:
+    using Arguments = std::tuple<>;
+
+    static IPC::MessageName name() { return IPC::MessageName::TestWithEnabledBy_ConditionallyEnabledOr; }
+    static constexpr bool isSync = false;
+    static constexpr bool canDispatchOutOfOrder = false;
+    static constexpr bool replyCanDispatchOutOfOrder = false;
+    static constexpr bool deferSendingIfSuspended = false;
 
     auto&& arguments()
     {

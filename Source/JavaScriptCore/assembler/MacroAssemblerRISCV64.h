@@ -655,6 +655,14 @@ public:
         m_assembler.maskRegister<32>(dest);
     }
 
+    void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data>();
+        move(imm, temp.data());
+        m_assembler.sllwInsn(dest, temp.data(), shiftAmount);
+        m_assembler.maskRegister<32>(dest);
+    }
+
     void lshift32(Address src, RegisterID shiftAmount, RegisterID dest)
     {
         auto temp = temps<Data>();
@@ -670,6 +678,13 @@ public:
     void lshift64(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         m_assembler.sllInsn(dest, src, shiftAmount);
+    }
+
+    void lshift64(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data>();
+        move(imm, temp.data());
+        lshift64(temp.data(), shiftAmount, dest);
     }
 
     void lshift64(TrustedImm32 shiftAmount, RegisterID dest)
@@ -1846,6 +1861,26 @@ public:
     void move(TrustedImmPtr imm, RegisterID dest)
     {
         loadImmediate(imm, dest);
+    }
+
+    void move32ToFloat(TrustedImm32 imm, FPRegisterID dest)
+    {
+        if (!imm.m_value) {
+            moveZeroToFloat(dest);
+            return;
+        }
+        move(imm, scratchRegister());
+        move32ToFloat(scratchRegister(), dest);
+    }
+
+    void move64ToDouble(TrustedImm64 imm, FPRegisterID dest)
+    {
+        if (!imm.m_value) {
+            moveZeroToDouble(dest);
+            return;
+        }
+        move(imm, scratchRegister());
+        move64ToDouble(scratchRegister(), dest);
     }
 
     void swap(RegisterID reg1, RegisterID reg2)
@@ -3370,6 +3405,16 @@ public:
     void floorDouble(FPRegisterID src, FPRegisterID dest)
     {
         roundFP<64, RISCV64Assembler::FPRoundingMode::RDN>(src, dest);
+    }
+
+    void truncDouble(FPRegisterID src, FPRegisterID dst)
+    {
+        roundTowardZeroDouble(src, dst);
+    }
+
+    void truncFloat(FPRegisterID src, FPRegisterID dst)
+    {
+        roundTowardZeroFloat(src, dst);
     }
 
     void roundTowardNearestIntFloat(FPRegisterID src, FPRegisterID dest)

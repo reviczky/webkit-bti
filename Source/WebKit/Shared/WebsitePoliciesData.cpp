@@ -168,11 +168,43 @@ void WebsitePoliciesData::applyToDocumentLoader(WebsitePoliciesData&& websitePol
     documentLoader.setIdempotentModeAutosizingOnlyHonorsPercentages(websitePolicies.idempotentModeAutosizingOnlyHonorsPercentages);
     documentLoader.setHTTPSByDefaultMode(websitePolicies.httpsByDefaultMode);
 
-    if (!documentLoader.frame())
+    switch (websitePolicies.pushAndNotificationsEnabledPolicy) {
+    case WebsitePushAndNotificationsEnabledPolicy::UseGlobalPolicy:
+        documentLoader.setPushAndNotificationsEnabledPolicy(WebCore::PushAndNotificationsEnabledPolicy::UseGlobalPolicy);
+        break;
+    case WebsitePushAndNotificationsEnabledPolicy::No:
+        documentLoader.setPushAndNotificationsEnabledPolicy(WebCore::PushAndNotificationsEnabledPolicy::No);
+        break;
+    case WebsitePushAndNotificationsEnabledPolicy::Yes:
+        documentLoader.setPushAndNotificationsEnabledPolicy(WebCore::PushAndNotificationsEnabledPolicy::Yes);
+        break;
+    }
+
+    switch (websitePolicies.inlineMediaPlaybackPolicy) {
+    case WebsiteInlineMediaPlaybackPolicy::Default:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::Default);
+        break;
+    case WebsiteInlineMediaPlaybackPolicy::RequiresPlaysInlineAttribute:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::RequiresPlaysInlineAttribute);
+        break;
+    case WebsiteInlineMediaPlaybackPolicy::DoesNotRequirePlaysInlineAttribute:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::DoesNotRequirePlaysInlineAttribute);
+        break;
+    }
+
+    RefPtr frame = documentLoader.frame();
+    if (!frame)
         return;
+
+    if (!frame->isMainFrame())
+        return;
+
+#if ENABLE(TOUCH_EVENTS)
+    if (auto overrideValue = websitePolicies.overrideTouchEventDOMAttributesEnabled)
+        frame->settings().setTouchEventDOMAttributesEnabled(*overrideValue);
+#endif
 
     documentLoader.applyPoliciesToSettings();
 }
 
-}
-
+} // namespace WebKit

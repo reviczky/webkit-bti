@@ -31,28 +31,43 @@
 #include "BitmapTexture.h"
 #include <wtf/RunLoop.h>
 
+typedef void *EGLImage;
+
+namespace WebCore {
+class BitmapTexturePool;
+}
+
+namespace WTF {
+template<typename T> struct IsDeprecatedTimerSmartPointerException;
+template<> struct IsDeprecatedTimerSmartPointerException<WebCore::BitmapTexturePool> : std::true_type { };
+}
+
 namespace WebCore {
 
 class IntSize;
 
 class BitmapTexturePool {
     WTF_MAKE_NONCOPYABLE(BitmapTexturePool);
+    WTF_MAKE_FAST_ALLOCATED();
 public:
     BitmapTexturePool();
 
-    RefPtr<BitmapTexture> acquireTexture(const IntSize&, OptionSet<BitmapTexture::Flags>);
+    Ref<BitmapTexture> acquireTexture(const IntSize&, OptionSet<BitmapTexture::Flags>);
+#if USE(GBM)
+    Ref<BitmapTexture> createTextureForImage(EGLImage, OptionSet<BitmapTexture::Flags>);
+#endif
     void releaseUnusedTexturesTimerFired();
 
 private:
     struct Entry {
-        explicit Entry(RefPtr<BitmapTexture>&& texture)
+        explicit Entry(Ref<BitmapTexture>&& texture)
             : m_texture(WTFMove(texture))
         { }
 
         void markIsInUse() { m_lastUsedTime = MonotonicTime::now(); }
         bool canBeReleased (MonotonicTime minUsedTime) const { return m_lastUsedTime < minUsedTime && m_texture->refCount() == 1; }
 
-        RefPtr<BitmapTexture> m_texture;
+        Ref<BitmapTexture> m_texture;
         MonotonicTime m_lastUsedTime;
     };
 
@@ -61,6 +76,9 @@ private:
     void exitLimitExceededModeIfNeeded();
 
     Vector<Entry> m_textures;
+#if USE(GBM)
+    Vector<Ref<BitmapTexture>> m_imageTextures;
+#endif
     RunLoop::Timer m_releaseUnusedTexturesTimer;
     uint64_t m_poolSize { 0 };
     bool m_onLimitExceededMode { false };

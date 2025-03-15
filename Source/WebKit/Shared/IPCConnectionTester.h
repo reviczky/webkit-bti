@@ -41,10 +41,15 @@ namespace WebKit {
 
 // Interface to test various IPC::Connection related activities.
 class IPCConnectionTester final : public RefCounted<IPCConnectionTester>, private IPC::Connection::Client {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(IPCConnectionTester);
 public:
     ~IPCConnectionTester();
     static Ref<IPCConnectionTester> create(IPC::Connection&, IPCConnectionTesterIdentifier, IPC::Connection::Handle&&);
     void stopListeningForIPC(Ref<IPCConnectionTester>&& refFromConnection);
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     void sendAsyncMessages(uint32_t messageCount);
 private:

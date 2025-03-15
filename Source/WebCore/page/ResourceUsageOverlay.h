@@ -33,6 +33,7 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
@@ -50,7 +51,7 @@ class IntPoint;
 class IntRect;
 
 class ResourceUsageOverlay final : public PageOverlayClient, public RefCounted<ResourceUsageOverlay>, public CanMakeWeakPtr<ResourceUsageOverlay> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ResourceUsageOverlay);
     WTF_MAKE_NONCOPYABLE(ResourceUsageOverlay);
 public:
     static Ref<ResourceUsageOverlay> create(Page&);
@@ -61,6 +62,8 @@ public:
 #if PLATFORM(COCOA)
     void platformDraw(CGContextRef);
 #endif
+
+    void detachFromPage() { m_page.clear(); }
 
     static const int normalWidth = 570;
     static const int normalHeight = 180;

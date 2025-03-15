@@ -28,12 +28,28 @@
 
 #include "Capabilities.h"
 #include "CommandResult.h"
+#include "Logging.h"
 #include "SessionHost.h"
+#include <wtf/Compiler.h>
+#include <wtf/LoggerHelper.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SortedArrayMap.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/WTFString.h>
+
+#if ENABLE(WEBDRIVER_BIDI)
+#include "HTTPServer.h"
+#include "WebSocketServer.h"
+#include <algorithm>
+#include <array>
+#include <cstdio>
+#include <limits>
+#include <optional>
+#include <wtf/JSONValues.h>
+#include <wtf/StdLibExtras.h>
+#include <wtf/glib/GTypedefs.h>
+#endif
 
 namespace WebDriver {
 
@@ -42,33 +58,54 @@ static const double maxSafeInteger = 9007199254740991.0; // 2 ^ 53 - 1
 
 WebDriverService::WebDriverService()
     : m_server(*this)
+#if ENABLE(WEBDRIVER_BIDI)
+    , m_bidiServer(*this, *this)
+    , m_browserTerminatedObserver([this](const String& sessionID) { onBrowserTerminated(sessionID); })
+#endif
 {
+#if ENABLE(WEBDRIVER_BIDI)
+    SessionHost::addBrowserTerminatedObserver(m_browserTerminatedObserver);
+#endif
+}
+
+WebDriverService::~WebDriverService()
+{
+#if ENABLE(WEBDRIVER_BIDI)
+    SessionHost::removeBrowserTerminatedObserver(m_browserTerminatedObserver);
+#endif
 }
 
 static void printUsageStatement(const char* programName)
 {
-    printf("Usage: %s options\n", programName);
-    printf("  -h,          --help             Prints this help message\n");
-    printf("  -p <port>,   --port=<port>      Port number the driver will use\n");
-    printf("               --host=<host>      Host IP the driver will use, or either 'local' or 'all' (default: 'local')\n");
-    printf("  -t <ip:port> --target=<ip:port> Target IP and port\n");
+    SAFE_PRINTF("Usage: %s options\n", String::fromLatin1(programName).utf8());
+    SAFE_PRINTF("  -h,          --help             Prints this help message\n");
+    SAFE_PRINTF("  -p <port>,   --port=<port>      Port number the driver will use\n");
+    SAFE_PRINTF("               --host=<host>      Host IP the driver will use, or either 'local' or 'all' (default: 'local')\n");
+    SAFE_PRINTF("  -t <ip:port> --target=<ip:port> Target IP and port\n");
+#if ENABLE(WEBDRIVER_BIDI)
+    SAFE_PRINTF("               --bidi-port=<port>        Port number to use for BiDi's WebSocket connections\n");
+#endif
+    SAFE_PRINTF("               --replace-on-new-session  Replace the existing session on new session request\n");
 }
 
 int WebDriverService::run(int argc, char** argv)
 {
     String portString;
     std::optional<String> host;
+#if ENABLE(WEBDRIVER_BIDI)
+    String bidiPortString;
+#endif
     String targetString;
     if (const char* targetEnvVar = getenv("WEBDRIVER_TARGET_ADDR"))
         targetString = String::fromLatin1(targetEnvVar);
     for (int i = 1 ; i < argc; ++i) {
-        const char* arg = argv[i];
-        if (!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
+        auto arg = unsafeSpan(argv[i]);
+        if (equalSpans(arg, "-h"_span) || equalSpans(arg, "--help"_span)) {
             printUsageStatement(argv[0]);
             return EXIT_SUCCESS;
         }
 
-        if (!strcmp(arg, "-p") && portString.isNull()) {
+        if (equalSpans(arg, "-p"_span) && portString.isNull()) {
             if (++i == argc) {
                 printUsageStatement(argv[0]);
                 return EXIT_FAILURE;
@@ -77,19 +114,27 @@ int WebDriverService::run(int argc, char** argv)
             continue;
         }
 
-        static const unsigned portStrLength = strlen("--port=");
-        if (!strncmp(arg, "--port=", portStrLength) && portString.isNull()) {
-            portString = String::fromLatin1(arg + portStrLength);
+        static constexpr auto portArgument = "--port="_span;
+        if (spanHasPrefix(arg, portArgument) && portString.isNull()) {
+            portString = arg.subspan(portArgument.size());
             continue;
         }
 
-        static const unsigned hostStrLength = strlen("--host=");
-        if (!strncmp(arg, "--host=", hostStrLength) && !host) {
-            host = String::fromLatin1(arg + hostStrLength);
+        static constexpr auto hostArgument = "--host="_span;
+        if (spanHasPrefix(arg, hostArgument) && !host) {
+            host = arg.subspan(hostArgument.size());
             continue;
         }
 
-        if (!strcmp(arg, "-t") && targetString.isNull()) {
+#if ENABLE(WEBDRIVER_BIDI)
+        static constexpr auto bidiPortArgument = "--bidi-port="_span;
+        if (spanHasPrefix(arg, bidiPortArgument) && bidiPortString.isNull()) {
+            bidiPortString = arg.subspan(bidiPortArgument.size());
+            continue;
+        }
+#endif
+
+        if (equalSpans(arg, "-t"_span) && targetString.isNull()) {
             if (++i == argc) {
                 printUsageStatement(argv[0]);
                 return EXIT_FAILURE;
@@ -98,9 +143,14 @@ int WebDriverService::run(int argc, char** argv)
             continue;
         }
 
-        static const unsigned targetStrLength = strlen("--target=");
-        if (!strncmp(arg, "--target=", targetStrLength) && targetString.isNull()) {
-            targetString = String::fromLatin1(arg + targetStrLength);
+        static constexpr auto targetArgument = "--target="_span;
+        if (spanHasPrefix(arg, targetArgument) && targetString.isNull()) {
+            targetString = arg.subspan(targetArgument.size());
+            continue;
+        }
+
+        if (equalSpans(arg, "--replace-on-new-session"_span)) {
+            m_replaceOnNewSession = true;
             continue;
         }
     }
@@ -124,13 +174,36 @@ int WebDriverService::run(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+#if ENABLE(WEBDRIVER_BIDI)
+    auto bidiPort = parseInteger<uint16_t>(bidiPortString);
+    if (!bidiPort) {
+        const int16_t bidiPortIncrement = *port == std::numeric_limits<uint16_t>::max() ? -1 : 1;
+        bidiPort = { *port + bidiPortIncrement };
+        fprintf(stderr, "Invalid WebSocket BiDi port %s provided. Defaulting to %d.\n", bidiPortString.utf8().data(), *bidiPort);
+    }
+#endif
+
     WTF::initializeMainThread();
 
-    if (!m_server.listen(host, *port))
+    const char* hostStr = host && host->utf8().data() ? host->utf8().data() : "local";
+#if ENABLE(WEBDRIVER_BIDI)
+    if (!m_bidiServer.listen(host ? *host : nullString(), *bidiPort)) {
+        fprintf(stderr, "FATAL: Unable to listen for WebSocket BiDi server at host %s and port %d.\n", hostStr, *bidiPort);
         return EXIT_FAILURE;
+    }
+    RELEASE_LOG(WebDriverBiDi, "Started WebSocket BiDi server with host %s and port %d", hostStr, *bidiPort);
+#endif // ENABLE(WEBDRIVER_BIDI)
+    if (!m_server.listen(host, *port)) {
+        fprintf(stderr, "FATAL: Unable to listen for HTTP server at host %s and port %d.\n", hostStr, *port);
+        return EXIT_FAILURE;
+    }
+    RELEASE_LOG(WebDriverClassic, "Started HTTP server with host %s and port %d", hostStr, *port);
 
     RunLoop::run();
 
+#if ENABLE(WEBDRIVER_BIDI)
+    m_bidiServer.disconnect();
+#endif
     m_server.disconnect();
 
     return EXIT_SUCCESS;
@@ -212,13 +285,21 @@ const WebDriverService::Command WebDriverService::s_commands[] = {
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/displayed", &WebDriverService::isElementDisplayed },
 };
 
+#if ENABLE(WEBDRIVER_BIDI)
+const WebDriverService::BidiCommand WebDriverService::s_bidiCommands[] = {
+    { "session.status"_s, &WebDriverService::bidiSessionStatus },
+    { "session.subscribe"_s, &WebDriverService::bidiSessionSubscribe },
+    { "session.unsubscribe"_s, &WebDriverService::bidiSessionUnsubscribe },
+};
+#endif
+
 std::optional<WebDriverService::HTTPMethod> WebDriverService::toCommandHTTPMethod(const String& method)
 {
     static constexpr std::pair<ComparableLettersLiteral, WebDriverService::HTTPMethod> httpMethodMappings[] = {
-        { "delete", WebDriverService::HTTPMethod::Delete },
-        { "get", WebDriverService::HTTPMethod::Get },
-        { "post", WebDriverService::HTTPMethod::Post },
-        { "put", WebDriverService::HTTPMethod::Post },
+        { "delete"_s, WebDriverService::HTTPMethod::Delete },
+        { "get"_s, WebDriverService::HTTPMethod::Get },
+        { "post"_s, WebDriverService::HTTPMethod::Post },
+        { "put"_s, WebDriverService::HTTPMethod::Post },
     };
     static constexpr SortedArrayMap httpMethods { httpMethodMappings };
 
@@ -324,6 +405,134 @@ void WebDriverService::sendResponse(Function<void (HTTPRequestHandler::Response&
     responseObject->setValue("value"_s, resultValue.releaseNonNull());
     replyHandler({ result.httpStatusCode(), responseObject->toJSONString().utf8(), "application/json; charset=utf-8"_s });
 }
+
+#if ENABLE(WEBDRIVER_BIDI)
+
+bool WebDriverService::acceptHandshake(HTTPRequestHandler::Request&& request)
+{
+    // https://w3c.github.io/webdriver-bidi/#transport
+    auto& resourceName = request.path;
+
+    auto& resources = m_bidiServer.listener()->resources;
+    auto foundResource = std::find(resources.begin(), resources.end(), resourceName);
+    if (foundResource == resources.end()) {
+        RELEASE_LOG(WebDriverBiDi, "Resource name %s not found in listener's list of WebSocket resources. Rejecting handshake.", resourceName.utf8().data());
+        return false;
+    }
+
+    if (*foundResource == "/session"_s) {
+        // FIXME Add support for bidi-only sessions
+        RELEASE_LOG(WebDriverBiDi, "BiDi-only sessions are not supported yet. Rejecting handshake.");
+        return false;
+    }
+
+    auto sessionID = m_bidiServer.getSessionID(resourceName);
+    if (sessionID.isNull()) {
+        RELEASE_LOG(WebDriverBiDi, "No session ID found for resource name %s. Rejecting handshake.", resourceName.utf8().data());
+        return false;
+    }
+
+    // FIXME Properly support multiple sessions in the future
+    if (sessionID != m_session->id()) {
+        RELEASE_LOG(WebDriverBiDi, "No active session found for session ID %s. Rejecting handshake.", sessionID.utf8().data());
+        return false;
+    }
+
+    return true;
+}
+
+void WebDriverService::handleMessage(WebSocketMessageHandler::Message&& message, Function<void(WebSocketMessageHandler::Message&&)>&& completionHandler)
+{
+    // https://w3c.github.io/webdriver-bidi/#handle-an-incoming-message
+
+    if (!message.connection) {
+        RELEASE_LOG(WebDriverBiDi, "Incoming message without attached connection. Ignoring message.");
+        completionHandler(WebSocketMessageHandler::Message::fail(CommandResult::ErrorCode::UnknownError, std::nullopt));
+        return;
+    }
+
+    auto connection = message.connection;
+    auto session = m_bidiServer.session(connection);
+    if (!session) {
+        if (!m_bidiServer.isStaticConnection(connection)) {
+            RELEASE_LOG(WebDriverBiDi, "Unknown connection. Ignoring message.");
+            completionHandler(WebSocketMessageHandler::Message::fail(CommandResult::ErrorCode::InvalidSessionID, connection));
+            return;
+        }
+    }
+    // 6.6 If session is null and command is not a static command, then send an error response given connection, command id, and invalid session id, and return.
+    // FIXME support checking static vs non-static methods https://bugs.webkit.org/show_bug.cgi?id=281721
+
+    auto parsedMessageValue = JSON::Value::parseJSON(String::fromUTF8(message.payload.data()));
+    if (!parsedMessageValue) {
+        RELEASE_LOG(WebDriverBiDi, "WebDriver handle Message: Failed to parse incoming message");
+        completionHandler(WebSocketMessageHandler::Message::fail(CommandResult::ErrorCode::InvalidArgument, message.connection));
+        return;
+    }
+
+    if (session && m_session && session->id() != m_session->id()) {
+        RELEASE_LOG(WebDriverBiDi, "Not an active session. Ignoring message.");
+        return;
+    }
+
+    BidiCommandHandler handler;
+    unsigned id = 0;
+    RefPtr<JSON::Object> parameters;
+    if (!findBidiCommand(parsedMessageValue, &handler, id, parameters)) {
+        RELEASE_LOG(WebDriverBiDi, "Failed to find appropriate BiDi command");
+        std::optional<int> commandId;
+        if (auto parsedMessageObject = parsedMessageValue->asObject()) {
+            auto parsedCommandId = parsedMessageObject->getInteger("id"_s);
+            if (parsedCommandId && *parsedCommandId >= 0)
+                commandId = parsedCommandId;
+        }
+
+        auto errorCode = CommandResult::ErrorCode::UnknownCommand;
+        auto errorReply = WebSocketMessageHandler::Message::fail(errorCode, connection, { "Command not supported"_s }, commandId);
+        completionHandler(WTFMove(errorReply));
+        return;
+    }
+
+    ((*this).*handler)(id, WTFMove(parameters), [completionHandler = WTFMove(completionHandler), message](WebSocketMessageHandler::Message&& resultMessage) {
+        // 6.7.5 If method is "session.new", let session be the entry in the list of active sessions whose session ID is equal to the "sessionId" property of value, append connection to session’s session WebSocket connections, and remove connection from the WebSocket connections not associated with a session.
+        // FIXME https://bugs.webkit.org/show_bug.cgi?id=281722
+        resultMessage.connection = message.connection;
+        completionHandler(WTFMove(resultMessage));
+    });
+}
+
+bool WebDriverService::findBidiCommand(RefPtr<JSON::Value>& parameters, BidiCommandHandler* handler, unsigned& id, RefPtr<JSON::Object>& parsedParams)
+{
+    if (!parameters)
+        return false;
+
+    const auto& asObject = parameters->asObject();
+    if (!asObject)
+        return false;
+
+    std::optional<int> idOpt = asObject->getInteger("id"_s);
+    if (!idOpt)
+        return false;
+
+    const String& method = asObject->getString("method"_s);
+    if (!method)
+        return false;
+
+    auto candidate = std::find_if(std::begin(s_bidiCommands), std::end(s_bidiCommands),
+        [method](const BidiCommand& command) {
+            return method == command.method;
+    });
+
+    if (candidate == std::end(s_bidiCommands))
+        return false;
+
+    id = *idOpt;
+    parsedParams = asObject->getObject("params"_s);
+    *handler = candidate->handler;
+    return true;
+}
+
+#endif // ENABLE(WEBDRIVER_BIDI)
 
 static std::optional<double> valueAsNumberInRange(const JSON::Value& value, double minAllowed = 0, double maxAllowed = std::numeric_limits<int>::max())
 {
@@ -550,6 +759,9 @@ void WebDriverService::parseCapabilities(const JSON::Object& matchedCapabilities
     if (!!unhandledPromptBehavior)
         capabilities.unhandledPromptBehavior = deserializeUnhandledPromptBehavior(unhandledPromptBehavior);
 
+    if (auto webSocketURL = matchedCapabilities.getBoolean("webSocketUrl"_s))
+        capabilities.webSocketURL = *webSocketURL;
+
     platformParseCapabilities(matchedCapabilities, capabilities);
 }
 
@@ -623,6 +835,11 @@ RefPtr<JSON::Object> WebDriverService::validatedCapabilities(const JSON::Object&
             if (!platformValidateCapability(it->key, it->value))
                 return nullptr;
             result->setValue(it->key, it->value.copyRef());
+        } else if (it->key == "webSocketUrl"_s) {
+            auto webSocketURL = it->value->asBoolean();
+            if (!webSocketURL)
+                return nullptr;
+            result->setBoolean(it->key, *webSocketURL);
         } else
             return nullptr;
     }
@@ -688,6 +905,10 @@ RefPtr<JSON::Object> WebDriverService::matchCapabilities(const JSON::Object& mer
         } else if (it->key == "proxy"_s) {
             auto proxyType = it->value->asObject()->getString("proxyType"_s);
             if (!platformSupportProxyType(proxyType))
+                return nullptr;
+        } else if (it->key == "webSocketUrl"_s) {
+            auto webSocketURL = it->value->asBoolean();
+            if (webSocketURL && !platformSupportBidi())
                 return nullptr;
         } else if (!platformMatchCapability(it->key, it->value))
             return nullptr;
@@ -804,18 +1025,35 @@ void WebDriverService::newSession(RefPtr<JSON::Object>&& parameters, Function<vo
 {
     // §8.1 New Session.
     // https://www.w3.org/TR/webdriver/#new-session
-    if (m_session) {
-        completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, String("Maximum number of active sessions"_s)));
-        return;
-    }
-
     auto matchedCapabilitiesList = processCapabilities(*parameters, completionHandler);
     if (matchedCapabilitiesList.isEmpty())
         return;
 
-    // Reverse the vector to always take last item.
-    matchedCapabilitiesList.reverse();
-    connectToBrowser(WTFMove(matchedCapabilitiesList), WTFMove(completionHandler));
+    if (!m_session) {
+        // Reverse the vector to always take last item.
+        matchedCapabilitiesList.reverse();
+        connectToBrowser(WTFMove(matchedCapabilitiesList), WTFMove(completionHandler));
+        return;
+    }
+
+    if (m_replaceOnNewSession) {
+        RELEASE_LOG(WebDriverClassic, "WebDriverService::newSession: Replacing existing session.");
+        auto session = std::exchange(m_session, nullptr);
+        session->close([this, session, matchedCapabilitiesList, completionHandler = WTFMove(completionHandler)](CommandResult&& result) mutable {
+#if ENABLE(WEBDRIVER_BIDI)
+            m_bidiServer.disconnectSession(session->id());
+#endif
+            // Ignore unknown errors when closing the session if the session has abeen actually closed.
+            if ((!result.isError()) || (result.errorCode() == CommandResult::ErrorCode::UnknownError && !session->isConnected())) {
+                matchedCapabilitiesList.reverse();
+                connectToBrowser(WTFMove(matchedCapabilitiesList), WTFMove(completionHandler));
+            } else
+                completionHandler(WTFMove(result));
+        });
+        return;
+    }
+    RELEASE_LOG(WebDriverClassic, "WebDriverService::newSession: Maximum number of active sessions reached. Returning error.");
+    completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, String("Maximum number of active sessions"_s)));
 }
 
 void WebDriverService::connectToBrowser(Vector<Capabilities>&& capabilitiesList, Function<void (CommandResult&&)>&& completionHandler)
@@ -825,10 +1063,10 @@ void WebDriverService::connectToBrowser(Vector<Capabilities>&& capabilitiesList,
         return;
     }
 
-    auto sessionHost = makeUnique<SessionHost>(capabilitiesList.takeLast());
-    auto* sessionHostPtr = sessionHost.get();
-    sessionHostPtr->setHostAddress(m_targetAddress, m_targetPort);
-    sessionHostPtr->connectToBrowser([this, capabilitiesList = WTFMove(capabilitiesList), sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](std::optional<String> error) mutable {
+    auto sessionHost = SessionHost::create(capabilitiesList.takeLast());
+    sessionHost->setHostAddress(m_targetAddress, m_targetPort);
+    auto protectedSessionHost = Ref<SessionHost>(sessionHost);
+    protectedSessionHost->connectToBrowser([this, capabilitiesList = WTFMove(capabilitiesList), sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](std::optional<String> error) mutable {
         if (error) {
             completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, makeString("Failed to connect to browser: "_s, error.value())));
             return;
@@ -838,10 +1076,10 @@ void WebDriverService::connectToBrowser(Vector<Capabilities>&& capabilitiesList,
     });
 }
 
-void WebDriverService::createSession(Vector<Capabilities>&& capabilitiesList, std::unique_ptr<SessionHost>&& sessionHost, Function<void (CommandResult&&)>&& completionHandler)
+void WebDriverService::createSession(Vector<Capabilities>&& capabilitiesList, Ref<SessionHost>&& sessionHost, Function<void (CommandResult&&)>&& completionHandler)
 {
-    auto* sessionHostPtr = sessionHost.get();
-    sessionHostPtr->startAutomationSession([this, capabilitiesList = WTFMove(capabilitiesList), sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](bool capabilitiesDidMatch, std::optional<String> errorMessage) mutable {
+    auto protectedSessionHost = Ref<SessionHost>(sessionHost);
+    protectedSessionHost->startAutomationSession([this, capabilitiesList = WTFMove(capabilitiesList), sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](bool capabilitiesDidMatch, std::optional<String> errorMessage) mutable {
         if (errorMessage) {
             completionHandler(CommandResult::fail(CommandResult::ErrorCode::UnknownError, errorMessage.value()));
             return;
@@ -850,8 +1088,11 @@ void WebDriverService::createSession(Vector<Capabilities>&& capabilitiesList, st
             connectToBrowser(WTFMove(capabilitiesList), WTFMove(completionHandler));
             return;
         }
-
+#if ENABLE(WEBDRIVER_BIDI)
+        RefPtr<Session> session = Session::create(WTFMove(sessionHost), m_bidiServer);
+#else
         RefPtr<Session> session = Session::create(WTFMove(sessionHost));
+#endif
         session->createTopLevelBrowsingContext([this, session, completionHandler = WTFMove(completionHandler)](CommandResult&& result) mutable {
             if (result.isError()) {
                 completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, result.errorMessage()));
@@ -909,6 +1150,25 @@ void WebDriverService::createSession(Vector<Capabilities>&& capabilitiesList, st
             timeoutsObject->setDouble("implicit"_s, m_session->implicitWaitTimeout());
             capabilitiesObject->setObject("timeouts"_s, WTFMove(timeoutsObject));
 
+#if ENABLE(WEBDRIVER_BIDI)
+            // Extension steps defined by BiDi spec: https://w3c.github.io/webdriver-bidi/#establishing
+            if (!m_session->hasBiDiEnabled() && capabilities.webSocketURL && *capabilities.webSocketURL) {
+                auto listener = m_bidiServer.startListening(m_session->id());
+                // We need to update the listener host to a visible one so remote clients can connect to it.
+                listener->host = m_server.visibleHost();
+
+                auto webSocketURL = m_bidiServer.getWebSocketURL(listener, m_session->id());
+                capabilitiesObject->setString("webSocketUrl"_s, webSocketURL);
+                m_session->setHasBiDiEnabled(true);
+            } else {
+                RELEASE_LOG(WebDriverBiDi, "BiDi support not enabled for session %s", m_session->id().utf8().data());
+                if (!m_session->hasBiDiEnabled())
+                    RELEASE_LOG(WebDriverBiDi, "BiDi flag not set for session %s", m_session->id().utf8().data());
+                if (!capabilities.webSocketURL || !*capabilities.webSocketURL)
+                    RELEASE_LOG(WebDriverBiDi, "webSocketURL not set for session %s", m_session->id().utf8().data());
+            }
+#endif
+
             resultObject->setObject("capabilities"_s, WTFMove(capabilitiesObject));
             completionHandler(CommandResult::success(WTFMove(resultObject)));
         });
@@ -931,8 +1191,12 @@ void WebDriverService::deleteSession(RefPtr<JSON::Object>&& parameters, Function
     }
 
     auto session = std::exchange(m_session, nullptr);
-    session->close([session, completionHandler = WTFMove(completionHandler)](CommandResult&& result) mutable {
-        // Ignore unknown errors when closing the session if the browser is closed.
+    session->close([this, session, completionHandler = WTFMove(completionHandler)](CommandResult&& result) mutable {
+        UNUSED_VARIABLE(this); // Conditionally used in ENABLE(WEBDRIVER_BIDI) block.
+#if ENABLE(WEBDRIVER_BIDI)
+        m_bidiServer.disconnectSession(session->id());
+#endif
+        // Ignore unknown errors when closing the session if the session has abeen actually closed.
         if (result.isError() && result.errorCode() == CommandResult::ErrorCode::UnknownError && !session->isConnected())
             completionHandler(CommandResult::success());
         else
@@ -2445,5 +2709,83 @@ void WebDriverService::takeElementScreenshot(RefPtr<JSON::Object>&& parameters, 
         m_session->takeScreenshot(elementID.value(), true, WTFMove(completionHandler));
     });
 }
+
+#if ENABLE(WEBDRIVER_BIDI)
+void WebDriverService::bidiSessionStatus(unsigned id, RefPtr<JSON::Object>&&, Function<void(WebSocketMessageHandler::Message&&)>&& completionHandler)
+{
+    auto result = JSON::Object::create();
+    bool ready = !m_session;
+    result->setBoolean("ready"_s, ready);
+    if (ready)
+        result->setString("message"_s, "Ready for new sessions"_s);
+    else
+        result->setString("message"_s, "Maximum number of sessions created"_s);
+
+    completionHandler(WebSocketMessageHandler::Message::reply("success"_s, id, WTFMove(result)));
+}
+
+void WebDriverService::bidiSessionSubscribe(unsigned id, RefPtr<JSON::Object>&&parameters, Function<void(WebSocketMessageHandler::Message&&)>&& completionHandler)
+{
+    // https://w3c.github.io/webdriver-bidi/#command-session-subscribe
+    auto eventNames = parameters->getArray("events"_s);
+
+    if (!eventNames) {
+        completionHandler(WebSocketMessageHandler::Message::fail(CommandResult::ErrorCode::InvalidArgument, std::nullopt, "Missing 'events' parameter"_s, id));
+        return;
+    }
+
+    // FIXME: Support event priorities.
+    // https://bugs.webkit.org/show_bug.cgi?id=282436
+    // FIXME: Support by-context subscriptions.
+    // https://bugs.webkit.org/show_bug.cgi?id=282981
+    for (auto& eventName : *eventNames) {
+        auto event = eventName->asString();
+        m_session->enableGlobalEvent(event);
+    }
+
+    completionHandler(WebSocketMessageHandler::Message::reply("success"_s, id, JSON::Value::null()));
+}
+
+void WebDriverService::bidiSessionUnsubscribe(unsigned id, RefPtr<JSON::Object>&&parameters, Function<void(WebSocketMessageHandler::Message&&)>&& completionHandler)
+{
+    // https://w3c.github.io/webdriver-bidi/#command-session-unsubscribe
+    auto eventNames = parameters->getArray("events"_s);
+
+    if (!eventNames) {
+        completionHandler(WebSocketMessageHandler::Message::fail(CommandResult::ErrorCode::InvalidArgument, std::nullopt, "Missing 'events' parameter"_s, id));
+        return;
+    }
+
+    // FIXME: Support by-context unsubscriptions.
+    // https://bugs.webkit.org/show_bug.cgi?id=282981
+    for (auto& eventName : *eventNames) {
+        auto event = eventName->asString();
+        m_session->disableGlobalEvent(event);
+    }
+
+    completionHandler(WebSocketMessageHandler::Message::reply("success"_s, id, JSON::Value::null()));
+}
+
+void WebDriverService::clientDisconnected(const WebSocketMessageHandler::Connection& connection)
+{
+    // https://w3c.github.io/webdriver-bidi/#handle-a-connection-closing
+    if (m_bidiServer.session(connection))
+        m_bidiServer.removeConnection(connection);
+    else if (m_bidiServer.isStaticConnection(connection))
+        m_bidiServer.removeStaticConnection(connection);
+    // Note from spec: This does not end any session.
+}
+
+void WebDriverService::onBrowserTerminated(const String& sessionID)
+{
+    if (m_session && m_session->id() == sessionID) {
+        auto connection = m_bidiServer.connection(sessionID);
+        m_bidiServer.disconnectSession(sessionID);
+        if (connection)
+            clientDisconnected(*connection);
+    }
+}
+
+#endif // ENABLE(WEBDRIVER_BIDI)
 
 } // namespace WebDriver

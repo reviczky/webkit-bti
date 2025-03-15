@@ -42,7 +42,7 @@ namespace WebKit {
 IPC::StreamConnectionWorkQueue& remoteGraphicsStreamWorkQueue()
 {
 #if ENABLE(WEBGL)
-    return remoteGraphicsContextGLStreamWorkQueue();
+    return remoteGraphicsContextGLStreamWorkQueueSingleton();
 #else
     static LazyNeverDestroyed<IPC::StreamConnectionWorkQueue> instance;
     static std::once_flag onceKey;
@@ -55,9 +55,9 @@ IPC::StreamConnectionWorkQueue& remoteGraphicsStreamWorkQueue()
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteWCLayerTreeHost);
 
-std::unique_ptr<RemoteWCLayerTreeHost> RemoteWCLayerTreeHost::create(GPUConnectionToWebProcess& connectionToWebProcess, WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering)
+Ref<RemoteWCLayerTreeHost> RemoteWCLayerTreeHost::create(GPUConnectionToWebProcess& connectionToWebProcess, WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering)
 {
-    return makeUnique<RemoteWCLayerTreeHost>(connectionToWebProcess, identifier, nativeWindow, usesOffscreenRendering);
+    return adoptRef(*new RemoteWCLayerTreeHost(connectionToWebProcess, identifier, nativeWindow, usesOffscreenRendering));
 }
 
 RemoteWCLayerTreeHost::RemoteWCLayerTreeHost(GPUConnectionToWebProcess& connectionToWebProcess, WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering)
@@ -103,7 +103,7 @@ void RemoteWCLayerTreeHost::update(WCUpdateInfo&& update, CompletionHandler<void
 {
     remoteGraphicsStreamWorkQueue().dispatch([scene = m_scene.get(), update = WTFMove(update), completionHandler = WTFMove(completionHandler)]() mutable {
         auto updateInfo = scene->update(WTFMove(update));
-        RunLoop::main().dispatch([updateInfo = WTFMove(updateInfo), completionHandler = WTFMove(completionHandler)]() mutable {
+        RunLoop::protectedMain()->dispatch([updateInfo = WTFMove(updateInfo), completionHandler = WTFMove(completionHandler)]() mutable {
             completionHandler(WTFMove(updateInfo));
         });
     });

@@ -40,7 +40,7 @@ static constexpr Seconds silentPushTimeoutForProduction { 30_s };
 static constexpr Seconds silentPushTimeoutForTesting { 1_s };
 
 constexpr auto protocolVersionKey = "protocol version"_s;
-constexpr uint64_t protocolVersionValue = 4;
+constexpr uint64_t protocolVersionValue = 5;
 constexpr auto protocolEncodedMessageKey = "encoded message"_s;
 
 // FIXME: ConnectionToMachService traits requires we have a message type, so keep this placeholder here
@@ -49,6 +49,30 @@ enum class MessageType : uint8_t {
     EchoTwice
 };
 
+static constexpr unsigned long pushActionSetting = 0x8054000;
+
+#ifdef __OBJC__
+inline NSString *pushActionVersionKey()
+{
+    return @"WebPushActionVersion";
+}
+
+inline NSNumber *currentPushActionVersion()
+{
+    return @1;
+}
+
+inline NSString *pushActionPartitionKey()
+{
+    return @"WebPushActionPartition";
+}
+
+inline NSString *pushActionTypeKey()
+{
+    return @"WebPushActionType";
+}
+#endif // __OBJC__
+
 } // namespace WebKit::WebPushD
 
-#endif
+#endif // __cplusplus

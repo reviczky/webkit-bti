@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkRefCnt.h"
@@ -22,7 +23,7 @@
 #include "src/gpu/graphite/TextureProxy.h"
 #include "src/text/gpu/SubRunControl.h"
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 #include "src/gpu/graphite/ContextOptionsPriv.h"
 #endif
 
@@ -60,14 +61,18 @@ struct ResourceBindingRequirements {
     // Whether buffer, texture, and sampler resource bindings use distinct index ranges.
     bool fDistinctIndexRanges = false;
 
+    // Whether intrinsic constant information is stored as push constants (rather than normal UBO).
+    // Currently only relevant or possibly true for Vulkan.
+    bool fUseVulkanPushConstantsForIntrinsicConstants = false;
+
     int fIntrinsicBufferBinding = -1;
     int fRenderStepBufferBinding = -1;
     int fPaintParamsBufferBinding = -1;
     int fGradientBufferBinding = -1;
 };
 
-enum class DstReadRequirement {
-    kNone,
+enum class DstReadStrategy {
+    kNoneRequired,
     kTextureCopy,
     kTextureSample,
     kFramebufferFetch,
@@ -81,7 +86,7 @@ public:
 
     sk_sp<SkCapabilities> capabilities() const;
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     std::string_view deviceName() const { return fDeviceName; }
 
     PathRendererStrategy requestedPathRendererStrategy() const {
@@ -118,23 +123,18 @@ public:
                                               const RenderPassDesc&) const = 0;
     virtual UniqueKey makeComputePipelineKey(const ComputePipelineDesc&) const = 0;
 
-    // Returns a GraphiteResourceKey based upon a SamplerDesc with any additional information that
-    // backends append within their implementation. By default, simply returns a key based upon
-    // the SamplerDesc with no extra info.
-    // TODO: Rather than going through a GraphiteResourceKey, migrate to having a cache of samplers
-    // keyed off of SamplerDesc to minimize heap allocations.
-    virtual GraphiteResourceKey makeSamplerKey(const SamplerDesc& samplerDesc) const;
-
-    // Backends can optionally override this method to return meaningful sampler conversion info.
-    // By default, simply return a default ImmutableSamplerInfo.
-    virtual ImmutableSamplerInfo getImmutableSamplerInfo(const TextureProxy*) const {
-        return {};
-    }
 
     virtual bool extractGraphicsDescs(const UniqueKey&,
                                       GraphicsPipelineDesc*,
                                       RenderPassDesc*,
                                       const RendererProvider*) const { return false; }
+
+    virtual bool deserializeTextureInfo(SkStream*,
+                                        BackendApi,
+                                        Mipmapped,
+                                        Protected,
+                                        uint32_t sampleCount,
+                                        TextureInfo* out) const { return false; }
 
     bool areColorTypeAndTextureInfoCompatible(SkColorType, const TextureInfo&) const;
     virtual uint32_t channelMask(const TextureInfo&) const = 0;
@@ -143,13 +143,14 @@ public:
     virtual bool isRenderable(const TextureInfo&) const = 0;
     virtual bool isStorage(const TextureInfo&) const = 0;
 
+    virtual bool loadOpAffectsMSAAPipelines() const { return false; }
+
     int maxTextureSize() const { return fMaxTextureSize; }
     int defaultMSAASamplesCount() const { return fDefaultMSAASamples; }
 
     virtual void buildKeyForTexture(SkISize dimensions,
                                     const TextureInfo&,
                                     ResourceType,
-                                    Shareable,
                                     GraphiteResourceKey*) const = 0;
 
     const ResourceBindingRequirements& resourceBindingRequirements() const {
@@ -170,6 +171,12 @@ public:
     // Returns the aligned rowBytes when transfering to or from a Texture
     size_t getAlignedTextureDataRowBytes(size_t rowBytes) const {
         return SkAlignTo(rowBytes, fTextureDataRowBytesAlignment);
+    }
+
+    // Backends can optionally override this method to return meaningful sampler conversion info.
+    // By default, simply return a default ImmutableSamplerInfo (e.g. no immutable sampler).
+    virtual ImmutableSamplerInfo getImmutableSamplerInfo(const TextureInfo&) const {
+        return {};
     }
 
     /**
@@ -226,6 +233,19 @@ public:
      */
     SkColorType getRenderableColorType(SkColorType) const;
 
+    // Determines the orientation of the NDC coordinates emitted by the vertex stage relative to
+    // both Skia's presumed top-left Y-down system and the viewport coordinates (which are also
+    // always top-left, Y-down for all supported backends).)
+    //
+    // If true is returned, then (-1,-1) in normalized device coords maps to the top-left of the
+    // configured viewport and positive Y points down. This aligns with Skia's conventions.
+    // If false is returned, then (-1,-1) in NDC maps to the bottom-left of the viewport and
+    // positive Y points up (so NDC is flipped relative to sk_Position and the viewport coords).
+    //
+    // There is no backend difference in handling the X axis so it's assumed -1 maps to the left
+    // edge and +1 maps to the right edge.
+    bool ndcYAxisPointsDown() const { return fNDCYAxisPointsDown; }
+
     bool clampToBorderSupport() const { return fClampToBorderSupport; }
 
     bool protectedSupport() const { return fProtectedSupport; }
@@ -251,7 +271,7 @@ public:
     // Returns whether a draw buffer can be mapped.
     bool drawBufferCanBeMapped() const { return fDrawBufferCanBeMapped; }
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     bool drawBufferCanBeMappedForReadback() const { return fDrawBufferCanBeMappedForReadback; }
 #endif
 
@@ -282,8 +302,10 @@ public:
 
     skgpu::ShaderErrorHandler* shaderErrorHandler() const { return fShaderErrorHandler; }
 
-    // Returns what method of dst read is required for a draw using the dst color.
-    DstReadRequirement getDstReadRequirement() const;
+    // Returns what method of dst read a draw should use for obtaining the dst color.
+    // TODO(b/390457657): This method should take in target texture information to better inform dst
+    // read strategy selection.
+    DstReadStrategy getDstReadStrategy() const;
 
     float minDistanceFieldFontSize() const { return fMinDistanceFieldFontSize; }
     float glyphsAsPathsFontSize() const { return fGlyphsAsPathsFontSize; }
@@ -306,6 +328,8 @@ public:
 
     bool setBackendLabels() const { return fSetBackendLabels; }
 
+    GpuStatsFlags supportedGpuStats() const { return fSupportedGpuStats; }
+
 protected:
     Caps();
 
@@ -313,9 +337,9 @@ protected:
     // the caps.
     void finishInitialization(const ContextOptions&);
 
-#if defined(GRAPHITE_TEST_UTILS)
-    void setDeviceName(const char* n) {
-        fDeviceName = n;
+#if defined(GPU_TEST_UTILS)
+    void setDeviceName(std::string n) {
+        fDeviceName = std::move(n);
     }
 #endif
 
@@ -372,6 +396,7 @@ protected:
 
     std::unique_ptr<SkSL::ShaderCaps> fShaderCaps;
 
+    bool fNDCYAxisPointsDown = false; // Most backends have NDC +Y pointing up
     bool fClampToBorderSupport = true;
     bool fProtectedSupport = false;
     bool fSemaphoreSupport = false;
@@ -385,11 +410,13 @@ protected:
     bool fSupportsAHardwareBufferImages = false;
     bool fFullCompressedUploadSizeMustAlignToBlockDims = false;
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     bool fDrawBufferCanBeMappedForReadback = true;
 #endif
 
     ResourceBindingRequirements fResourceBindingReqs;
+
+    GpuStatsFlags fSupportedGpuStats = GpuStatsFlags::kNone;
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // Client-provided Caps
@@ -400,7 +427,7 @@ protected:
      */
     ShaderErrorHandler* fShaderErrorHandler = nullptr;
 
-#if defined(GRAPHITE_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     std::string fDeviceName;
     int fMaxTextureAtlasSize = 2048;
     PathRendererStrategy fRequestedPathRendererStrategy;
@@ -415,7 +442,6 @@ protected:
     bool fAllowMultipleAtlasTextures = true;
     bool fSupportBilerpFromGlyphAtlas = false;
 
-    // Set based on client options
     bool fRequireOrderedRecordings = false;
 
     bool fSetBackendLabels = false;

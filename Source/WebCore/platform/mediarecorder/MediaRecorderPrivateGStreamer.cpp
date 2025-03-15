@@ -33,8 +33,12 @@
 #include <gst/app/gstappsink.h>
 #include <gst/transcoder/gsttranscoder.h>
 #include <wtf/Scope.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaRecorderPrivateBackend);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MediaRecorderPrivateGStreamer);
 
 GST_DEBUG_CATEGORY(webkit_media_recorder_debug);
 #define GST_CAT_DEFAULT webkit_media_recorder_debug
@@ -95,7 +99,7 @@ void MediaRecorderPrivateGStreamer::resumeRecording(CompletionHandler<void()>&& 
     m_recorder->resumeRecording(WTFMove(completionHandler));
 }
 
-const String& MediaRecorderPrivateGStreamer::mimeType() const
+String MediaRecorderPrivateGStreamer::mimeType() const
 {
     return m_recorder->mimeType();
 }
@@ -468,7 +472,7 @@ bool MediaRecorderPrivateBackend::preparePipeline()
             return;
         }
 
-        String elementClass = WTF::span(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
+        String elementClass = unsafeSpan(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
         auto classifiers = elementClass.split('/');
         if (classifiers.contains("Audio"_s) && classifiers.contains("Codec"_s) && classifiers.contains("Encoder"_s))
             recorder->configureAudioEncoder(element);
@@ -497,7 +501,7 @@ void MediaRecorderPrivateBackend::processSample(GRefPtr<GstSample>&& sample)
     Locker locker { m_dataLock };
 
     GST_LOG_OBJECT(m_transcoder.get(), "Queueing %zu bytes of encoded data, caps: %" GST_PTR_FORMAT, buffer.size(), gst_sample_get_caps(sample.get()));
-    m_data.append(std::span<const uint8_t> { buffer.data(), buffer.size() });
+    m_data.append(buffer.span<uint8_t>());
 }
 
 void MediaRecorderPrivateBackend::notifyPosition(GstClockTime position)

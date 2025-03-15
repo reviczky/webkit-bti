@@ -31,6 +31,7 @@
 #include "TextTrackPrivateRemoteConfiguration.h"
 #include <WebCore/InbandTextTrackPrivate.h>
 #include <WebCore/MediaPlayerIdentifier.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 class InbandGenericCue;
@@ -43,6 +44,7 @@ class GPUProcessConnection;
 class MediaPlayerPrivateRemote;
 
 class TextTrackPrivateRemote final : public WebCore::InbandTextTrackPrivate {
+    WTF_MAKE_TZONE_ALLOCATED(TextTrackPrivateRemote);
     WTF_MAKE_NONCOPYABLE(TextTrackPrivateRemote)
 public:
 
@@ -73,10 +75,10 @@ public:
     void updateConfiguration(TextTrackPrivateRemoteConfiguration&&);
 
     WebCore::TrackID id() const final { return m_id; }
-    AtomString label() const final { return AtomString { m_label }; }
-    AtomString language() const final { return AtomString { m_language }; }
+    AtomString label() const final { return AtomString { m_label.isolatedCopy() }; }
+    AtomString language() const final { return AtomString { m_language.isolatedCopy() }; }
     int trackIndex() const final { return m_trackIndex; }
-    AtomString inBandMetadataTrackDispatchType() const final { return AtomString { m_inBandMetadataTrackDispatchType }; }
+    AtomString inBandMetadataTrackDispatchType() const final { return AtomString { m_inBandMetadataTrackDispatchType.isolatedCopy() }; }
 
     using TextTrackKind = WebCore::InbandTextTrackPrivate::Kind;
     TextTrackKind kind() const final { return m_kind; }

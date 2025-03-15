@@ -29,6 +29,7 @@
 #include "MarkSurfacesAsVolatileRequestIdentifier.h"
 #include "PrepareBackingStoreBuffersData.h"
 #include "RemoteDisplayListRecorderProxy.h"
+#include "RemoteImageBufferSetConfiguration.h"
 #include "RemoteImageBufferSetIdentifier.h"
 #include "RenderingUpdateID.h"
 #include "WorkQueueMessageReceiver.h"
@@ -67,9 +68,7 @@ public:
     virtual bool flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) = 0;
 };
 
-// A RemoteImageBufferSet is a set of three ImageBuffers (front, back,
-// secondary back) owned by the GPU process, for the purpose of drawing
-// successive (layer) frames.
+// A RemoteImageBufferSet is an ImageBufferSet, where the actual ImageBuffers are owned by the GPU process.
 // To draw a frame, the consumer allocates a new RemoteDisplayListRecorderProxy and
 // asks the RemoteImageBufferSet set to map it to an appropriate new front
 // buffer (either by picking one of the back buffers, or by allocating a new
@@ -78,16 +77,18 @@ public:
 // Usage is done through RemoteRenderingBackendProxy::prepareImageBufferSetsForDisplay,
 // so that a Vector of RemoteImageBufferSets can be used with a single
 // IPC call.
-class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver, public Identified<RemoteImageBufferSetIdentifier> {
+// FIXME: It would be nice if this could actually be a subclass of ImageBufferSet, but
+// probably can't while it uses batching for prepare and volatility.
+class RemoteImageBufferSetProxy : public IPC::WorkQueueMessageReceiver<WTF::DestructionThread::Any>, public Identified<RemoteImageBufferSetIdentifier> {
 public:
     RemoteImageBufferSetProxy(RemoteRenderingBackendProxy&);
     ~RemoteImageBufferSetProxy();
 
     OptionSet<BufferInSetType> requestedVolatility() { return m_requestedVolatility; }
     OptionSet<BufferInSetType> confirmedVolatility() { return m_confirmedVolatility; }
-    void clearVolatilityUntilAfter(MarkSurfacesAsVolatileRequestIdentifier previousVolatilityRequest);
+    void clearVolatility();
     void addRequestedVolatility(OptionSet<BufferInSetType> request);
-    void setConfirmedVolatility(MarkSurfacesAsVolatileRequestIdentifier, OptionSet<BufferInSetType> types);
+    void setConfirmedVolatility(OptionSet<BufferInSetType> types);
 
 #if PLATFORM(COCOA)
     void didPrepareForDisplay(ImageBufferSetPrepareBufferForDisplayOutputData, RenderingUpdateID);
@@ -100,7 +101,7 @@ public:
 
     std::unique_ptr<ThreadSafeImageBufferSetFlusher> flushFrontBufferAsync(ThreadSafeImageBufferSetFlusher::FlushType);
 
-    void setConfiguration(WebCore::FloatSize, float, const WebCore::DestinationColorSpace&, WebCore::ImageBufferPixelFormat, WebCore::RenderingMode, WebCore::RenderingPurpose);
+    void setConfiguration(RemoteImageBufferSetConfiguration&&);
     void willPrepareForDisplay();
     void remoteBufferSetWasDestroyed();
 
@@ -125,16 +126,11 @@ private:
     WebCore::RenderingResourceIdentifier m_displayListIdentifier;
     std::unique_ptr<RemoteDisplayListRecorderProxy> m_displayListRecorder;
 
-    MarkSurfacesAsVolatileRequestIdentifier m_minimumVolatilityRequest;
     OptionSet<BufferInSetType> m_requestedVolatility;
     OptionSet<BufferInSetType> m_confirmedVolatility;
 
-    WebCore::FloatSize m_size;
-    float m_scale { 1.0f };
-    WebCore::DestinationColorSpace m_colorSpace { WebCore::DestinationColorSpace::SRGB() };
-    WebCore::ImageBufferPixelFormat m_pixelFormat;
-    WebCore::RenderingMode m_renderingMode { WebCore::RenderingMode::Unaccelerated };
-    WebCore::RenderingPurpose m_renderingPurpose { WebCore::RenderingPurpose::Unspecified };
+    RemoteImageBufferSetConfiguration m_configuration;
+
     unsigned m_generation { 0 };
     bool m_remoteNeedsConfigurationUpdate { false };
 

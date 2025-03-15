@@ -1,153 +1,105 @@
 =================
-WPE WebKit 2.46.6
+WPE WebKit 2.48.0
 =================
 
-What's new in WPE WebKit 2.46.6?
+What's new in WPE WebKit 2.48.0?
 
-  - Support building against ICU 76.1
-  - Fix lost initial audio samples played using WebAudio on 32-bit Raspberry
-	Pi devices when using the OpenMAX GStreamer elements.
-  - Fix rendering on GPUs with maximum texture size smaller than 2000x2000
-	pixels by querying the maximum size supported at runtime.
+  - Fix YouTube playback by using a different User-Agent quirk.
+  - Avoid adding redundant tracks to MediaPlayer.
+  - Propagate the font's computed locale to HarfBuzz.
+  - Fix missing default values for the key repeat delay, key repeat interval,
+    and drag threshold in WPESettings.
+  - Fix missing registration for the DRM scale setting in WPESettings.
+  - Fix the build on non-Linux platforms.
+  - Fix several crashes and rendering issues.
+
+==================
+WPE WebKit 2.47.90
+==================
+
+What's new in WPE WebKit 2.47.90?
+
+  - Ensure that the WebKitCookieManager APIs keep the cookie cache updated.
+  - Use two GPU rendering threads if the system has more than four CPU cores.
+  - Fix web view contents not rendered in some cases.
+  - Fix invalid DPI-aware font size conversion.
+  - Reduce memory copies when rendering DMA-BUF video frames.
+
+=================
+WPE WebKit 2.47.4
+=================
+
+What's new in WPE WebKit 2.47.4?
+
+  - Add support for the Cookie Store API.
+  - Add initial support for per-element audio output selection.
+  - Add debuging aids to visualize damage rectangles.
+  - Add documentation about how to use the remote web inspector.
+  - Enable WebDriver BiDi as an experimental feature.
+  - Remove support for GLib versions older than 2.70.
   - Fix a crash when enabling Skia CPU rendering.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.46.5
+WPE WebKit 2.47.3
 =================
 
-What's new in WPE WebKit 2.46.5?
+What's new in WPE WebKit 2.47.3?
 
-  - Fix audio/video synchronization issues in the GStreamer playback backend.
-  - Fix the build with GBM and release logs disabled.
+  - Add support for creating Promise objects using the JavaScriptCore GLib API.
+  - Add metadata (title and creation/modification date) to PDF documents generated for printing.
+  - Speed up reading large remote inspector protocol messages.
+  - Pause rendering when current toplevel window is in suspended state.
+  - Bring back support for OpenType-SVG fonts using the Skia SVG module.
+  - Improve performance of the preserve-3D intersection rendering.
+  - Use default configuration values from WPESettings in WPEPlatform.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.46.4
+WPE WebKit 2.47.2
 =================
 
-What's new in WPE WebKit 2.46.4?
+What's new in WPE WebKit 2.47.2?
 
-  - Improve memory consumption and performance of Canvas getImageData.
-  - Improve reliability and latency of audio/video MediaStream pipeplines.
-  - Improve detection of accelerated H.264 decoders.
-  - Add WebM audio capture bitrate configuration with GStreamer 1.24.9
-    and newer.
-  - Fix multi-touch input event handling.
-  - Fix getDisplayMedia() buffer format negotiation with PipeWire.
-  - Fix wrong video dimensions with GStreamer 1.34.9 and newer.
-  - Fix intersection and filter rendering for scenes with CSS
-    "transform-tyle: preserve-3d".
-  - Fix the HTTP-based remote Web Inspector not loading in Chromium.
-  - Fix Office 365 using an User-Agent quirk.
-  - Fix content filters not working on about:blank iframes.
-  - Fix logging in the memory pressure handler monitor.
-  - Fix the JSCOnly build with the GLib event loop enabled.
-  - Fix hole-punching media player when using fixed HTML body position.
-  - Fix the build with GCC 12.x when libwebrtc support is enabled.
-  - Fix the build with libsoup2.
+  - Move tiles rendering to a secondary thread when using the GPU.
+  - Use the damage information when collected to improve composition in WebKit.
+  - Improve performance of canvas putImageData/getImageData by avoiding
+    buffer copies.
+  - Add system settings API to WPEPlatform.
+  - Fix opacity not being handled correctly for DMA-BUF negotiation.
+  - Fix preserve-3D intersection rendering.
+  - Fix video dimensions since GStreamer 1.24.9.
+  - Fix opening links with window.open() when noopener is present.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.46.3
+WPE WebKit 2.47.1
 =================
 
-What's new in WPE WebKit 2.46.3?
+What's new in WPE WebKit 2.47.1?
 
-  - Fix DuckDuckGo links by adding a user agent quirk.
   - Flatten layers to a plane when preseve-3d style is set.
-  - Fix H.264 encoding and improve selection of encoder parameters according
-    to the requested profile.
-  - Fix libsoup URLs in generated reference documentation.
-  - Fix the build with ENABLE_REMOTE_INSPECTOR=OFF.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.46.2
-=================
-
-What's new in WPE WebKit 2.46.2?
-
-  - Own well-known bus name on the accessibility bus.
-  - Improve memory consumption when putImageData is used repeatedly on accelerated canvas.
-  - Disable cached web process suspension for now to prevent leaks.
-  - Improve text kerning with different combinations of antialias and hinting settings.
-  - Destroy all network sessions on process exit.
-  - Build with Skia and WebGL support enabled when targeting Android.
-  - Improve the last resort font fallback to increase the chances of getting
-    an usable system font with Skia.
-  - Fix visible rectangle calculation when there are animations.
-  - Fix the build with ENABLE_NOTIFICATIONS=OFF.
-  - Fix the build with ENABLE_FULLSCREEN_API=OFF.
-  - Fix the build with ENABLE_WEB_AUDIO=OFF.
-  - Fix the build with ENABLE_VIDEO=OFF.
-  - Fix the build on systems that use the Musl C library.
-  - Fix the build on ppc64le.
-  - Fix the build on ARMv7 when compiling with Clang.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.46.1
-=================
-
-What's new in WPE WebKit 2.46.1?
-
-  - Use the Skia CPU renderer by default, which at the moment performs better
-    in a number of embedded devices. The GPU renderer is still available and
-    may be enabled by setting WEBKIT_SKIA_ENABLE_CPU_RENDERING=0 in the
-    environment.
-  - Add a ENABLE_WPE_PLATFORM build option to CMake. This is disabled by
-    default because the WPEPlatform API is in development and provided as
-    part of the 2.46.x releases as a preview feature.
-  - Fix login QR code not shown in WhatsApp web.
-  - Fix processes not spawning when process startup is customized using
-    the wpe_process_provider API from libwpe.
-  - Fix mouse simulation with WebDriver when using a classic WPE backend
-    through libwpe.
-  - Disable DMABuf video sink by default to prevent file descriptor leaks.
-  - Fix building the MiniBrowser.
-  - Fix the build with libsysprof-capture version 44 and older.
-  - Fix the build with GCC 13.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.46.0
-=================
-
-What's new in WPE WebKit 2.46.0?
-
-  - Fix rendering of images in PDF documents.
-  - Make process launching fast again.
-  - Fix webkit_web_resource_get_data() regression that caused we were always retuning empty data.
-  - Fix the build with touch events disabled.
-  - Fix the build with GLib < 2.68.
-  - Fix several crashes and rendering issues.
-
-==================
-WPE WebKit 2.45.90
-==================
-
-What's new in WPE WebKit 2.45.90?
-
-  - Add explicit fencing support when available.
-  - Add new API to WebKitAutomationSession to be notified when the session is
-    about to be closed.
-  - Add webkit://gpu/stdout to dump the information from webkit://gpu to
-    standard output stream.
-  - Add signposts to allow observing graphics tile rendering in Sysprof.
-  - Add quirk to allow totale.rosettastone.com to load properly.
-  - Undeprecate injected bundle frame access interfaces.
-  - Use RGBA as the pixel format for texture backed SkSurfaces.
-  - Ensure that the WPEMonitor properties "width" and "height" are set at
-    the same time.
-  - Fix WebGL with accelerated compositing disabled.
-  - Fix build with GStreamer versions < 1.22.
-  - Fix connection to the accessibility bus under Flatpak.
-  - Fix image filtering not being applied in some cases.
-  - Fix linker relocation errors on Debug/RelWithDebInfo builds.
-  - Fix the build in non-linux systems.
-  - Fix the build with -DUSE_TEXTURE_MAPPER_DMABUF=OFF
-  - Fix the build with Wayland and GBM disabled.
+  - Build GPU process by default, but keeping WebGL in the web process by default for now.
+  - Enable WebGL support when targeting Android.
+  - Add experimental support for speech synthesis using libspiel, which may be
+    enabled at build time instead of Flite (with USE_SPIEL=ON and
+    USE_FLITE=OFF).
+  - Add support for building Skia when targeting Android.
+  - Add close button and handling of the URL entry onAccepted event to the
+    Qt6 qt-wpe-mini-browser.
+  - Add new settings API to the WPEPlatform library.
+  - Add new connect methods to use a custom device file with WPEDisplayDRM
+    and WPEDisplayHeadless in the WPEPlatform API.
+  - Web Inspector resources are now shipped in an GResource bundle file,
+    instead of the libWPEInspectorResources shared library.
+  - Rename class WPEMonitor to WPEScreen in the WPEPlatform API.
+  - Use DMA-BUF buffers for WebGL when available.
+  - Make GStreamer GL sink handle DMA-BUF memory to replace the DMA-BUF sink.
+  - Fix device scaling factor in the WPEPlatform DRM implementation.
+  - Fix input methods when using the WPEPlatform library.
+  - Fix unexpected ENABLE_WPE_PLATFORM guards in installed API headers.
+  - Fix building the Qt6 API.
+  - Fix DuckDuckGo links by adding a user agent quirk.
   - Fix several crashes and rendering issues.
 
 =================

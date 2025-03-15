@@ -53,7 +53,7 @@ Ref<WebNotificationManagerProxy> WebNotificationManagerProxy::create(WebProcessP
     return adoptRef(*new WebNotificationManagerProxy(processPool));
 }
 
-WebNotificationManagerProxy& WebNotificationManagerProxy::sharedServiceWorkerManager()
+WebNotificationManagerProxy& WebNotificationManagerProxy::serviceWorkerManagerSingleton()
 {
     ASSERT(isMainRunLoop());
     static NeverDestroyed<Ref<WebNotificationManagerProxy>> sharedManager = adoptRef(*new WebNotificationManagerProxy(nullptr));
@@ -101,9 +101,9 @@ HashMap<String, bool> WebNotificationManagerProxy::notificationPermissions()
     return m_provider->notificationPermissions();
 }
 
-static WebPageProxyIdentifier identifierForPagePointer(WebPageProxy* webPage)
+static std::optional<WebPageProxyIdentifier> identifierForPagePointer(WebPageProxy* webPage)
 {
-    return webPage ? webPage->identifier() : WebPageProxyIdentifier();
+    return webPage ? std::optional { webPage->identifier() } : std::nullopt;
 }
 
 void WebNotificationManagerProxy::show(WebPageProxy* webPage, IPC::Connection& connection, const WebCore::NotificationData& notificationData, RefPtr<WebCore::NotificationResources>&& notificationResources)
@@ -171,9 +171,9 @@ void WebNotificationManagerProxy::clearNotifications(WebPageProxy* webPage, cons
         globalNotificationIDs.append(globalNotificationID);
     }
 
-    for (auto it = globalNotificationIDs.begin(), end = globalNotificationIDs.end(); it != end; ++it) {
-        auto pageNotification = m_globalNotificationMap.take(*it);
-        m_notifications.remove(pageNotification);
+    for (auto globalNotificationID : globalNotificationIDs) {
+        if (auto pageNotification = m_globalNotificationMap.takeOptional(globalNotificationID))
+            m_notifications.remove(*pageNotification);
     }
 
     m_provider->clearNotifications(globalNotificationIDs);
@@ -335,7 +335,7 @@ void WebNotificationManagerProxy::providerDidUpdateNotificationPolicy(const API:
     if (originString.isEmpty())
         return;
 
-    if (this == &sharedServiceWorkerManager()) {
+    if (this == &serviceWorkerManagerSingleton()) {
         setPushesAndNotificationsEnabledForOrigin(origin->securityOrigin(), enabled);
         WebProcessPool::sendToAllRemoteWorkerProcesses(Messages::WebNotificationManager::DidUpdateNotificationDecision(originString, enabled));
         return;
@@ -351,7 +351,7 @@ void WebNotificationManagerProxy::providerDidRemoveNotificationPolicies(API::Arr
     if (!size)
         return;
 
-    if (this == &sharedServiceWorkerManager()) {
+    if (this == &serviceWorkerManagerSingleton()) {
         removePushSubscriptionsForOrigins(apiArrayToSecurityOrigins(origins));
         WebProcessPool::sendToAllRemoteWorkerProcesses(Messages::WebNotificationManager::DidRemoveNotificationDecisions(apiArrayToSecurityOriginStrings(origins)));
         return;

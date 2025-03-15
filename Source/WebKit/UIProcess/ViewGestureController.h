@@ -31,6 +31,7 @@
 #include <WebCore/Color.h>
 #include <WebCore/FloatRect.h>
 #include <WebCore/FloatSize.h>
+#include <WebCore/PageIdentifier.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RetainPtr.h>
@@ -92,31 +93,25 @@ typedef void* PlatformScrollEvent;
 #endif
 
 namespace WebKit {
-class ViewGestureController;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::ViewGestureController> : std::true_type { };
-}
-
-namespace WebKit {
 
 class ViewSnapshot;
 class WebBackForwardListItem;
 class WebPageProxy;
 class WebProcessProxy;
 
-class ViewGestureController : public IPC::MessageReceiver {
+class ViewGestureController final : public IPC::MessageReceiver, public RefCounted<ViewGestureController> {
     WTF_MAKE_TZONE_ALLOCATED(ViewGestureController);
     WTF_MAKE_NONCOPYABLE(ViewGestureController);
 public:
-
     static constexpr double defaultMinMagnification { 1 };
     static constexpr double defaultMaxMagnification { 3 };
 
-    ViewGestureController(WebPageProxy&);
+    static Ref<ViewGestureController> create(WebPageProxy&);
     ~ViewGestureController();
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
     void platformTeardown();
 
     void disconnectFromProcess();
@@ -133,10 +128,8 @@ public:
         Swipe
     };
 
-    enum class SwipeDirection {
-        Back,
-        Forward
-    };
+    enum class SwipeDirection : bool { Back, Forward };
+    enum class DeferToConflictingGestures : bool { No, Yes };
 
     typedef uint64_t GestureID;
 
@@ -182,7 +175,7 @@ public:
 
     void setAlternateBackForwardListSourcePage(WebPageProxy*);
 
-    bool canSwipeInDirection(SwipeDirection) const;
+    bool canSwipeInDirection(SwipeDirection, DeferToConflictingGestures) const;
 
     WebCore::Color backgroundColorForCurrentSnapshot() const { return m_backgroundColorForCurrentSnapshot; }
 
@@ -218,6 +211,8 @@ public:
     bool completeSimulatedSwipeInDirectionForTesting(SwipeDirection);
 
 private:
+    explicit ViewGestureController(WebPageProxy&);
+
     // IPC::MessageReceiver.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
@@ -230,7 +225,9 @@ private:
 
     void didStartProvisionalOrSameDocumentLoadForMainFrame();
 
-    class SnapshotRemovalTracker {
+    class SnapshotRemovalTracker : public CanMakeCheckedPtr<SnapshotRemovalTracker> {
+        WTF_MAKE_FAST_ALLOCATED;
+        WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(SnapshotRemovalTracker);
     public:
         enum Event : uint8_t {
             VisuallyNonEmptyLayout = 1 << 0,
@@ -304,7 +301,7 @@ private:
 
     void willEndSwipeGesture(WebBackForwardListItem& targetItem, bool cancelled);
     void endSwipeGesture(WebBackForwardListItem* targetItem, bool cancelled);
-    bool shouldUseSnapshotForSize(ViewSnapshot&, WebCore::FloatSize swipeLayerSize, float topContentInset);
+    bool shouldUseSnapshotForSize(ViewSnapshot&, WebCore::FloatSize swipeLayerSize, WebCore::FloatBoxExtent obscuredContentInsets);
 
 #if PLATFORM(MAC)
     static double resistanceForDelta(double deltaScale, double currentScale, double minMagnification, double maxMagnification);
@@ -330,6 +327,8 @@ private:
         void setShouldIgnorePinnedState(bool ignore) { m_shouldIgnorePinnedState = ignore; }
 
     private:
+        Ref<ViewGestureController> protectedViewGestureController() const;
+
         bool tryToStartSwipe(PlatformScrollEvent);
         bool scrollEventCanBecomeSwipe(PlatformScrollEvent, SwipeDirection&);
 
@@ -351,8 +350,8 @@ private:
 
         bool m_shouldIgnorePinnedState { false };
 
-        ViewGestureController& m_viewGestureController;
-        WebPageProxy& m_webPageProxy;
+        WeakRef<ViewGestureController> m_viewGestureController;
+        WeakRef<WebPageProxy> m_webPageProxy;
     };
 #endif
 
@@ -360,7 +359,10 @@ private:
     GRefPtr<GtkStyleContext> createStyleContext(const char*);
 #endif
 
-    WebPageProxy& m_webPageProxy;
+    WeakPtr<WebPageProxy> m_webPageProxy;
+    WebPageProxyIdentifier m_webPageProxyIdentifier;
+    Markable<WebCore::PageIdentifier> m_webPageIDInMainFrameProcess;
+    WeakPtr<WebProcessProxy> m_mainFrameProcess;
     ViewGestureType m_activeGestureType { ViewGestureType::None };
 
     bool m_swipeGestureEnabled { true };
@@ -469,8 +471,8 @@ private:
         float m_endProgress { 0 };
         bool m_cancelled { false };
 
-        ViewGestureController& m_viewGestureController;
-        WebPageProxy& m_webPageProxy;
+        WeakRef<ViewGestureController> m_viewGestureController;
+        WeakRef<WebPageProxy> m_webPageProxy;
     };
 
     SwipeProgressTracker m_swipeProgressTracker;

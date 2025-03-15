@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEJavaScriptCore</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.46.6</p>
+        <p>Library Version: 2.48.0</p>
         
       </div>
       
@@ -101,6 +101,8 @@ SPDX-License-Identifier: BSD, LGPL-2.1
     <a class="ctor" href="ctor.Value.new_number.html">new_number</a>
   
     <a class="ctor" href="ctor.Value.new_object.html">new_object</a>
+  
+    <a class="ctor" href="ctor.Value.new_promise.html">new_promise</a>
   
     <a class="ctor" href="ctor.Value.new_string.html">new_string</a>
   
@@ -254,7 +256,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/JavaScriptCore/API/glib/JSCValue.cpp#L42">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/JavaScriptCore/API/glib/JSCValue.cpp#L43">[src]</a>
           
         </h4>
 
@@ -488,6 +490,20 @@ When <code>instance</code> is provided, <code>jsc_class</code> must be provided 
           </div>
           <div class="docblock">
             <p></p>
+          </div>
+        </div>
+      
+        <div class="">
+          <h6><a href="ctor.Value.new_promise.html">jsc_value_new_promise</a></h6>
+          <div class="docblock">
+            <p>Creates a new Promise. <code>executor</code> will be invoked during promise initialization
+and it receives the <code>resolve</code> and <code>reject</code> objects than can be called to resolve
+or reject the promise. It is called like a JavaScript function, so exceptions raised
+during the executor invocation will not be propagated to the context, but
+handled by the promise causing a&nbsp;rejection.</p>
+          </div>
+          <div class="docblock">
+            <p><span class="emblem available">since: 2.48</span></p>
           </div>
         </div>
       

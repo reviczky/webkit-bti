@@ -28,31 +28,32 @@
 #include "GStreamerCaptureDeviceManager.h"
 #include "MockRealtimeMediaSourceCenter.h"
 #include <gst/app/gstappsrc.h>
+#include <wtf/IndexedRange.h>
 
 namespace WebCore {
 
-static const double s_Tau = 2 * M_PI;
-static const double s_BipBopDuration = 0.07;
-static const double s_BipBopVolume = 0.5;
-static const double s_BipFrequency = 1500;
-static const double s_BopFrequency = 500;
-static const double s_HumFrequency = 150;
-static const double s_HumVolume = 0.1;
-static const double s_NoiseFrequency = 3000;
-static const double s_NoiseVolume = 0.05;
+static constexpr double s_Tau = 2 * M_PI;
+static constexpr double s_BipBopDuration = 0.07;
+static constexpr double s_BipBopVolume = 0.5;
+static constexpr double s_BipFrequency = 1500;
+static constexpr double s_BopFrequency = 500;
+static constexpr double s_HumFrequency = 150;
+static constexpr double s_HumVolume = 0.1;
+static constexpr double s_NoiseFrequency = 3000;
+static constexpr double s_NoiseVolume = 0.05;
 
-static HashSet<MockRealtimeAudioSource*>& allMockRealtimeAudioSourcesStorage()
+static UncheckedKeyHashSet<MockRealtimeAudioSource*>& allMockRealtimeAudioSourcesStorage()
 {
-    static MainThreadNeverDestroyed<HashSet<MockRealtimeAudioSource*>> audioSources;
+    static MainThreadNeverDestroyed<UncheckedKeyHashSet<MockRealtimeAudioSource*>> audioSources;
     return audioSources;
 }
 
-const HashSet<MockRealtimeAudioSource*>& MockRealtimeAudioSourceGStreamer::allMockRealtimeAudioSources()
+const UncheckedKeyHashSet<MockRealtimeAudioSource*>& MockRealtimeAudioSourceGStreamer::allMockRealtimeAudioSources()
 {
     return allMockRealtimeAudioSourcesStorage();
 }
 
-CaptureSourceOrError MockRealtimeAudioSource::create(String&& deviceID, AtomString&& name, MediaDeviceHashSalts&& hashSalts, const MediaConstraints* constraints, PageIdentifier)
+CaptureSourceOrError MockRealtimeAudioSource::create(String&& deviceID, AtomString&& name, MediaDeviceHashSalts&& hashSalts, const MediaConstraints* constraints, std::optional<PageIdentifier>)
 {
 #ifndef NDEBUG
     auto device = MockRealtimeMediaSourceCenter::mockDeviceWithPersistentID(deviceID);
@@ -139,6 +140,15 @@ std::pair<GstClockTime, GstClockTime> MockRealtimeAudioSourceGStreamer::queryCap
     return m_capturer->queryLatency();
 }
 
+static void addHum(float amplitude, float frequency, float sampleRate, uint64_t start, std::span<float> destination)
+{
+    float humPeriod = sampleRate / frequency;
+    for (auto [i, destinationValue] : indexedRange(destination)) {
+        float a = amplitude * sin((start + i) * s_Tau / humPeriod);
+        destinationValue += a;
+    }
+}
+
 void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
 {
     if (!m_bipBopBuffer.size() || !m_streamFormat)
@@ -165,8 +175,9 @@ void MockRealtimeAudioSourceGStreamer::render(Seconds delta)
             if (muted())
                 webkitGstAudioFormatFillSilence(info.finfo, map.data(), map.size());
             else {
-                memcpy(map.data(), &m_bipBopBuffer[bipBopStart], sizeof(float) * bipBopCount);
-                addHum(s_HumVolume, s_HumFrequency, sampleRate(), m_samplesRendered, reinterpret_cast<float*>(map.data()), bipBopCount);
+                auto destination = map.mutableSpan<float>();
+                memcpySpan(destination, m_bipBopBuffer.subspan(bipBopStart, bipBopCount));
+                addHum(s_HumVolume, s_HumFrequency, sampleRate(), m_samplesRendered, destination);
             }
         }
 
@@ -191,16 +202,6 @@ void MockRealtimeAudioSourceGStreamer::settingsDidChange(OptionSet<RealtimeMedia
     reconfigure();
 }
 
-void MockRealtimeAudioSourceGStreamer::addHum(float amplitude, float frequency, float sampleRate, uint64_t start, float *p, uint64_t count)
-{
-    float humPeriod = sampleRate / frequency;
-    for (uint64_t i = start, end = start + count; i < end; ++i) {
-        float a = amplitude * sin(i * s_Tau / humPeriod);
-        a += *p;
-        *p++ = a;
-    }
-}
-
 void MockRealtimeAudioSourceGStreamer::reconfigure()
 {
     GstAudioInfo info;
@@ -219,10 +220,11 @@ void MockRealtimeAudioSourceGStreamer::reconfigure()
     size_t bipStart = 0;
     size_t bopStart = rate;
 
-    addHum(s_BipBopVolume, s_BipFrequency, rate, 0, m_bipBopBuffer.data() + bipStart, bipBopSampleCount);
-    addHum(s_BipBopVolume, s_BopFrequency, rate, 0, m_bipBopBuffer.data() + bopStart, bipBopSampleCount);
+    addHum(s_BipBopVolume, s_BipFrequency, rate, 0, m_bipBopBuffer.mutableSpan().subspan(bipStart, bipBopSampleCount));
+    addHum(s_BipBopVolume, s_BopFrequency, rate, 0, m_bipBopBuffer.mutableSpan().subspan(bopStart, bipBopSampleCount));
+
     if (!echoCancellation())
-        addHum(s_NoiseVolume, s_NoiseFrequency, rate, 0, m_bipBopBuffer.data(), sampleCount);
+        addHum(s_NoiseVolume, s_NoiseFrequency, rate, 0, m_bipBopBuffer.mutableSpan().first(sampleCount));
 }
 
 void MockRealtimeAudioSourceGStreamer::setInterruptedForTesting(bool isInterrupted)

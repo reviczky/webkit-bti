@@ -55,7 +55,7 @@ namespace WebKit {
 
 class RemoteVideoFrameProxy;
 
-class RemoteVideoFrameObjectHeapProxyProcessor : public IPC::WorkQueueMessageReceiver, public GPUProcessConnection::Client {
+class RemoteVideoFrameObjectHeapProxyProcessor : public IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>, public GPUProcessConnection::Client {
 public:
     static Ref<RemoteVideoFrameObjectHeapProxyProcessor> create(GPUProcessConnection&);
     ~RemoteVideoFrameObjectHeapProxyProcessor();
@@ -64,9 +64,11 @@ public:
     void getVideoFrameBuffer(const RemoteVideoFrameProxy&, bool canUseIOSurfce, Callback&&);
     RefPtr<WebCore::NativeImage> getNativeImage(const WebCore::VideoFrame&);
 
-    void ref() const final { return IPC::WorkQueueMessageReceiver::ref(); }
-    void deref() const final { return IPC::WorkQueueMessageReceiver::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return IPC::WorkQueueMessageReceiver::controlBlock(); }
+    ThreadSafeWeakPtrControlBlock& controlBlock() const final { return IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::controlBlock(); }
+    size_t weakRefCount() const final { return IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::weakRefCount(); }
+
+    void ref() const final { IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::ref(); }
+    void deref() const final { IPC::WorkQueueMessageReceiver<WTF::DestructionThread::MainRunLoop>::deref(); }
 
 private:
     explicit RemoteVideoFrameObjectHeapProxyProcessor(GPUProcessConnection&);
@@ -86,7 +88,8 @@ private:
     void clearCallbacks();
     Callback takeCallback(RemoteVideoFrameIdentifier);
 
-private:
+    Ref<WorkQueue> protectedQueue() const { return m_queue; }
+
     Lock m_connectionLock;
     RefPtr<IPC::Connection> m_connection WTF_GUARDED_BY_LOCK(m_connectionLock);
     Lock m_callbacksLock;

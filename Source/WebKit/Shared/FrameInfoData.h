@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,8 +25,11 @@
 
 #pragma once
 
+#include "WebFrameMetrics.h"
+#include <WebCore/CertificateInfo.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/ResourceRequest.h>
+#include <WebCore/ScriptExecutionContextIdentifier.h>
 #include <WebCore/SecurityOriginData.h>
 #include <wtf/ProcessID.h>
 
@@ -40,11 +43,15 @@ struct FrameInfoData {
     WebCore::ResourceRequest request;
     WebCore::SecurityOriginData securityOrigin;
     String frameName;
-    WebCore::FrameIdentifier frameID;
-    std::optional<WebCore::FrameIdentifier> parentFrameID;
+    // FIXME: Make this no longer Markable. That requires fixes in WebAuthN code.
+    Markable<WebCore::FrameIdentifier> frameID;
+    Markable<WebCore::FrameIdentifier> parentFrameID;
+    Markable<WebCore::ScriptExecutionContextIdentifier> documentID;
+    WebCore::CertificateInfo certificateInfo;
     ProcessID processID;
     bool isFocused { false };
     bool errorOccurred { false };
+    WebFrameMetrics frameMetrics { };
 };
 
 }

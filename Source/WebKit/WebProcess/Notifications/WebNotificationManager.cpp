@@ -27,7 +27,6 @@
 #include "WebNotificationManager.h"
 
 #include "Logging.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include "WebProcessCreationParameters.h"
@@ -57,7 +56,7 @@ namespace WebKit {
 using namespace WebCore;
 
 #if ENABLE(NOTIFICATIONS)
-static bool sendMessage(WebPage* page, const Function<bool(IPC::Connection&, uint64_t)>& sendMessage)
+static bool sendMessage(WebPage* page, NOESCAPE const Function<bool(IPC::Connection&, uint64_t)>& sendMessage)
 {
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
     if (DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
@@ -104,14 +103,23 @@ ASCIILiteral WebNotificationManager::supplementName()
 }
 
 WebNotificationManager::WebNotificationManager(WebProcess& process)
+    : m_process(process)
 {
 #if ENABLE(NOTIFICATIONS)
     process.addMessageReceiver(Messages::WebNotificationManager::messageReceiverName(), *this);
 #endif
 }
 
-WebNotificationManager::~WebNotificationManager()
+WebNotificationManager::~WebNotificationManager() = default;
+
+void WebNotificationManager::ref() const
 {
+    m_process->ref();
+}
+
+void WebNotificationManager::deref() const
+{
+    m_process->deref();
 }
 
 void WebNotificationManager::initialize(const WebProcessCreationParameters& parameters)
@@ -148,7 +156,7 @@ void WebNotificationManager::didRemoveNotificationDecisions(const Vector<String>
 
 NotificationClient::Permission WebNotificationManager::policyForOrigin(const String& originString, WebPage* page) const
 {
-#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+#if ENABLE(WEB_PUSH_NOTIFICATIONS) && ENABLE(NOTIFICATIONS)
     if (DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
         Ref connection = WebProcess::singleton().ensureNetworkProcessConnection().connection();
         auto origin = SecurityOriginData::fromURL(URL { originString });
@@ -168,7 +176,7 @@ NotificationClient::Permission WebNotificationManager::policyForOrigin(const Str
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
-#endif
+#endif // ENABLE(WEB_PUSH_NOTIFICATIONS) && ENABLE(NOTIFICATIONS)
 
 #if ENABLE(NOTIFICATIONS)
     if (originString.isEmpty())
@@ -211,7 +219,8 @@ bool WebNotificationManager::show(NotificationData&& notification, RefPtr<Notifi
 
     if (!notification.isPersistent()) {
         ASSERT(!m_nonPersistentNotificationsContexts.contains(notificationID));
-        m_nonPersistentNotificationsContexts.add(notificationID, notification.contextIdentifier);
+        RELEASE_ASSERT(notification.contextIdentifier);
+        m_nonPersistentNotificationsContexts.add(notificationID, *notification.contextIdentifier);
     }
     return true;
 #else
@@ -230,7 +239,8 @@ void WebNotificationManager::cancel(NotificationData&& notification, WebPage* pa
     auto identifier = notification.notificationID;
     ASSERT(notification.isPersistent() || m_nonPersistentNotificationsContexts.contains(identifier));
 
-    if (!sendNotificationMessage(Messages::NotificationManagerMessageHandler::CancelNotification(identifier), page))
+    auto origin = WebCore::SecurityOriginData::fromURL(URL { notification.originString });
+    if (!sendNotificationMessage(Messages::NotificationManagerMessageHandler::CancelNotification(WTFMove(origin), identifier), page))
         return;
 #else
     UNUSED_PARAM(notification);

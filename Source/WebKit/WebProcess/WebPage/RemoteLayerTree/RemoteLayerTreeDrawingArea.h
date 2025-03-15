@@ -35,16 +35,8 @@
 #include <atomic>
 #include <dispatch/dispatch.h>
 #include <wtf/HashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
-
-namespace WebKit {
-class RemoteLayerTreeDrawingArea;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLayerTreeDrawingArea> : std::true_type { };
-}
 
 namespace WebCore {
 class PlatformCALayer;
@@ -57,8 +49,13 @@ namespace WebKit {
 class RemoteLayerTreeContext;
 
 class RemoteLayerTreeDrawingArea : public DrawingArea, public WebCore::GraphicsLayerClient {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteLayerTreeDrawingArea);
 public:
-    RemoteLayerTreeDrawingArea(WebPage&, const WebPageCreationParameters&);
+    static RefPtr<RemoteLayerTreeDrawingArea> create(WebPage& webPage, const WebPageCreationParameters& parameters)
+    {
+        return adoptRef(*new RemoteLayerTreeDrawingArea(webPage, parameters));
+    }
+
     virtual ~RemoteLayerTreeDrawingArea();
 
     TransactionID nextTransactionID() const { return m_currentTransactionID.next(); }
@@ -69,6 +66,8 @@ public:
     void gpuProcessConnectionWasDestroyed();
 
 protected:
+    RemoteLayerTreeDrawingArea(WebPage&, const WebPageCreationParameters&);
+
     void updateRendering();
 
 private:
@@ -118,7 +117,7 @@ private:
 
     void displayDidRefresh() final;
 
-    void setDeviceScaleFactor(float) final;
+    void setDeviceScaleFactor(float, CompletionHandler<void()>&&) final;
 
     void mainFrameContentSizeChanged(WebCore::FrameIdentifier, const WebCore::IntSize&) override;
 
@@ -159,14 +158,14 @@ private:
     private:
         explicit BackingStoreFlusher(Ref<IPC::Connection>&&);
 
-        Ref<IPC::Connection> m_connection;
+        const Ref<IPC::Connection> m_connection;
         std::atomic<bool> m_hasPendingFlush { false };
     };
 
-    Ref<RemoteLayerTreeContext> m_remoteLayerTreeContext;
+    const Ref<RemoteLayerTreeContext> m_remoteLayerTreeContext;
     
     struct RootLayerInfo {
-        Ref<WebCore::GraphicsLayer> layer;
+        const Ref<WebCore::GraphicsLayer> layer;
         RefPtr<WebCore::GraphicsLayer> contentLayer;
         RefPtr<WebCore::GraphicsLayer> viewOverlayRootLayer;
         WebCore::FrameIdentifier frameID;
@@ -185,10 +184,10 @@ private:
     bool m_waitingForBackingStoreSwap { false };
     bool m_deferredRenderingUpdateWhileWaitingForBackingStoreSwap { false };
 
-    Ref<WorkQueue> m_commitQueue;
+    const Ref<WorkQueue> m_commitQueue;
     RefPtr<BackingStoreFlusher> m_backingStoreFlusher;
 
-    TransactionID m_currentTransactionID;
+    TransactionID m_currentTransactionID { TransactionID::generateMonotonic() };
     Vector<IPC::AsyncReplyID> m_pendingCallbackIDs;
     ActivityStateChangeID m_activityStateChangeID { ActivityStateChangeAsynchronous };
 

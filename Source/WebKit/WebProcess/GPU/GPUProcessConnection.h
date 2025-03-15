@@ -39,6 +39,7 @@
 #include <WebCore/AudioSession.h>
 #include <WebCore/PlatformMediaSession.h>
 #include <WebCore/SharedMemory.h>
+#include <wtf/AbstractThreadSafeRefCountedAndCanMakeWeakPtr.h>
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeWeakHashSet.h>
@@ -48,7 +49,7 @@ namespace WebCore {
 class CAAudioStreamDescription;
 struct GraphicsContextGLAttributes;
 struct PageIdentifierType;
-using PageIdentifier = LegacyNullableObjectIdentifier<PageIdentifierType>;
+using PageIdentifier = ObjectIdentifier<PageIdentifierType>;
 }
 
 namespace IPC {
@@ -70,10 +71,15 @@ class RemoteVideoFrameObjectHeapProxy;
 #endif
 
 class GPUProcessConnection : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<GPUProcessConnection>, public IPC::Connection::Client {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(GPUProcessConnection);
 public:
     static Ref<GPUProcessConnection> create(Ref<IPC::Connection>&&);
     ~GPUProcessConnection();
     GPUProcessConnectionIdentifier identifier() const { return m_identifier; }
+
+    void ref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::ref(); }
+    void deref() const final { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr::deref(); }
 
     IPC::Connection& connection() { return m_connection.get(); }
     Ref<IPC::Connection> protectedConnection() { return m_connection; }
@@ -86,10 +92,12 @@ public:
     Ref<RemoteSharedResourceCacheProxy> sharedResourceCache();
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     SampleBufferDisplayLayerManager& sampleBufferDisplayLayerManager();
+    Ref<SampleBufferDisplayLayerManager> protectedSampleBufferDisplayLayerManager();
     void resetAudioMediaStreamTrackRendererInternalUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier);
 #endif
 #if ENABLE(VIDEO)
     RemoteVideoFrameObjectHeapProxy& videoFrameObjectHeapProxy();
+    Ref<RemoteVideoFrameObjectHeapProxy> protectedVideoFrameObjectHeapProxy();
     RemoteMediaPlayerManager& mediaPlayerManager();
 #endif
 
@@ -119,13 +127,9 @@ public:
     void createGPU(WebGPUIdentifier, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
     void releaseGPU(WebGPUIdentifier);
 
-    class Client {
+    class Client : public AbstractThreadSafeRefCountedAndCanMakeWeakPtr {
     public:
         virtual ~Client() = default;
-
-        virtual void ref() const = 0;
-        virtual void deref() const = 0;
-        virtual ThreadSafeWeakPtrControlBlock& controlBlock() const = 0;
 
         virtual void gpuProcessConnectionDidClose(GPUProcessConnection&) { }
     };

@@ -30,6 +30,7 @@
 
 #include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/VideoTrackPrivate.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebKit {
 
@@ -39,6 +40,7 @@ struct VideoTrackPrivateRemoteConfiguration;
 
 class VideoTrackPrivateRemote
     : public WebCore::VideoTrackPrivate {
+    WTF_MAKE_TZONE_ALLOCATED(VideoTrackPrivateRemote);
     WTF_MAKE_NONCOPYABLE(VideoTrackPrivateRemote)
 public:
     static Ref<VideoTrackPrivateRemote> create(GPUProcessConnection& gpuProcessConnection, WebCore::MediaPlayerIdentifier playerIdentifier, VideoTrackPrivateRemoteConfiguration&& configuration)
@@ -51,8 +53,8 @@ public:
     using VideoTrackKind = WebCore::VideoTrackPrivate::Kind;
     VideoTrackKind kind() const final { return m_kind; }
     WebCore::TrackID id() const final { return m_id; }
-    AtomString label() const final { return AtomString { m_label }; }
-    AtomString language() const final { return AtomString { m_language }; }
+    AtomString label() const final { return AtomString { m_label.isolatedCopy() }; }
+    AtomString language() const final { return AtomString { m_language.isolatedCopy() }; }
     int trackIndex() const final { return m_trackIndex; }
     MediaTime startTimeVariance() const final { return m_startTimeVariance; }
 

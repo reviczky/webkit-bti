@@ -27,6 +27,7 @@
 
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
 
+#include "Connection.h"
 #include "MessageReceiver.h"
 #include "PushMessageForTesting.h"
 #include "WebPushMessage.h"
@@ -68,30 +69,33 @@ using WebKit::WebPushD::WebPushDaemonConnectionConfiguration;
 namespace WebPushD {
 
 enum class PushClientConnectionIdentifierType { };
-using PushClientConnectionIdentifier = LegacyNullableAtomicObjectIdentifier<PushClientConnectionIdentifierType>;
+using PushClientConnectionIdentifier = AtomicObjectIdentifier<PushClientConnectionIdentifierType>;
 
 class PushClientConnection : public RefCounted<PushClientConnection>, public Identified<PushClientConnectionIdentifier>, public IPC::MessageReceiver {
     WTF_MAKE_TZONE_ALLOCATED(PushClientConnection);
 public:
     static RefPtr<PushClientConnection> create(xpc_connection_t, IPC::Decoder&);
 
-    WebCore::PushSubscriptionSetIdentifier subscriptionSetIdentifier() const;
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
+
+    std::optional<WebCore::PushSubscriptionSetIdentifier> subscriptionSetIdentifierForOrigin(const WebCore::SecurityOriginData&) const;
     const String& hostAppCodeSigningIdentifier() const { return m_hostAppCodeSigningIdentifier; }
     bool hostAppHasPushInjectEntitlement() const { return m_hostAppHasPushInjectEntitlement; };
-
-    const String& pushPartitionString() const { return m_pushPartitionString; }
     std::optional<WTF::UUID> dataStoreIdentifier() const { return m_dataStoreIdentifier; }
+    bool declarativeWebPushEnabled() const { return m_declarativeWebPushEnabled; }
+
+    // You almost certainly do not want to use this and should probably use subscriptionSetIdentifierForOrigin instead.
+    const String& pushPartitionIfExists() const { return m_pushPartitionString; }
+
+    String debugDescription() const;
 
     void connectionClosed();
 
     void didReceiveMessageWithReplyHandler(IPC::Decoder&, Function<void(UniqueRef<IPC::Encoder>&&)>&&) override;
 
-#if PLATFORM(IOS)
-    String associatedWebClipTitle() const;
-#endif
-
 private:
-    PushClientConnection(xpc_connection_t, String&& hostAppCodeSigningIdentifier, bool hostAppHasPushInjectEntitlement, String&& pushPartitionString, std::optional<WTF::UUID>&& dataStoreIdentifier);
+    PushClientConnection(xpc_connection_t, String&& hostAppCodeSigningIdentifier, bool hostAppHasPushInjectEntitlement, String&& pushPartitionString, std::optional<WTF::UUID>&& dataStoreIdentifier, bool declarativeWebPushEnabled);
 
     // PushClientConnectionMessages
     void setPushAndNotificationsEnabledForOrigin(const String& originString, bool, CompletionHandler<void()>&& replySender);
@@ -114,19 +118,17 @@ private:
 
     void showNotification(const WebCore::NotificationData&, RefPtr<WebCore::NotificationResources>, CompletionHandler<void()>&&);
     void getNotifications(const URL& registrationURL, const String& tag, CompletionHandler<void(Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData>&&)>&&);
-    void cancelNotification(const WTF::UUID& notificationID);
+    void cancelNotification(WebCore::SecurityOriginData&&, const WTF::UUID& notificationID);
     void setAppBadge(WebCore::SecurityOriginData&&, std::optional<uint64_t>);
     void getAppBadgeForTesting(CompletionHandler<void(std::optional<uint64_t>)>&&);
+    void setProtocolVersionForTesting(unsigned, CompletionHandler<void()>&&);
 
     OSObjectPtr<xpc_connection_t> m_xpcConnection;
     String m_hostAppCodeSigningIdentifier;
     bool m_hostAppHasPushInjectEntitlement { false };
     String m_pushPartitionString;
     Markable<WTF::UUID> m_dataStoreIdentifier;
-
-#if PLATFORM(IOS)
-    mutable RetainPtr<UIWebClip> m_associatedWebClip;
-#endif
+    bool m_declarativeWebPushEnabled { false };
 };
 
 } // namespace WebPushD

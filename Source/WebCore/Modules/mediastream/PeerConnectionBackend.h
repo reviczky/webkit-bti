@@ -48,11 +48,6 @@ namespace WebCore {
 class PeerConnectionBackend;
 }
 
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebCore::PeerConnectionBackend> : std::true_type { };
-}
-
 namespace WebCore {
 
 class DeferredPromise;
@@ -73,6 +68,7 @@ class RTCSctpTransportBackend;
 class RTCSessionDescription;
 class RTCStatsReport;
 class ScriptExecutionContext;
+class WeakPtrImplWithEventTargetData;
 
 struct MediaEndpointConfiguration;
 struct RTCAnswerOptions;
@@ -172,7 +168,7 @@ public:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
-    const void* logIdentifier() const final { return m_logIdentifier; }
+    uint64_t logIdentifier() const final { return m_logIdentifier; }
     ASCIILiteral logClassName() const override { return "PeerConnectionBackend"_s; }
     WTFLogChannel& logChannel() const final;
 #if PLATFORM(WPE) || PLATFORM(GTK)
@@ -230,6 +226,9 @@ public:
     virtual void startGatheringStatLogs(Function<void(String&&)>&&) { }
     virtual void stopGatheringStatLogs() { }
 
+    WEBCORE_EXPORT void ref() const;
+    WEBCORE_EXPORT void deref() const;
+
 protected:
     void doneGatheringCandidates();
 
@@ -270,7 +269,8 @@ private:
     virtual void doStop() = 0;
 
 protected:
-    RTCPeerConnection& m_peerConnection;
+    Ref<RTCPeerConnection> protectedPeerConnection() const;
+    WeakRef<RTCPeerConnection, WeakPtrImplWithEventTargetData> m_peerConnection;
 
 private:
     CreateCallback m_offerAnswerCallback;
@@ -280,7 +280,7 @@ private:
 
 #if !RELEASE_LOG_DISABLED
     Ref<const Logger> m_logger;
-    const void* m_logIdentifier;
+    const uint64_t m_logIdentifier;
 #endif
     String m_logIdentifierString;
     bool m_finishedGatheringCandidates { false };

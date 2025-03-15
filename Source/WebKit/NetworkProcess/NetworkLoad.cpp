@@ -35,8 +35,8 @@
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkSession.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
+#include <WebCore/AuthenticationChallenge.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SharedBuffer.h>
 #include <wtf/NeverDestroyed.h>
@@ -61,13 +61,6 @@ NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkLoadParameters&& para
         m_task = NetworkDataTask::create(networkSession, *this, m_parameters);
 }
 
-NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkSession& networkSession, const Function<RefPtr<NetworkDataTask>(NetworkDataTaskClient&)>& createTask)
-    : m_client(client)
-    , m_networkProcess(networkSession.networkProcess())
-    , m_task(createTask(*this))
-{
-}
-
 std::optional<WebCore::FrameIdentifier> NetworkLoad::webFrameID() const
 {
     if (parameters().webFrameID)
@@ -89,32 +82,32 @@ Ref<NetworkProcess> NetworkLoad::networkProcess()
 
 void NetworkLoad::start()
 {
-    if (!m_task)
-        return;
-    m_task->resume();
+    if (RefPtr task = m_task)
+        task->resume();
 }
 
 void NetworkLoad::startWithScheduling()
 {
     if (!m_task || !m_task->networkSession())
         return;
-    m_scheduler = m_task->networkSession()->networkLoadScheduler();
-    m_scheduler->schedule(*this);
+    Ref scheduler = m_task->networkSession()->networkLoadScheduler();
+    m_scheduler = scheduler.get();
+    scheduler->schedule(*this);
 }
 
 NetworkLoad::~NetworkLoad()
 {
     ASSERT(RunLoop::isMain());
-    if (m_scheduler)
-        m_scheduler->unschedule(*this);
-    if (m_task)
-        m_task->clearClient();
+    if (RefPtr scheduler = m_scheduler.get())
+        scheduler->unschedule(*this);
+    if (RefPtr task = m_task)
+        task->clearClient();
 }
 
 void NetworkLoad::cancel()
 {
-    if (m_task)
-        m_task->cancel();
+    if (RefPtr task = m_task)
+        task->cancel();
 }
 
 static inline void updateRequest(ResourceRequest& currentRequest, const ResourceRequest& newRequest)
@@ -142,32 +135,31 @@ void NetworkLoad::reprioritizeRequest(ResourceLoadPriority priority)
 
 bool NetworkLoad::shouldCaptureExtraNetworkLoadMetrics() const
 {
-    return m_client.get().shouldCaptureExtraNetworkLoadMetrics();
+    return m_client->shouldCaptureExtraNetworkLoadMetrics();
 }
 
 bool NetworkLoad::isAllowedToAskUserForCredentials() const
 {
-    return m_client.get().isAllowedToAskUserForCredentials();
+    return m_client->isAllowedToAskUserForCredentials();
 }
 
 void NetworkLoad::convertTaskToDownload(PendingDownload& pendingDownload, const ResourceRequest& updatedRequest, const ResourceResponse& response, ResponseCompletionHandler&& completionHandler)
 {
-    if (!m_task)
+    RefPtr task = m_task;
+    if (!task)
         return completionHandler(PolicyAction::Ignore);
 
     m_client = pendingDownload;
     m_currentRequest = updatedRequest;
-    m_task->setPendingDownload(pendingDownload);
+    task->setPendingDownload(pendingDownload);
     
-    m_networkProcess->findPendingDownloadLocation(*m_task.get(), WTFMove(completionHandler), response);
+    m_networkProcess->findPendingDownloadLocation(*task, WTFMove(completionHandler), response);
 }
 
 void NetworkLoad::setPendingDownloadID(DownloadID downloadID)
 {
-    if (!m_task)
-        return;
-
-    m_task->setPendingDownloadID(downloadID);
+    if (RefPtr task = m_task)
+        task->setPendingDownloadID(downloadID);
 }
 
 void NetworkLoad::setSuggestedFilename(const String& suggestedName)
@@ -180,10 +172,8 @@ void NetworkLoad::setSuggestedFilename(const String& suggestedName)
 
 void NetworkLoad::setPendingDownload(PendingDownload& pendingDownload)
 {
-    if (!m_task)
-        return;
-
-    m_task->setPendingDownload(pendingDownload);
+    if (RefPtr task = m_task)
+        task->setPendingDownload(pendingDownload);
 }
 
 void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse, ResourceRequest&& request, RedirectCompletionHandler&& completionHandler)
@@ -192,7 +182,7 @@ void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse
     ASSERT(RunLoop::isMain());
 
     if (!m_networkProcess->ftpEnabled() && request.url().protocolIsInFTPFamily()) {
-        m_task->clearClient();
+        Ref { *m_task }->clearClient();
         m_task = nullptr;
         WebCore::NetworkLoadMetrics emptyMetrics;
         didCompleteWithError(ResourceError { errorDomainWebKitInternal, 0, url(), "FTP URLs are disabled"_s, ResourceError::Type::AccessControl }, emptyMetrics);
@@ -208,42 +198,43 @@ void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse
     request.setRequester(oldRequest.requester());
 
     m_currentRequest = request;
-    m_client.get().willSendRedirectedRequest(WTFMove(oldRequest), WTFMove(request), WTFMove(redirectResponse), [this, weakThis = WeakPtr<NetworkDataTaskClient> { *this }, completionHandler = WTFMove(completionHandler)] (ResourceRequest&& newRequest) mutable {
-        if (!weakThis)
+    m_client->willSendRedirectedRequest(WTFMove(oldRequest), WTFMove(request), WTFMove(redirectResponse), [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)] (ResourceRequest&& newRequest) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
             return completionHandler({ });
-        updateRequest(m_currentRequest, newRequest);
-        if (m_currentRequest.isNull()) {
+        updateRequest(protectedThis->m_currentRequest, newRequest);
+        if (protectedThis->m_currentRequest.isNull()) {
             NetworkLoadMetrics emptyMetrics;
-            didCompleteWithError(cancelledError(m_currentRequest), emptyMetrics);
+            protectedThis->didCompleteWithError(cancelledError(protectedThis->m_currentRequest), emptyMetrics);
             completionHandler({ });
             return;
         }
-        completionHandler(ResourceRequest(m_currentRequest));
+        completionHandler(ResourceRequest(protectedThis->m_currentRequest));
     });
 }
 
 void NetworkLoad::didReceiveChallenge(AuthenticationChallenge&& challenge, NegotiatedLegacyTLS negotiatedLegacyTLS, ChallengeCompletionHandler&& completionHandler)
 {
-    m_client.get().didReceiveChallenge(challenge);
+    m_client->didReceiveChallenge(challenge);
 
     auto scheme = challenge.protectionSpace().authenticationScheme();
     bool isTLSHandshake = scheme == ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested
         || scheme == ProtectionSpace::AuthenticationScheme::ClientCertificateRequested;
     if (!isAllowedToAskUserForCredentials() && !isTLSHandshake && !challenge.protectionSpace().isProxy()) {
-        m_client.get().didBlockAuthenticationChallenge();
+        m_client->didBlockAuthenticationChallenge();
         completionHandler(AuthenticationChallengeDisposition::UseCredential, { });
         return;
     }
     
-    if (auto* pendingDownload = m_task->pendingDownload())
-        m_networkProcess->authenticationManager().didReceiveAuthenticationChallenge(*pendingDownload, challenge, WTFMove(completionHandler));
+    if (RefPtr pendingDownload = m_task->pendingDownload())
+        m_networkProcess->protectedAuthenticationManager()->didReceiveAuthenticationChallenge(*pendingDownload, challenge, WTFMove(completionHandler));
     else
-        m_networkProcess->authenticationManager().didReceiveAuthenticationChallenge(m_task->sessionID(), m_parameters.webPageProxyID, m_parameters.topOrigin ? &m_parameters.topOrigin->data() : nullptr, challenge, negotiatedLegacyTLS, WTFMove(completionHandler));
+        m_networkProcess->protectedAuthenticationManager()->didReceiveAuthenticationChallenge(m_task->sessionID(), m_parameters.webPageProxyID, m_parameters.topOrigin ? &m_parameters.topOrigin->data() : nullptr, challenge, negotiatedLegacyTLS, WTFMove(completionHandler));
 }
 
 void NetworkLoad::didReceiveInformationalResponse(ResourceResponse&& response)
 {
-    m_client.get().didReceiveInformationalResponse(WTFMove(response));
+    m_client->didReceiveInformationalResponse(WTFMove(response));
 }
 
 void NetworkLoad::didReceiveResponse(ResourceResponse&& response, NegotiatedLegacyTLS negotiatedLegacyTLS, PrivateRelayed privateRelayed, ResponseCompletionHandler&& completionHandler)
@@ -256,7 +247,7 @@ void NetworkLoad::didReceiveResponse(ResourceResponse&& response, NegotiatedLega
     }
 
     if (negotiatedLegacyTLS == NegotiatedLegacyTLS::Yes)
-        m_networkProcess->authenticationManager().negotiatedLegacyTLS(m_parameters.webPageProxyID);
+        m_networkProcess->protectedAuthenticationManager()->negotiatedLegacyTLS(*m_parameters.webPageProxyID);
     
     notifyDidReceiveResponse(WTFMove(response), negotiatedLegacyTLS, privateRelayed, WTFMove(completionHandler));
 }
@@ -277,57 +268,55 @@ void NetworkLoad::notifyDidReceiveResponse(ResourceResponse&& response, Negotiat
         response.includeCertificateInfo(auditToken);
     }
 
-    m_client.get().didReceiveResponse(WTFMove(response), privateRelayed, WTFMove(completionHandler));
+    m_client->didReceiveResponse(WTFMove(response), privateRelayed, WTFMove(completionHandler));
 }
 
 void NetworkLoad::didReceiveData(const WebCore::SharedBuffer& buffer)
 {
     // FIXME: This should be the encoded data length, not the decoded data length.
-    m_client.get().didReceiveBuffer(buffer, buffer.size());
+    m_client->didReceiveBuffer(buffer, buffer.size());
 }
 
 void NetworkLoad::didCompleteWithError(const ResourceError& error, const WebCore::NetworkLoadMetrics& networkLoadMetrics)
 {
-    if (m_scheduler) {
-        m_scheduler->unschedule(*this, &networkLoadMetrics);
-        m_scheduler = nullptr;
-    }
+    if (RefPtr scheduler = std::exchange(m_scheduler, nullptr).get())
+        scheduler->unschedule(*this, &networkLoadMetrics);
 
     if (error.isNull())
-        m_client.get().didFinishLoading(networkLoadMetrics);
+        m_client->didFinishLoading(networkLoadMetrics);
     else
-        m_client.get().didFailLoading(error);
+        m_client->didFailLoading(error);
 }
 
 void NetworkLoad::didSendData(uint64_t totalBytesSent, uint64_t totalBytesExpectedToSend)
 {
-    m_client.get().didSendData(totalBytesSent, totalBytesExpectedToSend);
+    m_client->didSendData(totalBytesSent, totalBytesExpectedToSend);
 }
 
 void NetworkLoad::wasBlocked()
 {
-    m_client.get().didFailLoading(blockedError(m_currentRequest));
+    m_client->didFailLoading(blockedError(m_currentRequest));
 }
 
 void NetworkLoad::cannotShowURL()
 {
-    m_client.get().didFailLoading(cannotShowURLError(m_currentRequest));
+    m_client->didFailLoading(cannotShowURLError(m_currentRequest));
 }
 
 void NetworkLoad::wasBlockedByRestrictions()
 {
-    m_client.get().didFailLoading(wasBlockedByRestrictionsError(m_currentRequest));
+    m_client->didFailLoading(wasBlockedByRestrictionsError(m_currentRequest));
 }
 
 void NetworkLoad::wasBlockedByDisabledFTP()
 {
-    m_client.get().didFailLoading(ftpDisabledError(m_currentRequest));
+    m_client->didFailLoading(ftpDisabledError(m_currentRequest));
 }
 
 void NetworkLoad::didNegotiateModernTLS(const URL& url)
 {
     if (m_parameters.webPageProxyID)
-        m_networkProcess->send(Messages::NetworkProcessProxy::DidNegotiateModernTLS(m_parameters.webPageProxyID, url));
+        m_networkProcess->send(Messages::NetworkProcessProxy::DidNegotiateModernTLS(*m_parameters.webPageProxyID, url));
 }
 
 String NetworkLoad::description() const
@@ -339,8 +328,8 @@ String NetworkLoad::description() const
 
 void NetworkLoad::setH2PingCallback(const URL& url, CompletionHandler<void(Expected<WTF::Seconds, WebCore::ResourceError>&&)>&& completionHandler)
 {
-    if (m_task)
-        m_task->setH2PingCallback(url, WTFMove(completionHandler));
+    if (RefPtr task = m_task)
+        task->setH2PingCallback(url, WTFMove(completionHandler));
     else
         completionHandler(makeUnexpected(internalError(url)));
 }
@@ -353,9 +342,21 @@ void NetworkLoad::setTimingAllowFailedFlag()
 
 String NetworkLoad::attributedBundleIdentifier(WebPageProxyIdentifier pageID)
 {
-    if (m_task)
-        return m_task->attributedBundleIdentifier(pageID);
+    if (RefPtr task = m_task)
+        return task->attributedBundleIdentifier(pageID);
     return { };
+}
+
+RefPtr<NetworkDataTask> NetworkLoad::protectedTask()
+{
+    return m_task;
+}
+
+size_t NetworkLoad::bytesTransferredOverNetwork() const
+{
+    if (RefPtr task = m_task)
+        return task->bytesTransferredOverNetwork();
+    return 0;
 }
 
 } // namespace WebKit

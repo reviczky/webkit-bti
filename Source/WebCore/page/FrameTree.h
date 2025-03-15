@@ -56,6 +56,9 @@ public:
     Frame* firstRenderedChild() const;
     Frame* nextRenderedSibling() const;
 
+    LocalFrame* firstLocalDescendant() const;
+    LocalFrame* nextLocalSibling() const;
+
     WEBCORE_EXPORT bool isDescendantOf(const Frame* ancestor) const;
     
     WEBCORE_EXPORT Frame* traverseNext(const Frame* stayWithin = nullptr) const;
@@ -73,7 +76,7 @@ public:
 
     Frame* child(unsigned index) const;
     Frame* childBySpecifiedName(const AtomString& name) const;
-    Frame* childByFrameID(FrameIdentifier) const;
+    Frame* descendantByFrameID(FrameIdentifier) const;
     WEBCORE_EXPORT Frame* findByUniqueName(const AtomString&, Frame& activeFrame) const;
     WEBCORE_EXPORT Frame* findBySpecifiedName(const AtomString&, Frame& activeFrame) const;
     WEBCORE_EXPORT unsigned childCount() const;
@@ -93,7 +96,7 @@ private:
     Frame* nextAncestorSibling(const Frame* stayWithin) const;
 
     Frame* scopedChild(unsigned index, TreeScope*) const;
-    Frame* scopedChild(const Function<bool(const FrameTree&)>& isMatch, TreeScope*) const;
+    Frame* scopedChild(NOESCAPE const Function<bool(const FrameTree&)>& isMatch, TreeScope*) const;
     unsigned scopedChildCount(TreeScope*) const;
 
     template<typename F> Frame* find(const AtomString& name, F&& nameGetter, Frame& activeFrame) const;

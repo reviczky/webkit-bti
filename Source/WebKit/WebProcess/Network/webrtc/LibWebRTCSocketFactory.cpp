@@ -119,10 +119,10 @@ void LibWebRTCSocketFactory::removeSocket(LibWebRTCSocket& socket)
     m_sockets.remove(socket.identifier());
 }
 
-void LibWebRTCSocketFactory::forSocketInGroup(ScriptExecutionContextIdentifier contextIdentifier, const Function<void(LibWebRTCSocket&)>& callback)
+void LibWebRTCSocketFactory::forSocketInGroup(ScriptExecutionContextIdentifier contextIdentifier, NOESCAPE const Function<void(LibWebRTCSocket&)>& callback)
 {
     ASSERT(!WTF::isMainRunLoop());
-    for (auto& socket : m_sockets.values()) {
+    for (CheckedRef socket : m_sockets.values()) {
         if (socket->contextIdentifier() == contextIdentifier)
             callback(socket);
     }

@@ -31,6 +31,7 @@
 #include <mutex>
 #include <wtf/HashSet.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(WIN)
 #include "PlatformDisplayWin.h"
@@ -44,6 +45,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PlatformDisplay);
 
 #if PLATFORM(WIN)
 PlatformDisplay& PlatformDisplay::sharedDisplay()
@@ -75,9 +78,9 @@ PlatformDisplay* PlatformDisplay::sharedDisplayIfExists()
 }
 #endif
 
-static HashSet<PlatformDisplay*>& eglDisplays()
+static UncheckedKeyHashSet<PlatformDisplay*>& eglDisplays()
 {
-    static NeverDestroyed<HashSet<PlatformDisplay*>> displays;
+    static NeverDestroyed<UncheckedKeyHashSet<PlatformDisplay*>> displays;
     return displays;
 }
 
@@ -128,7 +131,7 @@ void PlatformDisplay::clearSharingGLContext()
 #if USE(SKIA)
     invalidateSkiaGLContexts();
 #endif
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     m_gstGLContext = nullptr;
 #endif
 #if ENABLE(WEBGL) && !PLATFORM(WIN)
@@ -154,7 +157,7 @@ const GLDisplay::Extensions& PlatformDisplay::eglExtensions() const
 
 void PlatformDisplay::terminateEGLDisplay()
 {
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     m_gstGLDisplay = nullptr;
 #endif
     clearSharingGLContext();
@@ -177,6 +180,13 @@ const Vector<GLDisplay::DMABufFormat>& PlatformDisplay::dmabufFormats()
 {
     return m_eglDisplay->dmabufFormats();
 }
+
+#if USE(GSTREAMER)
+const Vector<GLDisplay::DMABufFormat>& PlatformDisplay::dmabufFormatsForVideo()
+{
+    return m_eglDisplay->dmabufFormatsForVideo();
+}
+#endif
 #endif // USE(GBM)
 
 } // namespace WebCore

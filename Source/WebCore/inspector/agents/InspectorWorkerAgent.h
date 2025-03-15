@@ -34,6 +34,7 @@
 #include <wtf/FastMalloc.h>
 #include <wtf/Lock.h>
 #include <wtf/RobinHoodHashMap.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakPtr.h>
@@ -42,7 +43,7 @@ namespace WebCore {
 
 class InspectorWorkerAgent : public InspectorAgentBase, public Inspector::WorkerBackendDispatcherHandler, public CanMakeThreadSafeCheckedPtr<InspectorWorkerAgent> {
     WTF_MAKE_NONCOPYABLE(InspectorWorkerAgent);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(InspectorWorkerAgent);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(InspectorWorkerAgent);
 
 public:

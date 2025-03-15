@@ -74,6 +74,24 @@ PathCairo::PathCairo(RefPtr<cairo_t>&& platformPath, RefPtr<PathStream>&& elemen
     ASSERT(m_platformPath);
 }
 
+bool PathCairo::definitelyEqual(const PathImpl& otherImpl) const
+{
+    RefPtr otherAsPathCairo = dynamicDowncast<PathCairo>(otherImpl);
+    if (!otherAsPathCairo) {
+        // We could convert other to a platform path to compare, but that would be expensive.
+        return false;
+    }
+
+    if (otherAsPathCairo.get() == this)
+        return true;
+
+    if (m_elementsStream && otherAsPathCairo->m_elementsStream)
+        return m_elementsStream->definitelyEqual(*otherAsPathCairo->m_elementsStream);
+
+    // There doesn't seem to be an API to compare cairo_path_t.
+    return false;
+}
+
 Ref<PathImpl> PathCairo::copy() const
 {
     auto platformPathCopy = adoptRef(cairo_create(adoptRef(cairo_image_surface_create(CAIRO_FORMAT_A8, 1, 1)).get()));
@@ -305,6 +323,12 @@ void PathCairo::add(PathRoundedRect roundedRect)
     addBeziersForRoundedRect(roundedRect.roundedRect);
 }
 
+void PathCairo::add(PathContinuousRoundedRect continuousRoundedRect)
+{
+    // Continuous rounded rects are unavailable. Paint a normal rounded rect instead.
+    add(PathRoundedRect { FloatRoundedRect { continuousRoundedRect.rect, FloatRoundedRect::Radii { continuousRoundedRect.cornerWidth, continuousRoundedRect.cornerHeight } }, PathRoundedRect::Strategy::PreferNative });
+}
+
 void PathCairo::add(PathCloseSubpath)
 {
     cairo_close_path(platformPath());
@@ -411,7 +435,7 @@ bool PathCairo::contains(const FloatPoint &point, WindRule rule) const
     return contains;
 }
 
-bool PathCairo::strokeContains(const FloatPoint& point, const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+bool PathCairo::strokeContains(const FloatPoint& point, NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     ASSERT(strokeStyleApplier);
 
@@ -444,7 +468,7 @@ FloatRect PathCairo::boundingRect() const
     return FloatRect(x0, y0, x1 - x0, y1 - y0);
 }
 
-FloatRect PathCairo::strokeBoundingRect(const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+FloatRect PathCairo::strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     if (isEmpty())
         return { };

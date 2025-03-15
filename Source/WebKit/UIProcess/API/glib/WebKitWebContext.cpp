@@ -24,6 +24,7 @@
 #include "APIInjectedBundleClient.h"
 #include "APIProcessPoolConfiguration.h"
 #include "APIString.h"
+#include "FrameInfoData.h"
 #include "LegacyGlobalSettings.h"
 #include "NetworkProcessMessages.h"
 #include "TextChecker.h"
@@ -71,6 +72,7 @@
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/URLParser.h>
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/GSpanExtras.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
@@ -136,7 +138,7 @@ enum {
     N_PROPERTIES,
 };
 
-static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
+static std::array<GParamSpec*, N_PROPERTIES> sObjProperties;
 
 enum {
 #if !ENABLE(2022_GLIB_API)
@@ -178,14 +180,14 @@ private:
             return;
 
         GRefPtr<WebKitURISchemeRequest> request = adoptGRef(webkitURISchemeRequestCreate(m_context, page, task));
-        auto addResult = m_requests.add({ task.resourceLoaderID(), task.pageProxyID() }, WTFMove(request));
+        auto addResult = m_requests.add({ task.resourceLoaderID(), *task.pageProxyID() }, WTFMove(request));
         ASSERT(addResult.isNewEntry);
         m_callback(addResult.iterator->value.get(), m_userData);
     }
 
     void platformStopTask(WebPageProxy&, WebURLSchemeTask& task) final
     {
-        auto it = m_requests.find({ task.resourceLoaderID(), task.pageProxyID() });
+        auto it = m_requests.find({ task.resourceLoaderID(), *task.pageProxyID() });
         if (it == m_requests.end())
             return;
 
@@ -195,7 +197,7 @@ private:
 
     void platformTaskCompleted(WebURLSchemeTask& task) final
     {
-        m_requests.remove({ task.resourceLoaderID(), task.pageProxyID() });
+        m_requests.remove({ task.resourceLoaderID(), *task.pageProxyID() });
     }
 
     WebKitWebContext* m_context { nullptr };
@@ -290,7 +292,7 @@ struct _WebKitWebContextPrivate {
     CString timeZoneOverride;
 };
 
-static guint signals[LAST_SIGNAL] = { 0, };
+static std::array<unsigned, LAST_SIGNAL> signals;
 
 WEBKIT_DEFINE_FINAL_TYPE(WebKitWebContext, webkit_web_context, G_TYPE_OBJECT, GObject)
 
@@ -337,11 +339,9 @@ void webkitWebContextWillCloseAutomationSession(WebKitWebContext* webContext)
 
 static const char* injectedBundleDirectory()
 {
-#if ENABLE(DEVELOPER_MODE)
     const char* bundleDirectory = g_getenv("WEBKIT_INJECTED_BUNDLE_PATH");
     if (bundleDirectory && g_file_test(bundleDirectory, G_FILE_TEST_IS_DIR))
         return bundleDirectory;
-#endif
 
     static const char* injectedBundlePath = PKGLIBDIR G_DIR_SEPARATOR_S "injected-bundle" G_DIR_SEPARATOR_S;
     return injectedBundlePath;
@@ -515,7 +515,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR);
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8");
 
-    s_serviceWorkerNotificationProvider = makeUnique<WebKitNotificationProvider>(&WebNotificationManagerProxy::sharedServiceWorkerManager(), nullptr);
+    s_serviceWorkerNotificationProvider = makeUnique<WebKitNotificationProvider>(&WebNotificationManagerProxy::serviceWorkerManagerSingleton(), nullptr);
 
     gObjectClass->get_property = webkitWebContextGetProperty;
     gObjectClass->set_property = webkitWebContextSetProperty;
@@ -633,7 +633,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
-    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
+    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties.data());
 
 #if !ENABLE(2022_GLIB_API)
     /**
@@ -1093,7 +1093,7 @@ WebKitDownload* webkit_web_context_download_uri(WebKitWebContext* context, const
 
     WebCore::ResourceRequest request(String::fromUTF8(uri));
     auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(context->priv->websiteDataManager.get());
-    auto downloadProxy = context->priv->processPool->download(websiteDataStore, nullptr, request);
+    auto downloadProxy = context->priv->processPool->download(websiteDataStore, nullptr, request, { });
     auto download = webkitDownloadCreate(downloadProxy.get());
     downloadProxy->setDidStartCallback([context = GRefPtr<WebKitWebContext> { context }, download = download.get()](auto* downloadProxy) {
         if (!downloadProxy)
@@ -1421,24 +1421,27 @@ void webkit_web_context_set_sandbox_enabled(WebKitWebContext* context, gboolean 
 }
 #endif
 
-static bool pathIsHomeDirectory(const char* path)
+static bool pathExistsAndIsNotHomeDirectory(const char* path)
 {
     std::unique_ptr<char, decltype(free)*> resolvedPath(realpath(path, nullptr), free);
     if (!resolvedPath) {
-        g_warning("Failed to canonicalize path %s: %s", path, g_strerror(errno));
-        return true;
+        if (errno == ENOENT)
+            g_warning("Path %s must be created before adding it to the sandbox", path);
+        else
+            g_warning("Failed to canonicalize path %s: %s", path, g_strerror(errno));
+        return false;
     }
 
     if (!strcmp(resolvedPath.get(), "/home"))
-        return true;
+        return false;
 
     std::unique_ptr<char, decltype(free)*> resolvedHomeDirectory(realpath(g_get_home_dir(), nullptr), free);
     if (!resolvedPath) {
         g_warning("Failed to canonicalize path %s: %s", g_get_home_dir(), g_strerror(errno));
-        return true;
+        return false;
     }
 
-    return !strcmp(resolvedPath.get(), resolvedHomeDirectory.get());
+    return strcmp(resolvedPath.get(), resolvedHomeDirectory.get());
 }
 
 static bool pathIsBlocked(const char* path)
@@ -1452,11 +1455,13 @@ static bool pathIsBlocked(const char* path)
     if (!g_path_is_absolute(path))
         return true;
 
-    if (pathIsHomeDirectory(path))
+    if (!pathExistsAndIsNotHomeDirectory(path))
         return true;
 
     GUniquePtr<char*> splitPath(g_strsplit(path, G_DIR_SEPARATOR_S, 3));
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GTK/WPE Port
     return blockedPrefixes.contains(splitPath.get()[1]);
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 /**
@@ -1467,9 +1472,8 @@ static bool pathIsBlocked(const char* path)
  *
  * Adds a path to be mounted in the sandbox.
  *
- * @path must exist before any web process has been created; otherwise,
- * it will be silently ignored. It is a fatal error to add paths after
- * a web process has been spawned.
+ * @path must exist before any web process has been created. It is a fatal error
+ * to add paths after a web process has been spawned.
  *
  * Paths under `/sys`, `/proc`, and `/dev` are invalid. Attempting to
  * add all of `/` is not valid. Since 2.40, adding the user's entire
@@ -1527,7 +1531,7 @@ gboolean webkit_web_context_get_spell_checking_enabled(WebKitWebContext* context
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
 
 #if ENABLE(SPELLCHECK)
-    return TextChecker::state().isContinuousSpellCheckingEnabled;
+    return TextChecker::state().contains(TextCheckerState::ContinuousSpellCheckingEnabled);
 #else
     return false;
 #endif
@@ -1609,8 +1613,8 @@ void webkit_web_context_set_spell_checking_languages(WebKitWebContext* context, 
 
 #if ENABLE(SPELLCHECK)
     Vector<String> spellCheckingLanguages;
-    for (size_t i = 0; languages[i]; ++i)
-        spellCheckingLanguages.append(String::fromUTF8(languages[i]));
+    for (const char* language : span(const_cast<char**>(languages)))
+        spellCheckingLanguages.append(String::fromUTF8(language));
     TextChecker::setSpellCheckingLanguages(spellCheckingLanguages);
 #endif
 }
@@ -1638,13 +1642,15 @@ void webkit_web_context_set_preferred_languages(WebKitWebContext* context, const
     if (!languageList || !g_strv_length(const_cast<char**>(languageList)))
         return;
 
+    auto languagesSpan = span(const_cast<char**>(languageList));
+
     Vector<String> languages;
-    for (size_t i = 0; languageList[i]; ++i) {
+    for (auto language : languagesSpan) {
         // Do not propagate the C locale to WebCore.
-        if (!g_ascii_strcasecmp(languageList[i], "C") || !g_ascii_strcasecmp(languageList[i], "POSIX"))
+        if (!g_ascii_strcasecmp(language, "C") || !g_ascii_strcasecmp(language, "POSIX"))
             languages.append("en-US"_s);
         else
-            languages.append(makeStringByReplacingAll(String::fromUTF8(languageList[i]), '_', '-'));
+            languages.append(makeStringByReplacingAll(String::fromUTF8(language), '_', '-'));
     }
     context->priv->processPool->setOverrideLanguages(WTFMove(languages));
 }

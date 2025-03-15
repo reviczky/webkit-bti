@@ -29,6 +29,7 @@
 #include "ImageFrame.h"
 #include "ScalableImageDecoder.h"
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if USE(CG)
 #include "ImageDecoderCG.h"
@@ -43,6 +44,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ImageDecoder);
 
 #if ENABLE(GPU_PROCESS) && HAVE(AVASSETREADER)
 using FactoryVector = Vector<ImageDecoder::ImageDecoderFactory>;
@@ -165,6 +168,7 @@ bool ImageDecoder::fetchFrameMetaDataAtIndex(size_t index, SubsamplingLevel subs
     frame.m_decodingOptions = options;
     frame.m_hasAlpha = frameHasAlphaAtIndex(index);
     frame.m_orientation = frameOrientationAtIndex(index);
+    frame.m_headroom = frameHeadroomAtIndex(index);
     frame.m_decodingStatus = frameIsCompleteAtIndex(index) ? DecodingStatus::Complete : DecodingStatus::Partial;
     return true;
 }

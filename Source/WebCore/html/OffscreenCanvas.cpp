@@ -47,6 +47,7 @@
 #include "OffscreenCanvasRenderingContext2D.h"
 #include "Page.h"
 #include "PlaceholderRenderingContext.h"
+#include "ScriptTelemetryCategory.h"
 #include "WorkerClient.h"
 #include "WorkerGlobalScope.h"
 #include "WorkerNavigator.h"
@@ -65,6 +66,7 @@
 
 namespace WebCore {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DetachedOffscreenCanvas);
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(OffscreenCanvas);
 
 DetachedOffscreenCanvas::DetachedOffscreenCanvas(const IntSize& size, bool originClean, RefPtr<PlaceholderRenderingContextSource>&& placeholderSource)
@@ -119,7 +121,7 @@ Ref<OffscreenCanvas> OffscreenCanvas::create(ScriptExecutionContext& scriptExecu
 
 OffscreenCanvas::OffscreenCanvas(ScriptExecutionContext& scriptExecutionContext, IntSize size, RefPtr<PlaceholderRenderingContextSource>&& placeholderSource)
     : ActiveDOMObject(&scriptExecutionContext)
-    , CanvasBase(WTFMove(size), scriptExecutionContext.noiseInjectionHashSalt())
+    , CanvasBase(WTFMove(size), scriptExecutionContext)
     , m_placeholderSource(WTFMove(placeholderSource))
 {
 }
@@ -314,14 +316,26 @@ void OffscreenCanvas::convertToBlob(ImageEncodeOptions&& options, Ref<DeferredPr
         promise->reject(ExceptionCode::IndexSizeError);
         return;
     }
+
+    auto encodingMIMEType = toEncodingMimeType(options.type);
+    auto quality = qualityFromDouble(options.quality);
+
+    RefPtr context = canvasBaseScriptExecutionContext();
+    if (context && context->requiresScriptExecutionTelemetry(ScriptTelemetryCategory::Canvas)) {
+        RefPtr buffer = createImageForNoiseInjection();
+        auto blobData = buffer->toData(encodingMIMEType, quality);
+        if (blobData.isEmpty())
+            promise->reject(ExceptionCode::EncodingError);
+        else
+            promise->resolveWithNewlyCreated<IDLInterface<Blob>>(Blob::create(context.get(), WTFMove(blobData), encodingMIMEType));
+        return;
+    }
+
     RefPtr buffer = makeRenderingResultsAvailable();
     if (!buffer) {
         promise->reject(ExceptionCode::InvalidStateError);
         return;
     }
-
-    auto encodingMIMEType = toEncodingMimeType(options.type);
-    auto quality = qualityFromDouble(options.quality);
 
     Vector<uint8_t> blobData = buffer->toData(encodingMIMEType, quality);
     if (blobData.isEmpty()) {
@@ -329,7 +343,7 @@ void OffscreenCanvas::convertToBlob(ImageEncodeOptions&& options, Ref<DeferredPr
         return;
     }
 
-    Ref<Blob> blob = Blob::create(canvasBaseScriptExecutionContext(), WTFMove(blobData), encodingMIMEType);
+    Ref<Blob> blob = Blob::create(context.get(), WTFMove(blobData), encodingMIMEType);
     promise->resolveWithNewlyCreated<IDLInterface<Blob>>(WTFMove(blob));
 }
 

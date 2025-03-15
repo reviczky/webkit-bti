@@ -30,16 +30,8 @@
 #include "MessageReceiver.h"
 #include "RemoteLegacyCDMSessionIdentifier.h"
 #include <WebCore/LegacyCDMSession.h>
+#include <wtf/RefCounted.h>
 #include <wtf/WeakPtr.h>
-
-namespace WebKit {
-class RemoteLegacyCDMSession;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::RemoteLegacyCDMSession> : std::true_type { };
-}
 
 namespace WebCore {
 class SharedBuffer;
@@ -51,10 +43,14 @@ class RemoteLegacyCDMFactory;
 
 class RemoteLegacyCDMSession final
     : public WebCore::LegacyCDMSession
-    , public IPC::MessageReceiver {
+    , public IPC::MessageReceiver
+    , public RefCounted<RemoteLegacyCDMSession> {
 public:
-    static std::unique_ptr<RemoteLegacyCDMSession> create(WeakPtr<RemoteLegacyCDMFactory>, RemoteLegacyCDMSessionIdentifier&&, WebCore::LegacyCDMSessionClient&);
+    static RefPtr<RemoteLegacyCDMSession> create(RemoteLegacyCDMFactory&, RemoteLegacyCDMSessionIdentifier&&, WebCore::LegacyCDMSessionClient&);
     ~RemoteLegacyCDMSession();
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     // MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
@@ -62,15 +58,17 @@ public:
     const RemoteLegacyCDMSessionIdentifier& identifier() const { return m_identifier; }
 
 private:
-    RemoteLegacyCDMSession(WeakPtr<RemoteLegacyCDMFactory>, RemoteLegacyCDMSessionIdentifier&&, WebCore::LegacyCDMSessionClient&);
+    RemoteLegacyCDMSession(RemoteLegacyCDMFactory&, RemoteLegacyCDMSessionIdentifier&&, WebCore::LegacyCDMSessionClient&);
 
     // LegacyCDMSession
+    void invalidate() final;
     WebCore::LegacyCDMSessionType type() final { return WebCore::CDMSessionTypeRemote; }
     const String& sessionId() const final { return m_sessionId; }
     RefPtr<Uint8Array> generateKeyRequest(const String& mimeType, Uint8Array* initData, String& destinationURL, unsigned short& errorCode, uint32_t& systemCode) final;
     void releaseKeys() final;
     bool update(Uint8Array*, RefPtr<Uint8Array>& nextMessage, unsigned short& errorCode, uint32_t& systemCode) final;
     RefPtr<ArrayBuffer> cachedKeyForKeyID(const String&) const final;
+    bool isRemoteLegacyCDMSession() const final { return true; }
 
     // Messages
     void sendMessage(RefPtr<WebCore::SharedBuffer>&& message, const String& destinationURL);
@@ -84,5 +82,9 @@ private:
 };
 
 }
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::RemoteLegacyCDMSession)
+    static bool isType(const WebCore::LegacyCDMSession& session) { return session.isRemoteLegacyCDMSession(); }
+SPECIALIZE_TYPE_TRAITS_END()
 
 #endif

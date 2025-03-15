@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -52,19 +52,22 @@ public:
     bool isMainFrame() const { return m_data.isMainFrame; }
     bool isLocalFrame() const { return m_data.frameType == WebKit::FrameType::Local; }
     const WebCore::ResourceRequest& request() const { return m_data.request; }
-    WebCore::SecurityOriginData& securityOrigin() { return m_data.securityOrigin; }
+    const WebCore::SecurityOriginData& securityOrigin() const { return m_data.securityOrigin; }
     Ref<FrameHandle> handle() const;
     WebKit::WebPageProxy* page() { return m_page.get(); }
     RefPtr<FrameHandle> parentFrameHandle() const;
+    Markable<WebCore::ScriptExecutionContextIdentifier> documentID() const { return m_data.documentID; }
     ProcessID processID() const { return m_data.processID; }
     bool isFocused() const { return m_data.isFocused; }
     bool errorOccurred() const { return m_data.errorOccurred; }
     WTF::String title() const;
 
+    const WebKit::FrameInfoData& frameInfoData() const { return m_data; }
+
 private:
     FrameInfo(WebKit::FrameInfoData&&, RefPtr<WebKit::WebPageProxy>&&);
 
-    WebKit::FrameInfoData m_data;
+    const WebKit::FrameInfoData m_data;
     RefPtr<WebKit::WebPageProxy> m_page;
 };
 

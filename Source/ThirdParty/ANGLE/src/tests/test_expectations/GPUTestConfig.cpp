@@ -382,9 +382,14 @@ inline bool IsGalaxyS23()
     return IsAndroidDevice("SM-S911U1");
 }
 
-inline bool IsGalaxyQualcomm()
+inline bool IsGalaxyS24Exynos()
 {
-    return IsGalaxyA23() || IsGalaxyS23();
+    return IsAndroidDevice("SM-S926B");
+}
+
+inline bool IsGalaxyS24Qualcomm()
+{
+    return IsAndroidDevice("SM-S928B");
 }
 
 inline bool IsFindX6()
@@ -527,7 +532,8 @@ GPUTestConfig::GPUTestConfig(bool isSwiftShader)
     mConditions[kConditionGalaxyA54]        = !isSwiftShader && (IsGalaxyA54());
     mConditions[kConditionGalaxyS22]        = !isSwiftShader && (IsGalaxyS22());
     mConditions[kConditionGalaxyS23]        = !isSwiftShader && (IsGalaxyS23());
-    mConditions[kConditionGalaxyQualcomm]   = !isSwiftShader && (IsGalaxyQualcomm());
+    mConditions[kConditionGalaxyS24Exynos]   = !isSwiftShader && (IsGalaxyS24Exynos());
+    mConditions[kConditionGalaxyS24Qualcomm] = !isSwiftShader && (IsGalaxyS24Qualcomm());
     mConditions[kConditionFindX6]           = !isSwiftShader && (IsFindX6());
     mConditions[kConditionPineapple]        = !isSwiftShader && IsPineapple();
     mConditions[kConditionNVIDIAQuadroP400] = !isSwiftShader && IsNVIDIAQuadroP400();

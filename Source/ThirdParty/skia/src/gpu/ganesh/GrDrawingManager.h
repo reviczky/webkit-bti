@@ -46,7 +46,6 @@ class SkData;
 enum GrSurfaceOrigin : int;
 enum class GrColorType;
 enum class GrSemaphoresSubmitted : bool;
-enum class GrSyncCpu : bool;
 struct GrFlushInfo;
 struct GrMipLevel;
 struct SkIRect;
@@ -172,8 +171,6 @@ public:
     // and turned on.
     PathRenderer* getTessellationPathRenderer();
 
-    void flushIfNecessary();
-
     static bool ProgramUnitTest(GrDirectContext*, int maxStages, int maxLevels);
 
     GrSemaphoresSubmitted flushSurfaces(SkSpan<GrSurfaceProxy*>,
@@ -183,7 +180,7 @@ public:
 
     void addOnFlushCallbackObject(GrOnFlushCallbackObject*);
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     void testingOnly_removeOnFlushCallbackObject(GrOnFlushCallbackObject*);
     PathRendererChain::Options testingOnly_getOptionsForPathRendererChain() {
         return fOptionsForPathRendererChain;
@@ -231,7 +228,7 @@ private:
     GrRenderTask* appendTask(sk_sp<GrRenderTask>);
     GrRenderTask* insertTaskBeforeLast(sk_sp<GrRenderTask>);
 
-    bool submitToGpu(GrSyncCpu sync);
+    bool submitToGpu();
 
     SkDEBUGCODE(void validate() const;)
 

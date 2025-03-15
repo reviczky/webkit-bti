@@ -33,7 +33,7 @@
 #include "PlatformPath.h"
 #include "WindRule.h"
 #include <wtf/DataRef.h>
-#include <wtf/FastMalloc.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -42,7 +42,7 @@ class PathTraversalState;
 class RoundedRect;
 
 class Path {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Path);
 public:
     Path() = default;
     WEBCORE_EXPORT Path(PathSegment&&);
@@ -54,6 +54,8 @@ public:
     Path(Path&&) = default;
     Path& operator=(const Path&) = default;
     Path& operator=(Path&&) = default;
+
+    WEBCORE_EXPORT bool definitelyEqual(const Path&) const;
 
     WEBCORE_EXPORT void moveTo(const FloatPoint&);
 
@@ -68,6 +70,7 @@ public:
     WEBCORE_EXPORT void addRect(const FloatRect&);
     WEBCORE_EXPORT void addRoundedRect(const FloatRoundedRect&, PathRoundedRect::Strategy = PathRoundedRect::Strategy::PreferNative);
     void addRoundedRect(const FloatRect&, const FloatSize& roundingRadii, PathRoundedRect::Strategy = PathRoundedRect::Strategy::PreferNative);
+    void addContinuousRoundedRect(const FloatRect&, float cornerWidth, float cornerHeight);
     void addRoundedRect(const RoundedRect&);
 
     WEBCORE_EXPORT void closeSubpath();
@@ -85,6 +88,9 @@ public:
 
     WEBCORE_EXPORT std::optional<PathSegment> singleSegment() const;
     std::optional<PathDataLine> singleDataLine() const;
+    std::optional<PathRect> singleRect() const;
+    std::optional<PathRoundedRect> singleRoundedRect() const;
+    std::optional<PathContinuousRoundedRect> singleContinuousRoundedRect() const;
     std::optional<PathArc> singleArc() const;
     std::optional<PathClosedArc> singleClosedArc() const;
     std::optional<PathDataQuadCurve> singleQuadCurve() const;
@@ -106,11 +112,13 @@ public:
     FloatPoint pointAtLength(float length) const;
 
     bool contains(const FloatPoint&, WindRule = WindRule::NonZero) const;
-    bool strokeContains(const FloatPoint&, const Function<void(GraphicsContext&)>& strokeStyleApplier) const;
+    bool strokeContains(const FloatPoint&, NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const;
 
     WEBCORE_EXPORT FloatRect fastBoundingRect() const;
     WEBCORE_EXPORT FloatRect boundingRect() const;
-    FloatRect strokeBoundingRect(const Function<void(GraphicsContext&)>& strokeStyleApplier = { }) const;
+    FloatRect strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier = { }) const;
+
+    WEBCORE_EXPORT void ensureImplForTesting();
 
 private:
     PlatformPathImpl& ensurePlatformPathImpl();

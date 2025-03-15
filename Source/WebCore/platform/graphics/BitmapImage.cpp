@@ -30,6 +30,7 @@
 #include "BitmapImageSource.h"
 #include "GeometryUtilities.h"
 #include "GraphicsContext.h"
+#include "ImageBuffer.h"
 #include "ImageObserver.h"
 #include "NativeImageSource.h"
 
@@ -120,7 +121,15 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         if (orientation == ImageOrientation::Orientation::FromImage)
             orientation = currentFrameOrientation();
 
-        context.drawNativeImage(*nativeImage, destinationRect, adjustedSourceRect, { options, orientation });
+        auto headroom = options.headroom();
+        if (headroom == Headroom::FromImage && headroomForTesting().value_or(Headroom::None) > Headroom::None)
+            fillWithSolidColor(context, destinationRect, Color::gold, options.compositeOperator());
+        else {
+            if (headroom == Headroom::FromImage)
+                headroom = currentFrameHeadroom();
+
+            context.drawNativeImage(*nativeImage, destinationRect, adjustedSourceRect, { options, orientation, headroom });
+        }
     }
 
     if (auto observer = imageObserver())
@@ -160,12 +169,8 @@ void BitmapImage::drawLuminanceMaskPattern(GraphicsContext& context, const Float
     setImageObserver(WTFMove(observer));
     buffer->convertToLuminanceMask();
 
-    auto image = ImageBuffer::sinkIntoNativeImage(WTFMove(buffer));
-    if (!image)
-        return;
-
     context.setDrawLuminanceMask(false);
-    context.drawPattern(Ref { *image }, destinationRect, bufferRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
+    context.drawPattern(*buffer, destinationRect, bufferRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
 }
 
 void BitmapImage::dump(TextStream& ts) const

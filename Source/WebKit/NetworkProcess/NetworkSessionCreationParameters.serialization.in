@@ -78,6 +78,7 @@ enum class WebKit::AllowsCellularAccess : bool;
     String webPushPartitionString;
     bool enablePrivateClickMeasurementDebugMode;
     bool isBlobRegistryTopOriginPartitioningEnabled;
+    bool isOptInCookiePartitioningEnabled;
     bool shouldSendPrivateTokenIPCForTesting;
 
     WebKit::UnifiedOriginStorageLevel unifiedOriginStorageLevel;
@@ -106,4 +107,13 @@ enum class WebKit::AllowsCellularAccess : bool;
     std::optional<Vector<std::pair<Vector<uint8_t>, WTF::UUID>>> proxyConfigData;
 #endif
     WebKit::ResourceLoadStatisticsParameters resourceLoadStatisticsParameters;
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    String resourceMonitorThrottlerDirectory;
+    WebKit::SandboxExtensionHandle resourceMonitorThrottlerDirectoryExtensionHandle;
+#endif
 };
+
+#if USE(SOUP)
+enum class WebKit::SoupCookiePersistentStorageType : bool
+#endif

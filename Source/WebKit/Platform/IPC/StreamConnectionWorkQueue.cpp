@@ -88,7 +88,7 @@ void StreamConnectionWorkQueue::removeStreamConnection(StreamServerConnection& c
     wakeUp();
 }
 
-void StreamConnectionWorkQueue::stopAndWaitForCompletion(WTF::Function<void()>&& cleanupFunction)
+void StreamConnectionWorkQueue::stopAndWaitForCompletion(NOESCAPE WTF::Function<void()>&& cleanupFunction)
 {
     RefPtr<Thread> processingThread;
     {
@@ -113,14 +113,9 @@ void StreamConnectionWorkQueue::wakeUp()
     m_wakeUpSemaphore.signal();
 }
 
-IPC::Semaphore& StreamConnectionWorkQueue::wakeUpSemaphore()
-{
-    return m_wakeUpSemaphore;
-}
-
 void StreamConnectionWorkQueue::startProcessingThread()
 {
-    auto task = [this]() mutable {
+    SUPPRESS_UNCOUNTED_LAMBDA_CAPTURE auto task = [this]() mutable {
         for (;;) {
             processStreams();
             if (m_shouldQuit) {

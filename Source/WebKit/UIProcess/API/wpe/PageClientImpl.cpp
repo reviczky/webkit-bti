@@ -34,14 +34,18 @@
 #include "TouchGestureController.h"
 #include "WPEWebViewLegacy.h"
 #include "WPEWebViewPlatform.h"
+#include "WebColorPicker.h"
 #include "WebContextMenuProxy.h"
 #include "WebContextMenuProxyWPE.h"
+#include "WebDataListSuggestionsDropdown.h"
+#include "WebDateTimePicker.h"
 #include "WebKitPopupMenu.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/Cursor.h>
 #include <WebCore/DOMPasteAccess.h>
 #include <WebCore/NotImplemented.h>
 #include <wpe/wpe.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if USE(ATK)
 #include <atk/atk.h>
@@ -52,6 +56,8 @@
 #endif
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PageClientImpl);
 
 PageClientImpl::PageClientImpl(WKWPE::View& view)
     : m_view(view)
@@ -79,9 +85,9 @@ UnixFileDescriptor PageClientImpl::hostFileDescriptor()
     return UnixFileDescriptor { wpe_view_backend_get_renderer_host_fd(m_view.backend()), UnixFileDescriptor::Adopt };
 }
 
-std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
+Ref<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& webProcessProxy)
 {
-    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(m_view.page(), webProcessProxy);
+    return DrawingAreaProxyCoordinatedGraphics::create(m_view.page(), webProcessProxy);
 }
 
 void PageClientImpl::setViewNeedsDisplay(const WebCore::Region&)
@@ -161,10 +167,6 @@ void PageClientImpl::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
         setCursor(WebCore::noneCursor());
 }
 
-void PageClientImpl::didChangeViewportProperties(const WebCore::ViewportAttributes&)
-{
-}
-
 void PageClientImpl::registerEditCommand(Ref<WebEditCommandProxy>&&, UndoOrRedo)
 {
 }
@@ -193,6 +195,11 @@ WebCore::FloatRect PageClientImpl::convertToUserSpace(const WebCore::FloatRect& 
 }
 
 WebCore::IntPoint PageClientImpl::screenToRootView(const WebCore::IntPoint& point)
+{
+    return point;
+}
+
+WebCore::IntPoint PageClientImpl::rootViewToScreen(const WebCore::IntPoint& point)
 {
     return point;
 }
@@ -286,11 +293,26 @@ RefPtr<WebPopupMenuProxy> PageClientImpl::createPopupMenuProxy(WebPageProxy& pag
 }
 
 #if ENABLE(CONTEXT_MENUS)
-Ref<WebContextMenuProxy> PageClientImpl::createContextMenuProxy(WebPageProxy& page, ContextMenuContextData&& context, const UserData& userData)
+Ref<WebContextMenuProxy> PageClientImpl::createContextMenuProxy(WebPageProxy& page, FrameInfoData&&, ContextMenuContextData&& context, const UserData& userData)
 {
     return WebContextMenuProxyWPE::create(page, WTFMove(context), userData);
 }
 #endif
+
+RefPtr<WebColorPicker> PageClientImpl::createColorPicker(WebPageProxy&, const WebCore::Color& intialColor, const WebCore::IntRect&, ColorControlSupportsAlpha supportsAlpha, Vector<WebCore::Color>&&)
+{
+    return nullptr;
+}
+
+RefPtr<WebDataListSuggestionsDropdown> PageClientImpl::createDataListSuggestionsDropdown(WebPageProxy&)
+{
+    return nullptr;
+}
+
+RefPtr<WebDateTimePicker> PageClientImpl::createDateTimePicker(WebPageProxy& page)
+{
+    return nullptr;
+}
 
 void PageClientImpl::enterAcceleratedCompositingMode(const LayerTreeContext& context)
 {
@@ -391,7 +413,15 @@ WebCore::UserInterfaceLayoutDirection PageClientImpl::userInterfaceLayoutDirecti
 #if ENABLE(FULLSCREEN_API)
 WebFullScreenManagerProxyClient& PageClientImpl::fullScreenManagerProxyClient()
 {
+    if (m_fullscreenClientForTesting)
+        return *m_fullscreenClientForTesting;
+
     return *this;
+}
+
+void PageClientImpl::setFullScreenClientForTesting(std::unique_ptr<WebFullScreenManagerProxyClient>&& client)
+{
+    m_fullscreenClientForTesting = WTFMove(client);
 }
 
 void PageClientImpl::closeFullScreenManager()
@@ -404,12 +434,12 @@ bool PageClientImpl::isFullScreen()
     return m_view.isFullScreen();
 }
 
-void PageClientImpl::enterFullScreen()
+void PageClientImpl::enterFullScreen(WebCore::FloatSize, CompletionHandler<void(bool)>&& completionHandler)
 {
     if (isFullScreen())
-        return;
+        return completionHandler(false);
 
-    m_view.willEnterFullScreen();
+    m_view.willEnterFullScreen(WTFMove(completionHandler));
 #if ENABLE(WPE_PLATFORM)
     if (m_view.wpeView()) {
         static_cast<WKWPE::ViewPlatform&>(m_view).enterFullScreen();
@@ -420,16 +450,16 @@ void PageClientImpl::enterFullScreen()
     WebFullScreenManagerProxy* fullScreenManagerProxy = m_view.page().fullScreenManager();
     if (fullScreenManagerProxy) {
         if (!static_cast<WKWPE::ViewLegacy&>(m_view).setFullScreen(true))
-            fullScreenManagerProxy->didExitFullScreen();
+            fullScreenManagerProxy->requestExitFullScreen();
     }
 }
 
-void PageClientImpl::exitFullScreen()
+void PageClientImpl::exitFullScreen(CompletionHandler<void()>&& completionHandler)
 {
     if (!isFullScreen())
-        return;
+        return completionHandler();
 
-    m_view.willExitFullScreen();
+    m_view.willExitFullScreen(WTFMove(completionHandler));
 #if ENABLE(WPE_PLATFORM)
     if (m_view.wpeView()) {
         static_cast<WKWPE::ViewPlatform&>(m_view).exitFullScreen();
@@ -437,21 +467,21 @@ void PageClientImpl::exitFullScreen()
     }
 #endif
 
-    WebFullScreenManagerProxy* fullScreenManagerProxy = m_view.page().fullScreenManager();
-    if (fullScreenManagerProxy) {
-        if (!static_cast<WKWPE::ViewLegacy&>(m_view).setFullScreen(false))
-            fullScreenManagerProxy->didEnterFullScreen();
+    if (m_view.page().fullScreenManager()) {
+        bool success = static_cast<WKWPE::ViewLegacy&>(m_view).setFullScreen(false);
+        ASSERT_UNUSED(success, success);
     }
 }
 
-void PageClientImpl::beganEnterFullScreen(const WebCore::IntRect& /* initialFrame */, const WebCore::IntRect& /* finalFrame */)
+void PageClientImpl::beganEnterFullScreen(const WebCore::IntRect& /* initialFrame */, const WebCore::IntRect& /* finalFrame */, CompletionHandler<void(bool)>&& completionHandler)
 {
     notImplemented();
+    completionHandler(true);
 }
 
-void PageClientImpl::beganExitFullScreen(const WebCore::IntRect& /* initialFrame */, const WebCore::IntRect& /* finalFrame */)
+void PageClientImpl::beganExitFullScreen(const WebCore::IntRect& /* initialFrame */, const WebCore::IntRect& /* finalFrame */, CompletionHandler<void()>&& completionHandler)
 {
-    notImplemented();
+    completionHandler();
 }
 
 #endif // ENABLE(FULLSCREEN_API)

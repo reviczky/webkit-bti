@@ -60,17 +60,15 @@ static String permissiveTopPrivateDomain(StringView domain)
 
 String PublicSuffixStore::platformTopPrivatelyControlledDomain(StringView domain) const
 {
-    CString domainUTF8 = domain.utf8();
-
     // This function is expected to work with the format used by cookies, so skip any leading dots.
     unsigned position = 0;
-    while (domainUTF8.data()[position] == '.')
+    while (position < domain.length() && domain[position] == '.')
         position++;
 
-    if (position == domainUTF8.length())
+    auto tldView = domain.substring(position);
+    if (tldView.isEmpty())
         return String();
 
-    auto tldView = domain.substring(position);
     const auto tldCString = tldView.utf8();
 
     GUniqueOutPtr<GError> error;

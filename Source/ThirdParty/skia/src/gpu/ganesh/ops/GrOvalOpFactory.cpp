@@ -15,13 +15,14 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkString.h"
 #include "include/core/SkStrokeRec.h"
-#include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #include "include/private/SkColorData.h"
 #include "include/private/base/SkAlignedStorage.h"
 #include "include/private/base/SkDebug.h"
 #include "include/private/base/SkFloatingPoint.h"
 #include "include/private/base/SkOnce.h"
 #include "include/private/base/SkTArray.h"
+#include "include/private/base/SkTo.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/base/SkArenaAlloc.h"
 #include "src/core/SkMatrixPriv.h"
@@ -53,7 +54,7 @@
 #include "src/gpu/ganesh/ops/GrMeshDrawOp.h"
 #include "src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelper.h"
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 #include "src/base/SkRandom.h"
 #include "src/gpu/ganesh/GrDrawOpTest.h"
 #include "src/gpu/ganesh/GrTestUtils.h"
@@ -61,6 +62,7 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -301,7 +303,7 @@ private:
 
 GR_DEFINE_GEOMETRY_PROCESSOR_TEST(CircleGeometryProcessor)
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 GrGeometryProcessor* CircleGeometryProcessor::TestCreate(GrProcessorTestData* d) {
     bool stroke = d->fRandom->nextBool();
     bool roundCaps = stroke ? d->fRandom->nextBool() : false;
@@ -554,7 +556,7 @@ private:
     using INHERITED = GrGeometryProcessor;
 };
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 GrGeometryProcessor* ButtCapDashedCircleGeometryProcessor::TestCreate(GrProcessorTestData* d) {
     bool wideColor = d->fRandom->nextBool();
     const SkMatrix& matrix = GrTest::TestMatrix(d->fRandom);
@@ -746,7 +748,7 @@ private:
 
 GR_DEFINE_GEOMETRY_PROCESSOR_TEST(EllipseGeometryProcessor)
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 GrGeometryProcessor* EllipseGeometryProcessor::TestCreate(GrProcessorTestData* d) {
     bool stroke = d->fRandom->nextBool();
     bool wideColor = d->fRandom->nextBool();
@@ -936,7 +938,7 @@ private:
 
 GR_DEFINE_GEOMETRY_PROCESSOR_TEST(DIEllipseGeometryProcessor)
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 GrGeometryProcessor* DIEllipseGeometryProcessor::TestCreate(GrProcessorTestData* d) {
     bool wideColor = d->fRandom->nextBool();
     bool useScale = d->fRandom->nextBool();
@@ -1492,7 +1494,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string;
         for (int i = 0; i < fCircles.size(); ++i) {
@@ -1815,7 +1817,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string;
         for (int i = 0; i < fCircles.size(); ++i) {
@@ -2112,7 +2114,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string = SkStringPrintf("Stroked: %d\n", fStroked);
         for (const auto& geo : fEllipses) {
@@ -2384,7 +2386,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string;
         for (const auto& geo : fEllipses) {
@@ -2831,8 +2833,11 @@ private:
     CombineResult onCombineIfPossible(GrOp* t, SkArenaAlloc*, const GrCaps& caps) override {
         CircularRRectOp* that = t->cast<CircularRRectOp>();
 
-        // can only represent 65535 unique vertices with 16-bit indices
-        if (fVertCount + that->fVertCount > 65536) {
+        // Cannot combine if the net number of indices would overflow int32, or if the net number
+        // of vertices would overflow uint16 (since the index values are 16-bit that point into
+        // the vertex buffer).
+        if ((fIndexCount > INT32_MAX - that->fIndexCount) ||
+            (fVertCount > SkToInt(UINT16_MAX) - that->fVertCount)) {
             return CombineResult::kCannotCombine;
         }
 
@@ -2854,7 +2859,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string;
         for (int i = 0; i < fRRects.size(); ++i) {
@@ -3174,7 +3179,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         SkString string = SkStringPrintf("Stroked: %d\n", fStroked);
         for (const auto& geo : fRRects) {
@@ -3453,7 +3458,7 @@ GrOp::Owner GrOvalOpFactory::MakeArcOp(GrRecordingContext* context,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 
 GR_DRAW_OP_TEST_DEFINE(CircleOp) {
     if (numSamples > 1) {

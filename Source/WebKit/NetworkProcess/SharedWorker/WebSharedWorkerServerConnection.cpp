@@ -32,7 +32,6 @@
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkSession.h"
-#include "WebCoreArgumentCoders.h"
 #include "WebSharedWorker.h"
 #include "WebSharedWorkerObjectConnectionMessages.h"
 #include "WebSharedWorkerServer.h"
@@ -48,6 +47,11 @@ namespace WebKit {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSharedWorkerServerConnection);
 
+Ref<WebSharedWorkerServerConnection> WebSharedWorkerServerConnection::create(NetworkProcess& networkProcess, WebSharedWorkerServer& server, IPC::Connection& connection, WebCore::ProcessIdentifier webProcessIdentifier)
+{
+    return adoptRef(*new WebSharedWorkerServerConnection(networkProcess, server, connection, webProcessIdentifier));
+}
+
 WebSharedWorkerServerConnection::WebSharedWorkerServerConnection(NetworkProcess& networkProcess, WebSharedWorkerServer& server, IPC::Connection& connection, WebCore::ProcessIdentifier webProcessIdentifier)
     : m_contentConnection(connection)
     , m_networkProcess(networkProcess)
@@ -62,24 +66,37 @@ WebSharedWorkerServerConnection::~WebSharedWorkerServerConnection()
     CONNECTION_RELEASE_LOG("~WebSharedWorkerServerConnection:");
 }
 
+Ref<NetworkProcess> WebSharedWorkerServerConnection::protectedNetworkProcess()
+{
+    return m_networkProcess;
+}
+
+WebSharedWorkerServer* WebSharedWorkerServerConnection::server()
+{
+    return m_server.get();
+}
+
+const WebSharedWorkerServer* WebSharedWorkerServerConnection::server() const
+{
+    return m_server.get();
+}
+
 IPC::Connection* WebSharedWorkerServerConnection::messageSenderConnection() const
 {
     return m_contentConnection.ptr();
 }
 
-PAL::SessionID WebSharedWorkerServerConnection::sessionID()
-{
-    return server().sessionID();
-}
-
 NetworkSession* WebSharedWorkerServerConnection::session()
 {
-    return m_networkProcess->networkSession(sessionID());
+    CheckedPtr server = m_server.get();
+    if (!server)
+        return nullptr;
+    return protectedNetworkProcess()->networkSession(server->sessionID());
 }
 
 void WebSharedWorkerServerConnection::requestSharedWorker(WebCore::SharedWorkerKey&& sharedWorkerKey, WebCore::SharedWorkerObjectIdentifier sharedWorkerObjectIdentifier, WebCore::TransferredMessagePort&& port, WebCore::WorkerOptions&& workerOptions)
 {
-    MESSAGE_CHECK(m_networkProcess->allowsFirstPartyForCookies(m_webProcessIdentifier, WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorkerKey.origin.topOrigin.host())) != NetworkProcess::AllowCookieAccess::Terminate);
+    MESSAGE_CHECK(protectedNetworkProcess()->allowsFirstPartyForCookies(m_webProcessIdentifier, WebCore::RegistrableDomain::uncheckedCreateFromHost(sharedWorkerKey.origin.topOrigin.host())) != NetworkProcess::AllowCookieAccess::Terminate);
     MESSAGE_CHECK(sharedWorkerObjectIdentifier.processIdentifier() == m_webProcessIdentifier);
     MESSAGE_CHECK(sharedWorkerKey.name == workerOptions.name);
     CONNECTION_RELEASE_LOG("requestSharedWorker: sharedWorkerObjectIdentifier=%" PUBLIC_LOG_STRING, sharedWorkerObjectIdentifier.toString().utf8().data());
@@ -127,6 +144,12 @@ void WebSharedWorkerServerConnection::postErrorToWorkerObject(WebCore::SharedWor
 {
     CONNECTION_RELEASE_LOG_ERROR("postErrorToWorkerObject: sharedWorkerObjectIdentifier=%" PUBLIC_LOG_STRING, sharedWorkerObjectIdentifier.toString().utf8().data());
     send(Messages::WebSharedWorkerObjectConnection::PostErrorToWorkerObject { sharedWorkerObjectIdentifier, errorMessage, lineNumber, columnNumber, sourceURL, isErrorEvent });
+}
+
+void WebSharedWorkerServerConnection::reportNetworkUsageToWorkerObject(WebCore::SharedWorkerObjectIdentifier sharedWorkerObjectIdentifier, size_t bytesTransferredOverNetwork)
+{
+    CONNECTION_RELEASE_LOG("reportNetworkUsageToWorkerObject: sharedWorkerObjectIdentifier=%" PUBLIC_LOG_STRING ", bytesTransferredOverNetwork=%zu", sharedWorkerObjectIdentifier.toString().utf8().data(), bytesTransferredOverNetwork);
+    send(Messages::WebSharedWorkerObjectConnection::ReportNetworkUsageToWorkerObject { sharedWorkerObjectIdentifier, bytesTransferredOverNetwork });
 }
 
 #undef CONNECTION_RELEASE_LOG

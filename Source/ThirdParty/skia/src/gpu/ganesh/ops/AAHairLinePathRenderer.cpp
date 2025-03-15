@@ -15,18 +15,19 @@
 #include "include/core/SkScalar.h"
 #include "include/core/SkString.h"
 #include "include/core/SkStrokeRec.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #include "include/private/SkColorData.h"
 #include "include/private/base/SkAlignedStorage.h"
 #include "include/private/base/SkAssert.h"
 #include "include/private/base/SkDebug.h"
 #include "include/private/base/SkFloatingPoint.h"
+#include "include/private/base/SkMacros.h"
 #include "include/private/base/SkMath.h"
 #include "include/private/base/SkOnce.h"
 #include "include/private/base/SkPoint_impl.h"
 #include "include/private/base/SkTArray.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/base/SkSafeMath.h"
 #include "src/core/SkGeometry.h"
 #include "src/core/SkMatrixPriv.h"
 #include "src/core/SkPointPriv.h"
@@ -975,7 +976,7 @@ private:
         return CombineResult::kMerged;
     }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override {
         return SkStringPrintf("Color: 0x%08x Coverage: 0x%02x, Count: %d\n%s",
                               fColor.toBytes_RGBA(), fCoverage, fPaths.size(),
@@ -1006,7 +1007,7 @@ private:
     using INHERITED = GrMeshDrawOp;
 };
 
-GR_MAKE_BITFIELD_CLASS_OPS(AAHairlineOp::Program)
+SK_MAKE_BITFIELD_CLASS_OPS(AAHairlineOp::Program)
 
 void AAHairlineOp::makeLineProgramInfo(const GrCaps& caps, SkArenaAlloc* arena,
                                        const GrPipeline* pipeline,
@@ -1219,16 +1220,28 @@ void AAHairlineOp::onPrepareDraws(GrMeshDrawTarget* target) {
 
     int instanceCount = fPaths.size();
     bool convertConicsToQuads = !target->caps().shaderCaps()->fFloatIs32Bits;
-    for (int i = 0; i < instanceCount; i++) {
+    SkSafeMath safeMath;
+    for (int i = 0; i < instanceCount && safeMath.ok(); i++) {
         const PathData& args = fPaths[i];
-        quadCount += gather_lines_and_quads(args.fPath, args.fViewMatrix, args.fDevClipBounds,
-                                            args.fCapLength, convertConicsToQuads, &lines, &quads,
-                                            &conics, &qSubdivs, &cWeights);
+        quadCount = safeMath.addInt(quadCount,
+                                    gather_lines_and_quads(args.fPath,
+                                                           args.fViewMatrix,
+                                                           args.fDevClipBounds,
+                                                           args.fCapLength,
+                                                           convertConicsToQuads,
+                                                           &lines,
+                                                           &quads,
+                                                           &conics,
+                                                           &qSubdivs,
+                                                           &cWeights));
     }
 
     int lineCount = lines.size() / 2;
     int conicCount = conics.size() / 3;
-    int quadAndConicCount = conicCount + quadCount;
+    int quadAndConicCount = safeMath.addInt(conicCount, quadCount);
+    if (!safeMath.ok()) {
+        return;
+    }
 
     static constexpr int kMaxLines = SK_MaxS32 / kLineSegNumVertices;
     static constexpr int kMaxQuadsAndConics = SK_MaxS32 / kQuadNumVertices;
@@ -1336,7 +1349,7 @@ void AAHairlineOp::onExecute(GrOpFlushState* flushState, const SkRect& chainBoun
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 
 GR_DRAW_OP_TEST_DEFINE(AAHairlineOp) {
     SkMatrix viewMatrix = GrTest::TestMatrix(random);

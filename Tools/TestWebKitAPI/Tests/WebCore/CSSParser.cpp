@@ -26,9 +26,11 @@
 
 #include "config.h"
 
+#include <WebCore/CSSColorValue.h>
 #include <WebCore/CSSCustomPropertyValue.h>
 #include <WebCore/CSSGridIntegerRepeatValue.h>
 #include <WebCore/CSSParser.h>
+#include <WebCore/CSSSerializationContext.h>
 #include <WebCore/CSSValueList.h>
 #include <WebCore/Color.h>
 #include <WebCore/MutableStyleProperties.h>
@@ -50,7 +52,7 @@ TEST(CSSParser, ParseColorInput)
     Color valueColor(Color::red);
 
     EXPECT_TRUE(value->isColor());
-    EXPECT_EQ(valueColor, value->color());
+    EXPECT_EQ(valueColor, CSSColorValue::absoluteColor(*value));
 }
 
 TEST(CSSParser, ParseColorWithNewlineAndWhitespacesInput)
@@ -65,7 +67,7 @@ TEST(CSSParser, ParseColorWithNewlineAndWhitespacesInput)
     Color valueColor(Color::red);
 
     EXPECT_TRUE(value->isColor());
-    EXPECT_EQ(valueColor, value->color());
+    EXPECT_EQ(valueColor, CSSColorValue::absoluteColor(*value));
 }
 
 TEST(CSSParser, ParseCustomPropertyWithNewlineInput)
@@ -77,7 +79,7 @@ TEST(CSSParser, ParseCustomPropertyWithNewlineInput)
     auto customPropValue = downcast<CSSCustomPropertyValue>(properties->propertyAt(0).value());
 
     ASSERT_TRUE(is<CSSCustomPropertyValue>(customPropValue));
-    auto customText = customPropValue->cssText();
+    auto customText = customPropValue->cssText(CSS::defaultSerializationContext());
     customText.convertTo16Bit();
 
     EXPECT_EQ("ValueHere\nWithAnotherValue"_s, customText);
@@ -92,7 +94,7 @@ TEST(CSSParser, ParseCustomPropertyWithNewlineAndWhitespacesInput)
     auto customPropValue = downcast<CSSCustomPropertyValue>(properties->propertyAt(0).value());
 
     ASSERT_TRUE(is<CSSCustomPropertyValue>(customPropValue));
-    auto customText = customPropValue->cssText();
+    auto customText = customPropValue->cssText(CSS::defaultSerializationContext());
     customText.convertTo16Bit();
 
     EXPECT_EQ("ValueHere\nWithAnotherValue         ShouldPreserveAllWhitespace"_s, customText);
@@ -107,7 +109,7 @@ TEST(CSSParser, ParseCustomPropertyWithNewlineBetweenIdentInput)
     auto customPropValue = downcast<CSSCustomPropertyValue>(properties->propertyAt(0).value());
 
     ASSERT_TRUE(is<CSSCustomPropertyValue>(customPropValue));
-    auto customText = customPropValue->cssText();
+    auto customText = customPropValue->cssText(CSS::defaultSerializationContext());
     customText.convertTo16Bit();
 
     EXPECT_EQ("foo\nbar"_s, customText);
@@ -126,7 +128,7 @@ TEST(CSSParser, ParseColorPropertyWithNewlineBetweenIdentInput)
     Color valueColor(Color::red);
 
     EXPECT_TRUE(value->isColor());
-    EXPECT_EQ(valueColor, value->color());
+    EXPECT_EQ(valueColor, CSSColorValue::absoluteColor(*value));
 }
 
 TEST(CSSParser, ParseTextTransformPropertyWithNewlineBetweenTwoIdentInput)
@@ -149,7 +151,7 @@ TEST(CSSParser, ParseTextTransformPropertyWithNewlineBetweenTwoIdentInput)
     check(properties);
 
     auto value = properties->propertyAt(0).value();
-    auto serialized = value->cssText();
+    auto serialized = value->cssText(CSS::defaultSerializationContext());
     EXPECT_EQ(serialized, "capitalize full-width"_s);
 
     CSSParser parser2(strictCSSParserContext());
@@ -171,7 +173,7 @@ static unsigned computeNumberOfTracks(const CSSValueContainingVector& valueList)
             continue;
         if (is<CSSGridIntegerRepeatValue>(value)) {
             auto& repeatValue = downcast<CSSGridIntegerRepeatValue>(value);
-            numberOfTracks += repeatValue.repetitions() * computeNumberOfTracks(repeatValue);
+            numberOfTracks += repeatValue.repetitions().resolveAsIntegerNoConversionDataRequired() * computeNumberOfTracks(repeatValue);
             continue;
         }
         ++numberOfTracks;

@@ -10,12 +10,16 @@
 #include "include/core/SkMatrix.h"
 #include "include/core/SkShader.h"
 #include "include/core/SkStrokeRec.h"
+#include "include/gpu/graphite/Recorder.h"
 #include "src/base/SkTLazy.h"
 #include "src/core/SkPathPriv.h"
 #include "src/core/SkRRectPriv.h"
 #include "src/core/SkRectPriv.h"
+#include "src/gpu/graphite/AtlasProvider.h"
+#include "src/gpu/graphite/ClipAtlasManager.h"
 #include "src/gpu/graphite/Device.h"
 #include "src/gpu/graphite/DrawParams.h"
+#include "src/gpu/graphite/RecorderPriv.h"
 #include "src/gpu/graphite/geom/BoundsManager.h"
 #include "src/gpu/graphite/geom/Geometry.h"
 
@@ -33,6 +37,22 @@ Rect subtract(const Rect& a, const Rect& b, bool exact) {
         // For our purposes, we want the original A when A-B cannot be exactly represented
         return a;
     }
+}
+
+static constexpr uint32_t kInvalidGenID  = 0;
+static constexpr uint32_t kEmptyGenID    = 1;
+static constexpr uint32_t kWideOpenGenID = 2;
+
+uint32_t next_gen_id() {
+    // 0-2 are reserved for invalid, empty & wide-open
+    static const uint32_t kFirstUnreservedGenID = 3;
+    static std::atomic<uint32_t> nextID{kFirstUnreservedGenID};
+
+    uint32_t id;
+    do {
+        id = nextID.fetch_add(1, std::memory_order_relaxed);
+    } while (id < kFirstUnreservedGenID);
+    return id;
 }
 
 bool oriented_bbox_intersection(const Rect& a, const Transform& aXform,
@@ -383,7 +403,8 @@ void ClipStack::RawElement::drawClip(Device* device) {
                  (fOp == SkClipOp::kIntersect && fShape.inverted()));
         device->drawClipShape(fLocalToDevice,
                               fShape,
-                              Clip{drawBounds, drawBounds, scissor.asSkIRect(), nullptr},
+                              Clip{drawBounds, drawBounds, scissor.asSkIRect(),
+                                   /* nonMSAAClip= */ {}, /* shader= */ nullptr},
                               order);
     }
 
@@ -617,6 +638,7 @@ ClipStack::ClipState ClipStack::RawElement::clipType() const {
                    fLocalToDevice.type() == Transform::Type::kIdentity
                         ? ClipState::kDeviceRRect : ClipState::kComplex;
 
+        case Shape::Type::kArc:
         case Shape::Type::kLine:
             // These types should never become RawElements, but call them kComplex in release builds
             SkASSERT(false);
@@ -639,7 +661,8 @@ ClipStack::SaveRecord::SaveRecord(const Rect& deviceBounds)
         , fOldestValidIndex(0)
         , fDeferredSaveCount(0)
         , fStackOp(SkClipOp::kIntersect)
-        , fState(ClipState::kWideOpen)  {}
+        , fState(ClipState::kWideOpen)
+        , fGenID(kInvalidGenID) {}
 
 ClipStack::SaveRecord::SaveRecord(const SaveRecord& prior,
                                   int startingElementIndex)
@@ -650,10 +673,24 @@ ClipStack::SaveRecord::SaveRecord(const SaveRecord& prior,
         , fOldestValidIndex(prior.fOldestValidIndex)
         , fDeferredSaveCount(0)
         , fStackOp(prior.fStackOp)
-        , fState(prior.fState) {
+        , fState(prior.fState)
+        , fGenID(kInvalidGenID) {
     // If the prior record added an element, this one will insert into the same index
     // (that's okay since we'll remove it when this record is popped off the stack).
     SkASSERT(startingElementIndex >= prior.fStartingElementIndex);
+}
+
+uint32_t ClipStack::SaveRecord::genID() const {
+    if (fState == ClipState::kEmpty) {
+        return kEmptyGenID;
+    } else if (fState == ClipState::kWideOpen) {
+        return kWideOpenGenID;
+    } else {
+        // The gen ID shouldn't be empty or wide open, since they are reserved for the above
+        // if-cases. It may be kInvalid if the record hasn't had any elements added to it yet.
+        SkASSERT(fGenID != kEmptyGenID && fGenID != kWideOpenGenID);
+        return fGenID;
+    }
 }
 
 ClipStack::ClipState ClipStack::SaveRecord::state() const {
@@ -930,6 +967,8 @@ bool ClipStack::SaveRecord::appendElement(RawElement&& toAdd,
         elements->back() = std::move(toAdd);
     }
 
+    // Changing this will prompt ClipStack to invalidate any masks associated with this record.
+    fGenID = next_gen_id();
     return true;
 }
 
@@ -959,6 +998,7 @@ void ClipStack::SaveRecord::replaceWithElement(RawElement&& toAdd,
 
     // This invalidates all older elements that are owned by save records lower in the clip stack.
     fOldestValidIndex = fStartingElementIndex;
+    fGenID = next_gen_id();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1096,13 +1136,103 @@ void ClipStack::clipShape(const Transform& localToDevice,
     }
 }
 
+// Decide whether we can use this shape to do analytic clipping. Only rects and certain
+// rrects are supported. We assume these have been pre-transformed by the RawElement
+// constructor, so only identity transforms are allowed.
+namespace {
+AnalyticClip can_apply_analytic_clip(const Shape& shape,
+                                     const Transform& localToDevice) {
+    if (localToDevice.type() != Transform::Type::kIdentity) {
+        return {};
+    }
+
+    // The circular rrect clip only handles rrect radii >= kRadiusMin.
+    static constexpr SkScalar kRadiusMin = SK_ScalarHalf;
+
+    // Can handle Rect directly.
+    if (shape.isRect()) {
+        return {shape.rect(), kRadiusMin, AnalyticClip::kNone_EdgeFlag, shape.inverted()};
+    }
+
+    // Otherwise we only handle certain kinds of RRects.
+    if (!shape.isRRect()) {
+        return {};
+    }
+
+    const SkRRect& rrect = shape.rrect();
+    if (rrect.isOval() || rrect.isSimple()) {
+        SkVector radii = SkRRectPriv::GetSimpleRadii(rrect);
+        if (radii.fX < kRadiusMin || radii.fY < kRadiusMin) {
+            // In this case the corners are extremely close to rectangular and we collapse the
+            // clip to a rectangular clip.
+            return {rrect.rect(), kRadiusMin, AnalyticClip::kNone_EdgeFlag, shape.inverted()};
+        }
+        if (SkScalarNearlyEqual(radii.fX, radii.fY)) {
+            return {rrect.rect(), radii.fX, AnalyticClip::kAll_EdgeFlag, shape.inverted()};
+        } else {
+            return {};
+        }
+    }
+
+    if (rrect.isComplex() || rrect.isNinePatch()) {
+        // Check for the "tab" cases - two adjacent circular corners and two square corners.
+        constexpr uint32_t kCornerFlags[4] = {
+            AnalyticClip::kTop_EdgeFlag | AnalyticClip::kLeft_EdgeFlag,
+            AnalyticClip::kTop_EdgeFlag | AnalyticClip::kRight_EdgeFlag,
+            AnalyticClip::kBottom_EdgeFlag | AnalyticClip::kRight_EdgeFlag,
+            AnalyticClip::kBottom_EdgeFlag | AnalyticClip::kLeft_EdgeFlag,
+        };
+        SkScalar circularRadius = 0;
+        uint32_t edgeFlags = 0;
+        for (int corner = 0; corner < 4; ++corner) {
+            SkVector radii = rrect.radii((SkRRect::Corner)corner);
+            // Can only handle circular radii.
+            // Also applies to corners with both zero and non-zero radii.
+            if (!SkScalarNearlyEqual(radii.fX, radii.fY)) {
+                return {};
+            }
+            if (radii.fX < kRadiusMin || radii.fY < kRadiusMin) {
+                // The corner is square, so no need to flag as circular.
+                continue;
+            }
+            // First circular corner seen
+            if (!edgeFlags) {
+                circularRadius = radii.fX;
+            } else if (!SkScalarNearlyEqual(radii.fX, circularRadius)) {
+                // Radius doesn't match previously seen circular radius
+                return {};
+            }
+            edgeFlags |= kCornerFlags[corner];
+        }
+
+        if (edgeFlags == AnalyticClip::kNone_EdgeFlag) {
+            // It's a rect
+            return {rrect.rect(), kRadiusMin, edgeFlags, shape.inverted()};
+        } else {
+            // If any rounded corner pairs are non-adjacent or if there are three rounded
+            // corners all edge flags will be set, which is not valid.
+            if (edgeFlags == AnalyticClip::kAll_EdgeFlag) {
+                return {};
+            // At least one corner is rounded, or two adjacent corners are rounded.
+            } else {
+                return {rrect.rect(), circularRadius, edgeFlags, shape.inverted()};
+            }
+        }
+    }
+
+    return {};
+}
+}  // anonymous namespace
+
 Clip ClipStack::visitClipStackForDraw(const Transform& localToDevice,
                                       const Geometry& geometry,
                                       const SkStrokeRec& style,
                                       bool outsetBoundsForAA,
+                                      bool msaaSupported,
                                       ClipStack::ElementList* outEffectiveElements) const {
     static const Clip kClippedOut = {
-            Rect::InfiniteInverted(), Rect::InfiniteInverted(), SkIRect::MakeEmpty(), nullptr};
+            Rect::InfiniteInverted(), Rect::InfiniteInverted(), SkIRect::MakeEmpty(),
+            /* nonMSAAClip= */ {}, /* shader= */ nullptr};
 
     const SaveRecord& cs = this->currentSaveRecord();
     if (cs.state() == ClipState::kEmpty) {
@@ -1201,7 +1331,7 @@ Clip ClipStack::visitClipStackForDraw(const Transform& localToDevice,
         // Either the draw is off screen, so it's clipped out regardless of the state of the
         // SaveRecord, or there are no elements to apply to the draw. In both cases, 'drawBounds'
         // has the correct value, the scissor is the device bounds (ignored if clipped-out).
-        return Clip(drawBounds, transformedShapeBounds, deviceBounds.asSkIRect(), cs.shader());
+        return Clip(drawBounds, transformedShapeBounds, deviceBounds.asSkIRect(), {}, cs.shader());
     }
 
     // We don't evaluate Simplify() on the SaveRecord and the draw because a reduced version of
@@ -1218,7 +1348,7 @@ Clip ClipStack::visitClipStackForDraw(const Transform& localToDevice,
     transformedShapeBounds.intersect(scissor);
     if (drawBounds.isEmptyNegativeOrNaN() || cs.innerBounds().contains(drawBounds)) {
         // Like above, in both cases drawBounds holds the right value.
-        return Clip(drawBounds, transformedShapeBounds, scissor.asSkIRect(), cs.shader());
+        return Clip(drawBounds, transformedShapeBounds, scissor.asSkIRect(), {}, cs.shader());
     }
 
     // If we made it here, the clip stack affects the draw in a complex way so iterate each element.
@@ -1236,6 +1366,7 @@ Clip ClipStack::visitClipStackForDraw(const Transform& localToDevice,
     SkASSERT(outEffectiveElements);
     SkASSERT(outEffectiveElements->empty());
     int i = fElements.count();
+    NonMSAAClip nonMSAAClip;
     for (const RawElement& e : fElements.ritems()) {
         --i;
         if (i < cs.oldestElementIndex()) {
@@ -1250,11 +1381,42 @@ Clip ClipStack::visitClipStackForDraw(const Transform& localToDevice,
             return kClippedOut;
         }
         if (influence == RawElement::DrawInfluence::kIntersect) {
+            if (nonMSAAClip.fAnalyticClip.isEmpty()) {
+                nonMSAAClip.fAnalyticClip = can_apply_analytic_clip(e.shape(), e.localToDevice());
+                if (!nonMSAAClip.fAnalyticClip.isEmpty()) {
+                    continue;
+                }
+            }
             outEffectiveElements->push_back(&e);
         }
     }
 
-    return Clip(drawBounds, transformedShapeBounds, scissor.asSkIRect(), cs.shader());
+#if defined(SK_GRAPHITE_ENABLE_CLIP_ATLAS)
+    // If there is no MSAA supported, rasterize any remaining elements by flattening them
+    // into a single mask and storing in an atlas. Otherwise these will be handled by
+    // Device::drawClip().
+    AtlasProvider* atlasProvider = fDevice->recorder()->priv().atlasProvider();
+    if (!msaaSupported && !outEffectiveElements->empty()) {
+        ClipAtlasManager* clipAtlas = atlasProvider->getClipAtlasManager();
+        SkASSERT(clipAtlas);
+        AtlasClip* atlasClip = &nonMSAAClip.fAtlasClip;
+
+        const TextureProxy* proxy = clipAtlas->findOrCreateEntry(cs.genID(),
+                                                                 outEffectiveElements,
+                                                                 cs.outerBounds(),
+                                                                 &atlasClip->fOutPos);
+        if (proxy) {
+            // Add to Clip
+            atlasClip->fMaskBounds = scissor;
+            atlasClip->fAtlasTexture = sk_ref_sp(proxy);
+
+            // Elements are represented in the clip atlas, discard.
+            outEffectiveElements->clear();
+        }
+    }
+#endif
+
+    return Clip(drawBounds, transformedShapeBounds, scissor.asSkIRect(), nonMSAAClip, cs.shader());
 }
 
 CompressedPaintersOrder ClipStack::updateClipStateForDraw(const Clip& clip,

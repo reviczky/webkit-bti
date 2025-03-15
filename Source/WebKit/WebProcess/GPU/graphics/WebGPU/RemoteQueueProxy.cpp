@@ -30,6 +30,9 @@
 
 #include "RemoteQueueMessages.h"
 #include "WebGPUConvertToBackingContext.h"
+#include "WebProcess.h"
+#include <WebCore/NativeImage.h>
+#include <WebCore/WebCodecsVideoFrame.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit::WebGPU {
@@ -41,6 +44,14 @@ RemoteQueueProxy::RemoteQueueProxy(RemoteAdapterProxy& parent, ConvertToBackingC
     , m_convertToBackingContext(convertToBackingContext)
     , m_parent(parent)
 {
+#if ENABLE(VIDEO) && PLATFORM(COCOA) && ENABLE(WEB_CODECS)
+    RefPtr<RemoteVideoFrameObjectHeapProxy> videoFrameObjectHeapProxy;
+    callOnMainRunLoopAndWait([&videoFrameObjectHeapProxy] {
+        videoFrameObjectHeapProxy = WebProcess::singleton().ensureProtectedGPUProcessConnection()->protectedVideoFrameObjectHeapProxy();
+    });
+
+    m_videoFrameObjectHeapProxy = videoFrameObjectHeapProxy;
+#endif
 }
 
 RemoteQueueProxy::~RemoteQueueProxy()
@@ -49,13 +60,10 @@ RemoteQueueProxy::~RemoteQueueProxy()
     UNUSED_VARIABLE(sendResult);
 }
 
-void RemoteQueueProxy::submit(Vector<std::reference_wrapper<WebCore::WebGPU::CommandBuffer>>&& commandBuffers)
+void RemoteQueueProxy::submit(Vector<Ref<WebCore::WebGPU::CommandBuffer>>&& commandBuffers)
 {
     auto convertedCommandBuffers = WTF::compactMap(commandBuffers, [&](auto& commandBuffer) -> std::optional<WebGPUIdentifier> {
-        auto convertedCommandBuffer = m_convertToBackingContext->convertToBacking(commandBuffer);
-        ASSERT(convertedCommandBuffer);
-        if (!convertedCommandBuffer)
-            return std::nullopt;
+        auto convertedCommandBuffer = protectedConvertToBackingContext()->convertToBacking(commandBuffer);
         return convertedCommandBuffer;
     });
 
@@ -78,10 +86,7 @@ void RemoteQueueProxy::writeBuffer(
     WebCore::WebGPU::Size64 dataOffset,
     std::optional<WebCore::WebGPU::Size64> size)
 {
-    auto convertedBuffer = m_convertToBackingContext->convertToBacking(buffer);
-    ASSERT(convertedBuffer);
-    if (!convertedBuffer)
-        return;
+    auto convertedBuffer = protectedConvertToBackingContext()->convertToBacking(buffer);
 
     auto sharedMemory = WebCore::SharedMemory::copySpan(source.subspan(dataOffset, static_cast<size_t>(size.value_or(source.size() - dataOffset))));
     std::optional<WebCore::SharedMemoryHandle> handle;
@@ -99,11 +104,12 @@ void RemoteQueueProxy::writeTexture(
     const WebCore::WebGPU::ImageDataLayout& dataLayout,
     const WebCore::WebGPU::Extent3D& size)
 {
-    auto convertedDestination = m_convertToBackingContext->convertToBacking(destination);
+    Ref convertToBackingContext = m_convertToBackingContext;
+    auto convertedDestination = convertToBackingContext->convertToBacking(destination);
     ASSERT(convertedDestination);
-    auto convertedDataLayout = m_convertToBackingContext->convertToBacking(dataLayout);
+    auto convertedDataLayout = convertToBackingContext->convertToBacking(dataLayout);
     ASSERT(convertedDataLayout);
-    auto convertedSize = m_convertToBackingContext->convertToBacking(size);
+    auto convertedSize = convertToBackingContext->convertToBacking(size);
     ASSERT(convertedSize);
     if (!convertedDestination || !convertedDataLayout || !convertedSize)
         return;
@@ -142,11 +148,12 @@ void RemoteQueueProxy::copyExternalImageToTexture(
     const WebCore::WebGPU::ImageCopyTextureTagged& destination,
     const WebCore::WebGPU::Extent3D& copySize)
 {
-    auto convertedSource = m_convertToBackingContext->convertToBacking(source);
+    Ref convertToBackingContext = m_convertToBackingContext;
+    auto convertedSource = convertToBackingContext->convertToBacking(source);
     ASSERT(convertedSource);
-    auto convertedDestination = m_convertToBackingContext->convertToBacking(destination);
+    auto convertedDestination = convertToBackingContext->convertToBacking(destination);
     ASSERT(convertedDestination);
-    auto convertedCopySize = m_convertToBackingContext->convertToBacking(copySize);
+    auto convertedCopySize = convertToBackingContext->convertToBacking(copySize);
     ASSERT(convertedCopySize);
     if (!convertedSource || !convertedDestination || !convertedCopySize)
         return;
@@ -160,6 +167,30 @@ void RemoteQueueProxy::setLabelInternal(const String& label)
     auto sendResult = send(Messages::RemoteQueue::SetLabel(label));
     UNUSED_VARIABLE(sendResult);
 }
+
+Ref<ConvertToBackingContext> RemoteQueueProxy::protectedConvertToBackingContext() const
+{
+    return m_convertToBackingContext;
+}
+
+RefPtr<WebCore::NativeImage> RemoteQueueProxy::getNativeImage(WebCore::VideoFrame& videoFrame)
+{
+    RefPtr<WebCore::NativeImage> nativeImage;
+#if ENABLE(VIDEO) && PLATFORM(COCOA) && ENABLE(WEB_CODECS)
+    callOnMainRunLoopAndWait([&nativeImage, videoFrame = Ref { videoFrame }, videoFrameHeap = protectedVideoFrameObjectHeapProxy()] {
+        nativeImage = videoFrameHeap->getNativeImage(videoFrame);
+    });
+#endif
+    return nativeImage;
+}
+
+#if ENABLE(VIDEO)
+RefPtr<RemoteVideoFrameObjectHeapProxy> RemoteQueueProxy::protectedVideoFrameObjectHeapProxy() const
+{
+    return m_videoFrameObjectHeapProxy;
+}
+#endif
+
 
 } // namespace WebKit::WebGPU
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -80,11 +80,16 @@ DetachedImageBitmap::~DetachedImageBitmap() = default;
 
 DetachedImageBitmap& DetachedImageBitmap::operator=(DetachedImageBitmap&&) = default;
 
+size_t DetachedImageBitmap::memoryCost() const
+{
+    return m_bitmap->memoryCost();
+}
+
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(ImageBitmap);
 
 static inline RenderingMode bufferRenderingMode(ScriptExecutionContext& scriptExecutionContext)
 {
-#if USE(IOSURFACE_CANVAS_BACKING_STORE) || USE(SKIA)
+#if USE(CA) || USE(SKIA)
     static RenderingMode defaultRenderingMode = RenderingMode::Accelerated;
 #else
     static RenderingMode defaultRenderingMode = RenderingMode::Unaccelerated;
@@ -131,8 +136,7 @@ RefPtr<ImageBuffer> ImageBitmap::createImageBuffer(ScriptExecutionContext& scrip
         imageBufferColorSpace = DestinationColorSpace::SRGB();
 #endif
     }
-    auto bufferOptions = bufferOptionsForRendingMode(renderingMode);
-    return ImageBuffer::create(size, RenderingPurpose::Canvas, resolutionScale, *imageBufferColorSpace, ImageBufferPixelFormat::BGRA8, bufferOptions, scriptExecutionContext.graphicsClient());
+    return ImageBuffer::create(size, renderingMode, RenderingPurpose::Canvas, resolutionScale, *imageBufferColorSpace, ImageBufferPixelFormat::BGRA8, scriptExecutionContext.graphicsClient());
 }
 
 void ImageBitmap::createCompletionHandler(ScriptExecutionContext& scriptExecutionContext, ImageBitmap::Source&& source, ImageBitmapOptions&& options, ImageBitmapCompletionHandler&& completionHandler)
@@ -161,6 +165,11 @@ RefPtr<ImageBuffer> ImageBitmap::createImageBuffer(ScriptExecutionContext& scrip
     return createImageBuffer(scriptExecutionContext, size, bufferRenderingMode(scriptExecutionContext), colorSpace, resolutionScale);
 }
 
+ImageBuffer* ImageBitmap::buffer() const
+{
+    return m_bitmap.get();
+}
+
 std::optional<DetachedImageBitmap> ImageBitmap::detach()
 {
     if (!m_bitmap)
@@ -174,10 +183,20 @@ std::optional<DetachedImageBitmap> ImageBitmap::detach()
     return DetachedImageBitmap { makeUniqueRefFromNonNullUniquePtr(WTFMove(serializedBitmap)), originClean(), premultiplyAlpha(), forciblyPremultiplyAlpha() };
 }
 
+void ImageBitmap::close()
+{
+    takeImageBuffer();
+}
+
 #if USE(SKIA)
 void ImageBitmap::prepareForCrossThreadTransfer()
 {
     m_bitmap = ImageBuffer::sinkIntoImageBufferForCrossThreadTransfer(WTFMove(m_bitmap));
+}
+
+void ImageBitmap::finalizeCrossThreadTransfer()
+{
+    m_bitmap = ImageBuffer::sinkIntoImageBufferAfterCrossThreadTransfer(WTFMove(m_bitmap));
 }
 #endif
 
@@ -516,7 +535,7 @@ void ImageBitmap::createCompletionHandler(ScriptExecutionContext& scriptExecutio
     }
 
     FloatRect destRect(FloatPoint(), outputSize);
-    bitmapData->context().paintVideoFrame(*internalFrame, destRect, true);
+    bitmapData->context().drawVideoFrame(*internalFrame, destRect, ImageOrientation::Orientation::None, true);
 
     auto imageBitmap = create(bitmapData.releaseNonNull(), originClean);
     completionHandler(WTFMove(imageBitmap));
@@ -742,9 +761,8 @@ private:
 };
 
 class PendingImageBitmap final : public RefCounted<PendingImageBitmap>, public ActiveDOMObject, public FileReaderLoaderClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(PendingImageBitmap);
 public:
-    // ActiveDOMObject.
     void ref() const final { RefCounted::ref(); }
     void deref() const final { RefCounted::deref(); }
 
@@ -826,6 +844,8 @@ private:
     RefPtr<ArrayBuffer> m_arrayBufferToProcess;
     RefPtr<PendingActivity<PendingImageBitmap>> m_pendingActivity;
 };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PendingImageBitmap);
 
 void ImageBitmap::createFromBuffer(ScriptExecutionContext& scriptExecutionContext, Ref<ArrayBuffer>&& arrayBuffer, String mimeType, long long expectedContentLength, const URL& sourceURL, ImageBitmapOptions&& options, std::optional<IntRect> rect, ImageBitmapCompletionHandler&& completionHandler)
 {

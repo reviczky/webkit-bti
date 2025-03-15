@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006 Nikolas Zimmermann <zimmermann@kde.org>
- * Copyright (C) 2007-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@
 #include <wtf/Function.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
@@ -45,6 +46,11 @@
 
 #if HAVE(IOSURFACE)
 #include "IOSurface.h"
+#include "IOSurfacePool.h"
+#endif
+
+#if USE(SKIA)
+class GrDirectContext;
 #endif
 
 namespace WTF {
@@ -57,21 +63,13 @@ class BifurcatedGraphicsContext;
 class DynamicContentScalingDisplayList;
 class Filter;
 class GraphicsClient;
-#if HAVE(IOSURFACE)
-class IOSurfacePool;
-#endif
 class ScriptExecutionContext;
-
-enum class ImageBufferOptions : uint8_t {
-    Accelerated     = 1 << 0,
-    AvoidBackendSizeCheckForTesting = 1 << 1,
-};
 
 class SerializedImageBuffer;
 
 struct ImageBufferCreationContext {
 #if HAVE(IOSURFACE)
-    IOSurfacePool* surfacePool { nullptr };
+    RefPtr<IOSurfacePool> surfacePool;
     PlatformDisplayID displayID { 0 };
 #endif
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
@@ -91,9 +89,10 @@ struct ImageBufferParameters {
 };
 
 class ImageBuffer : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<ImageBuffer> {
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(ImageBuffer, WEBCORE_EXPORT);
 public:
     using Parameters = ImageBufferParameters;
-    WEBCORE_EXPORT static RefPtr<ImageBuffer> create(const FloatSize&, RenderingPurpose, float resolutionScale, const DestinationColorSpace&, ImageBufferPixelFormat, OptionSet<ImageBufferOptions> = { }, GraphicsClient* graphicsClient = nullptr);
+    WEBCORE_EXPORT static RefPtr<ImageBuffer> create(const FloatSize&, RenderingMode, RenderingPurpose, float resolutionScale, const DestinationColorSpace&, ImageBufferPixelFormat, GraphicsClient* = nullptr);
 
     template<typename BackendType, typename ImageBufferType = ImageBuffer, typename... Arguments>
     static RefPtr<ImageBufferType> create(const FloatSize& size, float resolutionScale, const DestinationColorSpace& colorSpace, ImageBufferPixelFormat pixelFormat, RenderingPurpose purpose, const ImageBufferCreationContext& creationContext, Arguments&&... arguments)
@@ -142,6 +141,8 @@ public:
     WEBCORE_EXPORT virtual void flushDrawingContext();
     WEBCORE_EXPORT virtual bool flushDrawingContextAsync();
 
+    void prepareForDisplay();
+
     WEBCORE_EXPORT IntSize backendSize() const;
 
     virtual void ensureBackendCreated() const { ensureBackend(); }
@@ -163,7 +164,7 @@ public:
     RenderingMode renderingMode() const { return m_backendInfo.renderingMode; }
     AffineTransform baseTransform() const { return m_backendInfo.baseTransform; }
     size_t memoryCost() const { return m_backendInfo.memoryCost; }
-    const ImageBufferBackend::Info& backendInfo() { return m_backendInfo; }
+    const ImageBufferBackend::Info& backendInfo() const { return m_backendInfo; }
 
     // Returns NativeImage of the current drawing results. Results in an immutable copy of the current back buffer.
     WEBCORE_EXPORT virtual RefPtr<NativeImage> copyNativeImage() const;
@@ -183,6 +184,22 @@ public:
     WEBCORE_EXPORT RefPtr<cairo_surface_t> createCairoSurface();
 #endif
 
+#if USE(SKIA)
+    // During DisplayList recording a fence is created, so that we can wait until the SkSurface finished rendering
+    // before we attempt to access the GPU resource from a secondary thread during replay (in threaded GPU painting mode).
+    void finishAcceleratedRenderingAndCreateFence();
+    void waitForAcceleratedRenderingFenceCompletion();
+
+    const GrDirectContext* skiaGrContext() const;
+
+    // Use to copy an accelerated ImageBuffer, cloning the ImageBufferSkiaAcceleratedBackend, creating
+    // a new SkSurface tied to the current thread (and thus the thread-local GrDirectContext), but re-using
+    // the existing backend render target, of this ImageBuffer. This avoids any GPU->GPU copies and has the
+    // sole purpose to abe able to access an accelerated ImageBuffer from another thread, that is not
+    // the creation thread.
+    RefPtr<ImageBuffer> copyAcceleratedImageBufferBorrowingBackendRenderTarget() const;
+#endif
+
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     WEBCORE_EXPORT virtual std::optional<DynamicContentScalingDisplayList> dynamicContentScalingDisplayList();
 #endif
@@ -200,8 +217,10 @@ public:
     WEBCORE_EXPORT static RefPtr<ImageBuffer> sinkIntoBufferForDifferentThread(RefPtr<ImageBuffer>);
 #if USE(SKIA)
     static RefPtr<ImageBuffer> sinkIntoImageBufferForCrossThreadTransfer(RefPtr<ImageBuffer>);
+    static RefPtr<ImageBuffer> sinkIntoImageBufferAfterCrossThreadTransfer(RefPtr<ImageBuffer>);
 #endif
     static std::unique_ptr<SerializedImageBuffer> sinkIntoSerializedImageBuffer(RefPtr<ImageBuffer>&&);
+    WEBCORE_EXPORT static RefPtr<SharedBuffer> sinkIntoPDFDocument(RefPtr<ImageBuffer>);
 
     WEBCORE_EXPORT virtual void convertToLuminanceMask();
     WEBCORE_EXPORT virtual void transformToColorSpace(const DestinationColorSpace& newColorSpace);
@@ -214,6 +233,8 @@ public:
 
     WEBCORE_EXPORT virtual RefPtr<PixelBuffer> getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& srcRect, const ImageBufferAllocator& = ImageBufferAllocator()) const;
     WEBCORE_EXPORT virtual void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint = { }, AlphaPremultiplication destFormat = AlphaPremultiplication::Premultiplied);
+
+    WEBCORE_EXPORT virtual RefPtr<SharedBuffer> sinkIntoPDFDocument();
 
     WEBCORE_EXPORT bool isInUse() const;
     WEBCORE_EXPORT virtual void releaseGraphicsContext();
@@ -251,8 +272,8 @@ protected:
 };
 
 class SerializedImageBuffer {
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(SerializedImageBuffer, WEBCORE_EXPORT);
     WTF_MAKE_NONCOPYABLE(SerializedImageBuffer);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
 
     SerializedImageBuffer() = default;
@@ -267,13 +288,6 @@ public:
 protected:
     virtual RefPtr<ImageBuffer> sinkIntoImageBuffer() = 0;
 };
-
-inline OptionSet<ImageBufferOptions> bufferOptionsForRendingMode(RenderingMode renderingMode)
-{
-    if (renderingMode == RenderingMode::Accelerated)
-        return { ImageBufferOptions::Accelerated };
-    return { };
-}
 
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, const ImageBuffer&);
 

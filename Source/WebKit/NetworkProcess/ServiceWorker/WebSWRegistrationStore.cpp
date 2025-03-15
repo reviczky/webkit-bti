@@ -28,8 +28,16 @@
 
 #include "NetworkStorageManager.h"
 #include <WebCore/SWServer.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebSWRegistrationStore);
+
+Ref<WebSWRegistrationStore> WebSWRegistrationStore::create(WebCore::SWServer& server, NetworkStorageManager& manager)
+{
+    return adoptRef(*new WebSWRegistrationStore(server, manager));
+}
 
 WebSWRegistrationStore::WebSWRegistrationStore(WebCore::SWServer& server, NetworkStorageManager& manager)
     : m_server(server)
@@ -122,15 +130,16 @@ void WebSWRegistrationStore::updateToStorage(CompletionHandler<void()>&& callbac
     if (!m_manager)
         return callback();
 
-    checkedManager()->updateServiceWorkerRegistrations(WTFMove(registrationsToUpdate), WTFMove(registrationsToDelete), [this, weakThis = WeakPtr { *this }, callback = WTFMove(callback)](auto&& result) mutable {
+    checkedManager()->updateServiceWorkerRegistrations(WTFMove(registrationsToUpdate), WTFMove(registrationsToDelete), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](auto&& result) mutable {
         ASSERT(RunLoop::isMain());
 
-        if (!weakThis || !m_server || !result)
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis || !protectedThis->m_server || !result)
             return callback();
 
         auto allScripts = WTFMove(result.value());
         for (auto&& scripts : allScripts)
-            protectedServer()->didSaveWorkerScriptsToDisk(scripts.identifier, WTFMove(scripts.mainScript), WTFMove(scripts.importedScripts));
+            protectedThis->protectedServer()->didSaveWorkerScriptsToDisk(scripts.identifier, WTFMove(scripts.mainScript), WTFMove(scripts.importedScripts));
 
         callback();
     });

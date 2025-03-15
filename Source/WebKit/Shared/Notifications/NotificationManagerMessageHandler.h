@@ -26,8 +26,10 @@
 #pragma once
 
 #include "MessageReceiver.h"
+#include "SharedPreferencesForWebProcess.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/NotificationDirection.h>
+#include <wtf/AbstractRefCounted.h>
 #include <wtf/UUID.h>
 
 namespace WebCore {
@@ -44,7 +46,7 @@ public:
     virtual ~NotificationManagerMessageHandler() = default;
 
     virtual void showNotification(IPC::Connection&, const WebCore::NotificationData&, RefPtr<WebCore::NotificationResources>&&, CompletionHandler<void()>&&) = 0;
-    virtual void cancelNotification(const WTF::UUID& notificationID) = 0;
+    virtual void cancelNotification(WebCore::SecurityOriginData&&, const WTF::UUID& notificationID) = 0;
     virtual void clearNotifications(const Vector<WTF::UUID>& notificationIDs) = 0;
     virtual void didDestroyNotification(const WTF::UUID& notificationID) = 0;
     virtual void pageWasNotifiedOfNotificationPermission() = 0;
@@ -52,6 +54,7 @@ public:
     virtual void setAppBadge(const WebCore::SecurityOriginData&, std::optional<uint64_t> badge) = 0;
     virtual void getPermissionState(WebCore::SecurityOriginData&&, CompletionHandler<void(WebCore::PushPermissionState)>&&) = 0;
     virtual void getPermissionStateSync(WebCore::SecurityOriginData&&, CompletionHandler<void(WebCore::PushPermissionState)>&&) = 0;
+    virtual std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess(const IPC::Connection&) const = 0;
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&);

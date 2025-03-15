@@ -30,13 +30,14 @@
 #include "GraphicsContextSkia.h"
 #include "NotImplemented.h"
 #include "PathStream.h"
+
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkPathUtils.h>
 #include <skia/core/SkRRect.h>
-#include <wtf/NeverDestroyed.h>
-
-IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
 #include <skia/core/SkSurface.h>
-IGNORE_CLANG_WARNINGS_END
+WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_END
+
+#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
@@ -63,6 +64,20 @@ Ref<PathSkia> PathSkia::create(const PathStream& stream)
 PathSkia::PathSkia(const SkPath& platformPath)
     : m_platformPath(platformPath)
 {
+}
+
+bool PathSkia::definitelyEqual(const PathImpl& otherImpl) const
+{
+    RefPtr otherAsPathSkia = dynamicDowncast<PathSkia>(otherImpl);
+    if (!otherAsPathSkia) {
+        // We could convert other to a platform path to compare, but that would be expensive.
+        return false;
+    }
+
+    if (otherAsPathSkia.get() == this)
+        return true;
+
+    return m_platformPath == otherAsPathSkia->m_platformPath;
 }
 
 Ref<PathImpl> PathSkia::copy() const
@@ -179,6 +194,13 @@ void PathSkia::add(PathRoundedRect roundedRect)
         addBeziersForRoundedRect(roundedRect.roundedRect);
 }
 
+void PathSkia::add(PathContinuousRoundedRect continuousRoundedRect)
+{
+    // Continuous rounded rects are unavailable. Paint a normal rounded rect instead.
+    // FIXME: Determine if PreferNative is the optimal strategy here.
+    add(PathRoundedRect { FloatRoundedRect { continuousRoundedRect.rect, FloatRoundedRect::Radii { continuousRoundedRect.cornerWidth, continuousRoundedRect.cornerHeight } }, PathRoundedRect::Strategy::PreferNative });
+}
+
 void PathSkia::add(PathCloseSubpath)
 {
     m_platformPath.close();
@@ -191,8 +213,10 @@ void PathSkia::addPath(const PathSkia& path, const AffineTransform& transform)
 
 bool PathSkia::applyElements(const PathElementApplier& applier) const
 {
-    auto convertPoints = [](FloatPoint dst[], const SkPoint src[], int count) {
-        for (int i = 0; i < count; i++) {
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN // GLib/Win port
+
+    auto convertPoints = [](std::span<FloatPoint, 3> dst, const SkPoint src[], int count) {
+        for (int i = 0; i < count; ++i) {
             dst[i].setX(SkScalarToFloat(src[i].fX));
             dst[i].setY(SkScalarToFloat(src[i].fY));
         }
@@ -243,6 +267,8 @@ bool PathSkia::applyElements(const PathElementApplier& applier) const
         applier(pathElement);
     }
     return true;
+
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 bool PathSkia::isEmpty() const
@@ -294,7 +320,7 @@ bool PathSkia::contains(const FloatPoint& point, WindRule windRule) const
     return m_platformPath.contains(x, y);
 }
 
-bool PathSkia::strokeContains(const FloatPoint& point, const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+bool PathSkia::strokeContains(const FloatPoint& point, NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     if (isEmpty() || !std::isfinite(point.x()) || !std::isfinite(point.y()))
         return false;
@@ -320,7 +346,7 @@ FloatRect PathSkia::boundingRect() const
     return m_platformPath.computeTightBounds();
 }
 
-FloatRect PathSkia::strokeBoundingRect(const Function<void(GraphicsContext&)>& strokeStyleApplier) const
+FloatRect PathSkia::strokeBoundingRect(NOESCAPE const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     if (isEmpty())
         return { };

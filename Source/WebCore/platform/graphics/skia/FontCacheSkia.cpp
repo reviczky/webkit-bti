@@ -29,18 +29,22 @@
 #include "Font.h"
 #include "FontDescription.h"
 #include "StyleFontSizeFunctions.h"
-#if defined(__ANDROID__) || defined(ANDROID)
-#include <skia/ports/SkFontMgr_android.h>
-#else
-#include <skia/ports/SkFontMgr_fontconfig.h>
-#endif
 #include <wtf/Assertions.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/CharacterProperties.h>
 #include <wtf/unicode/CharacterNames.h>
 
-#if PLATFORM(GTK)
-#include "GtkUtilities.h"
+#if PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
+#include "SystemSettings.h"
+#endif
+
+#if defined(__ANDROID__) || defined(ANDROID)
+#include <skia/ports/SkFontMgr_android.h>
+#elif PLATFORM(WIN)
+#include <dwrite.h>
+#include <skia/ports/SkTypeface_win.h>
+#else
+#include <skia/ports/SkFontMgr_fontconfig.h>
 #endif
 
 namespace WebCore {
@@ -54,6 +58,9 @@ SkFontMgr& FontCache::fontManager() const
     if (!m_fontManager) {
 #if defined(__ANDROID__) || defined(ANDROID)
         m_fontManager = SkFontMgr_New_Android(nullptr);
+#elif OS(WINDOWS)
+        auto result = createDWriteFactory();
+        m_fontManager = SkFontMgr_New_DirectWrite(result.factory.get(), result.fontCollection.get());
 #else
         m_fontManager = SkFontMgr_New_FontConfig(FcConfigReference(nullptr));
 #endif
@@ -70,22 +77,22 @@ static SkFontStyle skiaFontStyle(const FontDescription& fontDescription)
         skWeight = static_cast<int>(weight);
 
     int skWidth = SkFontStyle::kNormal_Width;
-    auto stretch = fontDescription.stretch();
-    if (stretch <= ultraCondensedStretchValue())
+    auto width = fontDescription.width();
+    if (width <= ultraCondensedWidthValue())
         skWidth = SkFontStyle::kUltraCondensed_Width;
-    else if (stretch <= extraCondensedStretchValue())
+    else if (width <= extraCondensedWidthValue())
         skWidth = SkFontStyle::kExtraCondensed_Width;
-    else if (stretch <= condensedStretchValue())
+    else if (width <= condensedWidthValue())
         skWidth = SkFontStyle::kCondensed_Width;
-    else if (stretch <= semiCondensedStretchValue())
+    else if (width <= semiCondensedWidthValue())
         skWidth = SkFontStyle::kSemiCondensed_Width;
-    else if (stretch >= semiExpandedStretchValue())
+    else if (width >= semiExpandedWidthValue())
         skWidth = SkFontStyle::kSemiExpanded_Width;
-    else if (stretch >= expandedStretchValue())
+    else if (width >= expandedWidthValue())
         skWidth = SkFontStyle::kExpanded_Width;
-    if (stretch >= extraExpandedStretchValue())
+    if (width >= extraExpandedWidthValue())
         skWidth = SkFontStyle::kExtraExpanded_Width;
-    if (stretch >= ultraExpandedStretchValue())
+    if (width >= ultraExpandedWidthValue())
         skWidth = SkFontStyle::kUltraExpanded_Width;
 
     SkFontStyle::Slant skSlant = SkFontStyle::kUpright_Slant;
@@ -144,7 +151,12 @@ bool FontCache::isSystemFontForbiddenForEditing(const String&)
 
 Ref<Font> FontCache::lastResortFallbackFont(const FontDescription& fontDescription)
 {
-    if (RefPtr<Font> font = fontForFamily(fontDescription, "serif"_s))
+#if PLATFORM(WIN)
+    const auto defaultFontName = "Times New Roman"_s;
+#else
+    const auto defaultFontName = "serif"_s;
+#endif
+    if (RefPtr<Font> font = fontForFamily(fontDescription, defaultFontName))
         return font.releaseNonNull();
 
     // Passing nullptr as family name makes Skia use a weak match.
@@ -182,9 +194,9 @@ static String getFamilyNameStringFromFamily(const String& family)
     if (family == familyNamesData->at(FamilyNamesIndex::FantasyFamily))
         return "fantasy"_s;
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || (PLATFORM(WPE) && ENABLE(WPE_PLATFORM))
     if (family == familyNamesData->at(FamilyNamesIndex::SystemUiFamily) || family == "-webkit-system-font"_s)
-        return defaultGtkSystemFont();
+        return SystemSettings::singleton().defaultSystemFont();
 #endif
 
     return emptyString();
@@ -366,9 +378,9 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
     return platformDataUniquePtr;
 }
 
-std::optional<ASCIILiteral> FontCache::platformAlternateFamilyName(const String&)
+ASCIILiteral FontCache::platformAlternateFamilyName(const String&)
 {
-    return std::nullopt;
+    return { };
 }
 
 void FontCache::platformInvalidate()

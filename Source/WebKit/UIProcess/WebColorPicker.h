@@ -25,10 +25,9 @@
 
 #pragma once
 
-#if ENABLE(INPUT_TYPE_COLOR)
-
+#include <wtf/CheckedPtr.h>
 #include <wtf/Ref.h>
-#include <wtf/RefCounted.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 
 namespace WebCore {
 class Color;
@@ -38,16 +37,18 @@ namespace WebKit {
 
 class WebPageProxy;
 
-class WebColorPickerClient {
-protected:
-    virtual ~WebColorPickerClient() = default;
-
+class WebColorPickerClient : public CanMakeCheckedPtr<WebColorPickerClient> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebColorPickerClient);
 public:
     virtual void didChooseColor(const WebCore::Color&) = 0;
     virtual void didEndColorPicker() = 0;
+
+protected:
+    virtual ~WebColorPickerClient() = default;
 };
 
-class WebColorPicker : public RefCounted<WebColorPicker> {
+class WebColorPicker : public RefCountedAndCanMakeWeakPtr<WebColorPicker> {
 public:
     using Client = WebColorPickerClient;
 
@@ -65,9 +66,10 @@ public:
 protected:
     explicit WebColorPicker(Client*);
 
-    Client* m_client;
+    Client* client() const { return m_client.get(); }
+
+private:
+    CheckedPtr<Client> m_client;
 };
 
 } // namespace WebKit
-
-#endif // ENABLE(INPUT_TYPE_COLOR)

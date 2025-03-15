@@ -143,10 +143,6 @@ WK_EXPORT bool WKPreferencesGetTextAreasAreResizable(WKPreferencesRef preference
 WK_EXPORT void WKPreferencesSetTabsToLinks(WKPreferencesRef preferences, bool tabsToLinks);
 WK_EXPORT bool WKPreferencesGetTabsToLinks(WKPreferencesRef preferences);
 
-// Defaults to false.
-WK_EXPORT void WKPreferencesSetDNSPrefetchingEnabled(WKPreferencesRef preferences, bool enabled);
-WK_EXPORT bool WKPreferencesGetDNSPrefetchingEnabled(WKPreferencesRef preferences);
-
 // Defaults to true.
 WK_EXPORT void WKPreferencesSetAuthorAndUserStylesEnabled(WKPreferencesRef preferences, bool enabled);
 WK_EXPORT bool WKPreferencesGetAuthorAndUserStylesEnabled(WKPreferencesRef preferences);
@@ -227,10 +223,6 @@ WK_EXPORT bool WKPreferencesGetQTKitEnabled(WKPreferencesRef preferencesRef);
 WK_EXPORT void WKPreferencesSetAsynchronousSpellCheckingEnabled(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetAsynchronousSpellCheckingEnabled(WKPreferencesRef preferencesRef);
 
-// Defaults to true
-WK_EXPORT void WKPreferencesSetMediaStreamEnabled(WKPreferencesRef preferencesRef, bool enabled);
-WK_EXPORT bool WKPreferencesGetMediaStreamEnabled(WKPreferencesRef preferencesRef);
-
 // Defaults to false
 WK_EXPORT void WKPreferencesSetMediaDevicesEnabled(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetMediaDevicesEnabled(WKPreferencesRef preferencesRef);
@@ -263,6 +255,10 @@ WK_EXPORT _WKUserInterfaceDirectionPolicy WKPreferencesGetUserInterfaceDirection
 WK_EXPORT bool WKPreferencesGetApplePayEnabled(WKPreferencesRef preferencesRef);
 WK_EXPORT void WKPreferencesSetApplePayEnabled(WKPreferencesRef preferencesRef, bool enabled);
 
+// Defaults to false.
+WK_EXPORT bool WKPreferencesGetCSSTransformStyleSeparatedEnabled(WKPreferencesRef preferencesRef);
+WK_EXPORT void WKPreferencesSetCSSTransformStyleSeparatedEnabled(WKPreferencesRef preferencesRef, bool enabled);
+
 // Defaults to true.
 WK_EXPORT bool WKPreferencesGetApplePayCapabilityDisclosureAllowed(WKPreferencesRef preferencesRef);
 WK_EXPORT void WKPreferencesSetApplePayCapabilityDisclosureAllowed(WKPreferencesRef preferencesRef, bool allowed);
@@ -277,10 +273,6 @@ WK_EXPORT void WKPreferencesSetAllowMediaContentTypesRequiringHardwareSupportAsF
 
 WK_EXPORT bool WKPreferencesGetMediaCapabilitiesEnabled(WKPreferencesRef preferencesRef);
 WK_EXPORT void WKPreferencesSetMediaCapabilitiesEnabled(WKPreferencesRef preferencesRef, bool enabled);
-
-// Defaults to false.
-WK_EXPORT bool WKPreferencesGetRestrictedHTTPResponseAccess(WKPreferencesRef preferencesRef);
-WK_EXPORT void WKPreferencesSetRestrictedHTTPResponseAccess(WKPreferencesRef preferencesRef, bool allow);
 
 // Defaults to false.
 WK_EXPORT bool WKPreferencesGetProcessSwapOnNavigationEnabled(WKPreferencesRef preferencesRef);
@@ -317,6 +309,10 @@ WK_EXPORT void WKPreferencesSetRequestVideoFrameCallbackEnabled(WKPreferencesRef
 
 // The following are all deprecated and do nothing. They should be removed when possible.
 
+WK_EXPORT void WKPreferencesSetDNSPrefetchingEnabled(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetDNSPrefetchingEnabled(WKPreferencesRef);
+WK_EXPORT bool WKPreferencesGetRestrictedHTTPResponseAccess(WKPreferencesRef);
+WK_EXPORT void WKPreferencesSetRestrictedHTTPResponseAccess(WKPreferencesRef, bool);
 WK_EXPORT void WKPreferencesSetOfflineWebApplicationCacheEnabled(WKPreferencesRef, bool) WK_C_API_DEPRECATED;
 WK_EXPORT bool WKPreferencesGetOfflineWebApplicationCacheEnabled(WKPreferencesRef) WK_C_API_DEPRECATED;
 WK_EXPORT void WKPreferencesSetXSSAuditorEnabled(WKPreferencesRef, bool) WK_C_API_DEPRECATED;
@@ -333,6 +329,8 @@ WK_EXPORT bool WKPreferencesGetCrossOriginResourcePolicyEnabled(WKPreferencesRef
 WK_EXPORT void WKPreferencesSetCrossOriginResourcePolicyEnabled(WKPreferencesRef, bool) WK_C_API_DEPRECATED;
 WK_EXPORT void WKPreferencesSetPlugInSnapshottingEnabled(WKPreferencesRef, bool) WK_C_API_DEPRECATED;
 WK_EXPORT bool WKPreferencesGetPlugInSnapshottingEnabled(WKPreferencesRef) WK_C_API_DEPRECATED;
+WK_EXPORT void WKPreferencesSetMediaStreamEnabled(WKPreferencesRef preferencesRef, bool enabled) WK_C_API_DEPRECATED;
+WK_EXPORT bool WKPreferencesGetMediaStreamEnabled(WKPreferencesRef preferencesRef) WK_C_API_DEPRECATED;
 
 #ifdef __cplusplus
 }

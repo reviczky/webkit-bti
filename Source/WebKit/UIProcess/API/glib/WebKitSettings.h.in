@@ -290,10 +290,10 @@ WEBKIT_API void
 webkit_settings_set_enable_tabs_to_links                       (WebKitSettings *settings,
                                                                 gboolean        enabled);
 
-WEBKIT_API gboolean
+WEBKIT_DEPRECATED gboolean
 webkit_settings_get_enable_dns_prefetching                     (WebKitSettings *settings);
 
-WEBKIT_API void
+WEBKIT_DEPRECATED void
 webkit_settings_set_enable_dns_prefetching                     (WebKitSettings *settings,
                                                                 gboolean        enabled);
 
@@ -574,6 +574,13 @@ webkit_settings_apply_from_key_file                            (WebKitSettings  
                                                                 GKeyFile        *key_file,
                                                                 const gchar     *group_name,
                                                                 GError         **error);
+
+WEBKIT_API const gchar*
+webkit_settings_get_webrtc_udp_ports_range                     (WebKitSettings *settings);
+
+WEBKIT_API void
+webkit_settings_set_webrtc_udp_ports_range                     (WebKitSettings *settings,
+                                                                const gchar    *udp_port_range);
 
 G_END_DECLS
 

@@ -21,10 +21,10 @@
 #include "include/core/SkSize.h"
 #include "include/core/SkTypes.h"
 #include "include/core/SkVertices.h"
-#include "include/gpu/GrBackendSemaphore.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrBackendSemaphore.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #include "include/private/base/SingleOwner.h"
 #include "include/private/base/SkDebug.h"
 #include "include/private/base/SkFloatingPoint.h"
@@ -140,17 +140,6 @@ void op_bounds(SkRect* bounds, const GrOp* op) {
 namespace skgpu::ganesh {
 
 using DoSimplify = GrStyledShape::DoSimplify;
-
-class AutoCheckFlush {
-public:
-    AutoCheckFlush(GrDrawingManager* drawingManager) : fDrawingManager(drawingManager) {
-        SkASSERT(fDrawingManager);
-    }
-    ~AutoCheckFlush() { fDrawingManager->flushIfNecessary(); }
-
-private:
-    GrDrawingManager* fDrawingManager;
-};
 
 std::unique_ptr<SurfaceDrawContext> SurfaceDrawContext::Make(GrRecordingContext* rContext,
                                                              GrColorType colorType,
@@ -345,7 +334,7 @@ void SurfaceDrawContext::willReplaceOpsTask(OpsTask* prevTask, OpsTask* nextTask
         // values?
         nextTask->setInitialStencilContent(OpsTask::StencilContent::kPreserved);
     }
-#if GR_GPU_STATS && defined(GR_TEST_UTILS)
+#if GR_GPU_STATS && defined(GPU_TEST_UTILS)
     if (fCanUseDynamicMSAA) {
         fContext->priv().dmsaaStats().fNumRenderPasses++;
     }
@@ -576,8 +565,6 @@ void SurfaceDrawContext::drawFilledQuad(const GrClip* clip,
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawFilledQuad", fContext);
 
-    AutoCheckFlush acf(this->drawingManager());
-
     QuadOptimization opt = this->attemptQuadOptimization(clip, ss, quad, &paint);
     if (opt >= QuadOptimization::kClipApplied) {
         // These optimizations require caller to add an op themselves
@@ -676,8 +663,6 @@ void SurfaceDrawContext::drawTexturedQuad(const GrClip* clip,
     SkASSERT(proxyView.asTextureProxy());
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawTexturedQuad", fContext);
 
-    AutoCheckFlush acf(this->drawingManager());
-
     // Functionally this is very similar to drawFilledQuad except that there's no constColor to
     // enable the kSubmitted optimizations, no stencil settings support, and its a TextureOp.
     QuadOptimization opt = this->attemptQuadOptimization(clip, nullptr/*stencil*/, quad,
@@ -716,8 +701,6 @@ void SurfaceDrawContext::drawRect(const GrClip* clip,
 
     // Path effects should've been devolved to a path in SkGpuDevice
     SkASSERT(!style->pathEffect());
-
-    AutoCheckFlush acf(this->drawingManager());
 
     const SkStrokeRec& stroke = style->strokeRec();
     if (stroke.getStyle() == SkStrokeRec::kFill_Style) {
@@ -825,7 +808,7 @@ int SurfaceDrawContext::maxWindowRectangles() const {
 }
 
 OpsTask::CanDiscardPreviousOps SurfaceDrawContext::canDiscardPreviousOpsOnFullClear() const {
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     if (fPreserveOpsOnFullClear_TestingOnly) {
         return OpsTask::CanDiscardPreviousOps::kNo;
     }
@@ -937,7 +920,6 @@ void SurfaceDrawContext::drawTextureSet(const GrClip* clip,
 
     // Create the minimum number of GrTextureOps needed to draw this set. Individual
     // GrTextureOps can rebind the texture between draws thus avoiding GrPaint (re)creation.
-    AutoCheckFlush acf(this->drawingManager());
     GrAAType aaType = this->chooseAAType(GrAA::kYes);
     auto clampType = GrColorTypeClampType(this->colorInfo().colorType());
     auto saturate = clampType == GrClampType::kManual ? ganesh::TextureOp::Saturate::kYes
@@ -957,8 +939,6 @@ void SurfaceDrawContext::drawVertices(const GrClip* clip,
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawVertices", fContext);
-
-    AutoCheckFlush acf(this->drawingManager());
 
     SkASSERT(vertices);
     auto xform = skipColorXform ? nullptr : this->colorInfo().refColorSpaceXformFromSRGB();
@@ -982,8 +962,6 @@ void SurfaceDrawContext::drawMesh(const GrClip* clip,
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawMesh", fContext);
-
-    AutoCheckFlush acf(this->drawingManager());
 
     SkASSERT(mesh.isValid());
 
@@ -1015,8 +993,6 @@ void SurfaceDrawContext::drawAtlas(const GrClip* clip,
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawAtlas", fContext);
-
-    AutoCheckFlush acf(this->drawingManager());
 
     GrAAType aaType = this->chooseAAType(GrAA::kNo);
     GrOp::Owner op = DrawAtlasOp::Make(fContext, std::move(paint), viewMatrix,
@@ -1082,8 +1058,6 @@ void SurfaceDrawContext::drawRRect(const GrClip* origClip,
         }
     }
 #endif
-
-    AutoCheckFlush acf(this->drawingManager());
 
     GrAAType aaType = this->chooseAAType(aa);
 
@@ -1167,8 +1141,6 @@ bool SurfaceDrawContext::drawFastShadow(const GrClip* clip,
     if (rrect.isEmpty()) {
         return true;
     }
-
-    AutoCheckFlush acf(this->drawingManager());
 
     SkPoint3 devLightPos = rec.fLightPos;
     bool directional = SkToBool(rec.fFlags & kDirectionalLight_ShadowFlag);
@@ -1393,8 +1365,6 @@ void SurfaceDrawContext::drawOval(const GrClip* clip,
         return;
     }
 
-    AutoCheckFlush acf(this->drawingManager());
-
     GrAAType aaType = this->chooseAAType(aa);
 
     GrOp::Owner op;
@@ -1450,8 +1420,6 @@ void SurfaceDrawContext::drawArc(const GrClip* clip,
     SkDEBUGCODE(this->validate();)
             GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawArc", fContext);
 
-    AutoCheckFlush acf(this->drawingManager());
-
 #ifndef SK_ENABLE_OPTIMIZE_SIZE
     GrAAType aaType = this->chooseAAType(aa);
     if (aaType == GrAAType::kCoverage) {
@@ -1492,8 +1460,6 @@ void SurfaceDrawContext::drawImageLattice(const GrClip* clip,
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "drawImageLattice", fContext);
-
-    AutoCheckFlush acf(this->drawingManager());
 
     GrOp::Owner op =
               LatticeOp::MakeNonAA(fContext, std::move(paint), viewMatrix, std::move(view),
@@ -1537,8 +1503,6 @@ bool SurfaceDrawContext::waitOnSemaphores(int numSemaphores,
     RETURN_FALSE_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("SurfaceDrawContext", "waitOnSemaphores", fContext);
-
-    AutoCheckFlush acf(this->drawingManager());
 
     if (numSemaphores && !this->caps()->backendSemaphoreSupport()) {
         return false;
@@ -1598,8 +1562,6 @@ void SurfaceDrawContext::drawShape(const GrClip* clip,
         return;
     }
 
-    AutoCheckFlush acf(this->drawingManager());
-
     // If we get here in drawShape(), we definitely need to use path rendering
     this->drawShapeUsingPathRenderer(clip, std::move(paint), aa, viewMatrix, std::move(shape),
                                      /* attemptDrawSimple */ true);
@@ -1628,8 +1590,6 @@ bool SurfaceDrawContext::drawAndStencilPath(const GrHardClip* clip,
                           SkRect::Make(this->dimensions()));
         return true;
     }
-
-    AutoCheckFlush acf(this->drawingManager());
 
     // An Assumption here is that path renderer would use some form of tweaking
     // the src color (either the input alpha or in the frag shader) to implement
@@ -2041,7 +2001,7 @@ void SurfaceDrawContext::addDrawOp(const GrClip* clip,
         this->setNeedsStencil();
     }
 
-#if GR_GPU_STATS && defined(GR_TEST_UTILS)
+#if GR_GPU_STATS && defined(GPU_TEST_UTILS)
     if (fCanUseDynamicMSAA && drawNeedsMSAA) {
         if (!opsTask->usesMSAASurface()) {
             fContext->priv().dmsaaStats().fNumMultisampleRenderPasses++;

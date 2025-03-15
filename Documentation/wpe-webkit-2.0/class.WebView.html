@@ -62,7 +62,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
         <h3><a href="index.html">WPEWebKit</a></h3>
         <p>API Version: 2.0</p>
         
-        <p>Library Version: 2.46.6</p>
+        <p>Library Version: 2.48.0</p>
         
       </div>
       
@@ -466,7 +466,7 @@ SPDX-License-Identifier: BSD, LGPL-2.1
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L124">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/main/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L127">[src]</a>
           
         </h4>
 
@@ -1559,9 +1559,9 @@ and child&nbsp;documents.</p>
         <div class="">
           <h6><a href="property.WebView.is-controlled-by-automation.html">WPEWebKit.WebView:is-controlled-by-automation</a></h6>
           <div class="docblock">
-            <p>Whether the <code>WebKitWebView</code> is controlled by automation. This should only be used when
-creating a new <code>WebKitWebView</code> as a response to <code>WebKitAutomationSession::create-web-view</code>
-signal&nbsp;request.</p>
+            <p>Whether the <code>WebKitWebView</code> is controlled by automation tools (e.g. WebDriver, Selenium). This is
+required for views returned as a response to <code>WebKitAutomationSession::create-web-view</code> signal,
+alongside any view you want to control during an automation&nbsp;session.</p>
           </div>
           <div class="docblock">
             <p><span class="emblem available">since: 2.18</span></p>

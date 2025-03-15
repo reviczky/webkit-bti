@@ -37,7 +37,7 @@
 
 namespace WebCore {
 
-Ref<CachedScriptFetcher> CachedScriptFetcher::create(const String& charset)
+Ref<CachedScriptFetcher> CachedScriptFetcher::create(const AtomString& charset)
 {
     return adoptRef(*new CachedScriptFetcher(charset));
 }
@@ -59,7 +59,7 @@ CachedResourceHandle<CachedScript> CachedScriptFetcher::requestScriptWithCache(D
     options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
     options.integrity = WTFMove(integrity);
     options.referrerPolicy = m_referrerPolicy;
-    options.fetchPriorityHint = m_fetchPriorityHint;
+    options.fetchPriority = m_fetchPriority;
     options.nonce = m_nonce;
 
     auto request = createPotentialAccessControlRequest(sourceURL, WTFMove(options), document, crossOriginMode);

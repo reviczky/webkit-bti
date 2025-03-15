@@ -10,7 +10,7 @@
 
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTypes.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/private/base/SkDebug.h"
 #include "include/private/base/SkTArray.h"
 #include "include/private/base/SkTDArray.h"
@@ -210,10 +210,6 @@ public:
      */
     void purgeUnlockedResources(size_t bytesToPurge, bool preferScratchResources);
 
-    /** Returns true if the cache would like a flush to occur in order to make more resources
-        purgeable. */
-    bool requestsFlush() const;
-
 #if GR_CACHE_STATS
     struct Stats {
         int fTotal;
@@ -250,7 +246,7 @@ public:
 
     void getStats(Stats*) const;
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     void dumpStats(SkString*) const;
 
     void dumpStatsKeyValuePairs(
@@ -259,7 +255,7 @@ public:
 
 #endif // GR_CACHE_STATS
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     int countUniqueKeysWithTag(const char* tag) const;
 
     void changeTimestamp(uint32_t newTimestamp);
@@ -399,7 +395,6 @@ private:
     int                                 fBudgetedCount = 0;
     size_t                              fBudgetedBytes = 0;
     size_t                              fPurgeableBytes = 0;
-    int                                 fNumBudgetedResourcesFlushWillMakePurgeable = 0;
 
     InvalidUniqueKeyInbox               fInvalidUniqueKeyInbox;
     UnrefResourceMessage::Bus::Inbox    fUnrefResourceInbox;

@@ -28,6 +28,7 @@
 #include "NotImplemented.h"
 #include "RealtimeIncomingAudioSourceGStreamer.h"
 #include "RealtimeIncomingVideoSourceGStreamer.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
@@ -36,6 +37,7 @@ GST_DEBUG_CATEGORY(webkit_webrtc_rtp_receiver_debug);
 
 namespace WebCore {
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GStreamerRtpReceiverBackend);
 
 GStreamerRtpReceiverBackend::GStreamerRtpReceiverBackend(GRefPtr<GstWebRTCRTPTransceiver>&& rtcTransceiver)
     : m_rtcTransceiver(WTFMove(rtcTransceiver))

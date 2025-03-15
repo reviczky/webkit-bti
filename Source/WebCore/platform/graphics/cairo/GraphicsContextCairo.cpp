@@ -51,7 +51,7 @@
 #endif
 
 #if USE(THEME_ADWAITA)
-#include "ThemeAdwaita.h"
+#include "Adwaita.h"
 #endif
 
 namespace WebCore {
@@ -227,7 +227,7 @@ void GraphicsContextCairo::clipToImageBuffer(ImageBuffer& buffer, const FloatRec
 void GraphicsContextCairo::drawFocusRing(const Path& path, float outlineWidth, const Color& color)
 {
 #if USE(THEME_ADWAITA)
-    ThemeAdwaita::paintFocus(*this, path, color);
+    Adwaita::paintFocus(*this, path, color);
     UNUSED_PARAM(outlineWidth);
     return;
 #else
@@ -238,7 +238,7 @@ void GraphicsContextCairo::drawFocusRing(const Path& path, float outlineWidth, c
 void GraphicsContextCairo::drawFocusRing(const Vector<FloatRect>& rects, float outlineOffset, float outlineWidth, const Color& color)
 {
 #if USE(THEME_ADWAITA)
-    ThemeAdwaita::paintFocus(*this, rects, color);
+    Adwaita::paintFocus(*this, rects, color);
     UNUSED_PARAM(outlineOffset);
     UNUSED_PARAM(outlineWidth);
     return;
@@ -248,11 +248,11 @@ void GraphicsContextCairo::drawFocusRing(const Vector<FloatRect>& rects, float o
 #endif
 }
 
-void GraphicsContextCairo::drawLinesForText(const FloatPoint& point, float thickness, const DashArray& widths, bool printing, bool doubleUnderlines, StrokeStyle)
+void GraphicsContextCairo::drawLinesForText(const FloatPoint& point, float thickness, std::span<const FloatSegment> lineSegments, bool printing, bool doubleUnderlines, StrokeStyle)
 {
-    if (widths.isEmpty())
+    if (lineSegments.empty())
         return;
-    Cairo::drawLinesForText(*this, point, thickness, widths, printing, doubleUnderlines, strokeColor());
+    Cairo::drawLinesForText(*this, point, thickness, lineSegments, printing, doubleUnderlines, strokeColor());
 }
 
 void GraphicsContextCairo::drawDotsForDocumentMarker(const FloatRect& rect, DocumentMarkerLineStyle style)

@@ -28,6 +28,7 @@
 #include "Attachment.h"
 #include "MessageNames.h"
 #include "ReceiverMatcher.h"
+#include "SyncRequestID.h"
 #include <wtf/ArgumentCoder.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
@@ -65,6 +66,10 @@ template<typename T, typename = IsObjCObject<T>> Class getClass()
 }
 #endif
 
+#if PLATFORM(COCOA)
+using AllowedClassHashSet = HashSet<RetainPtr<ClassStructPtr>>;
+#endif
+
 class Decoder {
     WTF_MAKE_TZONE_ALLOCATED(Decoder);
 public:
@@ -84,15 +89,13 @@ public:
     ReceiverName messageReceiverName() const { return receiverName(m_messageName); }
     MessageName messageName() const { return m_messageName; }
     uint64_t destinationID() const { return m_destinationID; }
+    SyncRequestID syncRequestID() const { ASSERT(m_syncRequestID); return *m_syncRequestID; }
     bool matches(const ReceiverMatcher& matcher) const { return matcher.matches(messageReceiverName(), destinationID()); }
 
     bool isSyncMessage() const { return messageIsSync(messageName()); }
     ShouldDispatchWhenWaitingForSyncReply shouldDispatchMessageWhenWaitingForSyncReply() const;
     bool isAllowedWhenWaitingForSyncReply() const { return messageAllowedWhenWaitingForSyncReply(messageName()) || m_isAllowedWhenWaitingForSyncReplyOverride; }
     bool isAllowedWhenWaitingForUnboundedSyncReply() const { return messageAllowedWhenWaitingForUnboundedSyncReply(messageName()); }
-#if ENABLE(IPC_TESTING_API)
-    bool hasSyncMessageDeserializationFailure() const;
-#endif
     bool shouldUseFullySynchronousModeForTesting() const;
     bool shouldMaintainOrderingWithAsyncMessages() const;
     void setIsAllowedWhenWaitingForSyncReplyOverride(bool value) { m_isAllowedWhenWaitingForSyncReplyOverride = value; }
@@ -138,22 +141,20 @@ public:
 
 #ifdef __OBJC__
     template<typename T, typename = IsObjCObject<T>>
-    std::optional<RetainPtr<T>> decodeWithAllowedClasses(const HashSet<ClassStructPtr>& allowedClasses = { getClass<T>() })
+    std::optional<RetainPtr<T>> decodeWithAllowedClasses(const AllowedClassHashSet& allowedClasses = { getClass<T>() })
     {
         m_allowedClasses = allowedClasses;
         return IPC::decodeRequiringAllowedClasses<T>(*this);
     }
 
     template<typename T, typename = IsNotObjCObject<T>>
-    std::optional<T> decodeWithAllowedClasses(const HashSet<ClassStructPtr>& allowedClasses)
+    std::optional<T> decodeWithAllowedClasses(const AllowedClassHashSet& allowedClasses)
     {
         m_allowedClasses = allowedClasses;
         return decode<T>();
     }
-#endif
 
-#if PLATFORM(COCOA)
-    HashSet<ClassStructPtr>& allowedClasses() { return m_allowedClasses; }
+    AllowedClassHashSet& allowedClasses() { return m_allowedClasses; }
 #endif
 
     std::optional<Attachment> takeLastAttachment();
@@ -182,10 +183,11 @@ private:
     ImportanceAssertion m_importanceAssertion;
 #endif
 #if PLATFORM(COCOA)
-    HashSet<ClassStructPtr> m_allowedClasses;
+    AllowedClassHashSet m_allowedClasses;
 #endif
 
     uint64_t m_destinationID;
+    Markable<SyncRequestID> m_syncRequestID;
 
     int32_t m_indexOfObjectFailingDecoding { -1 };
 };
