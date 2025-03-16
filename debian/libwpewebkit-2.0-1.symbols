@@ -1,5 +1,6 @@
 libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
 * Build-Depends-Package: libwpewebkit-2.0-dev
+ _ZN6WebKit14GPUProcessMainEiPPc@Base 2.48.0
  _ZN6WebKit14WebProcessMainEiPPc@Base 2.28.0
  _ZN6WebKit18NetworkProcessMainEiPPc@Base 2.28.0
  (optional)_ZN6WebKit26WebProcessExtensionManager10initializeEPNS_14InjectedBundleEPN3API6ObjectE@Base 2.39.91
@@ -101,6 +102,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  jsc_value_new_null@Base 2.24.1
  jsc_value_new_number@Base 2.24.1
  jsc_value_new_object@Base 2.24.1
+ jsc_value_new_promise@Base 2.48.0
  jsc_value_new_string@Base 2.24.1
  jsc_value_new_string_from_bytes@Base 2.24.1
  jsc_value_new_typed_array@Base 2.38.0
@@ -588,6 +590,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_settings_get_serif_font_family@Base 2.24.1
  webkit_settings_get_type@Base 2.24.1
  webkit_settings_get_user_agent@Base 2.24.1
+ webkit_settings_get_webrtc_udp_ports_range@Base 2.48.0
  webkit_settings_get_zoom_text_only@Base 2.24.1
  webkit_settings_new@Base 2.24.1
  webkit_settings_new_with_settings@Base 2.24.1
@@ -646,6 +649,7 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_settings_set_serif_font_family@Base 2.24.1
  webkit_settings_set_user_agent@Base 2.24.1
  webkit_settings_set_user_agent_with_application_details@Base 2.24.1
+ webkit_settings_set_webrtc_udp_ports_range@Base 2.48.0
  webkit_settings_set_zoom_text_only@Base 2.24.1
  webkit_snapshot_error_get_type@Base 2.24.1
  webkit_snapshot_error_quark@Base 2.24.1
@@ -764,6 +768,8 @@ libWPEWebKit-2.0.so.1 libwpewebkit-2.0-1 #MINVER#
  webkit_web_context_set_web_process_extensions_initialization_user_data@Base 2.39.91
  webkit_web_editor_get_page@Base 2.24.1
  webkit_web_editor_get_type@Base 2.24.1
+ webkit_web_extension_match_pattern_error_get_type@Base 2.48.0
+ webkit_web_extension_match_pattern_error_quark@Base 2.48.0
  webkit_web_extension_mode_get_type@Base 2.38.0
  webkit_web_form_manager_get_type@Base 2.39.91
  webkit_web_form_manager_input_element_auto_fill@Base 2.39.91

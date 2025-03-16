@@ -8,6 +8,8 @@ wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
   * libWPEWebInspectorResources.so is now inspector.gresource.
     - Update libwpewebkit-2.0-1.{install,symbols}.
     - Update libwpewebkit-2.0-1.lintian-overrides.
+  * debian/libwpewebkit-2.0-1.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 15 Mar 2025 21:43:25 +0100
 
