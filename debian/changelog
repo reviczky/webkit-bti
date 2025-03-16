@@ -12,6 +12,8 @@ wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
     - Update symbols.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * debian/patches/fix-soname.patch
+    - Cherry pick patch to fix WPE WebKit's shared library soname.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 15 Mar 2025 21:43:25 +0100
 
