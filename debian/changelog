@@ -1,4 +1,4 @@
-wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
+wpewebkit (2.48.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Refresh all patches.
@@ -15,7 +15,7 @@ wpewebkit (2.48.0-1) UNRELEASED; urgency=medium
   * debian/patches/fix-soname.patch
     - Cherry pick patch to fix WPE WebKit's shared library soname.
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 15 Mar 2025 21:43:25 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 17 Mar 2025 01:50:25 +0100
 
 wpewebkit (2.46.6-1) unstable; urgency=high
 
