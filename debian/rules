@@ -124,6 +124,11 @@ else
 	DH_GENCONTROL_ARGS += -Vgst:Recommends="gstreamer1.0-libav, gstreamer1.0-plugins-bad"
 endif
 
+# flite is not in Ubuntu main LP: #2096940
+ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_SPEECH_SYNTHESIS=OFF
+endif
+
 # This is loaded at runtime using libepoxy so add an explicit dependency (#1033230)
 ifneq (,$(filter $(DEB_HOST_ARCH),arm64 armel armhf))
 	DH_GENCONTROL_ARGS += -Vgles:Depends="libgles2"
