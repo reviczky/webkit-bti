@@ -1,3 +1,23 @@
+webkit2gtk (2.48.0-1~deb12u1) bookworm-security; urgency=medium
+
+  * Rebuild for bookworm-security.
+  * Disable sysprof profiling integration to avoid new dependencies:
+    - debian/control.in: Don't depend on libsysprof-capture-4-dev.
+    - debian/rules: Build with -DUSE_SYSPROF_CAPTURE=OFF.
+  * Disable JPEG XL to avoid adding new dependencies.
+    - debian/control.in: Remove build dependency on libjxl-dev.
+    - debian/rules: Build with -DUSE_JPEGXL=OFF.
+  * debian/rules:
+    - Enable ENABLE_SOUP2 and USE_OLD_PKG_NAMES to keep using the old
+      package names.
+  * debian/control-common.in:
+    - Make the -dev packages depend on the gir packages.
+  * debian/control.in:
+    - Build depend on ccache.
+  * Use clang-16 instead of clang.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 22 Mar 2025 17:51:06 +0100
+
 webkit2gtk (2.48.0-1) unstable; urgency=medium
 
   * New upstream release.
