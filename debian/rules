@@ -74,6 +74,11 @@ ifneq (,$(filter $(DEB_HOST_ARCH),loong64))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SKIA=OFF
 endif
 
+# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1101547
+ifneq (,$(filter $(DEB_HOST_ARCH),alpha))
+	CPPFLAGS += -mlarge-data -mlarge-text
+endif
+
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
