@@ -5,6 +5,8 @@ webkit2gtk (2.48.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * Build with -mlarge-data and -mlarge-text on alpha to fix build failure
     (thanks, John Paul Adrian Glaubitz) (Closes: #1101547).
+  * debian/control.in:
+    - Update Standards-Version to 4.7.2 (no changes).
 
   [ Jeremy Bicha ]
   * Disable speech synthesis in Ubuntu builds.
