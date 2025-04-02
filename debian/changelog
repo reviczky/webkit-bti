@@ -2,6 +2,7 @@ webkit2gtk (2.48.1-1) UNRELEASED; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream release.
+  * Refresh all patches.
   * Build with -mlarge-data and -mlarge-text on alpha to fix build failure
     (thanks, John Paul Adrian Glaubitz) (Closes: #1101547).
 
