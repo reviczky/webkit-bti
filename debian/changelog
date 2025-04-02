@@ -1,4 +1,4 @@
-webkit2gtk (2.48.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.48.1-1) unstable; urgency=high
 
   [ Alberto Garcia ]
   * New upstream release.
@@ -13,7 +13,7 @@ webkit2gtk (2.48.1-1) UNRELEASED; urgency=medium
   [ Jeremy Bicha ]
   * Disable speech synthesis in Ubuntu builds.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 18 Mar 2025 01:13:32 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 02 Apr 2025 20:33:55 +0200
 
 webkit2gtk (2.48.0-1) unstable; urgency=medium
 
