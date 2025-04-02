@@ -117,6 +117,8 @@ static inline Wasm::JITCallee* jitCompileAndSetHeuristics(Wasm::IPIntCallee* cal
 
     MemoryMode memoryMode = instance->memory()->mode();
     Wasm::CalleeGroup& calleeGroup = *instance->calleeGroup();
+    ASSERT(instance->memoryMode() == memoryMode);
+    ASSERT(memoryMode == calleeGroup.mode());
     auto getReplacement = [&] () -> Wasm::JITCallee* {
         Locker locker { calleeGroup.m_lock };
         if (osrFor == OSRFor::Call)

@@ -1,4 +1,17 @@
 ================
+WebKitGTK 2.48.1
+================
+
+What's new in WebKitGTK 2.48.1?
+
+  - Limit the data stored in session state.
+  - Remove the empty area below the title bar in Web Inspector when not docked.
+  - Fix the build with GST_DISABLE_GST_DEBUG.
+  - Fix the build with GStreamer < 1.20.
+  - Fix the build with video disabled.
+  - Fix the build with clang 20.
+
+================
 WebKitGTK 2.48.0
 ================
 
