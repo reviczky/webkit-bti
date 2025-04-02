@@ -7,6 +7,8 @@ webkit2gtk (2.48.1-1) UNRELEASED; urgency=medium
     (thanks, John Paul Adrian Glaubitz) (Closes: #1101547).
   * debian/control.in:
     - Update Standards-Version to 4.7.2 (no changes).
+  * fix-typo-denormaldisabler.patch:
+    - Fix build failure in i386 and others due to missing semicolon.
 
   [ Jeremy Bicha ]
   * Disable speech synthesis in Ubuntu builds.
