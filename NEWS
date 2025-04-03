@@ -1,4 +1,19 @@
 =================
+WPE WebKit 2.48.1
+=================
+
+What's new in WPE WebKit 2.48.1?
+
+  - Limit the data stored in session state.
+  - Remove the empty area below the title bar in Web Inspector when not docked.
+  - Improve the robustness of WebAudio and WebCodecs multimedia support.
+  - Fix the build with GST_DISABLE_GST_DEBUG.
+  - Fix the build with GStreamer versions older than 1.20.
+  - Fix the build with libc++ version 19 or newer.
+  - Fix the build with video support disabled (ENABLE_VIDEO=OFF).
+  - Fix the build with Clang 20.
+
+=================
 WPE WebKit 2.48.0
 =================
 
