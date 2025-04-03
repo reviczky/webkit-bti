@@ -6,7 +6,7 @@ Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -216,15 +216,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+@@ -221,15 +221,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
          WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fmax-errors=20)
      endif ()
  

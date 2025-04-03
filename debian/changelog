@@ -2,6 +2,7 @@ wpewebkit (2.48.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * Build with -mlarge-data and -mlarge-text on alpha (see #1101547).
+  * Refresh all patches and drop fix-soname.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 30 Mar 2025 20:36:10 +0200
 

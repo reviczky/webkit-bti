@@ -10,7 +10,7 @@ Index: webkitgtk/Source/WTF/wtf/PlatformCPU.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/PlatformCPU.h
 +++ webkitgtk/Source/WTF/wtf/PlatformCPU.h
-@@ -292,14 +292,6 @@
+@@ -293,14 +293,6 @@
  
  #endif /* ARM */
  
