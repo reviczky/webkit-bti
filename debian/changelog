@@ -1,4 +1,4 @@
-wpewebkit (2.48.1-1) UNRELEASED; urgency=medium
+wpewebkit (2.48.1-1) unstable; urgency=high
 
   * New upstream release.
   * debian/rules:
@@ -8,7 +8,7 @@ wpewebkit (2.48.1-1) UNRELEASED; urgency=medium
   * debian/control:
     - Update Standards-Version to 4.7.2 (no changes).
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 30 Mar 2025 20:36:10 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 03 Apr 2025 19:27:40 +0200
 
 wpewebkit (2.48.0-1) unstable; urgency=medium
 
