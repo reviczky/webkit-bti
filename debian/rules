@@ -79,6 +79,11 @@ ifneq (,$(filter $(DEB_HOST_ARCH),alpha))
 	CPPFLAGS += -mlarge-data -mlarge-text
 endif
 
+# https://bugs.webkit.org/show_bug.cgi?id=290994
+ifneq (,$(filter $(DEB_HOST_ARCH),armel))
+	CPPFLAGS += -DHAVE_DENORMAL=0
+endif
+
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS

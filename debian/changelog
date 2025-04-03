@@ -1,3 +1,10 @@
+webkit2gtk (2.48.1-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Build with HAVE_DENORMAL=0 on armel (WebKit bug #290994).
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 03 Apr 2025 19:37:49 +0200
+
 webkit2gtk (2.48.1-1) unstable; urgency=high
 
   [ Alberto Garcia ]
