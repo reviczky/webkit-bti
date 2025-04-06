@@ -39,10 +39,15 @@ endif
 
 # Skia strongly recommends using clang
 # https://skia.org/docs/user/build/#supported-and-preferred-compilers
-ifneq (,$(filter $(DEB_HOST_ARCH),amd64 armel armhf ppc64el riscv64 s390x))
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64 armel ppc64el riscv64 s390x))
 	EXTRA_CMAKE_ARGUMENTS += \
 	   -DCMAKE_C_COMPILER=clang \
 	   -DCMAKE_CXX_COMPILER=clang++
+endif
+ifneq (,$(filter $(DEB_HOST_ARCH),armhf))
+	EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang-19 \
+	   -DCMAKE_CXX_COMPILER=clang++-19
 endif
 
 # Sacrifice speed in order to make it more likely resource limits
